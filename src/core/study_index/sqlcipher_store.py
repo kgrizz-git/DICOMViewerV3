@@ -34,6 +34,21 @@ _FTS_QUERY_ERRS: tuple[type[BaseException], ...] = tuple(
 _SQL_WHERE = " WHERE "
 _SQL_AND = " AND "
 
+# Whitelist of grouped-output columns that ``search_grouped_studies`` may sort by.
+# Only a validated name from this set is ever placed into an ORDER BY clause.
+_GROUPED_SORT_COLUMNS: frozenset[str] = frozenset(
+    {
+        "study_date",
+        "patient_name",
+        "patient_id",
+        "accession_number",
+        "study_description",
+        "instance_count",
+        "series_count",
+        "indexed_at",
+    }
+)
+
 def _is_windows() -> bool:
     return os.name == "nt"
 
@@ -292,6 +307,139 @@ class StudyIndexStore:
             )
             return [row[0] for row in cur.fetchall()]
 
+    def row_count(self) -> int:
+        """Total number of indexed instance rows (0 for an empty database)."""
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM study_index_entry")
+            row = cur.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+
+    def checkpoint(self) -> None:
+        """Fold any WAL contents back into the main DB file so it is safe to copy."""
+        with self._connect() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            conn.commit()
+
+    def integrity_check(self) -> bool:
+        """Return True when the DB decrypts and ``PRAGMA integrity_check`` reports ``ok``.
+
+        Raises the underlying decrypt/IO error if the file cannot be opened with the
+        current passphrase (callers treat any exception as a failed verification).
+        """
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("PRAGMA integrity_check;")
+            rows = cur.fetchall()
+        return len(rows) == 1 and str(rows[0][0]).strip().lower() == "ok"
+
+    # Metadata + file-path columns exported/imported for portability. Explicitly
+    # excludes the FTS ``doc`` column and never touches DICOM pixel data (not stored).
+    _PORTABLE_COLUMNS: tuple[str, ...] = (
+        "study_uid",
+        "file_path",
+        "study_root_path",
+        "series_uid",
+        "sop_instance_uid",
+        "patient_name",
+        "patient_id",
+        "accession_number",
+        "study_date",
+        "study_description",
+        "series_description",
+        "modality",
+        "indexed_at",
+    )
+
+    def iter_all_entries(self) -> list[dict[str, Any]]:
+        """Return every indexed instance row (metadata + file paths only, no FTS doc)."""
+        cols = ", ".join(self._PORTABLE_COLUMNS)  # fixed constant identifiers, not user input
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT {cols} FROM study_index_entry ORDER BY study_uid, file_path"
+            )
+            names = [d[0] for d in cur.description]
+            return [dict(zip(names, row, strict=False)) for row in cur.fetchall()]
+
+    def existing_study_file_keys(self) -> set[tuple[str, str]]:
+        """Return the set of ``(study_uid, file_path)`` keys already in the database."""
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT study_uid, file_path FROM study_index_entry")
+            return {((r[0] or ""), (r[1] or "")) for r in cur.fetchall()}
+
+    def iter_study_groups(self) -> list[dict[str, Any]]:
+        """
+        Return every unique (``study_uid``, ``study_root_path``) group with light metadata.
+
+        Used by the integrity scan to walk all indexed studies. Each dict has
+        ``study_uid``, ``study_root_path``, ``patient_name``, ``study_date``,
+        ``instance_count``, and a normalised ``modalities`` string.
+        """
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT e.study_uid, e.study_root_path, "
+                "MAX(e.patient_name) AS patient_name, "
+                "MAX(e.study_date) AS study_date, "
+                "COUNT(*) AS instance_count, "
+                "GROUP_CONCAT(DISTINCT NULLIF(TRIM(e.modality), '')) AS _modalities_raw "
+                "FROM study_index_entry AS e "
+                "GROUP BY e.study_uid, e.study_root_path"
+            )
+            cols = [d[0] for d in cur.description]
+            rows = [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
+        for r in rows:
+            raw = r.pop("_modalities_raw", None)
+            r["modalities"] = _normalize_modalities_group_concat(raw)
+            r["instance_count"] = int(r.get("instance_count") or 0)
+        return rows
+
+    def relocate_study_paths(
+        self, study_uid: str, old_root: str, new_root: str
+    ) -> int:
+        """
+        Rewrite ``file_path``/``study_root_path`` for one study by swapping the root prefix.
+
+        Each entry's ``file_path`` has its ``old_root`` prefix replaced with ``new_root``
+        (falling back to ``new_root``/basename when a stored path does not start with the
+        old root). ``study_root_path`` is set to the normalised new root. The change is only
+        committed when **at least one** relocated path exists on disk; otherwise nothing is
+        written and ``0`` is returned. Returns the number of rows updated.
+        """
+        su = (study_uid or "").strip()
+        if not su or not (old_root or "").strip() or not (new_root or "").strip():
+            return 0
+        old = os.path.normpath(os.path.abspath(old_root.strip()))
+        new = os.path.normpath(os.path.abspath(new_root.strip()))
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, file_path FROM study_index_entry "
+                "WHERE study_uid = ? AND study_root_path = ?",
+                (su, old),
+            )
+            entries = cur.fetchall()
+            if not entries:
+                return 0
+            updates: list[tuple[str, str, int]] = []
+            for rid, fp in entries:
+                fp = fp or ""
+                if fp.startswith(old):
+                    new_fp = new + fp[len(old):]
+                else:
+                    new_fp = os.path.join(new, os.path.basename(fp))
+                updates.append((new_fp, new, int(rid)))
+            if not any(os.path.isfile(u[0]) for u in updates):
+                return 0
+            cur.executemany(
+                "UPDATE study_index_entry SET file_path = ?, study_root_path = ? WHERE id = ?",
+                updates,
+            )
+            conn.commit()
+        return len(updates)
+
     @staticmethod
     def _col(alias: str | None, name: str) -> str:
         return f"{alias}.{name}" if alias else name
@@ -422,12 +570,18 @@ class StudyIndexStore:
         global_fts_query: str = "",
         limit: int = 100,
         offset: int = 0,
+        order_by: str = "study_date",
+        descending: bool = True,
     ) -> list[dict[str, Any]]:
         """
         One row per (study_uid, study_root_path) with instance/series counts and modalities.
 
         Study-level text fields use SQLite aggregates (deterministic MAX). ``open_file_path``
         is MIN(file_path) for a stable default when opening from a grouped row.
+
+        ``order_by`` is validated against a whitelist of grouped output columns; any
+        other value falls back to ``study_date``. ``patient_name ASC`` is always the
+        secondary tiebreak so paging stays deterministic.
         """
         where, params = self._search_filter_clauses(
             patient_name_contains=patient_name_contains,
@@ -447,6 +601,10 @@ class StudyIndexStore:
             else:
                 where = _SQL_WHERE + fts_sql
             params.append(fts_q)
+        # Validate the sort column against a whitelist of grouped output columns. Never
+        # interpolate raw user input into SQL — only a known column name reaches the query.
+        order_col = order_by if order_by in _GROUPED_SORT_COLUMNS else "study_date"
+        order_dir = "DESC" if descending else "ASC"
         # COUNT(DISTINCT …): ignore empty series_uid so blank rows do not inflate series_count.
         sql = (
             "SELECT e.study_uid, e.study_root_path, "
@@ -456,6 +614,7 @@ class StudyIndexStore:
             "MAX(e.accession_number) AS accession_number, "
             "MAX(e.study_description) AS study_description, "
             "MAX(e.series_description) AS series_description, "
+            "MAX(e.indexed_at) AS indexed_at, "
             "MIN(e.file_path) AS open_file_path, "
             "COUNT(*) AS instance_count, "
             "COUNT(DISTINCT NULLIF(TRIM(e.series_uid), '')) AS series_count, "
@@ -463,7 +622,7 @@ class StudyIndexStore:
             "FROM study_index_entry AS e"
             + where
             + " GROUP BY e.study_uid, e.study_root_path "
-            + "ORDER BY study_date DESC, patient_name ASC "
+            + f"ORDER BY {order_col} {order_dir}, patient_name ASC "
             + "LIMIT ? OFFSET ?"
         )
         qparams = list(params)

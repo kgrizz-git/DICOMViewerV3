@@ -6,6 +6,8 @@ Used by the first-open indexing prompt and the Study Index dialog so the
 
 from __future__ import annotations
 
+import sys
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
@@ -28,6 +30,47 @@ def study_index_about_lines(config: ConfigManager) -> list[str]:
         "and is encrypted at rest.",
         "You can change the location or clear the index later in Edit → Settings.",
     ]
+
+
+def credential_store_label() -> str:
+    """Human name of the OS credential store holding the index encryption key."""
+    if sys.platform == "darwin":
+        return "macOS Keychain"
+    if sys.platform.startswith("win"):
+        return "Windows Credential Manager"
+    return "the system credential store (Secret Service / libsecret)"
+
+
+def credential_store_note() -> str:
+    """One-line note describing where the SQLCipher key is kept."""
+    return (
+        f"The encryption key is stored in {credential_store_label()} "
+        "under service “DICOMViewerV3”."
+    )
+
+
+def format_size_on_disk(num_bytes: int | None) -> str:
+    """Human-readable file size, or a placeholder when the DB does not exist yet."""
+    if num_bytes is None:
+        return "Not created yet"
+    size = float(num_bytes)
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            if unit == "bytes":
+                return f"{int(size)} bytes"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
+
+
+def format_last_modified(mtime: float | None) -> str:
+    """Local ``YYYY-MM-DD HH:MM`` for a DB mtime, or a placeholder when absent."""
+    if mtime is None:
+        return "Not created yet"
+    try:
+        return datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+    except (OverflowError, OSError, ValueError):
+        return ""
 
 
 def open_study_index_location(config: ConfigManager) -> bool:

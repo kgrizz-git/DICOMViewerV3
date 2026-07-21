@@ -17,6 +17,7 @@ STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT: tuple[str, ...] = (
     "patient_name",
     "patient_id",
     "study_date",
+    "indexed_at",
     "accession_number",
     "study_description",
     "study_root_path",

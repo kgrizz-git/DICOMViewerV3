@@ -354,3 +354,112 @@ def test_study_index_store_migrate_v1_schema_to_v2_fts(tmp_path) -> None:
     g = store.search_grouped_studies(global_fts_query="LegacyPat", limit=10, offset=0)
     assert len(g) == 1
     assert g[0]["study_uid"] == "1.legacy"
+
+
+def _seed_two_studies(store, tmp_path):
+    """Two grouped studies with distinct patient names and study dates."""
+    root = os.path.abspath(str(tmp_path))
+    store.upsert_rows(
+        [
+            {
+                "file_path": os.path.abspath(str(tmp_path / "alpha.dcm")),
+                "study_root_path": root,
+                "study_uid": "1.alpha",
+                "series_uid": "1.alpha.s1",
+                "sop_instance_uid": "1.alpha.1",
+                "patient_name": "Alpha^Pat",
+                "patient_id": "PA",
+                "accession_number": "",
+                "study_date": "20200101",
+                "study_description": "A",
+                "modality": "CT",
+            },
+            {
+                "file_path": os.path.abspath(str(tmp_path / "bravo.dcm")),
+                "study_root_path": root,
+                "study_uid": "2.bravo",
+                "series_uid": "2.bravo.s1",
+                "sop_instance_uid": "2.bravo.1",
+                "patient_name": "Bravo^Pat",
+                "patient_id": "PB",
+                "accession_number": "",
+                "study_date": "20211231",
+                "study_description": "B",
+                "modality": "MR",
+            },
+        ]
+    )
+
+
+def test_study_index_store_grouped_includes_indexed_at(tmp_path) -> None:
+    db = tmp_path / "idxat.sqlite"
+    store = StudyIndexStore(str(db), "pw-idxat")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    g = store.search_grouped_studies(limit=50, offset=0)
+    assert len(g) == 2
+    for r in g:
+        assert "indexed_at" in r
+        assert isinstance(r["indexed_at"], float)
+        assert r["indexed_at"] > 0
+
+
+def test_study_index_store_grouped_order_by_fallback(tmp_path) -> None:
+    """A non-whitelisted (potentially malicious) order_by falls back to study_date DESC."""
+    db = tmp_path / "fallback.sqlite"
+    store = StudyIndexStore(str(db), "pw-fallback")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    g = store.search_grouped_studies(
+        limit=50, offset=0, order_by="study_date; DROP TABLE study_index_entry"
+    )
+    # No SQL error, and default study_date DESC ordering applied (bravo=2021 first).
+    assert [r["study_uid"] for r in g] == ["2.bravo", "1.alpha"]
+
+
+def test_study_index_store_grouped_ascending_vs_descending(tmp_path) -> None:
+    db = tmp_path / "sortdir.sqlite"
+    store = StudyIndexStore(str(db), "pw-sortdir")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    asc = store.search_grouped_studies(
+        limit=50, offset=0, order_by="patient_name", descending=False
+    )
+    desc = store.search_grouped_studies(
+        limit=50, offset=0, order_by="patient_name", descending=True
+    )
+    assert [r["study_uid"] for r in asc] == ["1.alpha", "2.bravo"]
+    assert [r["study_uid"] for r in desc] == ["2.bravo", "1.alpha"]
+
+
+def test_study_index_store_row_count(tmp_path) -> None:
+    db = tmp_path / "count.sqlite"
+    store = StudyIndexStore(str(db), "pw-count")
+    store.init_schema()
+    assert store.row_count() == 0
+    _seed_two_studies(store, tmp_path)  # two instance rows across two studies
+    assert store.row_count() == 2
+
+
+def test_study_index_store_integrity_check_ok(tmp_path) -> None:
+    db = tmp_path / "integ.sqlite"
+    store = StudyIndexStore(str(db), "pw-integ")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    store.checkpoint()
+    assert store.integrity_check() is True
+
+
+def test_study_index_store_iter_all_entries_and_keys(tmp_path) -> None:
+    db = tmp_path / "entries.sqlite"
+    store = StudyIndexStore(str(db), "pw-entries")
+    store.init_schema()
+    _seed_two_studies(store, tmp_path)
+    entries = store.iter_all_entries()
+    assert len(entries) == 2
+    # Metadata + file paths only — no FTS ``doc`` and no pixel data.
+    assert "doc" not in entries[0]
+    assert {"study_uid", "file_path", "study_root_path"} <= set(entries[0])
+    keys = store.existing_study_file_keys()
+    assert (entries[0]["study_uid"], entries[0]["file_path"]) in keys
+    assert len(keys) == 2

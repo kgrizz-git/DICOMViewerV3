@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +24,27 @@ from core.study_index.metadata_extract import dataset_to_index_row
 from core.study_index.sqlcipher_store import StudyIndexStore
 from utils.config_manager import ConfigManager
 from utils.privacy.safe_storage import DeletionResult, secure_unlink
+
+
+def _safe_remove(path: str) -> None:
+    """Best-effort delete; ignore a missing file or a transient OS error."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+@dataclass
+class MissingStudyRecord:
+    """One indexed study whose files are (partly or wholly) missing on disk."""
+
+    study_uid: str
+    study_root_path: str
+    patient_name: str
+    study_date: str
+    modalities: str
+    missing_count: int
+    total_count: int
 
 
 class LocalStudyIndexService:
@@ -120,6 +144,8 @@ class LocalStudyIndexService:
         global_fts_query: str = "",
         limit: int = 100,
         offset: int = 0,
+        order_by: str = "study_date",
+        descending: bool = True,
         privacy_mode: bool = False,
     ) -> list[dict[str, Any]]:
         store = self._get_ready_store()
@@ -134,6 +160,8 @@ class LocalStudyIndexService:
             global_fts_query=global_fts_query,
             limit=limit,
             offset=offset,
+            order_by=order_by,
+            descending=descending,
         )
         if not privacy_mode:
             return rows
@@ -170,6 +198,175 @@ class LocalStudyIndexService:
             return []
         store = self._get_ready_store()
         return store.get_file_paths_for_study(study_uid, study_root_path)
+
+    def integrity_scan(
+        self, progress: Callable[[int, int], None] | None = None
+    ) -> list[MissingStudyRecord]:
+        """
+        Find indexed studies whose files are missing on disk.
+
+        Walks every unique ``(study_uid, study_root_path)`` group, gathers its indexed
+        file paths, and counts how many no longer exist (``os.path.isfile``). A study is
+        reported when its root folder is gone **or** at least one member file is missing.
+
+        ``progress(done, total)`` is called after each study when supplied. Returns an
+        empty list when the backend is unavailable.
+        """
+        if not self.is_backend_available():
+            return []
+        store = self._get_ready_store()
+        groups = store.iter_study_groups()
+        total = len(groups)
+        records: list[MissingStudyRecord] = []
+        for i, g in enumerate(groups):
+            study_uid = (g.get("study_uid") or "").strip()
+            root = (g.get("study_root_path") or "").strip()
+            paths = store.get_file_paths_for_study(study_uid, root)
+            total_count = len(paths)
+            missing_count = sum(1 for p in paths if not os.path.isfile(p))
+            root_gone = bool(root) and not os.path.isdir(root)
+            if root_gone or missing_count > 0:
+                records.append(
+                    MissingStudyRecord(
+                        study_uid=study_uid,
+                        study_root_path=root,
+                        patient_name=str(g.get("patient_name") or ""),
+                        study_date=str(g.get("study_date") or ""),
+                        modalities=str(g.get("modalities") or ""),
+                        missing_count=missing_count,
+                        total_count=total_count,
+                    )
+                )
+            if progress is not None:
+                progress(i + 1, total)
+        return records
+
+    def relocate_study(self, study_uid: str, old_root: str, new_root: str) -> int:
+        """
+        Point an indexed study at a new folder by rewriting its stored paths.
+
+        Delegates the SQL UPDATE to the store, which only commits when at least one
+        relocated path exists on disk. Blank inputs are rejected. Returns rows updated.
+        """
+        if not self.is_backend_available():
+            return 0
+        if not (study_uid or "").strip() or not (old_root or "").strip() or not (new_root or "").strip():
+            return 0
+        store = self._get_ready_store()
+        return store.relocate_study_paths(study_uid, old_root, new_root)
+
+    # --- Metadata (About this index) -----------------------------------------
+
+    def row_count(self) -> int:
+        """Total number of indexed instance rows (0 when the backend is unavailable)."""
+        if not self.is_backend_available():
+            return 0
+        return self._get_ready_store().row_count()
+
+    def db_file_size_bytes(self) -> int | None:
+        """Size of the DB file on disk in bytes, or ``None`` if it does not exist yet."""
+        try:
+            return os.path.getsize(self._db_path())
+        except OSError:
+            return None
+
+    def db_last_modified(self) -> float | None:
+        """Last-modified time (epoch seconds) of the DB file, or ``None`` if absent."""
+        try:
+            return os.path.getmtime(self._db_path())
+        except OSError:
+            return None
+
+    @staticmethod
+    def is_encrypted() -> bool:
+        """The local study index is always encrypted at rest (SQLCipher)."""
+        return True
+
+    # --- Move / Export / Import ----------------------------------------------
+
+    def move_database(self, new_db_path: str) -> str:
+        """Copy the DB to ``new_db_path``, verify it, switch config, delete the old file.
+
+        The copy is verified with ``PRAGMA integrity_check`` (opened through SQLCipher)
+        **before** the config path is updated, and the old file is only deleted once the
+        new path is persisted. On any failure the copy is removed and the original DB and
+        config are left untouched (no half-moved state). Returns the resolved new path.
+        """
+        if not self.is_backend_available():
+            raise RuntimeError("Study index backend is unavailable.")
+        new_path = os.path.normpath(os.path.abspath((new_db_path or "").strip()))
+        if not new_path:
+            raise ValueError("A destination path is required.")
+        old_path = self._db_path()
+        if new_path == old_path:
+            raise ValueError("The destination is the same as the current location.")
+        if os.path.exists(new_path):
+            raise FileExistsError("A file already exists at the destination.")
+
+        passphrase = self._passphrase()
+        # Make sure the source exists and fold the WAL into the main file before copying.
+        self.ensure_store_ready()
+        StudyIndexStore(old_path, passphrase).checkpoint()
+
+        parent = os.path.dirname(new_path)
+        if parent and not os.path.isdir(parent):
+            os.makedirs(parent, mode=0o700, exist_ok=True)
+        shutil.copy2(old_path, new_path)
+
+        try:
+            verified = StudyIndexStore(new_path, passphrase).integrity_check()
+        except Exception:
+            verified = False
+        if not verified:
+            _safe_remove(new_path)
+            raise RuntimeError("The copied database failed verification; move aborted.")
+
+        if not self._config.set_study_index_db_path(new_path):
+            _safe_remove(new_path)
+            raise RuntimeError("Could not save the new index location; move aborted.")
+
+        # Old location is now stale — remove it and its WAL sidecars securely.
+        try:
+            secure_unlink(Path(old_path))
+        except OSError:
+            _safe_remove(old_path)
+        for sidecar in (f"{old_path}-wal", f"{old_path}-shm", f"{old_path}-journal"):
+            _safe_remove(sidecar)
+
+        self._schema_initialized = False
+        self._cached_db_path = ""
+        return new_path
+
+    def export_entries(self) -> list[dict[str, Any]]:
+        """Return every indexed instance row (metadata + file paths only, no pixel data)."""
+        if not self.is_backend_available():
+            return []
+        return self._get_ready_store().iter_all_entries()
+
+    def import_entries(self, rows: list[dict[str, Any]]) -> tuple[int, int]:
+        """Upsert imported rows into the current DB, skipping duplicates.
+
+        Duplicates are keyed on ``(study_uid, file_path)`` against the existing database
+        and within the incoming batch. Returns ``(imported, skipped)``.
+        """
+        if not self.is_backend_available() or not rows:
+            return (0, 0)
+        store = self._get_ready_store()
+        existing = store.existing_study_file_keys()
+        to_add: list[dict[str, Any]] = []
+        skipped = 0
+        for r in rows:
+            study_uid = (r.get("study_uid") or "").strip()
+            file_path = (r.get("file_path") or "").strip()
+            key = (study_uid, file_path)
+            if not study_uid or not file_path or key in existing:
+                skipped += 1
+                continue
+            existing.add(key)
+            to_add.append(r)
+        if to_add:
+            store.upsert_rows(to_add)
+        return (len(to_add), skipped)
 
     def schedule_index_after_load(
         self,

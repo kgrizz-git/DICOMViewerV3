@@ -11,8 +11,10 @@ patient-related fields. Column order is persisted (movable headers).
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import (
@@ -30,23 +32,42 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QTableView,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
 )
 
-from core.study_index.index_service import LocalStudyIndexService
+from core.study_index.index_integrity_thread import StudyIndexIntegrityThread
+from core.study_index.index_service import (
+    LocalStudyIndexService,
+    MissingStudyRecord,
+)
 from core.study_index.metadata_extract import repair_str_bytes_repr_artifact
+from core.study_index.portability import (
+    PIXEL_DATA_DISCLAIMER,
+    read_entries_csv,
+    write_entries_csv,
+)
 from core.study_index.study_date_format import (
     format_partial_mdy_digits,
     format_study_date_display_us,
     parse_study_date_filter_field,
 )
-from gui.study_index_info import open_study_index_location, study_index_db_path
+from gui.study_index_info import (
+    credential_store_note,
+    format_last_modified,
+    format_size_on_disk,
+    open_study_index_location,
+    study_index_db_path,
+)
 from utils.config_manager import ConfigManager
 from utils.log_sanitizer import sanitize_message
 
@@ -88,10 +109,46 @@ _COLUMNS_SANITIZE_BYTES_REPR: frozenset[str] = frozenset(
     }
 )
 
+# Column ids the browser can sort by (server-side). Mirrors the store's grouped-sort
+# whitelist; columns absent here (folder, modalities, sample file, UID) ignore clicks.
+_SORTABLE_COLUMN_IDS: frozenset[str] = frozenset(
+    {
+        "study_date",
+        "patient_name",
+        "patient_id",
+        "accession_number",
+        "study_description",
+        "instance_count",
+        "series_count",
+        "indexed_at",
+    }
+)
+
+
+def _format_indexed_at_display(value: Any) -> str:
+    """Format an ``indexed_at`` epoch-seconds float as local ``YYYY-MM-DD HH:MM``.
+
+    Returns an empty string when the value is missing or not a finite number.
+    """
+    if value is None or value == "":
+        return ""
+    try:
+        epoch = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not math.isfinite(epoch):
+        return ""
+    try:
+        return datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M")
+    except (OverflowError, OSError, ValueError):
+        return ""
+
+
 _COLUMN_LABELS: dict[str, str] = {
     "patient_name": "Patient name",
     "patient_id": "Patient ID",
     "study_date": "Study date",
+    "indexed_at": "Indexed",
     "accession_number": "Accession",
     "study_description": "Study description",
     "study_root_path": "Study folder",
@@ -151,6 +208,8 @@ class _StudyIndexGroupedModel(QAbstractTableModel):
             return str(int(val))
         if cid == "study_date":
             return format_study_date_display_us(str(val))
+        if cid == "indexed_at":
+            return _format_indexed_at_display(val)
         s = str(val)
         if cid in _COLUMNS_SANITIZE_BYTES_REPR:
             s = repair_str_bytes_repr_artifact(s)
@@ -203,6 +262,9 @@ class StudyIndexSearchDialog(QDialog):
         self._config = config_manager
         self._open_paths = open_paths_callback
         self._offset = 0
+        self._sort_column_id = "study_date"
+        self._sort_descending = True
+        self._integrity_thread: StudyIndexIntegrityThread | None = None
         self._save_columns_timer = QTimer(self)
         self._save_columns_timer.setSingleShot(True)
         self._save_columns_timer.timeout.connect(self._persist_column_visual_order)
@@ -278,16 +340,30 @@ class StudyIndexSearchDialog(QDialog):
         self._load_more_btn.clicked.connect(self._on_load_more)
         index_btn = QPushButton("Index folder…")
         index_btn.clicked.connect(self._index_folder)
+        check_btn = QPushButton("Check indexed studies…")
+        check_btn.setToolTip(
+            "Scan the index for studies whose DICOM files are missing on disk, "
+            "then relocate or remove them"
+        )
+        check_btn.clicked.connect(self._check_indexed_studies)
         open_loc_btn = QPushButton("Open index location")
         open_loc_btn.setToolTip(
             f"Reveal the index database folder in your file manager\n{study_index_db_path(self._config)}"
         )
         open_loc_btn.clicked.connect(self._on_open_index_location)
+        about_btn = QPushButton("About this index…")
+        about_btn.setToolTip(
+            "Show where the index lives, its size and encryption status, and "
+            "move / export / import it"
+        )
+        about_btn.clicked.connect(self._show_about_index)
         btn_row.addWidget(search_btn)
         btn_row.addWidget(clear_btn)
         btn_row.addWidget(self._load_more_btn)
         btn_row.addWidget(index_btn)
+        btn_row.addWidget(check_btn)
         btn_row.addWidget(open_loc_btn)
+        btn_row.addWidget(about_btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
@@ -300,7 +376,10 @@ class StudyIndexSearchDialog(QDialog):
         hdr.setSectionsMovable(True)
         hdr.setFirstSectionMovable(True)
         hdr.setStretchLastSection(True)
+        hdr.setSectionsClickable(True)
+        hdr.setSortIndicatorShown(True)
         hdr.sectionMoved.connect(self._on_header_section_moved)
+        hdr.sectionClicked.connect(self._on_header_section_clicked)
         self._table.doubleClicked.connect(self._on_double_click)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
@@ -400,6 +479,8 @@ class StudyIndexSearchDialog(QDialog):
                 **self._service_query_kwargs(df, dt),
                 limit=_PAGE_SIZE,
                 offset=self._offset,
+                order_by=self._sort_column_id,
+                descending=self._sort_descending,
                 privacy_mode=self._privacy(),
             )
         except ValueError as e:
@@ -420,6 +501,7 @@ class StudyIndexSearchDialog(QDialog):
             return
         if reset:
             self._model.set_rows(batch)
+            self._update_sort_indicator()
         else:
             self._model.append_rows(batch)
         self._offset += len(batch)
@@ -442,6 +524,38 @@ class StudyIndexSearchDialog(QDialog):
 
     def _on_load_more(self) -> None:
         self._run_browse(reset=False)
+
+    def _on_header_section_clicked(self, logical_index: int) -> None:
+        """Set the sort column from the clicked header and re-query from the top.
+
+        Clicking the active column toggles ascending/descending; a new column starts
+        descending. Non-sortable columns (folder, modalities, sample file, UID) are
+        ignored. Current filters are preserved and paging uses the same sort.
+        """
+        if logical_index < 0 or logical_index >= self._model.columnCount():
+            return
+        cid = self._model.column_id_at(logical_index)
+        if cid not in _SORTABLE_COLUMN_IDS:
+            return
+        if cid == self._sort_column_id:
+            self._sort_descending = not self._sort_descending
+        else:
+            self._sort_column_id = cid
+            self._sort_descending = True
+        self._run_browse(reset=True, strict_dates=False)
+
+    def _update_sort_indicator(self) -> None:
+        """Show the sort arrow on the active column's current visual position."""
+        hdr = self._table.horizontalHeader()
+        order = (
+            Qt.SortOrder.DescendingOrder
+            if self._sort_descending
+            else Qt.SortOrder.AscendingOrder
+        )
+        for i in range(self._model.columnCount()):
+            if self._model.column_id_at(i) == self._sort_column_id:
+                hdr.setSortIndicator(i, order)
+                return
 
     def _on_double_click(self, index: QModelIndex) -> None:
         if index.isValid():
@@ -608,6 +722,19 @@ class StudyIndexSearchDialog(QDialog):
                 f"Could not open the index location:\n{study_index_db_path(self._config)}",
             )
 
+    def _show_about_index(self) -> None:
+        """Open the About-this-index panel (metadata + move / export / import)."""
+        if not self._backend_ok_or_warn():
+            return
+
+        def on_changed() -> None:
+            self._run_browse(reset=True, strict_dates=False)
+
+        dlg = _AboutStudyIndexDialog(
+            self._service, self._config, on_changed=on_changed, parent=self
+        )
+        dlg.exec()
+
     def _index_folder(self) -> None:
         if not self._backend_ok_or_warn():
             return
@@ -632,6 +759,73 @@ class StudyIndexSearchDialog(QDialog):
             on_failed=on_fail,
         )
 
+    def _check_indexed_studies(self) -> None:
+        """Scan the index for missing files on a background thread, then show results."""
+        if not self._backend_ok_or_warn():
+            return
+
+        progress = QProgressDialog(
+            "Checking indexed studies…", "Cancel", 0, 0, self
+        )
+        progress.setWindowTitle(_TITLE_STUDY_INDEX)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+
+        thread = StudyIndexIntegrityThread(self._service, parent=self)
+        self._integrity_thread = thread
+
+        def on_progress(done: int, total: int) -> None:
+            if total > 0:
+                progress.setMaximum(total)
+                progress.setValue(done)
+
+        def cleanup() -> None:
+            progress.close()
+            self._integrity_thread = None
+
+        def on_ok(records: object) -> None:
+            cleanup()
+            recs = list(records) if isinstance(records, list) else []
+            self._show_missing_studies(recs)
+
+        def on_fail(msg: str) -> None:
+            cleanup()
+            safe = sanitize_message(msg, redact_paths=True)
+            QMessageBox.warning(
+                self, _TITLE_STUDY_INDEX, f"Checking the index failed:\n{safe}"
+            )
+
+        thread.progress.connect(on_progress)
+        thread.finished_ok.connect(on_ok)
+        thread.failed.connect(on_fail)
+        # Cancelling the progress dialog just detaches the UI; the scan is read-only.
+        progress.canceled.connect(progress.close)
+        thread.start()
+
+    def _show_missing_studies(self, records: list[MissingStudyRecord]) -> None:
+        if not records:
+            QMessageBox.information(
+                self,
+                _TITLE_STUDY_INDEX,
+                "All indexed studies were found on disk. Nothing to relocate or remove.",
+            )
+            return
+
+        def on_changed() -> None:
+            self._run_browse(reset=True, strict_dates=False)
+
+        dlg = _MissingStudiesDialog(
+            records,
+            self._service,
+            privacy=self._privacy(),
+            on_changed=on_changed,
+            parent=self,
+        )
+        dlg.exec()
+        # A relocate/remove already refreshed the browse list via on_changed.
+
     def _on_header_section_moved(self, _logical: int, _old_v: int, _new_v: int) -> None:
         self._save_columns_timer.start(150)
 
@@ -652,3 +846,395 @@ class StudyIndexSearchDialog(QDialog):
         finally:
             hdr.blockSignals(False)
         self._apply_hidden_columns()
+
+
+_MISSING_COLUMNS = (
+    "Patient name",
+    "Study date",
+    "Modalities",
+    "Study folder",
+    "Files missing",
+)
+
+
+class _MissingStudiesDialog(QDialog):
+    """Results of an integrity scan: relocate or remove studies with missing files."""
+
+    def __init__(
+        self,
+        records: list[MissingStudyRecord],
+        service: LocalStudyIndexService,
+        *,
+        privacy: bool,
+        on_changed: Callable[[], None],
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._records: list[MissingStudyRecord] = list(records)
+        self._service = service
+        self._privacy = privacy
+        self._on_changed = on_changed
+        self.setWindowTitle("Check indexed studies")
+        self.resize(880, 480)
+        self._build_ui()
+        self._populate()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        hint = QLabel(
+            "These indexed studies have files that were not found on disk. "
+            "<b>Relocate…</b> points the index at a new folder (the files must exist "
+            "there); <b>Remove from index</b> deletes only the database rows for that "
+            "study (never files on disk)."
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(len(_MISSING_COLUMNS))
+        self._table.setHorizontalHeaderLabels(list(_MISSING_COLUMNS))
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.verticalHeader().setVisible(False)
+        hdr = self._table.horizontalHeader()
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self._table)
+
+        btn_row = QHBoxLayout()
+        self._relocate_btn = QPushButton("Relocate…")
+        self._relocate_btn.setToolTip("Point the selected study at a new folder")
+        self._relocate_btn.clicked.connect(self._relocate_selected)
+        self._remove_btn = QPushButton("Remove from index")
+        self._remove_btn.setToolTip(
+            "Delete the selected study’s index rows (does not delete DICOM files)"
+        )
+        self._remove_btn.clicked.connect(self._remove_selected)
+        remove_all_btn = QPushButton("Remove all missing")
+        remove_all_btn.setToolTip(
+            "Delete index rows for every study listed here (does not delete DICOM files)"
+        )
+        remove_all_btn.clicked.connect(self._remove_all)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self._relocate_btn)
+        btn_row.addWidget(self._remove_btn)
+        btn_row.addWidget(remove_all_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _populate(self) -> None:
+        self._table.setRowCount(len(self._records))
+        for row, rec in enumerate(self._records):
+            pn = "***" if self._privacy else (
+                repair_str_bytes_repr_artifact(rec.patient_name) or ""
+            )
+            values = (
+                pn,
+                format_study_date_display_us(rec.study_date or ""),
+                rec.modalities or "",
+                rec.study_root_path or "",
+                f"{rec.missing_count} of {rec.total_count} files missing",
+            )
+            for col, text in enumerate(values):
+                item = QTableWidgetItem(text)
+                item.setToolTip(text)
+                self._table.setItem(row, col, item)
+        self._table.resizeColumnsToContents()
+        has_rows = bool(self._records)
+        self._relocate_btn.setEnabled(has_rows)
+        self._remove_btn.setEnabled(has_rows)
+
+    def _selected_record(self) -> MissingStudyRecord | None:
+        row = self._table.currentRow()
+        if row < 0 or row >= len(self._records):
+            return None
+        return self._records[row]
+
+    def _drop_record(self, rec: MissingStudyRecord) -> None:
+        try:
+            self._records.remove(rec)
+        except ValueError:
+            pass
+        self._populate()
+
+    def _relocate_selected(self) -> None:
+        rec = self._selected_record()
+        if rec is None:
+            QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a study first.")
+            return
+        start = rec.study_root_path or os.path.expanduser("~")
+        new_root = QFileDialog.getExistingDirectory(
+            self, "Select the study’s new folder", start
+        )
+        if not new_root:
+            return
+        try:
+            n = self._service.relocate_study(
+                rec.study_uid, rec.study_root_path, new_root
+            )
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(self, _TITLE_STUDY_INDEX, f"Relocate failed:\n{safe}")
+            return
+        if n <= 0:
+            QMessageBox.warning(
+                self,
+                _TITLE_STUDY_INDEX,
+                "No relocated files were found in that folder. The index was not changed.",
+            )
+            return
+        QMessageBox.information(
+            self,
+            _TITLE_STUDY_INDEX,
+            f"Relocated {n} indexed file(s) to the new folder.",
+        )
+        self._drop_record(rec)
+        self._on_changed()
+
+    def _remove_selected(self) -> None:
+        rec = self._selected_record()
+        if rec is None:
+            QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a study first.")
+            return
+        patient_label = (
+            "***" if self._privacy
+            else repair_str_bytes_repr_artifact(rec.patient_name) or "(unknown patient)"
+        )
+        msg = (
+            "Remove this study from the local encrypted index only?\n\n"
+            f"Patient: {patient_label}\n"
+            f"Folder: {rec.study_root_path}\n\n"
+            "DICOM files on disk are not deleted."
+        )
+        if (
+            QMessageBox.question(self, _TITLE_STUDY_INDEX, msg)
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        if self._delete_one(rec):
+            self._drop_record(rec)
+            self._on_changed()
+
+    def _remove_all(self) -> None:
+        if not self._records:
+            return
+        msg = (
+            f"Remove all {len(self._records)} listed studies from the local encrypted "
+            "index?\n\nDICOM files on disk are not deleted."
+        )
+        if (
+            QMessageBox.question(self, _TITLE_STUDY_INDEX, msg)
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        removed = 0
+        for rec in list(self._records):
+            if self._delete_one(rec):
+                removed += 1
+        self._records = []
+        self._populate()
+        QMessageBox.information(
+            self,
+            _TITLE_STUDY_INDEX,
+            f"Removed {removed} study(ies) from the index.",
+        )
+        self._on_changed()
+
+    def _delete_one(self, rec: MissingStudyRecord) -> bool:
+        try:
+            self._service.delete_grouped_study(rec.study_uid, rec.study_root_path)
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(self, _TITLE_STUDY_INDEX, f"Remove failed:\n{safe}")
+            return False
+        return True
+
+
+class _AboutStudyIndexDialog(QDialog):
+    """About-this-index panel: location, encryption, size, and move / export / import."""
+
+    def __init__(
+        self,
+        service: LocalStudyIndexService,
+        config: ConfigManager,
+        *,
+        on_changed: Callable[[], None],
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._service = service
+        self._config = config
+        self._on_changed = on_changed
+        self.setWindowTitle("About this index")
+        self.resize(640, 360)
+        self._build_ui()
+        self._refresh_info()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+
+        info = QGroupBox("This index")
+        form = QFormLayout(info)
+        self._path_value = QLabel()
+        self._path_value.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._path_value.setWordWrap(True)
+        self._encryption_value = QLabel()
+        self._encryption_value.setWordWrap(True)
+        self._rows_value = QLabel()
+        self._size_value = QLabel()
+        self._modified_value = QLabel()
+        form.addRow("Location:", self._path_value)
+        form.addRow("Encryption:", self._encryption_value)
+        form.addRow("Indexed instances:", self._rows_value)
+        form.addRow("Size on disk:", self._size_value)
+        form.addRow("Last modified:", self._modified_value)
+        layout.addWidget(info)
+
+        open_row = QHBoxLayout()
+        open_loc_btn = QPushButton("Open location")
+        open_loc_btn.setToolTip("Reveal the index database folder in your file manager")
+        open_loc_btn.clicked.connect(self._open_location)
+        open_row.addWidget(open_loc_btn)
+        open_row.addStretch()
+        layout.addLayout(open_row)
+
+        note = QLabel(PIXEL_DATA_DISCLAIMER)
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        actions = QHBoxLayout()
+        move_btn = QPushButton("Move index…")
+        move_btn.setToolTip("Copy the database to a new location and switch to it")
+        move_btn.clicked.connect(self._move_index)
+        export_btn = QPushButton("Export index…")
+        export_btn.setToolTip("Write metadata and file paths to a CSV file")
+        export_btn.clicked.connect(self._export_index)
+        import_btn = QPushButton("Import index…")
+        import_btn.setToolTip("Add rows from a prior CSV export (duplicates skipped)")
+        import_btn.clicked.connect(self._import_index)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        actions.addWidget(move_btn)
+        actions.addWidget(export_btn)
+        actions.addWidget(import_btn)
+        actions.addStretch()
+        actions.addWidget(close_btn)
+        layout.addLayout(actions)
+
+    def _refresh_info(self) -> None:
+        db_path = study_index_db_path(self._config)
+        self._path_value.setText(db_path)
+        self._encryption_value.setText(
+            "Encrypted at rest (SQLCipher). " + credential_store_note()
+        )
+        try:
+            count = self._service.row_count()
+            self._rows_value.setText(f"{count:,}")
+        except Exception:
+            self._rows_value.setText("Unavailable")
+        self._size_value.setText(
+            format_size_on_disk(self._service.db_file_size_bytes())
+        )
+        self._modified_value.setText(
+            format_last_modified(self._service.db_last_modified())
+        )
+
+    def _open_location(self) -> None:
+        if not open_study_index_location(self._config):
+            QMessageBox.information(
+                self,
+                _TITLE_STUDY_INDEX,
+                f"Could not open the index location:\n{study_index_db_path(self._config)}",
+            )
+
+    def _move_index(self) -> None:
+        current = study_index_db_path(self._config)
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            "Move index database to…",
+            current,
+            "SQLite database (*.sqlite);;All files (*)",
+        )
+        if not dest:
+            return
+        confirm = (
+            "Move the encrypted index database to:\n\n"
+            f"{dest}\n\n"
+            "The copy is verified before the old file is deleted. Continue?"
+        )
+        if (
+            QMessageBox.question(self, _TITLE_STUDY_INDEX, confirm)
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            new_path = self._service.move_database(dest)
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(
+                self, _TITLE_STUDY_INDEX, f"Could not move the index:\n{safe}"
+            )
+            return
+        QMessageBox.information(
+            self, _TITLE_STUDY_INDEX, f"Index moved to:\n{new_path}"
+        )
+        self._refresh_info()
+        self._on_changed()
+
+    def _export_index(self) -> None:
+        default_name = os.path.join(
+            os.path.dirname(study_index_db_path(self._config)),
+            "study_index_export.csv",
+        )
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export index (metadata + file paths only)",
+            default_name,
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not dest:
+            return
+        try:
+            rows = self._service.export_entries()
+            n = write_entries_csv(dest, rows)
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(
+                self, _TITLE_STUDY_INDEX, f"Export failed:\n{safe}"
+            )
+            return
+        QMessageBox.information(
+            self,
+            _TITLE_STUDY_INDEX,
+            f"Exported {n} indexed entr(ies) (metadata + file paths only).",
+        )
+
+    def _import_index(self) -> None:
+        start = os.path.dirname(study_index_db_path(self._config))
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Import index from CSV", start, "CSV files (*.csv);;All files (*)"
+        )
+        if not src:
+            return
+        try:
+            rows = read_entries_csv(src)
+            added, skipped = self._service.import_entries(rows)
+        except Exception as e:
+            safe = sanitize_message(str(e), redact_paths=True)
+            QMessageBox.critical(
+                self, _TITLE_STUDY_INDEX, f"Import failed:\n{safe}"
+            )
+            return
+        QMessageBox.information(
+            self,
+            _TITLE_STUDY_INDEX,
+            f"Imported {added} new entr(ies); skipped {skipped} duplicate(s).",
+        )
+        if added:
+            self._refresh_info()
+            self._on_changed()
