@@ -1,6 +1,6 @@
 # Study Index — Recently-Indexed View & Easy Remove
 
-**Status:** In progress (2026-07-21)
+**Status:** Done (2026-07-21) — both phases shipped on branch `chore/queue-followups`.
 **Priority:** P1 (closes the "see and remove recently added studies" remainder of the first-launch opt-in item)
 **Parent:** [Study index portability & encryption UI](STUDY_INDEX_PORTABILITY_AND_ENCRYPTION_UI_PLAN.md)
 
