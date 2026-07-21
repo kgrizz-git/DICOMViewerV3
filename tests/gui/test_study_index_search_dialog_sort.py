@@ -120,3 +120,18 @@ def test_header_click_ignores_non_sortable_column(qapp) -> None:
 
 def test_indexed_at_in_default_columns() -> None:
     assert "indexed_at" in STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT
+
+
+def test_recently_indexed_clears_filters_and_sorts_by_indexed_at(qapp) -> None:
+    dlg, service = _build_dialog(qapp)
+    try:
+        dlg._patient_name.setText("foo")
+        service.calls.clear()
+        dlg._on_recently_indexed_clicked()
+        assert dlg._patient_name.text() == ""
+        assert service.calls, "recently indexed should re-query"
+        last = service.calls[-1]
+        assert last["order_by"] == "indexed_at"
+        assert last["descending"] is True
+    finally:
+        dlg.deleteLater()

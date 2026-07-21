@@ -46,6 +46,14 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
 
 ## Phase 1 — Optional encryption toggle + migration
 
+**Status: DEFERRED (decided 2026-07-21).** A user-facing toggle that lets people
+migrate the PHI index to **plaintext** is closer to a footgun than a feature — it
+downgrades at-rest protection for patient names/IDs/paths with little practical
+upside, and the migration + irreversible-warning surface is non-trivial. The index
+stays **always SQLCipher-encrypted** for now. If a concrete need appears (e.g. a
+platform without keyring), revisit with the 1b off-warning wording already drafted
+below. The remaining Phase 1 tasks are kept for reference, not scheduled.
+
 ### 1a. Config & backend
 
 - [ ] Add setting `study_index_encryption_enabled` (bool, default **False**) in `ConfigManager` / `study_index_config.py`.
@@ -59,11 +67,12 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
   - Write to a temp file, verify row count matches, then atomically rename.
   - Rollback on any failure; never leave a half-written DB.
 - [ ] Call migration from Settings when the toggle changes, with a confirmation dialog explaining that a restart may be needed or that the migration may take a moment for large indexes.
+- [ ] **Warn explicitly when turning encryption OFF.** Toggling encryption off must show a prominent confirmation (not just a tooltip) before migrating to plaintext: the index stores **patient names, IDs, study descriptions, and file paths**, and disabling encryption leaves that readable by anyone with disk access. Default the dialog button to **Cancel / keep encrypted**; only proceed on explicit confirmation. (Enabling encryption needs no such warning.)
 
 ### 1c. Settings UI
 
 - [ ] Add **Study Index** section to **Edit → Settings…** (or a dedicated tab):
-  - **Encryption** toggle with tooltip explaining tradeoffs.
+  - **Encryption** toggle with tooltip explaining tradeoffs; turning it **off** triggers the explicit at-rest-exposure warning from 1b.
   - Current DB path (read-only label) + **Browse…** button (already exists) + **Default** reset.
   - **Passphrase:** when encryption is on, note "Stored in OS credential store" with link to `keyring_storage.py` docs; no user-visible passphrase field (P2 item for user-configurable passphrase).
 
@@ -117,7 +126,7 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
 - [ ] `LocalStudyIndexService.relocate_study(study_uid, old_root, new_root)`:
   - Update all `file_path` entries by replacing `old_root` prefix with `new_root`.
   - Verify at least one relocated path exists before committing.
-- [ ] On load-from-index when files are missing (existing behavior: warns), add a **Relocate…** quick-action in the warning dialog.
+- [x] On load-from-index when files are missing (existing behavior: warns), add a **Relocate…** quick-action in the warning dialog. **DONE 2026-07-21** — `study_index_search_dialog.py::_relocate_and_reopen()`; the fully-missing branches of `_open_row` now offer **Relocate…** (default) and, when a sample fallback exists, **Load sample only**. Relocation calls `relocate_study`, refreshes the list, and reopens the new folder directly. Tests: `tests/gui/test_study_index_open_relocate.py`.
 
 ### Tests
 
