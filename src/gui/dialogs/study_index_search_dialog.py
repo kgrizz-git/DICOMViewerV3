@@ -285,7 +285,8 @@ class StudyIndexSearchDialog(QDialog):
             "Patient-related columns respect <b>Privacy mode</b> when enabled in View. "
             "Study dates in the table use <b>MM/DD/YYYY</b>; date filters accept the same "
             "or <b>YYYYMMDD</b>. <b>Remove from index</b> deletes only database rows for that "
-            "study and folder (not files on disk). Drag column headers to reorder; order is saved."
+            "study and folder (not files on disk). Drag column headers to reorder; order is saved. "
+            "<b>Recently indexed</b> clears filters and surfaces the most recently added studies first."
         )
         hint.setTextFormat(Qt.TextFormat.RichText)
         hint.setWordWrap(True)
@@ -346,6 +347,12 @@ class StudyIndexSearchDialog(QDialog):
             "then relocate or remove them"
         )
         check_btn.clicked.connect(self._check_indexed_studies)
+        recent_btn = QPushButton("Recently indexed")
+        recent_btn.setToolTip(
+            "Clear filters and list studies newest-indexed first "
+            "(most recent auto-adds at top)."
+        )
+        recent_btn.clicked.connect(self._on_recently_indexed_clicked)
         open_loc_btn = QPushButton("Open index location")
         open_loc_btn.setToolTip(
             f"Reveal the index database folder in your file manager\n{study_index_db_path(self._config)}"
@@ -362,6 +369,7 @@ class StudyIndexSearchDialog(QDialog):
         btn_row.addWidget(self._load_more_btn)
         btn_row.addWidget(index_btn)
         btn_row.addWidget(check_btn)
+        btn_row.addWidget(recent_btn)
         btn_row.addWidget(open_loc_btn)
         btn_row.addWidget(about_btn)
         btn_row.addStretch()
@@ -521,6 +529,23 @@ class StudyIndexSearchDialog(QDialog):
         self._date_from.clear()
         self._date_to.clear()
         self._run_browse(reset=True, strict_dates=False)
+
+    def _on_recently_indexed_clicked(self) -> None:
+        """Clear filters and show the newest-indexed studies first."""
+        self._global_fts.clear()
+        self._patient_name.clear()
+        self._patient_id.clear()
+        self._modality.clear()
+        self._accession.clear()
+        self._study_desc.clear()
+        self._date_from.clear()
+        self._date_to.clear()
+        self._sort_column_id = "indexed_at"
+        self._sort_descending = True
+        self._run_browse(reset=True, strict_dates=False)
+        self._update_sort_indicator()
+        if self._model.rowCount() > 0:
+            self._table.selectRow(0)
 
     def _on_load_more(self) -> None:
         self._run_browse(reset=False)
