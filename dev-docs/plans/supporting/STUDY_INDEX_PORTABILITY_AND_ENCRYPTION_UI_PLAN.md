@@ -59,11 +59,12 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
   - Write to a temp file, verify row count matches, then atomically rename.
   - Rollback on any failure; never leave a half-written DB.
 - [ ] Call migration from Settings when the toggle changes, with a confirmation dialog explaining that a restart may be needed or that the migration may take a moment for large indexes.
+- [ ] **Warn explicitly when turning encryption OFF.** Toggling encryption off must show a prominent confirmation (not just a tooltip) before migrating to plaintext: the index stores **patient names, IDs, study descriptions, and file paths**, and disabling encryption leaves that readable by anyone with disk access. Default the dialog button to **Cancel / keep encrypted**; only proceed on explicit confirmation. (Enabling encryption needs no such warning.)
 
 ### 1c. Settings UI
 
 - [ ] Add **Study Index** section to **Edit → Settings…** (or a dedicated tab):
-  - **Encryption** toggle with tooltip explaining tradeoffs.
+  - **Encryption** toggle with tooltip explaining tradeoffs; turning it **off** triggers the explicit at-rest-exposure warning from 1b.
   - Current DB path (read-only label) + **Browse…** button (already exists) + **Default** reset.
   - **Passphrase:** when encryption is on, note "Stored in OS credential store" with link to `keyring_storage.py` docs; no user-visible passphrase field (P2 item for user-configurable passphrase).
 
