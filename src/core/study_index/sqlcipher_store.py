@@ -307,6 +307,68 @@ class StudyIndexStore:
             )
             return [row[0] for row in cur.fetchall()]
 
+    def row_count(self) -> int:
+        """Total number of indexed instance rows (0 for an empty database)."""
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM study_index_entry")
+            row = cur.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+
+    def checkpoint(self) -> None:
+        """Fold any WAL contents back into the main DB file so it is safe to copy."""
+        with self._connect() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            conn.commit()
+
+    def integrity_check(self) -> bool:
+        """Return True when the DB decrypts and ``PRAGMA integrity_check`` reports ``ok``.
+
+        Raises the underlying decrypt/IO error if the file cannot be opened with the
+        current passphrase (callers treat any exception as a failed verification).
+        """
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("PRAGMA integrity_check;")
+            rows = cur.fetchall()
+        return len(rows) == 1 and str(rows[0][0]).strip().lower() == "ok"
+
+    # Metadata + file-path columns exported/imported for portability. Explicitly
+    # excludes the FTS ``doc`` column and never touches DICOM pixel data (not stored).
+    _PORTABLE_COLUMNS: tuple[str, ...] = (
+        "study_uid",
+        "file_path",
+        "study_root_path",
+        "series_uid",
+        "sop_instance_uid",
+        "patient_name",
+        "patient_id",
+        "accession_number",
+        "study_date",
+        "study_description",
+        "series_description",
+        "modality",
+        "indexed_at",
+    )
+
+    def iter_all_entries(self) -> list[dict[str, Any]]:
+        """Return every indexed instance row (metadata + file paths only, no FTS doc)."""
+        cols = ", ".join(self._PORTABLE_COLUMNS)  # fixed constant identifiers, not user input
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT {cols} FROM study_index_entry ORDER BY study_uid, file_path"
+            )
+            names = [d[0] for d in cur.description]
+            return [dict(zip(names, row, strict=False)) for row in cur.fetchall()]
+
+    def existing_study_file_keys(self) -> set[tuple[str, str]]:
+        """Return the set of ``(study_uid, file_path)`` keys already in the database."""
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT study_uid, file_path FROM study_index_entry")
+            return {((r[0] or ""), (r[1] or "")) for r in cur.fetchall()}
+
     def iter_study_groups(self) -> list[dict[str, Any]]:
         """
         Return every unique (``study_uid``, ``study_root_path``) group with light metadata.
