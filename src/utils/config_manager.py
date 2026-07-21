@@ -45,6 +45,7 @@ from utils.config.qa_pylinac_config import QaPylinacConfigMixin
 from utils.config.roi_config import ROIConfigMixin
 from utils.config.slice_sync_config import SliceSyncConfigMixin
 from utils.config.study_index_config import StudyIndexConfigMixin
+from utils.config.study_load_config import StudyLoadConfigMixin
 from utils.config.tag_export_config import TagExportConfigMixin
 from utils.privacy.safe_storage import (
     assert_safe_internal_path,
@@ -77,6 +78,7 @@ class ConfigManager(
     SliceSyncConfigMixin,
     QaPylinacConfigMixin,
     StudyIndexConfigMixin,
+    StudyLoadConfigMixin,
     PrivacyStorageConfigMixin,
 ):
     """
@@ -109,6 +111,7 @@ class ConfigManager(
         SliceSyncConfigMixin    – slice sync enabled flag and linked groups
         QaPylinacConfigMixin    – persisted pylinac QA options (e.g. MRI LC method/threshold/sanity)
         StudyIndexConfigMixin   – local encrypted study index DB path, auto-add on open
+        StudyLoadConfigMixin    – study-load memory budget fraction and study-count safety cap
     """
 
     def __init__(
@@ -254,6 +257,9 @@ class ConfigManager(
             "study_index_auto_add_consent": None,
             "study_index_browser_column_order": [],
             "study_index_passphrase_warning_dismissed": False,
+            # Study load memory budget (see core/study_cache.StudyCache)
+            "study_load_memory_fraction": 0.40,
+            "study_load_max_studies_cap": 20,
         }
 
         self.config = self._load_config()
