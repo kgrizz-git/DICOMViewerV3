@@ -1,6 +1,6 @@
 # Study Index — Browser Column, Integrity Scan & Portability (Execution Plan)
 
-**Status:** In progress (2026-07-20)
+**Status:** Phases A, 3, and 2 complete (2026-07-21). Encryption toggle (parent Phase 1) and relative paths (parent Phase 4) remain backlog.
 **Priority:** P1
 **Parent plan:** [Study index portability & encryption UI](STUDY_INDEX_PORTABILITY_AND_ENCRYPTION_UI_PLAN.md) (this doc is the ordered execution breakdown for Phases A→2 below)
 **Branch:** `feat/study-index-browser-integrity`
