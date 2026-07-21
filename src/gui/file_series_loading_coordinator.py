@@ -449,27 +449,39 @@ class FileSeriesLoadingCoordinator:
             for uid in new_study_uids:
                 study_cache.mark_accessed(uid)
 
-            # Check if we exceed the study limit or memory threshold
-            needs_eviction = (
-                len(app.current_studies) > study_cache.max_studies
-                or study_cache.would_exceed_memory()
+            # Check if we exceed the memory budget (primary limit) or the
+            # study-count safety net (secondary, high-water cap).
+            budget_mb = study_cache.get_memory_budget_mb()
+            estimated_loaded_mb = study_cache.estimate_total_loaded_mb(app.current_studies)
+            memory_exceeded = (
+                estimated_loaded_mb > budget_mb or study_cache.would_exceed_memory(budget_mb)
             )
+            count_exceeded = len(app.current_studies) > study_cache.max_studies
+            needs_eviction = memory_exceeded or count_exceeded
             if needs_eviction:
                 from core.study_cache import (
                     show_eviction_confirmation,
                 )
 
                 active_uid = getattr(app, "current_study_uid", "")
-                candidates = study_cache.get_eviction_candidates(
+                candidates = study_cache.get_eviction_candidates_by_size(
                     app.current_studies,
+                    budget_mb,
                     active_study_uid=active_uid,
                 )
+                if count_exceeded:
+                    # Ensure the safety-net cap is also satisfied: if the
+                    # size-based candidates wouldn't bring the count back
+                    # under the cap, top up with the count-based candidates.
+                    remaining_after = len(app.current_studies) - len(candidates)
+                    if remaining_after > study_cache.max_studies:
+                        for uid in study_cache.get_eviction_candidates(
+                            app.current_studies, active_study_uid=active_uid
+                        ):
+                            if uid not in candidates:
+                                candidates.append(uid)
                 if candidates:
-                    reason = (
-                        "memory limit"
-                        if study_cache.would_exceed_memory()
-                        else "study limit reached"
-                    )
+                    reason = "memory budget" if memory_exceeded else "study count cap"
                     descriptions = [
                         study_cache.get_study_description(uid, app.current_studies)
                         for uid in candidates

@@ -28,7 +28,6 @@ import ctypes.wintypes
 import logging
 import os
 import platform
-import sys
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
@@ -94,8 +93,11 @@ def estimate_study_size_mb(
 ) -> float:
     """Rough estimate of a study's memory footprint in MB.
 
-    Iterates datasets and sums ``sys.getsizeof`` on any cached pixel arrays
-    plus the ``PixelData`` tag size as a proxy for uncompressed data.
+    Iterates datasets and, for each, prefers the true byte size of a cached
+    decompressed NumPy pixel array (``array.nbytes``) when present; otherwise
+    falls back to the raw ``PixelData`` element's byte length as a proxy for
+    uncompressed data. The two terms are never summed together (that would
+    double-count the same pixel data once decompressed).
     """
     study_series = studies_dict.get(study_uid)
     if not study_series:
@@ -104,18 +106,81 @@ def estimate_study_size_mb(
     total_bytes = 0
     for _series_key, datasets in study_series.items():
         for ds in datasets:
-            # Cached pixel array (numpy)
+            # Cached pixel array (numpy) — the real decompressed footprint.
+            # ``sys.getsizeof`` on a numpy array only returns the small
+            # object-header overhead (~112 bytes), not the buffer it wraps,
+            # so it must not be used here.
             cached = getattr(ds, "_cached_pixel_array", None)
-            if cached is not None:
-                total_bytes += sys.getsizeof(cached)
-            # Raw PixelData tag
-            elem = ds.get((0x7FE0, 0x0010))  # PixelData
-            if elem is not None and hasattr(elem, "value") and elem.value is not None:
-                total_bytes += len(elem.value)
+            nbytes = getattr(cached, "nbytes", None) if cached is not None else None
+            if isinstance(nbytes, int) and nbytes > 0:
+                total_bytes += nbytes
+            else:
+                # No cached array yet (or it lacks .nbytes) — fall back to
+                # the raw (possibly compressed) PixelData element length.
+                elem = ds.get((0x7FE0, 0x0010))  # PixelData
+                if elem is not None and hasattr(elem, "value") and elem.value is not None:
+                    total_bytes += len(elem.value)
             # Minimal per-dataset overhead
             total_bytes += 1024  # ~1 KB metadata overhead estimate
 
     return total_bytes / (1024 * 1024)
+
+
+# ---------------------------------------------------------------------------
+# Total system memory detection
+# ---------------------------------------------------------------------------
+
+def get_total_system_memory_mb() -> float:
+    """Get total installed system RAM in MB. Returns 0.0 if unavailable.
+
+    Cross-platform, dependency-free (no psutil):
+      - Windows: ``GlobalMemoryStatusEx`` (``MEMORYSTATUSEX.ullTotalPhys``)
+        via ctypes.
+      - Linux/macOS: ``os.sysconf('SC_PHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')``.
+      - macOS fallback (if the sysconf name is missing): ``sysctl -n hw.memsize``.
+    """
+    try:
+        if os.name == "nt":
+            class MEMORYSTATUSEX(ctypes.Structure):  # mirrors the Win32 struct name
+                _fields_ = [
+                    ("dwLength", ctypes.wintypes.DWORD),
+                    ("dwMemoryLoad", ctypes.wintypes.DWORD),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):  # type: ignore[attr-defined]
+                return stat.ullTotalPhys / (1024 * 1024)
+        else:
+            try:
+                pages = os.sysconf("SC_PHYS_PAGES")
+                page_size = os.sysconf("SC_PAGE_SIZE")
+                if pages > 0 and page_size > 0:
+                    return (pages * page_size) / (1024 * 1024)
+            except (ValueError, OSError, AttributeError):
+                pass
+            if platform.system() == "Darwin":
+                import subprocess
+
+                result = subprocess.run(
+                    ["sysctl", "-n", "hw.memsize"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return int(result.stdout.strip()) / (1024 * 1024)
+    except Exception:
+        pass
+    return 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -131,8 +196,8 @@ def show_eviction_confirmation(
 
     Args:
         parent: Parent widget for the dialog (e.g. ``app.main_window``).
-        reason: Human-readable reason (e.g. "study limit reached" or
-                "memory limit").
+        reason: Human-readable reason (e.g. "memory budget" or
+                "study count cap").
         study_descriptions: List of study descriptions that will be unloaded.
 
     Returns:
@@ -166,18 +231,29 @@ class StudyCache:
     decisions, memory monitoring, and cache cleanup.
 
     Args:
-        max_studies: Maximum number of studies to keep in memory (default 5).
+        max_studies: Safety-net cap on the number of studies to keep in
+            memory (default 5; callers typically raise this — e.g. to 20 —
+            once the memory budget below is the primary limit).
         memory_threshold_mb: RSS threshold in MB that triggers memory-based
-            eviction (default 3000).
+            eviction (default 3000). Also used as the ``get_memory_budget_mb``
+            fallback when total system RAM cannot be determined.
+        memory_fraction: Fraction of total system RAM to use as the primary
+            memory budget (default 0.40).
+        memory_floor_mb: Minimum memory budget in MB regardless of *memory_fraction*
+            (default 1024).
     """
 
     def __init__(
         self,
         max_studies: int = 5,
         memory_threshold_mb: float = 3000.0,
+        memory_fraction: float = 0.40,
+        memory_floor_mb: float = 1024.0,
     ) -> None:
         self.max_studies = max_studies
         self.memory_threshold_mb = memory_threshold_mb
+        self.memory_fraction = memory_fraction
+        self.memory_floor_mb = memory_floor_mb
         # OrderedDict keyed by study_uid; values are unused (True).
         # Most-recently-accessed study is at the *end*.
         self._access_order: OrderedDict[str, bool] = OrderedDict()
@@ -220,6 +296,29 @@ class StudyCache:
         if usage <= 0.0:
             return False  # cannot measure; assume OK
         return usage > limit
+
+    def get_memory_budget_mb(self) -> float:
+        """Return the primary memory budget in MB.
+
+        Computed as ``memory_fraction`` of total system RAM, clamped to a
+        minimum of ``memory_floor_mb``. If total system RAM cannot be
+        determined (``get_total_system_memory_mb`` returns 0.0), falls back
+        to the absolute ``memory_threshold_mb`` so behavior degrades
+        gracefully instead of producing an unbounded or zero budget.
+        """
+        total_ram_mb = get_total_system_memory_mb()
+        if total_ram_mb <= 0.0:
+            return self.memory_threshold_mb
+        return max(self.memory_fraction * total_ram_mb, self.memory_floor_mb)
+
+    def estimate_total_loaded_mb(
+        self,
+        studies_dict: dict[str, dict[str, list[Dataset]]],
+    ) -> float:
+        """Return the estimated in-memory footprint of all loaded studies, in MB."""
+        return sum(
+            estimate_study_size_mb(uid, studies_dict) for uid in studies_dict
+        )
 
     # -- Eviction logic ------------------------------------------------------
 
@@ -268,6 +367,62 @@ class StudyCache:
                     continue
                 if uid not in self._access_order and uid not in candidates:
                     candidates.append(uid)
+
+        return candidates
+
+    def get_eviction_candidates_by_size(
+        self,
+        studies_dict: dict[str, dict[str, list[Dataset]]],
+        budget_mb: float,
+        active_study_uid: str | None = None,
+    ) -> list[str]:
+        """Return study UIDs to evict (oldest first) to fit within *budget_mb*.
+
+        Walks studies in LRU order (oldest first; untracked studies are
+        treated as oldest-of-all, same fallback order as
+        :meth:`get_eviction_candidates`), accumulating
+        :func:`estimate_study_size_mb` for each until the estimated total
+        footprint minus what's been freed is at or below *budget_mb*. The
+        *active_study_uid* is never included.
+
+        If no size information is available at all (every study estimates to
+        0.0 — e.g. datasets have no cached pixel data or PixelData yet),
+        falls back to the count-based :meth:`get_eviction_candidates` so
+        eviction still makes progress.
+
+        Args:
+            studies_dict: The organizer's ``studies`` dict.
+            budget_mb: Target memory budget in MB.
+            active_study_uid: Study UID that must not be evicted.
+
+        Returns:
+            List of study UIDs to evict, oldest first.
+        """
+        sizes = {uid: estimate_study_size_mb(uid, studies_dict) for uid in studies_dict}
+        total_mb = sum(sizes.values())
+        if total_mb <= budget_mb:
+            return []
+
+        if total_mb <= 0.0:
+            # No usable size data — fall back to the count-based strategy.
+            return self.get_eviction_candidates(
+                studies_dict, active_study_uid=active_study_uid
+            )
+
+        # Oldest-first: tracked studies in LRU order, then any studies not
+        # yet in the LRU tracker (mirrors get_eviction_candidates's fallback).
+        ordered = [uid for uid in self._access_order if uid in studies_dict]
+        ordered += [uid for uid in studies_dict if uid not in self._access_order]
+
+        candidates: list[str] = []
+        remaining_mb = total_mb
+        for uid in ordered:
+            if remaining_mb <= budget_mb:
+                break
+            if uid == active_study_uid:
+                continue
+            candidates.append(uid)
+            remaining_mb -= sizes.get(uid, 0.0)
 
         return candidates
 

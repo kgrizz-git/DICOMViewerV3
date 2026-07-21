@@ -376,9 +376,14 @@ class DICOMViewerApp(QObject):
         self.dicom_organizer = DICOMOrganizer()
         self.dicom_processor = DICOMProcessor()
 
-        # LRU study cache (limits loaded studies in memory)
+        # LRU study cache: memory budget (fraction of system RAM) is the
+        # primary limit; max_studies is a high-water safety net only.
         from core.study_cache import StudyCache
-        self.study_cache = StudyCache(max_studies=5)
+        self.study_cache = StudyCache(
+            max_studies=self.config_manager.get_study_load_max_studies_cap(),
+            memory_fraction=self.config_manager.get_study_load_memory_fraction(),
+            memory_floor_mb=1024.0,
+        )
 
         # Tag-edit history and general undo/redo stack
         self.tag_edit_history = TagEditHistoryManager(max_history=50)
