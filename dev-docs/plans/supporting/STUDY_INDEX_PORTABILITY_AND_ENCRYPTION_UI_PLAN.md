@@ -1,9 +1,9 @@
 # Study Index Portability & Encryption UI Plan
 
-**Status:** Not started  
+**Status:** Phase 0, Phase 2, and Phase 3 complete; optional plaintext migration deferred; relative paths remain backlog.
 **Priority:** P1  
 **Execution breakdown (Phases A→2, agent-run):** [Study index browser, integrity & portability execution plan](STUDY_INDEX_BROWSER_AND_INTEGRITY_EXECUTION_PLAN.md)
-**TO_DO refs:** UX/Workflow — "First-launch study-index opt-in prompt," "Study index — optional encryption (off by default)," "Study index — location & portability UI," "Allow a button in study index that checks all indexed studies still exist," "Study index — relative file paths"
+**TO_DO refs:** UX/Workflow — "Study index — optional encryption toggle — DEFERRED" and "Study index — relative file paths"
 
 ---
 
@@ -11,12 +11,12 @@
 
 Expose the study index's encryption, location, and health features through clear in-app UI so users can:
 
-1. Turn encryption **off** (default) or on, with safe migration.
+1. Keep the study index encrypted at rest by default and in the current product contract.
 2. See where the DB lives, move it, export/import metadata.
 3. Run a bulk **integrity scan** to find missing studies and relocate or remove them.
 4. (Future / P2) Store relative file paths for USB portability.
 
-Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-generated in the OS keyring, the DB path is configurable in **Edit → Settings…**, and there is no integrity scan or export/import UI.
+The index is **always SQLCipher-encrypted**; the passphrase is auto-generated in the OS keyring. The Study Index dialog provides index location, health, move, metadata export/import, and relocate/remove workflows. A plaintext migration is deliberately not exposed.
 
 ---
 
@@ -44,7 +44,7 @@ Currently the index is **always SQLCipher-encrypted**, the passphrase is auto-ge
 
 ---
 
-## Phase 1 — Optional encryption toggle + migration
+## Phase 1 — Optional plaintext migration (deferred)
 
 **Status: DEFERRED (decided 2026-07-21).** A user-facing toggle that lets people
 migrate the PHI index to **plaintext** is closer to a footgun than a feature — it
@@ -56,7 +56,7 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 
 ### 1a. Config & backend
 
-- [ ] Add setting `study_index_encryption_enabled` (bool, default **False**) in `ConfigManager` / `study_index_config.py`.
+- [ ] Only if the policy is explicitly reversed, add `study_index_encryption_enabled` (bool, default **True**) in `ConfigManager` / `study_index_config.py`.
 - [ ] When encryption is **off**, `StudyIndexStore` opens/creates the DB as plain SQLite (no `PRAGMA key`).
 - [ ] When encryption is **on**, behaviour is unchanged from today (SQLCipher + keyring passphrase).
 
@@ -87,26 +87,26 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 
 ## Phase 2 — Location & portability UI ("About this index" panel)
 
-- [ ] Add an **About this index…** button or info panel accessible from the Study Index Search dialog and from Settings:
+- [x] Add an **About this index…** panel in the Study Index Search dialog:
   - **DB path** (clickable → opens containing folder in Explorer/Finder).
   - **Encryption status** (on/off, credential-store location).
   - **Row count** / size on disk.
   - **Last modified** timestamp.
 - [x] **Open index location** button → `QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))`. **DONE 2026-07-20** — in the Study Index dialog and the first-open prompt, via `gui/study_index_info.py::open_study_index_location()` (opens the nearest existing ancestor if the DB file doesn't exist yet).
-- [ ] **Move index…** button:
+- [x] **Move index…** button:
   - File-save dialog for new location.
   - Copy DB file → verify integrity (open + `PRAGMA integrity_check`) → update config → delete old file.
   - Confirm dialog before proceeding.
-- [ ] **Export index…** button:
+- [x] **Export index…** button:
   - Exports **metadata and file paths only** (CSV or JSON) — no pixel data.
   - Clear label: "This export contains study metadata and file paths. DICOM image data is NOT included."
-- [ ] **Import index…** button:
+- [x] **Import index…** button:
   - Reads a previously exported CSV/JSON and upserts rows into the current DB.
   - Conflict resolution: skip duplicates (same StudyInstanceUID + file path).
 
 ### Tests
 
-- [ ] `tests/test_study_index_portability_ui.py`:
+- [x] `tests/test_study_index_portability_ui.py`:
   - Move DB, reopen, verify search still works.
   - Export → import round-trip preserves all rows.
 
@@ -114,23 +114,23 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 
 ## Phase 3 — Integrity scan & relocate
 
-- [ ] Add **Check indexed studies…** button to Study Index Search dialog toolbar.
-- [ ] `LocalStudyIndexService.integrity_scan() -> list[MissingStudyRecord]`:
+- [x] Add **Check indexed studies…** button to Study Index Search dialog toolbar.
+- [x] `LocalStudyIndexService.integrity_scan() -> list[MissingStudyRecord]`:
   - For each unique `(study_instance_uid, study_root_path)`, check if the root path exists and at least one file path exists on disk.
   - Run in a `QThread` with progress dialog (can be many studies).
   - Return list of studies whose files are missing.
-- [ ] Results dialog:
+- [x] Results dialog:
   - Table of missing studies (patient name, study date, modality, old path).
   - Per-row actions: **Relocate…** (file dialog to pick new root), **Remove from index**.
   - Bulk actions: **Remove all missing**, **Cancel**.
-- [ ] `LocalStudyIndexService.relocate_study(study_uid, old_root, new_root)`:
+- [x] `LocalStudyIndexService.relocate_study(study_uid, old_root, new_root)`:
   - Update all `file_path` entries by replacing `old_root` prefix with `new_root`.
   - Verify at least one relocated path exists before committing.
 - [x] On load-from-index when files are missing (existing behavior: warns), add a **Relocate…** quick-action in the warning dialog. **DONE 2026-07-21** — `study_index_search_dialog.py::_relocate_and_reopen()`; the fully-missing branches of `_open_row` now offer **Relocate…** (default) and, when a sample fallback exists, **Load sample only**. Relocation calls `relocate_study`, refreshes the list, and reopens the new folder directly. Tests: `tests/gui/test_study_index_open_relocate.py`.
 
 ### Tests
 
-- [ ] `tests/test_study_index_integrity_scan.py`:
+- [x] `tests/test_study_index_integrity_scan.py` and `tests/gui/test_study_index_missing_studies_dialog.py`:
   - Seed DB with paths, delete some files, run scan, verify missing list.
   - Relocate updates paths correctly.
   - Remove purges rows.
@@ -147,9 +147,8 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 
 ## Open questions
 
-1. **Default encryption off:** Confirm this is acceptable from a privacy standpoint. The index stores patient names, IDs, study descriptions — but Privacy Mode already governs on-screen display. Encryption protects the file at rest; without it, the SQLite file is readable by anyone with disk access.
-2. **Export format:** CSV (simple, Excel-friendly) vs JSON (richer, nested) vs both? Recommend CSV as primary.
-3. **Auto-add on open + canceled loads:** Should partial loads still auto-index? (Separate bug item in TO_DO, but interacts with this plan.)
+1. **Plaintext migration:** Keep deferred unless a concrete platform/keyring need warrants an explicit product and privacy review. Any future setting must default to encryption enabled and require the Phase 1b at-rest-exposure confirmation before creating plaintext.
+2. **Export format:** CSV is implemented for metadata and file paths only; no pixel data are exported. JSON can be considered if a concrete portability use case needs it.
 
 ---
 
@@ -157,8 +156,8 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 
 | File | Change |
 |------|--------|
-| `src/utils/config/study_index_config.py` | New `encryption_enabled` setting |
-| `src/core/study_index/sqlcipher_store.py` | Plain-SQLite path + `migrate_encryption()` |
+| `src/utils/config/study_index_config.py` | Future-only `encryption_enabled` setting if the deferred policy changes |
+| `src/core/study_index/sqlcipher_store.py` | Future-only plain-SQLite path + `migrate_encryption()` |
 | `src/core/study_index/index_service.py` | `integrity_scan()`, `relocate_study()` |
 | `src/gui/dialogs/settings_dialog.py` | Encryption toggle, info panel |
 | `src/gui/dialogs/study_index_search_dialog.py` | Check button, about-index, relocate |
