@@ -22,15 +22,13 @@ The index is **always SQLCipher-encrypted**; the passphrase is auto-generated in
 
 ## Phase 0 — First-open indexing prompt (persistent choice + one-time options)
 
-**Current behavior:** `gui/study_index_consent.py::ensure_study_index_auto_add_consent()` shows a binary **Yes / No** `QMessageBox` on the **first successful load** when no consent is recorded (invoked from `main.py:1564`), and remembers the answer via `study_index_auto_add_consent` / `study_index_auto_add_on_open`. Auto-add defaults **off**.
-
-**Target:** replace the binary prompt with a small custom dialog offering **four** choices, plus inline disclosure of what/where the index is:
+**Shipped behavior:** `gui/study_index_consent.py::ensure_study_index_auto_add_consent()` shows `StudyIndexFirstOpenDialog` on the **first successful load** when no consent is recorded. It provides four choices and inline disclosure of what/where the index is:
 
 - **Always add to index** — set auto-add **on** + record consent; never ask again.
 - **Never add to index** — set auto-add **off** + record consent; never ask again.
 - **Add this one time** — index the current study now, but **do not** record persistent consent (prompt can appear again later).
 - **Skip this one time** — do **not** index now, and **do not** record consent (prompt can appear again later).
-- Inline **info disclosure**: where the index is saved (DB path), that it stores clinical metadata + file locations **on this device**, encryption status, and that it can be changed/cleared later in **Settings**. Reuse the Phase 2 "About this index" copy so wording stays consistent.
+- Inline **info disclosure**: where the index is saved (DB path), that it stores clinical metadata + file locations **on this device**, that it is always encrypted at rest, and that it can be changed/cleared later in **Settings**. Reuse the Phase 2 "About this index" copy so wording stays consistent.
 
 **Re-prompt cadence for the one-time options (decided 2026-07-20):** the prompt is shown on each load while consent is unrecorded (i.e. `needs_study_index_auto_add_consent()`), so `ADD_ONCE`/`SKIP_ONCE` naturally re-prompt on the next load until the user picks `ALWAYS`/`NEVER`. A "don't ask again this session" nuance can be layered on later if the per-load prompt proves noisy.
 
@@ -89,7 +87,7 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 
 - [x] Add an **About this index…** panel in the Study Index Search dialog:
   - **DB path** (clickable → opens containing folder in Explorer/Finder).
-  - **Encryption status** (on/off, credential-store location).
+  - **Encryption:** always enabled at rest with SQLCipher; the passphrase is stored in the OS credential store under service `DICOMViewerV3`.
   - **Row count** / size on disk.
   - **Last modified** timestamp.
 - [x] **Open index location** button → `QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))`. **DONE 2026-07-20** — in the Study Index dialog and the first-open prompt, via `gui/study_index_info.py::open_study_index_location()` (opens the nearest existing ancestor if the DB file doesn't exist yet).
@@ -98,10 +96,10 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
   - Copy DB file → verify integrity (open + `PRAGMA integrity_check`) → update config → delete old file.
   - Confirm dialog before proceeding.
 - [x] **Export index…** button:
-  - Exports **metadata and file paths only** (CSV or JSON) — no pixel data.
-  - Clear label: "This export contains study metadata and file paths. DICOM image data is NOT included."
+  - Exports **metadata and file paths only** as CSV — no pixel data.
+  - Clear label: "This CSV contains PHI, including clinical metadata and file paths. Handle it securely. DICOM image pixel data is not included."
 - [x] **Import index…** button:
-  - Reads a previously exported CSV/JSON and upserts rows into the current DB.
+  - Reads a previously exported CSV and upserts rows into the current DB.
   - Conflict resolution: skip duplicates (same StudyInstanceUID + file path).
 
 ### Tests
@@ -124,7 +122,7 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
   - Per-row actions: **Relocate…** (file dialog to pick new root), **Remove from index**.
   - Bulk actions: **Remove all missing**, **Cancel**.
 - [x] `LocalStudyIndexService.relocate_study(study_uid, old_root, new_root)`:
-  - Update all `file_path` entries by replacing `old_root` prefix with `new_root`.
+  - Canonicalize the old/new roots and replace `file_path` prefixes only on a path-component boundary; leave unrelated similarly prefixed paths unchanged.
   - Verify at least one relocated path exists before committing.
 - [x] On load-from-index when files are missing (existing behavior: warns), add a **Relocate…** quick-action in the warning dialog. **DONE 2026-07-21** — `study_index_search_dialog.py::_relocate_and_reopen()`; the fully-missing branches of `_open_row` now offer **Relocate…** (default) and, when a sample fallback exists, **Load sample only**. Relocation calls `relocate_study`, refreshes the list, and reopens the new folder directly. Tests: `tests/gui/test_study_index_open_relocate.py`.
 
@@ -148,7 +146,7 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 ## Open questions
 
 1. **Plaintext migration:** Keep deferred unless a concrete platform/keyring need warrants an explicit product and privacy review. Any future setting must default to encryption enabled and require the Phase 1b at-rest-exposure confirmation before creating plaintext.
-2. **Export format:** CSV is implemented for metadata and file paths only; no pixel data are exported. JSON can be considered if a concrete portability use case needs it.
+2. **Export format:** CSV is the implemented metadata-and-file-path export format; no pixel data are exported. JSON is out of scope unless a concrete portability use case warrants it.
 
 ---
 
@@ -158,9 +156,5 @@ below. The remaining Phase 1 tasks are kept for reference, not scheduled.
 |------|--------|
 | `src/utils/config/study_index_config.py` | Future-only `encryption_enabled` setting if the deferred policy changes |
 | `src/core/study_index/sqlcipher_store.py` | Future-only plain-SQLite path + `migrate_encryption()` |
-| `src/core/study_index/index_service.py` | `integrity_scan()`, `relocate_study()` |
 | `src/gui/dialogs/settings_dialog.py` | Encryption toggle, info panel |
-| `src/gui/dialogs/study_index_search_dialog.py` | Check button, about-index, relocate |
 | `tests/test_study_index_encryption_toggle.py` | **New** |
-| `tests/test_study_index_portability_ui.py` | **New** |
-| `tests/test_study_index_integrity_scan.py` | **New** |

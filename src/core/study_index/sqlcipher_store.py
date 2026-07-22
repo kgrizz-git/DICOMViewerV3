@@ -403,10 +403,11 @@ class StudyIndexStore:
         Rewrite ``file_path``/``study_root_path`` for one study by swapping the root prefix.
 
         Each entry's ``file_path`` has its ``old_root`` prefix replaced with ``new_root``
-        (falling back to ``new_root``/basename when a stored path does not start with the
-        old root). ``study_root_path`` is set to the normalised new root. The change is only
-        committed when **at least one** relocated path exists on disk; otherwise nothing is
-        written and ``0`` is returned. Returns the number of rows updated.
+        only when the root ends on a path-component boundary. Unrelated paths with a
+        similar prefix are left unchanged. ``study_root_path`` is set to the normalised new
+        root. The change is only committed when **at least one** relocated path exists on
+        disk; otherwise nothing is written and ``0`` is returned. Returns the number of
+        rows updated.
         """
         su = (study_uid or "").strip()
         if not su or not (old_root or "").strip() or not (new_root or "").strip():
@@ -424,14 +425,22 @@ class StudyIndexStore:
             if not entries:
                 return 0
             updates: list[tuple[str, str, int]] = []
+            relocated_paths: list[str] = []
             for rid, fp in entries:
                 fp = fp or ""
-                if fp.startswith(old):
-                    new_fp = new + fp[len(old):]
+                try:
+                    relative_path = os.path.relpath(fp, old)
+                except ValueError:
+                    relative_path = os.pardir
+                if relative_path != os.pardir and not relative_path.startswith(
+                    os.pardir + os.sep
+                ):
+                    new_fp = os.path.normpath(os.path.join(new, relative_path))
+                    relocated_paths.append(new_fp)
                 else:
-                    new_fp = os.path.join(new, os.path.basename(fp))
+                    new_fp = fp
                 updates.append((new_fp, new, int(rid)))
-            if not any(os.path.isfile(u[0]) for u in updates):
+            if not any(os.path.isfile(path) for path in relocated_paths):
                 return 0
             cur.executemany(
                 "UPDATE study_index_entry SET file_path = ?, study_root_path = ? WHERE id = ?",

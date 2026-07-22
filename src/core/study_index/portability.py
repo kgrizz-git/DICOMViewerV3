@@ -30,8 +30,8 @@ EXPORT_COLUMNS: tuple[str, ...] = (
 
 # Shown next to the Export action so the user knows exactly what leaves the app.
 PIXEL_DATA_DISCLAIMER = (
-    "Exports contain clinical metadata and file paths only — "
-    "DICOM image pixel data is never included."
+    "This CSV contains PHI, including clinical metadata and file paths. "
+    "Handle it securely. DICOM image pixel data is never included."
 )
 
 
