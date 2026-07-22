@@ -132,6 +132,46 @@ def test_relocate_rewrites_paths_and_counts(tmp_path) -> None:
     assert svc.integrity_scan() == []
 
 
+def test_relocate_preserves_similarly_prefixed_unrelated_paths(tmp_path) -> None:
+    """A root such as ``ar`` must not rewrite a sibling ``archive`` path."""
+    studies = tmp_path / "studies"
+    old_root = studies / "ar"
+    archive = studies / "archive"
+    new_root = studies / "new"
+    old_root.mkdir(parents=True)
+    archive.mkdir()
+    new_root.mkdir()
+    old_file = old_root / "present.dcm"
+    archive_file = archive / "unrelated.dcm"
+    moved_file = new_root / "present.dcm"
+    for path in (old_file, archive_file, moved_file):
+        path.write_bytes(b"DICM")
+
+    db = tmp_path / "prefix.sqlite"
+    store = StudyIndexStore(str(db), "pw-prefix")
+    store.init_schema()
+    old = os.path.abspath(str(old_root))
+    store.upsert_rows(
+        [
+            _row(old, os.path.abspath(str(old_file)), "1.2.3"),
+            _row(
+                old,
+                os.path.abspath(str(archive_file)),
+                "1.2.3",
+                sop_instance_uid="1.2.3.archive",
+            ),
+        ]
+    )
+
+    svc = _service_for(store)
+    assert svc.relocate_study("1.2.3", old + os.sep + ".", str(new_root)) == 2
+    paths = store.get_file_paths_for_study(
+        "1.2.3", os.path.abspath(str(new_root))
+    )
+    assert os.path.abspath(str(moved_file)) in paths
+    assert os.path.abspath(str(archive_file)) in paths
+
+
 def test_relocate_no_commit_when_target_missing(tmp_path) -> None:
     store, root, files = _seed(tmp_path)
     for f in files:

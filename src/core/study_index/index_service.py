@@ -252,8 +252,10 @@ class LocalStudyIndexService:
             return 0
         if not (study_uid or "").strip() or not (old_root or "").strip() or not (new_root or "").strip():
             return 0
+        old = os.path.normpath(os.path.abspath(old_root.strip()))
+        new = os.path.normpath(os.path.abspath(new_root.strip()))
         store = self._get_ready_store()
-        return store.relocate_study_paths(study_uid, old_root, new_root)
+        return store.relocate_study_paths(study_uid, old, new)
 
     # --- Metadata (About this index) -----------------------------------------
 
