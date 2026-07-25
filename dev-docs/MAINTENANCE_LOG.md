@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-25
 
+- Completed the privacy structural-schema SonarQube slice: decomposed metric
+  normalization and rendered-value revalidation, schema loading, validator
+  parsing, and operation parsing into small fail-closed helpers. Added direct
+  normalization and invalid-schema regression coverage. A fresh full-suite,
+  coverage-backed local analysis cleared all five
+  `utils/privacy/structural_schema.py` `S3776` findings; priority findings are
+  now **280** (down from 285).
 - Completed a targeted local SonarQube cleanup slice: made the RDSR privacy
   projection's `dataclasses.replace` type preservation explicit (`S5886`) and
   moved the lazy 3D-render eligibility import out of the subwindow wiring loop

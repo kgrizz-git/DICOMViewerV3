@@ -34,8 +34,12 @@ def test_canonical_schema_has_exact_versioned_inventory() -> None:
     assert schema.version == 1
     assert len(schema.operations) == EXPECTED_OPERATION_COUNT == 19
     assert len(schema.performance_variants) == EXPECTED_PERFORMANCE_VARIANT_COUNT == 55
-    assert sum(item.kind == "mark" for item in schema.performance_variants.values()) == 19
-    assert sum(item.kind == "timer" for item in schema.performance_variants.values()) == 36
+    assert (
+        sum(item.kind == "mark" for item in schema.performance_variants.values()) == 19
+    )
+    assert (
+        sum(item.kind == "timer" for item in schema.performance_variants.values()) == 36
+    )
 
 
 def test_pyinstaller_spec_bundles_canonical_schema() -> None:
@@ -98,7 +102,9 @@ def test_adapter_only_operation_fails_closed_through_generic_factory() -> None:
     assert output == "operation=license.obligation validation=[REDACTED]"
 
 
-def test_valid_operation_namespace_identifier_and_performance_markers_are_absent() -> None:
+def test_valid_operation_namespace_identifier_and_performance_markers_are_absent() -> (
+    None
+):
     marker = "SCHEMACANARY71A9"
     outputs = [
         render_structural_event(
@@ -274,7 +280,9 @@ def test_all_55_performance_variants_render_without_redaction() -> None:
             key: _runtime_metric_value(validator)
             for key, validator in variant.metrics.items()
         }
-        operation = "performance.mark" if variant.kind == "mark" else "performance.timer"
+        operation = (
+            "performance.mark" if variant.kind == "mark" else "performance.timer"
+        )
         output = render_structural_event(
             structural_event(operation, category=label, metrics=metrics)
         )
@@ -292,3 +300,50 @@ def test_count_validator_rejects_out_of_domain_values(value: object) -> None:
     )
 
     assert "instance_count=[REDACTED]" in output
+
+
+@pytest.mark.parametrize(
+    (
+        "validator_name",
+        "runtime_value",
+        "expected_value",
+        "invalid_runtime_value",
+        "invalid_rendered_value",
+    ),
+    [
+        ("boolean", True, "true", 1, "True"),
+        ("count", 2, "2", True, "02"),
+        ("duration_ms", 1.5, "1.5", float("inf"), "1.50"),
+        ("shape", [1, 2], "1x2", [1, True], "01x2"),
+    ],
+)
+def test_metric_validation_preserves_normalized_fail_closed_contract(
+    validator_name: str,
+    runtime_value: object,
+    expected_value: str,
+    invalid_runtime_value: object,
+    invalid_rendered_value: str,
+) -> None:
+    schema = load_structural_event_schema()
+
+    assert schema.validate_metric(validator_name, runtime_value) == expected_value
+    assert schema.validate_metric(validator_name, invalid_runtime_value) is None
+    assert (
+        schema.validate_rendered_metric(validator_name, expected_value)
+        == expected_value
+    )
+    assert (
+        schema.validate_rendered_metric(validator_name, invalid_rendered_value) is None
+    )
+
+
+def test_loader_rejects_invalid_validator_and_operation_components() -> None:
+    raw = json.loads(default_schema_path().read_text(encoding="utf-8"))
+    raw["metric_validators"]["count"]["minimum"] = True
+    with pytest.raises(StructuralSchemaError, match="validator minimum"):
+        load_structural_event_schema(content=json.dumps(raw))
+
+    raw = json.loads(default_schema_path().read_text(encoding="utf-8"))
+    raw["operations"]["fusion.input"]["categories"] = [1]
+    with pytest.raises(StructuralSchemaError, match="operation categories"):
+        load_structural_event_schema(content=json.dumps(raw))
