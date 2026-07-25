@@ -90,6 +90,11 @@ FORBIDDEN_EXTERNAL_ANALYSIS_ACTIONS = (
     "sonarsource/sonarqube-scan-action",
 )
 FORBIDDEN_NETWORK_VERIFICATION_FLAGS = ("--only-verified",)
+APPROVED_SONARQUBE_CLOUD_WORKFLOW = ".github/workflows/sonarqube-cloud-main.yml"
+APPROVED_SONARQUBE_CLOUD_ACTION = (
+    "sonarsource/sonarqube-scan-action@"
+    "7006c4492b2e0ee0f816d36501671557c97f5995"
+)
 
 
 def split_anchor(url: str) -> tuple[str, str]:
@@ -154,6 +159,33 @@ def check_agents_md(repo_root: Path) -> list[str]:
     return errors
 
 
+def is_approved_main_only_sonarqube_cloud_workflow(rel: str, text: str) -> bool:
+    """Return whether one workflow is the reviewed, source-only Cloud exception."""
+    if rel != APPROVED_SONARQUBE_CLOUD_WORKFLOW:
+        return False
+    normalized = text.casefold()
+    required_markers = (
+        "push:",
+        "branches:",
+        "- main",
+        APPROVED_SONARQUBE_CLOUD_ACTION.casefold(),
+        "sonar_token: ${{ secrets.sonar_token }}",
+        "fetch-depth: 0",
+        "persist-credentials: false",
+    )
+    prohibited_markers = (
+        "pull_request:",
+        "schedule:",
+        "workflow_dispatch:",
+        "sonar.python.coverage.reportpaths",
+        "upload-artifact",
+        "pytest",
+    )
+    return all(marker in normalized for marker in required_markers) and not any(
+        marker in normalized for marker in prohibited_markers
+    )
+
+
 def check_external_analysis_upload_policy(repo_root: Path) -> list[str]:
     """Reject prohibited third-party coverage, telemetry, and source-analysis uploads."""
     errors: list[str] = []
@@ -164,16 +196,22 @@ def check_external_analysis_upload_policy(repo_root: Path) -> list[str]:
     workflows = repo_root / ".github" / "workflows"
     if workflows.is_dir():
         for path in sorted((*workflows.glob("*.yml"), *workflows.glob("*.yaml"))):
-            text = path.read_text(encoding="utf-8").casefold()
+            rel = path.relative_to(repo_root).as_posix()
+            text = path.read_text(encoding="utf-8")
+            normalized = text.casefold()
+            approved_sonar_workflow = is_approved_main_only_sonarqube_cloud_workflow(
+                rel, text
+            )
             for marker in FORBIDDEN_EXTERNAL_ANALYSIS_ACTIONS:
-                if marker in text:
-                    rel = path.relative_to(repo_root).as_posix()
+                if marker in normalized and not (
+                    marker == "sonarsource/sonarqube-scan-action"
+                    and approved_sonar_workflow
+                ):
                     errors.append(
                         f"{rel}: external analysis upload action is prohibited: {marker}"
                     )
             for marker in FORBIDDEN_NETWORK_VERIFICATION_FLAGS:
-                if marker in text:
-                    rel = path.relative_to(repo_root).as_posix()
+                if marker in normalized:
                     errors.append(
                         f"{rel}: network verification of suspected secrets is prohibited: {marker}"
                     )

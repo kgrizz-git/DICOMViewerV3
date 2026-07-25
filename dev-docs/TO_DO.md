@@ -39,13 +39,14 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P3]** **Enable the explicitly approved SonarQube Cloud main-only CI scan when needed.** Keep Automatic Analysis disabled. Add a GitHub Actions workflow triggered only by `push` to `main`, authenticate with a repository `SONAR_TOKEN` secret, and retain the committed `.sonarcloud.properties` scope (`src/` only with privacy-sensitive/local paths excluded). Do not enable pull-request, feature-branch, local-data, test, coverage, or artifact uploads without a separate explicit approval.
-
-- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the
-  structural-schema slice:** `utils/privacy/structural_schema.py` `S3776` is
-  now 0 (285 → 280 priority findings). Next: pick another high-count `S3776`
-  domain from the scoped reporter (for example `roi_manager`, annotation, or
-  subwindow-lifecycle clusters). Plan references:
+- [ ] **[P2]** **Refactor high-complexity functions identified by local
+  SonarQube or Lizard.** Prioritize bounded, characterized slices in
+  safety-sensitive or heavily changed code; use Sonar `S3776` cognitive
+  complexity and Lizard CCN/NLOC findings together, and preserve behavior with
+  regression tests. The completed `utils/privacy/structural_schema.py` slice
+  reduced priority findings 285 → 280. Next candidates include
+  `roi_manager`, annotation, subwindow-lifecycle, loading, and image-input
+  clusters. Plan references:
   [Fusion coordinator finish slice](plans/SONARQUBE_FUSION_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
   [Fusion coordinator first slice](plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md),
   [ROI coordinator finish slice](plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),

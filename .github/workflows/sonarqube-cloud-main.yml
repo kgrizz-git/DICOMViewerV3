@@ -1,0 +1,33 @@
+name: SonarQube Cloud (main only)
+
+# Intentionally no pull_request, schedule, workflow_dispatch, or non-main
+# branch triggers. The scanner receives only the source scope declared in the
+# root sonar-project.properties file; tests, coverage, artifacts, and local
+# data are excluded and are never uploaded.
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: sonarqube-cloud-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-main-source:
+    name: Analyze src/ on main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

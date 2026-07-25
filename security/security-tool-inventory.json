@@ -5,8 +5,8 @@
   "policy": {
     "default_data_handling": "local-only",
     "finding_output": "category/count/status only; never retain or paste matched sensitive values",
-    "external_source_or_coverage_uploads": "prohibited except an explicitly approved, main-only SonarQube Cloud CI scan limited to src/; no PR, branch, test, coverage, artifact, or local-data upload is permitted",
-    "allowed_remote_outputs": "GitHub Actions logs, optional SARIF attached to this private GitHub repository, and the narrowly scoped approved SonarQube Cloud main analysis after its workflow and secret are explicitly enabled",
+    "external_source_or_coverage_uploads": "prohibited except the approved, main-only SonarQube Cloud CI scan limited to src/; no PR, non-main branch, test, coverage, artifact, or local-data upload is permitted",
+    "allowed_remote_outputs": "GitHub Actions logs, optional SARIF attached to this private GitHub repository, and the narrowly scoped approved SonarQube Cloud main analysis",
     "version_field_meaning": "tested_version records the locally or CI-tested release, not an automatic upgrade constraint"
   },
   "tools": [
@@ -217,6 +217,18 @@
       "network_policy": "local-sonarqube-only",
       "entrypoints": ["scripts/run_local_sonarqube.py"],
       "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
+    },
+    {
+      "id": "sonarqube-cloud-ci",
+      "category": "hosted-static-analysis",
+      "purpose": "Approved token-authenticated source analysis after pushes to main only.",
+      "install_scope": "pinned GitHub Action",
+      "install_reference": "dev-docs/CONTRIBUTING.md",
+      "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
+      "enforcement": ["main-push CI blocking"],
+      "network_policy": "SonarQube Cloud upload of src only after main pushes; Automatic Analysis disabled; no PR, non-main branch, test, coverage, artifact, or local-data upload",
+      "entrypoints": [".github/workflows/sonarqube-cloud-main.yml"],
+      "tracked_configuration": ["sonar-project.properties"]
     },
     {
       "id": "basedpyright",
