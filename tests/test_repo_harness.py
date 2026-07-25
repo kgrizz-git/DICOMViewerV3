@@ -207,6 +207,7 @@ class TestExternalAnalysisUploadPolicy(unittest.TestCase):
                 "      persist-credentials: false\n"
                 "  - uses: SonarSource/sonarqube-scan-action@"
                 "7006c4492b2e0ee0f816d36501671557c97f5995\n"
+                "    needs: privacy-gate\n"
                 "    env:\n"
                 "      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n",
                 encoding="utf-8",
@@ -216,7 +217,7 @@ class TestExternalAnalysisUploadPolicy(unittest.TestCase):
 
         self.assertEqual(errors, [])
 
-    def test_rejects_sonarqube_cloud_workflow_with_pull_request_trigger(self) -> None:
+    def test_rejects_sonarqube_cloud_workflow_without_privacy_gate(self) -> None:
         import tempfile
 
         module = _load_harness_module()

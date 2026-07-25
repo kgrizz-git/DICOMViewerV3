@@ -29,9 +29,24 @@ permissions:
   pull-requests: write
 
 jobs:
+  privacy-gate:
+    name: Privacy gate for Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5" "pypdf>=6.14.2,<7"
+      - run: python scripts/check_no_phi_artifacts.py
+      - run: python scripts/git_hook_privacy_checks.py --all --critical
+
   semgrep:
     name: Semgrep Security Audit
     runs-on: ubuntu-latest
+    needs: privacy-gate
     # Semgrep docs: skip Dependabot PRs to avoid permission/token issues
     if: github.actor != 'dependabot[bot]'
 

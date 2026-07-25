@@ -160,21 +160,21 @@ def check_agents_md(repo_root: Path) -> list[str]:
 
 
 def is_approved_main_only_sonarqube_cloud_workflow(rel: str, text: str) -> bool:
-    """Return whether one workflow is the reviewed, source-only Cloud exception."""
+    """Return whether one workflow is the reviewed, privacy-gated Cloud exception."""
     if rel != APPROVED_SONARQUBE_CLOUD_WORKFLOW:
         return False
     normalized = text.casefold()
     required_markers = (
         "push:",
         "branches:",
-        "- main",
+        "main",
         APPROVED_SONARQUBE_CLOUD_ACTION.casefold(),
         "sonar_token: ${{ secrets.sonar_token }}",
         "fetch-depth: 0",
         "persist-credentials: false",
+        "needs: privacy-gate",
     )
     prohibited_markers = (
-        "pull_request:",
         "schedule:",
         "workflow_dispatch:",
         "sonar.python.coverage.reportpaths",
