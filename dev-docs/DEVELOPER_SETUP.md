@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-25
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -97,9 +97,12 @@ can continue exporting variables and activating the venv manually.
 ## Optional local SonarQube Community Build analysis
 
 This repository supports opt-in analysis against a local SonarQube Community
-Build instance. SonarQube Cloud and other external analysis uploads are
-disabled by policy. The local scan is intentionally **not** a Git hook: it can
-take time, and `--with-coverage` runs the full pytest suite first.
+Build instance. Other external analysis uploads are disabled by policy. A
+dormant [`.sonarcloud.properties`](../.sonarcloud.properties) narrowly scopes a
+future explicitly enabled SonarQube Cloud CI scan to `src/` on `main` only; it
+does not activate Cloud analysis, and PR/branch/test/coverage uploads remain
+prohibited. The local scan is intentionally **not** a Git hook: it can take
+time, and `--with-coverage` runs the full pytest suite first.
 
 1. Start the existing local SonarQube Community Build service and confirm its UI
    is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another

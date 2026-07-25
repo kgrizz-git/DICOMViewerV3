@@ -1,6 +1,6 @@
 # PHI / PII Repository Guardrails
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-25
 
 **Audience:** contributors and coding agents who add, generate, inspect, or export files in this repository.
 
@@ -83,11 +83,16 @@ The installed pre-commit hook invokes the staged artifact gate, the repository h
 ## Optional defense-in-depth tools
 
 Coverage XML, test captures, scanner reports, crash telemetry, and repository
-analysis must not be uploaded to Codecov, Coveralls, SonarQube Cloud,
-DeepSource, Sentry, or similar third-party services. CI may print aggregate
+analysis must not be uploaded to Codecov, Coveralls, DeepSource, Sentry, or
+similar third-party services. The sole approved exception is a future
+SonarQube Cloud CI scan of `src/` on a push to `main` only: it must not analyze
+pull requests, non-main branches, tests, coverage, artifacts, or local-data
+paths. Until that workflow and its secret are explicitly enabled, the tracked
+scope file is dormant and no Cloud upload occurs. CI may print aggregate
 coverage counts and may report value-free findings inside the private GitHub
 repository, but it must not upload coverage/source-analysis payloads to an
-external vendor. Keep the corresponding GitHub Apps/integrations disabled.
+external vendor beyond that approved exception. Keep other corresponding GitHub
+Apps/integrations disabled.
 Secret scanners must also run without network verification of suspected
 credentials; use TruffleHog `--no-verification` and value-redacted output.
 

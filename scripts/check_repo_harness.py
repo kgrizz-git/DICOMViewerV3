@@ -81,7 +81,6 @@ REQUIRED_USER_DOC_TOPICS = (
 
 FORBIDDEN_EXTERNAL_ANALYSIS_CONFIGS = (
     ".codecov.yml",
-    ".sonarcloud.properties",
     "codecov.yml",
 )
 FORBIDDEN_EXTERNAL_ANALYSIS_ACTIONS = (
@@ -156,7 +155,7 @@ def check_agents_md(repo_root: Path) -> list[str]:
 
 
 def check_external_analysis_upload_policy(repo_root: Path) -> list[str]:
-    """Reject known third-party coverage, telemetry, and source-analysis uploads."""
+    """Reject prohibited third-party coverage, telemetry, and source-analysis uploads."""
     errors: list[str] = []
     for rel in FORBIDDEN_EXTERNAL_ANALYSIS_CONFIGS:
         if (repo_root / rel).exists():

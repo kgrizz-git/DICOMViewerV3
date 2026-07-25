@@ -58,7 +58,7 @@ REQUIRED_CONTROL_IDS = frozenset(
     }
 )
 REQUIRED_PROHIBITED_SERVICES = frozenset(
-    {"codecov", "coveralls", "deepsource", "sentry", "sonarcloud"}
+    {"codecov", "coveralls", "deepsource", "sentry"}
 )
 REQUIRED_TOOL_FIELDS = frozenset(
     {

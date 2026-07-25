@@ -58,11 +58,15 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
 - **macOS PySide6 submodule excludes** are **off** by default; set **`PYINSTALLER_MACOS_SLIM=1`** locally or enable the optional **workflow_dispatch** slim job — see **`info/BUILDING_EXECUTABLES.md`** / **`info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **`tests/test_pyinstaller_exclude_audit.py`** guards excluded module names against **`src/`** and **`tests/`** imports.
 - **`actions/upload-artifact` v6+** and related actions may require **self-hosted runners ≥ 2.327.1** (Node 24); GitHub-hosted **`ubuntu-latest`** satisfies this.
 - If **`.github/dependabot.yml`** lists **`labels:`**, those labels must exist on the repo (e.g. `dependencies`, `github-actions`) or Dependabot will warn on PRs.
-- **External analysis uploads are disabled by repository policy.** Coverage is
-  printed in the CI job log but is not sent to Codecov/Coveralls. SonarQube
-  Cloud, DeepSource, Sentry, and similar repository integrations should remain
-  uninstalled or disabled. Use the opt-in local SonarQube runner and local
-  security tools when deeper analysis is needed.
+- **External analysis uploads are disabled by repository policy,** except for
+  a future explicitly enabled SonarQube Cloud CI scan of `src/` on `main`
+  only. Coverage is printed in the CI job log but is not sent to
+  Codecov/Coveralls; PR, branch, test, coverage, artifact, and local-data
+  uploads remain prohibited. The tracked `.sonarcloud.properties` is dormant
+  until a separately approved workflow and secret are added. DeepSource, Sentry,
+  and similar repository integrations should remain uninstalled or disabled.
+  Use the opt-in local SonarQube runner and local security tools when deeper
+  analysis is needed.
 - **Local SonarQube Community Build** is an opt-in developer tool, not a hook or CI gate. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py) supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties) file explicitly, can use Docker for the scanner, and writes the last successful submission timestamp to ignored `.sonar-local/last-analysis.json`. See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for token, server, coverage, and Docker-network guidance. After analysis, [`scripts/report_local_sonarqube_issues.py`](../scripts/report_local_sonarqube_issues.py) reports BLOCKER, CRITICAL BUG/VULNERABILITY, and MAJOR findings scoped to the `dicom-viewer-v3` component key.
   Run it with coverage at least every 14 days, before releases, and after large
   dependency or security-sensitive changes. Main-push hooks provide a
