@@ -197,11 +197,12 @@
       "install_scope": "local service",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "locally managed Community Build",
-      "enforcement": ["manual advisory", "30-day main pre-push freshness reminder"],
-      "network_policy": "local-loopback-only",
+      "enforcement": ["manual advisory", "14-day or five-commit-behind main pre-push freshness reminder"],
+      "network_policy": "local-loopback analysis; Docker Hub image-manifest and SonarSource GitHub release metadata only for weekly advisory update checks",
       "entrypoints": [
         "scripts/run_local_sonarqube.py",
-        "scripts/report_local_sonarqube_issues.py"
+        "scripts/report_local_sonarqube_issues.py",
+        "scripts/check_local_sonarqube_updates.py"
       ],
       "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
     },

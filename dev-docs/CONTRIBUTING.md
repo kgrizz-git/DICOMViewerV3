@@ -64,9 +64,10 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
   uninstalled or disabled. Use the opt-in local SonarQube runner and local
   security tools when deeper analysis is needed.
 - **Local SonarQube Community Build** is an opt-in developer tool, not a hook or CI gate. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py) supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties) file explicitly, can use Docker for the scanner, and writes the last successful submission timestamp to ignored `.sonar-local/last-analysis.json`. See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for token, server, coverage, and Docker-network guidance. After analysis, [`scripts/report_local_sonarqube_issues.py`](../scripts/report_local_sonarqube_issues.py) reports BLOCKER, CRITICAL BUG/VULNERABILITY, and MAJOR findings scoped to the `dicom-viewer-v3` component key.
-  Run it with coverage at least every 30 days, before releases, and after large
+  Run it with coverage at least every 14 days, before releases, and after large
   dependency or security-sensitive changes. Main-push hooks provide a
-  non-blocking stale/missing reminder after all blocking local gates pass.
+  non-blocking stale/missing reminder and weekly Docker Hub/SonarSource update
+  metadata checks on every local push; neither action pulls or installs.
 
 ## User documentation links
 

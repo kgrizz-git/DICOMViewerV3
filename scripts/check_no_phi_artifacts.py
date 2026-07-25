@@ -203,7 +203,7 @@ SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 # These exact repository control files are UTF-8 text despite lacking a
 # conventional data suffix. Keep them content-scanned rather than hash-approving
 # them as opaque media.
-TEXT_CONFIG_FILENAMES = {".env.example", ".envrc"}
+TEXT_CONFIG_FILENAMES = {".env.example", ".envrc", ".githooks/pre-push"}
 
 # A file without a suffix can hide a binary export or clinical data. Existing
 # reviewed assets live in the hash manifest; every new one blocks until reviewed.
