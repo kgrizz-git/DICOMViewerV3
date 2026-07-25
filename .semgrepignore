@@ -1,0 +1,29 @@
+# Never send protected study data, runtime output, or media/document artifacts
+# to the repository-controlled external Semgrep scan. Source code stays in scope.
+data/
+test-DICOM-data/
+sample-DICOM-gitignored/
+decoder-spike-artifacts/
+resources/screenshots-ignored/
+logs/
+tmp/
+backups/
+.sonar-local/
+.phi-tools/
+*.dcm
+*.dicom
+*.nii
+*.nii.gz
+*.nrrd
+*.mha
+*.mhd
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
