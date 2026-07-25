@@ -609,7 +609,7 @@ def run_acr_mri_large_batch(
             if ok:
                 final_pdf_path = str(output_path)
         except Exception as exc:
-            logger.error("compare PDF assembly failed: %s", sanitize_exception(str(exc)))
+            logger.error("compare PDF assembly failed: %s", sanitize_exception(str(exc)))  # NOSONAR (python:S8572): exception detail is explicitly sanitized for PHI/PII safety.
         finally:
             # Clean up temp dir regardless of success
             try:

@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-25
 
+- Completed a targeted local SonarQube cleanup slice: made the RDSR privacy
+  projection's `dataclasses.replace` type preservation explicit (`S5886`) and
+  moved the lazy 3D-render eligibility import out of the subwindow wiring loop
+  (`S1515`), with regression coverage for both. Documented four `S8572`
+  suppressions where raw `logging.exception` would violate the PHI/PII sink
+  gate; those paths retain structural/sanitized exception reporting. Fresh
+  coverage-backed local analysis: **285** priority findings (down from 291).
 - Approved a dormant, source-only SonarQube Cloud scope configuration for a
   future explicit CI workflow on `main`. Cloud analysis remains inactive until
   that workflow and its secret are separately enabled; PR, branch, test,

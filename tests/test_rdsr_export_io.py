@@ -10,6 +10,7 @@ import pytest
 
 from core.rdsr_dose_sr import (
     CtRadiationDoseSummary,
+    apply_privacy_to_ct_radiation_dose_summary,
     dose_summary_to_export_dict,
     write_dose_summary_csv,
     write_dose_summary_json,
@@ -35,6 +36,27 @@ def test_dose_summary_export_dict_anonymize_masks_strings() -> None:
     assert d_anon["ctdi_vol_mgy"] == 12.5
     d_raw = dose_summary_to_export_dict(s, anonymize=False)
     assert d_raw["study_instance_uid"] == "1.2.3"
+
+
+def test_apply_privacy_to_dose_summary_preserves_non_identifying_fields() -> None:
+    summary = CtRadiationDoseSummary(
+        study_instance_uid="1.2.3",
+        ctdi_vol_mgy=12.5,
+        dlp_mgy_cm=100.0,
+        ssde_mgy=10.0,
+        irradiation_event_count=2,
+        parse_node_cap_hit=True,
+    )
+
+    redacted = apply_privacy_to_ct_radiation_dose_summary(summary)
+
+    assert isinstance(redacted, CtRadiationDoseSummary)
+    assert redacted.study_instance_uid == "***"
+    assert redacted.ctdi_vol_mgy == 12.5
+    assert redacted.dlp_mgy_cm == 100.0
+    assert redacted.ssde_mgy == 10.0
+    assert redacted.irradiation_event_count == 2
+    assert redacted.parse_node_cap_hit is True
 
 
 def test_write_json_csv_roundtrip(tmp_path: Path) -> None:

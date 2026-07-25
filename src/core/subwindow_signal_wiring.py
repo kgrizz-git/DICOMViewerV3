@@ -69,6 +69,19 @@ def wire_pixel_info_callbacks_for_subwindow(
     )
 
 
+def _volume_render_enabled_callback(app: Any, subwindow_index: int) -> Any:
+    """Build a lazily imported 3D-render availability callback for one pane."""
+
+    def callback() -> bool:
+        # Keep the optional VTK dependency lazy, without closing over a
+        # name created in ``connect_subwindow_signals``' layout loop.
+        from core.volume_render_eligibility import can_launch_3d_volume_render
+
+        return can_launch_3d_volume_render(app, subwindow_index)[0]
+
+    return callback
+
+
 # ---------------------------------------------------------------------------
 # All-subwindow wiring (called on every layout change)
 # ---------------------------------------------------------------------------
@@ -316,14 +329,12 @@ def connect_subwindow_signals(ctrl: Any) -> None:
 
             # 3D Volume Render action (context menu).
             if hasattr(app, "_volume_render_facade"):
-                from core.volume_render_eligibility import can_launch_3d_volume_render
-
                 def view_3d_slot(i=idx):
                     return app._volume_render_facade.launch_3d_view(i)
                 image_viewer.create_3d_view_requested.connect(view_3d_slot)
                 ctrl._3d_view_slots[vid] = view_3d_slot
                 image_viewer.get_3d_volume_render_enabled_callback = (
-                    lambda i=idx: can_launch_3d_volume_render(app, i)[0]
+                    _volume_render_enabled_callback(app, idx)
                 )
     connect_all_subwindow_transform_signals(ctrl)
 

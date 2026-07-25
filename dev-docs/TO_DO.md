@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-25
 
 ---
 
@@ -38,6 +38,8 @@ This file tracks active and near-term tasks.
 
 
 ## Static analysis
+
+- [ ] **[P3]** **Enable the explicitly approved SonarQube Cloud main-only CI scan when needed.** Keep Automatic Analysis disabled. Add a GitHub Actions workflow triggered only by `push` to `main`, authenticate with a repository `SONAR_TOKEN` secret, and retain the committed `.sonarcloud.properties` scope (`src/` only with privacy-sensitive/local paths excluded). Do not enable pull-request, feature-branch, local-data, test, coverage, or artifact uploads without a separate explicit approval.
 
 - [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the fusion
   coordinator finish slice:** `fusion_coordinator` `S3776` is now 0 (290 → 287

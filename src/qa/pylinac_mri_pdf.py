@@ -416,7 +416,7 @@ def assemble_mri_compare_pdf(
             writer.write(fh)
         success = True
     except Exception as exc:
-        logger.error("assemble_mri_compare_pdf failed: %s", sanitize_exception(str(exc)))
+        logger.error("assemble_mri_compare_pdf failed: %s", sanitize_exception(str(exc)))  # NOSONAR (python:S8572): exception detail is explicitly sanitized for PHI/PII safety.
         success = False
 
     # Best-effort cleanup of temp files
