@@ -344,14 +344,19 @@ def apply_privacy_to_ct_radiation_dose_summary(
     strings replaced for **Privacy Mode** display (align with study index masking style).
     """
     mask = "***"
-    return replace(
-        summary,
-        study_instance_uid=mask if summary.study_instance_uid else None,
-        series_instance_uid=mask if summary.series_instance_uid else None,
-        sop_instance_uid=mask if summary.sop_instance_uid else None,
-        manufacturer=mask if summary.manufacturer else None,
-        manufacturer_model_name=mask if summary.manufacturer_model_name else None,
-        device_serial_number=mask if summary.device_serial_number else None,
+    # ``dataclasses.replace`` preserves the runtime type, but its generic return
+    # type is not inferred by every static analyzer.
+    return cast(
+        CtRadiationDoseSummary,
+        replace(
+            summary,
+            study_instance_uid=mask if summary.study_instance_uid else None,
+            series_instance_uid=mask if summary.series_instance_uid else None,
+            sop_instance_uid=mask if summary.sop_instance_uid else None,
+            manufacturer=mask if summary.manufacturer else None,
+            manufacturer_model_name=mask if summary.manufacturer_model_name else None,
+            device_serial_number=mask if summary.device_serial_number else None,
+        ),
     )
 
 

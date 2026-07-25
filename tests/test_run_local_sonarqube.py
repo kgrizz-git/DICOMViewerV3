@@ -105,6 +105,7 @@ def test_last_submission_round_trip(tmp_path):
         project_key="dicom-viewer-v3",
         scanner="docker",
         included_coverage=False,
+        revision="abc123",
     )
 
     assert path == tmp_path / ".sonar-local" / "last-analysis.json"
@@ -112,14 +113,16 @@ def test_last_submission_round_trip(tmp_path):
     assert record is not None
     assert record["project_key"] == "dicom-viewer-v3"
     assert record["scanner"] == "docker"
+    assert record["revision"] == "abc123"
     assert record["dashboard_url"] == "http://localhost:9000/dashboard?id=dicom-viewer-v3"
 
 
 def test_freshness_check_distinguishes_fresh_stale_future_and_missing(
-    tmp_path, capsys
+    tmp_path, capsys, monkeypatch
 ):
     module = _load_module()
     now = datetime(2026, 7, 16, tzinfo=UTC)
+    monkeypatch.setattr(module, "commits_behind", lambda *_args: 0)
 
     assert module.check_submission_freshness(tmp_path, now=now) == 3
     assert "No valid local SonarQube analysis" in capsys.readouterr().out
@@ -127,25 +130,48 @@ def test_freshness_check_distinguishes_fresh_stale_future_and_missing(
     path = module.state_path(tmp_path)
     path.parent.mkdir(parents=True)
     path.write_text(
-        '{"submitted_at_utc": "2026-07-01T00:00:00+00:00"}\n',
+        '{"submitted_at_utc": "2026-07-05T00:00:00+00:00", "revision": "abc123"}\n',
         encoding="utf-8",
     )
     assert module.check_submission_freshness(tmp_path, now=now) == 0
     assert "is fresh" in capsys.readouterr().out
 
     path.write_text(
-        '{"submitted_at_utc": "2026-05-01T00:00:00+00:00"}\n',
+        '{"submitted_at_utc": "2026-05-01T00:00:00+00:00", "revision": "abc123"}\n',
         encoding="utf-8",
     )
     assert module.check_submission_freshness(tmp_path, now=now) == 3
     assert "is stale" in capsys.readouterr().out
 
     path.write_text(
-        '{"submitted_at_utc": "2026-07-17T00:00:00+00:00"}\n',
+        '{"submitted_at_utc": "2026-07-17T00:00:00+00:00", "revision": "abc123"}\n',
         encoding="utf-8",
     )
     assert module.check_submission_freshness(tmp_path, now=now) == 3
     assert "future-dated" in capsys.readouterr().out
+
+
+def test_freshness_check_marks_unknown_or_far_behind_revision_stale(tmp_path, capsys, monkeypatch):
+    module = _load_module()
+    now = datetime(2026, 7, 16, tzinfo=UTC)
+    path = module.state_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text('{"submitted_at_utc": "2026-07-15T00:00:00+00:00"}\n', encoding="utf-8")
+
+    assert module.check_submission_freshness(tmp_path, now=now) == 3
+    assert "revision is unknown" in capsys.readouterr().out
+
+    path.write_text(
+        '{"submitted_at_utc": "2026-07-15T00:00:00+00:00", "revision": "abc123"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "commits_behind", lambda *_args: 6)
+    assert module.check_submission_freshness(tmp_path, now=now) == 3
+    assert "6 commits behind" in capsys.readouterr().out
+
+    monkeypatch.setattr(module, "commits_behind", lambda *_args: 5)
+    assert module.check_submission_freshness(tmp_path, now=now) == 0
+    assert "5 commits behind" in capsys.readouterr().out
 
 
 def test_freshness_cli_does_not_require_token_or_contact_server(

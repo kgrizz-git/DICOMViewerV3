@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-07-16",
+  "last_verified": "2026-07-25",
   "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
   "policy": {
     "default_data_handling": "local-only",
     "finding_output": "category/count/status only; never retain or paste matched sensitive values",
-    "external_source_or_coverage_uploads": "prohibited",
-    "allowed_remote_outputs": "GitHub Actions logs and optional SARIF attached to this private GitHub repository only",
+    "external_source_or_coverage_uploads": "prohibited except an explicitly approved, main-only SonarQube Cloud CI scan limited to src/; no PR, branch, test, coverage, artifact, or local-data upload is permitted",
+    "allowed_remote_outputs": "GitHub Actions logs, optional SARIF attached to this private GitHub repository, and the narrowly scoped approved SonarQube Cloud main analysis after its workflow and secret are explicitly enabled",
     "version_field_meaning": "tested_version records the locally or CI-tested release, not an automatic upgrade constraint"
   },
   "tools": [
@@ -197,11 +197,12 @@
       "install_scope": "local service",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "locally managed Community Build",
-      "enforcement": ["manual advisory", "30-day main pre-push freshness reminder"],
-      "network_policy": "local-loopback-only",
+      "enforcement": ["manual advisory", "14-day or five-commit-behind main pre-push freshness reminder"],
+      "network_policy": "local-loopback analysis; Docker Hub image-manifest and SonarSource GitHub release metadata only for weekly advisory update checks",
       "entrypoints": [
         "scripts/run_local_sonarqube.py",
-        "scripts/report_local_sonarqube_issues.py"
+        "scripts/report_local_sonarqube_issues.py",
+        "scripts/check_local_sonarqube_updates.py"
       ],
       "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
     },
@@ -379,7 +380,6 @@
     "Codecov",
     "Coveralls",
     "DeepSource",
-    "Sentry",
-    "SonarCloud"
+    "Sentry"
   ]
 }

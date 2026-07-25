@@ -802,10 +802,11 @@ class DICOMViewerApp(QObject):
             if subwindow is not None and not subwindow.is_focused:
                 subwindow.set_focused(True)
         except Exception as exc:
-            _logger.error(
+            _logger.error(  # NOSONAR (python:S8572): raw logging.exception is prohibited by the PHI/PII sink gate.
                 "MPR thumbnail focus failed",
                 extra=safe_event_fields("mpr.thumbnail_focus", error=exc),
             )
+            _logger.debug("%s", sanitized_format_exc())
 
     def _on_mpr_assign_requested(
         self, source_subwindow_index: int, target_subwindow_index: int

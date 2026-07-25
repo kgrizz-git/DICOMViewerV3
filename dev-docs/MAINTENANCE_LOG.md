@@ -1,10 +1,42 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-25
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-07-25
+
+- Completed the privacy structural-schema SonarQube slice: decomposed metric
+  normalization and rendered-value revalidation, schema loading, validator
+  parsing, and operation parsing into small fail-closed helpers. Added direct
+  normalization and invalid-schema regression coverage. A fresh full-suite,
+  coverage-backed local analysis cleared all five
+  `utils/privacy/structural_schema.py` `S3776` findings; priority findings are
+  now **280** (down from 285).
+- Completed a targeted local SonarQube cleanup slice: made the RDSR privacy
+  projection's `dataclasses.replace` type preservation explicit (`S5886`) and
+  moved the lazy 3D-render eligibility import out of the subwindow wiring loop
+  (`S1515`), with regression coverage for both. Documented four `S8572`
+  suppressions where raw `logging.exception` would violate the PHI/PII sink
+  gate; those paths retain structural/sanitized exception reporting. Fresh
+  coverage-backed local analysis: **285** priority findings (down from 291).
+- Approved a dormant, source-only SonarQube Cloud scope configuration for a
+  future explicit CI workflow on `main`. Cloud analysis remains inactive until
+  that workflow and its secret are separately enabled; PR, branch, test,
+  coverage, artifact, and local-data uploads remain prohibited.
+
+## 2026-07-24
+
+- Local SonarQube freshness is now advisory-stale when a successful submission
+  is older than 14 days or more than five commits behind `HEAD`. Submission
+  records include their Git revision so the main pre-push reminder can detect
+  code drift without contacting SonarQube.
+- Every local pre-push now performs metadata-only Docker Hub/SonarSource checks
+  for an updated local SonarQube server image and native scanner at most once
+  every seven days. It records an ignored local result and never pulls,
+  installs, or restarts anything.
 
 ## 2026-07-18
 

@@ -389,7 +389,8 @@ Behavior:
   update targets `refs/heads/main`, it then runs the full offline/local scanner
   suite (`run_security_scan.py --all`). Only after those gates pass, it checks
   the ignored local SonarQube timestamp and prints a non-blocking reminder when
-  the last successful Community Build analysis is missing or over 30 days old.
+  the last successful Community Build analysis is missing, over 14 days old,
+  or more than five commits behind `HEAD`.
   The same successful `main` path also runs local/no-account Hounddog after the
   blocking suite and before the SonarQube freshness reminder. Hounddog findings
   remain advisory and no report is retained.

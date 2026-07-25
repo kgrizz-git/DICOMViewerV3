@@ -264,6 +264,11 @@ def test_blocks_unapproved_extensionless_file(repo):
     assert _run(repo) == 1
 
 
+def test_allows_tracked_pre_push_hook_as_text_control(repo):
+    _stage(repo, ".githooks/pre-push", "#!/usr/bin/env bash\necho hook\n")
+    assert _run(repo) == 0
+
+
 def test_blocks_unapproved_image_file(repo):
     _stage(repo, "resources/new-image.png", "not a reviewed image")
     assert _run(repo) == 1

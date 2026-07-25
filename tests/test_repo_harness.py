@@ -173,6 +173,20 @@ class TestExternalAnalysisUploadPolicy(unittest.TestCase):
 
         self.assertEqual(errors, [])
 
+    def test_accepts_dormant_sonarcloud_scope_without_a_workflow(self) -> None:
+        import tempfile
+
+        module = _load_harness_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".sonarcloud.properties").write_text(
+                "sonar.sources=src\n", encoding="utf-8"
+            )
+
+            errors = module.check_external_analysis_upload_policy(root)
+
+        self.assertEqual(errors, [])
+
     def test_rejects_secret_verification_against_provider_apis(self) -> None:
         import tempfile
 

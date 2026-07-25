@@ -47,6 +47,7 @@ from utils.config.slice_sync_config import SliceSyncConfigMixin
 from utils.config.study_index_config import StudyIndexConfigMixin
 from utils.config.study_load_config import StudyLoadConfigMixin
 from utils.config.tag_export_config import TagExportConfigMixin
+from utils.log_sanitizer import sanitized_format_exc
 from utils.privacy.safe_storage import (
     assert_safe_internal_path,
     atomic_write_private_text,
@@ -309,10 +310,11 @@ class ConfigManager(
             )
             return True
         except (OSError, ValueError) as e:
-            _logger.error(
+            _logger.error(  # NOSONAR (python:S8572): raw logging.exception is prohibited by the PHI/PII sink gate.
                 "Application configuration could not be saved",
                 extra={"operation": "config.save", "error_class": type(e).__name__},
             )
+            _logger.debug("%s", sanitized_format_exc())
             return False
 
     def get(self, key: str, default: Any = None) -> Any:

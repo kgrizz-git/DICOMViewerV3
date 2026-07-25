@@ -11,7 +11,7 @@ in the ignored .env file or exported in the shell):
     python scripts/run_local_sonarqube.py
     python scripts/run_local_sonarqube.py --with-coverage
     python scripts/run_local_sonarqube.py --status
-    python scripts/run_local_sonarqube.py --check-freshness-days 30
+    python scripts/run_local_sonarqube.py --check-freshness-days 14
 """
 
 from __future__ import annotations
@@ -44,7 +44,8 @@ SCANNER_IMAGE = "sonarsource/sonar-scanner-cli:latest"
 SCANNER_CACHE_VOLUME = "dicom-viewer-v3-sonar-scanner-cache"
 STATE_DIRECTORY = Path(".sonar-local")
 STATE_FILE_NAME = "last-analysis.json"
-DEFAULT_FRESHNESS_DAYS = 30
+DEFAULT_FRESHNESS_DAYS = 14
+DEFAULT_MAX_COMMITS_BEHIND = 5
 LOOPBACK_HOSTNAME = "localhost"
 DOCKER_HOST_GATEWAY = "host.docker.internal"
 
@@ -135,6 +136,7 @@ def write_last_submission(
     project_key: str,
     scanner: str,
     included_coverage: bool,
+    revision: str | None = None,
 ) -> Path:
     """Atomically record a scanner submission that completed successfully."""
     path = state_path(repo_root)
@@ -147,6 +149,7 @@ def write_last_submission(
         "dashboard_url": f"{host_url}/dashboard?id={quote(project_key, safe='')}",
         "scanner": scanner,
         "included_coverage": included_coverage,
+        "revision": revision,
     }
     temporary_path = path.with_suffix(".tmp")
     temporary_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -165,6 +168,7 @@ def print_last_submission(repo_root: Path) -> int:
     print(f"Project: {record.get('project_key', 'unknown')}")
     print(f"Scanner: {record.get('scanner', 'unknown')}")
     print(f"Coverage included: {record.get('included_coverage', False)}")
+    print(f"Revision: {record.get('revision', 'unknown')}")
     print(f"Dashboard: {record.get('dashboard_url', 'unknown')}")
     return 0
 
@@ -183,17 +187,59 @@ def parse_submission_time(record: dict[str, Any]) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
+def current_revision(repo_root: Path) -> str | None:
+    """Return the checked-out Git revision, without treating Git metadata as required."""
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    revision = result.stdout.strip() if isinstance(result.stdout, str) else ""
+    return revision if result.returncode == 0 and revision else None
+
+
+def commits_behind(repo_root: Path, revision: str) -> int | None:
+    """Return how many commits HEAD is ahead, or None when ancestry is unknown."""
+    current = current_revision(repo_root)
+    if current is None:
+        return None
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", revision, current],
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        return None
+    result = subprocess.run(
+        ["git", "rev-list", "--count", f"{revision}..{current}"],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    try:
+        return int(result.stdout.strip()) if result.returncode == 0 else None
+    except (AttributeError, ValueError):
+        return None
+
+
 def check_submission_freshness(
     repo_root: Path,
     *,
     max_age_days: int = DEFAULT_FRESHNESS_DAYS,
     now: datetime | None = None,
 ) -> int:
-    """Check the ignored local record without contacting SonarQube."""
+    """Check scan age and Git distance without contacting SonarQube."""
     record = read_last_submission(repo_root)
     submitted = parse_submission_time(record) if record is not None else None
     current = (now or datetime.now(UTC)).astimezone(UTC)
-    if submitted is None:
+    if submitted is None or record is None:
         print(
             "No valid local SonarQube analysis is recorded. "
             "Run: python scripts/run_local_sonarqube.py --with-coverage"
@@ -214,10 +260,32 @@ def check_submission_freshness(
         )
         return 3
 
+    revision = record.get("revision")
+    if not isinstance(revision, str) or not revision:
+        print(
+            "Local SonarQube analysis is stale because its Git revision is unknown. "
+            "Run: python scripts/run_local_sonarqube.py --with-coverage"
+        )
+        return 3
+    behind = commits_behind(repo_root, revision)
+    if behind is None:
+        print(
+            "Local SonarQube analysis is stale because its Git revision cannot be "
+            "compared with HEAD. Run: python scripts/run_local_sonarqube.py --with-coverage"
+        )
+        return 3
+    if behind > DEFAULT_MAX_COMMITS_BEHIND:
+        print(
+            f"Local SonarQube analysis is stale ({behind} commits behind HEAD; "
+            f"target <= {DEFAULT_MAX_COMMITS_BEHIND}). Run: "
+            "python scripts/run_local_sonarqube.py --with-coverage"
+        )
+        return 3
+
     age_label = "day" if age_days == 1 else "days"
     print(
-        f"Local SonarQube analysis is fresh ({age_days} {age_label}; "
-        f"target <= {max_age_days})."
+        f"Local SonarQube analysis is fresh ({age_days} {age_label}, {behind} commits "
+        f"behind HEAD; targets <= {max_age_days} days and <= {DEFAULT_MAX_COMMITS_BEHIND} commits)."
     )
     return 0
 
@@ -462,6 +530,7 @@ def main() -> int:
         project_key=args.project_key,
         scanner=mode,
         included_coverage=args.with_coverage,
+        revision=current_revision(repo_root),
     )
     record = read_last_submission(repo_root)
     dashboard_url = record.get("dashboard_url") if record else f"{host_url}/dashboard?id={args.project_key}"

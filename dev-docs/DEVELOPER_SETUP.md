@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-25
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -97,9 +97,12 @@ can continue exporting variables and activating the venv manually.
 ## Optional local SonarQube Community Build analysis
 
 This repository supports opt-in analysis against a local SonarQube Community
-Build instance. SonarQube Cloud and other external analysis uploads are
-disabled by policy. The local scan is intentionally **not** a Git hook: it can
-take time, and `--with-coverage` runs the full pytest suite first.
+Build instance. Other external analysis uploads are disabled by policy. A
+dormant [`.sonarcloud.properties`](../.sonarcloud.properties) narrowly scopes a
+future explicitly enabled SonarQube Cloud CI scan to `src/` on `main` only; it
+does not activate Cloud analysis, and PR/branch/test/coverage uploads remain
+prohibited. The local scan is intentionally **not** a Git hook: it can take
+time, and `--with-coverage` runs the full pytest suite first.
 
 1. Start the existing local SonarQube Community Build service and confirm its UI
    is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
@@ -131,6 +134,19 @@ server with:
 
 ```bash
 python scripts/run_local_sonarqube.py --status
+```
+
+Every local push, including a branch pushed to open or update a pull request,
+runs an advisory update check at most once every seven days. It compares the
+Docker-hosted local `sonarqube:community` server image with the matching public
+Docker Hub manifest and compares an installed native `sonar-scanner` with
+SonarSource's public latest-release metadata. It records only identifiers,
+versions, and the check time under ignored `.sonar-local/`. It never pulls,
+installs, or restarts anything, and it never sends repository content or the
+SonarQube token. Run it manually with:
+
+```bash
+python scripts/check_local_sonarqube_updates.py
 ```
 
 To include test coverage, use `python scripts/run_local_sonarqube.py
@@ -177,15 +193,17 @@ python scripts/report_local_sonarqube_issues.py \
 ```
 
 Recommended cadence: run `python scripts/run_local_sonarqube.py
---with-coverage` at least every 30 days, before a release, and after a large
+--with-coverage` at least every 14 days, before a release, and after a large
 dependency or security-sensitive change. A push that updates `main` checks the
-ignored timestamp only after the blocking privacy, PHI, secret, type, test, and
-full local scanner gates pass. Missing or stale analysis prints a reminder but
+ignored scan record only after the blocking privacy, PHI, secret, type, test, and
+full local scanner gates pass. The record is stale when it is older than 14 days
+or more than five commits behind `HEAD`; scans recorded before revision tracking
+was added are stale until rerun. Missing or stale analysis prints a reminder but
 does not block contributors who do not have the local service or token. Check
 freshness without contacting SonarQube:
 
 ```bash
-python scripts/run_local_sonarqube.py --check-freshness-days 30
+python scripts/run_local_sonarqube.py --check-freshness-days 14
 ```
 
 Do not add a root `sonar-project.properties` or cloud-analysis configuration.
