@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
@@ -37,19 +36,32 @@ def test_update_check_records_only_a_due_manifest_comparison(tmp_path, monkeypat
     assert "not due" in capsys.readouterr().out
 
 
-def test_remote_image_id_selects_the_local_platform(monkeypatch):
+def test_remote_image_id_reads_docker_hub_tag_digest(monkeypatch):
     module = _load_module()
-    payload = [
-        {"Descriptor": {"platform": {"architecture": "amd64", "os": "linux"}}, "OCIManifest": {"config": {"digest": "sha256:amd"}}},
-        {"Descriptor": {"platform": {"architecture": "arm64", "os": "linux"}}, "OCIManifest": {"config": {"digest": "sha256:arm"}}},
-    ]
-    monkeypatch.setattr(
-        module,
-        "run_docker",
-        lambda _command: subprocess.CompletedProcess([], 0, module.json.dumps(payload), ""),
-    )
 
-    assert module.remote_image_id("arm64", "linux") == "sha256:arm"
+    class Response:
+        def __init__(self, body: bytes, headers: dict[str, str] | None = None):
+            self._body = body
+            self.headers = headers or {}
+
+        def read(self) -> bytes:
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    responses = iter(
+        [
+            Response(b'{"token": "public-token"}'),
+            Response(b"", {"Docker-Content-Digest": "sha256:tag"}),
+        ]
+    )
+    monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: next(responses))
+
+    assert module.remote_image_id() == "sha256:tag"
 
 
 def test_version_key_compares_numeric_scanner_versions():

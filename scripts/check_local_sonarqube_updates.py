@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -26,6 +27,8 @@ STATE_PATH = Path(".sonar-local/last-update-check.json")
 SERVER_IMAGE = "sonarqube:community"
 DEFAULT_INTERVAL_DAYS = 7
 SCANNER_RELEASE_URL = "https://api.github.com/repos/SonarSource/sonar-scanner-cli/releases/latest"
+DOCKER_TOKEN_URL = "https://auth.docker.io/token"
+DOCKER_MANIFEST_URL = "https://registry-1.docker.io/v2/library/sonarqube/manifests/community"
 
 
 def state_path(repo_root: Path) -> Path:
@@ -72,41 +75,47 @@ def run_docker(command: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def local_image_details() -> tuple[str, str, str] | None:
-    """Return local image ID, architecture, and OS without contacting a registry."""
+    """Return local manifest digest, architecture, and OS without a registry request."""
     result = run_docker(
-        ["docker", "image", "inspect", SERVER_IMAGE, "--format", "{{.Id}} {{.Architecture}} {{.Os}}"]
+        [
+            "docker",
+            "image",
+            "inspect",
+            SERVER_IMAGE,
+            "--format",
+            "{{index .RepoDigests 0}} {{.Architecture}} {{.Os}}",
+        ]
     )
     fields = result.stdout.strip().split() if result.returncode == 0 else []
-    return (fields[0], fields[1], fields[2]) if len(fields) == 3 else None
-
-
-def remote_image_id(architecture: str, operating_system: str) -> str | None:
-    """Return the matching remote config digest from Docker Hub's manifest metadata."""
-    result = run_docker(["docker", "manifest", "inspect", "--verbose", SERVER_IMAGE])
-    if result.returncode != 0:
+    if len(fields) != 3 or "@" not in fields[0]:
         return None
+    return (fields[0].rsplit("@", maxsplit=1)[1], fields[1], fields[2])
+
+
+def remote_image_id() -> str | None:
+    """Return Docker Hub's top-level tag digest without pulling an image."""
     try:
-        manifests = json.loads(result.stdout)
-    except json.JSONDecodeError:
+        token_request = Request(
+            f"{DOCKER_TOKEN_URL}?{urlencode({'service': 'registry.docker.io', 'scope': 'repository:library/sonarqube:pull'})}",
+            headers={"Accept": "application/json"},
+        )
+        with urlopen(token_request, timeout=10.0) as response:
+            token_payload = json.loads(response.read().decode("utf-8"))
+        token = token_payload.get("token") if isinstance(token_payload, dict) else None
+        if not isinstance(token, str) or not token:
+            return None
+        manifest_request = Request(
+            DOCKER_MANIFEST_URL,
+            headers={
+                "Accept": "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json",
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        with urlopen(manifest_request, timeout=10.0) as response:
+            digest = response.headers.get("Docker-Content-Digest")
+    except (OSError, URLError, UnicodeDecodeError, json.JSONDecodeError):
         return None
-    if not isinstance(manifests, list):
-        return None
-    for manifest in manifests:
-        if not isinstance(manifest, dict):
-            continue
-        descriptor = manifest.get("Descriptor")
-        oci_manifest = manifest.get("OCIManifest")
-        platform = descriptor.get("platform") if isinstance(descriptor, dict) else None
-        config = oci_manifest.get("config") if isinstance(oci_manifest, dict) else None
-        if (
-            isinstance(platform, dict)
-            and platform.get("architecture") == architecture
-            and platform.get("os") == operating_system
-            and isinstance(config, dict)
-            and isinstance(config.get("digest"), str)
-        ):
-            return config["digest"]
-    return None
+    return digest if isinstance(digest, str) and digest.startswith("sha256:") else None
 
 
 def native_scanner_version() -> str | None:
@@ -180,8 +189,8 @@ def check_for_update(repo_root: Path, *, interval_days: int = DEFAULT_INTERVAL_D
     if local is None:
         print("Local SonarQube update check could not inspect the server image.", file=sys.stderr)
         return 2
-    local_id, architecture, operating_system = local
-    remote_id = remote_image_id(architecture, operating_system)
+    local_id, _architecture, _operating_system = local
+    remote_id = remote_image_id()
     if remote_id is None:
         print("Local SonarQube update check could not read Docker Hub metadata.", file=sys.stderr)
         return 2
