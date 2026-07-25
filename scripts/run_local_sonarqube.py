@@ -239,7 +239,7 @@ def check_submission_freshness(
     record = read_last_submission(repo_root)
     submitted = parse_submission_time(record) if record is not None else None
     current = (now or datetime.now(UTC)).astimezone(UTC)
-    if submitted is None:
+    if submitted is None or record is None:
         print(
             "No valid local SonarQube analysis is recorded. "
             "Run: python scripts/run_local_sonarqube.py --with-coverage"
