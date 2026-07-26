@@ -135,11 +135,12 @@ class MagnifierWidget(QWidget):
             else None
         )
         primary = QApplication.primaryScreen()
-        screen = (
-            screen_obj.geometry()
-            if screen_obj is not None
-            else (primary.geometry() if primary is not None else self.screen().geometry())
-        )
+        if screen_obj is not None:
+            screen = screen_obj.geometry()
+        elif primary is not None:
+            screen = primary.geometry()
+        else:
+            screen = self.screen().geometry()
 
         # Adjust if would go off left edge
         if x < screen.left():

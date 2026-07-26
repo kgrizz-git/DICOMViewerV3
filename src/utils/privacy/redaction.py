@@ -21,11 +21,11 @@ REDACTED_PATH = REDACTED
 REDACTED_EXCEPTION = "[REDACTED EXCEPTION DETAIL]"
 
 _WINDOWS_PATH = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z]:\\|\\\\)[^\r\n\t\"'<>|)\],;]+",
+    r"(?<![a-z0-9])(?:[a-z]:\\|\\\\)[^\r\n\t\"'<>|)\],;]+",
     re.IGNORECASE,
 )
 _POSIX_HOME_PATH = re.compile(
-    r"(?<![A-Za-z0-9])/(?:Users|home|root|private/var/folders)/[^\r\n\t\"'<>)\],;]+",
+    r"(?<![a-z0-9])/(?:Users|home|root|private/var/folders)/[^\r\n\t\"'<>)\],;]+",
     re.IGNORECASE,
 )
 _FILE_URI = re.compile(r"\bfile://[^\s\"'<>]+", re.IGNORECASE)

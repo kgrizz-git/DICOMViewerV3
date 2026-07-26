@@ -24,7 +24,7 @@ def repair_str_bytes_repr_artifact(s: str) -> str:
     t = (s or "").strip()
     if len(t) < 3:
         return t
-    if not (t.startswith("b'") or t.startswith('b"')):
+    if not t.startswith(("b'", 'b"')):
         return t
     try:
         ev = ast.literal_eval(t)

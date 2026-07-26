@@ -405,6 +405,15 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> np.ndarray | No
         return None
 
 
+def _select_functional_group_item(fg_source, shared_seq, frame_index):
+    """Pick the functional-group item: shared uses index 0, per-frame uses frame_index."""
+    if fg_source is shared_seq:
+        return fg_source[0]
+    if 0 <= frame_index < len(fg_source):
+        return fg_source[frame_index]
+    return None
+
+
 def create_frame_dataset(dataset: Dataset, frame_index: int) -> Dataset | None:
     """
     Create a frame-specific dataset wrapper for a multi-frame DICOM file.
@@ -515,9 +524,7 @@ class FrameDatasetWrapper(Dataset):
         for fg_source in (shared_seq, per_frame_seq):
             if not fg_source:
                 continue
-            fg_item = fg_source[0] if fg_source is shared_seq else (
-                fg_source[frame_index] if 0 <= frame_index < len(fg_source) else None
-            )
+            fg_item = _select_functional_group_item(fg_source, shared_seq, frame_index)
             if fg_item is None:
                 continue
             pm_seq = getattr(fg_item, 'PixelMeasuresSequence', None)
@@ -540,9 +547,7 @@ class FrameDatasetWrapper(Dataset):
         for fg_source in (shared_seq, per_frame_seq):
             if not fg_source:
                 continue
-            fg_item = fg_source[0] if fg_source is shared_seq else (
-                fg_source[frame_index] if 0 <= frame_index < len(fg_source) else None
-            )
+            fg_item = _select_functional_group_item(fg_source, shared_seq, frame_index)
             if fg_item is None:
                 continue
             pvt_seq = getattr(fg_item, 'PixelValueTransformationSequence', None)
@@ -565,9 +570,7 @@ class FrameDatasetWrapper(Dataset):
         for fg_source in (shared_seq, per_frame_seq):
             if not fg_source:
                 continue
-            fg_item = fg_source[0] if fg_source is shared_seq else (
-                fg_source[frame_index] if 0 <= frame_index < len(fg_source) else None
-            )
+            fg_item = _select_functional_group_item(fg_source, shared_seq, frame_index)
             if fg_item is None:
                 continue
             voi_seq = getattr(fg_item, 'FrameVOILUTSequence', None)

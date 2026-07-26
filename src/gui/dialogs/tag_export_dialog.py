@@ -824,8 +824,6 @@ class TagExportDialog(QDialog):
                 study_item.setCheckState(0, Qt.CheckState.Unchecked)
         # If this is an instance item, update parent series and study
         else:
-            check_state = item.checkState(0)
-
             # Update parent series's check state
             series_item = parent
             all_checked = True

@@ -39,8 +39,8 @@ StudiesNestedDict = dict[str, dict[str, list[Dataset]]]
 def flatten_studies_for_tag_export_union(studies: StudiesNestedDict) -> list[Dataset]:
     """Stable study → series → instance order for tag-export union."""
     out: list[Dataset] = []
-    for _, series_dict in studies.items():
-        for _, datasets in series_dict.items():
+    for series_dict in studies.values():
+        for datasets in series_dict.values():
             out.extend(datasets)
     return out
 

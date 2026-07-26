@@ -243,25 +243,16 @@ class ImageViewerInputMixin:
             self.roi_drawing_mode = "ellipse"
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "roi_rectangle":
+        elif mode in ("roi_rectangle", "auto_window_level"):
+            # Rectangle ROI drawing; auto window/level reuses the rectangle tool.
             self.roi_drawing_mode = "rectangle"
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "auto_window_level":
-            # Auto window/level mode - use rectangle ROI drawing
-            self.roi_drawing_mode = "rectangle"
-            self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "measure":
+        elif mode in ("measure", "measure_angle"):
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            # Cursor set by _apply_cursor_for_mouse_mode() below
-            # Reset measurement state when switching to measure mode
-            self.measuring = False
-            self.measurement_start_pos = None
-        elif mode == "measure_angle":
-            self.roi_drawing_mode = None
-            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            # Cursor set by _apply_cursor_for_mouse_mode() below.
+            # Reset measurement state when switching to a measurement mode.
             self.measuring = False
             self.measurement_start_pos = None
         elif mode == "zoom":
