@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on overlay position updates: moved
+  widget geometry sync, viewport corner anchors, max-width cache resolution,
+  left/right item placement, and deferred repaint into
+  `src/gui/overlay_position_updater.py`; `OverlayManager.update_overlay_positions`
+  now orchestrates only. Added
+  `tests/gui/test_overlay_position_updater_sonar_slice.py`. Target finding was
+  cognitive complexity 142 on `update_overlay_positions`.
 - Completed a Sonar `python:S3776` slice on the load pipeline: shared helpers
   for merge paths / empty-load errors / failed-file warnings / post-load
   status / progress UI; sync body split from outer exception wrapper; async
