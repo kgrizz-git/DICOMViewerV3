@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on series-transition window/level
+  resolution: extracted new-series stored/fallback/cache helpers in
+  `slice_window_level_resolver` so `resolve_window_level_for_series_transition`
+  orchestrates only. Added
+  `tests/core/test_slice_window_level_resolver_sonar_slice.py`. Target finding
+  was cognitive complexity 89.
 - Completed a Sonar `python:S3776` slice on measurement itemChange handlers:
   moved handle/group position, selection, geometry sync, and debug logging into
   `src/tools/measurement_item_change.py`; both `itemChange` methods now
