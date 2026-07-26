@@ -67,8 +67,14 @@ jobs:
           SEMGREP_SEND_METRICS: "off"
         run: |
           set +e
+          # Semgrep's generic secret rule mistakes the immutable public SHA of
+          # the Sonar GitHub Action for a SonarQube credential. The action is
+          # separately constrained by the repository harness and is not
+          # application source, so exclude this one workflow rather than
+          # weakening the SHA pin or suppressing a broader rule.
           semgrep scan \
             --metrics=off \
+            --exclude .github/workflows/sonarqube-cloud-main.yml \
             --config p/security-audit \
             --config p/owasp-top-ten \
             --config p/secrets \
