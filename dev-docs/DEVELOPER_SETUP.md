@@ -97,12 +97,14 @@ can continue exporting variables and activating the venv manually.
 ## Optional local SonarQube Community Build analysis
 
 This repository supports opt-in analysis against a local SonarQube Community
-Build instance. Other external analysis uploads are disabled by policy. A
-dormant [`.sonarcloud.properties`](../.sonarcloud.properties) narrowly scopes a
-future explicitly enabled SonarQube Cloud CI scan to `src/` on `main` only; it
-does not activate Cloud analysis, and PR/branch/test/coverage uploads remain
-prohibited. The local scan is intentionally **not** a Git hook: it can take
-time, and `--with-coverage` runs the full pytest suite first.
+Build instance. Other external analysis uploads are disabled by policy. The
+approved [SonarQube Cloud main-only workflow](../.github/workflows/sonarqube-cloud-main.yml)
+uses the repository `SONAR_TOKEN` secret and root
+[`sonar-project.properties`](../sonar-project.properties) to analyze `src/`
+after pushes to `main`; SonarQube Cloud Automatic Analysis must remain
+disabled. PR, non-main branch, test, coverage, artifact, and local-data uploads
+remain prohibited. The local scan is intentionally **not** a Git hook: it can
+take time, and `--with-coverage` runs the full pytest suite first.
 
 1. Start the existing local SonarQube Community Build service and confirm its UI
    is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
@@ -206,8 +208,10 @@ freshness without contacting SonarQube:
 python scripts/run_local_sonarqube.py --check-freshness-days 14
 ```
 
-Do not add a root `sonar-project.properties` or cloud-analysis configuration.
-The separate local settings file is passed only by this runner.
+The root [`sonar-project.properties`](../sonar-project.properties) is reserved
+for the approved GitHub Actions main-only Cloud scan. Do not point the local
+runner at it, add another Cloud workflow, or enable Automatic Analysis. The
+separate local settings file is passed only by this runner.
 
 **Privacy / logging gate:** `scripts/git-hook-security-gate.py` invokes **`scripts/git_hook_privacy_checks.py`** on every **pre-commit** and **pre-push** invocation (before branch-gated scans). It reads the **staged** index for **`src/*.py`**: forbids real **`traceback.print_exc(`** calls (matches inside **`tokenize`** **STRING**/**COMMENT** tokens—e.g. docstrings—are skipped); on **git-added** lines only, applies heuristics for patient tag names in logs, path-like literals in **`logger.*`** calls, raw-exception patterns in **`QMessageBox`**-style calls, and **`logger.*`** with non-literal messages without **`sanitize_message`** / **`sanitize_exception`**. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to print findings without blocking. From repo root: `.venv\Scripts\python.exe scripts\git_hook_privacy_checks.py`.
 

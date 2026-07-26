@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-25
 
+- Enabled the approved SonarQube Cloud CI analysis of `src/` only after pushes
+  to `main`: `.github/workflows/sonarqube-cloud-main.yml` is pinned to the
+  official scan action and uses only the repository `SONAR_TOKEN` secret.
+  Root `sonar-project.properties` excludes tests, coverage, artifacts, local
+  data, and generated/cache paths. The harness now permits only this exact
+  main-only workflow; Automatic Analysis must remain disabled in SonarQube
+  Cloud to prevent independent PR analysis.
 - Completed the privacy structural-schema SonarQube slice: decomposed metric
   normalization and rendered-value revalidation, schema loading, validator
   parsing, and operation parsing into small fail-closed helpers. Added direct

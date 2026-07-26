@@ -1,0 +1,49 @@
+name: SonarQube Cloud (after privacy gate)
+
+# The scanner receives only the source scope declared in the
+# root sonar-project.properties file; tests, coverage, artifacts, and local
+# data are excluded and are never uploaded.
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: sonarqube-cloud-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-gate:
+    name: Privacy gate for external analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5" "pypdf>=6.14.2,<7"
+      - run: python scripts/check_no_phi_artifacts.py
+      - run: python scripts/git_hook_privacy_checks.py --all --critical
+
+  analyze-main-source:
+    name: Analyze src/ after privacy gate
+    needs: privacy-gate
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key -- pinned public GitHub Action commit SHA (v8.1.0), not a credential
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -198,3 +198,19 @@ jobs:
 
       - name: Block unsafe output sinks without echoing matched values
         run: python scripts/git_hook_privacy_checks.py --all --critical
+
+  request-coderabbit-review:
+    name: Request CodeRabbit review after privacy gate
+    needs: [no-secrets-scan, phi-artifact-scan, privacy-output-scan]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `@coderabbitai review\n\nPrivacy gate passed for ${context.payload.pull_request.head.sha}.`
+            });

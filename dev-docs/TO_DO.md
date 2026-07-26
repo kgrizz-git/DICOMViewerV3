@@ -39,13 +39,14 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
-- [ ] **[P3]** **Enable the explicitly approved SonarQube Cloud main-only CI scan when needed.** Keep Automatic Analysis disabled. Add a GitHub Actions workflow triggered only by `push` to `main`, authenticate with a repository `SONAR_TOKEN` secret, and retain the committed `.sonarcloud.properties` scope (`src/` only with privacy-sensitive/local paths excluded). Do not enable pull-request, feature-branch, local-data, test, coverage, or artifact uploads without a separate explicit approval.
-
-- [ ] **[P2]** **Continue the local SonarQube code-smell backlog after the
-  structural-schema slice:** `utils/privacy/structural_schema.py` `S3776` is
-  now 0 (285 → 280 priority findings). Next: pick another high-count `S3776`
-  domain from the scoped reporter (for example `roi_manager`, annotation, or
-  subwindow-lifecycle clusters). Plan references:
+- [ ] **[P2]** **Refactor high-complexity functions identified by local
+  SonarQube or Lizard.** Prioritize bounded, characterized slices in
+  safety-sensitive or heavily changed code; use Sonar `S3776` cognitive
+  complexity and Lizard CCN/NLOC findings together, and preserve behavior with
+  regression tests. The completed `utils/privacy/structural_schema.py` slice
+  reduced priority findings 285 → 280. Next candidates include
+  `roi_manager`, annotation, subwindow-lifecycle, loading, and image-input
+  clusters. Plan references:
   [Fusion coordinator finish slice](plans/SONARQUBE_FUSION_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
   [Fusion coordinator first slice](plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md),
   [ROI coordinator finish slice](plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
@@ -82,6 +83,7 @@ This file tracks active and near-term tasks.
 
 ## Maintenance
 
+- [ ] **[P2]** **If DeepSource is enabled, require the same privacy controls as external CI scanners.** Do not enable the repository integration until it is configured to run only after the blocking privacy gate and excludes protected data/runtime roots plus DICOM, imaging, spreadsheet, document, and media patterns. Update `security/security-tool-inventory.json`, document the exact trigger/exclusion configuration, and verify that no source is sent before the gate passes.
 - [ ] **[P2]** **Restore blocking Grype and Semgrep SARIF uploads when GitHub Code Scanning is available.** The current private repository has Code Scanning disabled, so `.github/workflows/grype.yml` and `.github/workflows/semgrep.yml` keep their actual vulnerability/SAST scans mandatory but make only their optional Security-tab uploads nonblocking. When the repository becomes public **or** Code Scanning is explicitly enabled for the private repository, remove `continue-on-error: true` from both workflows, manually run them, and confirm that both SARIF result sets appear in the GitHub Security tab. **Added 2026-07-14.**
 - [ ] **[P2]** **Work through local Semgrep, basedpyright, and dependency-scan findings.** Triage actionable bugs/technical debt versus false positives using the repository's local-first tools; do not enable hosted source-analysis integrations to perform this work.
 - [ ] **[P2]** **Add a `pre-push` git hook running `basedpyright` locally.** Currently `basedpyright` only runs in CI (`.github/workflows/pyright.yml`), gated on `errorCount > 0` (warnings don't block). A local pre-push hook would catch errors before they reach GitHub instead of only surfacing after a push/PR. Note: investigated 2026-07-09 after a DeepSource PR comment flagged a reused-loop-variable type mismatch in `export_manager.py` (PR #81) — confirmed `basedpyright` itself does **not** flag that particular pattern (it flow-narrows the reassigned variable per-statement), so a pre-push hook running `basedpyright` would not have caught that specific case; DeepSource's own analyzer is stricter there. Still worth adding for the errors basedpyright *does* catch, to shorten the feedback loop vs. waiting on CI.
