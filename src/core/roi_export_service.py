@@ -744,187 +744,19 @@ def write_xlsx(
     """
     Write one sheet per study (name from StudyDescription, max 31 chars, sanitized).
     Bold merged series headers, indented slice headers, bold ROI/crosshair headings, data rows.
+
+    Implementation lives in ``core.roi_export_xlsx`` (Sonar S3776 complexity slice).
     """
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import Font
-    except ImportError as e:
-        raise ImportError(
-            "openpyxl is required for XLSX export. Install with: pip install openpyxl"
-        ) from e
+    from core.roi_export_xlsx import write_xlsx_workbook
 
-    roi_manager = None
-    for idx in sorted(subwindow_managers.keys()):
-        if subwindow_managers[idx].get("roi_manager"):
-            roi_manager = subwindow_managers[idx]["roi_manager"]
-            break
-    if roi_manager is None and subwindow_managers:
-        roi_manager = next(iter(subwindow_managers.values())).get("roi_manager")
-
-    wb = Workbook()
-    ws = wb.active
-    if ws is None:
-        raise RuntimeError("Workbook has no active sheet")
-    ws.title = "ROI Statistics"[:31]
-
-    bold_font = Font(bold=True)
-    row = 1
-
-    for (study_uid, series_uid), slice_list in collected:
-        series_dict = current_studies.get(study_uid, {}).get(series_uid, [])
-        if not series_dict:
-            continue
-        first_ds = series_dict[0]
-        series_num = getattr(first_ds, "SeriesNumber", "")
-        series_desc = getattr(first_ds, _TAG_SERIES_DESCRIPTION, _DEFAULT_UNKNOWN_SERIES)
-        study_desc = getattr(first_ds, "StudyDescription", "Study")[:31]
-        study_desc = _sanitize_filename(study_desc) or "Study"
-
-        ws.cell(
-            row=row,
-            column=1,
-            value=_safe_spreadsheet_value(f"Series {series_num}: {series_desc}"),
-        )
-        ws.cell(row=row, column=1).font = bold_font
-        row += 1
-
-        if not slice_list:
-            ws.cell(row=row, column=1, value="No annotations")
-            row += 2
-            continue
-
-        for z, rois, crosshairs, measurements in slice_list:
-            dataset = series_dict[z] if z < len(series_dict) else None
-            ws.cell(row=row, column=1, value=f"  Slice Index (0-based): {z}")
-            row += 1
-            for roi_idx, roi_item in enumerate(rois, start=1):
-                shape = getattr(roi_item, "shape_type", "ellipse").capitalize()
-                ws.cell(row=row, column=1, value=f"  {shape} ROI {roi_idx}")
-                ws.cell(row=row, column=1).font = bold_font
-                row += 1
-                if dataset and roi_manager:
-                    stats, rescale_unit = compute_roi_statistics(
-                        roi_item, dataset, use_rescale, roi_manager, dicom_processor
-                    )
-                    unit_str = rescale_unit or ""
-                    mean_v = stats.get("mean")
-                    std_v = stats.get("std")
-                    min_v = stats.get("min")
-                    max_v = stats.get("max")
-                    count_v = stats.get("count")
-                    area_px_v = stats.get("area_pixels")
-                    area_mm2_v = stats.get("area_mm2")
-
-                    mean_f = float(mean_v) if mean_v is not None else 0.0
-                    std_f = float(std_v) if std_v is not None else 0.0
-                    min_f = float(min_v) if min_v is not None else 0.0
-                    max_f = float(max_v) if max_v is not None else 0.0
-                    count_i = int(count_v) if count_v is not None else 0
-                    area_px_f = float(area_px_v) if area_px_v is not None else 0.0
-                    area_mm2_f = float(area_mm2_v) if area_mm2_v is not None else None
-
-                    ws.cell(row=row, column=1, value="Mean")
-                    ws.cell(row=row, column=2, value=round(mean_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                    row += 1
-                    ws.cell(row=row, column=1, value="Std Dev")
-                    ws.cell(row=row, column=2, value=round(std_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                    row += 1
-                    ws.cell(row=row, column=1, value="Min")
-                    ws.cell(row=row, column=2, value=round(min_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                    row += 1
-                    ws.cell(row=row, column=1, value="Max")
-                    ws.cell(row=row, column=2, value=round(max_f, 2))
-                    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                    row += 1
-                    ws.cell(row=row, column=1, value="Pixels")
-                    ws.cell(row=row, column=2, value=count_i)
-                    ws.cell(row=row, column=3, value="")
-                    row += 1
-                    if area_mm2_f is not None:
-                        if area_mm2_f >= 100.0:
-                            ws.cell(row=row, column=1, value="Area")
-                            ws.cell(row=row, column=2, value=round(area_mm2_f / 100.0, 2))
-                            ws.cell(row=row, column=3, value="cm²")
-                        else:
-                            ws.cell(row=row, column=1, value="Area")
-                            ws.cell(row=row, column=2, value=round(area_mm2_f, 2))
-                            ws.cell(row=row, column=3, value="mm²")
-                    else:
-                        ws.cell(row=row, column=1, value="Area")
-                        ws.cell(row=row, column=2, value=area_px_f)
-                        ws.cell(row=row, column=3, value="pixels")
-                    row += 1
-                    channel_count, channel_values = _extract_channel_stats(stats)
-                    ch_labels = multichannel_axis_labels(dataset, channel_count)
-                    for c in range(channel_count):
-                        lab = ch_labels[c]
-                        ws.cell(row=row, column=1, value=f"{lab} Mean")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"mean_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-                        ws.cell(row=row, column=1, value=f"{lab} Std Dev")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"std_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-                        ws.cell(row=row, column=1, value=f"{lab} Min")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"min_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-                        ws.cell(row=row, column=1, value=f"{lab} Max")
-                        ws.cell(
-                            row=row,
-                            column=2,
-                            value=_safe_spreadsheet_value(channel_values.get(f"max_ch{c}", "")),
-                        )
-                        ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit_str))
-                        row += 1
-            for cross_idx, cross_item in enumerate(crosshairs, start=1):
-                ws.cell(row=row, column=1, value=f"  Crosshair {cross_idx}")
-                ws.cell(row=row, column=1).font = bold_font
-                row += 1
-                if dataset:
-                    data = get_crosshair_export_data(cross_item, dataset)
-                    crosshair_rows = [
-                        ("Pixel X", data["pixel_x"]),
-                        ("Pixel Y", data["pixel_y"]),
-                        ("Slice Index (0-based)", data["slice_index"]),
-                        ("Pixel Value", _safe_spreadsheet_value(data["pixel_value_str"])),
-                        ("Patient X (mm)", _format_float(data["patient_x"])),
-                        ("Patient Y (mm)", _format_float(data["patient_y"])),
-                        ("Patient Z (mm)", _format_float(data["patient_z"])),
-                    ]
-                    for label, value in crosshair_rows:
-                        ws.cell(row=row, column=1, value=label)
-                        ws.cell(row=row, column=2, value=value)
-                        ws.cell(row=row, column=3, value="")
-                        row += 1
-            for meas_idx, m_item in enumerate(measurements, start=1):
-                ws.cell(row=row, column=1, value=f"  Measurement {meas_idx}")
-                ws.cell(row=row, column=1).font = bold_font
-                row += 1
-                for label, value in _measurement_xlsx_label_value_pairs(m_item):
-                    ws.cell(row=row, column=1, value=label)
-                    ws.cell(row=row, column=2, value=_safe_spreadsheet_value(value))
-                    ws.cell(row=row, column=3, value="")
-                    row += 1
-        row += 1
-
-    wb.save(file_path)
+    write_xlsx_workbook(
+        file_path,
+        collected,
+        current_studies,
+        subwindow_managers,
+        use_rescale,
+        dicom_processor,
+    )
 
 
 def run_export(

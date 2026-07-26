@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-07-18  
+**Last updated:** 2026-07-26  
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -45,6 +45,7 @@ src/
 │   ├── slice_sync_coordinator.py      # Linked-group anatomic slice sync across panes (off by default)
 │   ├── slice_location_line_helper.py  # Pure geometry: plane intersections → 2-D line segments per target pane
 │   ├── roi_export_service.py          # ROI/crosshair/measurement aggregation + TXT/CSV/XLSX writers (formula-safe cells)
+│   ├── roi_export_xlsx.py             # XLSX worksheet helpers for write_xlsx (S3776 slice)
 │   ├── spreadsheet_safety.py          # Neutralize formula-like spreadsheet cell prefixes on export
 │   ├── study_navigation_handlers.py   # Study/series navigation menu slots (delegated from main)
 │   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/test_direction_labels.py)

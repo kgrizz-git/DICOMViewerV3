@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on ROI XLSX export: moved workbook
+  assembly, series/slice blocks, ROI stats/area/channel rows, and
+  crosshair/measurement writers into `src/core/roi_export_xlsx.py`;
+  `roi_export_service.write_xlsx` now orchestrates that module. Added
+  `tests/core/test_roi_export_xlsx_sonar_slice.py`. Target finding was
+  cognitive complexity 99.
 - Completed a Sonar `python:S3776` slice on projection enabled handling:
   extracted state-apply, MPR/non-MPR refresh, and DEBUG_PROJECTION helpers in
   `projection_app_facade` so `on_projection_enabled_changed` orchestrates only.
