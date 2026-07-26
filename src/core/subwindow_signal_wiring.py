@@ -82,6 +82,205 @@ def _volume_render_enabled_callback(app: Any, subwindow_index: int) -> Any:
     return callback
 
 
+def _disconnect_ignore_missing(signal: Any, slot: Any | None = None) -> None:
+    """Disconnect *slot* (or all slots) from *signal*, ignoring missing connections."""
+    try:
+        if slot is None:
+            signal.disconnect()
+        else:
+            signal.disconnect(slot)
+    except (TypeError, RuntimeError):
+        pass
+
+
+def _pop_tracked_disconnect(signal: Any, slot_map: dict[Any, Any], vid: int) -> None:
+    """Disconnect and remove a per-viewer slot stored in *slot_map* when present."""
+    if vid not in slot_map:
+        return
+    _disconnect_ignore_missing(signal, slot_map[vid])
+    del slot_map[vid]
+
+
+def _layout_fixed_signal_pairs(app: Any, image_viewer: Any, subwindow: Any) -> list[tuple[Any, Any]]:
+    """App-level signal/slot pairs shared by every subwindow layout wiring pass."""
+    return [
+        (image_viewer.files_dropped, app._open_files_from_paths),
+        (image_viewer.layout_change_requested, app._on_layout_change_requested),
+        (image_viewer.privacy_view_toggled, app._on_privacy_view_toggled),
+        (image_viewer.smooth_when_zoomed_toggled, app._on_smooth_when_zoomed_toggled),
+        (image_viewer.scale_markers_toggled, app._on_scale_markers_toggled),
+        (image_viewer.direction_labels_toggled, app._on_direction_labels_toggled),
+        (image_viewer.slice_sync_toggled, app._on_slice_sync_toggled),
+        (image_viewer.slice_sync_manage_requested, app._open_slice_sync_dialog),
+        (image_viewer.slice_location_lines_toggled, app._on_slice_location_lines_toggled),
+        (
+            image_viewer.slice_location_lines_same_group_only_toggled,
+            app._on_slice_location_lines_same_group_only_toggled,
+        ),
+        (
+            image_viewer.slice_location_lines_focused_only_toggled,
+            app._on_slice_location_lines_focused_only_toggled,
+        ),
+        (
+            image_viewer.slice_location_lines_mode_toggled,
+            app._on_slice_location_lines_mode_toggled,
+        ),
+        (image_viewer.left_pane_toggle_requested, app.main_window._toggle_left_pane),
+        (image_viewer.right_pane_toggle_requested, app.main_window._toggle_right_pane),
+        (image_viewer.about_this_file_requested, app._open_about_this_file),
+        (subwindow.assign_series_requested, app._on_assign_series_requested),
+        (image_viewer.assign_series_requested, app._on_assign_series_from_context_menu),
+        (subwindow.expand_to_1x1_requested, app._on_expand_to_1x1_requested),
+        (image_viewer.swap_view_requested, app._on_swap_view_requested),
+        (image_viewer.window_slot_map_popup_requested, app._on_window_slot_map_popup_requested),
+    ]
+
+
+def _disconnect_layout_viewer_signals(
+    ctrl: Any, app: Any, image_viewer: Any, subwindow: Any, vid: int
+) -> None:
+    """Tear down prior layout wiring for one viewer (safe if not previously connected)."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            _WARN_FILTER_ACTION, category=RuntimeWarning, message=_WARN_DISCONNECT_MSG
+        )
+        for signal, slot in _layout_fixed_signal_pairs(app, image_viewer, subwindow):
+            _disconnect_ignore_missing(signal, slot)
+
+        _pop_tracked_disconnect(
+            image_viewer.structured_report_browser_requested, ctrl._rdsr_report_slots, vid
+        )
+        _pop_tracked_disconnect(image_viewer.histogram_requested, ctrl._histogram_slots, vid)
+        _pop_tracked_disconnect(image_viewer.create_mpr_view_requested, ctrl._mpr_open_slots, vid)
+        _pop_tracked_disconnect(image_viewer.clear_mpr_view_requested, ctrl._mpr_clear_slots, vid)
+        _pop_tracked_disconnect(image_viewer.create_3d_view_requested, ctrl._3d_view_slots, vid)
+        _pop_tracked_disconnect(
+            image_viewer.clear_window_content_requested, ctrl._clear_window_slots, vid
+        )
+        _pop_tracked_disconnect(
+            image_viewer.cine_play_pause_toggle_requested, ctrl._cine_toggle_slots, vid
+        )
+        _pop_tracked_disconnect(image_viewer.cine_stop_requested, ctrl._cine_stop_slots, vid)
+
+
+def _bind_slice_location_line_callbacks(app: Any, image_viewer: Any) -> None:
+    """Attach config-backed getters used by the slice-location-lines context menu."""
+    image_viewer.get_slice_location_lines_same_group_only_callback = (
+        lambda: app.config_manager.get_slice_location_lines_same_group_only()
+    )
+    image_viewer.get_slice_location_lines_focused_only_callback = (
+        lambda: app.config_manager.get_slice_location_lines_focused_only()
+    )
+    image_viewer.get_slice_location_lines_mode_callback = (
+        lambda: app.config_manager.get_slice_location_line_mode()
+    )
+    image_viewer.get_slice_location_lines_visible_callback = (
+        lambda: app.config_manager.get_slice_location_lines_visible()
+    )
+
+
+def _connect_tracked_dialog_slots(
+    ctrl: Any, app: Any, image_viewer: Any, idx: int, vid: int
+) -> None:
+    """Wire histogram / SR browser slots and retain them for later disconnect."""
+
+    def hist_slot(i: int = idx) -> Any:
+        return app.dialog_coordinator.open_histogram(i)
+
+    image_viewer.histogram_requested.connect(hist_slot)
+    ctrl._histogram_slots[vid] = hist_slot
+
+    def sr_slot(i: int = idx) -> Any:
+        return app._open_structured_report_browser(i)
+
+    image_viewer.structured_report_browser_requested.connect(sr_slot)
+    ctrl._rdsr_report_slots[vid] = sr_slot
+
+
+def _connect_clear_and_cine_slots(
+    ctrl: Any, app: Any, image_viewer: Any, idx: int, vid: int
+) -> None:
+    """Wire clear-window and cine play/stop slots for one viewer."""
+
+    def clear_window_slot(i: int = idx) -> Any:
+        return app._on_clear_subwindow_content_requested(i)
+
+    image_viewer.clear_window_content_requested.connect(clear_window_slot)
+    ctrl._clear_window_slots[vid] = clear_window_slot
+    image_viewer.get_clear_this_window_enabled_callback = lambda i=idx: (
+        app.subwindow_data.get(i, {}).get("current_dataset") is not None
+        or bool(app.subwindow_data.get(i, {}).get("is_mpr"))
+    )
+    image_viewer.get_cine_loop_state_callback = (
+        lambda: app.cine_app_facade.get_cine_loop_state()
+    )
+    image_viewer.get_cine_is_playing_callback = lambda: app.cine_player.is_playing
+
+    def cine_toggle_slot() -> Any:
+        return app.cine_app_facade.on_cine_play_pause_toggle()
+
+    def cine_stop_slot() -> Any:
+        return app.cine_app_facade.on_cine_stop()
+
+    image_viewer.cine_play_pause_toggle_requested.connect(cine_toggle_slot)
+    image_viewer.cine_stop_requested.connect(cine_stop_slot)
+    ctrl._cine_toggle_slots[vid] = cine_toggle_slot
+    ctrl._cine_stop_slots[vid] = cine_stop_slot
+
+
+def _connect_mpr_and_3d_slots(
+    ctrl: Any, app: Any, image_viewer: Any, idx: int, vid: int
+) -> None:
+    """Optionally wire MPR and 3D volume-render actions when facades exist."""
+    if hasattr(app, "_mpr_controller"):
+
+        def open_mpr_slot(i: int = idx) -> Any:
+            return app._mpr_controller.open_mpr_dialog(i)
+
+        def clear_mpr_slot(i: int = idx) -> Any:
+            return app._mpr_controller.clear_mpr(i)
+
+        image_viewer.create_mpr_view_requested.connect(open_mpr_slot)
+        image_viewer.clear_mpr_view_requested.connect(clear_mpr_slot)
+        ctrl._mpr_open_slots[vid] = open_mpr_slot
+        ctrl._mpr_clear_slots[vid] = clear_mpr_slot
+        image_viewer.is_mpr_view_callback = lambda i=idx: app._mpr_controller.is_mpr(i)
+
+    if hasattr(app, "_volume_render_facade"):
+
+        def view_3d_slot(i: int = idx) -> Any:
+            return app._volume_render_facade.launch_3d_view(i)
+
+        image_viewer.create_3d_view_requested.connect(view_3d_slot)
+        ctrl._3d_view_slots[vid] = view_3d_slot
+        image_viewer.get_3d_volume_render_enabled_callback = _volume_render_enabled_callback(
+            app, idx
+        )
+
+
+def _connect_layout_viewer_signals(
+    ctrl: Any, app: Any, image_viewer: Any, subwindow: Any, idx: int, vid: int
+) -> None:
+    """Connect layout-level signals and callbacks for one subwindow viewer."""
+    for signal, slot in _layout_fixed_signal_pairs(app, image_viewer, subwindow):
+        signal.connect(slot)
+
+    _bind_slice_location_line_callbacks(app, image_viewer)
+    _connect_tracked_dialog_slots(ctrl, app, image_viewer, idx, vid)
+
+    image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
+    image_viewer.set_subwindow_index(idx)
+    wire_pixel_info_callbacks_for_subwindow(ctrl, image_viewer, idx)
+    layout = app.multi_window_layout
+    image_viewer.get_slot_to_view_callback = lambda lay=layout: lay.get_slot_to_view()
+
+    # MPR assign is connect-only here (legacy: not torn down in the disconnect pass).
+    subwindow.mpr_assign_requested.connect(app._on_mpr_assign_requested)
+
+    _connect_clear_and_cine_slots(ctrl, app, image_viewer, idx, vid)
+    _connect_mpr_and_3d_slots(ctrl, app, image_viewer, idx, vid)
+
+
 # ---------------------------------------------------------------------------
 # All-subwindow wiring (called on every layout change)
 # ---------------------------------------------------------------------------
@@ -95,247 +294,12 @@ def connect_subwindow_signals(ctrl: Any) -> None:
     app = ctrl.app
     subwindows = app.multi_window_layout.get_all_subwindows()
     for idx, subwindow in enumerate(subwindows):
-        if subwindow:
-            image_viewer = subwindow.image_viewer
-            vid = id(image_viewer)
-            with warnings.catch_warnings():
-                warnings.filterwarnings(_WARN_FILTER_ACTION, category=RuntimeWarning, message=_WARN_DISCONNECT_MSG)
-                try:
-                    image_viewer.files_dropped.disconnect(app._open_files_from_paths)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.layout_change_requested.disconnect(app._on_layout_change_requested)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.privacy_view_toggled.disconnect(app._on_privacy_view_toggled)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.smooth_when_zoomed_toggled.disconnect(app._on_smooth_when_zoomed_toggled)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.scale_markers_toggled.disconnect(app._on_scale_markers_toggled)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.direction_labels_toggled.disconnect(app._on_direction_labels_toggled)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.slice_sync_toggled.disconnect(app._on_slice_sync_toggled)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.slice_sync_manage_requested.disconnect(app._open_slice_sync_dialog)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.slice_location_lines_toggled.disconnect(app._on_slice_location_lines_toggled)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.slice_location_lines_same_group_only_toggled.disconnect(
-                        app._on_slice_location_lines_same_group_only_toggled
-                    )
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.slice_location_lines_focused_only_toggled.disconnect(
-                        app._on_slice_location_lines_focused_only_toggled
-                    )
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.slice_location_lines_mode_toggled.disconnect(
-                        app._on_slice_location_lines_mode_toggled
-                    )
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.left_pane_toggle_requested.disconnect(app.main_window._toggle_left_pane)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.right_pane_toggle_requested.disconnect(app.main_window._toggle_right_pane)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.about_this_file_requested.disconnect(app._open_about_this_file)
-                except (TypeError, RuntimeError):
-                    pass
-                if vid in ctrl._rdsr_report_slots:
-                    try:
-                        image_viewer.structured_report_browser_requested.disconnect(
-                            ctrl._rdsr_report_slots[vid]
-                        )
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._rdsr_report_slots[vid]
-                if vid in ctrl._histogram_slots:
-                    try:
-                        image_viewer.histogram_requested.disconnect(ctrl._histogram_slots[vid])
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._histogram_slots[vid]
-                if vid in ctrl._mpr_open_slots:
-                    try:
-                        image_viewer.create_mpr_view_requested.disconnect(ctrl._mpr_open_slots[vid])
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._mpr_open_slots[vid]
-                if vid in ctrl._mpr_clear_slots:
-                    try:
-                        image_viewer.clear_mpr_view_requested.disconnect(ctrl._mpr_clear_slots[vid])
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._mpr_clear_slots[vid]
-                if vid in ctrl._3d_view_slots:
-                    try:
-                        image_viewer.create_3d_view_requested.disconnect(ctrl._3d_view_slots[vid])
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._3d_view_slots[vid]
-                try:
-                    subwindow.assign_series_requested.disconnect(app._on_assign_series_requested)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.assign_series_requested.disconnect(app._on_assign_series_from_context_menu)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    subwindow.expand_to_1x1_requested.disconnect(app._on_expand_to_1x1_requested)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.swap_view_requested.disconnect(app._on_swap_view_requested)
-                except (TypeError, RuntimeError):
-                    pass
-                try:
-                    image_viewer.window_slot_map_popup_requested.disconnect(app._on_window_slot_map_popup_requested)
-                except (TypeError, RuntimeError):
-                    pass
-                if vid in ctrl._clear_window_slots:
-                    try:
-                        image_viewer.clear_window_content_requested.disconnect(
-                            ctrl._clear_window_slots[vid]
-                        )
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._clear_window_slots[vid]
-                if vid in ctrl._cine_toggle_slots:
-                    try:
-                        image_viewer.cine_play_pause_toggle_requested.disconnect(
-                            ctrl._cine_toggle_slots[vid]
-                        )
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._cine_toggle_slots[vid]
-                if vid in ctrl._cine_stop_slots:
-                    try:
-                        image_viewer.cine_stop_requested.disconnect(ctrl._cine_stop_slots[vid])
-                    except (TypeError, RuntimeError):
-                        pass
-                    del ctrl._cine_stop_slots[vid]
-
-            image_viewer.files_dropped.connect(app._open_files_from_paths)
-            image_viewer.layout_change_requested.connect(app._on_layout_change_requested)
-            image_viewer.privacy_view_toggled.connect(app._on_privacy_view_toggled)
-            image_viewer.smooth_when_zoomed_toggled.connect(app._on_smooth_when_zoomed_toggled)
-            image_viewer.scale_markers_toggled.connect(app._on_scale_markers_toggled)
-            image_viewer.direction_labels_toggled.connect(app._on_direction_labels_toggled)
-            image_viewer.slice_sync_toggled.connect(app._on_slice_sync_toggled)
-            image_viewer.slice_sync_manage_requested.connect(app._open_slice_sync_dialog)
-            image_viewer.slice_location_lines_toggled.connect(app._on_slice_location_lines_toggled)
-            image_viewer.slice_location_lines_same_group_only_toggled.connect(
-                app._on_slice_location_lines_same_group_only_toggled
-            )
-            image_viewer.get_slice_location_lines_same_group_only_callback = (
-                lambda: app.config_manager.get_slice_location_lines_same_group_only()
-            )
-            image_viewer.get_slice_location_lines_focused_only_callback = (
-                lambda: app.config_manager.get_slice_location_lines_focused_only()
-            )
-            image_viewer.slice_location_lines_focused_only_toggled.connect(
-                app._on_slice_location_lines_focused_only_toggled
-            )
-            image_viewer.slice_location_lines_mode_toggled.connect(
-                app._on_slice_location_lines_mode_toggled
-            )
-            image_viewer.get_slice_location_lines_mode_callback = (
-                lambda: app.config_manager.get_slice_location_line_mode()
-            )
-            image_viewer.left_pane_toggle_requested.connect(app.main_window._toggle_left_pane)
-            image_viewer.right_pane_toggle_requested.connect(app.main_window._toggle_right_pane)
-            image_viewer.about_this_file_requested.connect(app._open_about_this_file)
-            def hist_slot(i=idx):
-                return app.dialog_coordinator.open_histogram(i)
-            image_viewer.histogram_requested.connect(hist_slot)
-            ctrl._histogram_slots[vid] = hist_slot
-            def sr_slot(i=idx):
-                return app._open_structured_report_browser(i)
-            image_viewer.structured_report_browser_requested.connect(sr_slot)
-            ctrl._rdsr_report_slots[vid] = sr_slot
-            image_viewer.get_file_path_callback = lambda i=idx: app._get_current_slice_file_path(i)
-            image_viewer.get_slice_location_lines_visible_callback = (
-                lambda: app.config_manager.get_slice_location_lines_visible()
-            )
-            image_viewer.set_subwindow_index(idx)
-            wire_pixel_info_callbacks_for_subwindow(ctrl, image_viewer, idx)
-            layout = app.multi_window_layout
-            image_viewer.get_slot_to_view_callback = lambda lay=layout: lay.get_slot_to_view()
-            subwindow.assign_series_requested.connect(app._on_assign_series_requested)
-            image_viewer.assign_series_requested.connect(app._on_assign_series_from_context_menu)
-            subwindow.mpr_assign_requested.connect(app._on_mpr_assign_requested)
-            subwindow.expand_to_1x1_requested.connect(app._on_expand_to_1x1_requested)
-            image_viewer.swap_view_requested.connect(app._on_swap_view_requested)
-            image_viewer.window_slot_map_popup_requested.connect(app._on_window_slot_map_popup_requested)
-
-            def clear_window_slot(i=idx):
-                return app._on_clear_subwindow_content_requested(i)
-            image_viewer.clear_window_content_requested.connect(clear_window_slot)
-            ctrl._clear_window_slots[vid] = clear_window_slot
-            image_viewer.get_clear_this_window_enabled_callback = lambda i=idx: (
-                app.subwindow_data.get(i, {}).get("current_dataset") is not None
-                or bool(app.subwindow_data.get(i, {}).get("is_mpr"))
-            )
-            image_viewer.get_cine_loop_state_callback = (
-                lambda: app.cine_app_facade.get_cine_loop_state()
-            )
-            image_viewer.get_cine_is_playing_callback = lambda: app.cine_player.is_playing
-            def cine_toggle_slot():
-                return app.cine_app_facade.on_cine_play_pause_toggle()
-            def cine_stop_slot():
-                return app.cine_app_facade.on_cine_stop()
-            image_viewer.cine_play_pause_toggle_requested.connect(cine_toggle_slot)
-            image_viewer.cine_stop_requested.connect(cine_stop_slot)
-            ctrl._cine_toggle_slots[vid] = cine_toggle_slot
-            ctrl._cine_stop_slots[vid] = cine_stop_slot
-
-            # MPR view actions.
-            if hasattr(app, "_mpr_controller"):
-                def open_mpr_slot(i=idx):
-                    return app._mpr_controller.open_mpr_dialog(i)
-                def clear_mpr_slot(i=idx):
-                    return app._mpr_controller.clear_mpr(i)
-                image_viewer.create_mpr_view_requested.connect(open_mpr_slot)
-                image_viewer.clear_mpr_view_requested.connect(clear_mpr_slot)
-                ctrl._mpr_open_slots[vid] = open_mpr_slot
-                ctrl._mpr_clear_slots[vid] = clear_mpr_slot
-                image_viewer.is_mpr_view_callback = lambda i=idx: app._mpr_controller.is_mpr(i)
-
-            # 3D Volume Render action (context menu).
-            if hasattr(app, "_volume_render_facade"):
-                def view_3d_slot(i=idx):
-                    return app._volume_render_facade.launch_3d_view(i)
-                image_viewer.create_3d_view_requested.connect(view_3d_slot)
-                ctrl._3d_view_slots[vid] = view_3d_slot
-                image_viewer.get_3d_volume_render_enabled_callback = (
-                    _volume_render_enabled_callback(app, idx)
-                )
+        if not subwindow:
+            continue
+        image_viewer = subwindow.image_viewer
+        vid = id(image_viewer)
+        _disconnect_layout_viewer_signals(ctrl, app, image_viewer, subwindow, vid)
+        _connect_layout_viewer_signals(ctrl, app, image_viewer, subwindow, idx, vid)
     connect_all_subwindow_transform_signals(ctrl)
 
 

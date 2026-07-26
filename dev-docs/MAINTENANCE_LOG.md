@@ -8,6 +8,11 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on subwindow layout signal wiring:
+  extracted `_disconnect_ignore_missing` / tracked-slot pop helpers and
+  fixed signal-pair tables so `connect_subwindow_signals` orchestrates only.
+  Added `tests/core/test_subwindow_signal_wiring_sonar_slice.py`. Target finding
+  was cognitive complexity 126.
 - Completed a Sonar `python:S3776` slice on additive file load:
   moved eviction, PS/KO load, appended-series refresh, empty-pane auto-assign,
   navigator/fusion/status side effects into
