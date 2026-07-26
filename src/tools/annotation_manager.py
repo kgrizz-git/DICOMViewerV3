@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 
 from core.key_object_handler import KeyObjectHandler
 from core.presentation_state_handler import PresentationStateHandler
+from tools.annotation_overlay_bitmap import convert_overlay_bitmap_to_graphics
 from utils.log_sanitizer import sanitized_format_exc
 from utils.privacy.console import print_redacted
 
@@ -683,210 +684,26 @@ class AnnotationManager:
     ) -> dict[str, Any]:
         """
         Convert overlay bitmap data to graphics primitives.
-        
+
         Args:
             overlay_data: Overlay bitmap data (byte array, 1 bit per pixel)
             cols: Number of columns in overlay
             rows: Number of rows in overlay
             origin_x: X coordinate of overlay origin
             origin_y: Y coordinate of overlay origin
-            
+
         Returns:
             Dictionary with 'coordinates' (list of points) and 'paths' (list of paths)
         """
-        coordinates = []
-        paths = []
-
-        try:
-            import numpy as np
-
-            # Convert overlay data to numpy array
-            # pydicom may return overlay data as bytes, bytearray, or pydicom DataElement
-            overlay_bytes = None
-
-            if hasattr(overlay_data, 'value'):
-                # pydicom DataElement
-                overlay_bytes = overlay_data.value
-            elif isinstance(overlay_data, (bytes, bytearray)):
-                overlay_bytes = bytes(overlay_data)
-            else:
-                # Try to convert to bytes
-                try:
-                    overlay_bytes = bytes(overlay_data)
-                except Exception:
-                    return {'coordinates': [], 'paths': []}
-
-            if overlay_bytes:
-                # Convert bytes to numpy array
-                # Overlay data is packed: 1 bit per pixel
-                num_bits = cols * rows
-                num_bytes = (num_bits + 7) // 8  # Round up to nearest byte
-
-                # Ensure we have enough bytes
-                if len(overlay_bytes) < num_bytes:
-                    # Try to use what we have
-                    num_bytes = len(overlay_bytes)
-                    num_bits = num_bytes * 8
-                    if num_bits > cols * rows:
-                        num_bits = cols * rows
-
-                # Convert bytes to bit array
-                # DICOM overlay data uses LSB-first bit order per DICOM standard Part 5, Chapter 8
-                # First bit stored in LSB of first byte, next bits in increasing MSB positions
-                # Use bitorder='little' (default) to unpack LSB-to-MSB within each byte
-                bit_array = np.unpackbits(np.frombuffer(overlay_bytes[:num_bytes], dtype=np.uint8), bitorder='little')
-                # Reshape to image dimensions (only use the bits we need)
-                if len(bit_array) >= num_bits:
-                    bitmap = bit_array[:num_bits].reshape((rows, cols))
-                else:
-                    return {'coordinates': [], 'paths': []}
-            else:
-                # If we didn't get bytes, try other formats
-                if isinstance(overlay_data, (list, tuple)):
-                    # Already a list/array
-                    bitmap = np.array(overlay_data, dtype=np.uint8)
-                    if bitmap.size == cols * rows:
-                        bitmap = bitmap.reshape((rows, cols))
-                    else:
-                        return {'coordinates': [], 'paths': []}
-                else:
-                    # Try to convert to numpy array
-                    try:
-                        bitmap = np.array(overlay_data, dtype=np.uint8)
-                        if bitmap.size == cols * rows:
-                            bitmap = bitmap.reshape((rows, cols))
-                        else:
-                            return {'coordinates': [], 'paths': []}
-                    except Exception:
-                        return {'coordinates': [], 'paths': []}
-
-            # Bitmap positions are correct - no flip needed
-            # DICOM overlay data: bits packed LSB-first within each byte, bytes stored sequentially
-            # Character reversal is fixed by using LSB-first bit order (bitorder='little') per DICOM standard Part 5, Chapter 8
-
-            # Find set pixels (value > 0)
-            set_pixels = np.argwhere(bitmap > 0)
-
-            if len(set_pixels) == 0:
-                return {'coordinates': [], 'paths': []}
-
-
-            # Bitmap positions are correct - no flip needed; character reversal is fixed by bit order.
-
-            for pixel in set_pixels:
-                row, col = pixel[0], pixel[1]
-                # Convert to image coordinates: overlay_coord + origin
-                x = float(col) + origin_x
-                y = float(row) + origin_y
-                coordinates.append((x, y))
-
-            # Group connected pixels into paths
-            # Use contour extraction for smoother paths
-            try:
-                # Try OpenCV for better contour extraction
-                try:
-                    cv2 = importlib.import_module("cv2")
-                    # Find contours (external contours only for now)
-                    contours, _ = cv2.findContours(
-                        (bitmap > 0).astype(np.uint8) * 255,
-                        cv2.RETR_EXTERNAL,
-                        cv2.CHAIN_APPROX_SIMPLE
-                    )
-
-
-                    # Convert contours to paths
-                    # OpenCV contours return points as (x, y) = (column, row) in bitmap space
-                    for _idx, contour in enumerate(contours):
-                        if len(contour) >= 3:  # Need at least 3 points for a path
-                            # Simplify contour (reduce points while preserving shape)
-                            epsilon = 0.5  # Simplification factor
-                            simplified = cv2.approxPolyDP(contour, epsilon, closed=True)
-
-                            # Convert to image coordinates
-                            # OpenCV point format: point[0] = [x, y] = [col, row]
-                            # Bitmap positions are correct - no flip needed
-                            path_coords = []
-                            for _point_idx, point in enumerate(simplified):
-                                # OpenCV returns (x, y) = (col, row) from bitmap
-                                col = point[0][0]  # x coordinate in bitmap = column
-                                row = point[0][1]  # y coordinate in bitmap = row
-                                x = float(col) + origin_x
-                                y = float(row) + origin_y
-                                path_coords.append((x, y))
-
-                                # Debug: show first point of first contour
-
-                            if len(path_coords) >= 2:
-                                paths.append(path_coords)
-                except ImportError:
-                    # OpenCV not available, use scipy connected components
-                    ndimage = importlib.import_module("scipy.ndimage")
-                    # Label connected components
-                    labeled, num_features = ndimage.label(bitmap > 0)
-
-
-                    # Extract paths for each component
-                    for label_id in range(1, num_features + 1):
-                        component_pixels = np.argwhere(labeled == label_id)
-
-                        # Filter out very small components (likely noise)
-                        if len(component_pixels) < 3:
-                            continue
-
-                        # Extract contour using marching squares or simple boundary tracing
-                        # For now, use sorted pixels but try to create smoother paths
-                        # Sort pixels to create a more coherent path
-                        component_pixels = component_pixels[np.lexsort((component_pixels[:, 1], component_pixels[:, 0]))]
-
-                        # Simplify: take every Nth point for large paths
-                        if len(component_pixels) > 100:
-                            step = max(1, len(component_pixels) // 100)
-                            component_pixels = component_pixels[::step]
-
-                        # Convert to image coordinates
-                        # Bitmap positions are correct - no flip needed
-                        path_coords = []
-                        for _pixel_idx, pixel in enumerate(component_pixels):
-                            row, col = pixel[0], pixel[1]
-                            x = float(col) + origin_x
-                            y = float(row) + origin_y
-                            path_coords.append((x, y))
-
-                            # Debug: show first point of first component
-
-                        if len(path_coords) >= 2:
-                            paths.append(path_coords)
-            except ImportError:
-                # Neither OpenCV nor scipy available, skip path extraction
-                pass
-            except Exception:
-                _logger.debug("%s", sanitized_format_exc())
-
-        except ImportError:
-            # numpy not available, use simple approach
-            # Fallback: just extract individual pixels
-            if isinstance(overlay_data, bytes):
-                # Simple byte-by-byte extraction
-                byte_idx = 0
-                bit_idx = 0
-                for row in range(rows):
-                    for col in range(cols):
-                        if byte_idx < len(overlay_data):
-                            byte_val = overlay_data[byte_idx]
-                            bit_val = (byte_val >> (7 - bit_idx)) & 1
-                            if bit_val:
-                                x = float(col) + origin_x
-                                y = float(row) + origin_y
-                                coordinates.append((x, y))
-
-                            bit_idx += 1
-                            if bit_idx >= 8:
-                                bit_idx = 0
-                                byte_idx += 1
-        except Exception:
-            _logger.debug("%s", sanitized_format_exc())
-
-        return {'coordinates': coordinates, 'paths': paths}
+        return convert_overlay_bitmap_to_graphics(
+            overlay_data,
+            cols,
+            rows,
+            origin_x,
+            origin_y,
+            log_debug=lambda msg: _logger.debug("%s", msg),
+            import_module=importlib.import_module,
+        )
 
     def _create_overlay_bitmap_item(self, overlay_data, cols: int, rows: int,
                                     origin_x: float, origin_y: float, color: QColor) -> QGraphicsItem | None:

@@ -8,6 +8,26 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on overlay bitmap conversion: moved byte
+  extraction, LSB-first unpack, coordinate mapping, OpenCV/scipy path extraction,
+  and no-NumPy fallback into `src/tools/annotation_overlay_bitmap.py`;
+  `AnnotationManager._convert_overlay_bitmap_to_graphics` now delegates to that
+  module. Added `tests/tools/test_annotation_overlay_bitmap_sonar_slice.py`.
+  Target finding was cognitive complexity ~85 (radon CCN 34 on the method before
+  refactor).
+- Completed a Sonar `python:S3776` slice on ROI TXT/CSV export: moved TXT
+  area-line formatting, slice/series blocks, and CSV row builders / finalize
+  logic into `roi_export_txt` and `roi_export_csv`; `write_txt` and `write_csv`
+  in `roi_export_service` are thin wrappers. Added
+  `tests/core/test_roi_export_txt_csv_sonar_slice.py`. Target findings were
+  cognitive complexity 83 / 81 (radon CCN 26 / 31 on `write_txt` / `write_csv`
+  before refactor).
+- Completed a Sonar `python:S3776` slice on histogram series-frequency
+  computation: moved dataset resolution, rescale parsing, and histogram
+  accumulation helpers into `src/gui/dialogs/histogram_frequency.py`;
+  `HistogramDialog._compute_series_global_frequency_max` now orchestrates only.
+  Added `tests/gui/test_histogram_frequency_sonar_slice.py`. Target finding was
+  cognitive complexity ~85 (radon CCN 39 on `_compute_series_global_frequency_max`).
 - Completed a Sonar `python:S3776` slice on single-file DICOM loading: moved
   compression-label lookup, defer/multiframe messages, memory-estimate pre-load,
   slow-file timing assembly, and exception message builders into
