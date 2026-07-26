@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Ran a fresh local SonarQube analysis on `349ab6f` after the series-navigator
+  list slice. CE task succeeded; `scripts/report_local_sonarqube_issues.py`
+  reported **242** priority findings (BLOCKER/CRITICAL/MAJOR). Highest remaining
+  open `python:S3776`: `measurement_items.itemChange` (92),
+  `resolve_window_level_for_series_transition` (89), `dicom_loader.load_file` (88),
+  `handle_load_first_slice` (87).
 - Completed a Sonar `python:S3776` slice on series navigator list rebuild:
   moved series sorting, section-width, and display-label helpers into
   `series_navigator_model`; `SeriesNavigator.update_series_list` now
