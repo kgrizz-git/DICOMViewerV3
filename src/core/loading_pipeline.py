@@ -3,10 +3,13 @@ Loading Pipeline
 
 Shared DICOM load pipeline extracted from FileOperationsHandler.
 
-Provides three pure utility functions and ``run_load_pipeline()``, which
-executes the progress-reporting → loading → organising → status-update
-pipeline that was previously duplicated across ``open_files``,
-``open_folder``, ``open_recent_file``, and ``open_paths``.
+Provides pure utility helpers and ``run_load_pipeline()``, which executes the
+progress-reporting → loading → organising → status-update pipeline that was
+previously duplicated across ``open_files``, ``open_folder``,
+``open_recent_file``, and ``open_paths``.
+
+The threaded entry point ``run_load_pipeline_async`` is implemented in
+``loading_pipeline_async`` and re-exported here for a stable import path.
 
 Inputs:
     - ``loader_fn``: callable that accepts a progress callback and returns a
@@ -39,10 +42,8 @@ from PySide6.QtWidgets import QApplication
 
 from core.dicom_loader import DICOMLoader
 from core.dicom_organizer import DICOMOrganizer, MergeResult
-from core.loader_worker import LoaderWorker
 from core.loading_progress_manager import LoadingProgressManager
 from utils.log_sanitizer import sanitized_format_exc
-from utils.perf_timer import perf_mark, perf_timer
 
 _logger = logging.getLogger(__name__)
 
@@ -131,6 +132,199 @@ def batch_counts_from_merge_result(merge_result) -> tuple[int, int, int]:
     return (num_studies, num_series, num_files)
 
 
+def resolve_merge_paths(
+    datasets: list[Any],
+    file_paths_for_merge: list[str] | None,
+) -> list[str]:
+    """Paths for ``merge_batch``: explicit list, or ``dataset.filename`` in folder mode."""
+    if file_paths_for_merge is not None:
+        return file_paths_for_merge
+    return [
+        p
+        for p in (getattr(ds, "filename", None) for ds in datasets)
+        if isinstance(p, str)
+    ]
+
+
+def empty_load_error_message(
+    failed: list[tuple[str, str]],
+    *,
+    is_folder_mode: bool,
+) -> str:
+    """User-facing error when a load produced zero datasets."""
+    if is_folder_mode:
+        if failed:
+            return (
+                f"No DICOM files found in folder.\n\n"
+                f"{len(failed)} file(s) could not be loaded."
+            )
+        return "No DICOM files found in folder."
+    if failed:
+        error_msg = "No DICOM files could be loaded.\n\nErrors:\n"
+        for path, error in failed[:5]:
+            error_msg += f"\n{os.path.basename(path)}: {error}"
+        if len(failed) > 5:
+            error_msg += f"\n... and {len(failed) - 5} more"
+        return error_msg
+    return "No DICOM files could be loaded."
+
+
+def failed_files_warning_message(
+    failed: list[tuple[str, str]],
+    *,
+    is_folder_mode: bool,
+) -> str | None:
+    """Warning text for partial load failures, or ``None`` when nothing failed."""
+    if not failed:
+        return None
+    if is_folder_mode:
+        return f"Warning: {len(failed)} file(s) could not be loaded."
+    warning_msg = f"Warning: {len(failed)} file(s) could not be loaded:\n"
+    for path, error in failed[:5]:
+        warning_msg += f"\n{os.path.basename(path)}: {error}"
+    if len(failed) > 5:
+        warning_msg += f"\n... and {len(failed) - 5} more"
+    return warning_msg
+
+
+def build_post_load_status(
+    *,
+    merge_result: MergeResult,
+    loader: DICOMLoader,
+    source_name: str,
+    was_cancelled: bool,
+    check_compression_errors: bool,
+) -> str:
+    """Status-bar text after organise/display (full success or partial cancel)."""
+    num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
+    if was_cancelled:
+        return format_cancelled_partial_status(
+            num_files, loader.get_attempted_file_count()
+        )
+
+    final_status = format_final_status(
+        num_studies,
+        num_series,
+        num_files,
+        source_name,
+        non_dicom_count=len(loader.get_failed_files()),
+        duplicate_count=merge_result.skipped_file_count,
+        extension_skipped_count=loader.get_extension_skipped_count(),
+    )
+    if check_compression_errors:
+        compression_errors = [
+            f
+            for f in loader.get_failed_files()
+            if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()
+        ]
+        if compression_errors:
+            final_status += (
+                f". {len(compression_errors)} compressed file(s) require pylibjpeg:"
+                " pip install pylibjpeg pyjpegls"
+            )
+    return final_status
+
+
+def _progress_label_text(current: int, total: int, filename: str) -> str:
+    """Progress-dialog label for the current load step."""
+    if not filename:
+        return f"Loaded {current} file(s). Organizing into studies/series..."
+    if filename.startswith("Deferring"):
+        return filename
+    return f"Loading file {current}/{total}: {filename}..."
+
+
+def update_loading_progress_dialog(
+    loading_manager: LoadingProgressManager,
+    current: int,
+    total: int,
+    filename: str,
+    loading_started: list[bool],
+    last_ui_update: list[float],
+    *,
+    ui_interval: float = 0.05,
+    process_events: bool = False,
+) -> None:
+    """Refresh the progress dialog and honor cancel once loading has started."""
+    if current > 0 and filename:
+        loading_started[0] = True
+
+    dlg = loading_manager.get_dialog()
+    if not dlg:
+        return
+
+    if total > dlg.maximum():
+        dlg.setMaximum(total)
+
+    now = time.monotonic()
+    if now - last_ui_update[0] >= ui_interval:
+        dlg.setValue(current)
+        dlg.setLabelText(_progress_label_text(current, total, filename))
+        last_ui_update[0] = now
+        if process_events:
+            QApplication.processEvents()
+
+    if (
+        not loading_manager.is_cancelled()
+        and loading_started[0]
+        and loading_manager.was_dialog_cancelled()
+    ):
+        loading_manager.on_cancel_loading()
+
+
+def _merge_batch_or_show_error(
+    *,
+    organizer: DICOMOrganizer,
+    datasets: list[Any],
+    merge_paths: list[str],
+    source_dir: str,
+    main_window: Any,
+    file_dialog: Any,
+) -> MergeResult | None:
+    """Run ``merge_batch``; show an error dialog and return ``None`` on failure."""
+    try:
+        return organizer.merge_batch(datasets, merge_paths, source_dir)
+    except MemoryError as e:
+        file_dialog.show_error(
+            main_window,
+            _TITLE_MEMORY_ERROR,
+            f"Out of memory while organizing DICOM files. "
+            f"Try closing other applications or loading fewer files.\n\nError: {e}",
+        )
+        return None
+    except Exception as e:
+        file_dialog.show_error(
+            main_window, _TITLE_ERROR, f"Error organizing DICOM files: {e}"
+        )
+        return None
+
+
+def _display_first_slice_or_show_error(
+    *,
+    load_first_slice_callback: Callable[..., None],
+    merge_result: MergeResult,
+    main_window: Any,
+    file_dialog: Any,
+) -> bool:
+    """Display first slice; return False if an error dialog was shown."""
+    try:
+        load_first_slice_callback(merge_result)
+        return True
+    except MemoryError as e:
+        file_dialog.show_error(
+            main_window,
+            _TITLE_MEMORY_ERROR,
+            f"Out of memory while displaying image. "
+            f"Try closing other applications.\n\nError: {e}",
+        )
+        return False
+    except Exception as e:
+        file_dialog.show_error(
+            main_window, _TITLE_ERROR, f"Error displaying first slice: {e}"
+        )
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Shared pipeline
 # ---------------------------------------------------------------------------
@@ -156,60 +350,20 @@ class LoadPipelineRequest:
     on_load_success: Callable[..., None] | None = None
 
 
-def run_load_pipeline(
+
+def _cleanup_loading_ui(
+    loading_manager: LoadingProgressManager, loader: DICOMLoader
+) -> None:
+    """Stop animation, close dialog, and clear loader cancel state."""
+    loading_manager.stop_animated_loading()
+    loading_manager.close_progress_dialog()
+    loader.reset_cancellation()
+
+
+def _run_load_pipeline_body(
     request: LoadPipelineRequest,
 ) -> tuple[list[Any] | None, dict[str, Any] | None]:
-    """Execute the shared DICOM load pipeline.
-
-    Parameters
-    ----------
-    loader_fn:
-        ``loader_fn(progress_callback) -> datasets``.  The caller builds the
-        actual load call (``load_files`` or ``load_directory``) around this
-        signature.
-    source_dir:
-        Directory used for de-dup/disambiguation in ``merge_batch``.
-    source_name:
-        Human-readable label shown in the progress dialog and status bar.
-    file_paths_for_merge:
-        File paths passed to ``merge_batch``.  Pass ``None`` for folder loads
-        where paths are extracted from ``dataset.filename`` attributes.
-    loader:
-        :class:`DICOMLoader` instance that performs the actual I/O.
-    organizer:
-        :class:`DICOMOrganizer` instance for study/series organisation.
-    loading_manager:
-        :class:`LoadingProgressManager` that owns the progress dialog and
-        cancellation state.
-    progress_max:
-        Initial maximum value for the progress dialog (may grow dynamically).
-    progress_label:
-        Custom label for the progress dialog.  Defaults to
-        ``"Loading files from {source_name}..."``.
-    main_window:
-        Parent window used for modal dialogs.
-    file_dialog:
-        :class:`FileDialog` instance used to show error/warning popups.
-    load_first_slice_callback:
-        Called with the ``MergeResult`` to update the image viewer.
-    update_status_callback:
-        Called with a status string to update the main-window status bar.
-    check_compression_errors:
-        When *True*, detect compressed-DICOM failures in the failed-file list
-        and append a ``pylibjpeg`` installation hint to the status message.
-    on_load_success:
-        If set, invoked after a successful load with
-        ``(datasets, studies, merge_result, source_dir, merge_paths, *,
-        was_cancelled=False)`` where ``merge_paths`` is the list passed to
-        ``merge_batch``. When the user cancelled after partial progress,
-        ``was_cancelled`` is True (study-index auto-add should skip). Errors are
-        logged and do not fail the load.
-
-    Returns
-    -------
-    ``(datasets, studies)`` on success, or ``(None, None)`` on cancellation or
-    fatal error.
-    """
+    """Core sync load path (progress → load → organise → display → status)."""
     loader_fn = request.loader_fn
     source_dir = request.source_dir
     source_name = request.source_name
@@ -225,219 +379,131 @@ def run_load_pipeline(
     update_status_callback = request.update_status_callback
     check_compression_errors = request.check_compression_errors
     on_load_success = request.on_load_success
-    # Folder-mode: file_paths_for_merge is None
-    _is_folder_mode = file_paths_for_merge is None
-
+    is_folder_mode = file_paths_for_merge is None
     label = progress_label or f"Loading files from {source_name}..."
 
+    loader.reset_cancellation()
+    loading_manager.reset()
+
+    progress_dialog = loading_manager.create_progress_dialog(
+        main_window, progress_max, label
+    )
+    progress_dialog.setValue(0)
+    QApplication.processEvents()
+
+    loading_started = [False]
+    last_ui_update = [0.0]
+
+    def progress_callback(current: int, total: int, filename: str) -> None:
+        update_loading_progress_dialog(
+            loading_manager,
+            current,
+            total,
+            filename,
+            loading_started,
+            last_ui_update,
+            process_events=True,
+        )
+
+    datasets = loader_fn(progress_callback)
+    loading_manager.close_progress_dialog()
+
+    was_cancelled = loading_manager.is_cancelled()
+    if was_cancelled:
+        num_loaded = len(datasets) if datasets else 0
+        if num_loaded <= 0:
+            update_status_callback(_STATUS_LOADING_CANCELLED)
+            loader.reset_cancellation()
+            return None, None
+
+    loading_manager.stop_animated_loading()
+
+    if not datasets:
+        file_dialog.show_error(
+            main_window,
+            _TITLE_ERROR,
+            empty_load_error_message(
+                loader.get_failed_files(), is_folder_mode=is_folder_mode
+            ),
+        )
+        return None, None
+
+    warning_msg = failed_files_warning_message(
+        loader.get_failed_files(), is_folder_mode=is_folder_mode
+    )
+    if warning_msg is not None:
+        file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
+
+    merge_paths = resolve_merge_paths(datasets, file_paths_for_merge)
+    merge_result = _merge_batch_or_show_error(
+        organizer=organizer,
+        datasets=datasets,
+        merge_paths=merge_paths,
+        source_dir=source_dir,
+        main_window=main_window,
+        file_dialog=file_dialog,
+    )
+    if merge_result is None:
+        return None, None
+
+    if not _display_first_slice_or_show_error(
+        load_first_slice_callback=load_first_slice_callback,
+        merge_result=merge_result,
+        main_window=main_window,
+        file_dialog=file_dialog,
+    ):
+        return None, None
+
+    final_status = build_post_load_status(
+        merge_result=merge_result,
+        loader=loader,
+        source_name=source_name,
+        was_cancelled=was_cancelled,
+        check_compression_errors=check_compression_errors,
+    )
+    update_status_callback(final_status)
+    QApplication.processEvents()
+    loader.reset_cancellation()
+    if on_load_success is not None:
+        try:
+            on_load_success(
+                datasets,
+                organizer.studies,
+                merge_result,
+                source_dir,
+                merge_paths,
+                was_cancelled=was_cancelled,
+            )
+        except Exception:
+            _logger.debug("%s", sanitized_format_exc())
+    if len(datasets) > 100:
+        QTimer.singleShot(2000, gc.collect)
+    return datasets, organizer.studies
+
+
+def run_load_pipeline(
+    request: LoadPipelineRequest,
+) -> tuple[list[Any] | None, dict[str, Any] | None]:
+    """Execute the shared DICOM load pipeline.
+
+    See ``LoadPipelineRequest`` for parameter semantics. Returns
+    ``(datasets, studies)`` on success, or ``(None, None)`` on cancellation or
+    fatal error.
+    """
+    loader = request.loader
+    loading_manager = request.loading_manager
+    main_window = request.main_window
+    file_dialog = request.file_dialog
+
     try:
-        loader.reset_cancellation()
-        loading_manager.reset()
-
-        progress_dialog = loading_manager.create_progress_dialog(
-            main_window, progress_max, label
-        )
-        progress_dialog.setValue(0)
-        QApplication.processEvents()
-
-        # Progress callback shared by all load variants.
-        loading_started = [False]
-        last_ui_update = [0.0]
-        _UI_INTERVAL = 0.05  # seconds between processEvents calls
-
-        def progress_callback(current: int, total: int, filename: str) -> None:
-            if current > 0 and filename:
-                loading_started[0] = True
-
-            dlg = loading_manager.get_dialog()
-            if dlg:
-                if total > dlg.maximum():
-                    dlg.setMaximum(total)
-
-                now = time.monotonic()
-                if now - last_ui_update[0] >= _UI_INTERVAL:
-                    dlg.setValue(current)
-                    if filename:
-                        if filename.startswith("Deferring"):
-                            dlg.setLabelText(filename)
-                        else:
-                            dlg.setLabelText(
-                                f"Loading file {current}/{total}: {filename}..."
-                            )
-                    else:
-                        dlg.setLabelText(
-                            f"Loaded {current} file(s). Organizing into studies/series..."
-                        )
-                    last_ui_update[0] = now
-                    QApplication.processEvents()
-
-                if (
-                    not loading_manager.is_cancelled()
-                    and loading_started[0]
-                    and loading_manager.was_dialog_cancelled()
-                ):
-                    loading_manager.on_cancel_loading()
-
-        datasets = loader_fn(progress_callback)
-        loading_manager.close_progress_dialog()
-
-        # ── Cancellation ──────────────────────────────────────────────────
-        was_cancelled = loading_manager.is_cancelled()
-        if was_cancelled:
-            num_loaded = len(datasets) if datasets else 0
-            if num_loaded <= 0:
-                update_status_callback(_STATUS_LOADING_CANCELLED)
-                loader.reset_cancellation()
-                return None, None
-            # Continue with partial data; final status set after organise/display.
-
-        loading_manager.stop_animated_loading()
-
-        # ── Empty result ───────────────────────────────────────────────────
-        if not datasets:
-            failed = loader.get_failed_files()
-            if _is_folder_mode:
-                if failed:
-                    error_msg = (
-                        f"No DICOM files found in folder.\n\n"
-                        f"{len(failed)} file(s) could not be loaded."
-                    )
-                else:
-                    error_msg = "No DICOM files found in folder."
-            else:
-                if failed:
-                    error_msg = "No DICOM files could be loaded.\n\nErrors:\n"
-                    for path, error in failed[:5]:
-                        error_msg += f"\n{os.path.basename(path)}: {error}"
-                    if len(failed) > 5:
-                        error_msg += f"\n... and {len(failed) - 5} more"
-                else:
-                    error_msg = "No DICOM files could be loaded."
-            file_dialog.show_error(main_window, _TITLE_ERROR, error_msg)
-            return None, None
-
-        # ── Warnings for failed files ──────────────────────────────────────
-        failed = loader.get_failed_files()
-        if failed:
-            if _is_folder_mode:
-                warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
-            else:
-                warning_msg = (
-                    f"Warning: {len(failed)} file(s) could not be loaded:\n"
-                )
-                for path, error in failed[:5]:
-                    warning_msg += f"\n{os.path.basename(path)}: {error}"
-                if len(failed) > 5:
-                    warning_msg += f"\n... and {len(failed) - 5} more"
-            file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
-
-        # ── Organise ──────────────────────────────────────────────────────
-        merge_paths = (
-            file_paths_for_merge
-            if not _is_folder_mode
-            else [
-                p
-                for p in (getattr(ds, "filename", None) for ds in datasets)
-                if isinstance(p, str)
-            ]
-        )
-        try:
-            merge_result = organizer.merge_batch(datasets, merge_paths, source_dir)
-        except MemoryError as e:
-            file_dialog.show_error(
-                main_window,
-                _TITLE_MEMORY_ERROR,
-                f"Out of memory while organizing DICOM files. "
-                f"Try closing other applications or loading fewer files.\n\nError: {e}",
-            )
-            return None, None
-        except Exception as e:
-            file_dialog.show_error(
-                main_window, _TITLE_ERROR, f"Error organizing DICOM files: {e}"
-            )
-            return None, None
-
-        # ── Display first slice ────────────────────────────────────────────
-        try:
-            load_first_slice_callback(merge_result)
-        except MemoryError as e:
-            file_dialog.show_error(
-                main_window,
-                _TITLE_MEMORY_ERROR,
-                f"Out of memory while displaying image. "
-                f"Try closing other applications.\n\nError: {e}",
-            )
-            return None, None
-        except Exception as e:
-            file_dialog.show_error(
-                main_window, _TITLE_ERROR, f"Error displaying first slice: {e}"
-            )
-            return None, None
-
-        # ── Status bar update ──────────────────────────────────────────────
-        num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
-        extension_skipped = loader.get_extension_skipped_count()
-        non_dicom_count = len(loader.get_failed_files())
-        duplicate_count = merge_result.skipped_file_count
-        if was_cancelled:
-            total_attempted = loader.get_attempted_file_count()
-            final_status = format_cancelled_partial_status(
-                num_files, total_attempted
-            )
-        else:
-            final_status = format_final_status(
-                num_studies,
-                num_series,
-                num_files,
-                source_name,
-                non_dicom_count=non_dicom_count,
-                duplicate_count=duplicate_count,
-                extension_skipped_count=extension_skipped,
-            )
-
-            if check_compression_errors:
-                failed_files = loader.get_failed_files()
-                compression_errors = [
-                    f
-                    for f in failed_files
-                    if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()
-                ]
-                if compression_errors:
-                    final_status += (
-                        f". {len(compression_errors)} compressed file(s) require pylibjpeg:"
-                        " pip install pylibjpeg pyjpegls"
-                    )
-
-        update_status_callback(final_status)
-        QApplication.processEvents()
-        loader.reset_cancellation()
-        if on_load_success is not None:
-            try:
-                on_load_success(
-                    datasets,
-                    organizer.studies,
-                    merge_result,
-                    source_dir,
-                    merge_paths,
-                    was_cancelled=was_cancelled,
-                )
-            except Exception:
-                _logger.debug("%s", sanitized_format_exc())
-        # Deferred GC: run 2 s after loading finishes so the UI stays responsive.
-        if len(datasets) > 100:
-            QTimer.singleShot(2000, gc.collect)
-        return datasets, organizer.studies
+        return _run_load_pipeline_body(request)
 
     except (SystemExit, KeyboardInterrupt):
-        loading_manager.stop_animated_loading()
-        loading_manager.close_progress_dialog()
-        loader.reset_cancellation()
+        _cleanup_loading_ui(loading_manager, loader)
         raise
 
     except MemoryError as e:
-        loading_manager.stop_animated_loading()
-        loading_manager.close_progress_dialog()
-        loader.reset_cancellation()
+        _cleanup_loading_ui(loading_manager, loader)
         file_dialog.show_error(
             main_window,
             _TITLE_MEMORY_ERROR,
@@ -447,9 +513,7 @@ def run_load_pipeline(
         return None, None
 
     except BaseException as e:
-        loading_manager.stop_animated_loading()
-        loading_manager.close_progress_dialog()
-        loader.reset_cancellation()
+        _cleanup_loading_ui(loading_manager, loader)
         error_type = type(e).__name__
         _logger.debug("%s", sanitized_format_exc())
         file_dialog.show_error(
@@ -462,332 +526,23 @@ def run_load_pipeline(
         return None, None
 
 
+
 # ---------------------------------------------------------------------------
-# Async (threaded) pipeline
+# Async (threaded) pipeline — see loading_pipeline_async.py
 # ---------------------------------------------------------------------------
+
 
 def run_load_pipeline_async(
     request: LoadPipelineRequest,
     *,
-    on_pipeline_complete: Callable[[list[Any] | None, dict[str, Any] | None], None] | None = None,
-) -> LoaderWorker:
-    """Async version of run_load_pipeline that uses a background worker thread.
-
-    Instead of blocking the UI thread during file I/O, this function:
-    1. Creates the progress dialog.
-    2. Starts a LoaderWorker QThread for the actual loading.
-    3. Connects signals so post-load steps run on the main thread.
-    4. Returns the worker immediately (caller must hold a reference).
-
-    Parameters are identical to ``run_load_pipeline`` with the addition of
-    ``on_pipeline_complete`` which receives ``(datasets, studies)`` when the
-    full pipeline finishes (or ``(None, None)`` on error/cancel).
-
-    Returns the worker so the caller can store a reference (preventing GC).
-    """
-    loader_fn = request.loader_fn
-    source_dir = request.source_dir
-    source_name = request.source_name
-    file_paths_for_merge = request.file_paths_for_merge
-    loader = request.loader
-    organizer = request.organizer
-    loading_manager = request.loading_manager
-    progress_max = request.progress_max
-    progress_label = request.progress_label
-    main_window = request.main_window
-    file_dialog = request.file_dialog
-    load_first_slice_callback = request.load_first_slice_callback
-    update_status_callback = request.update_status_callback
-    check_compression_errors = request.check_compression_errors
-    on_load_success = request.on_load_success
-    _is_folder_mode = file_paths_for_merge is None
-    perf_mark(
-        "first_paint.prehandoff.pipeline_async.start",
-        source_len=len(source_name),
-        folder_mode=file_paths_for_merge is None,
-        progress_max=progress_max,
+    on_pipeline_complete: Callable[[list[Any] | None, dict[str, Any] | None], None]
+    | None = None,
+):
+    """Async load pipeline; implementation lives in ``loading_pipeline_async``."""
+    from core.loading_pipeline_async import (
+        run_load_pipeline_async as _run_load_pipeline_async,
     )
 
-    label = progress_label or f"Loading files from {source_name}..."
-
-    loader.reset_cancellation()
-    loading_manager.reset()
-
-    progress_dialog = loading_manager.create_progress_dialog(
-        main_window, progress_max, label
+    return _run_load_pipeline_async(
+        request, on_pipeline_complete=on_pipeline_complete
     )
-    progress_dialog.setValue(0)
-    QApplication.processEvents()
-
-    # ── Build organize_fn closure (runs on worker thread) ───────────
-    # merge_batch is pure data processing with no Qt dependencies, so it
-    # can safely run off the UI thread.  The closure captures the mutable
-    # merge_paths list and immutable source_dir.
-
-    def _organize_fn(datasets: list[Any]) -> MergeResult:
-        merge_paths = (
-            file_paths_for_merge
-            if not _is_folder_mode
-            else [
-                p
-                for p in (getattr(ds, "filename", None) for ds in datasets)
-                if isinstance(p, str)
-            ]
-        )
-        return organizer.merge_batch(datasets, merge_paths, source_dir)
-
-    # Build the worker — organize_fn offloads merge_batch to the worker.
-    worker = LoaderWorker(loader_fn, organize_fn=_organize_fn)
-
-    # --- progress signal (worker thread -> main thread via queued connection) ---
-    loading_started = [False]
-    last_ui_update = [0.0]
-    _UI_INTERVAL = 0.05
-
-    def _on_progress(current: int, total: int, filename: str) -> None:
-        if current > 0 and filename:
-            loading_started[0] = True
-
-        dlg = loading_manager.get_dialog()
-        if dlg:
-            if total > dlg.maximum():
-                dlg.setMaximum(total)
-
-            now = time.monotonic()
-            if now - last_ui_update[0] >= _UI_INTERVAL:
-                dlg.setValue(current)
-                if filename:
-                    if filename.startswith("Deferring"):
-                        dlg.setLabelText(filename)
-                    else:
-                        dlg.setLabelText(
-                            f"Loading file {current}/{total}: {filename}..."
-                        )
-                else:
-                    dlg.setLabelText(
-                        f"Loaded {current} file(s). Organizing into studies/series..."
-                    )
-                last_ui_update[0] = now
-
-            if (
-                not loading_manager.is_cancelled()
-                and loading_started[0]
-                and loading_manager.was_dialog_cancelled()
-            ):
-                loading_manager.on_cancel_loading()
-
-    worker.progress.connect(_on_progress)
-
-    # --- finished signal (fallback: no organize_fn or empty/cancelled) ---
-    def _on_finished(datasets: list[Any], _failed: list[Any]) -> None:
-        loading_manager.close_progress_dialog()
-
-        # Cancellation
-        was_cancelled = loading_manager.is_cancelled()
-        if was_cancelled:
-            num_loaded = len(datasets) if datasets else 0
-            if num_loaded <= 0:
-                update_status_callback(_STATUS_LOADING_CANCELLED)
-                loader.reset_cancellation()
-                if on_pipeline_complete:
-                    on_pipeline_complete(None, None)
-                return
-
-        loading_manager.stop_animated_loading()
-
-        # Empty result
-        if not datasets:
-            failed = loader.get_failed_files()
-            if _is_folder_mode:
-                if failed:
-                    error_msg = (
-                        f"No DICOM files found in folder.\n\n"
-                        f"{len(failed)} file(s) could not be loaded."
-                    )
-                else:
-                    error_msg = "No DICOM files found in folder."
-            else:
-                if failed:
-                    error_msg = "No DICOM files could be loaded.\n\nErrors:\n"
-                    for path, error in failed[:5]:
-                        error_msg += f"\n{os.path.basename(path)}: {error}"
-                    if len(failed) > 5:
-                        error_msg += f"\n... and {len(failed) - 5} more"
-                else:
-                    error_msg = "No DICOM files could be loaded."
-            file_dialog.show_error(main_window, _TITLE_ERROR, error_msg)
-            if on_pipeline_complete:
-                on_pipeline_complete(None, None)
-            return
-
-        # Warnings for failed files
-        failed = loader.get_failed_files()
-        if failed:
-            if _is_folder_mode:
-                warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
-            else:
-                warning_msg = (
-                    f"Warning: {len(failed)} file(s) could not be loaded:\n"
-                )
-                for path, error in failed[:5]:
-                    warning_msg += f"\n{os.path.basename(path)}: {error}"
-                if len(failed) > 5:
-                    warning_msg += f"\n... and {len(failed) - 5} more"
-            file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
-
-        loader.reset_cancellation()
-        if on_pipeline_complete:
-            on_pipeline_complete(None, None)
-
-    worker.finished.connect(_on_finished)
-
-    # --- organized signal (merge_batch completed on worker thread) ---
-    def _on_organized(datasets: list[Any], merge_result: MergeResult) -> None:
-        perf_mark(
-            "first_paint.prehandoff.pipeline_async.organized_signal",
-            datasets=len(datasets),
-            new_series=len(getattr(merge_result, "new_series", [])),
-            appended_series=len(getattr(merge_result, "appended_series", [])),
-            added_files=getattr(merge_result, "added_file_count", 0),
-        )
-        loading_manager.close_progress_dialog()
-
-        # Cancellation check (loader may have been cancelled mid-organize)
-        was_cancelled = loading_manager.is_cancelled()
-        if was_cancelled:
-            num_loaded = len(datasets) if datasets else 0
-            if num_loaded <= 0:
-                update_status_callback(_STATUS_LOADING_CANCELLED)
-                loader.reset_cancellation()
-                if on_pipeline_complete:
-                    on_pipeline_complete(None, None)
-                return
-
-        loading_manager.stop_animated_loading()
-
-        # Warnings for failed files
-        failed = loader.get_failed_files()
-        if failed:
-            if _is_folder_mode:
-                warning_msg = f"Warning: {len(failed)} file(s) could not be loaded."
-            else:
-                warning_msg = (
-                    f"Warning: {len(failed)} file(s) could not be loaded:\n"
-                )
-                for path, error in failed[:5]:
-                    warning_msg += f"\n{os.path.basename(path)}: {error}"
-                if len(failed) > 5:
-                    warning_msg += f"\n... and {len(failed) - 5} more"
-            file_dialog.show_warning(main_window, _TITLE_LOADING_WARNINGS, warning_msg)
-
-        # Display first slice (UI-thread only)
-        try:
-            with perf_timer("first_paint.prehandoff.pipeline_async.ui_handoff"):
-                load_first_slice_callback(merge_result)
-        except MemoryError as e:
-            file_dialog.show_error(
-                main_window,
-                _TITLE_MEMORY_ERROR,
-                f"Out of memory while displaying image. "
-                f"Try closing other applications.\n\nError: {e}",
-            )
-            if on_pipeline_complete:
-                on_pipeline_complete(None, None)
-            return
-        except Exception as e:
-            file_dialog.show_error(
-                main_window, _TITLE_ERROR, f"Error displaying first slice: {e}"
-            )
-            if on_pipeline_complete:
-                on_pipeline_complete(None, None)
-            return
-
-        # Status bar update
-        num_studies, num_series, num_files = batch_counts_from_merge_result(merge_result)
-        extension_skipped = loader.get_extension_skipped_count()
-        non_dicom_count = len(loader.get_failed_files())
-        duplicate_count = merge_result.skipped_file_count
-        merge_paths = (
-            file_paths_for_merge
-            if not _is_folder_mode
-            else [
-                p
-                for p in (getattr(ds, "filename", None) for ds in datasets)
-                if isinstance(p, str)
-            ]
-        )
-        if was_cancelled:
-            total_attempted = loader.get_attempted_file_count()
-            final_status = format_cancelled_partial_status(
-                num_files, total_attempted
-            )
-        else:
-            final_status = format_final_status(
-                num_studies,
-                num_series,
-                num_files,
-                source_name,
-                non_dicom_count=non_dicom_count,
-                duplicate_count=duplicate_count,
-                extension_skipped_count=extension_skipped,
-            )
-
-            if check_compression_errors:
-                failed_files = loader.get_failed_files()
-                compression_errors = [
-                    f
-                    for f in failed_files
-                    if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()
-                ]
-                if compression_errors:
-                    final_status += (
-                        f". {len(compression_errors)} compressed file(s) require pylibjpeg:"
-                        " pip install pylibjpeg pyjpegls"
-                    )
-
-        update_status_callback(final_status)
-        QApplication.processEvents()
-        loader.reset_cancellation()
-        if on_load_success is not None:
-            try:
-                on_load_success(
-                    datasets,
-                    organizer.studies,
-                    merge_result,
-                    source_dir,
-                    merge_paths,
-                    was_cancelled=was_cancelled,
-                )
-            except Exception:
-                _logger.debug("%s", sanitized_format_exc())
-
-        # Deferred GC: run 2 s after loading finishes so the UI stays responsive.
-        if len(datasets) > 100:
-            QTimer.singleShot(2000, gc.collect)
-
-        if on_pipeline_complete:
-            on_pipeline_complete(datasets, organizer.studies)
-
-    worker.organized.connect(_on_organized)
-
-    # --- error signal ---
-    def _on_error(error_msg: str) -> None:
-        loading_manager.stop_animated_loading()
-        loading_manager.close_progress_dialog()
-        loader.reset_cancellation()
-        _logger.debug("Loader worker reported a redacted error")
-        file_dialog.show_error(
-            main_window,
-            "Critical Error",
-            "A critical error occurred during loading. Details were withheld "
-            "to protect private data.\n\n"
-            "This may be due to corrupted or unsupported DICOM files.",
-        )
-        if on_pipeline_complete:
-            on_pipeline_complete(None, None)
-
-    worker.error.connect(_on_error)
-
-    # Start the worker
-    worker.start()
-    return worker

@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on the load pipeline: shared helpers
+  for merge paths / empty-load errors / failed-file warnings / post-load
+  status / progress UI; sync body split from outer exception wrapper; async
+  implementation moved to `src/core/loading_pipeline_async.py` (re-exported
+  from `loading_pipeline`). Added `tests/test_loading_pipeline_sonar_slice.py`.
+  Fresh analysis: `run_load_pipeline_async` (was 146) cleared; no remaining
+  `S3776` under `loading_pipeline*`; priority `S3776` count 253 → 251.
 - Completed the non-constructor `python:S107` parameter-object sweep (8 sites:
   layout/load, render pipelines, cine + export request dataclasses) and fixed
   the two follow-on `python:S5806` builtin-shadow findings in
