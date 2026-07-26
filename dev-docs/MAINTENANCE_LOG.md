@@ -8,6 +8,11 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on `FrameDatasetWrapper.__init__`:
+  extracted nested functional-group helpers for plane geometry, pixel measures,
+  rescale, and VOI LUT into focused functions in `multiframe_handler`. Added
+  `tests/core/test_frame_dataset_wrapper_sonar_slice.py`. Target finding was
+  cognitive complexity 133.
 - Completed a Sonar `python:S3776` slice on overlay position updates: moved
   widget geometry sync, viewport corner anchors, max-width cache resolution,
   left/right item placement, and deferred repaint into
