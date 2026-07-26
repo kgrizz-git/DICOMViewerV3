@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.dialogs.anonymization_options_widget import AnonymizationOptionsDialog
-from gui.export_manager import ExportManager
+from gui.export_manager import ExportManager, ExportSelectedRequest
 from utils.deep_anonymizer import DeepAnonymizerOptions
 from utils.log_sanitizer import sanitize_message
 
@@ -660,31 +660,33 @@ class ExportDialog(QDialog):
         try:
             manager = ExportManager()
             exported_count, downgraded_list = manager.export_selected(
-                self.selected_items,
-                self.output_path,
-                self.export_format,
-                self.window_level_option,
-                self.current_window_center,
-                self.current_window_width,
-                self.include_overlays,
-                self.use_rescaled_values,
-                self.roi_manager,
-                self.overlay_manager,
-                self.measurement_tool,
-                self.config_manager,
-                self.text_annotation_tool,
-                self.arrow_annotation_tool,
-                self.studies,
-                export_scale,
-                scale_annotations,
-                anonymize=False,
-                projection_enabled=self.projection_enabled,
-                projection_type=self.projection_type,
-                projection_slice_count=self.projection_slice_count,
-                subwindow_annotation_managers=self.subwindow_annotation_managers,
-                deep_anonymize=deep_anonymize,
-                deep_anonymizer_options=self.anonymizer_options if deep_anonymize else None,
-                deep_anonymized_items=deep_anonymized_items,
+                ExportSelectedRequest(
+                    self.selected_items,
+                    self.output_path,
+                    self.export_format,
+                    self.window_level_option,
+                    self.current_window_center,
+                    self.current_window_width,
+                    self.include_overlays,
+                    self.use_rescaled_values,
+                    self.roi_manager,
+                    self.overlay_manager,
+                    self.measurement_tool,
+                    self.config_manager,
+                    self.text_annotation_tool,
+                    self.arrow_annotation_tool,
+                    self.studies,
+                    export_scale,
+                    scale_annotations,
+                    anonymize=False,
+                    projection_enabled=self.projection_enabled,
+                    projection_type=self.projection_type,
+                    projection_slice_count=self.projection_slice_count,
+                    subwindow_annotation_managers=self.subwindow_annotation_managers,
+                    deep_anonymize=deep_anonymize,
+                    deep_anonymizer_options=self.anonymizer_options if deep_anonymize else None,
+                    deep_anonymized_items=deep_anonymized_items,
+                )
             )
 
             # Save export path to config for next time

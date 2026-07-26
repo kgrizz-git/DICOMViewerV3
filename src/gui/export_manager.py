@@ -21,6 +21,7 @@ Requirements:
     - core.dicom_processor, core.export_rendering
 """
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 from PIL import Image
@@ -36,6 +37,71 @@ from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     from utils.deep_anonymizer import DeepAnonymizerOptions
+
+
+@dataclass
+class ExportSelectedRequest:
+    """Inputs for :meth:`ExportManager.export_selected`."""
+
+    selected_items: dict[tuple[str, str, int], Dataset]
+    output_dir: str
+    format: str
+    window_level_option: str = "dataset"
+    current_window_center: float | None = None
+    current_window_width: float | None = None
+    include_overlays: bool = False
+    use_rescaled_values: bool = False
+    roi_manager: Any = None
+    overlay_manager: Any = None
+    measurement_tool: Any = None
+    config_manager: Any = None
+    text_annotation_tool: Any = None
+    arrow_annotation_tool: Any = None
+    studies: dict[str, dict[str, list[Dataset]]] | None = None
+    export_scale: float = 1.0
+    scale_annotations_with_image: bool = False
+    anonymize: bool = False
+    deep_anonymize: bool = False
+    deep_anonymizer_options: Optional["DeepAnonymizerOptions"] = None
+    projection_enabled: bool = False
+    projection_type: str = "aip"
+    projection_slice_count: int = 4
+    subwindow_annotation_managers: list[dict[str, Any]] | None = None
+    deep_anonymized_items: dict[tuple[str, str, int], Dataset] | None = None
+
+
+@dataclass
+class ExportSliceRequest:
+    """Inputs for :meth:`ExportManager.export_slice`."""
+
+    dataset: Dataset
+    output_path: str
+    format: str
+    window_level_option: str = "dataset"
+    current_window_center: float | None = None
+    current_window_width: float | None = None
+    include_overlays: bool = False
+    use_rescaled_values: bool = False
+    roi_manager: Any = None
+    overlay_manager: Any = None
+    measurement_tool: Any = None
+    config_manager: Any = None
+    text_annotation_tool: Any = None
+    arrow_annotation_tool: Any = None
+    study_uid: str | None = None
+    series_uid: str | None = None
+    slice_index: int | None = None
+    total_slices: int | None = None
+    export_scale: float = 1.0
+    scale_annotations_with_image: bool = False
+    anonymize: bool = False
+    dataset_pre_anonymized: bool = False
+    projection_enabled: bool = False
+    projection_type: str = "aip"
+    projection_slice_count: int = 4
+    studies: dict[str, dict[str, list[Dataset]]] | None = None
+    subwindow_annotation_managers: list[dict[str, Any]] | None = None
+
 
 class ExportManager:
     """
@@ -191,32 +257,7 @@ class ExportManager:
         return paths
 
     def export_selected(
-        self,
-        selected_items: dict[tuple[str, str, int], Dataset],
-        output_dir: str,
-        format: str,
-        window_level_option: str = "dataset",
-        current_window_center: float | None = None,
-        current_window_width: float | None = None,
-        include_overlays: bool = False,
-        use_rescaled_values: bool = False,
-        roi_manager=None,
-        overlay_manager=None,
-        measurement_tool=None,
-        config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
-        studies: dict[str, dict[str, list[Dataset]]] | None = None,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
-        anonymize: bool = False,
-        deep_anonymize: bool = False,
-        deep_anonymizer_options: Optional["DeepAnonymizerOptions"] = None,
-        projection_enabled: bool = False,
-        projection_type: str = "aip",
-        projection_slice_count: int = 4,
-        subwindow_annotation_managers: list[dict[str, Any]] | None = None,
-        deep_anonymized_items: dict[tuple[str, str, int], Dataset] | None = None,
+        self, request: ExportSelectedRequest
     ) -> tuple[int, list[tuple[str, float, float]]]:
         """
         Export selected items based on hierarchical selection.
@@ -254,6 +295,32 @@ class ExportManager:
             deep_anonymized_items: Precomputed deep-anonymized selection from
                 build_deep_anonymized_selection, used to keep preflight and export paths identical.
         """
+        selected_items = request.selected_items
+        output_dir = request.output_dir
+        format = request.format
+        window_level_option = request.window_level_option
+        current_window_center = request.current_window_center
+        current_window_width = request.current_window_width
+        include_overlays = request.include_overlays
+        use_rescaled_values = request.use_rescaled_values
+        roi_manager = request.roi_manager
+        overlay_manager = request.overlay_manager
+        measurement_tool = request.measurement_tool
+        config_manager = request.config_manager
+        text_annotation_tool = request.text_annotation_tool
+        arrow_annotation_tool = request.arrow_annotation_tool
+        studies = request.studies
+        export_scale = request.export_scale
+        scale_annotations_with_image = request.scale_annotations_with_image
+        anonymize = request.anonymize
+        deep_anonymize = request.deep_anonymize
+        deep_anonymizer_options = request.deep_anonymizer_options
+        projection_enabled = request.projection_enabled
+        projection_type = request.projection_type
+        projection_slice_count = request.projection_slice_count
+        subwindow_annotation_managers = request.subwindow_annotation_managers
+        deep_anonymized_items = request.deep_anonymized_items
+
         exported = 0
         downgraded: list[tuple[str, float, float]] = []  # (filename, requested_scale, actual_scale)
 
@@ -377,33 +444,35 @@ class ExportManager:
                         total_slices = len(studies[study_uid][series_uid])
 
                     success, downgrade_info = self.export_slice(
-                        export_dataset,
-                        output_path,
-                        format,
-                        window_level_option,
-                        current_window_center,
-                        current_window_width,
-                        include_overlays,
-                        use_rescaled_values,
-                        roi_manager,
-                        overlay_manager,
-                        measurement_tool,
-                        config_manager,
-                        text_annotation_tool,
-                        arrow_annotation_tool,
-                        study_uid,
-                        series_uid,
-                        slice_index,
-                        total_slices,
-                        export_scale,
-                        scale_annotations_with_image,
-                        anonymize=anonymize and not deep_anonymize,
-                        dataset_pre_anonymized=deep_anonymize and format == "DICOM",
-                        projection_enabled=projection_enabled,
-                        projection_type=projection_type,
-                        projection_slice_count=projection_slice_count,
-                        studies=studies,
-                        subwindow_annotation_managers=subwindow_annotation_managers
+                        ExportSliceRequest(
+                            export_dataset,
+                            output_path,
+                            format,
+                            window_level_option,
+                            current_window_center,
+                            current_window_width,
+                            include_overlays,
+                            use_rescaled_values,
+                            roi_manager,
+                            overlay_manager,
+                            measurement_tool,
+                            config_manager,
+                            text_annotation_tool,
+                            arrow_annotation_tool,
+                            study_uid,
+                            series_uid,
+                            slice_index,
+                            total_slices,
+                            export_scale,
+                            scale_annotations_with_image,
+                            anonymize=anonymize and not deep_anonymize,
+                            dataset_pre_anonymized=deep_anonymize and format == "DICOM",
+                            projection_enabled=projection_enabled,
+                            projection_type=projection_type,
+                            projection_slice_count=projection_slice_count,
+                            studies=studies,
+                            subwindow_annotation_managers=subwindow_annotation_managers,
+                        )
                     )
                     if success:
                         exported += 1
@@ -421,34 +490,7 @@ class ExportManager:
         return (exported, downgraded)
 
     def export_slice(
-        self,
-        dataset: Dataset,
-        output_path: str,
-        format: str,
-        window_level_option: str = "dataset",
-        current_window_center: float | None = None,
-        current_window_width: float | None = None,
-        include_overlays: bool = False,
-        use_rescaled_values: bool = False,
-        roi_manager=None,
-        overlay_manager=None,
-        measurement_tool=None,
-        config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
-        study_uid: str | None = None,
-        series_uid: str | None = None,
-        slice_index: int | None = None,
-        total_slices: int | None = None,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
-        anonymize: bool = False,
-        dataset_pre_anonymized: bool = False,
-        projection_enabled: bool = False,
-        projection_type: str = "aip",
-        projection_slice_count: int = 4,
-        studies: dict[str, dict[str, list[Dataset]]] | None = None,
-        subwindow_annotation_managers: list[dict[str, Any]] | None = None
+        self, request: ExportSliceRequest
     ) -> tuple[bool, tuple[float, float] | None]:
         """
         Export a single slice or projection image.
@@ -484,6 +526,34 @@ class ExportManager:
             (success, downgrade_info). downgrade_info is (requested_scale, actual_scale) when
             image was exported at lower magnification than requested (PNG/JPG only), else None.
         """
+        dataset = request.dataset
+        output_path = request.output_path
+        format = request.format
+        window_level_option = request.window_level_option
+        current_window_center = request.current_window_center
+        current_window_width = request.current_window_width
+        include_overlays = request.include_overlays
+        use_rescaled_values = request.use_rescaled_values
+        roi_manager = request.roi_manager
+        overlay_manager = request.overlay_manager
+        measurement_tool = request.measurement_tool
+        config_manager = request.config_manager
+        text_annotation_tool = request.text_annotation_tool
+        arrow_annotation_tool = request.arrow_annotation_tool
+        study_uid = request.study_uid
+        series_uid = request.series_uid
+        slice_index = request.slice_index
+        total_slices = request.total_slices
+        export_scale = request.export_scale
+        scale_annotations_with_image = request.scale_annotations_with_image
+        anonymize = request.anonymize
+        dataset_pre_anonymized = request.dataset_pre_anonymized
+        projection_enabled = request.projection_enabled
+        projection_type = request.projection_type
+        projection_slice_count = request.projection_slice_count
+        studies = request.studies
+        subwindow_annotation_managers = request.subwindow_annotation_managers
+
         try:
             if format == "DICOM":
                 # Export as DICOM
