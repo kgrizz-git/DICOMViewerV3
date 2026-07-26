@@ -31,6 +31,7 @@ from PySide6.QtWidgets import QApplication
 from core.dicom_loader import DICOMLoader, should_skip_path_for_dicom
 from core.dicom_organizer import DICOMOrganizer
 from core.loading_pipeline import (
+    LoadPipelineRequest,
     format_source_name,
     run_load_pipeline_async,
 )
@@ -219,20 +220,22 @@ class FileOperationsHandler:
             return self.dicom_loader.load_files(captured, progress_callback=cb)
 
         self._active_worker = run_load_pipeline_async(
-            loader_fn=load_selected_files,
-            source_dir=source_dir,
-            source_name=source_name,
-            file_paths_for_merge=file_paths,
-            loader=self.dicom_loader,
-            organizer=self.dicom_organizer,
-            loading_manager=self._loading_manager,
-            progress_max=len(file_paths),
-            main_window=self.main_window,
-            file_dialog=self.file_dialog,
-            load_first_slice_callback=self.load_first_slice_callback,
-            update_status_callback=self.update_status_callback,
-            check_compression_errors=True,
-            on_load_success=self._on_load_success_callback,
+            LoadPipelineRequest(
+                loader_fn=load_selected_files,
+                source_dir=source_dir,
+                source_name=source_name,
+                file_paths_for_merge=file_paths,
+                loader=self.dicom_loader,
+                organizer=self.dicom_organizer,
+                loading_manager=self._loading_manager,
+                progress_max=len(file_paths),
+                main_window=self.main_window,
+                file_dialog=self.file_dialog,
+                load_first_slice_callback=self.load_first_slice_callback,
+                update_status_callback=self.update_status_callback,
+                check_compression_errors=True,
+                on_load_success=self._on_load_success_callback,
+            ),
             on_pipeline_complete=self._on_pipeline_complete,
         )
 
@@ -265,20 +268,22 @@ class FileOperationsHandler:
             )
 
         self._active_worker = run_load_pipeline_async(
-            loader_fn=load_selected_folder,
-            source_dir=source_dir,
-            source_name=source_name,
-            file_paths_for_merge=None,
-            loader=self.dicom_loader,
-            organizer=self.dicom_organizer,
-            loading_manager=self._loading_manager,
-            progress_max=estimated_total,
-            main_window=self.main_window,
-            file_dialog=self.file_dialog,
-            load_first_slice_callback=self.load_first_slice_callback,
-            update_status_callback=self.update_status_callback,
-            check_compression_errors=False,
-            on_load_success=self._on_load_success_callback,
+            LoadPipelineRequest(
+                loader_fn=load_selected_folder,
+                source_dir=source_dir,
+                source_name=source_name,
+                file_paths_for_merge=None,
+                loader=self.dicom_loader,
+                organizer=self.dicom_organizer,
+                loading_manager=self._loading_manager,
+                progress_max=estimated_total,
+                main_window=self.main_window,
+                file_dialog=self.file_dialog,
+                load_first_slice_callback=self.load_first_slice_callback,
+                update_status_callback=self.update_status_callback,
+                check_compression_errors=False,
+                on_load_success=self._on_load_success_callback,
+            ),
             on_pipeline_complete=self._on_pipeline_complete,
         )
 
@@ -322,21 +327,23 @@ class FileOperationsHandler:
                 return self.dicom_loader.load_files([file_path], progress_callback=cb)
 
             self._active_worker = run_load_pipeline_async(
-                loader_fn=load_recent_file,
-                source_dir=source_dir,
-                source_name=source_name,
-                file_paths_for_merge=[file_path],
-                loader=self.dicom_loader,
-                organizer=self.dicom_organizer,
-                loading_manager=self._loading_manager,
-                progress_max=1,
-                progress_label=f"Loading {source_name}...",
-                main_window=self.main_window,
-                file_dialog=self.file_dialog,
-                load_first_slice_callback=self.load_first_slice_callback,
-                update_status_callback=self.update_status_callback,
-                check_compression_errors=True,
-                on_load_success=self._on_load_success_callback,
+                LoadPipelineRequest(
+                    loader_fn=load_recent_file,
+                    source_dir=source_dir,
+                    source_name=source_name,
+                    file_paths_for_merge=[file_path],
+                    loader=self.dicom_loader,
+                    organizer=self.dicom_organizer,
+                    loading_manager=self._loading_manager,
+                    progress_max=1,
+                    progress_label=f"Loading {source_name}...",
+                    main_window=self.main_window,
+                    file_dialog=self.file_dialog,
+                    load_first_slice_callback=self.load_first_slice_callback,
+                    update_status_callback=self.update_status_callback,
+                    check_compression_errors=True,
+                    on_load_success=self._on_load_success_callback,
+                ),
                 on_pipeline_complete=self._on_pipeline_complete,
             )
             return
@@ -362,20 +369,22 @@ class FileOperationsHandler:
             )
 
         self._active_worker = run_load_pipeline_async(
-            loader_fn=load_recent_folder,
-            source_dir=source_dir,
-            source_name=source_name,
-            file_paths_for_merge=None,
-            loader=self.dicom_loader,
-            organizer=self.dicom_organizer,
-            loading_manager=self._loading_manager,
-            progress_max=estimated_total,
-            main_window=self.main_window,
-            file_dialog=self.file_dialog,
-            load_first_slice_callback=self.load_first_slice_callback,
-            update_status_callback=self.update_status_callback,
-            check_compression_errors=False,
-            on_load_success=self._on_load_success_callback,
+            LoadPipelineRequest(
+                loader_fn=load_recent_folder,
+                source_dir=source_dir,
+                source_name=source_name,
+                file_paths_for_merge=None,
+                loader=self.dicom_loader,
+                organizer=self.dicom_organizer,
+                loading_manager=self._loading_manager,
+                progress_max=estimated_total,
+                main_window=self.main_window,
+                file_dialog=self.file_dialog,
+                load_first_slice_callback=self.load_first_slice_callback,
+                update_status_callback=self.update_status_callback,
+                check_compression_errors=False,
+                on_load_success=self._on_load_success_callback,
+            ),
             on_pipeline_complete=self._on_pipeline_complete,
         )
 
@@ -425,20 +434,22 @@ class FileOperationsHandler:
                 )
 
             self._active_worker = run_load_pipeline_async(
-                loader_fn=load_dropped_folder,
-                source_dir=source_dir,
-                source_name=source_name,
-                file_paths_for_merge=None,
-                loader=self.dicom_loader,
-                organizer=self.dicom_organizer,
-                loading_manager=self._loading_manager,
-                progress_max=estimated_total,
-                main_window=self.main_window,
-                file_dialog=self.file_dialog,
-                load_first_slice_callback=self.load_first_slice_callback,
-                update_status_callback=self.update_status_callback,
-                check_compression_errors=False,
-                on_load_success=self._on_load_success_callback,
+                LoadPipelineRequest(
+                    loader_fn=load_dropped_folder,
+                    source_dir=source_dir,
+                    source_name=source_name,
+                    file_paths_for_merge=None,
+                    loader=self.dicom_loader,
+                    organizer=self.dicom_organizer,
+                    loading_manager=self._loading_manager,
+                    progress_max=estimated_total,
+                    main_window=self.main_window,
+                    file_dialog=self.file_dialog,
+                    load_first_slice_callback=self.load_first_slice_callback,
+                    update_status_callback=self.update_status_callback,
+                    check_compression_errors=False,
+                    on_load_success=self._on_load_success_callback,
+                ),
                 on_pipeline_complete=self._on_pipeline_complete,
             )
             return
@@ -468,20 +479,22 @@ class FileOperationsHandler:
                 return self.dicom_loader.load_files(captured, progress_callback=cb)
 
             self._active_worker = run_load_pipeline_async(
-                loader_fn=load_dropped_files,
-                source_dir=source_dir,
-                source_name=source_name,
-                file_paths_for_merge=files,
-                loader=self.dicom_loader,
-                organizer=self.dicom_organizer,
-                loading_manager=self._loading_manager,
-                progress_max=len(files),
-                main_window=self.main_window,
-                file_dialog=self.file_dialog,
-                load_first_slice_callback=self.load_first_slice_callback,
-                update_status_callback=self.update_status_callback,
-                check_compression_errors=True,
-                on_load_success=self._on_load_success_callback,
+                LoadPipelineRequest(
+                    loader_fn=load_dropped_files,
+                    source_dir=source_dir,
+                    source_name=source_name,
+                    file_paths_for_merge=files,
+                    loader=self.dicom_loader,
+                    organizer=self.dicom_organizer,
+                    loading_manager=self._loading_manager,
+                    progress_max=len(files),
+                    main_window=self.main_window,
+                    file_dialog=self.file_dialog,
+                    load_first_slice_callback=self.load_first_slice_callback,
+                    update_status_callback=self.update_status_callback,
+                    check_compression_errors=True,
+                    on_load_success=self._on_load_success_callback,
+                ),
                 on_pipeline_complete=self._on_pipeline_complete,
             )
 

@@ -31,6 +31,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QTimer
@@ -134,23 +135,29 @@ def batch_counts_from_merge_result(merge_result) -> tuple[int, int, int]:
 # Shared pipeline
 # ---------------------------------------------------------------------------
 
+@dataclass
+class LoadPipelineRequest:
+    """Bundled inputs for :func:`run_load_pipeline` / :func:`run_load_pipeline_async`."""
+
+    loader_fn: Callable[..., list[Any]]
+    source_dir: str
+    source_name: str
+    file_paths_for_merge: list[str] | None
+    loader: DICOMLoader
+    organizer: DICOMOrganizer
+    loading_manager: LoadingProgressManager
+    progress_max: int
+    main_window: Any
+    file_dialog: Any
+    load_first_slice_callback: Callable[..., None]
+    update_status_callback: Callable[..., None]
+    progress_label: str | None = None
+    check_compression_errors: bool = False
+    on_load_success: Callable[..., None] | None = None
+
+
 def run_load_pipeline(
-    *,
-    loader_fn: Callable[..., list[Any]],
-    source_dir: str,
-    source_name: str,
-    file_paths_for_merge: list[str] | None,
-    loader: DICOMLoader,
-    organizer: DICOMOrganizer,
-    loading_manager: LoadingProgressManager,
-    progress_max: int,
-    progress_label: str | None = None,
-    main_window,
-    file_dialog,
-    load_first_slice_callback: Callable[..., None],
-    update_status_callback: Callable[..., None],
-    check_compression_errors: bool = False,
-    on_load_success: Callable[..., None] | None = None,
+    request: LoadPipelineRequest,
 ) -> tuple[list[Any] | None, dict[str, Any] | None]:
     """Execute the shared DICOM load pipeline.
 
@@ -203,6 +210,21 @@ def run_load_pipeline(
     ``(datasets, studies)`` on success, or ``(None, None)`` on cancellation or
     fatal error.
     """
+    loader_fn = request.loader_fn
+    source_dir = request.source_dir
+    source_name = request.source_name
+    file_paths_for_merge = request.file_paths_for_merge
+    loader = request.loader
+    organizer = request.organizer
+    loading_manager = request.loading_manager
+    progress_max = request.progress_max
+    progress_label = request.progress_label
+    main_window = request.main_window
+    file_dialog = request.file_dialog
+    load_first_slice_callback = request.load_first_slice_callback
+    update_status_callback = request.update_status_callback
+    check_compression_errors = request.check_compression_errors
+    on_load_success = request.on_load_success
     # Folder-mode: file_paths_for_merge is None
     _is_folder_mode = file_paths_for_merge is None
 
@@ -445,22 +467,8 @@ def run_load_pipeline(
 # ---------------------------------------------------------------------------
 
 def run_load_pipeline_async(
+    request: LoadPipelineRequest,
     *,
-    loader_fn: Callable[..., list[Any]],
-    source_dir: str,
-    source_name: str,
-    file_paths_for_merge: list[str] | None,
-    loader: DICOMLoader,
-    organizer: DICOMOrganizer,
-    loading_manager: LoadingProgressManager,
-    progress_max: int,
-    progress_label: str | None = None,
-    main_window,
-    file_dialog,
-    load_first_slice_callback: Callable[..., None],
-    update_status_callback: Callable[..., None],
-    check_compression_errors: bool = False,
-    on_load_success: Callable[..., None] | None = None,
     on_pipeline_complete: Callable[[list[Any] | None, dict[str, Any] | None], None] | None = None,
 ) -> LoaderWorker:
     """Async version of run_load_pipeline that uses a background worker thread.
@@ -477,6 +485,21 @@ def run_load_pipeline_async(
 
     Returns the worker so the caller can store a reference (preventing GC).
     """
+    loader_fn = request.loader_fn
+    source_dir = request.source_dir
+    source_name = request.source_name
+    file_paths_for_merge = request.file_paths_for_merge
+    loader = request.loader
+    organizer = request.organizer
+    loading_manager = request.loading_manager
+    progress_max = request.progress_max
+    progress_label = request.progress_label
+    main_window = request.main_window
+    file_dialog = request.file_dialog
+    load_first_slice_callback = request.load_first_slice_callback
+    update_status_callback = request.update_status_callback
+    check_compression_errors = request.check_compression_errors
+    on_load_success = request.on_load_success
     _is_folder_mode = file_paths_for_merge is None
     perf_mark(
         "first_paint.prehandoff.pipeline_async.start",

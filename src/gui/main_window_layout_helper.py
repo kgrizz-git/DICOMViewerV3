@@ -22,26 +22,41 @@ Requirements:
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass
+class MainWindowPanels:
+    """Widgets placed into the main-window center/left/right panels."""
+
+    multi_window_layout: Any
+    cine_controls_widget: Any
+    metadata_panel: Any
+    window_level_controls: Any
+    zoom_display_widget: Any
+    roi_list_panel: Any
+    roi_statistics_panel: Any
+    intensity_projection_controls_widget: Any
+    fusion_controls_widget: Any
+    series_navigator: Any
+
+
+@dataclass
+class WindowSlotMapCallbacks:
+    """Callbacks wired to the window-slot thumbnail map."""
+
+    get_slot_to_view: Callable[..., Any]
+    get_layout_mode: Callable[..., Any]
+    get_focused_view_index: Callable[..., Any]
+    get_thumbnail_for_view: Callable[..., Any]
 
 
 def setup_main_window_content(
     main_window,
-    multi_window_layout,
-    cine_controls_widget,
-    metadata_panel,
-    window_level_controls,
-    zoom_display_widget,
-    roi_list_panel,
-    roi_statistics_panel,
-    intensity_projection_controls_widget,
-    fusion_controls_widget,
-    series_navigator,
+    panels: MainWindowPanels,
     *,
-    get_slot_to_view: Callable[..., Any],
-    get_layout_mode: Callable[..., Any],
-    get_focused_view_index: Callable[..., Any],
-    get_thumbnail_for_view: Callable[..., Any],
+    slot_map: WindowSlotMapCallbacks,
 ) -> None:
     """
     Assemble the main-window panel layout: center (multi-window), left (cine + metadata),
@@ -56,7 +71,7 @@ def setup_main_window_content(
     # No outer margins — image viewport should fill to the splitter handles
     center_layout.setContentsMargins(0, 0, 0, 0)
     center_layout.setSpacing(0)
-    center_layout.addWidget(multi_window_layout)
+    center_layout.addWidget(panels.multi_window_layout)
 
     # Add cine controls widget and metadata panel to left panel
     left_layout = main_window.left_panel.layout()
@@ -66,9 +81,9 @@ def setup_main_window_content(
     left_layout.setContentsMargins(0, 0, 0, 0)
     left_layout.setSpacing(0)
     # Add cine controls widget first (above metadata panel) with stretch 0
-    left_layout.addWidget(cine_controls_widget, 0)
+    left_layout.addWidget(panels.cine_controls_widget, 0)
     # Add metadata panel below cine controls with stretch 1 to make it ~1.5x its current height
-    left_layout.addWidget(metadata_panel, 1)
+    left_layout.addWidget(panels.metadata_panel, 1)
 
     # Add controls to right panel with tabbed interface
     right_layout = main_window.right_panel.layout()
@@ -106,12 +121,12 @@ def setup_main_window_content(
     rescale_presets_row.addStretch()
     main_window.wl_presets_row_layout = rescale_presets_row
     tab1_layout.addLayout(rescale_presets_row, 0)
-    tab1_layout.addWidget(window_level_controls, 0)
-    tab1_layout.addWidget(zoom_display_widget, 0)
+    tab1_layout.addWidget(panels.window_level_controls, 0)
+    tab1_layout.addWidget(panels.zoom_display_widget, 0)
     # ROI panels share all remaining space equally; they expand when the
     # window is tall and shrink to their minimum height when short.
-    tab1_layout.addWidget(roi_list_panel, 1)
-    tab1_layout.addWidget(roi_statistics_panel, 1)
+    tab1_layout.addWidget(panels.roi_list_panel, 1)
+    tab1_layout.addWidget(panels.roi_statistics_panel, 1)
     tab_widget.addTab(tab1_widget, "Window/Zoom/ROI")
 
     # Tab 2: Combine/Fuse
@@ -119,8 +134,8 @@ def setup_main_window_content(
     tab2_layout = QVBoxLayout(tab2_widget)
     tab2_layout.setContentsMargins(3, 4, 4, 0)
     tab2_layout.setSpacing(0)
-    tab2_layout.addWidget(intensity_projection_controls_widget)
-    tab2_layout.addWidget(fusion_controls_widget)
+    tab2_layout.addWidget(panels.intensity_projection_controls_widget)
+    tab2_layout.addWidget(panels.fusion_controls_widget)
     tab2_layout.addStretch()
 
     # Contextual link to fusion algorithm documentation (moved from Help menu)
@@ -136,16 +151,16 @@ def setup_main_window_content(
     right_layout.addWidget(tab_widget)
 
     # Add series navigator and window-slot thumbnail to main window
-    main_window.set_series_navigator(series_navigator)
+    main_window.set_series_navigator(panels.series_navigator)
 
     # Wire callbacks for window-slot thumbnail widget (if present)
     if hasattr(main_window, "set_window_slot_map_callbacks"):
         try:
             main_window.set_window_slot_map_callbacks(
-                get_slot_to_view=get_slot_to_view,
-                get_layout_mode=get_layout_mode,
-                get_focused_view_index=get_focused_view_index,
-                get_thumbnail_for_view=get_thumbnail_for_view,
+                get_slot_to_view=slot_map.get_slot_to_view,
+                get_layout_mode=slot_map.get_layout_mode,
+                get_focused_view_index=slot_map.get_focused_view_index,
+                get_thumbnail_for_view=slot_map.get_thumbnail_for_view,
             )
         except Exception:
             pass
