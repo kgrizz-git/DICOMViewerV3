@@ -23,6 +23,7 @@ Requirements:
     - ViewStateManager for view state coordination
 """
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from PIL import Image
@@ -124,6 +125,26 @@ def _overlay_metadata_dataset_for_slice(
     if ds_sop != cd_sop:
         return cand
     return dataset
+
+
+@dataclass
+class BaseImageRenderContext:
+    """Inputs for :meth:`SliceDisplayManager._render_base_image_pipeline`."""
+
+    dataset: Dataset
+    current_studies: dict[str, dict[str, list[Dataset]]]
+    current_study_uid: str
+    current_series_uid: str
+    current_slice_index: int
+    window_center: float | None
+    window_width: float | None
+    use_rescaled_values: bool
+    rescale_slope: float | None
+    rescale_intercept: float | None
+    is_same_series: bool
+    is_new_study_series: bool
+    series_identifier: str
+    preserve_view_override: bool | None
 
 
 class SliceDisplayManager:
@@ -638,24 +659,22 @@ class SliceDisplayManager:
                         }
                     )
 
-    def _render_base_image_pipeline(
-        self,
-        dataset: Dataset,
-        current_studies: dict[str, dict[str, list[Dataset]]],
-        current_study_uid: str,
-        current_series_uid: str,
-        current_slice_index: int,
-        window_center: float | None,
-        window_width: float | None,
-        use_rescaled_values: bool,
-        rescale_slope: float | None,
-        rescale_intercept: float | None,
-        is_same_series: bool,
-        is_new_study_series: bool,
-        series_identifier: str,
-        preserve_view_override: bool | None,
-    ) -> None:
+    def _render_base_image_pipeline(self, ctx: BaseImageRenderContext) -> None:
         """Projection, single-slice render, fusion, viewer image + fit (same order as prior display_slice)."""
+        dataset = ctx.dataset
+        current_studies = ctx.current_studies
+        current_study_uid = ctx.current_study_uid
+        current_series_uid = ctx.current_series_uid
+        current_slice_index = ctx.current_slice_index
+        window_center = ctx.window_center
+        window_width = ctx.window_width
+        use_rescaled_values = ctx.use_rescaled_values
+        rescale_slope = ctx.rescale_slope
+        rescale_intercept = ctx.rescale_intercept
+        is_same_series = ctx.is_same_series
+        is_new_study_series = ctx.is_new_study_series
+        series_identifier = ctx.series_identifier
+        preserve_view_override = ctx.preserve_view_override
         image = self._try_build_projection_image(
             dataset,
             current_studies,
@@ -1208,20 +1227,22 @@ class SliceDisplayManager:
 
             with perf_timer("first_paint.slice.render_base_image_pipeline"):
                 self._render_base_image_pipeline(
-                    dataset=dataset,
-                    current_studies=current_studies,
-                    current_study_uid=current_study_uid,
-                    current_series_uid=current_series_uid,
-                    current_slice_index=current_slice_index,
-                    window_center=window_center,
-                    window_width=window_width,
-                    use_rescaled_values=use_rescaled_values,
-                    rescale_slope=rescale_slope,
-                    rescale_intercept=rescale_intercept,
-                    is_same_series=is_same_series,
-                    is_new_study_series=is_new_study_series,
-                    series_identifier=series_identifier,
-                    preserve_view_override=preserve_view_override,
+                    BaseImageRenderContext(
+                        dataset=dataset,
+                        current_studies=current_studies,
+                        current_study_uid=current_study_uid,
+                        current_series_uid=current_series_uid,
+                        current_slice_index=current_slice_index,
+                        window_center=window_center,
+                        window_width=window_width,
+                        use_rescaled_values=use_rescaled_values,
+                        rescale_slope=rescale_slope,
+                        rescale_intercept=rescale_intercept,
+                        is_same_series=is_same_series,
+                        is_new_study_series=is_new_study_series,
+                        series_identifier=series_identifier,
+                        preserve_view_override=preserve_view_override,
+                    )
                 )
 
             with perf_timer("first_paint.slice.controls_and_metadata"):

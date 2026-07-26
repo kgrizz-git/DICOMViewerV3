@@ -581,26 +581,28 @@ class ExportManager:
                 # Render overlays and ROIs if requested (on final-size image)
                 if include_overlays:
                     image = _er.render_overlays_and_rois(
-                        image,
-                        dataset,
-                        roi_manager,
-                        overlay_manager,
-                        measurement_tool,
-                        config_manager,
-                        text_annotation_tool,
-                        arrow_annotation_tool,
-                        study_uid,
-                        series_uid,
-                        slice_index,
-                        total_slices,
-                        coordinate_scale=effective_scale,
-                        export_scale=effective_scale,
-                        scale_annotations_with_image=scale_annotations_with_image,
-                        projection_enabled=projection_enabled,
-                        projection_type=projection_type,
-                        projection_slice_count=projection_slice_count,
-                        studies=studies,
-                        subwindow_annotation_managers=subwindow_annotation_managers
+                        _er.RenderOverlaysRequest(
+                            image,
+                            dataset,
+                            roi_manager,
+                            overlay_manager,
+                            measurement_tool,
+                            config_manager,
+                            text_annotation_tool,
+                            arrow_annotation_tool,
+                            study_uid,
+                            series_uid,
+                            slice_index,
+                            total_slices,
+                            coordinate_scale=effective_scale,
+                            export_scale=effective_scale,
+                            scale_annotations_with_image=scale_annotations_with_image,
+                            projection_enabled=projection_enabled,
+                            projection_type=projection_type,
+                            projection_slice_count=projection_slice_count,
+                            studies=studies,
+                            subwindow_annotation_managers=subwindow_annotation_managers
+                        )
                     )
 
                 if format == "PNG":

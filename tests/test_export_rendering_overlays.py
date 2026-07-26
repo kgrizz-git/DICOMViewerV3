@@ -30,7 +30,7 @@ from PIL import Image, ImageFont
 from pydicom.dataset import Dataset
 
 from gui import export_rendering
-from gui.export_rendering import render_overlays_and_rois
+from gui.export_rendering import RenderOverlaysRequest, render_overlays_and_rois
 from tools.angle_measurement_items import AngleMeasurementItem
 
 
@@ -280,7 +280,7 @@ def _render(**overrides: Any) -> Image.Image:
         "total_slices": 10,
     }
     kwargs.update(overrides)
-    return render_overlays_and_rois(**kwargs)
+    return render_overlays_and_rois(RenderOverlaysRequest(**kwargs))
 
 
 # --- structural invariants (font/Pillow independent) ------------------------
