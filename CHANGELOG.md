@@ -7,6 +7,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Internal SonarQube S107 parameter-object sweep + S5806 fix:** introduced request dataclasses for eight non-constructor too-many-parameters sites (layout/load, render pipelines, cine + export), then renamed `format` → `export_format` locals in `export_manager` unpack paths so they no longer shadow the builtin (`python:S5806`). Fresh analysis: **259** priority findings (**6 MAJOR**, all remaining DI `__init__` constructors left as accepted debt; cognitive complexity deferred). **Semantic versioning note: patch** (maintainability only).
 - **Internal SonarQube first-slice cleanup:** removed redundant fusion spatial-alignment `None` guards and extracted ROI undo/redo helpers to reduce cognitive complexity, with no intended user-visible behavior change. **Semantic versioning note: patch** (maintainability only).
 - **Internal SonarQube undo/redo annotation-command slice:** extracted add/remove helpers for measurement, text, arrow, and crosshair undo commands (`utils.undo_redo`) without changing undo semantics. **Semantic versioning note: patch** (maintainability only).
 - **Internal SonarQube ROI statistics-path slice:** extracted projection/spacing helpers in `roi_coordinator` stats updates without changing projection or MPR behavior. **Semantic versioning note: patch** (maintainability only).

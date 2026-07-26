@@ -297,7 +297,7 @@ class ExportManager:
         """
         selected_items = request.selected_items
         output_dir = request.output_dir
-        format = request.format
+        export_format = request.format
         window_level_option = request.window_level_option
         current_window_center = request.current_window_center
         current_window_width = request.current_window_width
@@ -343,7 +343,7 @@ class ExportManager:
 
         # Deep anonymize batch (DICOM): consistent UID remap and date shift across selection
         pre_anonymized: dict[tuple[str, str, int], Dataset] = {}
-        if deep_anonymize and format == "DICOM":
+        if deep_anonymize and export_format == "DICOM":
             pre_anonymized = deep_anonymized_items or self.build_deep_anonymized_selection(
                 selected_items,
                 deep_anonymizer_options,
@@ -357,7 +357,7 @@ class ExportManager:
                     continue
 
                 # Use anonymized tags for folder structure when anonymize or deep anonymize
-                if deep_anonymize and format == "DICOM":
+                if deep_anonymize and export_format == "DICOM":
                     first_key = (study_uid, series_uid, items[0][0])
                     folder_dataset = pre_anonymized.get(first_key, items[0][1])
                 elif anonymize:
@@ -416,7 +416,7 @@ class ExportManager:
                         break
 
                     export_dataset = dataset
-                    if deep_anonymize and format == "DICOM":
+                    if deep_anonymize and export_format == "DICOM":
                         slice_key = (study_uid, series_uid, slice_index)
                         export_dataset = pre_anonymized.get(slice_key, dataset)
 
@@ -429,9 +429,9 @@ class ExportManager:
                         projection_type_upper = projection_type.upper()
                         projection_suffix = f"_{projection_type_upper}_{projection_slice_count}slices"
 
-                    if format == "DICOM":
+                    if export_format == "DICOM":
                         filename = f"Instance_{instance_num:04d}{projection_suffix}.dcm"
-                    elif format == "PNG":
+                    elif export_format == "PNG":
                         filename = f"Instance_{instance_num:04d}{projection_suffix}.png"
                     else:  # JPG
                         filename = f"Instance_{instance_num:04d}{projection_suffix}.jpg"
@@ -447,7 +447,7 @@ class ExportManager:
                         ExportSliceRequest(
                             export_dataset,
                             output_path,
-                            format,
+                            export_format,
                             window_level_option,
                             current_window_center,
                             current_window_width,
@@ -466,7 +466,7 @@ class ExportManager:
                             export_scale,
                             scale_annotations_with_image,
                             anonymize=anonymize and not deep_anonymize,
-                            dataset_pre_anonymized=deep_anonymize and format == "DICOM",
+                            dataset_pre_anonymized=deep_anonymize and export_format == "DICOM",
                             projection_enabled=projection_enabled,
                             projection_type=projection_type,
                             projection_slice_count=projection_slice_count,
@@ -476,7 +476,7 @@ class ExportManager:
                     )
                     if success:
                         exported += 1
-                        if downgrade_info is not None and format in ("PNG", "JPG"):
+                        if downgrade_info is not None and export_format in ("PNG", "JPG"):
                             req, act = downgrade_info
                             downgraded.append((os.path.basename(output_path), req, act))
 
@@ -528,7 +528,7 @@ class ExportManager:
         """
         dataset = request.dataset
         output_path = request.output_path
-        format = request.format
+        export_format = request.format
         window_level_option = request.window_level_option
         current_window_center = request.current_window_center
         current_window_width = request.current_window_width
@@ -555,7 +555,7 @@ class ExportManager:
         subwindow_annotation_managers = request.subwindow_annotation_managers
 
         try:
-            if format == "DICOM":
+            if export_format == "DICOM":
                 # Export as DICOM
                 if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
                     # Create projection dataset for DICOM export
@@ -675,9 +675,9 @@ class ExportManager:
                         )
                     )
 
-                if format == "PNG":
+                if export_format == "PNG":
                     image.save(output_path, "PNG")
-                elif format == "JPG":
+                elif export_format == "JPG":
                     image.save(output_path, "JPEG", quality=95)
 
                 return (True, downgrade_info)

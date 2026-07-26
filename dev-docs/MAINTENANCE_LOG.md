@@ -1,10 +1,20 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-07-26
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-07-26
+
+- Completed the non-constructor `python:S107` parameter-object sweep (8 sites:
+  layout/load, render pipelines, cine + export request dataclasses) and fixed
+  the two follow-on `python:S5806` builtin-shadow findings in
+  `export_manager` (`format` → `export_format` locals). Fresh local analysis:
+  **259** priority findings (**253 CRITICAL** / **6 MAJOR**). Remaining MAJOR
+  are six DI `__init__` constructors intentionally left as accepted debt;
+  CRITICAL volume is still dominated by deferred `S3776` cognitive complexity.
 
 ## 2026-07-25
 
