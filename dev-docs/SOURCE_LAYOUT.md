@@ -66,7 +66,7 @@ src/
 │       ├── slice_sync_dialog.py       # Manage linked sync groups (**View → Manage Sync Groups…**)
 │       ├── export_roi_statistics_dialog.py  # **Tools → Export ROI Statistics** series picker + format options
 │       └── mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
-├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
+├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair); measurement_item_change (itemChange helpers)
 │   └── roi_persistence.py         # Clipboard-oriented ROI dict serialization (Phase 5B; copy/paste schema)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── undo_redo_tag_commands.py  # `TagEditCommand` for DICOM tag edits; imported at end of `undo_redo.py` for re-export (Phase 5E)

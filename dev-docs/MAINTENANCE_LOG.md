@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on measurement itemChange handlers:
+  moved handle/group position, selection, geometry sync, and debug logging into
+  `src/tools/measurement_item_change.py`; both `itemChange` methods now
+  orchestrate that module. Added
+  `tests/tools/test_measurement_item_change_sonar_slice.py`. Target findings
+  were cognitive complexity 92 and 74.
 - Ran a fresh local SonarQube analysis on `349ab6f` after the series-navigator
   list slice. CE task succeeded; `scripts/report_local_sonarqube_issues.py`
   reported **242** priority findings (BLOCKER/CRITICAL/MAJOR). Highest remaining
