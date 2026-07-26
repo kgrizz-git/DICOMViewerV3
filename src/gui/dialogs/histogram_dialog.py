@@ -66,7 +66,7 @@ class HistogramDialog(QDialog):
     """
 
     def __init__(
-        self,
+        self,  # NOSONAR(S107) - DI wiring ctor; many injected collaborators by design
         parent=None,
         get_current_dataset: HistogramDatasetFn | None = None,
         get_current_slice_index: Callable[[], int] | None = None,

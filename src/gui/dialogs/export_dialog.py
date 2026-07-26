@@ -62,7 +62,7 @@ class ExportDialog(QDialog):
     """
 
     def __init__(
-        self,
+        self,  # NOSONAR(S107) - DI wiring ctor; many injected collaborators by design
         studies: dict[str, dict[str, list[Dataset]]],
         current_window_center: float | None = None,
         current_window_width: float | None = None,

@@ -11,10 +11,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 - Completed the non-constructor `python:S107` parameter-object sweep (8 sites:
   layout/load, render pipelines, cine + export request dataclasses) and fixed
   the two follow-on `python:S5806` builtin-shadow findings in
-  `export_manager` (`format` → `export_format` locals). Fresh local analysis:
-  **259** priority findings (**253 CRITICAL** / **6 MAJOR**). Remaining MAJOR
-  are six DI `__init__` constructors intentionally left as accepted debt;
-  CRITICAL volume is still dominated by deferred `S3776` cognitive complexity.
+  `export_manager` (`format` → `export_format` locals). Documented the six
+  remaining DI `__init__` constructors with `# NOSONAR(S107)` (wiring ctors;
+  rule remains active for methods): `dialog_coordinator`, `export_dialog`,
+  `histogram_dialog`, `keyboard_event_handler`, `roi_coordinator`,
+  `slice_display_manager`. Fresh local analysis target: **0 MAJOR** from
+  these S107 sites; CRITICAL volume is still dominated by deferred `S3776`.
 
 ## 2026-07-25
 
