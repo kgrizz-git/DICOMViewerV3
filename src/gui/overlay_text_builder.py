@@ -108,6 +108,313 @@ def get_modality(parser: DICOMParser) -> str:
     return str(modality).strip()
 
 
+def format_overlay_numeric_value(value: object) -> str:
+    """Format floats without trailing zeros; pass other values through ``str``."""
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else f"{value:.3f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
+def multiframe_timing_suffix(context: dict[str, Any]) -> str:
+    """Parenthetical timing suffix for cardiac/spatial multiframe labels."""
+    trigger_time_ms = context.get("trigger_time_ms")
+    if trigger_time_ms is not None:
+        return f" ({format_overlay_numeric_value(trigger_time_ms)} ms)"
+    nominal = context.get("nominal_cardiac_trigger_time_ms")
+    if nominal is not None:
+        return f" ({format_overlay_numeric_value(nominal)} ms nominal)"
+    return ""
+
+
+def format_multiframe_corner_label(context: dict[str, Any]) -> str:
+    """Build InstanceNumber replacement text from multiframe context."""
+    instance_index = context.get("instance_index")
+    total_instances = context.get("total_instances")
+    frame_index = context.get("frame_index")
+    total_frames = context.get("total_frames")
+    if frame_index is None or total_frames is None:
+        return ""
+
+    frame_type = str(context.get("frame_type", "unknown"))
+    if frame_type == "temporal":
+        frame_label = f"Frame {frame_index}/{total_frames}"
+    elif frame_type == "cardiac":
+        frame_label = f"Phase {frame_index}/{total_frames}"
+        frame_label += multiframe_timing_suffix(context)
+    elif frame_type == "diffusion":
+        diffusion_b_value = context.get("diffusion_b_value")
+        if diffusion_b_value is not None:
+            frame_label = f"b={format_overlay_numeric_value(diffusion_b_value)}"
+        else:
+            frame_label = f"Frame {frame_index}/{total_frames}"
+    elif frame_type == "spatial":
+        frame_label = f"Slice {frame_index}/{total_frames}"
+        frame_label += multiframe_timing_suffix(context)
+    else:
+        frame_label = f"Frame {frame_index}/{total_frames}"
+
+    if (
+        instance_index is not None
+        and total_instances is not None
+        and isinstance(total_instances, (int, float))
+        and int(total_instances) > 1
+    ):
+        return f"Instance {instance_index}/{total_instances} · {frame_label}"
+    return frame_label
+
+
+def detect_multiframe_overlay_state(
+    parser: DICOMParser,
+) -> tuple[bool, int | None, int | None]:
+    """
+    Detect FrameDatasetWrapper-style multi-frame state on *parser*.
+
+    Returns:
+        ``(is_multiframe_dataset, frame_index_0based, total_frames)``.
+    """
+    dataset = parser.dataset
+    if dataset is None:
+        return False, None, None
+    if not (hasattr(dataset, "_frame_index") and hasattr(dataset, "_original_dataset")):
+        return False, None, None
+    frame_index = dataset._frame_index  # 0-based
+    total_frames = None
+    original_dataset = dataset._original_dataset
+    if is_multiframe(original_dataset):
+        total_frames = get_frame_count(original_dataset)
+    return True, frame_index, total_frames
+
+
+def _projection_range_suffix(
+    projection_enabled: bool,
+    projection_start_slice: int | None,
+    projection_end_slice: int | None,
+    projection_type: str | None,
+) -> str:
+    """Suffix like `` (1-5 MIP)`` when combine-slices projection is active."""
+    if not (
+        projection_enabled
+        and projection_start_slice is not None
+        and projection_end_slice is not None
+    ):
+        return ""
+    start_display = projection_start_slice + 1
+    end_display = projection_end_slice + 1
+    type_map = {"aip": "AIP", "mip": "MIP", "minip": "MinIP"}
+    proj_label = (
+        type_map.get(projection_type.lower(), projection_type.upper())
+        if projection_type
+        else ""
+    )
+    if proj_label:
+        return f" ({start_display}-{end_display} {proj_label})"
+    return f" ({start_display}-{end_display})"
+
+
+def format_instance_number_slice_display(
+    value_str: str,
+    *,
+    total_slices: int,
+    stack_position: int | None,
+    projection_enabled: bool,
+    projection_start_slice: int | None,
+    projection_end_slice: int | None,
+    projection_type: str | None,
+    is_multiframe_dataset: bool,
+    frame_index: int | None,
+    total_frames: int | None,
+) -> str | None:
+    """
+    Format InstanceNumber as Slice X/Y (plus projection/frame suffixes).
+
+    Returns ``None`` when *value_str* is not an int (caller falls back to tag:value).
+    """
+    try:
+        instance_num = int(value_str)
+    except (ValueError, TypeError):
+        return None
+
+    if stack_position is not None:
+        # Numerator is the loaded-stack position so the fraction is always
+        # coherent; show DICOM InstanceNumber only when it differs.
+        slice_display = f"Slice {stack_position}/{total_slices}"
+        if instance_num != stack_position:
+            slice_display += f" (Instance {instance_num})"
+    elif instance_num > total_slices:
+        # Never emit an impossible fraction like "Slice 104/11".
+        slice_display = f"Slice {instance_num}"
+    else:
+        slice_display = f"Slice {instance_num}/{total_slices}"
+
+    slice_display += _projection_range_suffix(
+        projection_enabled,
+        projection_start_slice,
+        projection_end_slice,
+        projection_type,
+    )
+
+    if is_multiframe_dataset and total_frames is not None and frame_index is not None:
+        frame_display = frame_index + 1
+        return f"{slice_display} (Frame {frame_display}/{total_frames})"
+    return slice_display
+
+
+def try_format_instance_number_line(
+    tag: str,
+    value_str: str,
+    *,
+    total_slices: int | None,
+    projection_enabled: bool,
+    projection_start_slice: int | None,
+    projection_end_slice: int | None,
+    projection_type: str | None,
+    multiframe_context: dict[str, Any] | None,
+    stack_position: int | None,
+    is_multiframe_dataset: bool,
+    frame_index: int | None,
+    total_frames: int | None,
+) -> str | None:
+    """Format InstanceNumber special cases, or ``None`` when *tag* is not that keyword."""
+    if tag != "InstanceNumber":
+        return None
+    if multiframe_context is not None:
+        label = format_multiframe_corner_label(multiframe_context)
+        return label if label else f"{tag}: {value_str}"
+    if total_slices is None:
+        return None
+    formatted = format_instance_number_slice_display(
+        value_str,
+        total_slices=total_slices,
+        stack_position=stack_position,
+        projection_enabled=projection_enabled,
+        projection_start_slice=projection_start_slice,
+        projection_end_slice=projection_end_slice,
+        projection_type=projection_type,
+        is_multiframe_dataset=is_multiframe_dataset,
+        frame_index=frame_index,
+        total_frames=total_frames,
+    )
+    return formatted if formatted is not None else f"{tag}: {value_str}"
+
+
+def try_format_slice_thickness_line(
+    tag: str,
+    value_str: str,
+    *,
+    projection_enabled: bool,
+    projection_total_thickness: float | None,
+) -> str | None:
+    """Format projected SliceThickness, or ``None`` when not applicable."""
+    if not (
+        tag == "SliceThickness"
+        and projection_enabled
+        and projection_total_thickness is not None
+    ):
+        return None
+    try:
+        single_thickness = float(value_str)
+        return f"Slice Thickness: {single_thickness} ({projection_total_thickness})"
+    except (ValueError, TypeError):
+        return f"{tag}: {value_str}"
+
+
+def try_format_multiframe_timing_line(
+    tag: str,
+    multiframe_context: dict[str, Any] | None,
+) -> str | None:
+    """Format TriggerTime / NominalCardiacTriggerTime / ContentTime from context."""
+    if multiframe_context is None:
+        return None
+    if tag == "TriggerTime" and multiframe_context.get("trigger_time_ms") is not None:
+        return (
+            f"TriggerTime: {format_overlay_numeric_value(multiframe_context['trigger_time_ms'])} ms"
+        )
+    if (
+        tag == "NominalCardiacTriggerTime"
+        and multiframe_context.get("nominal_cardiac_trigger_time_ms") is not None
+    ):
+        return (
+            "NominalCardiacTriggerTime: "
+            f"{format_overlay_numeric_value(multiframe_context['nominal_cardiac_trigger_time_ms'])} ms"
+        )
+    if tag == "ContentTime" and multiframe_context.get("content_time"):
+        return f"ContentTime: {multiframe_context['content_time']}"
+    return None
+
+
+def format_corner_tag_line(
+    tag: str,
+    value_str: str,
+    *,
+    total_slices: int | None,
+    projection_enabled: bool,
+    projection_start_slice: int | None,
+    projection_end_slice: int | None,
+    projection_total_thickness: float | None,
+    projection_type: str | None,
+    multiframe_context: dict[str, Any] | None,
+    stack_position: int | None,
+    is_multiframe_dataset: bool,
+    frame_index: int | None,
+    total_frames: int | None,
+) -> str:
+    """Return one overlay line for a non-empty tag value."""
+    instance_line = try_format_instance_number_line(
+        tag,
+        value_str,
+        total_slices=total_slices,
+        projection_enabled=projection_enabled,
+        projection_start_slice=projection_start_slice,
+        projection_end_slice=projection_end_slice,
+        projection_type=projection_type,
+        multiframe_context=multiframe_context,
+        stack_position=stack_position,
+        is_multiframe_dataset=is_multiframe_dataset,
+        frame_index=frame_index,
+        total_frames=total_frames,
+    )
+    if instance_line is not None:
+        return instance_line
+
+    thickness_line = try_format_slice_thickness_line(
+        tag,
+        value_str,
+        projection_enabled=projection_enabled,
+        projection_total_thickness=projection_total_thickness,
+    )
+    if thickness_line is not None:
+        return thickness_line
+
+    timing_line = try_format_multiframe_timing_line(tag, multiframe_context)
+    if timing_line is not None:
+        return timing_line
+
+    return f"{tag}: {value_str}"
+
+
+def trailing_multiframe_frame_line(
+    *,
+    tags: list[str],
+    is_multiframe_dataset: bool,
+    total_frames: int | None,
+    multiframe_context: dict[str, Any] | None,
+    total_slices: int | None,
+    frame_index: int | None,
+) -> str | None:
+    """Optional trailing ``Frame: x/y`` when InstanceNumber is present without slice total."""
+    if not (
+        is_multiframe_dataset
+        and total_frames is not None
+        and multiframe_context is None
+        and "InstanceNumber" in tags
+        and total_slices is None
+        and frame_index is not None
+    ):
+        return None
+    frame_display = frame_index + 1
+    return f"Frame: {frame_display}/{total_frames}"
+
+
 def get_corner_text(
     parser: DICOMParser,
     tags: list[str],
@@ -148,74 +455,7 @@ def get_corner_text(
         Newline-joined text lines ready for display.
     """
     lines: list[str] = []
-
-    # ── Inner helpers ───────────────────────────────────────────────────────
-
-    def format_numeric_value(value: object) -> str:
-        if isinstance(value, float):
-            return str(int(value)) if value.is_integer() else f"{value:.3f}".rstrip("0").rstrip(".")
-        return str(value)
-
-    def get_timing_suffix(context: dict[str, Any]) -> str:
-        trigger_time_ms = context.get("trigger_time_ms")
-        if trigger_time_ms is not None:
-            return f" ({format_numeric_value(trigger_time_ms)} ms)"
-        nominal = context.get("nominal_cardiac_trigger_time_ms")
-        if nominal is not None:
-            return f" ({format_numeric_value(nominal)} ms nominal)"
-        return ""
-
-    def format_multiframe_label(context: dict[str, Any]) -> str:
-        instance_index = context.get("instance_index")
-        total_instances = context.get("total_instances")
-        frame_index = context.get("frame_index")
-        total_frames = context.get("total_frames")
-        if frame_index is None or total_frames is None:
-            return ""
-
-        frame_type = str(context.get("frame_type", "unknown"))
-        if frame_type == "temporal":
-            frame_label = f"Frame {frame_index}/{total_frames}"
-        elif frame_type == "cardiac":
-            frame_label = f"Phase {frame_index}/{total_frames}"
-            frame_label += get_timing_suffix(context)
-        elif frame_type == "diffusion":
-            diffusion_b_value = context.get("diffusion_b_value")
-            if diffusion_b_value is not None:
-                frame_label = f"b={format_numeric_value(diffusion_b_value)}"
-            else:
-                frame_label = f"Frame {frame_index}/{total_frames}"
-        elif frame_type == "spatial":
-            frame_label = f"Slice {frame_index}/{total_frames}"
-            frame_label += get_timing_suffix(context)
-        else:
-            frame_label = f"Frame {frame_index}/{total_frames}"
-
-        if (
-            instance_index is not None
-            and total_instances is not None
-            and isinstance(total_instances, (int, float))
-            and int(total_instances) > 1
-        ):
-            return f"Instance {instance_index}/{total_instances} · {frame_label}"
-        return frame_label
-
-    # ── Multi-frame detection ───────────────────────────────────────────────
-
-    dataset = parser.dataset
-    frame_index = None
-    total_frames = None
-    is_multiframe_dataset = False
-
-    if dataset is not None:
-        if hasattr(dataset, "_frame_index") and hasattr(dataset, "_original_dataset"):
-            is_multiframe_dataset = True
-            frame_index = dataset._frame_index  # 0-based
-            original_dataset = dataset._original_dataset
-            if is_multiframe(original_dataset):
-                total_frames = get_frame_count(original_dataset)
-
-    # ── Build lines ─────────────────────────────────────────────────────────
+    is_multiframe_dataset, frame_index, total_frames = detect_multiframe_overlay_state(parser)
 
     for tag in tags:
         value = parser.get_tag_by_keyword(tag)
@@ -227,112 +467,36 @@ def get_corner_text(
         else:
             value_str = str(value)
 
-        # Privacy masking
         if privacy_mode and tag in get_patient_tag_keywords():
             value_str = "PRIVACY MODE"
 
-        # ── InstanceNumber ──────────────────────────────────────────────
-        if tag == "InstanceNumber" and multiframe_context is not None:
-            label = format_multiframe_label(multiframe_context)
-            lines.append(label if label else f"{tag}: {value_str}")
-
-        elif tag == "InstanceNumber" and total_slices is not None:
-            try:
-                instance_num = int(value_str)
-                if stack_position is not None:
-                    # Numerator is the loaded-stack position so the fraction is
-                    # always coherent; show the DICOM InstanceNumber only when it
-                    # differs (e.g. partial load or non-1..N acquisition order).
-                    slice_display = f"Slice {stack_position}/{total_slices}"
-                    if instance_num != stack_position:
-                        slice_display += f" (Instance {instance_num})"
-                elif instance_num > total_slices:
-                    # No stack position threaded in: never emit an impossible
-                    # fraction like "Slice 104/11"; drop the unknown denominator.
-                    slice_display = f"Slice {instance_num}"
-                else:
-                    slice_display = f"Slice {instance_num}/{total_slices}"
-
-                if (
-                    projection_enabled
-                    and projection_start_slice is not None
-                    and projection_end_slice is not None
-                ):
-                    start_display = projection_start_slice + 1
-                    end_display = projection_end_slice + 1
-                    type_map = {"aip": "AIP", "mip": "MIP", "minip": "MinIP"}
-                    proj_label = (
-                        type_map.get(projection_type.lower(), projection_type.upper())
-                        if projection_type
-                        else ""
-                    )
-                    if proj_label:
-                        slice_display += f" ({start_display}-{end_display} {proj_label})"
-                    else:
-                        slice_display += f" ({start_display}-{end_display})"
-
-                if is_multiframe_dataset and total_frames is not None and frame_index is not None:
-                    frame_display = frame_index + 1
-                    lines.append(f"{slice_display} (Frame {frame_display}/{total_frames})")
-                else:
-                    lines.append(slice_display)
-            except (ValueError, TypeError):
-                lines.append(f"{tag}: {value_str}")
-
-        # ── SliceThickness ──────────────────────────────────────────────
-        elif (
-            tag == "SliceThickness"
-            and projection_enabled
-            and projection_total_thickness is not None
-        ):
-            try:
-                single_thickness = float(value_str)
-                lines.append(
-                    f"Slice Thickness: {single_thickness} ({projection_total_thickness})"
-                )
-            except (ValueError, TypeError):
-                lines.append(f"{tag}: {value_str}")
-
-        # ── Timing tags from multi-frame context ────────────────────────
-        elif (
-            tag == "TriggerTime"
-            and multiframe_context is not None
-            and multiframe_context.get("trigger_time_ms") is not None
-        ):
-            lines.append(
-                f"TriggerTime: {format_numeric_value(multiframe_context['trigger_time_ms'])} ms"
+        lines.append(
+            format_corner_tag_line(
+                tag,
+                value_str,
+                total_slices=total_slices,
+                projection_enabled=projection_enabled,
+                projection_start_slice=projection_start_slice,
+                projection_end_slice=projection_end_slice,
+                projection_total_thickness=projection_total_thickness,
+                projection_type=projection_type,
+                multiframe_context=multiframe_context,
+                stack_position=stack_position,
+                is_multiframe_dataset=is_multiframe_dataset,
+                frame_index=frame_index,
+                total_frames=total_frames,
             )
+        )
 
-        elif (
-            tag == "NominalCardiacTriggerTime"
-            and multiframe_context is not None
-            and multiframe_context.get("nominal_cardiac_trigger_time_ms") is not None
-        ):
-            lines.append(
-                f"NominalCardiacTriggerTime: "
-                f"{format_numeric_value(multiframe_context['nominal_cardiac_trigger_time_ms'])} ms"
-            )
-
-        elif (
-            tag == "ContentTime"
-            and multiframe_context is not None
-            and multiframe_context.get("content_time")
-        ):
-            lines.append(f"ContentTime: {multiframe_context['content_time']}")
-
-        else:
-            lines.append(f"{tag}: {value_str}")
-
-    # ── Append frame info if InstanceNumber is not in this corner ────────
-    if (
-        is_multiframe_dataset
-        and total_frames is not None
-        and multiframe_context is None
-        and "InstanceNumber" in tags
-        and total_slices is None
-        and frame_index is not None
-    ):
-        frame_display = frame_index + 1
-        lines.append(f"Frame: {frame_display}/{total_frames}")
+    trailing = trailing_multiframe_frame_line(
+        tags=tags,
+        is_multiframe_dataset=is_multiframe_dataset,
+        total_frames=total_frames,
+        multiframe_context=multiframe_context,
+        total_slices=total_slices,
+        frame_index=frame_index,
+    )
+    if trailing is not None:
+        lines.append(trailing)
 
     return "\n".join(lines)

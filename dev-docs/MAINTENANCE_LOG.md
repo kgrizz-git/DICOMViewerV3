@@ -8,6 +8,11 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on overlay corner text: lifted
+  multiframe label, InstanceNumber/slice, thickness, and timing formatters out
+  of `get_corner_text` in `overlay_text_builder`. Added
+  `tests/gui/test_overlay_text_builder_sonar_slice.py`. Target finding was
+  cognitive complexity 94.
 - Completed a Sonar `python:S3776` slice on ROI XLSX export: moved workbook
   assembly, series/slice blocks, ROI stats/area/channel rows, and
   crosshair/measurement writers into `src/core/roi_export_xlsx.py`;
