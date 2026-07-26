@@ -40,6 +40,18 @@ import pydicom
 from pydicom.errors import InvalidDicomError
 from PySide6.QtWidgets import QApplication
 
+from core.dicom_loader_file import (
+    build_compression_install_error_detail,
+    build_generic_load_error_message,
+    build_memory_error_message,
+    build_slow_load_timing_parts,
+    compression_label_from_dataset,
+    format_defer_pixel_data_message,
+    format_multiframe_load_complete_message,
+    format_multiframe_load_start_message,
+    normalize_validation_error,
+    preload_enhanced_multiframe_pixels,
+)
 from core.multiframe_handler import get_frame_count, is_multiframe
 from core.sr_sop_classes import (
     is_structured_report_dataset,
@@ -54,6 +66,149 @@ _logger = logging.getLogger(__name__)
 def _is_main_thread() -> bool:
     """Return True if the caller is on the main (UI) thread."""
     return threading.current_thread().ident == _MAIN_THREAD_ID
+
+
+def _process_events_if_main_thread() -> None:
+    """Pump Qt events on the main thread so progress UI stays responsive."""
+    if _is_main_thread():
+        QApplication.processEvents()
+
+
+def _notify_file_load_progress(
+    progress_callback: Callable[[str, int | None, int | None], None] | None,
+    message: str,
+    current_frames: int | None = None,
+    total_frames: int | None = None,
+) -> None:
+    """Invoke load-file progress callback and process Qt events on the main thread."""
+    if progress_callback:
+        progress_callback(message, current_frames, total_frames)
+        _process_events_if_main_thread()
+
+
+def _read_dicom_dataset(
+    file_path: str,
+    defer_size: int | None,
+    filename: str,
+    progress_callback: Callable[[str, int | None, int | None], None] | None,
+) -> tuple[pydicom.Dataset, float]:
+    """
+    Read a DICOM dataset with optional defer_size branching.
+
+    Returns:
+        Tuple of (dataset, read_time_seconds).
+    """
+    read_start = time.time()
+    if defer_size is not None:
+        file_size = os.path.getsize(file_path)
+        if file_size > defer_size:
+            file_size_mb = file_size / (1024 * 1024)
+            defer_size_mb = defer_size / (1024 * 1024)
+            _notify_file_load_progress(
+                progress_callback,
+                format_defer_pixel_data_message(filename, file_size_mb, defer_size_mb),
+            )
+            dataset = pydicom.dcmread(file_path, force=True, defer_size=defer_size)
+        else:
+            dataset = pydicom.dcmread(file_path, force=True)
+    else:
+        dataset = pydicom.dcmread(file_path, force=True)
+    return dataset, time.time() - read_start
+
+
+def _annotate_structured_report(dataset: pydicom.Dataset) -> None:
+    """Tag structured-report datasets that carry no image pixels."""
+    if is_structured_report_dataset(dataset):
+        dataset._no_pixel_reason = "structured_report"
+        dataset._structured_report_label = structured_report_storage_label(
+            str(getattr(dataset, "SOPClassUID", "") or "")
+        )
+
+
+def _finalize_multiframe_metadata(
+    loader: "DICOMLoader",
+    dataset: pydicom.Dataset,
+    file_path: str,
+    filename: str,
+    progress_callback: Callable[[str, int | None, int | None], None] | None,
+) -> tuple[float, bool]:
+    """
+    Apply multi-frame metadata and optionally pre-load enhanced multi-frame pixels.
+
+    Returns:
+        ``(pixel_load_time_seconds, should_abort_load)``.
+    """
+    if not is_multiframe(dataset):
+        dataset._num_frames = 1
+        dataset._is_multiframe = False
+        return 0.0, False
+
+    num_frames = get_frame_count(dataset)
+    dataset._num_frames = num_frames
+    dataset._is_multiframe = True
+
+    if not hasattr(dataset, "PerFrameFunctionalGroupsSequence"):
+        return 0.0, False
+
+    _notify_file_load_progress(
+        progress_callback,
+        format_multiframe_load_start_message(filename, num_frames),
+        total_frames=num_frames,
+    )
+
+    if loader._cancelled:
+        return 0.0, True
+
+    pixel_load_time, should_abort = preload_enhanced_multiframe_pixels(
+        dataset,
+        file_path,
+        num_frames,
+        classify_pixel_data_error=_classify_pixel_data_error,
+        compression_error_files=loader._compression_error_files,
+        failed_files=loader.failed_files,
+        on_compression_decode_failed=lambda exc: _logger.warning(
+            "DICOM compression decode failed",
+            extra=safe_event_fields("dicom.decode", error=exc),
+        ),
+        on_pixel_preload_failed=lambda exc: _logger.warning(
+            "DICOM pixel pre-load failed",
+            extra=safe_event_fields("dicom.pixel_preload", error=exc),
+        ),
+    )
+    if should_abort:
+        return pixel_load_time, True
+
+    if pixel_load_time > 0:
+        _notify_file_load_progress(
+            progress_callback,
+            format_multiframe_load_complete_message(filename, num_frames),
+            current_frames=num_frames,
+            total_frames=num_frames,
+        )
+    return pixel_load_time, False
+
+
+def _record_load_file_generic_exception(
+    loader: "DICOMLoader",
+    file_path: str,
+    dataset: pydicom.Dataset | None,
+    exc: Exception,
+) -> None:
+    """Classify and append a generic ``load_file`` exception to ``failed_files``."""
+    error_msg_str = str(exc)
+    is_compression_error, classified_message = _classify_pixel_data_error(dataset, error_msg_str)
+
+    if is_compression_error:
+        error_msg = build_compression_install_error_detail(classified_message)
+        if file_path not in loader._compression_error_files:
+            loader._compression_error_files.add(file_path)
+            _logger.warning(
+                "DICOM compression decode failed",
+                extra=safe_event_fields("dicom.decode", error=exc),
+            )
+    else:
+        error_msg = build_generic_load_error_message(classified_message, type(exc).__name__)
+    loader.failed_files.append((file_path, error_msg))
 
 # Default defer size: 250MB - files larger than this will defer pixel data loading
 # This balances fast initial load with responsive slice navigation
@@ -282,239 +437,67 @@ class DICOMLoader:
             filename = os.path.basename(file_path)
             file_start_time = time.time()
 
-            # Notify start of loading
-            if progress_callback:
-                progress_callback(f"Loading {filename}...", None, None)
-                # Process events to allow timer to start and UI to update
-                if _is_main_thread():
-                    QApplication.processEvents()
+            _notify_file_load_progress(progress_callback, f"Loading {filename}...")
 
-            # Validate file before attempting to load pixel data
             validation_start = time.time()
             is_valid, error_msg = self.validate_dicom_file(file_path)
             validation_time = time.time() - validation_start
 
             if not is_valid:
-                # `validate_dicom_file()` returns `Optional[str]`, but `failed_files` is
-                # typed as `List[Tuple[str, str]]`, so normalize `None` to a string.
-                error_msg_str = error_msg if error_msg is not None else "Unknown validation error"
                 _logger.warning(
                     "DICOM validation failed",
                     extra=safe_event_fields("dicom.validate"),
                 )
-                self.failed_files.append((file_path, error_msg_str))
+                self.failed_files.append((file_path, normalize_validation_error(error_msg)))
                 return None
 
-            # Check for cancellation after validation
             if self._cancelled:
                 return None
 
-            # Suppress excess padding warnings - these are informational and pydicom handles them automatically
-            # The warnings don't cause errors, but we suppress them to reduce noise
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*excess padding.*', category=UserWarning)
+                _process_events_if_main_thread()
+                dataset, read_time = _read_dicom_dataset(
+                    file_path, defer_size, filename, progress_callback
+                )
 
-                # Process events before blocking read operation to allow timer to fire
-                if _is_main_thread():
-                    QApplication.processEvents()
+            _annotate_structured_report(dataset)
+            compression_type = compression_label_from_dataset(dataset)
 
-                # Check file size if defer_size is specified
-                read_start = time.time()
-                if defer_size is not None:
-                    file_size = os.path.getsize(file_path)
-                    if file_size > defer_size:
-                        # Use defer_size parameter to defer pixel data loading
-                        file_size_mb = file_size / (1024 * 1024)
-                        defer_size_mb = defer_size / (1024 * 1024)
-                        # Notify that pixel data loading is being deferred
-                        if progress_callback:
-                            progress_callback(
-                                f"Deferring pixel data loading for {filename} ({file_size_mb:.1f} MB > {defer_size_mb:.0f} MB threshold)",
-                                None,
-                                None
-                            )
-                            if _is_main_thread():
-                                QApplication.processEvents()
-                        dataset = pydicom.dcmread(file_path, force=True, defer_size=defer_size)
-                    else:
-                        dataset = pydicom.dcmread(file_path, force=True)
-                else:
-                    # Attempt to read the file as DICOM
-                    dataset = pydicom.dcmread(file_path, force=True)
-                read_time = time.time() - read_start
+            pixel_load_time, should_abort = _finalize_multiframe_metadata(
+                self, dataset, file_path, filename, progress_callback
+            )
+            if should_abort:
+                return None
 
-            if is_structured_report_dataset(dataset):
-                dataset._no_pixel_reason = "structured_report"
-                dataset._structured_report_label = structured_report_storage_label(str(getattr(dataset, "SOPClassUID", "") or ""))
-
-            # Track compression info for debugging
-            compression_type = None
-            pixel_load_time = 0
-
-            # Check compression type (for all files, not just multi-frame)
-            if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
-                transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
-                # List of compressed transfer syntaxes
-                compressed_syntaxes = {
-                    '1.2.840.10008.1.2.4': 'RLE Lossless',
-                    '1.2.840.10008.1.2.4.50': 'JPEG Baseline',
-                    '1.2.840.10008.1.2.4.51': 'JPEG Extended',
-                    '1.2.840.10008.1.2.4.57': 'JPEG Lossless',
-                    '1.2.840.10008.1.2.4.70': 'JPEG Lossless',
-                    '1.2.840.10008.1.2.4.80': 'JPEG-LS Lossless',
-                    '1.2.840.10008.1.2.4.81': 'JPEG-LS Lossy',
-                    '1.2.840.10008.1.2.4.90': 'JPEG 2000 Lossless',
-                    '1.2.840.10008.1.2.4.91': 'JPEG 2000',
-                }
-                if transfer_syntax in compressed_syntaxes:
-                    compression_type = compressed_syntaxes[transfer_syntax]
-
-            # Detect multi-frame files (for informational purposes)
-            # The actual frame splitting will be done in the organizer
-            if is_multiframe(dataset):
-                num_frames = get_frame_count(dataset)
-                dataset._num_frames = num_frames
-                dataset._is_multiframe = True
-
-                # Debug logging for multi-frame files (only if verbose)
-                # Commented out to reduce noise - uncomment if needed for debugging
-                # print(f"\n=== MULTI-FRAME DEBUG ===")
-                # print(f"File: {os.path.basename(file_path)}")
-                # print(f"Frames: {num_frames}")
-                # print(f"Dimensions: {getattr(dataset, 'Rows', 'N/A')} x {getattr(dataset, 'Columns', 'N/A')}")
-                # print(f"Bits Allocated: {getattr(dataset, 'BitsAllocated', 'N/A')}")
-                # print(f"Transfer Syntax: {transfer_syntax}")
-
-                # For Enhanced Multi-frame DICOMs, pre-load pixel array to ensure correct 3D shape
-                # This is necessary because Enhanced Multi-frame files may not expose pixel data
-                # correctly if accessed later after the dataset has been manipulated
-                if hasattr(dataset, 'PerFrameFunctionalGroupsSequence'):
-                    # Notify about frame loading
-                    if progress_callback:
-                        progress_callback(f"Loading {num_frames} frames from {filename}...", None, num_frames)
-                        # Process events before blocking operation to allow timer to fire
-                        if _is_main_thread():
-                            QApplication.processEvents()
-
-                    # Check for cancellation before expensive pixel array loading
-                    if self._cancelled:
-                        return None
-
-                    # Check estimated memory requirement before loading
-                    rows = int(getattr(dataset, 'Rows', 512))
-                    cols = int(getattr(dataset, 'Columns', 512))
-                    bits_allocated = int(getattr(dataset, 'BitsAllocated', 16))
-                    bytes_per_pixel = bits_allocated // 8
-                    samples_per_pixel = int(getattr(dataset, 'SamplesPerPixel', 1))
-                    estimated_memory_mb = (num_frames * rows * cols * samples_per_pixel * bytes_per_pixel) / (1024 * 1024)
-
-                    # Skip pre-loading if estimated size is very large (>200MB) to avoid memory pressure
-                    # The pixel array will be loaded on-demand later when needed
-                    if estimated_memory_mb > 200:
-                        # Don't pre-load, but mark as multi-frame
-                        dataset._num_frames = num_frames
-                        dataset._is_multiframe = True
-                    else:
-                        try:
-                            pixel_load_start = time.time()
-                            pixel_array = dataset.pixel_array
-                            pixel_load_time = time.time() - pixel_load_start
-                            # Cache the pixel array in the dataset for later access
-                            dataset._cached_pixel_array = pixel_array
-                            # Notify completion
-                            if progress_callback:
-                                progress_callback(f"Loaded {num_frames} frames from {filename}", num_frames, num_frames)
-                        except Exception as e:
-                            error_msg = str(e)
-                            is_compression_error, classified_message = _classify_pixel_data_error(
-                                dataset, error_msg
-                            )
-
-                            if is_compression_error:
-                                error_detail = (
-                                    f"{classified_message} "
-                                    f"Install optional dependencies: pip install pylibjpeg pyjpegls"
-                                )
-                                # Only show error message once per file
-                                if file_path not in self._compression_error_files:
-                                    self._compression_error_files.add(file_path)
-                                    _logger.warning(
-                                        "DICOM compression decode failed",
-                                        extra=safe_event_fields("dicom.decode", error=e),
-                                    )
-                                # Add to failed files with descriptive message
-                                self.failed_files.append((file_path, error_detail))
-                                return None
-                            else:
-                                _logger.warning(
-                                    "DICOM pixel pre-load failed",
-                                    extra=safe_event_fields("dicom.pixel_preload", error=e),
-                                )
-
-            else:
-                dataset._num_frames = 1
-                dataset._is_multiframe = False
-
-            # Log timing breakdown for slow files
-            total_time = time.time() - file_start_time
-            if total_time > 0.5:  # Log breakdown for files taking > 0.5s
-                timing_parts = [f"Total {total_time:.3f}s"]
-                if validation_time > 0.05:
-                    timing_parts.append(f"validation: {validation_time:.3f}s")
-                if read_time > 0.05:
-                    timing_parts.append(f"read: {read_time:.3f}s")
-                if pixel_load_time > 0.05:
-                    timing_parts.append(f"pixel_load: {pixel_load_time:.3f}s")
-                # Always show compression type for slow files to help diagnose
-                if compression_type:
-                    timing_parts.append(f"compressed: {compression_type}")
-                else:
-                    timing_parts.append("uncompressed")
-                # print(f"[LOAD DEBUG] {filename}: {' | '.join(timing_parts)}")
+            build_slow_load_timing_parts(
+                time.time() - file_start_time,
+                validation_time,
+                read_time,
+                pixel_load_time,
+                compression_type,
+            )
+            # timing_parts retained for optional debug logging:
+            # print(f"[LOAD DEBUG] {filename}: {' | '.join(timing_parts)}")
 
             return dataset
 
         except MemoryError as e:
-            error_msg = (
-                f"Memory error: File too large to load. "
-                f"Try closing other applications or use a system with more memory. "
-                f"Error: {e!s}"
-            )
-            self.failed_files.append((file_path, error_msg))
+            self.failed_files.append((file_path, build_memory_error_message(e)))
             return None
         except InvalidDicomError as e:
             self.failed_files.append((file_path, f"Invalid DICOM file: {e!s}"))
             return None
         except OSError as e:
-            # Handle file system errors (file not found, permission denied, etc.)
             self.failed_files.append((file_path, f"File system error: {e!s}"))
             return None
         except Exception as e:
-            error_msg_str = str(e)
-            is_compression_error, classified_message = _classify_pixel_data_error(
+            _record_load_file_generic_exception(
+                self,
+                file_path,
                 dataset if 'dataset' in locals() else None,
-                error_msg_str,
+                e,
             )
-
-            if is_compression_error:
-                error_msg = (
-                    f"{classified_message} "
-                    f"Install optional dependencies: pip install pylibjpeg pyjpegls"
-                )
-                # Only show error message once per file
-                if file_path not in self._compression_error_files:
-                    self._compression_error_files.add(file_path)
-                    _logger.warning(
-                        "DICOM compression decode failed",
-                        extra=safe_event_fields("dicom.decode", error=e),
-                    )
-            else:
-                error_msg = f"Error reading file: {classified_message}"
-            # Include error type for debugging
-            error_type = type(e).__name__
-            if error_type not in error_msg:
-                error_msg = f"{error_type}: {error_msg}"
-            self.failed_files.append((file_path, error_msg))
             return None
 
     def load_files(self, file_paths: list[str], defer_size: int | None = None,

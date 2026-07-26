@@ -37,7 +37,6 @@ Callback interface (what the app must provide):
 from typing import Any
 
 from pydicom.dataset import Dataset
-from PySide6.QtCore import QTimer
 
 from core.file_path_actions import (
     get_current_slice_file_path as _fpa_get_current_slice_file_path,
@@ -98,10 +97,11 @@ from gui.file_series_additive_load import (
     show_additive_load_status,
     show_duplicate_skip_toast,
 )
-from utils.debug_flags import DEBUG_LOADING, DEBUG_SERIES
-from utils.dicom_utils import get_composite_series_key
+from gui.file_series_first_slice_load import (
+    apply_first_slice_load,
+    pre_first_slice_reset,
+)
 from utils.perf_timer import perf_mark, perf_timer
-from utils.privacy.console import print_redacted
 
 # Human-readable window labels for error messages (1-based).
 _WINDOW_LABELS = ["Window 1", "Window 2", "Window 3", "Window 4"]
@@ -205,219 +205,12 @@ class FileSeriesLoadingCoordinator:
         perf_mark("first_paint.handle_load_first_slice.start", studies=len(studies))
 
         with perf_timer("first_paint.pre_first_slice_reset"):
-            # Disable fusion and clear status for all subwindows when opening new files
-            app._reset_fusion_for_all_subwindows()
-
-            # Clear edited tags for previous dataset if it exists
-            if app.current_dataset is not None and app.tag_edit_history:
-                app.tag_edit_history.clear_edited_tags(app.current_dataset)
-            # Clear all subwindows before loading new files
-            subwindows = app.multi_window_layout.get_all_subwindows()
-            for subwindow in subwindows:
-                if subwindow and subwindow.image_viewer:
-                    subwindow.image_viewer.scene.clear()
-                    subwindow.image_viewer.image_item = None
-                    subwindow.image_viewer.viewport().update()
-
-            # Clear overlay items for all subwindows
-            for idx in app.subwindow_managers:
-                managers = app.subwindow_managers[idx]
-                overlay_manager = managers.get('overlay_manager')
-                if overlay_manager:
-                    subwindows = app.multi_window_layout.get_all_subwindows()
-                    if idx < len(subwindows) and subwindows[idx] and subwindows[idx].image_viewer:
-                        scene = subwindows[idx].image_viewer.scene
-                        overlay_manager.clear_overlay_items(scene)
-                    else:
-                        overlay_manager.overlay_items.clear()
-
-            # Reset projection state when new files are opened
-            app.slice_display_manager.reset_projection_state()
-            app.intensity_projection_controls_widget.set_enabled(False)
-            app.intensity_projection_controls_widget.set_projection_type("aip")
-            app.intensity_projection_controls_widget.set_slice_count(4)
-
-            if app.dialog_coordinator:
-                app.dialog_coordinator.clear_tag_viewer_filter()
+            pre_first_slice_reset(app)
 
         with perf_timer("first_paint.load_first_slice_info"):
             first_slice_info = app.file_operations_handler.load_first_slice(studies)
         if first_slice_info:
-            app.current_studies = studies
-            app._schedule_tag_export_union_rebuild()
-            app.current_study_uid = first_slice_info['study_uid']
-            app.current_series_uid = first_slice_info['series_uid']
-            app.current_slice_index = first_slice_info['slice_index']
-
-            focused_subwindow = app.multi_window_layout.get_focused_subwindow()
-            if focused_subwindow:
-                subwindows = app.multi_window_layout.get_all_subwindows()
-                focused_idx = subwindows.index(focused_subwindow) if focused_subwindow in subwindows else -1
-                if focused_idx >= 0 and focused_idx in app.subwindow_managers:
-                    fusion_coordinator = app.subwindow_managers[focused_idx].get('fusion_coordinator')
-                    if fusion_coordinator:
-                        fusion_coordinator.update_fusion_controls_series_list()
-
-            # Clear stale subwindow data that references series not in current_studies
-            stale_count = 0
-            for idx in list(app.subwindow_data.keys()):
-                data = app.subwindow_data[idx]
-                study_uid = data.get('current_study_uid', '')
-                series_uid = data.get('current_series_uid', '')
-                if study_uid and series_uid:
-                    if (study_uid not in app.current_studies or
-                        series_uid not in app.current_studies.get(study_uid, {})):
-                        app.subwindow_data[idx] = {
-                            'current_dataset': None,
-                            'current_slice_index': 0,
-                            'current_series_uid': '',
-                            'current_study_uid': '',
-                            'current_datasets': []
-                        }
-                        stale_count += 1
-            if stale_count > 0 and DEBUG_LOADING and DEBUG_SERIES:
-
-                print(f"[DEBUG] Cleared stale data from {stale_count} subwindow(s)")
-
-            # Load Presentation States and Key Objects into annotation manager
-            all_presentation_states = {}
-            all_key_objects = {}
-            for study_uid in studies:
-                presentation_states = app.dicom_organizer.get_presentation_states(study_uid)
-                key_objects = app.dicom_organizer.get_key_objects(study_uid)
-                if presentation_states:
-                    all_presentation_states[study_uid] = presentation_states
-                if key_objects:
-                    all_key_objects[study_uid] = key_objects
-            if all_presentation_states:
-                app.annotation_manager.load_presentation_states(all_presentation_states)
-            if all_key_objects:
-                app.annotation_manager.load_key_objects(all_key_objects)
-
-            # Always load first series to subwindow 0 and make it focused
-            subwindow_0 = app.multi_window_layout.get_subwindow(0)
-            if subwindow_0:
-                app.multi_window_layout.set_focused_subwindow(subwindow_0)
-                app.focused_subwindow_index = 0
-
-            if 0 not in app.subwindow_managers:
-                app._ensure_all_subwindows_have_managers()
-
-            managers_0 = app.subwindow_managers[0]
-            slice_display_manager_0 = managers_0.get('slice_display_manager')
-            view_state_manager_0 = managers_0.get('view_state_manager')
-
-            if view_state_manager_0:
-                view_state_manager_0.reset_window_level_state()
-                view_state_manager_0.reset_series_tracking()
-
-            app.slice_navigator.set_total_slices(first_slice_info['total_slices'])
-            app.slice_navigator.set_current_slice(0)
-
-            if slice_display_manager_0:
-                with perf_timer("first_paint.display_slice"):
-                    slice_display_manager_0.display_slice(
-                        first_slice_info['dataset'],
-                        app.current_studies,
-                        app.current_study_uid,
-                        app.current_series_uid,
-                        app.current_slice_index
-                    )
-                image_item_present = bool(
-                    getattr(
-                        getattr(slice_display_manager_0, "image_viewer", None),
-                        "image_item",
-                        None,
-                    )
-                )
-                perf_mark(
-                    "first_paint.display_slice.returned",
-                    image_item_present=image_item_present,
-                )
-
-            app.current_dataset = first_slice_info['dataset']
-
-            focused_idx = 0
-            if focused_idx not in app.subwindow_data:
-                app.subwindow_data[focused_idx] = {}
-
-            displayed_dataset = first_slice_info['dataset']
-            extracted_series_uid = get_composite_series_key(displayed_dataset)
-            extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
-
-            if extracted_series_uid != app.current_series_uid and DEBUG_SERIES:
-
-                print("[DEBUG] Syncing subwindow_data after initial load: MISMATCH detected!")
-            if extracted_study_uid != app.current_study_uid and DEBUG_SERIES:
-
-                print_redacted(f"[DEBUG]   Extracted study_uid from dataset: {extracted_study_uid}")
-
-            app.subwindow_data[focused_idx]['current_dataset'] = displayed_dataset
-            app.subwindow_data[focused_idx]['current_slice_index'] = app.current_slice_index
-            app.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
-            app.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
-
-            app.current_series_uid = extracted_series_uid
-            app.current_study_uid = extracted_study_uid
-
-            if extracted_study_uid in studies and extracted_series_uid in studies[extracted_study_uid]:
-                series_datasets = studies[extracted_study_uid][extracted_series_uid]
-                app.subwindow_data[focused_idx]['current_datasets'] = series_datasets
-            else:
-                series_datasets = studies[app.current_study_uid][app.current_series_uid]
-                app.subwindow_data[focused_idx]['current_datasets'] = series_datasets
-
-            if slice_display_manager_0:
-                slice_display_manager_0.set_current_data_context(
-                    app.current_studies,
-                    extracted_study_uid,
-                    extracted_series_uid,
-                    app.current_slice_index
-                )
-
-            if view_state_manager_0:
-                view_state_manager_0.current_dataset = first_slice_info['dataset']
-
-            app.view_state_manager = view_state_manager_0
-            app.slice_display_manager = slice_display_manager_0
-            if 0 in app.subwindow_managers:
-                managers_0 = app.subwindow_managers[0]
-                app.roi_coordinator = managers_0.get('roi_coordinator')
-
-            app._disconnect_focused_subwindow_signals()
-            app._connect_focused_subwindow_signals()
-
-            with perf_timer("first_paint.metadata_cine_history_refresh"):
-                app.metadata_panel.clear_filter()
-                app.cine_app_facade.update_cine_player_context()
-
-                if app.tag_edit_history:
-                    app.tag_edit_history.clear_history(app.current_dataset)
-                app._update_undo_redo_state()
-
-            QTimer.singleShot(100, app.view_state_manager.store_initial_view_state)
-
-            with perf_timer("first_paint.navigator.update_series_list"):
-                app.series_navigator.update_series_list(
-                    app.current_studies,
-                    app.current_study_uid,
-                    app.current_series_uid
-                )
-            with perf_timer("first_paint.navigator.refresh_state"):
-                app._refresh_series_navigator_state()
-            with perf_timer("first_paint.navigator.set_subwindow_assignments"):
-                app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
-
-            navigator_was_hidden = not app.main_window.series_navigator_visible
-            if navigator_was_hidden:
-                app.main_window.toggle_series_navigator()
-            if navigator_was_hidden:
-                QTimer.singleShot(50, lambda: app.image_viewer.fit_to_view(center_image=True))
-
-            # Apply slice location lines if enabled. Defer so display/layout has settled.
-            app._slice_sync_coordinator.invalidate_cache()
-            QTimer.singleShot(100, app._slice_location_line_coordinator.refresh_all)
-            QTimer.singleShot(0, lambda: perf_mark("first_paint.event_loop_returned"))
+            apply_first_slice_load(app, studies, first_slice_info)
 
     def handle_additive_load(self, merge_result: Any) -> None:
         """

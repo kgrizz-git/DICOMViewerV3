@@ -8,6 +8,20 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on single-file DICOM loading: moved
+  compression-label lookup, defer/multiframe messages, memory-estimate pre-load,
+  slow-file timing assembly, and exception message builders into
+  `dicom_loader_file`; `DICOMLoader.load_file` now orchestrates module-level
+  read/annotate/multiframe helpers. Added
+  `tests/core/test_dicom_loader_load_file_sonar_slice.py`. Target finding was
+  cognitive complexity 88 (radon CCN 39 on `load_file`).
+- Completed a Sonar `python:S3776` slice on first-slice (full replace) load:
+  moved pre-reset, stale subwindow cleanup, PS/KO load, subwindow-0 display,
+  navigator reveal/fit, and deferred paint side effects into
+  `src/gui/file_series_first_slice_load.py`;
+  `FileSeriesLoadingCoordinator.handle_load_first_slice` now orchestrates only.
+  Added `tests/gui/test_file_series_first_slice_load_sonar_slice.py`. Target finding
+  was cognitive complexity 87.
 - Completed a Sonar `python:S3776` slice on series-transition window/level
   resolution: extracted new-series stored/fallback/cache helpers in
   `slice_window_level_resolver` so `resolve_window_level_for_series_transition`

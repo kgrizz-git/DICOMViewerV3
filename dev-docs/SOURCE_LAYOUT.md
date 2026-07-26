@@ -39,6 +39,7 @@ src/
 │   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
 │   ├── slice_window_level_resolver.py # Resolve effective W/L for a slice (dataset tags + user overrides)
 │   ├── dicom_window_level.py          # DICOM window/level tag parsing and display-range math
+│   ├── dicom_loader_file.py           # Pure single-file DICOM load helpers (compression labels, defer messages, multi-frame pre-load; S3776 slice)
 │   ├── wl_preset_catalog.py           # Built-in and user W/L preset catalog (modality-aware labels)
 │   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
 │   ├── slice_geometry.py              # Pure 3-D slice-plane/stack math (patient mm); shared by sync and location lines
@@ -58,7 +59,7 @@ src/
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, overlay_position_updater (viewport-anchored zoom/pan reposition), file_series_additive_load (additive merge UI/eviction helpers), series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, overlay_position_updater (viewport-anchored zoom/pan reposition), file_series_additive_load (additive merge UI/eviction helpers), file_series_first_slice_load (full-replace first-slice load helpers), series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
 │   ├── slice_location_line_manager.py   # Per-pane QGraphics line items for slice-location reference lines
 │   ├── slice_location_line_coordinator.py  # App-level refresh across panes; reads ``SliceSyncConfigMixin`` visibility flags
 │   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
