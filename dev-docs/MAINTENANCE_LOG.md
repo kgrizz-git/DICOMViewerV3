@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on additive file load:
+  moved eviction, PS/KO load, appended-series refresh, empty-pane auto-assign,
+  navigator/fusion/status side effects into
+  `src/gui/file_series_additive_load.py`;
+  `FileSeriesLoadingCoordinator.handle_additive_load` now orchestrates only.
+  Added `tests/gui/test_file_series_additive_load_sonar_slice.py`. Target finding
+  was cognitive complexity 127.
 - Completed a Sonar `python:S3776` slice on `FrameDatasetWrapper.__init__`:
   extracted nested functional-group helpers for plane geometry, pixel measures,
   rescale, and VOI LUT into focused functions in `multiframe_handler`. Added
