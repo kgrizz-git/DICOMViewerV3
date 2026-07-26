@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on ROI statistics overlays: moved
+  text formatting, font resolution, item ensure/flags, scene position, and
+  visibility sync into `src/tools/roi_statistics_overlay.py`;
+  `ROIManager.create_statistics_overlay` / position update now orchestrate
+  those helpers. Added `tests/tools/test_roi_statistics_overlay_sonar_slice.py`.
+  Target finding was cognitive complexity 122.
 - Completed a Sonar `python:S3776` slice on subwindow layout signal wiring:
   extracted `_disconnect_ignore_missing` / tracked-slot pop helpers and
   fixed signal-pair tables so `connect_subwindow_signals` orchestrates only.
