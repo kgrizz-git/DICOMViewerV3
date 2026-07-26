@@ -226,7 +226,7 @@
       "install_reference": "dev-docs/CONTRIBUTING.md",
       "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
       "enforcement": ["privacy-gated CI blocking"],
-      "network_policy": "SonarQube Cloud upload of src only after privacy checks on trusted PRs and main/develop pushes; Automatic Analysis disabled; no test, coverage, artifact, or local-data upload",
+      "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; Automatic Analysis disabled; no PR, test, coverage, artifact, or local-data upload",
       "entrypoints": [".github/workflows/sonarqube-cloud-main.yml"],
       "tracked_configuration": ["sonar-project.properties"]
     },

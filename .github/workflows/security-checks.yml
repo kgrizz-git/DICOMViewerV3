@@ -1,7 +1,7 @@
 name: Debug Flags & Security Checks
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
       - develop
@@ -50,7 +50,7 @@ jobs:
           fi
 
       - name: Comment on PR if flags found
-        if: failure() && github.event_name == 'pull_request_target'
+        if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
@@ -80,7 +80,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Resolve commit range for TruffleHog
@@ -94,7 +93,7 @@ jobs:
           SKIP_REASON=""
           TREE_SCAN="false"
 
-          if [ "${{ github.event_name }}" = "pull_request_target" ]; then
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           elif [ "${{ github.event_name }}" = "push" ]; then
@@ -174,17 +173,9 @@ jobs:
     # diff: that catches artifacts committed before a .gitignore rule existed --
     # exactly how three pytest temp dirs holding a real recent_files list survived.
     steps:
-      - name: Checkout trusted privacy policy
+      - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
-          path: .trusted-policy
-          persist-credentials: false
-      - name: Checkout candidate source
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-          path: candidate
           persist-credentials: false
 
       - name: Set up Python
@@ -199,25 +190,16 @@ jobs:
         run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5" "pypdf>=6.14.2,<7"
 
       - name: Scan tracked files for PHI and runtime artifacts
-        run: python ../.trusted-policy/scripts/check_no_phi_artifacts.py
-        working-directory: candidate
+        run: python scripts/check_no_phi_artifacts.py
 
   privacy-output-scan:
     name: Blocking Privacy Output Scan
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout trusted privacy policy
+      - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
-          path: .trusted-policy
-          persist-credentials: false
-      - name: Checkout candidate source
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-          path: candidate
           persist-credentials: false
 
       - name: Set up Python
@@ -226,13 +208,12 @@ jobs:
           python-version: "3.12"
 
       - name: Block unsafe output sinks without echoing matched values
-        run: python ../.trusted-policy/scripts/git_hook_privacy_checks.py --all --critical
-        working-directory: candidate
+        run: python scripts/git_hook_privacy_checks.py --all --critical
 
   request-coderabbit-review:
     name: Request CodeRabbit review after privacy gate
     needs: [no-secrets-scan, phi-artifact-scan, privacy-output-scan]
-    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

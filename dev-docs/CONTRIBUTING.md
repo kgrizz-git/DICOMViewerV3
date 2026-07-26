@@ -59,8 +59,8 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
 - **`actions/upload-artifact` v6+** and related actions may require **self-hosted runners ≥ 2.327.1** (Node 24); GitHub-hosted **`ubuntu-latest`** satisfies this.
 - If **`.github/dependabot.yml`** lists **`labels:`**, those labels must exist on the repo (e.g. `dependencies`, `github-actions`) or Dependabot will warn on PRs.
 - **External analysis uploads are disabled by repository policy,** except for
-  the approved privacy-gated SonarQube Cloud CI scan of `src/` on trusted PRs
-  and pushes to `main`/`develop`.
+  the approved privacy-gated SonarQube Cloud CI scan of `src/` after protected
+  pushes to `main`/`develop`.
   It uses the repository `SONAR_TOKEN` secret and root
   [`sonar-project.properties`](../sonar-project.properties). SonarQube Cloud
   Automatic Analysis must remain disabled. Coverage is printed in CI logs but
