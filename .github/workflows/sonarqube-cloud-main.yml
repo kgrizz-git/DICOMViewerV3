@@ -4,8 +4,6 @@ name: SonarQube Cloud (after privacy gate)
 # root sonar-project.properties file; tests, coverage, artifacts, and local
 # data are excluded and are never uploaded.
 on:
-  pull_request:
-    branches: [main, develop]
   push:
     branches: [main, develop]
 
@@ -21,7 +19,8 @@ jobs:
     name: Privacy gate for external analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -34,10 +33,9 @@ jobs:
   analyze-main-source:
     name: Analyze src/ after privacy gate
     needs: privacy-gate
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main
+      - name: Checkout protected branch source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
