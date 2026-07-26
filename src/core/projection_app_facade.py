@@ -32,6 +32,192 @@ from utils.privacy.console import print_redacted
 _log = logging.getLogger(__name__)
 
 
+def _debug_projection(message: str) -> None:
+    """Emit a projection debug line when ``DEBUG_PROJECTION`` is enabled."""
+    if DEBUG_PROJECTION:
+        print(f"[DEBUG-PROJECTION] {message}")
+
+
+def _debug_roi_coordinator_manager_binding(app: Any) -> None:
+    """
+    Debug-only: verify the ROI coordinator projection callback closes over the
+    same ``slice_display_manager`` instance as the app.
+    """
+    if not DEBUG_PROJECTION:
+        return
+    if not hasattr(app, "roi_coordinator") or app.roi_coordinator is None:
+        return
+    callback = app.roi_coordinator.get_projection_enabled
+    if callback is None:
+        return
+
+    try:
+        callback_result = callback()
+        _debug_projection(
+            f"_on_projection_enabled_changed: ROI coordinator callback returns: {callback_result}"
+        )
+
+        closure = getattr(callback, "__closure__", None)
+        if not closure:
+            return
+
+        closure_vars = [cell.cell_contents for cell in closure]
+        _debug_projection(
+            "_on_projection_enabled_changed: ROI coordinator callback closure vars: "
+            f"{[type(v).__name__ for v in closure_vars]}"
+        )
+
+        for var in closure_vars:
+            if not (isinstance(var, dict) and "slice_display_manager" in var):
+                continue
+            manager_from_closure = var["slice_display_manager"]
+            same = manager_from_closure is app.slice_display_manager
+            _debug_projection(
+                "_on_projection_enabled_changed: Manager from closure ID: "
+                f"{id(manager_from_closure)}, "
+                f"self.slice_display_manager ID: {id(app.slice_display_manager)}, "
+                f"same object: {same}, "
+                f"closure manager projection_enabled: {manager_from_closure.projection_enabled}, "
+                f"self.slice_display_manager projection_enabled: "
+                f"{app.slice_display_manager.projection_enabled}"
+            )
+            if not same:
+                _debug_projection(
+                    "_on_projection_enabled_changed: WARNING - Manager objects are different! "
+                    "This could cause synchronization issues."
+                )
+            break
+    except Exception as e:
+        print_redacted(
+            f"[DEBUG-PROJECTION] _on_projection_enabled_changed: "
+            f"Error checking ROI coordinator callback: {e}"
+        )
+        _log.debug("%s", sanitized_format_exc())
+
+
+def _apply_projection_enabled_state(app: Any, enabled: bool) -> None:
+    """
+    Sync manager/widget for an enabled-changed signal.
+
+    During projection reset, ignore mismatched signals and force the widget to
+    match the manager; otherwise update the manager (and widget if needed).
+    """
+    current_widget_state = app.intensity_projection_controls_widget.get_enabled()
+    current_manager_state = app.slice_display_manager.projection_enabled
+    checkbox_visual_state = app.intensity_projection_controls_widget.enable_checkbox.isChecked()
+    _debug_projection(
+        f"_on_projection_enabled_changed: Current widget state={current_widget_state}, "
+        f"checkbox visual state={checkbox_visual_state}, manager state={current_manager_state}, "
+        f"signal enabled={enabled}"
+    )
+
+    if app._resetting_projection_state and current_manager_state != enabled:
+        _debug_projection(
+            f"_on_projection_enabled_changed: Reset in progress: ignoring signal ({enabled}), "
+            f"syncing widget to manager ({current_manager_state})"
+        )
+        app.intensity_projection_controls_widget.set_enabled(current_manager_state)
+        return
+
+    _debug_projection(
+        f"_on_projection_enabled_changed: Updating manager state to match signal ({enabled})"
+    )
+    app.slice_display_manager.set_projection_enabled(enabled)
+    updated_state = app.slice_display_manager.projection_enabled
+    _debug_projection(
+        f"_on_projection_enabled_changed: Manager state after update: {updated_state}, "
+        f"manager object ID: {id(app.slice_display_manager)}"
+    )
+    _debug_roi_coordinator_manager_binding(app)
+
+    if current_widget_state != enabled:
+        _debug_projection(
+            f"_on_projection_enabled_changed: Widget state ({current_widget_state}) != "
+            f"signal ({enabled}), syncing widget"
+        )
+        app.intensity_projection_controls_widget.set_enabled(enabled)
+
+
+def _warn_if_roi_projection_callback_mismatches(app: Any) -> None:
+    """Debug-only warning when ROI callback state disagrees with the manager."""
+    if app.current_dataset is None:
+        return
+    if not hasattr(app, "roi_coordinator") or app.roi_coordinator is None:
+        return
+    callback = app.roi_coordinator.get_projection_enabled
+    if callback is None:
+        return
+    callback_state = callback()
+    if callback_state != app.slice_display_manager.projection_enabled:
+        _debug_projection(
+            "_on_projection_enabled_changed: WARNING - Callback state mismatch! "
+            f"Callback={callback_state}, Manager={app.slice_display_manager.projection_enabled}"
+        )
+
+
+def _refresh_mpr_combine_after_enabled_change(app: Any, focused_idx: int) -> bool:
+    """
+    Refresh MPR combine state for the focused pane when applicable.
+
+    Returns:
+        True when the MPR path handled the refresh (caller should not redisplay
+        the regular current dataset), including the case where subwindow data is
+        missing but the focused pane is still an MPR view.
+    """
+    if not hasattr(app, "_mpr_controller"):
+        return False
+    if not app._mpr_controller.is_mpr(focused_idx):
+        return False
+    if app._resetting_projection_state:
+        return False
+
+    mp_data = app.subwindow_data.get(focused_idx)
+    if mp_data is not None:
+        w = app.intensity_projection_controls_widget
+        mp_data["mpr_combine_enabled"] = w.get_enabled()
+        mp_data["mpr_combine_mode"] = w.get_projection_type()
+        mp_data["mpr_combine_slice_count"] = w.get_slice_count()
+        app._mpr_controller.display_mpr_slice(
+            focused_idx, mp_data.get("mpr_slice_index", 0)
+        )
+        app._slice_location_line_coordinator.refresh_all()
+
+    selected_roi = app.roi_manager.get_selected_roi()
+    if selected_roi is not None:
+        _debug_projection(
+            "_on_projection_enabled_changed: Selected ROI after MPR combine refresh"
+        )
+    return True
+
+
+def _redisplay_current_dataset_after_projection_change(app: Any) -> None:
+    """Redisplay the focused non-MPR dataset after a projection toggle."""
+    if app.current_dataset is None:
+        _debug_projection(
+            "_on_projection_enabled_changed: current_dataset is None, cannot redisplay"
+        )
+        return
+
+    app._display_slice(app.current_dataset)
+    app._slice_location_line_coordinator.refresh_all()
+    selected_roi = app.roi_manager.get_selected_roi()
+    if selected_roi is not None:
+        _debug_projection(
+            "_on_projection_enabled_changed: Selected ROI exists, statistics should be "
+            "updated by _display_rois_for_slice"
+        )
+
+
+def _refresh_display_after_projection_enabled_change(app: Any) -> None:
+    """Histogram update plus MPR combine refresh or regular slice redisplay."""
+    _warn_if_roi_projection_callback_mismatches(app)
+    focused_idx = app.focused_subwindow_index
+    app.dialog_coordinator.update_histogram_for_subwindow(focused_idx)
+    if _refresh_mpr_combine_after_enabled_change(app, focused_idx):
+        return
+    _redisplay_current_dataset_after_projection_change(app)
+
+
 class ProjectionAppFacade:
     """Cohesive projection / combine-slices behavior cut from ``DICOMViewerApp``."""
 
@@ -71,157 +257,12 @@ class ProjectionAppFacade:
             enabled: True if projection mode enabled, False otherwise
         """
         app = self._app
-        if DEBUG_PROJECTION:
-            print(
-                f"[DEBUG-PROJECTION] _on_projection_enabled_changed: enabled={enabled}, "
-                f"_resetting_projection_state={app._resetting_projection_state}"
-            )
-
-        # Check current states BEFORE updating manager
-        current_widget_state = app.intensity_projection_controls_widget.get_enabled()
-        current_manager_state = app.slice_display_manager.projection_enabled
-        checkbox_visual_state = app.intensity_projection_controls_widget.enable_checkbox.isChecked()
-        if DEBUG_PROJECTION:
-            print(
-                f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Current widget state={current_widget_state}, "
-                f"checkbox visual state={checkbox_visual_state}, manager state={current_manager_state}, signal enabled={enabled}"
-            )
-
-        # If we're resetting and signal doesn't match manager state, sync widget to manager (ignore signal)
-        if app._resetting_projection_state and current_manager_state != enabled:
-            if DEBUG_PROJECTION:
-                print(
-                    f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Reset in progress: ignoring signal ({enabled}), "
-                    f"syncing widget to manager ({current_manager_state})"
-                )
-            app.intensity_projection_controls_widget.set_enabled(current_manager_state)
-        else:
-            # Normal case: update manager state to match the signal (user's intent)
-            if DEBUG_PROJECTION:
-                print(
-                    f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Updating manager state to match signal ({enabled})"
-                )
-            app.slice_display_manager.set_projection_enabled(enabled)
-
-            # Verify the update took effect
-            updated_state = app.slice_display_manager.projection_enabled
-            if DEBUG_PROJECTION:
-                print(
-                    f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Manager state after update: {updated_state}, "
-                    f"manager object ID: {id(app.slice_display_manager)}"
-                )
-
-            # Verify ROI coordinator is using the same manager
-            if hasattr(app, "roi_coordinator") and app.roi_coordinator is not None:
-                if app.roi_coordinator.get_projection_enabled is not None:
-                    try:
-                        # Check what the callback returns
-                        callback_result = app.roi_coordinator.get_projection_enabled()
-                        if DEBUG_PROJECTION:
-                            print(
-                                f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback returns: {callback_result}"
-                            )
-
-                        # Try to inspect the closure to see what manager it references
-                        if (
-                            hasattr(app.roi_coordinator.get_projection_enabled, "__closure__")
-                            and app.roi_coordinator.get_projection_enabled.__closure__
-                        ):
-                            # The closure should contain the managers dict
-                            closure_vars = [
-                                cell.cell_contents
-                                for cell in app.roi_coordinator.get_projection_enabled.__closure__
-                            ]
-                            if DEBUG_PROJECTION:
-                                print(
-                                    f"[DEBUG-PROJECTION] _on_projection_enabled_changed: ROI coordinator callback closure vars: {[type(v).__name__ for v in closure_vars]}"
-                                )
-
-                            # Check if the manager in the closure is the same as app.slice_display_manager
-                            for var in closure_vars:
-                                if isinstance(var, dict) and "slice_display_manager" in var:
-                                    manager_from_closure = var["slice_display_manager"]
-                                    if DEBUG_PROJECTION:
-                                        print(
-                                            f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Manager from closure ID: {id(manager_from_closure)}, "
-                                            f"self.slice_display_manager ID: {id(app.slice_display_manager)}, "
-                                            f"same object: {manager_from_closure is app.slice_display_manager}, "
-                                            f"closure manager projection_enabled: {manager_from_closure.projection_enabled}, "
-                                            f"self.slice_display_manager projection_enabled: {app.slice_display_manager.projection_enabled}"
-                                        )
-                                    if manager_from_closure is not app.slice_display_manager:
-                                        if DEBUG_PROJECTION:
-                                            print(
-                                                "[DEBUG-PROJECTION] _on_projection_enabled_changed: WARNING - Manager objects are different! "
-                                                "This could cause synchronization issues."
-                                            )
-                                    break
-                    except Exception as e:
-                        if DEBUG_PROJECTION:
-                            print_redacted(
-                                f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Error checking ROI coordinator callback: {e}"
-                            )
-                            _log.debug("%s", sanitized_format_exc())
-
-            # Widget state should already match signal, but verify and sync if needed
-            if current_widget_state != enabled:
-                if DEBUG_PROJECTION:
-                    print(
-                        f"[DEBUG-PROJECTION] _on_projection_enabled_changed: Widget state ({current_widget_state}) != signal ({enabled}), syncing widget"
-                    )
-                app.intensity_projection_controls_widget.set_enabled(enabled)
-
-        # Redisplay current slice with new projection state
-        if app.current_dataset is not None:
-            if hasattr(app, "roi_coordinator") and app.roi_coordinator is not None:
-                if app.roi_coordinator.get_projection_enabled is not None:
-                    callback_state = app.roi_coordinator.get_projection_enabled()
-                    if callback_state != app.slice_display_manager.projection_enabled:
-                        if DEBUG_PROJECTION:
-                            print(
-                                f"[DEBUG-PROJECTION] _on_projection_enabled_changed: WARNING - Callback state mismatch! "
-                                f"Callback={callback_state}, Manager={app.slice_display_manager.projection_enabled}"
-                            )
-
-        # MPR combine refresh must run even when app.current_dataset is None (MPR uses subwindow_data).
-        focused_idx = app.focused_subwindow_index
-        app.dialog_coordinator.update_histogram_for_subwindow(focused_idx)
-        if (
-            hasattr(app, "_mpr_controller")
-            and app._mpr_controller.is_mpr(focused_idx)
-            and not app._resetting_projection_state
-        ):
-            mp_data = app.subwindow_data.get(focused_idx)
-            if mp_data is not None:
-                w = app.intensity_projection_controls_widget
-                mp_data["mpr_combine_enabled"] = w.get_enabled()
-                mp_data["mpr_combine_mode"] = w.get_projection_type()
-                mp_data["mpr_combine_slice_count"] = w.get_slice_count()
-                app._mpr_controller.display_mpr_slice(
-                    focused_idx, mp_data.get("mpr_slice_index", 0)
-                )
-                app._slice_location_line_coordinator.refresh_all()
-            selected_roi = app.roi_manager.get_selected_roi()
-            if selected_roi is not None and DEBUG_PROJECTION:
-                print(
-                    "[DEBUG-PROJECTION] _on_projection_enabled_changed: "
-                    "Selected ROI after MPR combine refresh"
-                )
-            return
-
-        if app.current_dataset is not None:
-            app._display_slice(app.current_dataset)
-            app._slice_location_line_coordinator.refresh_all()
-
-            selected_roi = app.roi_manager.get_selected_roi()
-            if selected_roi is not None and DEBUG_PROJECTION:
-                print(
-                    "[DEBUG-PROJECTION] _on_projection_enabled_changed: Selected ROI exists, statistics should be updated by _display_rois_for_slice"
-                )
-        elif DEBUG_PROJECTION:
-            print(
-                "[DEBUG-PROJECTION] _on_projection_enabled_changed: current_dataset is None, cannot redisplay"
-            )
+        _debug_projection(
+            f"_on_projection_enabled_changed: enabled={enabled}, "
+            f"_resetting_projection_state={app._resetting_projection_state}"
+        )
+        _apply_projection_enabled_state(app, enabled)
+        _refresh_display_after_projection_enabled_change(app)
 
     def on_projection_type_changed(self, projection_type: str) -> None:
         """
@@ -256,11 +297,10 @@ class ProjectionAppFacade:
             count: Number of slices to combine (2, 3, 4, 6, or 8)
         """
         app = self._app
-        if DEBUG_PROJECTION:
-            print(
-                f"[DEBUG-PROJECTION] _on_projection_slice_count_changed: count={count}, "
-                f"projection_enabled={app.slice_display_manager.projection_enabled}"
-            )
+        _debug_projection(
+            f"_on_projection_slice_count_changed: count={count}, "
+            f"projection_enabled={app.slice_display_manager.projection_enabled}"
+        )
         app.slice_display_manager.set_projection_slice_count(count)
         app.intensity_projection_controls_widget.set_slice_count(count)
         focused_idx = app.focused_subwindow_index
@@ -275,7 +315,8 @@ class ProjectionAppFacade:
                 app._slice_location_line_coordinator.refresh_all()
             return
         if app.current_dataset is not None and app.slice_display_manager.projection_enabled:
-            if DEBUG_PROJECTION:
-                print("[DEBUG-PROJECTION] _on_projection_slice_count_changed: Redisplaying slice")
+            _debug_projection(
+                "_on_projection_slice_count_changed: Redisplaying slice"
+            )
             app._display_slice(app.current_dataset)
             app._slice_location_line_coordinator.refresh_all()
