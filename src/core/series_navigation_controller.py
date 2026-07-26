@@ -273,6 +273,234 @@ def _try_navigate_multiframe_instance(
     return True
 
 
+def _sorted_series_list(
+    study_series: dict[str, list[Dataset]],
+) -> list[tuple[int, str, list[Dataset]]]:
+    """Return [(series_number, series_uid, datasets), ...] sorted by series number."""
+    series_list: list[tuple[int, str, list[Dataset]]] = []
+    for series_uid, datasets in study_series.items():
+        if datasets:
+            series_number = getattr(datasets[0], 'SeriesNumber', None)
+            try:
+                series_num = int(series_number) if series_number is not None else 0
+            except (ValueError, TypeError):
+                series_num = 0
+            series_list.append((series_num, series_uid, datasets))
+    series_list.sort(key=lambda x: x[0])
+    return series_list
+
+
+def _sync_series_navigator(app: Any, focused_idx: int) -> None:
+    """Point the series navigator + dot indicators at the focused subwindow's series."""
+    if focused_idx not in app.subwindow_data:
+        return
+    data = app.subwindow_data[focused_idx]
+    focused_series_uid = data.get('current_series_uid', '')
+    focused_study_uid = data.get('current_study_uid', '')
+    if focused_series_uid and focused_study_uid:
+        app.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
+        app._refresh_series_navigator_state()
+        # Refresh colored dot indicators so the slot-to-series mapping follows
+        # the newly selected series.
+        app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())
+
+
+def _bootstrap_first_or_last_series(
+    app: Any, focused_idx: int, data: dict, focused_study_uid: str, direction: int
+) -> None:
+    """No series in the focused subwindow: load the first (dir>0) or last series."""
+    if DEBUG_NAV and DEBUG_SERIES:
+        print(f"[DEBUG] Series navigation: No series loaded, attempting to load {'first' if direction > 0 else 'last'} series")
+    if not app.current_studies:
+        if DEBUG_NAV and DEBUG_SERIES:
+            print("[DEBUG] Series navigation: No studies loaded, cannot navigate")
+        return
+    if not focused_study_uid:
+        focused_study_uid = next(iter(app.current_studies.keys()))
+        data['current_study_uid'] = focused_study_uid
+    study_series = app.current_studies.get(focused_study_uid, {})
+    if not study_series:
+        if DEBUG_NAV and DEBUG_SERIES:
+            print("[DEBUG] Series navigation: Study has no series, cannot navigate")
+        return
+    series_list = _sorted_series_list(study_series)
+    if not series_list:
+        if DEBUG_NAV and DEBUG_SERIES:
+            print("[DEBUG] Series navigation: No valid series in study, cannot navigate")
+        return
+    if direction > 0:
+        _, target_series_uid, target_datasets = series_list[0]
+    else:
+        _, target_series_uid, target_datasets = series_list[-1]
+    data['current_series_uid'] = target_series_uid
+    data['current_study_uid'] = focused_study_uid
+    data['current_dataset'] = target_datasets[0]
+    data['current_slice_index'] = 0
+    app.current_series_uid = target_series_uid
+    app.current_slice_index = 0
+    app.current_dataset = target_datasets[0]
+    app.current_study_uid = focused_study_uid
+    app.slice_display_manager.set_current_data_context(
+        app.current_studies, focused_study_uid, target_series_uid, 0
+    )
+    app.slice_display_manager.display_slice(
+        target_datasets[0], app.current_studies, focused_study_uid, target_series_uid, 0
+    )
+    extracted_series_uid = get_composite_series_key(target_datasets[0])
+    extracted_study_uid = getattr(target_datasets[0], 'StudyInstanceUID', '')
+    app.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+    app.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+    app.subwindow_data[focused_idx]['current_dataset'] = target_datasets[0]
+    app.subwindow_data[focused_idx]['current_slice_index'] = 0
+    app.current_series_uid = extracted_series_uid
+    app.current_study_uid = extracted_study_uid
+    app.current_slice_index = 0
+    app.current_dataset = target_datasets[0]
+    app.slice_display_manager.set_current_data_context(
+        app.current_studies, extracted_study_uid, extracted_series_uid, 0
+    )
+    app._update_undo_redo_state()
+    if app.current_studies and app.current_study_uid and app.current_series_uid:
+        datasets = app.current_studies[app.current_study_uid][app.current_series_uid]
+        app.slice_navigator.set_total_slices(len(datasets))
+        app.slice_navigator.set_current_slice(0)
+    _sync_series_navigator(app, focused_idx)
+    app.cine_app_facade.update_cine_player_context()
+    update_about_this_file_dialog(app)
+
+
+def _recover_series_not_in_study(
+    app: Any, focused_idx: int, study_series: dict[str, list[Dataset]]
+) -> tuple[str, int] | None:
+    """Focused series missing from its study: fall back to the study's first series.
+
+    Returns ``(series_uid, slice_index)`` to continue navigation, or ``None`` when
+    no usable series exists and navigation should abort.
+    """
+    if not study_series:
+        return None
+    series_list = _sorted_series_list(study_series)
+    if not series_list:
+        return None
+    _, first_series_uid, first_datasets = series_list[0]
+    app.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
+    app.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
+    app.subwindow_data[focused_idx]['current_slice_index'] = 0
+    return first_series_uid, 0
+
+
+def _navigate_to_adjacent_series(
+    app: Any,
+    focused_idx: int,
+    focused_study_uid: str,
+    focused_series_uid: str,
+    direction: int,
+) -> None:
+    """Move focus to the series adjacent (by ``direction``) in the flat series list."""
+    flat_series_list = build_flat_series_list(app.current_studies)
+    if not flat_series_list:
+        if DEBUG_NAV and DEBUG_SERIES:
+            print("[DEBUG] Series navigation: No series found in any study")
+        return
+    current_index = None
+    for idx, (_, study_uid, series_uid, _) in enumerate(flat_series_list):
+        if study_uid == focused_study_uid and series_uid == focused_series_uid:
+            current_index = idx
+            break
+    if current_index is None:
+        return
+    new_index = current_index + direction
+    if new_index < 0 or new_index >= len(flat_series_list):
+        return
+    _, target_study_uid, target_series_uid, target_first_dataset = flat_series_list[new_index]
+    if target_study_uid not in app.current_studies or target_series_uid not in app.current_studies[target_study_uid]:
+        return
+    target_datasets = app.current_studies[target_study_uid][target_series_uid]
+    if not target_datasets:
+        return
+    new_series_uid = target_series_uid
+    slice_index = 0
+    dataset = target_datasets[0]
+    app.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
+    app.subwindow_data[focused_idx]['current_study_uid'] = target_study_uid
+    app.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+    app.subwindow_data[focused_idx]['current_dataset'] = dataset
+    app.current_series_uid = new_series_uid
+    app.current_slice_index = slice_index
+    app.current_dataset = dataset
+    app.current_study_uid = target_study_uid
+    app.slice_display_manager.reset_projection_state()
+    app.intensity_projection_controls_widget.set_enabled(False)
+    app.intensity_projection_controls_widget.set_projection_type("aip")
+    app.intensity_projection_controls_widget.set_slice_count(4)
+    app.slice_display_manager.display_slice(
+        dataset, app.current_studies, target_study_uid, new_series_uid, slice_index
+    )
+    extracted_series_uid = get_composite_series_key(dataset)
+    extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
+    app.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
+    app.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
+    app.subwindow_data[focused_idx]['current_dataset'] = dataset
+    app.subwindow_data[focused_idx]['current_slice_index'] = slice_index
+    app.current_series_uid = extracted_series_uid
+    app.current_study_uid = extracted_study_uid
+    app.current_slice_index = slice_index
+    app.current_dataset = dataset
+    app.slice_display_manager.set_current_data_context(
+        app.current_studies, extracted_study_uid, extracted_series_uid, slice_index
+    )
+    app._update_undo_redo_state()
+    if app.current_studies and app.current_study_uid and app.current_series_uid:
+        datasets = app.current_studies[app.current_study_uid][app.current_series_uid]
+        app.slice_navigator.set_total_slices(len(datasets))
+        app.slice_navigator.set_current_slice(slice_index)
+    _sync_series_navigator(app, focused_idx)
+    app._update_right_panel_for_focused_subwindow()
+    app.cine_app_facade.update_cine_player_context()
+    update_about_this_file_dialog(app)
+
+
+def _resolve_navigation_context(
+    app: Any, focused_idx: int, data: dict, direction: int
+) -> tuple[str, str, int] | None:
+    """Resolve and repair the focused study/series/slice before navigating.
+
+    Returns ``(study_uid, series_uid, slice_index)`` to proceed, or ``None`` when
+    the request was fully handled (bootstrap) or navigation cannot continue.
+    """
+    focused_study_uid = data.get('current_study_uid', '')
+    focused_series_uid = data.get('current_series_uid', '')
+    focused_slice_index = data.get('current_slice_index', 0)
+    displayed_dataset = data.get('current_dataset')
+    if displayed_dataset:
+        extracted_series_uid = get_composite_series_key(displayed_dataset)
+        extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
+        if extracted_series_uid and extracted_series_uid != focused_series_uid:
+            if DEBUG_NAV and DEBUG_SERIES:
+                print_redacted(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
+            focused_series_uid = extracted_series_uid
+            focused_study_uid = extracted_study_uid
+            data['current_series_uid'] = extracted_series_uid
+            data['current_study_uid'] = extracted_study_uid
+    elif not focused_series_uid:
+        _bootstrap_first_or_last_series(app, focused_idx, data, focused_study_uid, direction)
+        return None
+
+    if DEBUG_NAV and DEBUG_SERIES:
+        print_redacted(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
+    if not focused_study_uid or focused_study_uid not in app.current_studies:
+        if DEBUG_NAV and DEBUG_SERIES:
+            print("[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
+        return None
+    study_series = app.current_studies[focused_study_uid]
+    if focused_series_uid and focused_series_uid not in study_series:
+        recovered = _recover_series_not_in_study(app, focused_idx, study_series)
+        if recovered is None:
+            return None
+        focused_series_uid, focused_slice_index = recovered
+    return focused_study_uid, focused_series_uid, focused_slice_index
+
+
 def on_series_navigation_requested(app: Any, direction: int) -> None:
     """
     Handle series navigation request from image viewer (focused subwindow only).
@@ -311,140 +539,10 @@ def on_series_navigation_requested(app: Any, direction: int) -> None:
                 print(f"[DEBUG] Series navigation: subwindow {focused_idx} not in subwindow_data")
             return
         data = app.subwindow_data[focused_idx]
-        focused_study_uid = data.get('current_study_uid', '')
-        focused_series_uid = data.get('current_series_uid', '')
-        focused_slice_index = data.get('current_slice_index', 0)
-        displayed_dataset = data.get('current_dataset')
-        if displayed_dataset:
-            extracted_series_uid = get_composite_series_key(displayed_dataset)
-            extracted_study_uid = getattr(displayed_dataset, 'StudyInstanceUID', '')
-            if extracted_series_uid and extracted_series_uid != focused_series_uid:
-                if DEBUG_NAV and DEBUG_SERIES:
-
-                    print_redacted(f"[DEBUG] Series navigation: MISMATCH at start! Stored={focused_series_uid}, Extracted={extracted_series_uid}")
-                focused_series_uid = extracted_series_uid
-                focused_study_uid = extracted_study_uid
-                data['current_series_uid'] = extracted_series_uid
-                data['current_study_uid'] = extracted_study_uid
-        elif not focused_series_uid:
-            if DEBUG_NAV and DEBUG_SERIES:
-
-                print(f"[DEBUG] Series navigation: No series loaded, attempting to load {'first' if direction > 0 else 'last'} series")
-            if not app.current_studies:
-                if DEBUG_NAV and DEBUG_SERIES:
-
-                    print("[DEBUG] Series navigation: No studies loaded, cannot navigate")
-                return
-            if not focused_study_uid:
-                focused_study_uid = next(iter(app.current_studies.keys()))
-                data['current_study_uid'] = focused_study_uid
-            study_series = app.current_studies.get(focused_study_uid, {})
-            if not study_series:
-                if DEBUG_NAV and DEBUG_SERIES:
-
-                    print("[DEBUG] Series navigation: Study has no series, cannot navigate")
-                return
-            series_list = []
-            for series_uid, datasets in study_series.items():
-                if datasets:
-                    first_dataset = datasets[0]
-                    series_number = getattr(first_dataset, 'SeriesNumber', None)
-                    try:
-                        series_num = int(series_number) if series_number is not None else 0
-                    except (ValueError, TypeError):
-                        series_num = 0
-                    series_list.append((series_num, series_uid, datasets))
-            series_list.sort(key=lambda x: x[0])
-            if not series_list:
-                if DEBUG_NAV and DEBUG_SERIES:
-
-                    print("[DEBUG] Series navigation: No valid series in study, cannot navigate")
-                return
-            if direction > 0:
-                _, target_series_uid, target_datasets = series_list[0]
-            else:
-                _, target_series_uid, target_datasets = series_list[-1]
-            data['current_series_uid'] = target_series_uid
-            data['current_study_uid'] = focused_study_uid
-            data['current_dataset'] = target_datasets[0]
-            data['current_slice_index'] = 0
-            app.current_series_uid = target_series_uid
-            app.current_slice_index = 0
-            app.current_dataset = target_datasets[0]
-            app.current_study_uid = focused_study_uid
-            app.slice_display_manager.set_current_data_context(
-                app.current_studies, focused_study_uid, target_series_uid, 0
-            )
-            app.slice_display_manager.display_slice(
-                target_datasets[0], app.current_studies, focused_study_uid, target_series_uid, 0
-            )
-            extracted_series_uid = get_composite_series_key(target_datasets[0])
-            extracted_study_uid = getattr(target_datasets[0], 'StudyInstanceUID', '')
-            app.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
-            app.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
-            app.subwindow_data[focused_idx]['current_dataset'] = target_datasets[0]
-            app.subwindow_data[focused_idx]['current_slice_index'] = 0
-            app.current_series_uid = extracted_series_uid
-            app.current_study_uid = extracted_study_uid
-            app.current_slice_index = 0
-            app.current_dataset = target_datasets[0]
-            app.slice_display_manager.set_current_data_context(
-                app.current_studies, extracted_study_uid, extracted_series_uid, 0
-            )
-            app._update_undo_redo_state()
-            if app.current_studies and app.current_study_uid and app.current_series_uid:
-                datasets = app.current_studies[app.current_study_uid][app.current_series_uid]
-                app.slice_navigator.set_total_slices(len(datasets))
-                app.slice_navigator.set_current_slice(0)
-            if focused_idx in app.subwindow_data:
-                data = app.subwindow_data[focused_idx]
-                focused_series_uid = data.get('current_series_uid', '')
-                focused_study_uid = data.get('current_study_uid', '')
-                if focused_series_uid and focused_study_uid:
-                    app.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
-                    app._refresh_series_navigator_state()
-                    # Refresh colored dot indicators so the slot-to-series
-                    # mapping follows the newly selected series.
-                    app.series_navigator.set_subwindow_assignments(
-                        app._get_subwindow_assignments()
-                    )
-            app.cine_app_facade.update_cine_player_context()
-            update_about_this_file_dialog(app)
+        context = _resolve_navigation_context(app, focused_idx, data, direction)
+        if context is None:
             return
-
-        if DEBUG_NAV and DEBUG_SERIES:
-
-            print_redacted(f"[DEBUG] Series navigation: subwindow {focused_idx}, study={focused_study_uid[:20] if focused_study_uid else 'None'}..., series={focused_series_uid[:20] if focused_series_uid else 'None'}..., direction={direction}")
-        if not focused_study_uid or focused_study_uid not in app.current_studies:
-            if DEBUG_NAV and DEBUG_SERIES:
-
-                print("[DEBUG] Series navigation: Invalid study UID or study not in current_studies")
-            return
-        study_series = app.current_studies[focused_study_uid]
-        if focused_series_uid and focused_series_uid not in study_series:
-            if study_series:
-                series_list = []
-                for series_uid, datasets in study_series.items():
-                    if datasets:
-                        first_dataset = datasets[0]
-                        series_number = getattr(first_dataset, 'SeriesNumber', None)
-                        try:
-                            series_num = int(series_number) if series_number is not None else 0
-                        except (ValueError, TypeError):
-                            series_num = 0
-                        series_list.append((series_num, series_uid, datasets))
-                series_list.sort(key=lambda x: x[0])
-                if series_list:
-                    _, first_series_uid, first_datasets = series_list[0]
-                    focused_series_uid = first_series_uid
-                    app.subwindow_data[focused_idx]['current_series_uid'] = first_series_uid
-                    app.subwindow_data[focused_idx]['current_dataset'] = first_datasets[0]
-                    app.subwindow_data[focused_idx]['current_slice_index'] = 0
-                    focused_slice_index = 0
-                else:
-                    return
-            else:
-                return
+        focused_study_uid, focused_series_uid, focused_slice_index = context
         app.slice_display_manager.set_current_data_context(
             app.current_studies, focused_study_uid, focused_series_uid, focused_slice_index
         )
@@ -461,79 +559,9 @@ def on_series_navigation_requested(app: Any, direction: int) -> None:
             direction,
         ):
             return
-        flat_series_list = build_flat_series_list(app.current_studies)
-        if not flat_series_list:
-            if DEBUG_NAV and DEBUG_SERIES:
-
-                print("[DEBUG] Series navigation: No series found in any study")
-            return
-        current_index = None
-        for idx, (_, study_uid, series_uid, _) in enumerate(flat_series_list):
-            if study_uid == focused_study_uid and series_uid == focused_series_uid:
-                current_index = idx
-                break
-        if current_index is None:
-            return
-        new_index = current_index + direction
-        if new_index < 0 or new_index >= len(flat_series_list):
-            return
-        _, target_study_uid, target_series_uid, target_first_dataset = flat_series_list[new_index]
-        if target_study_uid not in app.current_studies or target_series_uid not in app.current_studies[target_study_uid]:
-            return
-        target_datasets = app.current_studies[target_study_uid][target_series_uid]
-        if not target_datasets:
-            return
-        new_series_uid = target_series_uid
-        slice_index = 0
-        dataset = target_datasets[0]
-        app.subwindow_data[focused_idx]['current_series_uid'] = new_series_uid
-        app.subwindow_data[focused_idx]['current_study_uid'] = target_study_uid
-        app.subwindow_data[focused_idx]['current_slice_index'] = slice_index
-        app.subwindow_data[focused_idx]['current_dataset'] = dataset
-        app.current_series_uid = new_series_uid
-        app.current_slice_index = slice_index
-        app.current_dataset = dataset
-        app.current_study_uid = target_study_uid
-        app.slice_display_manager.reset_projection_state()
-        app.intensity_projection_controls_widget.set_enabled(False)
-        app.intensity_projection_controls_widget.set_projection_type("aip")
-        app.intensity_projection_controls_widget.set_slice_count(4)
-        app.slice_display_manager.display_slice(
-            dataset, app.current_studies, target_study_uid, new_series_uid, slice_index
+        _navigate_to_adjacent_series(
+            app, focused_idx, focused_study_uid, focused_series_uid, direction
         )
-        extracted_series_uid = get_composite_series_key(dataset)
-        extracted_study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        app.subwindow_data[focused_idx]['current_series_uid'] = extracted_series_uid
-        app.subwindow_data[focused_idx]['current_study_uid'] = extracted_study_uid
-        app.subwindow_data[focused_idx]['current_dataset'] = dataset
-        app.subwindow_data[focused_idx]['current_slice_index'] = slice_index
-        app.current_series_uid = extracted_series_uid
-        app.current_study_uid = extracted_study_uid
-        app.current_slice_index = slice_index
-        app.current_dataset = dataset
-        app.slice_display_manager.set_current_data_context(
-            app.current_studies, extracted_study_uid, extracted_series_uid, slice_index
-        )
-        app._update_undo_redo_state()
-        if app.current_studies and app.current_study_uid and app.current_series_uid:
-            datasets = app.current_studies[app.current_study_uid][app.current_series_uid]
-            app.slice_navigator.set_total_slices(len(datasets))
-            app.slice_navigator.set_current_slice(slice_index)
-        if focused_idx in app.subwindow_data:
-            data = app.subwindow_data[focused_idx]
-            focused_series_uid = data.get('current_series_uid', '')
-            focused_study_uid = data.get('current_study_uid', '')
-            if focused_series_uid and focused_study_uid:
-                app.series_navigator.set_current_series(focused_series_uid, focused_study_uid)
-                app._refresh_series_navigator_state()
-                # Also update dot indicators to follow the new assignment
-                # of series to subwindows after keyboard navigation.
-                app.series_navigator.set_subwindow_assignments(
-                    app._get_subwindow_assignments()
-                )
-        app._update_right_panel_for_focused_subwindow()
-        app.cine_app_facade.update_cine_player_context()
-        update_about_this_file_dialog(app)
     finally:
         if DEBUG_NAV:
             timestamp = time.time()
