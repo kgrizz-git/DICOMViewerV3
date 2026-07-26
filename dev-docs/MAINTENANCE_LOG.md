@@ -8,6 +8,12 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Completed a Sonar `python:S3776` slice on series navigator list rebuild:
+  moved series sorting, section-width, and display-label helpers into
+  `series_navigator_model`; `SeriesNavigator.update_series_list` now
+  orchestrates clear/append/schedule helpers. Added
+  `tests/gui/test_series_navigator_list_update_sonar_slice.py`. Target finding
+  was cognitive complexity 94.
 - Completed a Sonar `python:S3776` slice on overlay corner text: lifted
   multiframe label, InstanceNumber/slice, thickness, and timing formatters out
   of `get_corner_text` in `overlay_text_builder`. Added

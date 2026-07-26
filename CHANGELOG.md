@@ -7,6 +7,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Internal SonarQube series-navigator list complexity slice:** extracted series sorting, section-width, and display-label helpers into `series_navigator_model` and thinned `SeriesNavigator.update_series_list` (was cognitive complexity 94) to clear `python:S3776`. Added `tests/gui/test_series_navigator_list_update_sonar_slice.py`. **Semantic versioning note: patch** (maintainability only).
 - **Internal SonarQube overlay corner-text complexity slice:** extracted multiframe/InstanceNumber/thickness/timing helpers in `overlay_text_builder` so `get_corner_text` (was cognitive complexity 94) clears `python:S3776`. Added `tests/gui/test_overlay_text_builder_sonar_slice.py`. **Semantic versioning note: patch** (maintainability only).
 - **Internal SonarQube ROI XLSX-export complexity slice:** extracted workbook/series/slice/ROI/crosshair helpers into `roi_export_xlsx` so `write_xlsx` (was cognitive complexity 99) clears `python:S3776`. Added `tests/core/test_roi_export_xlsx_sonar_slice.py`. **Semantic versioning note: patch** (maintainability only).
 - **Internal SonarQube projection-enabled complexity slice:** extracted apply/refresh/debug helpers in `projection_app_facade` so `on_projection_enabled_changed` (was cognitive complexity 107) clears `python:S3776`. Existing `tests/core/test_projection_app_facade.py` covers behavior. **Semantic versioning note: patch** (maintainability only).
