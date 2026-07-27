@@ -20,12 +20,20 @@ on:
       - 'plans/**'
       - 'logs/**'
       - 'LICENSE'
-  workflow_run:
-    workflows: ["Privacy Gate"]
-    types: [completed]
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**/*.md'
+      - 'user-docs/**'
+      - 'dev-docs/**'
+      - 'plans/**'
+      - 'logs/**'
+      - 'LICENSE'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -35,16 +43,12 @@ jobs:
   test:
     name: pytest (py3.12, ubuntu)
     runs-on: ubuntu-latest
-    if: |
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.conclusion == 'success')
 
     steps:
-      - name: Checkout repository  # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
+      - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
