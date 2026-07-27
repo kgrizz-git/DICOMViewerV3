@@ -44,8 +44,6 @@ from core.dicom_loader_file import (
     build_compression_install_error_detail,
     build_generic_load_error_message,
     build_memory_error_message,
-    build_slow_load_timing_parts,
-    compression_label_from_dataset,
     format_defer_pixel_data_message,
     format_multiframe_load_complete_message,
     format_multiframe_load_start_message,
@@ -435,13 +433,10 @@ class DICOMLoader:
         dataset = None  # bound up-front so the except handler can reference it
         try:
             filename = os.path.basename(file_path)
-            file_start_time = time.time()
 
             _notify_file_load_progress(progress_callback, f"Loading {filename}...")
 
-            validation_start = time.time()
             is_valid, error_msg = self.validate_dicom_file(file_path)
-            validation_time = time.time() - validation_start
 
             if not is_valid:
                 _logger.warning(
@@ -457,28 +452,17 @@ class DICOMLoader:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*excess padding.*', category=UserWarning)
                 _process_events_if_main_thread()
-                dataset, read_time = _read_dicom_dataset(
+                dataset, _ = _read_dicom_dataset(
                     file_path, defer_size, filename, progress_callback
                 )
 
             _annotate_structured_report(dataset)
-            compression_type = compression_label_from_dataset(dataset)
 
-            pixel_load_time, should_abort = _finalize_multiframe_metadata(
+            _, should_abort = _finalize_multiframe_metadata(
                 self, dataset, file_path, filename, progress_callback
             )
             if should_abort:
                 return None
-
-            build_slow_load_timing_parts(
-                time.time() - file_start_time,
-                validation_time,
-                read_time,
-                pixel_load_time,
-                compression_type,
-            )
-            # timing_parts retained for optional debug logging:
-            # print(f"[LOAD DEBUG] {filename}: {' | '.join(timing_parts)}")
 
             return dataset
 

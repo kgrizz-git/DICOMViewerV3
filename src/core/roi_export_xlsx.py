@@ -142,7 +142,7 @@ def write_xlsx_roi_statistics_rows(
             row = write_xlsx_labeled_value_row(
                 ws,
                 row,
-                f"{lab} {metric}",
+                _safe_spreadsheet_value(f"{lab} {metric}"),
                 _safe_spreadsheet_value(channel_values.get(key, "")),
                 unit_str,
             )
@@ -257,9 +257,7 @@ def write_xlsx_series_block(
     series_desc = getattr(
         first_ds, svc._TAG_SERIES_DESCRIPTION, svc._DEFAULT_UNKNOWN_SERIES
     )
-    study_desc = getattr(first_ds, "StudyDescription", "Study")[:31]
-    study_desc = svc._sanitize_filename(study_desc) or "Study"
-    _ = study_desc  # historical; workbook sheet title remains "ROI Statistics"
+    # Workbook sheet title remains fixed as "ROI Statistics".
 
     ws.cell(
         row=row,

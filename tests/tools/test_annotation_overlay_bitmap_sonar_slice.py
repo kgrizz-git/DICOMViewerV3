@@ -40,6 +40,24 @@ def test_overlay_bitmap_from_bytes_lsb_first_2x2() -> None:
     assert bitmap[1, 1] == 1
 
 
+def test_overlay_bitmap_from_bytes_pads_truncated_payload() -> None:
+    # One byte supplies 8 bits for a 3x3 (9-bit) grid — pad the missing bit with 0.
+    bitmap = overlay_bitmap_from_bytes(bytes([0b00000001]), 3, 3, np)
+    assert bitmap is not None
+    assert bitmap.shape == (3, 3)
+    assert bitmap[0, 0] == 1
+    assert int(bitmap.sum()) == 1
+
+
+def test_overlay_coordinates_no_numpy_matches_lsb_numpy() -> None:
+    payload = bytes([0b00001011])
+    numpy_coords = overlay_coordinates_from_bitmap(
+        overlay_bitmap_from_bytes(payload, 2, 2, np), 0.0, 0.0, np
+    )
+    fallback_coords = overlay_coordinates_no_numpy(payload, 2, 2, 0.0, 0.0)
+    assert sorted(fallback_coords) == sorted(numpy_coords)
+
+
 def test_overlay_bitmap_from_non_bytes_list() -> None:
     bitmap = overlay_bitmap_from_non_bytes([1, 0, 0, 1], 2, 2, np)
     assert bitmap is not None
@@ -82,8 +100,9 @@ def test_overlay_paths_from_bitmap_uses_scipy_fallback() -> None:
     assert paths == [[(10.0, 20.0), (11.0, 20.0), (11.0, 21.0)]]
 
 
-def test_overlay_coordinates_no_numpy_msb_within_byte() -> None:
-    coords = overlay_coordinates_no_numpy(bytes([0b10000000]), 2, 2, 0.0, 0.0)
+def test_overlay_coordinates_no_numpy_lsb_within_byte() -> None:
+    # LSB-first: bit 0 of 0b00000001 lights pixel (0,0), matching NumPy unpackbits little.
+    coords = overlay_coordinates_no_numpy(bytes([0b00000001]), 2, 2, 0.0, 0.0)
     assert coords == [(0.0, 0.0)]
 
 

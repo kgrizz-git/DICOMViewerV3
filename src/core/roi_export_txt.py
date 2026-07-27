@@ -112,13 +112,13 @@ def txt_crosshair_block_lines(cross_item: Any, cross_idx: int, dataset: Dataset 
         data = svc.get_crosshair_export_data(cross_item, dataset)
         lines.extend(
             [
-                f"    Pixel X        {data['pixel_x']}    ",
-                f"    Pixel Y        {data['pixel_y']}    ",
-                f"    Slice Index    {data['slice_index']}    ",
-                f"    Pixel Value    {data['pixel_value_str']}    ",
-                f"    Patient X (mm) {svc._format_float(data['patient_x'])}    ",
-                f"    Patient Y (mm) {svc._format_float(data['patient_y'])}    ",
-                f"    Patient Z (mm) {svc._format_float(data['patient_z'])}    ",
+                f"    Pixel X        {data.get('pixel_x', '')}    ",
+                f"    Pixel Y        {data.get('pixel_y', '')}    ",
+                f"    Slice Index    {data.get('slice_index', '')}    ",
+                f"    Pixel Value    {data.get('pixel_value_str', '')}    ",
+                f"    Patient X (mm) {svc._format_float(data.get('patient_x'))}    ",
+                f"    Patient Y (mm) {svc._format_float(data.get('patient_y'))}    ",
+                f"    Patient Z (mm) {svc._format_float(data.get('patient_z'))}    ",
             ]
         )
     lines.append("")

@@ -423,10 +423,18 @@ def _nested_sequence_attr(fg_item: Any, sequence_name: str, attr_name: str) -> A
 
 
 def _set_local_attr_if_unset(wrapper: "FrameDatasetWrapper", keyword: str, value: Any) -> None:
-    """Store a local frame override only when the wrapper does not already expose *keyword*."""
+    """Store a local frame override only when *keyword* is absent from local ``_dict``.
+
+    Uses local storage only — ``hasattr`` / ``wrapper.get`` can see delegated
+    parent-dataset attributes via ``__getattr__`` and incorrectly skip overrides.
+    """
     if value is None:
         return
-    if hasattr(wrapper, keyword) and wrapper.get(keyword) is not None:
+    try:
+        tag = Tag(keyword)
+    except Exception:
+        return
+    if tag in wrapper._dict:
         return
     wrapper._set_local_value(keyword, value)
 

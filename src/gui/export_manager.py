@@ -261,39 +261,16 @@ class ExportManager:
     ) -> tuple[int, list[tuple[str, float, float]]]:
         """
         Export selected items based on hierarchical selection.
-        
+
+        Args:
+            request: ``ExportSelectedRequest`` holding export options and the
+                hierarchical selection fields (items, output dir, format, W/L,
+                overlays, anonymization, projection, and related managers).
+
         Returns:
             (exported_count, downgraded_list). downgraded_list is a list of
             (filename, requested_scale, actual_scale) for images exported at
             a lower magnification than requested (PNG/JPG only).
-        
-        Args:
-            selected_items: Dictionary of {(study_uid, series_uid, slice_index): dataset}
-            output_dir: Output directory
-            format: Export format ("PNG", "JPG", or "DICOM")
-            window_level_option: "current" or "dataset"
-            current_window_center: Current window center from viewer
-            current_window_width: Current window width from viewer
-            include_overlays: Whether to include overlays/ROIs (PNG/JPG only)
-            use_rescaled_values: Whether to apply rescale slope/intercept (matches viewer setting)
-            roi_manager: Optional ROI manager for rendering ROIs
-            overlay_manager: Optional overlay manager for rendering overlays
-            measurement_tool: Optional measurement tool for rendering measurements
-            config_manager: Optional config manager for overlay configuration
-            studies: Optional studies dictionary for calculating total_slices {study_uid: {series_uid: [datasets]}}
-            export_scale: Scale factor for image dimensions (1.0, 1.5, 2.0, or 4.0)
-            scale_annotations_with_image: If True, multiply annotation line/font sizes by export_scale
-            anonymize: Whether to anonymize DICOM exports (group 0010 only)
-            deep_anonymize: Whether to apply deep anonymization (DICOM only)
-            deep_anonymizer_options: Options for DeepDICOMAnonymizer when deep_anonymize is True
-            projection_enabled: Whether intensity projection (combine slices) is enabled
-            projection_type: Type of projection ("aip", "mip", or "minip")
-            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            subwindow_annotation_managers: Optional list of per-subwindow dicts with keys
-                roi_manager, measurement_tool, text_annotation_tool, arrow_annotation_tool.
-                When provided, annotations are aggregated from all subwindows for each slice (Option B).
-            deep_anonymized_items: Precomputed deep-anonymized selection from
-                build_deep_anonymized_selection, used to keep preflight and export paths identical.
         """
         selected_items = request.selected_items
         output_dir = request.output_dir
@@ -496,31 +473,9 @@ class ExportManager:
         Export a single slice or projection image.
 
         Args:
-            dataset: DICOM dataset
-            output_path: Output file path
-            format: Export format ("PNG", "JPG", or "DICOM")
-            window_level_option: "current" or "dataset"
-            current_window_center: Current window center from viewer
-            current_window_width: Current window width from viewer
-            include_overlays: Whether to include overlays/ROIs (PNG/JPG only)
-            use_rescaled_values: Whether to apply rescale slope/intercept (matches viewer setting)
-            roi_manager: Optional ROI manager for rendering ROIs
-            overlay_manager: Optional overlay manager for rendering overlays
-            measurement_tool: Optional measurement tool for rendering measurements
-            config_manager: Optional config manager for overlay configuration
-            study_uid: Optional study UID for ROI lookup
-            series_uid: Optional series UID for ROI lookup
-            slice_index: Optional slice index for ROI lookup
-            total_slices: Optional total number of slices in series (for "Slice X/Y" formatting)
-            export_scale: Scale factor for image dimensions (1.0, 1.5, 2.0, or 4.0)
-            scale_annotations_with_image: If True, multiply annotation sizes by export_scale
-            anonymize: Whether to anonymize DICOM exports (group 0010 only)
-            dataset_pre_anonymized: When True, DICOM export saves dataset as-is (already anonymized)
-            projection_enabled: Whether intensity projection (combine slices) is enabled
-            projection_type: Type of projection ("aip", "mip", or "minip")
-            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            studies: Optional studies dictionary for gathering slices for projection
-            subwindow_annotation_managers: Optional list of per-subwindow annotation managers (Option B aggregate)
+            request: ``ExportSliceRequest`` holding the dataset, output path,
+                format, W/L, overlay/annotation managers, anonymization, and
+                optional projection fields.
 
         Returns:
             (success, downgrade_info). downgrade_info is (requested_scale, actual_scale) when

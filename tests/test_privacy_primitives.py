@@ -53,6 +53,28 @@ def test_redact_text_removes_entire_path_including_basename(value: str) -> None:
     assert "[PATH]" in result or "[REDACTED]" in result
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        r" C:\Users\privacy-canary\secret.dcm",
+        r"xC:\Users\privacy-canary\secret.dcm",
+        r"XC:\Users\privacy-canary\secret.dcm",
+        r"LoadC:\Users\privacy-canary\secret.dcm",
+        r"see C:\Users\privacy-canary\secret.dcm",
+        r"ID:C:\Users\privacy-canary\secret.dcm",
+        r"prefix\\clinical-host\share\privacy-canary\secret.dcm",
+        "load/Users/privacy-canary/secret.dcm",
+        "see /Users/privacy-canary/secret.dcm",
+    ],
+)
+def test_redact_text_redacts_paths_even_when_glued_to_preceding_text(message: str) -> None:
+    """Fail-closed: alphanumeric text before a path must not prevent redaction."""
+    result = redact_text(message)
+    assert "privacy-canary" not in result
+    assert "secret.dcm" not in result
+    assert "[REDACTED]" in result
+
+
 def test_canonical_registry_includes_indirect_dicom_identifiers() -> None:
     assert PATIENT_PII_FIELDS <= SENSITIVE_DICOM_FIELDS
     assert {

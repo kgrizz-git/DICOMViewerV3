@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 # Transfer-syntax UID → human-readable compression label (subset used for timing logs).
 COMPRESSED_TRANSFER_SYNTAX_LABELS: dict[str, str] = {
-    "1.2.840.10008.1.2.4": "RLE Lossless",
+    "1.2.840.10008.1.2.5": "RLE Lossless",
     "1.2.840.10008.1.2.4.50": "JPEG Baseline",
     "1.2.840.10008.1.2.4.51": "JPEG Extended",
     "1.2.840.10008.1.2.4.57": "JPEG Lossless",

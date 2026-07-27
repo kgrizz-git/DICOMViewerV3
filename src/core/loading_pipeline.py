@@ -414,6 +414,7 @@ def _run_load_pipeline_body(
         if num_loaded <= 0:
             update_status_callback(_STATUS_LOADING_CANCELLED)
             loader.reset_cancellation()
+            loading_manager.stop_animated_loading()
             return None, None
 
     loading_manager.stop_animated_loading()

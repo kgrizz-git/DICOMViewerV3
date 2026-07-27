@@ -186,6 +186,8 @@ def apply_statistics_overlay_font(
         text_item.setTransform(transform)
     else:
         font = make_qfont(font_family, font_variant, font_size)
+        # Clear any scale left from an earlier sub-6pt render on a reused item.
+        text_item.setTransform(QTransform())
     text_item.setFont(font)
 
 

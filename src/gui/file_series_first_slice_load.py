@@ -207,12 +207,12 @@ def _resolve_series_datasets_for_subwindow(
     """
     Pick series datasets for subwindow 0 after app UIDs are synced to the dataset.
 
-    Mirrors the original if/else in ``handle_load_first_slice``: prefer keys present
-    in *studies*, otherwise index with the app-level UIDs (already extracted).
+    Returns the matching list when both UIDs are present; otherwise an empty list
+    (avoids a KeyError that the prior identical if/else fallback always raised).
     """
     if study_uid in studies and series_uid in studies[study_uid]:
         return studies[study_uid][series_uid]
-    return studies[study_uid][series_uid]
+    return []
 
 
 def _sync_subwindow_zero_data(
@@ -392,7 +392,8 @@ def apply_first_slice_load(
     )
 
     refresh_metadata_cine_and_history(app)
-    QTimer.singleShot(100, app.view_state_manager.store_initial_view_state)
+    if app.view_state_manager is not None:
+        QTimer.singleShot(100, app.view_state_manager.store_initial_view_state)
 
     refresh_series_navigator_after_first_slice(app)
     maybe_reveal_navigator_and_fit(app)

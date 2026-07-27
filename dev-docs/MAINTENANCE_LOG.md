@@ -8,6 +8,10 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Addressed verified CodeRabbit findings on the S3776 PR (RLE UID, cancel
+  animation stop, FrameDatasetWrapper local overrides, first-slice guards,
+  overlay recreate context, overlay bitmap LSB/pad, export docstring/sanitize,
+  MPR assign disconnect). Skipped speculative nitpick refactors.
 - Cleared basedpyright push-gate errors introduced by recent S3776 helper
   extractions: typed bare generics, overlay parser null guard, measurement
   `QPointF` casts, and `importlib` loaders for load-pipeline / ROI-export

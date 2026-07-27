@@ -161,6 +161,9 @@ def _disconnect_layout_viewer_signals(
             image_viewer.cine_play_pause_toggle_requested, ctrl._cine_toggle_slots, vid
         )
         _pop_tracked_disconnect(image_viewer.cine_stop_requested, ctrl._cine_stop_slots, vid)
+        _disconnect_ignore_missing(
+            subwindow.mpr_assign_requested, app._on_mpr_assign_requested
+        )
 
 
 def _bind_slice_location_line_callbacks(app: Any, image_viewer: Any) -> None:
@@ -274,7 +277,7 @@ def _connect_layout_viewer_signals(
     layout = app.multi_window_layout
     image_viewer.get_slot_to_view_callback = lambda lay=layout: lay.get_slot_to_view()
 
-    # MPR assign is connect-only here (legacy: not torn down in the disconnect pass).
+    # Disconnect before connect so layout changes do not accumulate duplicate handlers.
     subwindow.mpr_assign_requested.connect(app._on_mpr_assign_requested)
 
     _connect_clear_and_cine_slots(ctrl, app, image_viewer, idx, vid)

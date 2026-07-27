@@ -51,23 +51,20 @@ def overlay_bitmap_from_bytes(
     np: Any,
 ) -> Any | None:
     """Unpack LSB-first DICOM overlay bytes into a ``(rows, cols)`` uint8 bitmap."""
-    num_bits = cols * rows
-    num_bytes = (num_bits + 7) // 8
-
-    if len(overlay_bytes) < num_bytes:
-        num_bytes = len(overlay_bytes)
-        num_bits = num_bytes * 8
-        if num_bits > cols * rows:
-            num_bits = cols * rows
+    expected_bits = cols * rows
+    num_bytes = (expected_bits + 7) // 8
+    available = min(len(overlay_bytes), num_bytes)
 
     # DICOM overlay data uses LSB-first bit order per DICOM standard Part 5, Chapter 8
     bit_array = np.unpackbits(
-        np.frombuffer(overlay_bytes[:num_bytes], dtype=np.uint8),
+        np.frombuffer(overlay_bytes[:available], dtype=np.uint8),
         bitorder="little",
     )
-    if len(bit_array) >= num_bits:
-        return bit_array[:num_bits].reshape((rows, cols))
-    return None
+    if len(bit_array) < expected_bits:
+        bit_array = np.pad(bit_array, (0, expected_bits - len(bit_array)))
+    else:
+        bit_array = bit_array[:expected_bits]
+    return bit_array.reshape((rows, cols))
 
 
 def overlay_bitmap_from_non_bytes(
@@ -225,7 +222,7 @@ def overlay_coordinates_no_numpy(
     origin_x: float,
     origin_y: float,
 ) -> list[tuple[float, float]]:
-    """Byte-by-byte fallback when NumPy is unavailable (MSB-first within each byte)."""
+    """Byte-by-byte fallback when NumPy is unavailable (LSB-first within each byte)."""
     coordinates: list[tuple[float, float]] = []
     if isinstance(overlay_data, bytes):
         byte_idx = 0
@@ -234,7 +231,7 @@ def overlay_coordinates_no_numpy(
             for col in range(cols):
                 if byte_idx < len(overlay_data):
                     byte_val = overlay_data[byte_idx]
-                    bit_val = (byte_val >> (7 - bit_idx)) & 1
+                    bit_val = (byte_val >> bit_idx) & 1
                     if bit_val:
                         coordinates.append(
                             overlay_pixel_to_image_coords(row, col, origin_x, origin_y)

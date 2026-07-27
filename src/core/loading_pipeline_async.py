@@ -149,6 +149,7 @@ def _abort_empty_cancel(ctx: _AsyncLoadContext) -> bool:
         return False
     request.update_status_callback(_STATUS_LOADING_CANCELLED)
     request.loader.reset_cancellation()
+    request.loading_manager.stop_animated_loading()
     _complete_pipeline(ctx, None, None)
     return True
 

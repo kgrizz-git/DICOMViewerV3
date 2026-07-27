@@ -356,6 +356,12 @@ class OverlayManager:
         self.current_scene = None
         self.current_total_slices: int | None = None
         self.current_stack_position: int | None = None
+        self.current_projection_enabled: bool = False
+        self.current_projection_start_slice: int | None = None
+        self.current_projection_end_slice: int | None = None
+        self.current_projection_total_thickness: float | None = None
+        self.current_projection_type: str | None = None
+        self.current_multiframe_context: dict[str, Any] | None = None
 
         # QWidget overlay widget (viewport-based)
         self.viewport_overlay_widget: ViewportOverlayWidget | None = None
@@ -578,6 +584,12 @@ class OverlayManager:
         if total_slices is not None:
             self.current_total_slices = total_slices
         self.current_stack_position = stack_position
+        self.current_projection_enabled = projection_enabled
+        self.current_projection_start_slice = projection_start_slice
+        self.current_projection_end_slice = projection_end_slice
+        self.current_projection_total_thickness = projection_total_thickness
+        self.current_projection_type = projection_type
+        self.current_multiframe_context = multiframe_context
 
         # Get view for QWidget overlay creation
         view = scene.views()[0] if scene.views() else None
@@ -932,6 +944,14 @@ class OverlayManager:
             parser,
             total_slices=total_slices,
             stack_position=stack_position,
+            projection_enabled=getattr(self, "current_projection_enabled", False),
+            projection_start_slice=getattr(self, "current_projection_start_slice", None),
+            projection_end_slice=getattr(self, "current_projection_end_slice", None),
+            projection_total_thickness=getattr(
+                self, "current_projection_total_thickness", None
+            ),
+            projection_type=getattr(self, "current_projection_type", None),
+            multiframe_context=getattr(self, "current_multiframe_context", None),
         )
 
     def _update_one_corner_overlay_position(

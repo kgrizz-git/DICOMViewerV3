@@ -211,7 +211,7 @@ def collect_csv_row_payloads(
     Walk collected data and gather row payloads plus max channel count.
 
     Returns:
-        (payloads, max_channel_count, label_ref_dataset)
+        (payloads, max_channel_count, label_ref_dataset, headers)
     """
     svc = _svc()
     headers = list(CSV_BASE_HEADERS)
