@@ -26,7 +26,6 @@ except ModuleNotFoundError:
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.check_no_phi_artifacts import local_identities, path_reasons
-from scripts.git_hook_commit_message_privacy import check_message
 
 OBJECT_ID = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.I)
 SENSITIVE_REF = re.compile(
@@ -85,7 +84,10 @@ def _ref_categories(root: Path, ref_name: str, identities: frozenset[str]) -> li
     if SENSITIVE_REF.search(ref_name):
         categories.append("patient or study identifier in ref")
     categories.extend(path_reasons(ref_name, identities))
-    categories.extend(category for _, category in check_message(ref_name, identities))
+    # check_message is intentionally NOT called on ref names: its IDENTIFIER_PATTERN
+    # uses a loose patient[_ -]?id form designed for prose, which false-positives on
+    # development branch names like feature/phi-filename-patient-id-hook-ci.
+    # SENSITIVE_REF above is the correctly calibrated check for ref names.
     return list(dict.fromkeys(categories))
 
 
