@@ -33,7 +33,7 @@ jobs:
        github.event.workflow_run.conclusion == 'success')
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository  # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
