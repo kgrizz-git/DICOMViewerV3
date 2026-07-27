@@ -323,6 +323,264 @@ def compute_series_transition_state(
     return new_series_uid, is_same_series, is_new_study_series, series_identifier
 
 
+def _debug_log_wl_enter(
+    dataset: Dataset,
+    new_series_uid: str,
+    is_new_study_series: bool,
+    is_same_series: bool,
+    rescale_slope: float | None,
+    rescale_intercept: float | None,
+    use_rescaled_values: bool,
+) -> None:
+    """Emit DEBUG_WL entry log for display_slice W/L resolution."""
+    if not DEBUG_WL:
+        return
+    study_uid = (
+        getattr(dataset, "StudyInstanceUID", "")[:24]
+        if getattr(dataset, "StudyInstanceUID", "")
+        else ""
+    )
+    modality = getattr(dataset, "Modality", "?")
+    print_redacted(
+        f"[DEBUG-WL] display_slice ENTER: study={study_uid}... "
+        f"series={new_series_uid[:24] if new_series_uid else ''}... "
+        f"modality={modality} is_new={is_new_study_series} is_same={is_same_series} | "
+        f"rescale_slope={rescale_slope} rescale_intercept={rescale_intercept} | "
+        f"use_rescaled_values={use_rescaled_values}"
+    )
+
+
+def _series_in_current_studies(
+    current_studies: dict[str, dict[str, list[Dataset]]],
+    study_uid: str,
+    new_series_uid: str,
+) -> bool:
+    """Return whether *study_uid*/*new_series_uid* exist in *current_studies*."""
+    return bool(
+        study_uid
+        and new_series_uid
+        and current_studies
+        and study_uid in current_studies
+        and new_series_uid in current_studies[study_uid]
+    )
+
+
+def _compute_stored_wl_from_series_dict(
+    mgr: Any,
+    dataset: Dataset,
+    series_datasets: list[Dataset],
+    *,
+    use_rescaled_values: bool,
+    rescale_slope: float | None,
+    rescale_intercept: float | None,
+) -> tuple[float | None, float | None]:
+    """
+    Resolve default W/L when the series is present in ``current_studies``.
+
+    Preference: embedded presets → series pixel range → single-slice range.
+    """
+    _, _, series_pixel_min, series_pixel_max = _compute_pixel_range_wl(
+        mgr, series_datasets, use_rescaled_values
+    )
+    wc, ww, is_rescaled = _build_presets_and_extract_wl(
+        mgr, dataset, rescale_slope, rescale_intercept, "embedded"
+    )
+    if wc is not None and ww is not None:
+        stored_wc, stored_ww = _apply_rescale_and_store_defaults(
+            mgr,
+            wc,
+            ww,
+            is_rescaled,
+            use_rescaled_values,
+            rescale_slope,
+            rescale_intercept,
+            "",
+        )
+        if DEBUG_WL:
+            print(
+                f"[DEBUG-WL] after conversion stored_wc={stored_wc} stored_ww={stored_ww}"
+            )
+        return stored_wc, stored_ww
+    if series_pixel_min is not None and series_pixel_max is not None:
+        return _compute_wl_from_series_pixel_range(
+            mgr,
+            series_datasets,
+            series_pixel_min,
+            series_pixel_max,
+            use_rescaled_values,
+        )
+    return _compute_wl_from_single_slice(mgr, dataset, use_rescaled_values)
+
+
+def _apply_fallback_new_series_wl(
+    mgr: Any,
+    dataset: Dataset,
+    *,
+    use_rescaled_values: bool,
+    rescale_slope: float | None,
+    rescale_intercept: float | None,
+    series_identifier: str,
+    new_series_uid: str,
+) -> tuple[float | None, float | None]:
+    """
+    Fallback W/L when the series is missing from ``current_studies`` or stored W/L is empty.
+    """
+    if DEBUG_WL:
+        study_uid = getattr(dataset, "StudyInstanceUID", "")
+        print_redacted(
+            f"[DEBUG-WL] New series WL fallback: study_uid={study_uid[:20] if study_uid else ''}... "
+            f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
+            f"computing from dataset being loaded"
+        )
+    try:
+        pixel_min, pixel_max = mgr.dicom_processor.get_pixel_value_range(
+            dataset, apply_rescale=use_rescaled_values
+        )
+        if pixel_min is not None and pixel_max is not None:
+            mgr.view_state_manager.set_series_pixel_range(pixel_min, pixel_max)
+        else:
+            mgr.view_state_manager.clear_series_pixel_range()
+    except Exception:
+        mgr.view_state_manager.clear_series_pixel_range()
+
+    wc, ww, is_rescaled = _build_presets_and_extract_wl(
+        mgr, dataset, rescale_slope, rescale_intercept, "fallback"
+    )
+    if wc is not None and ww is not None:
+        wc, ww = _apply_rescale_and_store_defaults(
+            mgr,
+            wc,
+            ww,
+            is_rescaled,
+            use_rescaled_values,
+            rescale_slope,
+            rescale_intercept,
+            "fallback",
+        )
+        mgr.view_state_manager.current_window_center = wc
+        mgr.view_state_manager.current_window_width = ww
+        if series_identifier not in mgr.view_state_manager.series_defaults:
+            mgr.view_state_manager.series_defaults[series_identifier] = {}
+        mgr.view_state_manager.series_defaults[series_identifier].update(
+            {
+                "window_center": wc,
+                "window_width": ww,
+                "use_rescaled_values": use_rescaled_values,
+                "image_inverted": mgr.image_viewer.image_inverted,
+                "window_level_defaults_set": True,
+            }
+        )
+        return wc, ww
+
+    if DEBUG_WL:
+        print(
+            "[DEBUG-WL] fallback: no embedded WL (wc/ww None), "
+            "dataset_to_image will use internal default"
+        )
+    mgr.view_state_manager.current_window_center = None
+    mgr.view_state_manager.current_window_width = None
+    return None, None
+
+
+def _apply_stored_or_fallback_new_series_wl(
+    mgr: Any,
+    dataset: Dataset,
+    new_series_uid: str,
+    series_identifier: str,
+    *,
+    stored_window_center: float | None,
+    stored_window_width: float | None,
+    use_rescaled_values: bool,
+    rescale_slope: float | None,
+    rescale_intercept: float | None,
+) -> tuple[float | None, float | None]:
+    """Apply stored W/L when present; otherwise run the new-series fallback path."""
+    if stored_window_center is not None and stored_window_width is not None:
+        if DEBUG_WL:
+            study_uid = getattr(dataset, "StudyInstanceUID", "")
+            print_redacted(
+                f"[DEBUG-WL] New series WL: study_uid={study_uid[:20] if study_uid else ''}... "
+                f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
+                f"use_rescaled={use_rescaled_values} slope={rescale_slope} "
+                f"intercept={rescale_intercept} "
+                f"stored_wc={stored_window_center} stored_ww={stored_window_width}"
+            )
+        _store_wl_and_defaults(
+            mgr,
+            stored_window_center,
+            stored_window_width,
+            use_rescaled_values,
+            series_identifier,
+        )
+        return stored_window_center, stored_window_width
+    return _apply_fallback_new_series_wl(
+        mgr,
+        dataset,
+        use_rescaled_values=use_rescaled_values,
+        rescale_slope=rescale_slope,
+        rescale_intercept=rescale_intercept,
+        series_identifier=series_identifier,
+        new_series_uid=new_series_uid,
+    )
+
+
+def _resolve_new_series_window_level(
+    mgr: Any,
+    dataset: Dataset,
+    current_studies: dict[str, dict[str, list[Dataset]]],
+    new_series_uid: str,
+    series_identifier: str,
+    *,
+    use_rescaled_values: bool,
+    rescale_slope: float | None,
+    rescale_intercept: float | None,
+) -> tuple[float | None, float | None]:
+    """Full new-series W/L path including user-cache restore."""
+    stored_window_center: float | None = None
+    stored_window_width: float | None = None
+
+    study_uid = getattr(dataset, "StudyInstanceUID", "")
+    series_in_dict = _series_in_current_studies(current_studies, study_uid, new_series_uid)
+    if DEBUG_WL:
+        print_redacted(
+            f"[DEBUG-WL] new series: series_in_current_studies={series_in_dict} "
+            f"(study_uid in current_studies="
+            f"{study_uid in current_studies if current_studies else False} "
+            f"series_uid in study="
+            f"{new_series_uid in current_studies.get(study_uid, {}) if study_uid and current_studies else False})"
+        )
+
+    if series_in_dict:
+        series_datasets = current_studies[study_uid][new_series_uid]
+        stored_window_center, stored_window_width = _compute_stored_wl_from_series_dict(
+            mgr,
+            dataset,
+            series_datasets,
+            use_rescaled_values=use_rescaled_values,
+            rescale_slope=rescale_slope,
+            rescale_intercept=rescale_intercept,
+        )
+        mgr.view_state_manager.window_level_user_modified = False
+
+    window_center, window_width = _apply_stored_or_fallback_new_series_wl(
+        mgr,
+        dataset,
+        new_series_uid,
+        series_identifier,
+        stored_window_center=stored_window_center,
+        stored_window_width=stored_window_width,
+        use_rescaled_values=use_rescaled_values,
+        rescale_slope=rescale_slope,
+        rescale_intercept=rescale_intercept,
+    )
+
+    cached_wc, cached_ww = _restore_user_wl_cache(mgr, series_identifier)
+    if cached_wc is not None:
+        window_center = cached_wc
+        window_width = cached_ww
+    return window_center, window_width
+
+
 def resolve_window_level_for_series_transition(
     mgr: Any,
     dataset: Dataset,
@@ -338,11 +596,9 @@ def resolve_window_level_for_series_transition(
     """Resolve window/level and rescale mode across same-series vs new-series transitions."""
     _ = current_series_uid  # retained for call-site / API compatibility
 
-    # -- 1. If new study/series: initialise rescale state, reset W/L ---------
     if is_new_study_series:
         _init_new_series_state(mgr, rescale_slope, rescale_intercept, series_identifier)
 
-    # -- 2. Determine use_rescaled_values ------------------------------------
     window_center = mgr.view_state_manager.current_window_center
     window_width = mgr.view_state_manager.current_window_width
     if is_new_study_series:
@@ -350,143 +606,26 @@ def resolve_window_level_for_series_transition(
     else:
         use_rescaled_values = mgr.view_state_manager.use_rescaled_values
 
-    # -- 3. Debug log entry --------------------------------------------------
-    if DEBUG_WL:
-        study_uid = getattr(dataset, 'StudyInstanceUID', '')[:24] if getattr(dataset, 'StudyInstanceUID', '') else ''
-        modality = getattr(dataset, 'Modality', '?')
-        print_redacted(
-            f"[DEBUG-WL] display_slice ENTER: study={study_uid}... series={new_series_uid[:24] if new_series_uid else ''}... "
-            f"modality={modality} is_new={is_new_study_series} is_same={is_same_series} | "
-            f"rescale_slope={rescale_slope} rescale_intercept={rescale_intercept} | "
-            f"use_rescaled_values={use_rescaled_values}"
-        )
+    _debug_log_wl_enter(
+        dataset,
+        new_series_uid,
+        is_new_study_series,
+        is_same_series,
+        rescale_slope,
+        rescale_intercept,
+        use_rescaled_values,
+    )
 
-    # -- 4. New study/series W/L resolution ----------------------------------
     if is_new_study_series:
-        window_center = None
-        window_width = None
-        stored_window_center: float | None = None
-        stored_window_width: float | None = None
-
-        study_uid = getattr(dataset, 'StudyInstanceUID', '')
-        series_in_dict = bool(
-            study_uid and new_series_uid and current_studies
-            and study_uid in current_studies
-            and new_series_uid in current_studies[study_uid]
+        window_center, window_width = _resolve_new_series_window_level(
+            mgr,
+            dataset,
+            current_studies,
+            new_series_uid,
+            series_identifier,
+            use_rescaled_values=use_rescaled_values,
+            rescale_slope=rescale_slope,
+            rescale_intercept=rescale_intercept,
         )
-        if DEBUG_WL:
-            print_redacted(
-                f"[DEBUG-WL] new series: series_in_current_studies={series_in_dict} "
-                f"(study_uid in current_studies={study_uid in current_studies if current_studies else False} "
-                f"series_uid in study={new_series_uid in current_studies.get(study_uid, {}) if study_uid and current_studies else False})"
-            )
-
-        if study_uid and new_series_uid and current_studies:
-            if study_uid in current_studies and new_series_uid in current_studies[study_uid]:
-                series_datasets = current_studies[study_uid][new_series_uid]
-
-                # 4a. Compute series pixel range
-                _, _, series_pixel_min, series_pixel_max = _compute_pixel_range_wl(
-                    mgr, series_datasets, use_rescaled_values
-                )
-
-                # 4b. Build presets and extract embedded W/L
-                wc, ww, is_rescaled = _build_presets_and_extract_wl(
-                    mgr, dataset, rescale_slope, rescale_intercept, "embedded"
-                )
-
-                # 4c. Determine stored W/L
-                if wc is not None and ww is not None:
-                    # Embedded W/L found -- apply rescale conversion
-                    stored_window_center, stored_window_width = _apply_rescale_and_store_defaults(
-                        mgr, wc, ww, is_rescaled, use_rescaled_values,
-                        rescale_slope, rescale_intercept, "",
-                    )
-                    if DEBUG_WL:
-                        print(f"[DEBUG-WL] after conversion stored_wc={stored_window_center} stored_ww={stored_window_width}")
-                elif series_pixel_min is not None and series_pixel_max is not None:
-                    # No embedded W/L but pixel range available
-                    stored_window_center, stored_window_width = _compute_wl_from_series_pixel_range(
-                        mgr, series_datasets, series_pixel_min, series_pixel_max,
-                        use_rescaled_values,
-                    )
-                else:
-                    # Single-slice pixel range fallback
-                    stored_window_center, stored_window_width = _compute_wl_from_single_slice(
-                        mgr, dataset, use_rescaled_values
-                    )
-                mgr.view_state_manager.window_level_user_modified = False
-
-        if stored_window_center is not None and stored_window_width is not None:
-            if DEBUG_WL:
-                study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                print_redacted(
-                    f"[DEBUG-WL] New series WL: study_uid={study_uid[:20] if study_uid else ''}... "
-                    f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
-                    f"use_rescaled={use_rescaled_values} slope={rescale_slope} intercept={rescale_intercept} "
-                    f"stored_wc={stored_window_center} stored_ww={stored_window_width}"
-                )
-            window_center = stored_window_center
-            window_width = stored_window_width
-            _store_wl_and_defaults(
-                mgr, window_center, window_width, use_rescaled_values, series_identifier
-            )
-        else:
-            # -- Fallback branch: series not in dict or no stored W/L --------
-            if DEBUG_WL:
-                study_uid = getattr(dataset, 'StudyInstanceUID', '')
-                print_redacted(
-                    f"[DEBUG-WL] New series WL fallback: study_uid={study_uid[:20] if study_uid else ''}... "
-                    f"series_uid={new_series_uid[:20] if new_series_uid else ''}... "
-                    f"computing from dataset being loaded"
-                )
-            # Compute single-dataset pixel range for the fallback path
-            try:
-                pixel_min, pixel_max = mgr.dicom_processor.get_pixel_value_range(
-                    dataset, apply_rescale=use_rescaled_values
-                )
-                if pixel_min is not None and pixel_max is not None:
-                    mgr.view_state_manager.set_series_pixel_range(pixel_min, pixel_max)
-                else:
-                    mgr.view_state_manager.clear_series_pixel_range()
-            except Exception:
-                mgr.view_state_manager.clear_series_pixel_range()
-
-            # Build presets and extract W/L (same logic as branch A)
-            wc, ww, is_rescaled = _build_presets_and_extract_wl(
-                mgr, dataset, rescale_slope, rescale_intercept, "fallback"
-            )
-
-            if wc is not None and ww is not None:
-                wc, ww = _apply_rescale_and_store_defaults(
-                    mgr, wc, ww, is_rescaled, use_rescaled_values,
-                    rescale_slope, rescale_intercept, "fallback",
-                )
-                window_center = wc
-                window_width = ww
-                mgr.view_state_manager.current_window_center = wc
-                mgr.view_state_manager.current_window_width = ww
-                if series_identifier not in mgr.view_state_manager.series_defaults:
-                    mgr.view_state_manager.series_defaults[series_identifier] = {}
-                mgr.view_state_manager.series_defaults[series_identifier].update({
-                    'window_center': window_center,
-                    'window_width': window_width,
-                    'use_rescaled_values': use_rescaled_values,
-                    'image_inverted': mgr.image_viewer.image_inverted,
-                    'window_level_defaults_set': True,
-                })
-            else:
-                if DEBUG_WL:
-                    print("[DEBUG-WL] fallback: no embedded WL (wc/ww None), dataset_to_image will use internal default")
-                window_center = None
-                window_width = None
-                mgr.view_state_manager.current_window_center = None
-                mgr.view_state_manager.current_window_width = None
-
-        # -- 5. Restore user W/L cache if available --------------------------
-        cached_wc, cached_ww = _restore_user_wl_cache(mgr, series_identifier)
-        if cached_wc is not None:
-            window_center = cached_wc
-            window_width = cached_ww
 
     return window_center, window_width, use_rescaled_values

@@ -20,12 +20,15 @@ REDACTED = "[REDACTED]"
 REDACTED_PATH = REDACTED
 REDACTED_EXCEPTION = "[REDACTED EXCEPTION DETAIL]"
 
+# Match drive/UNC paths even when glued to preceding text (e.g. LoadC:\Users\...).
+# Fail-closed: prefer over-redaction over leaking a path mid-token.
 _WINDOWS_PATH = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z]:\\|\\\\)[^\r\n\t\"'<>|)\],;]+",
+    r"(?:[a-z]:\\|\\\\)[^\r\n\t\"'<>|)\],;]+",
     re.IGNORECASE,
 )
+# Same fail-closed stance for home-root POSIX paths glued to preceding characters.
 _POSIX_HOME_PATH = re.compile(
-    r"(?<![A-Za-z0-9])/(?:Users|home|root|private/var/folders)/[^\r\n\t\"'<>)\],;]+",
+    r"/(?:Users|home|root|private/var/folders)/[^\r\n\t\"'<>)\],;]+",
     re.IGNORECASE,
 )
 _FILE_URI = re.compile(r"\bfile://[^\s\"'<>]+", re.IGNORECASE)

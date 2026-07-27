@@ -125,17 +125,17 @@ class _PaneTitleBarFrame(QFrame):
     def sync_bar(self) -> _SliceSyncGroupBar:
         return self._bar
 
-    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+    def _accept_or_ignore_drag(self, event: QDragEnterEvent | QDragMoveEvent) -> None:
         if self._container._mime_accepts_series_or_mpr(event.mimeData()):
             event.acceptProposedAction()
         else:
             event.ignore()
 
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        self._accept_or_ignore_drag(event)
+
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
-        if self._container._mime_accepts_series_or_mpr(event.mimeData()):
-            event.acceptProposedAction()
-        else:
-            event.ignore()
+        self._accept_or_ignore_drag(event)
 
     def dropEvent(self, event: QDropEvent) -> None:
         SubWindowContainer.dropEvent(self._container, event)

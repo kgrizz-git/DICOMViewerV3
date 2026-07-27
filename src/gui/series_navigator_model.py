@@ -11,6 +11,7 @@ Requirements: pydicom.
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from pydicom.dataset import Dataset
 
@@ -168,3 +169,101 @@ def build_instance_entries_for_navigator(
         ordinal += 1
 
     return entries
+
+
+def first_nonempty_series_dataset(
+    study_series: dict[str, list[Dataset]],
+) -> Dataset | None:
+    """Return the first dataset from the first non-empty series, if any."""
+    for datasets in study_series.values():
+        if datasets:
+            return datasets[0]
+    return None
+
+
+def sorted_series_entries(
+    study_series: dict[str, list[Dataset]],
+) -> list[tuple[int, str, Dataset]]:
+    """
+    Build ``(series_number, series_uid, first_dataset)`` rows sorted by series number.
+
+    Empty series are omitted. Non-integer SeriesNumber values sort as ``0``.
+    """
+    series_list: list[tuple[int, str, Dataset]] = []
+    for series_uid, datasets in study_series.items():
+        if not datasets:
+            continue
+        first_dataset = datasets[0]
+        series_number = getattr(first_dataset, "SeriesNumber", None)
+        try:
+            series_num = int(series_number) if series_number is not None else 0
+        except (ValueError, TypeError):
+            series_num = 0
+        series_list.append((series_num, series_uid, first_dataset))
+    series_list.sort(key=lambda row: row[0])
+    return series_list
+
+
+def series_thumbnail_display_label(first_dataset: Dataset, series_num: int) -> str:
+    """
+    Human-readable series thumbnail caption.
+
+    Prefer SeriesDescription (truncated); else Modality + series number; else ``S{n}``.
+    """
+    desc = getattr(first_dataset, "SeriesDescription", None)
+    modality = getattr(first_dataset, "Modality", None)
+    if desc and str(desc).strip():
+        label_raw = str(desc).strip()
+        return label_raw[:16] + "…" if len(label_raw) > 16 else label_raw
+    if modality:
+        return f"{str(modality).strip()} S{series_num}"
+    return f"S{series_num}"
+
+
+def compute_study_section_width(
+    series_list: list[tuple[int, str, Dataset]],
+    study_uid: str,
+    *,
+    show_instances_separately: bool,
+    multiframe_info_map: dict[tuple[str, str], Any],
+    mpr_thumbnail_specs: dict[Any, dict[str, Any]],
+    thumbnail_width: int = 68,
+    thumbnail_spacing: int = 5,
+    instance_thumbnail_width: int = 48,
+    instance_spacing: int = 4,
+) -> int:
+    """
+    Pixel width for one study section from visible thumbnail groups and MPR slots.
+
+    When no series contribute width, returns *thumbnail_width* as a minimum.
+    """
+    section_width = 0
+    for _, series_uid, _ in series_list:
+        group_width = thumbnail_width
+        multiframe_info = multiframe_info_map.get((study_uid, series_uid))
+        if (
+            show_instances_separately
+            and multiframe_info is not None
+            and multiframe_info.instance_count > 1
+            and multiframe_info.max_frame_count > 1
+        ):
+            instance_count = multiframe_info.instance_count
+            group_width += (
+                instance_spacing
+                + (instance_count * instance_thumbnail_width)
+                + ((instance_count - 1) * instance_spacing)
+            )
+        if section_width > 0:
+            section_width += thumbnail_spacing
+        section_width += group_width
+        mpr_count = sum(
+            1
+            for spec in mpr_thumbnail_specs.values()
+            if spec.get("study_uid") == study_uid
+            and spec.get("source_series_uid") == series_uid
+        )
+        if mpr_count > 0:
+            section_width += mpr_count * (thumbnail_spacing + thumbnail_width)
+    if section_width <= 0:
+        return thumbnail_width
+    return section_width

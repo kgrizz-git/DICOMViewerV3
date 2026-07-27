@@ -48,6 +48,10 @@ from gui.series_navigator_model import (
     build_instance_navigator_tooltip,
     build_series_navigator_tooltip,
     build_study_navigator_tooltip,
+    compute_study_section_width,
+    first_nonempty_series_dataset,
+    series_thumbnail_display_label,
+    sorted_series_entries,
     study_label_from_dataset,
 )
 from gui.series_navigator_view import SeriesThumbnail, StudyDivider, StudyLabel
@@ -354,8 +358,35 @@ class SeriesNavigator(QWidget):
         self.current_study_uid = current_study_uid
         self.current_series_uid = current_series_uid
         self._last_studies = studies
+        self._clear_navigator_rebuild_state()
 
-        # Clear existing widgets from main layout (keep stretch at the end).
+        if not studies:
+            return
+
+        first_study = True
+        for study_uid, study_series in studies.items():
+            if not study_series:
+                continue
+            if not first_study:
+                self._insert_study_divider()
+            self._append_study_section(
+                study_uid,
+                study_series,
+                current_study_uid,
+                current_series_uid,
+            )
+            first_study = False
+
+        self.set_current_position(current_series_uid, current_study_uid, self.current_slice_index)
+        perf_mark(
+            "first_paint.navigator.update_series_list.queued_thumbnails",
+            series_jobs=len(self._pending_thumbnail_jobs),
+            instance_jobs=len(self._pending_instance_thumbnail_jobs),
+        )
+        self._schedule_pending_thumbnail_jobs()
+
+    def _clear_navigator_rebuild_state(self) -> None:
+        """Remove study widgets and reset thumbnail tracking for a full rebuild."""
         while self.main_layout.count() > 1:  # Keep the stretch at the end
             layout_item = self.main_layout.takeAt(0)
             if layout_item is None:
@@ -365,283 +396,275 @@ class SeriesNavigator(QWidget):
                 continue
             w.deleteLater()
 
-        # Clear tracking lists
         self.thumbnails.clear()
         self.instance_thumbnails.clear()
         self._mpr_thumbnails.clear()
         self.study_labels.clear()
         self.study_dividers.clear()
         self._instance_start_indices.clear()
-        # Cancel any in-flight deferred thumbnail generation from a prior call.
         self._pending_thumbnail_jobs.clear()
         self._pending_instance_thumbnail_jobs.clear()
 
-        if not studies:
-            return
+    def _insert_study_divider(self) -> None:
+        """Insert a vertical divider before the next study section."""
+        divider = StudyDivider(self.main_container)
+        self.study_dividers.append(divider)
+        self.main_layout.insertWidget(self.main_layout.count() - 1, divider)
 
-        # Iterate through all studies and create study sections
-        first_study = True
-        for study_uid, study_series in studies.items():
-            # Skip studies with no series
-            if not study_series:
-                continue
-
-            # Add divider before study (except for first study)
-            if not first_study:
-                divider = StudyDivider(self.main_container)
-                self.study_dividers.append(divider)
-                self.main_layout.insertWidget(self.main_layout.count() - 1, divider)
-
-            # Get study label from first dataset of first series
-            study_label_text = "Unknown Study"
-            first_dataset = None
-
-            # Find first series with datasets
-            for datasets in study_series.values():
-                if datasets:
-                    first_dataset = datasets[0]
-                    break
-
-            if first_dataset:
-                study_label_text = study_label_from_dataset(first_dataset)
-
-            # Build list of (series_number, series_uid, first_dataset) for this study
-            series_list = []
-            for series_uid, datasets in study_series.items():
-                if datasets:
-                    first_dataset = datasets[0]
-                    series_number = getattr(first_dataset, 'SeriesNumber', None)
-                    try:
-                        series_num = int(series_number) if series_number is not None else 0
-                    except (ValueError, TypeError):
-                        series_num = 0
-                    series_list.append((series_num, series_uid, first_dataset))
-
-            # Sort by series number
-            series_list.sort(key=lambda x: x[0])
-
-            # Calculate width for this study section based on visible thumbnail groups,
-            # including any MPR thumbnails inserted after their source series.
-            thumbnail_width = 68
-            thumbnail_spacing = 5
-            instance_thumbnail_width = 48
-            instance_spacing = 4
-            section_width = 0
-            for _, series_uid, _ in series_list:
-                group_width = thumbnail_width
-                multiframe_info = self._multiframe_info_map.get((study_uid, series_uid))
-                if (
-                    self._show_instances_separately
-                    and multiframe_info is not None
-                    and multiframe_info.instance_count > 1
-                    and multiframe_info.max_frame_count > 1
-                ):
-                    instance_count = multiframe_info.instance_count
-                    group_width += instance_spacing + (instance_count * instance_thumbnail_width) + ((instance_count - 1) * instance_spacing)
-                if section_width > 0:
-                    section_width += thumbnail_spacing
-                section_width += group_width
-                mpr_count = sum(
-                    1
-                    for spec in self._mpr_thumbnail_specs.values()
-                    if spec.get("study_uid") == study_uid
-                    and spec.get("source_series_uid") == series_uid
-                )
-                if mpr_count > 0:
-                    section_width += mpr_count * (thumbnail_spacing + thumbnail_width)
-            if section_width <= 0:
-                section_width = thumbnail_width
-
-            # Create study section container
-            # The global stylesheet has: QWidget[objectName="series_navigator_container"] > QWidget
-            # This should apply to child widgets, but we need WA_StyledBackground for it to work
-            study_section = QWidget(self.main_container)
-            # Enable styled background so the global stylesheet rule applies
-            study_section.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            # Don't set local stylesheet - let the global one handle it
-            # The global stylesheet rule should match: QWidget[objectName="series_navigator_container"] > QWidget
-
-            section_layout = QVBoxLayout(study_section)
-            section_layout.setContentsMargins(0, 0, 0, 0)
-            section_layout.setSpacing(0)
-
-            # Add study label at top (spans full width of section)
-            study_label = StudyLabel(study_label_text, study_section)
-            study_label.set_width(section_width)
-            if first_dataset is not None:
-                study_label.apply_navigator_tooltip(
-                    build_study_navigator_tooltip(
-                        first_dataset,
-                        privacy_mode=self._privacy_mode_enabled,
-                    )
-                )
-            else:
-                study_label.apply_navigator_tooltip("")
-            self.study_labels.append(study_label)
-            section_layout.addWidget(study_label)
-
-            # Create thumbnails container
-            # The global stylesheet should apply here too via the child selector
-            thumbnails_container = QWidget(study_section)
-            # Enable styled background so the global stylesheet rule applies
-            thumbnails_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            # Don't set local stylesheet - let the global one handle it
-            thumbnails_layout = QHBoxLayout(thumbnails_container)
-            thumbnails_layout.setContentsMargins(0, 0, 0, 0)
-            thumbnails_layout.setSpacing(thumbnail_spacing)
-
-            # Create thumbnails for this study
-            for series_num, series_uid, first_dataset in series_list:
-                # Check cache first; defer generation for cache misses so the
-                # navigator appears immediately and thumbnails fill in later.
-                cache_key = (study_uid, series_uid)
-                if cache_key in self.thumbnail_cache:
-                    thumbnail_image = self.thumbnail_cache[cache_key]
-                else:
-                    thumbnail_image = None  # placeholder — filled asynchronously
-                    self._pending_thumbnail_jobs.append(
-                        (study_uid, series_uid, first_dataset, study_series[series_uid])
-                    )
-
-                series_group_widget = QWidget(thumbnails_container)
-                series_group_layout = QHBoxLayout(series_group_widget)
-                series_group_layout.setContentsMargins(0, 0, 0, 0)
-                series_group_layout.setSpacing(4)
-
-                # Build a human-readable display label from SeriesDescription (C5)
-                # Prefer SeriesDescription; fall back to Modality+SeriesNumber; last resort: bare series number
-                _desc = getattr(first_dataset, "SeriesDescription", None)
-                _mod = getattr(first_dataset, "Modality", None)
-                if _desc and str(_desc).strip():
-                    _label_raw = str(_desc).strip()
-                    _display_label = _label_raw[:16] + "…" if len(_label_raw) > 16 else _label_raw
-                elif _mod:
-                    _display_label = f"{str(_mod).strip()} S{series_num}"
-                else:
-                    _display_label = f"S{series_num}"
-
-                # Create main series thumbnail widget
-                thumbnail = SeriesThumbnail(series_uid, series_num, thumbnail_image, study_uid, series_group_widget,
-                                            display_label=_display_label)
-                thumbnail.clicked.connect(self.series_selected.emit)
-                thumbnail.show_file_requested.connect(self.show_file_requested.emit)
-                thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
-                thumbnail.close_series_signal.connect(self.close_series_requested.emit)
-                thumbnail.close_study_signal.connect(self.close_study_requested.emit)
-
-                thumbnail.setToolTip(
-                    build_series_navigator_tooltip(
-                        first_dataset,
-                        privacy_mode=self._privacy_mode_enabled,
-                    )
-                )
-
-                is_current = (series_uid == current_series_uid and study_uid == current_study_uid)
-                thumbnail.set_current(is_current)
-                multiframe_info = self._multiframe_info_map.get((study_uid, series_uid))
-                if multiframe_info is not None:
-                    thumbnail.set_multiframe_info(
-                        multiframe_info.instance_count,
-                        multiframe_info.max_frame_count,
-                    )
-                else:
-                    thumbnail.set_multiframe_info(1, 1)
-                thumbnail.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
-
-                composite_key = f"{study_uid}:{series_uid}"
-                self.thumbnails[composite_key] = thumbnail
-                series_group_layout.addWidget(thumbnail)
-
-                if (
-                    self._show_instances_separately
-                    and multiframe_info is not None
-                    and multiframe_info.instance_count > 1
-                    and multiframe_info.max_frame_count > 1
-                ):
-                    instance_entries = build_instance_entries_for_navigator(study_series[series_uid])
-                    self._instance_start_indices[(study_uid, series_uid)] = [
-                        slice_index for slice_index, _, _ in instance_entries
-                    ]
-                    for slice_index, instance_dataset, instance_label in instance_entries:
-                        cache_key = (study_uid, series_uid, slice_index)
-                        if cache_key in self.instance_thumbnail_cache:
-                            instance_thumbnail_image = self.instance_thumbnail_cache[cache_key]
-                        else:
-                            instance_thumbnail_image = None  # placeholder — filled asynchronously
-                            self._pending_instance_thumbnail_jobs.append(
-                                (study_uid, series_uid, slice_index, instance_dataset, study_series[series_uid])
-                            )
-
-                        instance_thumbnail = SeriesThumbnail(
-                            series_uid,
-                            series_num,
-                            instance_thumbnail_image,
-                            study_uid,
-                            series_group_widget,
-                            display_label=instance_label,
-                            target_slice_index=slice_index,
-                            thumbnail_size=48,
-                        )
-                        instance_thumbnail.instance_clicked.connect(self.instance_selected.emit)
-                        instance_thumbnail.show_file_requested.connect(self.show_file_requested.emit)
-                        instance_thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
-                        instance_thumbnail.close_series_signal.connect(self.close_series_requested.emit)
-                        instance_thumbnail.close_study_signal.connect(self.close_study_requested.emit)
-                        instance_thumbnail.set_show_slice_frame_count_badge(False)
-                        instance_thumbnail.setToolTip(
-                            build_instance_navigator_tooltip(
-                                first_dataset,
-                                instance_label,
-                                privacy_mode=self._privacy_mode_enabled,
-                            )
-                        )
-                        instance_composite_key = f"{study_uid}:{series_uid}:{slice_index}"
-                        self.instance_thumbnails[instance_composite_key] = instance_thumbnail
-                        series_group_layout.addWidget(instance_thumbnail)
-
-                thumbnails_layout.addWidget(series_group_widget)
-
-                for mpr_idx, mpr_spec in self._mpr_thumbnail_specs.items():
-                    if (
-                        mpr_spec.get("study_uid") != study_uid
-                        or mpr_spec.get("source_series_uid") != series_uid
-                    ):
-                        continue
-                    mpr_widget = self._create_mpr_thumbnail_widget(
-                        mpr_idx,
-                        thumbnails_container,
-                    )
-                    mpr_widget.update_preview(
-                        mpr_spec.get("pixel_array"),
-                        mpr_spec.get("window_center"),
-                        mpr_spec.get("window_width"),
-                    )
-                    mpr_widget.set_slice_count(mpr_spec.get("n_slices"))
-                    mpr_widget.set_show_slice_frame_count_badge(
-                        self._show_slice_frame_count_badge
-                    )
-                    thumbnails_layout.addWidget(mpr_widget)
-
-            # Add thumbnails container to section
-            section_layout.addWidget(thumbnails_container)
-
-            # Add study section to main layout
-            self.main_layout.insertWidget(self.main_layout.count() - 1, study_section)
-
-            first_study = False
-
-        self.set_current_position(current_series_uid, current_study_uid, self.current_slice_index)
-
-        perf_mark(
-            "first_paint.navigator.update_series_list.queued_thumbnails",
-            series_jobs=len(self._pending_thumbnail_jobs),
-            instance_jobs=len(self._pending_instance_thumbnail_jobs),
-        )
-
-        # Kick off deferred thumbnail generation so the navigator appears
-        # immediately with placeholders and thumbnails fill in progressively.
+    def _schedule_pending_thumbnail_jobs(self) -> None:
+        """Queue deferred thumbnail generation when cache misses exist."""
         if self._pending_thumbnail_jobs or self._pending_instance_thumbnail_jobs:
             QTimer.singleShot(0, self._process_next_thumbnail)
+
+    def _append_study_section(
+        self,
+        study_uid: str,
+        study_series: dict[str, list[Dataset]],
+        current_study_uid: str,
+        current_series_uid: str,
+    ) -> None:
+        """Build one study label + thumbnail row and insert it into the navigator."""
+        first_dataset = first_nonempty_series_dataset(study_series)
+        study_label_text = (
+            study_label_from_dataset(first_dataset) if first_dataset else "Unknown Study"
+        )
+        series_list = sorted_series_entries(study_series)
+        # Match prior update_series_list: tooltip used the last non-empty series
+        # dataset from dict iteration (after series_list construction overwrote
+        # the local first_dataset variable), not the first-series label source.
+        tooltip_dataset = None
+        for datasets in study_series.values():
+            if datasets:
+                tooltip_dataset = datasets[0]
+        thumbnail_spacing = 5
+        section_width = compute_study_section_width(
+            series_list,
+            study_uid,
+            show_instances_separately=self._show_instances_separately,
+            multiframe_info_map=self._multiframe_info_map,
+            mpr_thumbnail_specs=self._mpr_thumbnail_specs,
+            thumbnail_spacing=thumbnail_spacing,
+        )
+
+        study_section = QWidget(self.main_container)
+        study_section.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        section_layout = QVBoxLayout(study_section)
+        section_layout.setContentsMargins(0, 0, 0, 0)
+        section_layout.setSpacing(0)
+
+        study_label = StudyLabel(study_label_text, study_section)
+        study_label.set_width(section_width)
+        if tooltip_dataset is not None:
+            study_label.apply_navigator_tooltip(
+                build_study_navigator_tooltip(
+                    tooltip_dataset,
+                    privacy_mode=self._privacy_mode_enabled,
+                )
+            )
+        else:
+            study_label.apply_navigator_tooltip("")
+        self.study_labels.append(study_label)
+        section_layout.addWidget(study_label)
+
+        thumbnails_container = QWidget(study_section)
+        thumbnails_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        thumbnails_layout = QHBoxLayout(thumbnails_container)
+        thumbnails_layout.setContentsMargins(0, 0, 0, 0)
+        thumbnails_layout.setSpacing(thumbnail_spacing)
+
+        for series_num, series_uid, series_first_dataset in series_list:
+            self._append_series_group(
+                thumbnails_container,
+                thumbnails_layout,
+                study_uid,
+                study_series,
+                series_num,
+                series_uid,
+                series_first_dataset,
+                current_study_uid,
+                current_series_uid,
+            )
+
+        section_layout.addWidget(thumbnails_container)
+        self.main_layout.insertWidget(self.main_layout.count() - 1, study_section)
+
+    def _append_series_group(
+        self,
+        thumbnails_container: QWidget,
+        thumbnails_layout: QHBoxLayout,
+        study_uid: str,
+        study_series: dict[str, list[Dataset]],
+        series_num: int,
+        series_uid: str,
+        first_dataset: Dataset,
+        current_study_uid: str,
+        current_series_uid: str,
+    ) -> None:
+        """Add one series thumbnail group (and related instance/MPR widgets)."""
+        cache_key = (study_uid, series_uid)
+        if cache_key in self.thumbnail_cache:
+            thumbnail_image = self.thumbnail_cache[cache_key]
+        else:
+            thumbnail_image = None
+            self._pending_thumbnail_jobs.append(
+                (study_uid, series_uid, first_dataset, study_series[series_uid])
+            )
+
+        series_group_widget = QWidget(thumbnails_container)
+        series_group_layout = QHBoxLayout(series_group_widget)
+        series_group_layout.setContentsMargins(0, 0, 0, 0)
+        series_group_layout.setSpacing(4)
+
+        display_label = series_thumbnail_display_label(first_dataset, series_num)
+        thumbnail = SeriesThumbnail(
+            series_uid,
+            series_num,
+            thumbnail_image,
+            study_uid,
+            series_group_widget,
+            display_label=display_label,
+        )
+        thumbnail.clicked.connect(self.series_selected.emit)
+        thumbnail.show_file_requested.connect(self.show_file_requested.emit)
+        thumbnail.about_this_file_requested.connect(self.about_this_file_requested.emit)
+        thumbnail.close_series_signal.connect(self.close_series_requested.emit)
+        thumbnail.close_study_signal.connect(self.close_study_requested.emit)
+        thumbnail.setToolTip(
+            build_series_navigator_tooltip(
+                first_dataset,
+                privacy_mode=self._privacy_mode_enabled,
+            )
+        )
+
+        is_current = series_uid == current_series_uid and study_uid == current_study_uid
+        thumbnail.set_current(is_current)
+        multiframe_info = self._multiframe_info_map.get((study_uid, series_uid))
+        if multiframe_info is not None:
+            thumbnail.set_multiframe_info(
+                multiframe_info.instance_count,
+                multiframe_info.max_frame_count,
+            )
+        else:
+            thumbnail.set_multiframe_info(1, 1)
+        thumbnail.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
+
+        composite_key = f"{study_uid}:{series_uid}"
+        self.thumbnails[composite_key] = thumbnail
+        series_group_layout.addWidget(thumbnail)
+
+        self._append_instance_thumbnails_if_needed(
+            series_group_widget,
+            series_group_layout,
+            study_uid,
+            study_series,
+            series_num,
+            series_uid,
+            first_dataset,
+            multiframe_info,
+        )
+        thumbnails_layout.addWidget(series_group_widget)
+        self._append_mpr_thumbnails_for_series(
+            thumbnails_container,
+            thumbnails_layout,
+            study_uid,
+            series_uid,
+        )
+
+    def _append_instance_thumbnails_if_needed(
+        self,
+        series_group_widget: QWidget,
+        series_group_layout: QHBoxLayout,
+        study_uid: str,
+        study_series: dict[str, list[Dataset]],
+        series_num: int,
+        series_uid: str,
+        first_dataset: Dataset,
+        multiframe_info: MultiFrameSeriesInfo | None,
+    ) -> None:
+        """Add per-instance thumbnails when separate-instance mode applies."""
+        if not (
+            self._show_instances_separately
+            and multiframe_info is not None
+            and multiframe_info.instance_count > 1
+            and multiframe_info.max_frame_count > 1
+        ):
+            return
+
+        instance_entries = build_instance_entries_for_navigator(study_series[series_uid])
+        self._instance_start_indices[(study_uid, series_uid)] = [
+            slice_index for slice_index, _, _ in instance_entries
+        ]
+        for slice_index, instance_dataset, instance_label in instance_entries:
+            cache_key = (study_uid, series_uid, slice_index)
+            if cache_key in self.instance_thumbnail_cache:
+                instance_thumbnail_image = self.instance_thumbnail_cache[cache_key]
+            else:
+                instance_thumbnail_image = None
+                self._pending_instance_thumbnail_jobs.append(
+                    (
+                        study_uid,
+                        series_uid,
+                        slice_index,
+                        instance_dataset,
+                        study_series[series_uid],
+                    )
+                )
+
+            instance_thumbnail = SeriesThumbnail(
+                series_uid,
+                series_num,
+                instance_thumbnail_image,
+                study_uid,
+                series_group_widget,
+                display_label=instance_label,
+                target_slice_index=slice_index,
+                thumbnail_size=48,
+            )
+            instance_thumbnail.instance_clicked.connect(self.instance_selected.emit)
+            instance_thumbnail.show_file_requested.connect(self.show_file_requested.emit)
+            instance_thumbnail.about_this_file_requested.connect(
+                self.about_this_file_requested.emit
+            )
+            instance_thumbnail.close_series_signal.connect(self.close_series_requested.emit)
+            instance_thumbnail.close_study_signal.connect(self.close_study_requested.emit)
+            instance_thumbnail.set_show_slice_frame_count_badge(False)
+            instance_thumbnail.setToolTip(
+                build_instance_navigator_tooltip(
+                    first_dataset,
+                    instance_label,
+                    privacy_mode=self._privacy_mode_enabled,
+                )
+            )
+            instance_composite_key = f"{study_uid}:{series_uid}:{slice_index}"
+            self.instance_thumbnails[instance_composite_key] = instance_thumbnail
+            series_group_layout.addWidget(instance_thumbnail)
+
+    def _append_mpr_thumbnails_for_series(
+        self,
+        thumbnails_container: QWidget,
+        thumbnails_layout: QHBoxLayout,
+        study_uid: str,
+        series_uid: str,
+    ) -> None:
+        """Insert MPR preview thumbnails that belong after *series_uid*."""
+        for mpr_idx, mpr_spec in self._mpr_thumbnail_specs.items():
+            if (
+                mpr_spec.get("study_uid") != study_uid
+                or mpr_spec.get("source_series_uid") != series_uid
+            ):
+                continue
+            mpr_widget = self._create_mpr_thumbnail_widget(
+                mpr_idx,
+                thumbnails_container,
+            )
+            mpr_widget.update_preview(
+                mpr_spec.get("pixel_array"),
+                mpr_spec.get("window_center"),
+                mpr_spec.get("window_width"),
+            )
+            mpr_widget.set_slice_count(mpr_spec.get("n_slices"))
+            mpr_widget.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
+            thumbnails_layout.addWidget(mpr_widget)
 
     # ------------------------------------------------------------------
     # Deferred thumbnail generation helpers

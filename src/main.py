@@ -51,7 +51,11 @@ from gui.dialogs.file_dialog import FileDialog
 from gui.image_viewer import ImageViewer
 from gui.intensity_projection_controls_widget import IntensityProjectionControlsWidget
 from gui.main_window import MainWindow
-from gui.main_window_layout_helper import setup_main_window_content
+from gui.main_window_layout_helper import (
+    MainWindowPanels,
+    WindowSlotMapCallbacks,
+    setup_main_window_content,
+)
 from gui.multi_window_layout import MultiWindowLayout
 from gui.overlay_manager import OverlayManager
 from gui.series_navigator import SeriesNavigator
@@ -1296,20 +1300,24 @@ class DICOMViewerApp(QObject):
         """Assemble main-window panel layout. Implemented in gui.main_window_layout_helper."""
         setup_main_window_content(
             self.main_window,
-            self.multi_window_layout,
-            self.cine_controls_widget,
-            self.metadata_panel,
-            self.window_level_controls,
-            self.zoom_display_widget,
-            self.roi_list_panel,
-            self.roi_statistics_panel,
-            self.intensity_projection_controls_widget,
-            self.fusion_controls_widget,
-            self.series_navigator,
-            get_slot_to_view=self.multi_window_layout.get_slot_to_view,
-            get_layout_mode=self.multi_window_layout.get_layout_mode,
-            get_focused_view_index=self.get_focused_subwindow_index,
-            get_thumbnail_for_view=self._get_thumbnail_for_view,
+            MainWindowPanels(
+                multi_window_layout=self.multi_window_layout,
+                cine_controls_widget=self.cine_controls_widget,
+                metadata_panel=self.metadata_panel,
+                window_level_controls=self.window_level_controls,
+                zoom_display_widget=self.zoom_display_widget,
+                roi_list_panel=self.roi_list_panel,
+                roi_statistics_panel=self.roi_statistics_panel,
+                intensity_projection_controls_widget=self.intensity_projection_controls_widget,
+                fusion_controls_widget=self.fusion_controls_widget,
+                series_navigator=self.series_navigator,
+            ),
+            slot_map=WindowSlotMapCallbacks(
+                get_slot_to_view=self.multi_window_layout.get_slot_to_view,
+                get_layout_mode=self.multi_window_layout.get_layout_mode,
+                get_focused_view_index=self.get_focused_subwindow_index,
+                get_thumbnail_for_view=self._get_thumbnail_for_view,
+            ),
         )
 
     def _connect_signals(self) -> None:

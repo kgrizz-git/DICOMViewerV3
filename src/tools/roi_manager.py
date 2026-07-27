@@ -38,7 +38,6 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from core.dicom_color import multichannel_axis_labels
-from gui.view_transform_helpers import graphics_view_uniform_zoom
 from tools.roi_graphics_items import (
     ROI_RESIZE_HANDLE_IDS,
     DraggableStatisticsOverlay,
@@ -48,6 +47,15 @@ from tools.roi_graphics_items import (
     apply_roi_scene_bounding_rect,
     compute_resized_scene_rect_from_handle,
     roi_scene_bounding_rect,
+)
+from tools.roi_statistics_overlay import (
+    apply_statistics_overlay_font,
+    configure_statistics_overlay_item_flags,
+    ensure_draggable_statistics_overlay,
+    format_roi_statistics_overlay_lines,
+    resolve_roi_overlay_font_style,
+    statistics_overlay_scene_pos,
+    sync_statistics_overlay_scene_visibility,
 )
 from utils.bundled_fonts import make_qfont
 from utils.config_manager import ConfigManager
@@ -850,7 +858,7 @@ class ROIManager:
                                   rescale_type: str | None = None) -> None:
         """
         Create or update statistics overlay text item for an ROI.
-        
+
         Args:
             roi: ROI item
             statistics: Statistics dictionary
@@ -859,176 +867,31 @@ class ROIManager:
             font_color: Font color as (r, g, b) tuple (if None, uses config value)
             rescale_type: Optional rescale type (e.g., "HU") to append to values
         """
-        # Get font size and color from config if not provided
-        if font_size is None:
-            if self.config_manager is not None:
-                resolved_font_size: int = self.config_manager.get_roi_font_size()
-            else:
-                resolved_font_size = 6  # Default
-        else:
-            resolved_font_size = font_size
-
-        if font_color is None:
-            if self.config_manager:
-                font_color = self.config_manager.get_roi_font_color()
-            else:
-                font_color = (255, 255, 0)  # Default yellow
-        font_family = self.config_manager.get_roi_font_family() if self.config_manager else "IBM Plex Sans"
-        font_variant = self.config_manager.get_roi_font_variant() if self.config_manager else "Bold"
-        # Format statistics text based on visible_statistics
-        lines = []
-        unit_suffix = f" {rescale_type}" if rescale_type else ""
-
-        if "mean" in roi.visible_statistics and "mean" in statistics:
-            lines.append(f"Mean: {statistics['mean']:.2f}{unit_suffix}")
-        if "std" in roi.visible_statistics and "std" in statistics:
-            lines.append(f"Std Dev: {statistics['std']:.2f}{unit_suffix}")
-        if "min" in roi.visible_statistics and "min" in statistics:
-            lines.append(f"Min: {statistics['min']:.2f}{unit_suffix}")
-        if "max" in roi.visible_statistics and "max" in statistics:
-            lines.append(f"Max: {statistics['max']:.2f}{unit_suffix}")
-        mc = int(statistics.get("multichannel_count") or 0)
-        if mc >= 2:
-            raw_lbl = statistics.get("channel_labels")
-            if isinstance(raw_lbl, (list, tuple)) and len(raw_lbl) == mc:
-                labels = tuple(str(x) for x in raw_lbl)
-            else:
-                labels = tuple(f"Ch{i}" for i in range(mc))
-            if "mean" in roi.visible_statistics:
-                bits: list[str] = []
-                for c in range(mc):
-                    mk = f"mean_ch{c}"
-                    if mk in statistics:
-                        lab = labels[c] if c < len(labels) else str(c)
-                        bits.append(f"{lab} μ={statistics[mk]:.2f}{unit_suffix}")
-                if bits:
-                    lines.append("Ch mean: " + "  ".join(bits))
-            if "std" in roi.visible_statistics:
-                bits_std: list[str] = []
-                for c in range(mc):
-                    sk = f"std_ch{c}"
-                    if sk in statistics:
-                        lab = labels[c] if c < len(labels) else str(c)
-                        bits_std.append(f"{lab} σ={statistics[sk]:.2f}{unit_suffix}")
-                if bits_std:
-                    lines.append("Ch std: " + "  ".join(bits_std))
-            if "min" in roi.visible_statistics:
-                bits_min: list[str] = []
-                for c in range(mc):
-                    nk = f"min_ch{c}"
-                    if nk in statistics:
-                        lab = labels[c] if c < len(labels) else str(c)
-                        bits_min.append(f"{lab} min={statistics[nk]:.2f}{unit_suffix}")
-                if bits_min:
-                    lines.append("Ch min: " + "  ".join(bits_min))
-            if "max" in roi.visible_statistics:
-                bits_max: list[str] = []
-                for c in range(mc):
-                    xk = f"max_ch{c}"
-                    if xk in statistics:
-                        lab = labels[c] if c < len(labels) else str(c)
-                        bits_max.append(f"{lab} max={statistics[xk]:.2f}{unit_suffix}")
-                if bits_max:
-                    lines.append("Ch max: " + "  ".join(bits_max))
-        if "count" in roi.visible_statistics and "count" in statistics:
-            lines.append(f"Pixels: {statistics['count']}")
-        if "area" in roi.visible_statistics:
-            area_mm2 = statistics.get('area_mm2')
-            if area_mm2 is not None:
-                if area_mm2 >= 100:
-                    lines.append(f"Area: {area_mm2/100:.2f} cm²")
-                else:
-                    lines.append(f"Area: {area_mm2:.2f} mm²")
-            else:
-                area_pixels = statistics.get('area_pixels', 0.0)
-                lines.append(f"Area: {area_pixels:.1f} px")
-
+        resolved_font_size, resolved_color, font_family, font_variant = (
+            resolve_roi_overlay_font_style(self.config_manager, font_size, font_color)
+        )
+        lines = format_roi_statistics_overlay_lines(
+            roi.visible_statistics, statistics, rescale_type
+        )
         if not lines:
             return
 
-        text = "\n".join(lines)
-
-        # Create or reuse draggable text item
         def update_offset(offset_x: float, offset_y: float) -> None:
             """Update stored offset when overlay is moved."""
             roi.statistics_overlay_offset = (offset_x, offset_y)
 
-        text_item = roi.statistics_overlay_item
-        if text_item is None:
-            text_item = DraggableStatisticsOverlay(roi, update_offset)
-        else:
-            # Reuse existing overlay item, but ensure it's removed from any other scene first
-            # This prevents overlays from appearing in multiple subwindows
-            old_scene = text_item.scene()
-            #       f"old_scene={id(old_scene) if old_scene else None}, new_scene={id(scene)}")
-            if old_scene is not None and old_scene != scene:
-                old_scene.removeItem(text_item)
-            text_item.roi = roi
-            text_item.offset_update_callback = update_offset
-            text_item.clear_deleted_flag()
-        text_item.setDefaultTextColor(QColor(*font_color))
-
-        # Set font - use absolute pixel size
-        if resolved_font_size < 6:
-            font = make_qfont(font_family, font_variant, 6)
-            scale_factor = resolved_font_size / 6.0
-            transform = QTransform()
-            transform.scale(scale_factor, scale_factor)
-            text_item.setTransform(transform)
-        else:
-            font = make_qfont(font_family, font_variant, resolved_font_size)
-
-        text_item.setFont(font)
-        text_item.setPlainText(text)
-
-        # Set flag to ignore parent transformations (keeps font size consistent)
-        text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-        # Make overlay draggable
-        text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
-        text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
-        text_item.setZValue(1001)  # Above ROI but below other overlays
-
-        # Store reference to ROI in text item for position updates
-        text_item.setData(0, id(roi))  # Store ROI id as user data
-
-        # Position overlay near top-right corner of ROI bounds
-        bounds = roi.get_bounds()
-        # Use stored offset if available, otherwise use default
-        offset_x, offset_y = roi.statistics_overlay_offset
-
-        # Get view for coordinate conversion (needed for ItemIgnoresTransformations)
-        view = scene.views()[0] if scene.views() else None
-        if view is not None:
-            view_scale = graphics_view_uniform_zoom(view)
-            viewport_to_scene_scale = 1.0 / view_scale
-
-            # Position at top-right corner of ROI bounds
-            x_pos = bounds.right() + (offset_x * viewport_to_scene_scale)
-            y_pos = bounds.top() + (offset_y * viewport_to_scene_scale)
-        else:
-            # Fallback: use scene coordinates directly
-            x_pos = bounds.right() + offset_x
-            y_pos = bounds.top() + offset_y
-
-        text_item.setPos(x_pos, y_pos)
-
-        # Connect to itemChange to track when overlay is moved
-        # We'll handle this in update_statistics_overlay_position
-
-        # Only add to scene if overlay is visible
-        if roi.statistics_overlay_visible:
-            # Ensure overlay is removed from any other scene first
-            # This prevents overlays from appearing in multiple subwindows
-            current_scene = text_item.scene()
-            if current_scene is not None and current_scene != scene:
-                current_scene.removeItem(text_item)
-            # Now safe to add to new scene
-            if text_item.scene() != scene:
-                scene.addItem(text_item)
-            text_item.show()
-        else:
-            text_item.hide()
-
+        text_item = ensure_draggable_statistics_overlay(roi, scene, update_offset)
+        apply_statistics_overlay_font(
+            text_item,
+            font_size=resolved_font_size,
+            font_color=resolved_color,
+            font_family=font_family,
+            font_variant=font_variant,
+        )
+        text_item.setPlainText("\n".join(lines))
+        configure_statistics_overlay_item_flags(text_item, roi)
+        text_item.setPos(*statistics_overlay_scene_pos(roi, scene))
+        sync_statistics_overlay_scene_visibility(text_item, roi, scene)
         roi.statistics_overlay_item = text_item
 
     def update_statistics_overlay(self, roi: ROIItem, statistics: RoiStatisticsMap,
@@ -1052,7 +915,7 @@ class ROIManager:
     def update_statistics_overlay_position(self, roi: ROIItem, scene: QGraphicsScene) -> None:
         """
         Update statistics overlay position when ROI moves.
-        
+
         Args:
             roi: ROI item
             scene: QGraphicsScene
@@ -1060,28 +923,8 @@ class ROIManager:
         if roi.statistics_overlay_item is None or roi.statistics is None:
             return
 
-        # Get view for coordinate conversion
-        view = scene.views()[0] if scene.views() else None
-        bounds = roi.get_bounds()
-        # Use stored offset
-        offset_x, offset_y = roi.statistics_overlay_offset
-
-        # Set updating flag to prevent recursive updates
         roi.statistics_overlay_item.set_updating_position(True)
-
-        if view is not None:
-            view_scale = graphics_view_uniform_zoom(view)
-            viewport_to_scene_scale = 1.0 / view_scale
-
-            x_pos = bounds.right() + (offset_x * viewport_to_scene_scale)
-            y_pos = bounds.top() + (offset_y * viewport_to_scene_scale)
-        else:
-            x_pos = bounds.right() + offset_x
-            y_pos = bounds.top() + offset_y
-
-        roi.statistics_overlay_item.setPos(x_pos, y_pos)
-
-        # Clear updating flag
+        roi.statistics_overlay_item.setPos(*statistics_overlay_scene_pos(roi, scene))
         roi.statistics_overlay_item.set_updating_position(False)
 
     def remove_statistics_overlay(self, roi: ROIItem, scene: QGraphicsScene) -> None:

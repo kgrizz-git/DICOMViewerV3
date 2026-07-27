@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from PIL import Image
 
-from gui.slice_display_manager import SliceDisplayManager
+from gui.slice_display_manager import BaseImageRenderContext, SliceDisplayManager
 
 
 def _make_manager(**overrides) -> SliceDisplayManager:
@@ -92,20 +92,22 @@ def test_projection_success_skips_dataset_to_image(qapp) -> None:
     ds = _ds()
 
     mgr._render_base_image_pipeline(
-        ds,
-        {ds.StudyInstanceUID: {ds.SeriesInstanceUID: [ds]}},
-        ds.StudyInstanceUID,
-        ds.SeriesInstanceUID,
-        0,
-        40.0,
-        400.0,
-        True,
-        1.0,
-        0.0,
-        True,
-        False,
-        "series-key",
-        None,
+        BaseImageRenderContext(
+            ds,
+            {ds.StudyInstanceUID: {ds.SeriesInstanceUID: [ds]}},
+            ds.StudyInstanceUID,
+            ds.SeriesInstanceUID,
+            0,
+            40.0,
+            400.0,
+            True,
+            1.0,
+            0.0,
+            True,
+            False,
+            "series-key",
+            None,
+        )
     )
 
     mgr.dicom_processor.dataset_to_image.assert_not_called()
@@ -123,20 +125,22 @@ def test_projection_none_falls_back_to_dataset_to_image(qapp) -> None:
     ds = _ds()
 
     mgr._render_base_image_pipeline(
-        ds,
-        {ds.StudyInstanceUID: {ds.SeriesInstanceUID: [ds]}},
-        ds.StudyInstanceUID,
-        ds.SeriesInstanceUID,
-        0,
-        40.0,
-        400.0,
-        True,
-        1.0,
-        0.0,
-        True,
-        False,
-        "series-key",
-        None,
+        BaseImageRenderContext(
+            ds,
+            {ds.StudyInstanceUID: {ds.SeriesInstanceUID: [ds]}},
+            ds.StudyInstanceUID,
+            ds.SeriesInstanceUID,
+            0,
+            40.0,
+            400.0,
+            True,
+            1.0,
+            0.0,
+            True,
+            False,
+            "series-key",
+            None,
+        )
     )
 
     mgr.dicom_processor.dataset_to_image.assert_called_once()
@@ -150,20 +154,22 @@ def test_none_image_uses_placeholder_and_sr_bar(qapp) -> None:
     ds = _ds(modality="SR")
 
     mgr._render_base_image_pipeline(
-        ds,
-        {},
-        "",
-        "",
-        0,
-        None,
-        None,
-        False,
-        None,
-        None,
-        False,
-        True,
-        "series-key",
-        None,
+        BaseImageRenderContext(
+            ds,
+            {},
+            "",
+            "",
+            0,
+            None,
+            None,
+            False,
+            None,
+            None,
+            False,
+            True,
+            "series-key",
+            None,
+        )
     )
 
     mgr.image_viewer.set_no_pixel_placeholder_bar.assert_any_call(
@@ -184,20 +190,22 @@ def test_fusion_replaces_base_image_when_available(qapp) -> None:
     studies = {ds.StudyInstanceUID: {ds.SeriesInstanceUID: [ds]}}
 
     mgr._render_base_image_pipeline(
-        ds,
-        studies,
-        ds.StudyInstanceUID,
-        ds.SeriesInstanceUID,
-        0,
-        40.0,
-        400.0,
-        True,
-        1.0,
-        0.0,
-        True,
-        False,
-        "series-key",
-        None,
+        BaseImageRenderContext(
+            ds,
+            studies,
+            ds.StudyInstanceUID,
+            ds.SeriesInstanceUID,
+            0,
+            40.0,
+            400.0,
+            True,
+            1.0,
+            0.0,
+            True,
+            False,
+            "series-key",
+            None,
+        )
     )
 
     fusion.get_fused_image.assert_called_once()

@@ -37,9 +37,13 @@ from PySide6.QtWidgets import (
 
 from core.dicom_processor import DICOMProcessor
 from core.multiframe_handler import (
-    get_frame_count,
     get_frame_pixel_array,
     is_multiframe,
+)
+from gui.dialogs.histogram_frequency import (
+    compute_series_global_frequency_stats,
+    parse_rescale_slope_intercept,
+    resolve_series_datasets,
 )
 from tools.histogram_widget import HistogramWidget
 
@@ -66,7 +70,7 @@ class HistogramDialog(QDialog):
     """
 
     def __init__(
-        self,
+        self,  # NOSONAR(S107) - DI wiring ctor; many injected collaborators by design
         parent=None,
         get_current_dataset: HistogramDatasetFn | None = None,
         get_current_slice_index: Callable[[], int] | None = None,
@@ -149,95 +153,29 @@ class HistogramDialog(QDialog):
         self.series_global_x_min = None
         self.series_global_x_max = None
 
-        # Resolve datasets for the current series
-        datasets = None
-        if self.get_series_datasets is not None:
-            datasets = self.get_series_datasets() or None
-
-        if (not datasets) and self.get_all_studies and self.get_series_study_uid and self.get_series_uid:
-            studies = self.get_all_studies() or {}
-            study_uid = self.get_series_study_uid()
-            series_uid = self.get_series_uid()
-            if study_uid and series_uid:
-                series_dict = studies.get(study_uid, {})
-                datasets = series_dict.get(series_uid)
-
+        datasets = resolve_series_datasets(
+            self.get_series_datasets,
+            self.get_all_studies,
+            self.get_series_study_uid,
+            self.get_series_uid,
+        )
         if not datasets:
             return
 
-        # Prepare optional rescale parameters (assumed consistent within a series)
-        rescale_slope = 1.0
-        rescale_intercept = 0.0
-        if use_rescaled and self.get_rescale_params:
-            try:
-                slope, intercept, _ = self.get_rescale_params()
-                if slope is not None:
-                    rescale_slope = float(slope)
-                if intercept is not None:
-                    rescale_intercept = float(intercept)
-            except Exception:
-                pass
-
-        max_freq = 0.0
-        global_x_min = None
-        global_x_max = None
-
-        for dataset in datasets:
-            if dataset is None:
-                continue
-            try:
-                if is_multiframe(dataset):
-                    # Iterate over all frames in this dataset
-                    num_frames = get_frame_count(dataset)
-                    for frame_index in range(max(0, num_frames)):
-                        frame_array = get_frame_pixel_array(dataset, frame_index)
-                        if frame_array is None:
-                            continue
-                        pixels = frame_array.astype(np.float32)
-                        if use_rescaled:
-                            pixels = pixels * rescale_slope + rescale_intercept
-                        if pixels.size == 0:
-                            continue
-                        hist, _ = np.histogram(pixels.flatten(), bins=256)
-                        if hist.size > 0:
-                            max_freq = max(max_freq, float(hist.max()))
-                        # Track global pixel value range
-                        frame_min = float(pixels.min())
-                        frame_max = float(pixels.max())
-                        global_x_min = frame_min if global_x_min is None else min(global_x_min, frame_min)
-                        global_x_max = frame_max if global_x_max is None else max(global_x_max, frame_max)
-                else:
-                    pixel_array = DICOMProcessor.get_pixel_array(dataset)
-                    if pixel_array is None:
-                        continue
-                    # Handle 2D or 3D arrays (frames, height, width)
-                    if pixel_array.ndim == 3:
-                        frames = pixel_array
-                    else:
-                        frames = [pixel_array]
-                    for frame_array in frames:
-                        pixels = frame_array.astype(np.float32)
-                        if use_rescaled:
-                            pixels = pixels * rescale_slope + rescale_intercept
-                        if pixels.size == 0:
-                            continue
-                        hist, _ = np.histogram(pixels.flatten(), bins=256)
-                        if hist.size > 0:
-                            max_freq = max(max_freq, float(hist.max()))
-                        # Track global pixel value range
-                        frame_min = float(pixels.min())
-                        frame_max = float(pixels.max())
-                        global_x_min = frame_min if global_x_min is None else min(global_x_min, frame_min)
-                        global_x_max = frame_max if global_x_max is None else max(global_x_max, frame_max)
-            except Exception:
-                # On any error, skip problematic dataset but continue with others
-                continue
-
-        if max_freq > 0:
-            self.series_global_frequency_max = max_freq
-        if global_x_min is not None and global_x_max is not None and global_x_max > global_x_min:
-            self.series_global_x_min = global_x_min
-            self.series_global_x_max = global_x_max
+        rescale_slope, rescale_intercept = parse_rescale_slope_intercept(
+            use_rescaled,
+            self.get_rescale_params,
+        )
+        (
+            self.series_global_frequency_max,
+            self.series_global_x_min,
+            self.series_global_x_max,
+        ) = compute_series_global_frequency_stats(
+            datasets,
+            use_rescaled,
+            rescale_slope,
+            rescale_intercept,
+        )
 
     def _create_ui(self) -> None:
         """Create the UI components."""

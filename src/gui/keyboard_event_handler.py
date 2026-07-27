@@ -90,7 +90,7 @@ class KeyboardEventHandler:
     """
 
     def __init__(
-        self,
+        self,  # NOSONAR(S107) - DI wiring ctor; many injected collaborators by design
         roi_manager: ROIManager,
         measurement_tool: MeasurementTool,
         slice_navigator: SliceNavigator,

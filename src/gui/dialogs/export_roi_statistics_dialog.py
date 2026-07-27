@@ -377,7 +377,12 @@ class ExportROIStatisticsDialog(QDialog):
                 "Please specify a file path (use Browse to choose location).",
             )
             return
-        format_key = "TXT" if self.radio_txt.isChecked() else "CSV" if self.radio_csv.isChecked() else "XLSX"
+        if self.radio_txt.isChecked():
+            format_key = "TXT"
+        elif self.radio_csv.isChecked():
+            format_key = "CSV"
+        else:
+            format_key = "XLSX"
         use_rescale = self.rescale_checkbox.isChecked()
         try:
             run_export(

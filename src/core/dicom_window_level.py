@@ -279,6 +279,13 @@ def resolve_window_level_and_rescale(
     return window_center, window_width, out_slope, out_intercept
 
 
+def _nth_or_last(values: list[Any], index: int):
+    """Return ``values[index]``, falling back to the last value, or None if empty."""
+    if index < len(values):
+        return values[index]
+    return values[-1] if values else None
+
+
 def get_window_level_presets_from_dataset(
     dataset: Dataset,
     rescale_slope: float | None = None,
@@ -370,8 +377,8 @@ def get_window_level_presets_from_dataset(
         if num_presets == 0:
             return presets
         for i in range(num_presets):
-            wc = window_centers[i] if i < len(window_centers) else (window_centers[-1] if window_centers else None)
-            ww = window_widths[i] if i < len(window_widths) else (window_widths[-1] if window_widths else None)
+            wc = _nth_or_last(window_centers, i)
+            ww = _nth_or_last(window_widths, i)
             if wc is None or ww is None:
                 continue
             preset_name = (

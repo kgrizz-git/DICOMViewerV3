@@ -405,6 +405,98 @@ def get_frame_pixel_array(dataset: Dataset, frame_index: int) -> np.ndarray | No
         return None
 
 
+def _select_functional_group_item(fg_source, shared_seq, frame_index):
+    """Pick the functional-group item: shared uses index 0, per-frame uses frame_index."""
+    if fg_source is shared_seq:
+        return fg_source[0]
+    if 0 <= frame_index < len(fg_source):
+        return fg_source[frame_index]
+    return None
+
+
+def _nested_sequence_attr(fg_item: Any, sequence_name: str, attr_name: str) -> Any:
+    """Return ``fg_item.<sequence>[0].<attr>`` when present, else None."""
+    seq = getattr(fg_item, sequence_name, None)
+    if not seq or len(seq) == 0:
+        return None
+    return getattr(seq[0], attr_name, None)
+
+
+def _set_local_attr_if_unset(wrapper: "FrameDatasetWrapper", keyword: str, value: Any) -> None:
+    """Store a local frame override only when *keyword* is absent from local ``_dict``.
+
+    Uses local storage only — ``hasattr`` / ``wrapper.get`` can see delegated
+    parent-dataset attributes via ``__getattr__`` and incorrectly skip overrides.
+    """
+    if value is None:
+        return
+    try:
+        tag = Tag(keyword)
+    except Exception:
+        return
+    if tag in wrapper._dict:
+        return
+    wrapper._set_local_value(keyword, value)
+
+
+def _apply_per_frame_plane_geometry(wrapper: "FrameDatasetWrapper", frame_fg: Any) -> None:
+    """Copy IPP/IOP from a PerFrameFunctionalGroupsSequence item onto *wrapper*."""
+    ipp = _nested_sequence_attr(frame_fg, "PlanePositionSequence", "ImagePositionPatient")
+    if ipp is not None:
+        wrapper._set_local_value("ImagePositionPatient", ipp)
+    iop = _nested_sequence_attr(frame_fg, "PlaneOrientationSequence", "ImageOrientationPatient")
+    if iop is not None:
+        wrapper._set_local_value("ImageOrientationPatient", iop)
+
+
+def _apply_shared_plane_geometry_if_unset(wrapper: "FrameDatasetWrapper", shared_fg: Any) -> None:
+    """Fill missing IPP/IOP from SharedFunctionalGroupsSequence when not already set."""
+    if wrapper.get("ImageOrientationPatient") is None:
+        iop = _nested_sequence_attr(shared_fg, "PlaneOrientationSequence", "ImageOrientationPatient")
+        if iop is not None:
+            wrapper._set_local_value("ImageOrientationPatient", iop)
+    if wrapper.get("ImagePositionPatient") is None:
+        ipp = _nested_sequence_attr(shared_fg, "PlanePositionSequence", "ImagePositionPatient")
+        if ipp is not None:
+            wrapper._set_local_value("ImagePositionPatient", ipp)
+
+
+def _apply_attrs_from_functional_groups(
+    wrapper: "FrameDatasetWrapper",
+    shared_seq: Any,
+    per_frame_seq: Any,
+    frame_index: int,
+    sequence_name: str,
+    attr_names: tuple[str, ...],
+) -> None:
+    """
+    Copy nested functional-group attributes onto *wrapper*.
+
+    Walks shared then per-frame sources and only fills attributes that are still
+    unset (shared values win when both are present — matches prior behavior).
+    """
+    for fg_source in (shared_seq, per_frame_seq):
+        if not fg_source:
+            continue
+        fg_item = _select_functional_group_item(fg_source, shared_seq, frame_index)
+        if fg_item is None:
+            continue
+        nested = getattr(fg_item, sequence_name, None)
+        if not nested or len(nested) == 0:
+            continue
+        source_item = nested[0]
+        for attr_name in attr_names:
+            _set_local_attr_if_unset(
+                wrapper, attr_name, getattr(source_item, attr_name, None)
+            )
+
+
+# Attribute lists copied from enhanced multi-frame functional groups into a frame wrapper.
+_PIXEL_MEASURE_ATTRS = ("PixelSpacing", "SliceThickness", "SpacingBetweenSlices")
+_RESCALE_ATTRS = ("RescaleSlope", "RescaleIntercept", "RescaleType")
+_VOI_LUT_ATTRS = ("WindowCenter", "WindowWidth", "WindowCenterWidthExplanation")
+
+
 def create_frame_dataset(dataset: Dataset, frame_index: int) -> Dataset | None:
     """
     Create a frame-specific dataset wrapper for a multi-frame DICOM file.
@@ -456,135 +548,56 @@ class FrameDatasetWrapper(Dataset):
     def __init__(self, original_dataset: Dataset, frame_index: int):
         """
         Initialize frame dataset wrapper.
-        
+
         Args:
             original_dataset: Original multi-frame DICOM dataset
             frame_index: Zero-based index of the frame this wrapper represents
         """
         super().__init__()
 
-        # Store reference to original dataset and frame index
-        self._original_dataset = original_dataset
-        self._frame_index = frame_index
-
         # Keep only per-frame overrides locally. Copying every non-pixel element
         # (especially enhanced functional groups) once for every frame dominates
         # post-load time for large multi-frame studies. Read methods below proxy
         # the original dataset for all other metadata.
-        if hasattr(original_dataset, 'NumberOfFrames'):
-            self._set_local_value('NumberOfFrames', 1)
+        self._original_dataset = original_dataset
+        self._frame_index = frame_index
 
-        # Extract per-frame geometry from PerFrameFunctionalGroupsSequence
-        per_frame_seq = getattr(original_dataset, 'PerFrameFunctionalGroupsSequence', None)
+        if hasattr(original_dataset, "NumberOfFrames"):
+            self._set_local_value("NumberOfFrames", 1)
+
+        per_frame_seq = getattr(original_dataset, "PerFrameFunctionalGroupsSequence", None)
         if per_frame_seq and 0 <= frame_index < len(per_frame_seq):
-            frame_fg = per_frame_seq[frame_index]
-            # Extract IPP from PlanePositionSequence
-            plane_pos = getattr(frame_fg, 'PlanePositionSequence', None)
-            if plane_pos and len(plane_pos) > 0:
-                ipp = getattr(plane_pos[0], 'ImagePositionPatient', None)
-                if ipp is not None:
-                    self._set_local_value('ImagePositionPatient', ipp)
-            # Extract IOP from PlaneOrientationSequence
-            plane_orient = getattr(frame_fg, 'PlaneOrientationSequence', None)
-            if plane_orient and len(plane_orient) > 0:
-                iop = getattr(plane_orient[0], 'ImageOrientationPatient', None)
-                if iop is not None:
-                    self._set_local_value('ImageOrientationPatient', iop)
+            _apply_per_frame_plane_geometry(self, per_frame_seq[frame_index])
 
-        # Also check SharedFunctionalGroupsSequence for geometry shared across all frames
-        shared_seq = getattr(original_dataset, 'SharedFunctionalGroupsSequence', None)
+        shared_seq = getattr(original_dataset, "SharedFunctionalGroupsSequence", None)
         if shared_seq and len(shared_seq) > 0:
-            shared_fg = shared_seq[0]
-            # IOP is often shared across all frames
-            if self.get('ImageOrientationPatient') is None:
-                plane_orient = getattr(shared_fg, 'PlaneOrientationSequence', None)
-                if plane_orient and len(plane_orient) > 0:
-                    iop = getattr(plane_orient[0], 'ImageOrientationPatient', None)
-                    if iop is not None:
-                        self._set_local_value('ImageOrientationPatient', iop)
-            # IPP from shared (less common but possible)
-            if self.get('ImagePositionPatient') is None:
-                plane_pos = getattr(shared_fg, 'PlanePositionSequence', None)
-                if plane_pos and len(plane_pos) > 0:
-                    ipp = getattr(plane_pos[0], 'ImagePositionPatient', None)
-                    if ipp is not None:
-                        self._set_local_value('ImagePositionPatient', ipp)
+            _apply_shared_plane_geometry_if_unset(self, shared_seq[0])
 
-        # Extract PixelSpacing / SliceThickness from PixelMeasuresSequence
-        # (shared or per-frame; per-frame overrides shared)
-        for fg_source in (shared_seq, per_frame_seq):
-            if not fg_source:
-                continue
-            fg_item = fg_source[0] if fg_source is shared_seq else (
-                fg_source[frame_index] if 0 <= frame_index < len(fg_source) else None
-            )
-            if fg_item is None:
-                continue
-            pm_seq = getattr(fg_item, 'PixelMeasuresSequence', None)
-            if pm_seq and len(pm_seq) > 0:
-                pm = pm_seq[0]
-                if not hasattr(self, 'PixelSpacing') or self.get('PixelSpacing') is None:
-                    ps = getattr(pm, 'PixelSpacing', None)
-                    if ps is not None:
-                        self._set_local_value('PixelSpacing', ps)
-                if not hasattr(self, 'SliceThickness') or self.get('SliceThickness') is None:
-                    st = getattr(pm, 'SliceThickness', None)
-                    if st is not None:
-                        self._set_local_value('SliceThickness', st)
-                if not hasattr(self, 'SpacingBetweenSlices') or self.get('SpacingBetweenSlices') is None:
-                    sbs = getattr(pm, 'SpacingBetweenSlices', None)
-                    if sbs is not None:
-                        self._set_local_value('SpacingBetweenSlices', sbs)
-
-        # Extract rescale parameters from PixelValueTransformationSequence
-        for fg_source in (shared_seq, per_frame_seq):
-            if not fg_source:
-                continue
-            fg_item = fg_source[0] if fg_source is shared_seq else (
-                fg_source[frame_index] if 0 <= frame_index < len(fg_source) else None
-            )
-            if fg_item is None:
-                continue
-            pvt_seq = getattr(fg_item, 'PixelValueTransformationSequence', None)
-            if pvt_seq and len(pvt_seq) > 0:
-                pvt = pvt_seq[0]
-                if not hasattr(self, 'RescaleSlope') or self.get('RescaleSlope') is None:
-                    val = getattr(pvt, 'RescaleSlope', None)
-                    if val is not None:
-                        self._set_local_value('RescaleSlope', val)
-                if not hasattr(self, 'RescaleIntercept') or self.get('RescaleIntercept') is None:
-                    val = getattr(pvt, 'RescaleIntercept', None)
-                    if val is not None:
-                        self._set_local_value('RescaleIntercept', val)
-                if not hasattr(self, 'RescaleType') or self.get('RescaleType') is None:
-                    val = getattr(pvt, 'RescaleType', None)
-                    if val is not None:
-                        self._set_local_value('RescaleType', val)
-
-        # Extract Window Center/Width from FrameVOILUTSequence
-        for fg_source in (shared_seq, per_frame_seq):
-            if not fg_source:
-                continue
-            fg_item = fg_source[0] if fg_source is shared_seq else (
-                fg_source[frame_index] if 0 <= frame_index < len(fg_source) else None
-            )
-            if fg_item is None:
-                continue
-            voi_seq = getattr(fg_item, 'FrameVOILUTSequence', None)
-            if voi_seq and len(voi_seq) > 0:
-                voi = voi_seq[0]
-                if not hasattr(self, 'WindowCenter') or self.get('WindowCenter') is None:
-                    val = getattr(voi, 'WindowCenter', None)
-                    if val is not None:
-                        self._set_local_value('WindowCenter', val)
-                if not hasattr(self, 'WindowWidth') or self.get('WindowWidth') is None:
-                    val = getattr(voi, 'WindowWidth', None)
-                    if val is not None:
-                        self._set_local_value('WindowWidth', val)
-                if not hasattr(self, 'WindowCenterWidthExplanation') or self.get('WindowCenterWidthExplanation') is None:
-                    val = getattr(voi, 'WindowCenterWidthExplanation', None)
-                    if val is not None:
-                        self._set_local_value('WindowCenterWidthExplanation', val)
+        # Pixel measures / rescale / VOI LUT from shared then per-frame gaps.
+        _apply_attrs_from_functional_groups(
+            self,
+            shared_seq,
+            per_frame_seq,
+            frame_index,
+            "PixelMeasuresSequence",
+            _PIXEL_MEASURE_ATTRS,
+        )
+        _apply_attrs_from_functional_groups(
+            self,
+            shared_seq,
+            per_frame_seq,
+            frame_index,
+            "PixelValueTransformationSequence",
+            _RESCALE_ATTRS,
+        )
+        _apply_attrs_from_functional_groups(
+            self,
+            shared_seq,
+            per_frame_seq,
+            frame_index,
+            "FrameVOILUTSequence",
+            _VOI_LUT_ATTRS,
+        )
 
     @property
     def pixel_array(self) -> np.ndarray:

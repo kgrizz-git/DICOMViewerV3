@@ -36,6 +36,7 @@ import os
 import shutil
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -129,36 +130,64 @@ def ffmpeg_codec_and_params_for_cine_container(video_format: str) -> tuple[str, 
     raise ValueError(f"No FFmpeg codec mapping for format: {video_format!r}")
 
 
-def rasterize_cine_export_frame(
-    dataset: Dataset,
-    studies: dict[str, dict[str, list[Dataset]]],
-    study_uid: str,
-    series_uid: str,
-    slice_index: int,
-    total_slices: int,
-    window_level_option: str,
-    current_window_center: float | None,
-    current_window_width: float | None,
-    include_overlays: bool,
-    use_rescaled_values: bool,
-    roi_manager: Any,
-    overlay_manager: Any,
-    measurement_tool: Any,
-    config_manager: Any,
-    text_annotation_tool: Any,
-    arrow_annotation_tool: Any,
-    projection_enabled: bool,
-    projection_type: str,
-    projection_slice_count: int,
-    export_scale: float = 1.0,
-    scale_annotations_with_image: bool = False,
-    subwindow_annotation_managers: list[dict[str, Any]] | None = None,
-) -> Image.Image | None:
+@dataclass
+class CineFrameRequest:
+    """Inputs for :func:`rasterize_cine_export_frame`."""
+
+    dataset: Dataset
+    studies: dict[str, dict[str, list[Dataset]]]
+    study_uid: str
+    series_uid: str
+    slice_index: int
+    total_slices: int
+    window_level_option: str
+    current_window_center: float | None
+    current_window_width: float | None
+    include_overlays: bool
+    use_rescaled_values: bool
+    roi_manager: Any
+    overlay_manager: Any
+    measurement_tool: Any
+    config_manager: Any
+    text_annotation_tool: Any
+    arrow_annotation_tool: Any
+    projection_enabled: bool
+    projection_type: str
+    projection_slice_count: int
+    export_scale: float = 1.0
+    scale_annotations_with_image: bool = False
+    subwindow_annotation_managers: list[dict[str, Any]] | None = None
+
+
+def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None:
     """
     Rasterize one frame like PNG export (window/level, photometric, projection, overlays).
 
     Must be called from the **Qt main thread** when overlays reference live managers.
     """
+    dataset = request.dataset
+    studies = request.studies
+    study_uid = request.study_uid
+    series_uid = request.series_uid
+    slice_index = request.slice_index
+    total_slices = request.total_slices
+    window_level_option = request.window_level_option
+    current_window_center = request.current_window_center
+    current_window_width = request.current_window_width
+    include_overlays = request.include_overlays
+    use_rescaled_values = request.use_rescaled_values
+    roi_manager = request.roi_manager
+    overlay_manager = request.overlay_manager
+    measurement_tool = request.measurement_tool
+    config_manager = request.config_manager
+    text_annotation_tool = request.text_annotation_tool
+    arrow_annotation_tool = request.arrow_annotation_tool
+    projection_enabled = request.projection_enabled
+    projection_type = request.projection_type
+    projection_slice_count = request.projection_slice_count
+    export_scale = request.export_scale
+    scale_annotations_with_image = request.scale_annotations_with_image
+    subwindow_annotation_managers = request.subwindow_annotation_managers
     window_center = None
     window_width = None
     if (
@@ -214,26 +243,28 @@ def rasterize_cine_export_frame(
 
     if include_overlays:
         image = _er.render_overlays_and_rois(
-            image,
-            dataset,
-            roi_manager,
-            overlay_manager,
-            measurement_tool,
-            config_manager,
-            text_annotation_tool,
-            arrow_annotation_tool,
-            study_uid,
-            series_uid,
-            slice_index,
-            total_slices,
-            coordinate_scale=effective_scale,
-            export_scale=effective_scale,
-            scale_annotations_with_image=scale_annotations_with_image,
-            projection_enabled=projection_enabled,
-            projection_type=projection_type,
-            projection_slice_count=projection_slice_count,
-            studies=studies,
-            subwindow_annotation_managers=subwindow_annotation_managers,
+            _er.RenderOverlaysRequest(
+                image,
+                dataset,
+                roi_manager,
+                overlay_manager,
+                measurement_tool,
+                config_manager,
+                text_annotation_tool,
+                arrow_annotation_tool,
+                study_uid,
+                series_uid,
+                slice_index,
+                total_slices,
+                coordinate_scale=effective_scale,
+                export_scale=effective_scale,
+                scale_annotations_with_image=scale_annotations_with_image,
+                projection_enabled=projection_enabled,
+                projection_type=projection_type,
+                projection_slice_count=projection_slice_count,
+                studies=studies,
+                subwindow_annotation_managers=subwindow_annotation_managers,
+            )
         )
     if image.mode not in ("RGB", "RGBA"):
         image = image.convert("RGB")

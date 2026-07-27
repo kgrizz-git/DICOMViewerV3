@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import os
 import time
+from typing import NamedTuple
 
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import (
@@ -100,6 +101,33 @@ def _normalize_scene_pick_item_for_roi(item):
     if isinstance(item, ROIResizeHandleItem):
         return item.roi_graphics_shape_item()
     return item
+
+
+def _is_measurement_descendant(item) -> bool:
+    """True when ``item`` is (transitively) parented by a measurement item."""
+    if item is None:
+        return False
+    from tools.angle_measurement_items import AngleMeasurementItem
+    from tools.measurement_tool import MeasurementItem
+
+    parent = item.parentItem()
+    while parent is not None:
+        if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
+            return True
+        parent = parent.parentItem()
+    return False
+
+
+class _PressItemFlags(NamedTuple):
+    """Classification of the scene item under a left-button press."""
+
+    is_roi_item: bool
+    is_measurement_item: bool
+    is_handle: bool
+    is_measurement_text: bool
+    is_text_annotation_item: bool
+    is_arrow_annotation_item: bool
+    is_measurement_child: bool
 
 
 class ImageViewerInputMixin:
@@ -215,25 +243,16 @@ class ImageViewerInputMixin:
             self.roi_drawing_mode = "ellipse"
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "roi_rectangle":
+        elif mode in ("roi_rectangle", "auto_window_level"):
+            # Rectangle ROI drawing; auto window/level reuses the rectangle tool.
             self.roi_drawing_mode = "rectangle"
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "auto_window_level":
-            # Auto window/level mode - use rectangle ROI drawing
-            self.roi_drawing_mode = "rectangle"
-            self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            self.setCursor(Qt.CursorShape.CrossCursor)
-        elif mode == "measure":
+        elif mode in ("measure", "measure_angle"):
             self.roi_drawing_mode = None
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
-            # Cursor set by _apply_cursor_for_mouse_mode() below
-            # Reset measurement state when switching to measure mode
-            self.measuring = False
-            self.measurement_start_pos = None
-        elif mode == "measure_angle":
-            self.roi_drawing_mode = None
-            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            # Cursor set by _apply_cursor_for_mouse_mode() below.
+            # Reset measurement state when switching to a measurement mode.
             self.measuring = False
             self.measurement_start_pos = None
         elif mode == "zoom":
@@ -352,374 +371,328 @@ class ImageViewerInputMixin:
             return
 
         if event.button() == Qt.MouseButton.LeftButton:
-            # Handle select mode - allow default Qt selection behavior
+            # Select mode: let Qt handle selection; deselect on empty-space click.
             if self.mouse_mode == "select":
-                # Check what item is at the click position
-                scene_pos = self.mapToScene(event.position().toPoint())
-                raw_pick = self.scene.itemAt(scene_pos, self.transform())
-                item = _normalize_scene_pick_item_for_roi(raw_pick)
-
-                # Check if clicking on empty space (image item or None)
-                from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
-
-                from tools.angle_measurement_items import (
-                    AngleMeasurementItem,
-                    AngleVertexHandle,
-                    DraggableAngleMeasurementText,
-                )
-                from tools.measurement_tool import (
-                    DraggableMeasurementText,
-                    MeasurementHandle,
-                    MeasurementItem,
-                )
-                from tools.roi_manager import ROIResizeHandleItem
-
-                is_empty_space = (item is None or item == self.image_item)
-
-                # Check if item is an ROI - use ROI manager callback for accurate detection
-                is_roi_item = False
-                if item is not None and hasattr(self, 'get_roi_from_item_callback') and self.get_roi_from_item_callback:
-                    roi = self.get_roi_from_item_callback(item)
-                    if roi is not None:
-                        is_roi_item = True
-
-                # Fallback: check by type if callback not available
-                if not is_roi_item:
-                    is_roi_item = isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)) and item != self.image_item
-
-                is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
-                is_handle = isinstance(raw_pick, (MeasurementHandle, AngleVertexHandle, ROIResizeHandleItem))
-                is_measurement_text = isinstance(item, (DraggableMeasurementText, DraggableAngleMeasurementText))
-
-                # Check for text and arrow annotation items
-                from tools.arrow_annotation_tool import ArrowAnnotationItem
-                from tools.text_annotation_tool import TextAnnotationItem
-                is_text_annotation_item = isinstance(item, TextAnnotationItem)
-                is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
-
-                # Check if item is a child of a measurement (line or text)
-                is_measurement_child = False
-                if item is not None:
-                    parent = item.parentItem()
-                    while parent is not None:
-                        if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
-                            is_measurement_child = True
-                            break
-                        parent = parent.parentItem()
-                if is_empty_space and not (is_roi_item or is_measurement_item or is_handle or is_measurement_text or is_measurement_child or is_text_annotation_item or is_arrow_annotation_item):
-                    # Clicking on empty space - deselect everything
-
-                    if self.scene is not None:
-                        # First, explicitly deselect all measurements, text annotations, arrow annotations, and their text labels
-                        from tools.arrow_annotation_tool import ArrowAnnotationItem
-                        from tools.text_annotation_tool import TextAnnotationItem
-                        for scene_item in self.scene.items():
-                            if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
-                                scene_item.setSelected(False)
-
-                        # Clear scene selection (this will visually deselect ROIs)
-                        list(self.scene.selectedItems())
-                        self.scene.clearSelection()
-                        list(self.scene.selectedItems())
-
-                    # Emit signal to clear ROI selection - this is critical for proper ROI deselection
-                    # This must happen BEFORE calling super() to prevent Qt's default behavior from interfering
-                    self.image_clicked_no_roi.emit()
-
-                    # Accept the event to prevent further processing
-                    event.accept()
-                    return
-
-                # Let Qt handle selection of ROIs and measurements
-                super().mousePressEvent(event)
+                self._handle_select_mode_press(event)
                 return
-
-            # If ScrollHandDrag is active (pan mode), let Qt handle it unless clicking on ROI
+            # ScrollHandDrag (pan) mode: let Qt pan unless clicking an ROI.
             if self.dragMode() == QGraphicsView.DragMode.ScrollHandDrag:
-                # Check if clicking on ROI item first
-                scene_pos = self.mapToScene(event.position().toPoint())
-                item = _normalize_scene_pick_item_for_roi(
-                    self.scene.itemAt(scene_pos, self.transform())
-                )
-
-                from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
-                # Check if item is an ROI item (but not the image item)
-                is_roi_item = (item is not None and
-                              item != self.image_item and
-                              isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
-
-                if is_roi_item:
-                    # Clicking on ROI - disable ScrollHandDrag temporarily
-                    self.setDragMode(QGraphicsView.DragMode.NoDrag)
-                    self.roi_clicked.emit(item)
-                    return
-                else:
-                    # Not clicking on ROI (clicking on image item, empty space, or other items) - deselect measurements and emit signal for deselection
-                    from tools.angle_measurement_items import (
-                        AngleMeasurementItem,
-                        DraggableAngleMeasurementText,
-                    )
-                    from tools.arrow_annotation_tool import ArrowAnnotationItem
-                    from tools.measurement_tool import (
-                        DraggableMeasurementText,
-                        MeasurementItem,
-                    )
-                    from tools.text_annotation_tool import TextAnnotationItem
-                    if self.scene is not None:
-                        # Deselect all measurements, text annotations, arrow annotations, and their text labels
-                        for scene_item in self.scene.items():
-                            if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
-                                scene_item.setSelected(False)
-                        # Also clear scene selection to ensure everything is deselected
-                        self.scene.clearSelection()
-                    # Emit before calling super() to ensure signal is processed
-                    self.image_clicked_no_roi.emit()
-                    # This is critical: we must let Qt handle the event for ScrollHandDrag to work
-                    super().mousePressEvent(event)
-                    return
-
-            # For other modes, handle normally
-            # First check if clicking on existing ROI item
-            scene_pos = self.mapToScene(event.position().toPoint())
-            item = _normalize_scene_pick_item_for_roi(
-                self.scene.itemAt(scene_pos, self.transform())
-            )
-
-            # Check if it's a ROI item (QGraphicsRectItem or QGraphicsEllipseItem) but not the image item
-            from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
-
-            from tools.angle_measurement_items import (
-                AngleMeasurementItem,
-                AngleVertexHandle,
-                DraggableAngleMeasurementText,
-            )
-            from tools.measurement_tool import (
-                DraggableMeasurementText,
-                MeasurementHandle,
-                MeasurementItem,
-            )
-
-            is_roi_item = (item is not None and
-                          item != self.image_item and
-                          isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)))
-
-            # Check if clicking on measurement-related items
-            is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
-            is_handle = isinstance(item, (MeasurementHandle, AngleVertexHandle))
-            is_measurement_text = isinstance(item, (DraggableMeasurementText, DraggableAngleMeasurementText))
-
-            # Check for text and arrow annotation items
-            from tools.arrow_annotation_tool import ArrowAnnotationItem
-            from tools.text_annotation_tool import TextAnnotationItem
-            is_text_annotation_item = isinstance(item, TextAnnotationItem)
-            is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
-
-            # Check if item is a child of a measurement
-            is_measurement_child = False
-            if item is not None:
-                parent = item.parentItem()
-                while parent is not None:
-                    if isinstance(parent, (MeasurementItem, AngleMeasurementItem)):
-                        is_measurement_child = True
-                        break
-                    parent = parent.parentItem()
-
-            if is_roi_item:
-                # Clicking on existing ROI - emit signal for ROI click
-                self.roi_clicked.emit(item)
-            elif is_measurement_item or is_handle or is_measurement_text or is_measurement_child:
-                # Clicking on measurement, handle, text, or measurement child - let Qt handle it
-                # Don't deselect here - allow normal selection behavior
-                pass
-            elif is_text_annotation_item or is_arrow_annotation_item:
-                # Clicking on text or arrow annotation - let Qt handle it for selection
-                # Don't start new annotation if clicking on existing one
-                pass
-            elif item is None or item == self.image_item:
-                # Clicking on empty space or image item - deselect measurements and emit deselection signal
-                # This ensures measurements are deselected even after handle dragging
-                from tools.arrow_annotation_tool import ArrowAnnotationItem
-                from tools.text_annotation_tool import TextAnnotationItem
-                if self.scene is not None:
-                    # Deselect all measurements, text annotations, arrow annotations, and their text labels
-                    for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
-                            scene_item.setSelected(False)
-                    # Also clear scene selection to ensure everything is deselected
-                    self.scene.clearSelection()
-                self.image_clicked_no_roi.emit()
-                # Continue with mode-specific handling
-                if self.mouse_mode == "zoom":
-                    # Zoom mode - start zoom operation
-                    # Use viewport position for zoom tracking (more accurate for vertical movement)
-                    self.zoom_start_pos = event.position()
-                    self.zoom_start_zoom = self.current_zoom
-                    self.zoom_mouse_moved = False  # Track if mouse actually moved
-                elif self.mouse_mode == "measure":
-                    # Measurement mode - start or finish measurement
-                    if not self.measuring:
-                        # Start new measurement (first end placed); hide cursor while drawing line
-                        self.measuring = True
-                        self.measurement_start_pos = scene_pos
-                        self.setCursor(Qt.CursorShape.BlankCursor)
-                        self.measurement_started.emit(scene_pos)
-                    else:
-                        # Finish current measurement
-                        self.measuring = False
-                        self.measurement_start_pos = None
-                        self.measurement_finished.emit()
-                elif self.mouse_mode == "measure_angle":
-                    self.angle_measurement_clicked.emit(scene_pos)
-                elif self.mouse_mode == "magnifier":
-                    # Magnifier mode - activate magnifier
-                    if not self.magnifier_active:
-                        # Create magnifier widget if it doesn't exist
-                        if self.magnifier_widget is None:
-                            from gui.magnifier_widget import MagnifierWidget
-                            self.magnifier_widget = MagnifierWidget()
-
-                        self.magnifier_active = True
-                        # Hide cursor when magnifier is active
-                        self.setCursor(Qt.CursorShape.BlankCursor)
-                        # Extract and show magnified region
-                        # Get current zoom from authoritative scalar (not from matrix m11,
-                        # which would be incorrect when rotation is active)
-                        current_zoom = self.current_zoom
-                        # Magnifier zoom is 2.0x the current view zoom
-                        magnifier_zoom = 2.0 * current_zoom
-                        # Extract region size calculation for 2.0x zoom
-                        # To achieve true 2.0x zoom: we want final pixmap to be 200px (widget size)
-                        # After scaling by magnifier_zoom, we need: region_size * magnifier_zoom = 200
-                        # So: region_size = 200 / magnifier_zoom = 200 / (2.0 * current_zoom)
-                        # This ensures the extracted region, when scaled, fills the 200px widget at 2.0x zoom
-                        adjusted_region_size = 200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
-                        if DEBUG_MAGNIFIER:
-                            print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
-                        magnified_pixmap = self._render_scene_region(
-                            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
-                        )
-                        if magnified_pixmap is not None and DEBUG_MAGNIFIER:
-                            print(f"[DEBUG-MAGNIFIER] Press: extracted_region_size=({int(adjusted_region_size):d}x{int(adjusted_region_size):d}), scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
-                        if magnified_pixmap is not None:
-                            self.magnifier_widget.update_magnified_region(magnified_pixmap)
-                            # Position magnifier centered on cursor
-                            global_pos = self.mapToGlobal(event.position().toPoint())
-                            self.magnifier_widget.show_at_position(global_pos)
-                elif self.mouse_mode == "crosshair":
-                    # Crosshair mode - get pixel value and coordinates, emit signal
-                    if self.get_current_dataset_callback:
-                        dataset = self.get_current_dataset_callback()
-                        if dataset is not None:
-                            # Convert scene position to image coordinates
-                            x = int(scene_pos.x())
-                            y = int(scene_pos.y())
-                            z = 0
-                            if self.get_current_slice_index_callback:
-                                z = self.get_current_slice_index_callback()
-
-                            # Get pixel value
-                            use_rescaled = False
-                            if self.get_use_rescaled_values_callback:
-                                use_rescaled = self.get_use_rescaled_values_callback()
-
-                            pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
-
-                            # Emit signal with crosshair information
-                            self.crosshair_clicked.emit(scene_pos, pixel_value_str, x, y, z)
-                elif self.mouse_mode == "text_annotation":
-                    # Text annotation mode - start text annotation (if not clicking on existing annotation)
-                    if not is_text_annotation_item:
-                        # Finish any current annotation first (if editing)
-                        if self.text_annotating:
-                            # Cancel current annotation if it exists
-                            self.text_annotation_finished.emit()
-                        # Start new annotation
-                        self.text_annotating = True
-                        self.text_annotation_start_pos = scene_pos
-                        self.text_annotation_started.emit(scene_pos)
-                    else:
-                        # Clicking on existing text annotation - let it handle the event (for selection/editing)
-                        pass
-                elif self.mouse_mode == "arrow_annotation":
-                    # Arrow annotation mode - start arrow annotation (if not clicking on existing annotation)
-                    if not is_arrow_annotation_item:
-                        # Cancel any current arrow first
-                        if self.arrow_annotating:
-                            self.arrow_annotation_finished.emit()
-                        # Start new arrow
-                        self.arrow_annotating = True
-                        self.arrow_annotation_start_pos = scene_pos
-                        self.arrow_annotation_started.emit(scene_pos)
-                elif self.roi_drawing_mode:
-                    # Start ROI drawing
-                    self.roi_drawing_start = scene_pos
-                    self.roi_drawing_started.emit(scene_pos)
-            elif self.mouse_mode == "zoom":
-                # Zoom mode - start zoom operation (clicking on overlay or other items)
-                # Use viewport position for zoom tracking (more accurate for vertical movement)
-                self.zoom_start_pos = event.position()
-                self.zoom_start_zoom = self.current_zoom
-                self.zoom_mouse_moved = False  # Track if mouse actually moved
-                # Deselect measurements when clicking away
-                from tools.angle_measurement_items import (
-                    AngleMeasurementItem,
-                    DraggableAngleMeasurementText,
-                )
-                from tools.measurement_tool import (
-                    DraggableMeasurementText,
-                    MeasurementItem,
-                )
-                if self.scene is not None:
-                    for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText)):
-                            scene_item.setSelected(False)
-                    self.scene.clearSelection()
-                # Emit signal for clicking on image (not ROI) to allow deselection
-                self.image_clicked_no_roi.emit()
-            elif self.mouse_mode == "measure":
-                # Measurement mode - start or finish measurement
-                if not self.measuring:
-                    # Start new measurement
-                    self.measuring = True
-                    self.measurement_start_pos = scene_pos
-                    self.measurement_started.emit(scene_pos)
-                else:
-                    # Finish current measurement
-                    self.measuring = False
-                    self.measurement_start_pos = None
-                    self.measurement_finished.emit()
-            elif self.mouse_mode == "measure_angle":
-                self.angle_measurement_clicked.emit(scene_pos)
-            elif self.roi_drawing_mode:
-                # Start ROI drawing only if not clicking on existing ROI
-                self.roi_drawing_start = scene_pos
-                self.roi_drawing_started.emit(scene_pos)
-            else:
-                # Clicking on other items (overlay, etc.) but not on ROI or measurement - deselect measurements and allow deselection
-                # This ensures measurements are deselected when clicking on overlays or other items after dragging handles
-                from tools.angle_measurement_items import (
-                    AngleMeasurementItem,
-                    DraggableAngleMeasurementText,
-                )
-                from tools.arrow_annotation_tool import ArrowAnnotationItem
-                from tools.measurement_tool import (
-                    DraggableMeasurementText,
-                    MeasurementItem,
-                )
-                from tools.text_annotation_tool import TextAnnotationItem
-                if self.scene is not None:
-                    # Deselect all measurements, text annotations, arrow annotations, and their text labels
-                    for scene_item in self.scene.items():
-                        if isinstance(scene_item, (MeasurementItem, AngleMeasurementItem, DraggableMeasurementText, DraggableAngleMeasurementText, TextAnnotationItem, ArrowAnnotationItem)):
-                            scene_item.setSelected(False)
-                    # Also clear scene selection to ensure everything is deselected
-                    self.scene.clearSelection()
+                self._handle_scrollhand_press(event)
+                return
+            # All other modes: classify the item under the cursor and dispatch.
+            self._handle_left_button_press(event)
         elif event.button() == Qt.MouseButton.RightButton:
             from gui.image_viewer_context_menu import handle_mouse_press_right_button
             handle_mouse_press_right_button(self, event)
             return
 
         super().mousePressEvent(event)
+
+    def _deselect_all_annotation_items(self, *, include_text_arrow: bool = True) -> None:
+        """
+        Deselect measurement/annotation items in the scene and clear selection.
+
+        When ``include_text_arrow`` is False, text and arrow annotations are left
+        untouched (preserves the legacy zoom-overlay deselection behavior).
+        """
+        if self.scene is None:
+            return
+        from tools.angle_measurement_items import (
+            AngleMeasurementItem,
+            DraggableAngleMeasurementText,
+        )
+        from tools.measurement_tool import (
+            DraggableMeasurementText,
+            MeasurementItem,
+        )
+        annotation_types: tuple[type, ...] = (
+            MeasurementItem,
+            AngleMeasurementItem,
+            DraggableMeasurementText,
+            DraggableAngleMeasurementText,
+        )
+        if include_text_arrow:
+            from tools.arrow_annotation_tool import ArrowAnnotationItem
+            from tools.text_annotation_tool import TextAnnotationItem
+            annotation_types += (TextAnnotationItem, ArrowAnnotationItem)
+        for scene_item in self.scene.items():
+            if isinstance(scene_item, annotation_types):
+                scene_item.setSelected(False)
+        self.scene.clearSelection()
+
+    def _handle_select_mode_press(self, event: QMouseEvent) -> None:
+        """Select mode: allow Qt selection, but deselect all on empty-space click."""
+        scene_pos = self.mapToScene(event.position().toPoint())
+        raw_pick = self.scene.itemAt(scene_pos, self.transform())
+        item = _normalize_scene_pick_item_for_roi(raw_pick)
+
+        from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
+
+        from tools.angle_measurement_items import (
+            AngleMeasurementItem,
+            AngleVertexHandle,
+            DraggableAngleMeasurementText,
+        )
+        from tools.arrow_annotation_tool import ArrowAnnotationItem
+        from tools.measurement_tool import (
+            DraggableMeasurementText,
+            MeasurementHandle,
+            MeasurementItem,
+        )
+        from tools.roi_manager import ROIResizeHandleItem
+        from tools.text_annotation_tool import TextAnnotationItem
+
+        is_empty_space = item is None or item == self.image_item
+
+        # Prefer the ROI-manager callback for accurate detection; fall back to type.
+        is_roi_item = False
+        if item is not None and getattr(self, "get_roi_from_item_callback", None):
+            is_roi_item = self.get_roi_from_item_callback(item) is not None
+        if not is_roi_item:
+            is_roi_item = (
+                isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+                and item != self.image_item
+            )
+
+        is_measurement_item = isinstance(item, (MeasurementItem, AngleMeasurementItem))
+        is_handle = isinstance(
+            raw_pick, (MeasurementHandle, AngleVertexHandle, ROIResizeHandleItem)
+        )
+        is_measurement_text = isinstance(
+            item, (DraggableMeasurementText, DraggableAngleMeasurementText)
+        )
+        is_text_annotation_item = isinstance(item, TextAnnotationItem)
+        is_arrow_annotation_item = isinstance(item, ArrowAnnotationItem)
+        is_measurement_child = _is_measurement_descendant(item)
+
+        if is_empty_space and not (
+            is_roi_item
+            or is_measurement_item
+            or is_handle
+            or is_measurement_text
+            or is_measurement_child
+            or is_text_annotation_item
+            or is_arrow_annotation_item
+        ):
+            # Empty-space click: deselect everything before Qt sees the event.
+            self._deselect_all_annotation_items()
+            self.image_clicked_no_roi.emit()
+            event.accept()
+            return
+
+        # Let Qt handle selection of ROIs and measurements.
+        super().mousePressEvent(event)
+
+    def _handle_scrollhand_press(self, event: QMouseEvent) -> None:
+        """Pan mode: let Qt pan unless the click landed on an ROI item."""
+        scene_pos = self.mapToScene(event.position().toPoint())
+        item = _normalize_scene_pick_item_for_roi(
+            self.scene.itemAt(scene_pos, self.transform())
+        )
+
+        from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
+
+        is_roi_item = (
+            item is not None
+            and item != self.image_item
+            and isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+        )
+
+        if is_roi_item:
+            # Clicking on ROI - disable ScrollHandDrag temporarily.
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.roi_clicked.emit(item)
+            return
+
+        # Not an ROI: deselect and emit before letting Qt drive the pan.
+        self._deselect_all_annotation_items()
+        self.image_clicked_no_roi.emit()
+        super().mousePressEvent(event)
+
+    def _classify_normal_press_item(self, item) -> _PressItemFlags:
+        """Classify the picked ``item`` for the non-select, non-pan press path."""
+        from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
+
+        from tools.angle_measurement_items import (
+            AngleMeasurementItem,
+            AngleVertexHandle,
+            DraggableAngleMeasurementText,
+        )
+        from tools.arrow_annotation_tool import ArrowAnnotationItem
+        from tools.measurement_tool import (
+            DraggableMeasurementText,
+            MeasurementHandle,
+            MeasurementItem,
+        )
+        from tools.text_annotation_tool import TextAnnotationItem
+
+        return _PressItemFlags(
+            is_roi_item=(
+                item is not None
+                and item != self.image_item
+                and isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem))
+            ),
+            is_measurement_item=isinstance(item, (MeasurementItem, AngleMeasurementItem)),
+            is_handle=isinstance(item, (MeasurementHandle, AngleVertexHandle)),
+            is_measurement_text=isinstance(
+                item, (DraggableMeasurementText, DraggableAngleMeasurementText)
+            ),
+            is_text_annotation_item=isinstance(item, TextAnnotationItem),
+            is_arrow_annotation_item=isinstance(item, ArrowAnnotationItem),
+            is_measurement_child=_is_measurement_descendant(item),
+        )
+
+    def _handle_left_button_press(self, event: QMouseEvent) -> None:
+        """Non-select, non-pan left press: classify the item and dispatch by mode."""
+        scene_pos = self.mapToScene(event.position().toPoint())
+        item = _normalize_scene_pick_item_for_roi(
+            self.scene.itemAt(scene_pos, self.transform())
+        )
+        flags = self._classify_normal_press_item(item)
+
+        if flags.is_roi_item:
+            # Clicking on existing ROI - emit signal for ROI click.
+            self.roi_clicked.emit(item)
+        elif (
+            flags.is_measurement_item
+            or flags.is_handle
+            or flags.is_measurement_text
+            or flags.is_measurement_child
+        ):
+            # Measurement/handle/text/child - let Qt handle normal selection.
+            pass
+        elif flags.is_text_annotation_item or flags.is_arrow_annotation_item:
+            # Existing text/arrow annotation - let Qt handle it for selection.
+            pass
+        elif item is None or item == self.image_item:
+            # Empty space or image item - deselect, then run mode-specific handling.
+            self._deselect_all_annotation_items()
+            self.image_clicked_no_roi.emit()
+            self._dispatch_empty_space_press(event, scene_pos, flags)
+        elif self.mouse_mode == "zoom":
+            # Zoom mode - start zoom operation (clicking on overlay or other items).
+            self.zoom_start_pos = event.position()
+            self.zoom_start_zoom = self.current_zoom
+            self.zoom_mouse_moved = False
+            self._deselect_all_annotation_items(include_text_arrow=False)
+            self.image_clicked_no_roi.emit()
+        elif self.mouse_mode == "measure":
+            self._toggle_measurement(scene_pos, hide_cursor=False)
+        elif self.mouse_mode == "measure_angle":
+            self.angle_measurement_clicked.emit(scene_pos)
+        elif self.roi_drawing_mode:
+            # Start ROI drawing only if not clicking on existing ROI.
+            self.roi_drawing_start = scene_pos
+            self.roi_drawing_started.emit(scene_pos)
+        else:
+            # Other items (overlay, etc.): deselect so stale selections clear.
+            self._deselect_all_annotation_items()
+
+    def _dispatch_empty_space_press(self, event, scene_pos, flags) -> None:
+        """Mode-specific handling for a press on empty space or the image item."""
+        if self.mouse_mode == "zoom":
+            # Use viewport position for zoom tracking (better vertical accuracy).
+            self.zoom_start_pos = event.position()
+            self.zoom_start_zoom = self.current_zoom
+            self.zoom_mouse_moved = False
+        elif self.mouse_mode == "measure":
+            self._toggle_measurement(scene_pos, hide_cursor=True)
+        elif self.mouse_mode == "measure_angle":
+            self.angle_measurement_clicked.emit(scene_pos)
+        elif self.mouse_mode == "magnifier":
+            self._activate_magnifier(event, scene_pos)
+        elif self.mouse_mode == "crosshair":
+            self._emit_crosshair(scene_pos)
+        elif self.mouse_mode == "text_annotation":
+            if not flags.is_text_annotation_item:
+                # Finish any in-progress annotation, then start a new one.
+                if self.text_annotating:
+                    self.text_annotation_finished.emit()
+                self.text_annotating = True
+                self.text_annotation_start_pos = scene_pos
+                self.text_annotation_started.emit(scene_pos)
+        elif self.mouse_mode == "arrow_annotation":
+            if not flags.is_arrow_annotation_item:
+                # Cancel any in-progress arrow, then start a new one.
+                if self.arrow_annotating:
+                    self.arrow_annotation_finished.emit()
+                self.arrow_annotating = True
+                self.arrow_annotation_start_pos = scene_pos
+                self.arrow_annotation_started.emit(scene_pos)
+        elif self.roi_drawing_mode:
+            self.roi_drawing_start = scene_pos
+            self.roi_drawing_started.emit(scene_pos)
+
+    def _toggle_measurement(self, scene_pos, *, hide_cursor: bool) -> None:
+        """Start a new measurement or finish the in-progress one."""
+        if not self.measuring:
+            # Start new measurement (first end placed).
+            self.measuring = True
+            self.measurement_start_pos = scene_pos
+            if hide_cursor:
+                # Hide cursor while drawing the line.
+                self.setCursor(Qt.CursorShape.BlankCursor)
+            self.measurement_started.emit(scene_pos)
+        else:
+            # Finish current measurement.
+            self.measuring = False
+            self.measurement_start_pos = None
+            self.measurement_finished.emit()
+
+    def _activate_magnifier(self, event, scene_pos) -> None:
+        """Activate the magnifier widget over ``scene_pos`` at 2.0x the view zoom."""
+        if self.magnifier_active:
+            return
+        # Create magnifier widget if it doesn't exist.
+        if self.magnifier_widget is None:
+            from gui.magnifier_widget import MagnifierWidget
+            self.magnifier_widget = MagnifierWidget()
+
+        self.magnifier_active = True
+        # Hide cursor when magnifier is active.
+        self.setCursor(Qt.CursorShape.BlankCursor)
+        # Use the authoritative zoom scalar (matrix m11 is wrong under rotation).
+        current_zoom = self.current_zoom
+        # Magnifier zoom is 2.0x the current view zoom.
+        magnifier_zoom = 2.0 * current_zoom
+        # region_size * magnifier_zoom must equal the 200px widget, so the extracted
+        # region, once scaled, exactly fills the widget at 2.0x zoom.
+        adjusted_region_size = (
+            200.0 / (2.0 * current_zoom) if current_zoom > 0 else 200.0 / 2.0
+        )
+        if DEBUG_MAGNIFIER:
+            print(f"[DEBUG-MAGNIFIER] Press: current_zoom={current_zoom:.3f}, magnifier_zoom={magnifier_zoom:.3f}, adjusted_region_size={adjusted_region_size:.3f}")
+        magnified_pixmap = self._render_scene_region(
+            scene_pos.x(), scene_pos.y(), adjusted_region_size, magnifier_zoom
+        )
+        if magnified_pixmap is not None and DEBUG_MAGNIFIER:
+            print(f"[DEBUG-MAGNIFIER] Press: extracted_region_size=({int(adjusted_region_size):d}x{int(adjusted_region_size):d}), scaled_pixmap_size=({magnified_pixmap.width()}x{magnified_pixmap.height()})")
+        if magnified_pixmap is not None:
+            self.magnifier_widget.update_magnified_region(magnified_pixmap)
+            # Position magnifier centered on cursor.
+            global_pos = self.mapToGlobal(event.position().toPoint())
+            self.magnifier_widget.show_at_position(global_pos)
+
+    def _emit_crosshair(self, scene_pos) -> None:
+        """Emit crosshair info (pixel value + coords) for the current dataset."""
+        if not self.get_current_dataset_callback:
+            return
+        dataset = self.get_current_dataset_callback()
+        if dataset is None:
+            return
+        # Convert scene position to image coordinates.
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+        z = 0
+        if self.get_current_slice_index_callback:
+            z = self.get_current_slice_index_callback()
+
+        use_rescaled = False
+        if self.get_use_rescaled_values_callback:
+            use_rescaled = self.get_use_rescaled_values_callback()
+
+        pixel_value_str = self._get_pixel_value_at_coords(dataset, x, y, z, use_rescaled)
+        self.crosshair_clicked.emit(scene_pos, pixel_value_str, x, y, z)
 
     def _toggle_statistic(self, roi, stat_name: str, checked: bool) -> None:
         from gui.image_viewer_context_menu import toggle_roi_statistic

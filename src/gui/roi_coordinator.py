@@ -61,7 +61,7 @@ class ROICoordinator:
     """
 
     def __init__(
-        self,
+        self,  # NOSONAR(S107) - DI wiring ctor; many injected collaborators by design
         roi_manager: ROIManager,
         roi_list_panel: ROIListPanel,
         roi_statistics_panel: ROIStatisticsPanel,

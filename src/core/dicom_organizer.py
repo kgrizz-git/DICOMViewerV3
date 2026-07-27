@@ -352,7 +352,6 @@ class DICOMOrganizer:
                 for base_key, new_datasets_list in series_dict.items():
                     existing_source = self.series_source_dirs.get((study_uid, base_key))
                     if existing_source is None or existing_source == source_dir:
-                        effective_key = base_key
                         self.series_source_dirs[(study_uid, base_key)] = source_dir
                         if base_key in self.studies.get(study_uid, {}):
                             # Slice append: merge and re-sort; existing file_paths stay, add only new from batch_fp

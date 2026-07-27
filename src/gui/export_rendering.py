@@ -10,6 +10,7 @@ import copy
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -1091,28 +1092,33 @@ def _draw_corner_overlays(
         _draw_corner_text(draw, text, font, text_color, x, y, align, is_bottom)
 
 
-def render_overlays_and_rois(
-    image: Image.Image,
-    dataset: Dataset,
-    roi_manager,
-    overlay_manager,
-    measurement_tool,
-    config_manager,
-    text_annotation_tool=None,
-    arrow_annotation_tool=None,
-    study_uid: str | None = None,
-    series_uid: str | None = None,
-    slice_index: int | None = None,
-    total_slices: int | None = None,
-    coordinate_scale: float = 1.0,
-    export_scale: float = 1.0,
-    scale_annotations_with_image: bool = False,
-    projection_enabled: bool = False,
-    projection_type: str = "aip",
-    projection_slice_count: int = 4,
-    studies: dict[str, dict[str, list[Dataset]]] | None = None,
+@dataclass
+class RenderOverlaysRequest:
+    """Inputs for :func:`render_overlays_and_rois`."""
+
+    image: Image.Image
+    dataset: Dataset
+    roi_manager: Any
+    overlay_manager: Any
+    measurement_tool: Any
+    config_manager: Any
+    text_annotation_tool: Any = None
+    arrow_annotation_tool: Any = None
+    study_uid: str | None = None
+    series_uid: str | None = None
+    slice_index: int | None = None
+    total_slices: int | None = None
+    coordinate_scale: float = 1.0
+    export_scale: float = 1.0
+    scale_annotations_with_image: bool = False
+    projection_enabled: bool = False
+    projection_type: str = "aip"
+    projection_slice_count: int = 4
+    studies: dict[str, dict[str, list[Dataset]]] | None = None
     subwindow_annotation_managers: list[dict[str, Any]] | None = None
-) -> Image.Image:
+
+
+def render_overlays_and_rois(request: RenderOverlaysRequest) -> Image.Image:
     """
     Render overlays, ROIs, and measurements onto a PIL Image.
 
@@ -1120,6 +1126,26 @@ def render_overlays_and_rois(
     text_size = (1/100)*setting*(w+h)/2; optional scale by export_scale when
     scale_annotations_with_image.
     """
+    image = request.image
+    dataset = request.dataset
+    roi_manager = request.roi_manager
+    overlay_manager = request.overlay_manager
+    measurement_tool = request.measurement_tool
+    config_manager = request.config_manager
+    text_annotation_tool = request.text_annotation_tool
+    arrow_annotation_tool = request.arrow_annotation_tool
+    study_uid = request.study_uid
+    series_uid = request.series_uid
+    slice_index = request.slice_index
+    total_slices = request.total_slices
+    coordinate_scale = request.coordinate_scale
+    export_scale = request.export_scale
+    scale_annotations_with_image = request.scale_annotations_with_image
+    projection_enabled = request.projection_enabled
+    projection_type = request.projection_type
+    projection_slice_count = request.projection_slice_count
+    studies = request.studies
+    subwindow_annotation_managers = request.subwindow_annotation_managers
     # Convert to RGB if grayscale (needed for drawing colored ROIs)
     if image.mode == 'L':
         image = image.convert('RGB')

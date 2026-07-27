@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.dialogs.anonymization_options_widget import AnonymizationOptionsWidget
-from gui.export_manager import ExportManager
+from gui.export_manager import ExportManager, ExportSelectedRequest
 from utils.deep_anonymizer import DeepAnonymizerOptions
 from utils.log_sanitizer import sanitize_message
 
@@ -304,13 +304,15 @@ class DeepAnonymizerExportDialog(QDialog):
         try:
             manager = ExportManager()
             exported_count, _downgraded = manager.export_selected(
-                self.selected_items,
-                self.output_path,
-                "DICOM",
-                studies=self.studies,
-                deep_anonymize=True,
-                deep_anonymizer_options=anonymizer_options,
-                deep_anonymized_items=deep_anonymized_items,
+                ExportSelectedRequest(
+                    self.selected_items,
+                    self.output_path,
+                    "DICOM",
+                    studies=self.studies,
+                    deep_anonymize=True,
+                    deep_anonymizer_options=anonymizer_options,
+                    deep_anonymized_items=deep_anonymized_items,
+                )
             )
             if self.config_manager and self.output_path:
                 self.config_manager.set_last_export_path(self.output_path)

@@ -44,6 +44,10 @@ from PySide6.QtWidgets import (
 )
 
 from gui.view_transform_helpers import graphics_view_uniform_zoom
+from tools.measurement_item_change import (
+    process_measurement_group_item_change,
+    process_measurement_handle_item_change,
+)
 
 # Callback types for handle-drag magnifier (scene_pos, shift_held for start; scene_pos for move)
 HandleDragStartCallback = Callable[[QPointF, bool], None]
@@ -286,129 +290,9 @@ class MeasurementHandle(QGraphicsEllipseItem):
         Returns:
             Modified value
         """
-        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            return value
-
-        elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            if self.parent_measurement is not None:
-                if self.parent_measurement.scene() is None:
-                    return value
-
-                if hasattr(self.parent_measurement, '_updating_handles'):
-                    if self.parent_measurement._updating_handles:
-                        return value
-
-                scene_pos = self.pos()
-                m = self.parent_measurement
-
-                def _fmt(pt) -> str:
-                    return f"({pt.x():.1f}, {pt.y():.1f})"
-
-                def _line_str(li) -> str:
-                    ln = li.line()
-                    return f"p1={_fmt(ln.p1())} p2={_fmt(ln.p2())}"
-
-                if DEBUG_MEASUREMENT_DRAG:
-                    h_label = "START" if self.is_start else "END"
-                    li = m.line_item
-                    ln = li.line()
-                    ln_scene_p1 = li.mapToScene(ln.p1())
-                    ln_scene_p2 = li.mapToScene(ln.p2())
-                    sh_pos = m.start_handle.pos() if m.start_handle else None
-                    eh_pos = m.end_handle.pos() if m.end_handle else None
-                    print(
-                        f"[DRAG] {h_label} handle moved → handle.pos={_fmt(scene_pos)}\n"
-                        f"       group.pos={_fmt(m.pos())}  start_point={_fmt(m.start_point)}  end_point={_fmt(m.end_point)}\n"
-                        f"       end_relative={_fmt(m.end_relative)}\n"
-                        f"       line item coords: {_line_str(li)}\n"
-                        f"       line scene:  p1={_fmt(ln_scene_p1)}  p2={_fmt(ln_scene_p2)}\n"
-                        f"       start_handle.pos={_fmt(sh_pos) if sh_pos else 'None'}  "
-                        f"end_handle.pos={_fmt(eh_pos) if eh_pos else 'None'}"
-                    )
-
-                self.parent_measurement._updating_handles = True
-
-                try:
-                    if self.is_start:
-                        original_end_point = self.parent_measurement.end_point
-
-                        self.parent_measurement.start_point = scene_pos
-                        self.parent_measurement.setPos(self.parent_measurement.start_point)
-                        self.parent_measurement.end_point = original_end_point
-                        self.parent_measurement.end_relative = (
-                            self.parent_measurement.end_point -
-                            self.parent_measurement.start_point
-                        )
-                        self.parent_measurement.update_distance()
-                        self.parent_measurement.line_item.update()
-                        self.parent_measurement.update()
-
-                        if self.parent_measurement.scene() is not None:
-                            line_rect = self.parent_measurement.line_item.boundingRect()
-                            line_scene_rect = self.parent_measurement.line_item.mapRectToScene(line_rect)
-                            self.parent_measurement.scene().update(line_scene_rect)
-                    else:
-                        original_end_point = self.parent_measurement.end_point
-
-                        self.parent_measurement.end_point = scene_pos
-                        self.parent_measurement.end_relative = (
-                            self.parent_measurement.end_point -
-                            self.parent_measurement.start_point
-                        )
-                        self.parent_measurement.update_distance()
-                        self.parent_measurement.line_item.update()
-                        self.parent_measurement.update()
-
-                        if self.parent_measurement.scene() is not None:
-                            line_rect = self.parent_measurement.line_item.boundingRect()
-                            line_scene_rect = self.parent_measurement.line_item.mapRectToScene(line_rect)
-                            self.parent_measurement.scene().update(line_scene_rect)
-                finally:
-                    self.parent_measurement._updating_handles = False
-
-                # Keep the other handle in sync during drag so the line doesn't jump (update_handle_positions is skipped)
-                was_updating = getattr(m, '_updating_handles', False)
-                m._updating_handles = True
-                try:
-                    if self.is_start and m.end_handle is not None and m.end_handle.scene() is not None:
-                        m.end_handle.setPos(m.end_point)
-                    elif not self.is_start and m.start_handle is not None and m.start_handle.scene() is not None:
-                        m.start_handle.setPos(m.start_point)
-                finally:
-                    m._updating_handles = was_updating
-
-                if DEBUG_MEASUREMENT_DRAG:
-                    h_label = "START" if self.is_start else "END"
-                    li = m.line_item
-                    ln = li.line()
-                    ln_scene_p1 = li.mapToScene(ln.p1())
-                    ln_scene_p2 = li.mapToScene(ln.p2())
-                    sh_pos = m.start_handle.pos() if m.start_handle else None
-                    eh_pos = m.end_handle.pos() if m.end_handle else None
-                    print(
-                        f"[DRAG] {h_label} AFTER update:\n"
-                        f"       group.pos={_fmt(m.pos())}  start_point={_fmt(m.start_point)}  end_point={_fmt(m.end_point)}\n"
-                        f"       end_relative={_fmt(m.end_relative)}\n"
-                        f"       line item coords: {_line_str(li)}\n"
-                        f"       line scene:  p1={_fmt(ln_scene_p1)}  p2={_fmt(ln_scene_p2)}\n"
-                        f"       start_handle.pos={_fmt(sh_pos) if sh_pos else 'None'}  "
-                        f"end_handle.pos={_fmt(eh_pos) if eh_pos else 'None'}"
-                    )
-
-                if self.parent_measurement.on_moved_callback:
-                    try:
-                        self.parent_measurement.on_moved_callback()
-                    except Exception:
-                        pass
-
-                # Notify handle-drag move for magnifier update (e.g. Shift+drag)
-                move_callback = self.parent_measurement.on_handle_drag_move_callback
-                if move_callback is not None:
-                    try:
-                        move_callback(self.pos())
-                    except Exception:
-                        pass
-
+        handled, result = process_measurement_handle_item_change(self, change, value)
+        if handled:
+            return result
         return super().itemChange(change, value)
 
 
@@ -781,94 +665,7 @@ class MeasurementItem(QGraphicsItemGroup):
 
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value) -> object:
         """Handle position/selection/scene changes: sync points, show/hide handles, zoom text offset."""
-        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            if hasattr(self, '_updating_handles') and self._updating_handles:
-                # Our own code called setPos explicitly (e.g. repositioning group to start_point
-                # during start-handle drag); accept the proposed position unconditionally.
-                if DEBUG_MEASUREMENT_DRAG:
-                    print(f"[DRAG] GROUP ItemPositionChange → ALLOWED (our setPos): proposed={value.x():.1f},{value.y():.1f}")
-                return value
-            if getattr(self, '_handle_drag_in_progress', False):
-                # Block Qt's scene-level movement of the group while a handle is being dragged.
-                # Qt adds the group to its internal movingItems list because the group is
-                # selected+movable and its shape() overlaps the handle click point.
-                # Returning self.pos() vetoes the proposed move and keeps the group in place;
-                # the handle's own itemChange repositions the group (for the start handle) via
-                # an explicit setPos under _updating_handles=True, which passes the guard above.
-                if DEBUG_MEASUREMENT_DRAG:
-                    cur = self.pos()
-                    print(f"[DRAG] GROUP ItemPositionChange → BLOCKED (handle drag): proposed={value.x():.1f},{value.y():.1f}  kept={cur.x():.1f},{cur.y():.1f}")
-                return self.pos()
-            # Normal group drag – mouseMoveEvent handles start_point/end_point/line/text/handles.
-            # Just allow the move; no duplicate bookkeeping here.
-            return value
-
-        elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            # Skip all callbacks/updates during interactive user drag; mouseMoveEvent handles that.
-            if self._last_drag_pos is not None:
-                return value
-            if self.on_moved_callback:
-                try:
-                    self.on_moved_callback()
-                except Exception:
-                    pass
-            if self._last_drag_pos is None:
-                if hasattr(self, '_updating_handles') and self._updating_handles:
-                    return value
-                if getattr(self, '_handle_drag_in_progress', False):
-                    return value
-                current_pos = self.pos()
-                if current_pos != self.start_point:
-                    delta = current_pos - self.start_point
-                    self.start_point += delta
-                    self.end_point += delta
-                    self.end_relative = self.end_point - self.start_point
-                    self.line_item.prepareGeometryChange()
-                    if self.scene() is not None:
-                        self.scene().invalidate(self.line_item.mapRectToScene(self.line_item.boundingRect()))
-                    self.line_item.setLine(QLineF(QPointF(0, 0), self.end_relative))
-                    if self.scene() is not None:
-                        self.scene().invalidate(self.line_item.mapRectToScene(self.line_item.boundingRect()))
-                        self.scene().invalidate(self.mapRectToScene(self.boundingRect()))
-                    self.line_item.update()
-                    self.update()
-                    mid_point_scene = QPointF(
-                        (self.start_point.x() + self.end_point.x()) / 2.0,
-                        (self.start_point.y() + self.end_point.y()) / 2.0
-                    )
-                    view = self.scene().views()[0] if self.scene() and self.scene().views() else None
-                    viewport_to_scene_scale = (
-                        1.0 / graphics_view_uniform_zoom(view)
-                    ) if view is not None else 1.0
-                    self.text_offset = QPointF(
-                        self.text_offset_viewport.x() * viewport_to_scene_scale,
-                        self.text_offset_viewport.y() * viewport_to_scene_scale
-                    )
-                    text_pos_scene = mid_point_scene + self.text_offset
-                    if isinstance(self.text_item, DraggableMeasurementText):
-                        self.text_item._updating_position = True
-                    self.text_item.setPos(text_pos_scene)
-                    if isinstance(self.text_item, DraggableMeasurementText):
-                        self.text_item._updating_position = False
-                    self.update_handle_positions(force=True)
-
-        elif change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
-            if value:
-                if hasattr(self, '_handle_drag_in_progress') and self._handle_drag_in_progress:
-                    return value
-                self.show_handles()
-            else:
-                # Clear drag state on deselect so we never get stuck (e.g. if release was lost)
-                if hasattr(self, '_handle_drag_in_progress'):
-                    self._handle_drag_in_progress = False
-                if hasattr(self, '_dragging_handle'):
-                    self._dragging_handle = None
-                self.hide_handles()
-            self.update()
-
-        elif change == QGraphicsItem.GraphicsItemChange.ItemSceneHasChanged:
-            if value is not None:
-                self.update_text_offset_for_zoom()
-            return value
-
+        handled, result = process_measurement_group_item_change(self, change, value)
+        if handled:
+            return result
         return super().itemChange(change, value)

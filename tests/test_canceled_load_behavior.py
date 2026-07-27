@@ -6,7 +6,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from core.loading_pipeline import format_cancelled_partial_status, run_load_pipeline
+from core.loading_pipeline import (
+    LoadPipelineRequest,
+    format_cancelled_partial_status,
+    run_load_pipeline,
+)
 from core.study_index.index_service import LocalStudyIndexService
 
 
@@ -51,19 +55,21 @@ def test_run_load_pipeline_cancelled_skips_index_callback_flag() -> None:
         "core.loading_pipeline.QTimer.singleShot"
     ):
         result = run_load_pipeline(
-            loader_fn=lambda _cb: datasets,
-            source_dir="/study",
-            source_name="study",
-            file_paths_for_merge=None,
-            loader=loader,
-            organizer=organizer,
-            loading_manager=loading_manager,
-            progress_max=10,
-            main_window=MagicMock(),
-            file_dialog=MagicMock(),
-            load_first_slice_callback=MagicMock(),
-            update_status_callback=status_messages.append,
-            on_load_success=on_load_success,
+            LoadPipelineRequest(
+                loader_fn=lambda _cb: datasets,
+                source_dir="/study",
+                source_name="study",
+                file_paths_for_merge=None,
+                loader=loader,
+                organizer=organizer,
+                loading_manager=loading_manager,
+                progress_max=10,
+                main_window=MagicMock(),
+                file_dialog=MagicMock(),
+                load_first_slice_callback=MagicMock(),
+                update_status_callback=status_messages.append,
+                on_load_success=on_load_success,
+            )
         )
 
     assert result[0] is datasets

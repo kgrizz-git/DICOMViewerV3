@@ -1,10 +1,141 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-07-26
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-07-26
+
+- Addressed verified CodeRabbit findings on the S3776 PR (RLE UID, cancel
+  animation stop, FrameDatasetWrapper local overrides, first-slice guards,
+  overlay recreate context, overlay bitmap LSB/pad, export docstring/sanitize,
+  MPR assign disconnect). Skipped speculative nitpick refactors.
+- Cleared basedpyright push-gate errors introduced by recent S3776 helper
+  extractions: typed bare generics, overlay parser null guard, measurement
+  `QPointF` casts, and `importlib` loaders for load-pipeline / ROI-export
+  modules so import-cycle errors no longer block pre-push.
+- Completed a Sonar `python:S3776` slice on overlay bitmap conversion: moved byte
+  extraction, LSB-first unpack, coordinate mapping, OpenCV/scipy path extraction,
+  and no-NumPy fallback into `src/tools/annotation_overlay_bitmap.py`;
+  `AnnotationManager._convert_overlay_bitmap_to_graphics` now delegates to that
+  module. Added `tests/tools/test_annotation_overlay_bitmap_sonar_slice.py`.
+  Target finding was cognitive complexity ~85 (radon CCN 34 on the method before
+  refactor).
+- Completed a Sonar `python:S3776` slice on ROI TXT/CSV export: moved TXT
+  area-line formatting, slice/series blocks, and CSV row builders / finalize
+  logic into `roi_export_txt` and `roi_export_csv`; `write_txt` and `write_csv`
+  in `roi_export_service` are thin wrappers. Added
+  `tests/core/test_roi_export_txt_csv_sonar_slice.py`. Target findings were
+  cognitive complexity 83 / 81 (radon CCN 26 / 31 on `write_txt` / `write_csv`
+  before refactor).
+- Completed a Sonar `python:S3776` slice on histogram series-frequency
+  computation: moved dataset resolution, rescale parsing, and histogram
+  accumulation helpers into `src/gui/dialogs/histogram_frequency.py`;
+  `HistogramDialog._compute_series_global_frequency_max` now orchestrates only.
+  Added `tests/gui/test_histogram_frequency_sonar_slice.py`. Target finding was
+  cognitive complexity ~85 (radon CCN 39 on `_compute_series_global_frequency_max`).
+- Completed a Sonar `python:S3776` slice on single-file DICOM loading: moved
+  compression-label lookup, defer/multiframe messages, memory-estimate pre-load,
+  slow-file timing assembly, and exception message builders into
+  `dicom_loader_file`; `DICOMLoader.load_file` now orchestrates module-level
+  read/annotate/multiframe helpers. Added
+  `tests/core/test_dicom_loader_load_file_sonar_slice.py`. Target finding was
+  cognitive complexity 88 (radon CCN 39 on `load_file`).
+- Completed a Sonar `python:S3776` slice on first-slice (full replace) load:
+  moved pre-reset, stale subwindow cleanup, PS/KO load, subwindow-0 display,
+  navigator reveal/fit, and deferred paint side effects into
+  `src/gui/file_series_first_slice_load.py`;
+  `FileSeriesLoadingCoordinator.handle_load_first_slice` now orchestrates only.
+  Added `tests/gui/test_file_series_first_slice_load_sonar_slice.py`. Target finding
+  was cognitive complexity 87.
+- Completed a Sonar `python:S3776` slice on series-transition window/level
+  resolution: extracted new-series stored/fallback/cache helpers in
+  `slice_window_level_resolver` so `resolve_window_level_for_series_transition`
+  orchestrates only. Added
+  `tests/core/test_slice_window_level_resolver_sonar_slice.py`. Target finding
+  was cognitive complexity 89.
+- Completed a Sonar `python:S3776` slice on measurement itemChange handlers:
+  moved handle/group position, selection, geometry sync, and debug logging into
+  `src/tools/measurement_item_change.py`; both `itemChange` methods now
+  orchestrate that module. Added
+  `tests/tools/test_measurement_item_change_sonar_slice.py`. Target findings
+  were cognitive complexity 92 and 74.
+- Ran a fresh local SonarQube analysis on `349ab6f` after the series-navigator
+  list slice. CE task succeeded; `scripts/report_local_sonarqube_issues.py`
+  reported **242** priority findings (BLOCKER/CRITICAL/MAJOR). Highest remaining
+  open `python:S3776`: `measurement_items.itemChange` (92),
+  `resolve_window_level_for_series_transition` (89), `dicom_loader.load_file` (88),
+  `handle_load_first_slice` (87).
+- Completed a Sonar `python:S3776` slice on series navigator list rebuild:
+  moved series sorting, section-width, and display-label helpers into
+  `series_navigator_model`; `SeriesNavigator.update_series_list` now
+  orchestrates clear/append/schedule helpers. Added
+  `tests/gui/test_series_navigator_list_update_sonar_slice.py`. Target finding
+  was cognitive complexity 94.
+- Completed a Sonar `python:S3776` slice on overlay corner text: lifted
+  multiframe label, InstanceNumber/slice, thickness, and timing formatters out
+  of `get_corner_text` in `overlay_text_builder`. Added
+  `tests/gui/test_overlay_text_builder_sonar_slice.py`. Target finding was
+  cognitive complexity 94.
+- Completed a Sonar `python:S3776` slice on ROI XLSX export: moved workbook
+  assembly, series/slice blocks, ROI stats/area/channel rows, and
+  crosshair/measurement writers into `src/core/roi_export_xlsx.py`;
+  `roi_export_service.write_xlsx` now orchestrates that module. Added
+  `tests/core/test_roi_export_xlsx_sonar_slice.py`. Target finding was
+  cognitive complexity 99.
+- Completed a Sonar `python:S3776` slice on projection enabled handling:
+  extracted state-apply, MPR/non-MPR refresh, and DEBUG_PROJECTION helpers in
+  `projection_app_facade` so `on_projection_enabled_changed` orchestrates only.
+  Covered by existing `tests/core/test_projection_app_facade.py`. Target finding
+  was cognitive complexity 107.
+- Completed a Sonar `python:S3776` slice on ROI statistics overlays: moved
+  text formatting, font resolution, item ensure/flags, scene position, and
+  visibility sync into `src/tools/roi_statistics_overlay.py`;
+  `ROIManager.create_statistics_overlay` / position update now orchestrate
+  those helpers. Added `tests/tools/test_roi_statistics_overlay_sonar_slice.py`.
+  Target finding was cognitive complexity 122.
+- Completed a Sonar `python:S3776` slice on subwindow layout signal wiring:
+  extracted `_disconnect_ignore_missing` / tracked-slot pop helpers and
+  fixed signal-pair tables so `connect_subwindow_signals` orchestrates only.
+  Added `tests/core/test_subwindow_signal_wiring_sonar_slice.py`. Target finding
+  was cognitive complexity 126.
+- Completed a Sonar `python:S3776` slice on additive file load:
+  moved eviction, PS/KO load, appended-series refresh, empty-pane auto-assign,
+  navigator/fusion/status side effects into
+  `src/gui/file_series_additive_load.py`;
+  `FileSeriesLoadingCoordinator.handle_additive_load` now orchestrates only.
+  Added `tests/gui/test_file_series_additive_load_sonar_slice.py`. Target finding
+  was cognitive complexity 127.
+- Completed a Sonar `python:S3776` slice on `FrameDatasetWrapper.__init__`:
+  extracted nested functional-group helpers for plane geometry, pixel measures,
+  rescale, and VOI LUT into focused functions in `multiframe_handler`. Added
+  `tests/core/test_frame_dataset_wrapper_sonar_slice.py`. Target finding was
+  cognitive complexity 133.
+- Completed a Sonar `python:S3776` slice on overlay position updates: moved
+  widget geometry sync, viewport corner anchors, max-width cache resolution,
+  left/right item placement, and deferred repaint into
+  `src/gui/overlay_position_updater.py`; `OverlayManager.update_overlay_positions`
+  now orchestrates only. Added
+  `tests/gui/test_overlay_position_updater_sonar_slice.py`. Target finding was
+  cognitive complexity 142 on `update_overlay_positions`.
+- Completed a Sonar `python:S3776` slice on the load pipeline: shared helpers
+  for merge paths / empty-load errors / failed-file warnings / post-load
+  status / progress UI; sync body split from outer exception wrapper; async
+  implementation moved to `src/core/loading_pipeline_async.py` (re-exported
+  from `loading_pipeline`). Added `tests/test_loading_pipeline_sonar_slice.py`.
+  Fresh analysis: `run_load_pipeline_async` (was 146) cleared; no remaining
+  `S3776` under `loading_pipeline*`; priority `S3776` count 253 → 251.
+- Completed the non-constructor `python:S107` parameter-object sweep (8 sites:
+  layout/load, render pipelines, cine + export request dataclasses) and fixed
+  the two follow-on `python:S5806` builtin-shadow findings in
+  `export_manager` (`format` → `export_format` locals). Documented the six
+  remaining DI `__init__` constructors with `# NOSONAR(S107)` (wiring ctors;
+  rule remains active for methods): `dialog_coordinator`, `export_dialog`,
+  `histogram_dialog`, `keyboard_event_handler`, `roi_coordinator`,
+  `slice_display_manager`. Fresh local analysis target: **0 MAJOR** from
+  these S107 sites; CRITICAL volume is still dominated by deferred `S3776`.
 
 ## 2026-07-25
 

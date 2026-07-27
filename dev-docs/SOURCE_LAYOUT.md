@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-07-18  
+**Last updated:** 2026-07-26  
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -39,12 +39,16 @@ src/
 │   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
 │   ├── slice_window_level_resolver.py # Resolve effective W/L for a slice (dataset tags + user overrides)
 │   ├── dicom_window_level.py          # DICOM window/level tag parsing and display-range math
+│   ├── dicom_loader_file.py           # Pure single-file DICOM load helpers (compression labels, defer messages, multi-frame pre-load; S3776 slice)
 │   ├── wl_preset_catalog.py           # Built-in and user W/L preset catalog (modality-aware labels)
 │   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
 │   ├── slice_geometry.py              # Pure 3-D slice-plane/stack math (patient mm); shared by sync and location lines
 │   ├── slice_sync_coordinator.py      # Linked-group anatomic slice sync across panes (off by default)
 │   ├── slice_location_line_helper.py  # Pure geometry: plane intersections → 2-D line segments per target pane
 │   ├── roi_export_service.py          # ROI/crosshair/measurement aggregation + TXT/CSV/XLSX writers (formula-safe cells)
+│   ├── roi_export_txt.py              # TXT report helpers for write_txt (S3776 slice)
+│   ├── roi_export_csv.py              # CSV row builders for write_csv (S3776 slice)
+│   ├── roi_export_xlsx.py             # XLSX worksheet helpers for write_xlsx (S3776 slice)
 │   ├── spreadsheet_safety.py          # Neutralize formula-like spreadsheet cell prefixes on export
 │   ├── study_navigation_handlers.py   # Study/series navigation menu slots (delegated from main)
 │   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/test_direction_labels.py)
@@ -57,15 +61,16 @@ src/
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, overlay_position_updater (viewport-anchored zoom/pan reposition), file_series_additive_load (additive merge UI/eviction helpers), file_series_first_slice_load (full-replace first-slice load helpers), series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
 │   ├── slice_location_line_manager.py   # Per-pane QGraphics line items for slice-location reference lines
 │   ├── slice_location_line_coordinator.py  # App-level refresh across panes; reads ``SliceSyncConfigMixin`` visibility flags
 │   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
 │   └── dialogs/
+│       ├── histogram_frequency.py     # Series-wide histogram frequency/pixel-range helpers (S3776 slice)
 │       ├── slice_sync_dialog.py       # Manage linked sync groups (**View → Manage Sync Groups…**)
 │       ├── export_roi_statistics_dialog.py  # **Tools → Export ROI Statistics** series picker + format options
 │       └── mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
-├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair)
+├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair); measurement_item_change (itemChange helpers); annotation_overlay_bitmap (overlay bitmap helpers)
 │   └── roi_persistence.py         # Clipboard-oriented ROI dict serialization (Phase 5B; copy/paste schema)
 └── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
     ├── undo_redo_tag_commands.py  # `TagEditCommand` for DICOM tag edits; imported at end of `undo_redo.py` for re-export (Phase 5E)

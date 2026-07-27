@@ -31,6 +31,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QProgressDialo
 
 from core.sr_sop_classes import is_structured_report_dataset
 from gui.cine_video_export import (
+    CineFrameRequest,
     build_cine_export_frame_indices,
     cleanup_temp_frame_dir,
     describe_focused_cine_export_blocker,
@@ -448,29 +449,31 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
             progress.setValue(step)
             dataset = series_list[frame_idx]
             img = rasterize_cine_export_frame(
-                dataset,
-                studies,
-                study_uid,
-                series_uid,
-                frame_idx,
-                total,
-                wl_opt,
-                wc,
-                ww,
-                opts.include_overlays,
-                use_rescaled,
-                managers.get("roi_manager"),
-                managers.get("overlay_manager"),
-                managers.get("measurement_tool"),
-                app.config_manager,
-                managers.get("text_annotation_tool"),
-                managers.get("arrow_annotation_tool"),
-                proj_en,
-                proj_ty,
-                proj_cnt,
-                export_scale=opts.export_scale,
-                scale_annotations_with_image=False,
-                subwindow_annotation_managers=subwindow_annotation_managers,
+                CineFrameRequest(
+                    dataset,
+                    studies,
+                    study_uid,
+                    series_uid,
+                    frame_idx,
+                    total,
+                    wl_opt,
+                    wc,
+                    ww,
+                    opts.include_overlays,
+                    use_rescaled,
+                    managers.get("roi_manager"),
+                    managers.get("overlay_manager"),
+                    managers.get("measurement_tool"),
+                    app.config_manager,
+                    managers.get("text_annotation_tool"),
+                    managers.get("arrow_annotation_tool"),
+                    proj_en,
+                    proj_ty,
+                    proj_cnt,
+                    export_scale=opts.export_scale,
+                    scale_annotations_with_image=False,
+                    subwindow_annotation_managers=subwindow_annotation_managers,
+                )
             )
             if img is None:
                 QMessageBox.critical(

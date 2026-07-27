@@ -20,11 +20,22 @@ Requirements:
 
 from typing import Any
 
-from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtWidgets import QGraphicsItem, QGraphicsTextItem, QLabel, QWidget
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtWidgets import QGraphicsTextItem, QLabel, QWidget
 
 from core.dicom_parser import DICOMParser
 from gui.overlay_items_factory import create_graphics_overlay_text_item
+from gui.overlay_position_updater import (
+    OVERLAY_VIEWPORT_MARGIN_PX,
+    build_viewport_corner_anchors,
+    filter_valid_overlay_items,
+    position_left_aligned_corner_item,
+    position_right_aligned_corner_items,
+    resolve_corner_max_width_viewport,
+    resolve_view_for_scene,
+    schedule_scene_viewport_repaint,
+    sync_widget_overlay_geometry,
+)
 from gui.overlay_text_builder import (
     get_corner_text,
     get_modality,
@@ -32,7 +43,6 @@ from gui.overlay_text_builder import (
 )
 from gui.view_transform_helpers import graphics_view_uniform_zoom
 from utils.bundled_fonts import make_qfont
-from utils.debug_flags import DEBUG_WIDGET_PAN
 
 # MPR top-centre banner: keep below "Show Direction Labels" top edge text (~16px + font).
 _MPR_BANNER_EXTRA_TOP_PX = 30
@@ -346,6 +356,12 @@ class OverlayManager:
         self.current_scene = None
         self.current_total_slices: int | None = None
         self.current_stack_position: int | None = None
+        self.current_projection_enabled: bool = False
+        self.current_projection_start_slice: int | None = None
+        self.current_projection_end_slice: int | None = None
+        self.current_projection_total_thickness: float | None = None
+        self.current_projection_type: str | None = None
+        self.current_multiframe_context: dict[str, Any] | None = None
 
         # QWidget overlay widget (viewport-based)
         self.viewport_overlay_widget: ViewportOverlayWidget | None = None
@@ -568,6 +584,12 @@ class OverlayManager:
         if total_slices is not None:
             self.current_total_slices = total_slices
         self.current_stack_position = stack_position
+        self.current_projection_enabled = projection_enabled
+        self.current_projection_start_slice = projection_start_slice
+        self.current_projection_end_slice = projection_end_slice
+        self.current_projection_total_thickness = projection_total_thickness
+        self.current_projection_type = projection_type
+        self.current_multiframe_context = multiframe_context
 
         # Get view for QWidget overlay creation
         view = scene.views()[0] if scene.views() else None
@@ -910,339 +932,132 @@ class OverlayManager:
         # Clear width cache when items are cleared
         self.corner_max_width_map.clear()
 
+    def _recreate_overlay_items_for_current_state(self, scene) -> None:
+        """Rebuild corner overlays after stale/deleted graphics items are detected."""
+        parser = self.current_parser
+        if parser is None:
+            return
+        total_slices = getattr(self, "current_total_slices", None)
+        stack_position = getattr(self, "current_stack_position", None)
+        self.create_overlay_items(
+            scene,
+            parser,
+            total_slices=total_slices,
+            stack_position=stack_position,
+            projection_enabled=getattr(self, "current_projection_enabled", False),
+            projection_start_slice=getattr(self, "current_projection_start_slice", None),
+            projection_end_slice=getattr(self, "current_projection_end_slice", None),
+            projection_total_thickness=getattr(
+                self, "current_projection_total_thickness", None
+            ),
+            projection_type=getattr(self, "current_projection_type", None),
+            multiframe_context=getattr(self, "current_multiframe_context", None),
+        )
+
+    def _update_one_corner_overlay_position(
+        self,
+        scene,
+        corner_key: str,
+        x: float,
+        y: float,
+        alignment: Qt.AlignmentFlag,
+        margin_scene: float,
+        viewport_to_scene_scale: float,
+    ) -> bool:
+        """
+        Reposition items for one corner.
+
+        Returns:
+            False when stale items forced a full recreate (caller must stop).
+        """
+        items = self.corner_item_map.get(corner_key, [])
+        if not items:
+            return True
+
+        valid_items = filter_valid_overlay_items(items, scene)
+        if len(valid_items) != len(items):
+            self._recreate_overlay_items_for_current_state(scene)
+            return False
+
+        if bool(alignment & Qt.AlignmentFlag.AlignRight):
+            cached = self.corner_max_width_map.get(corner_key, 0)
+            max_width, to_cache = resolve_corner_max_width_viewport(cached, valid_items)
+            if to_cache is not None:
+                self.corner_max_width_map[corner_key] = to_cache
+            position_right_aligned_corner_items(
+                valid_items=valid_items,
+                scene=scene,
+                anchor_x=x,
+                anchor_y=y,
+                alignment=alignment,
+                margin_scene=margin_scene,
+                max_text_width_viewport=max_width,
+                viewport_to_scene_scale=viewport_to_scene_scale,
+            )
+            return True
+
+        if valid_items:
+            position_left_aligned_corner_item(
+                item=valid_items[0],
+                scene=scene,
+                x=x,
+                y=y,
+                alignment=alignment,
+                viewport_to_scene_scale=viewport_to_scene_scale,
+            )
+        return True
+
     def update_overlay_positions(self, scene) -> None:
         """
         Update overlay item positions when view transform changes (zoom/pan).
-        
+
         This ensures text stays anchored to viewport edges when zooming/panning.
         Updates existing items instead of recreating them to prevent jitter.
-        
-        For QWidget overlays, only updates on viewport resize (not zoom/pan).
-        
+
+        For QWidget overlays, only syncs widget geometry; label layout is owned
+        by ``ViewportOverlayWidget.resizeEvent``.
+
         Args:
             scene: QGraphicsScene containing overlay items
         """
-        # Get view for coordinate conversion
         view = scene.views()[0] if scene.views() else None
         if view is None:
             return
 
-        # Handle QWidget overlays - only update on viewport resize, not zoom/pan
-        # Position updates for QWidget overlays are handled by ViewportOverlayWidget.resizeEvent()
-        # when the viewport actually resizes. We should NOT update positions here during
-        # transform changes (zoom/pan) because the viewport size hasn't changed.
+        # QWidget path: geometry only (label positions come from resizeEvent).
         if self.use_widget_overlays:
-            # Just ensure widget geometry matches viewport and stays at (0,0)
-            # but don't update label positions - that's handled by resizeEvent
             if self.viewport_overlay_widget:
-                viewport = view.viewport()
-                if viewport:
-                    # Check if widget position or size needs updating
-                    current_geometry = self.viewport_overlay_widget.geometry()
-                    view_transform = view.transform()
-                    translation_x = view_transform.m31()
-                    translation_y = view_transform.m32()
-
-                    # Debug: Only log during panning (when translation is non-zero)
-                    if abs(translation_x) > 0.01 or abs(translation_y) > 0.01:
-                        if DEBUG_WIDGET_PAN:
-                            widget_pos = (current_geometry.x(), current_geometry.y())
-                            widget_size = (current_geometry.width(), current_geometry.height())
-                            viewport_size = (viewport.width(), viewport.height())
-                            if DEBUG_WIDGET_PAN:
-                                print(f"[DEBUG-WIDGET-PAN] PAN detected: widget_pos={widget_pos}, widget_size={widget_size}, "
-                                  f"viewport_size={viewport_size}, transform_translation=({translation_x:.2f}, {translation_y:.2f})")
-
-                            # Log label positions to see if they're moving
-                            for corner_key, label in self.viewport_overlay_widget.corner_labels.items():
-                                if label.isVisible():
-                                    label_pos = label.pos()
-                                    if DEBUG_WIDGET_PAN:
-                                        print(f"[DEBUG-WIDGET-PAN] {corner_key} label position: {label_pos}")
-
-                    # Ensure widget stays at (0,0) and matches viewport size
-                    if (current_geometry.x() != 0 or current_geometry.y() != 0 or
-                        current_geometry.width() != viewport.width() or
-                        current_geometry.height() != viewport.height()):
-                        if abs(translation_x) > 0.01 or abs(translation_y) > 0.01:
-                            if DEBUG_WIDGET_PAN:
-                                print(f"[DEBUG-WIDGET-PAN] Correcting widget geometry: {current_geometry} -> (0, 0, {viewport.width()}, {viewport.height()})")
-                        self.viewport_overlay_widget.setGeometry(0, 0, viewport.width(), viewport.height())
+                sync_widget_overlay_geometry(self.viewport_overlay_widget, view)
             return
 
-        # QGraphicsItem approach - update positions on zoom/pan
+        # QGraphicsItem path — always update (focused or not) so overlays stay
+        # pinned to viewport edges rather than moving with the image.
         if not self.overlay_items or self.current_parser is None:
             return
 
-        # Verify this view is associated with the scene
-        if view.scene != scene:
-            # print(f"[DEBUG-OVERLAY] WARNING: View's scene doesn't match! view.scene={view.scene}, scene={scene}")
-            # Try to find the correct view
-            views = scene.views()
-            if views:
-                view = views[0]
-            else:
-                return
+        view = resolve_view_for_scene(scene, view)
+        if view is None:
+            return
 
-        # Check if this view belongs to a subwindow and if it's focused
-        # We need to traverse the widget hierarchy to find the SubWindowContainer
-        # View -> (may have layout parent) -> SubWindowContainer
-        from gui.sub_window_container import SubWindowContainer
-
-        # Traverse up the widget hierarchy to find SubWindowContainer
-        current_widget = view
-        max_depth = 5  # Safety limit to avoid infinite loops
-        depth = 0
-
-        while current_widget is not None and depth < max_depth:
-            parent = current_widget.parent()
-            if isinstance(parent, SubWindowContainer):
-                break
-            current_widget = parent
-            depth += 1
-
-        # Debug logging (commented out - only needed for QGraphicsItem approach)
-        # view_type = type(view).__name__
-        # parent_type = type(view.parent()).__name__ if view.parent() else "None"
-        # found_container = subwindow_container is not None
-        # is_focused = subwindow_container.is_focused if subwindow_container else None
-        #
-        # # Diagnostic logging: View transform state
-        # view_transform = view.transform()
-        # view_scale = view_transform.m11()
-        # view_translation_x = view_transform.m31()
-        # view_translation_y = view_transform.m32()
-        #
-        # print(f"[DEBUG-OVERLAY] update_overlay_positions: view={view_type}, parent={parent_type}, "
-        #       f"found_container={found_container}, is_focused={is_focused}")
-        # print(f"[DEBUG-DIAG] View transform: scale={view_scale:.6f}, translation=({view_translation_x:.2f}, {view_translation_y:.2f})")
-        #
-        # # Diagnostic logging: Check if this is a focus change event
-        # if subwindow_container:
-        #     # Log focus state change if we can detect it
-        #     if hasattr(self, '_last_focus_state'):
-        #         if self._last_focus_state != is_focused:
-        #             print(f"[DEBUG-DIAG] FOCUS CHANGE DETECTED: {self._last_focus_state} -> {is_focused}")
-        #     self._last_focus_state = is_focused
-
-        # IMPORTANT: We ALWAYS update overlay positions, regardless of focus state
-        # This ensures overlays stay fixed relative to the viewport, not the image
-        # When zooming unfocused subwindows, we still need to update positions
-        # so the overlay stays at viewport edges (not moving with the image)
-
-        # Get scene dimensions
         scene_rect = scene.sceneRect()
         if scene_rect.width() <= 0 or scene_rect.height() <= 0:
             return
 
-        margin = 10  # Margin in viewport pixels
+        viewport_to_scene_scale, corners = build_viewport_corner_anchors(view)
+        margin_scene = OVERLAY_VIEWPORT_MARGIN_PX * viewport_to_scene_scale
 
-        # Uniform zoom — m11() is wrong under rotation / horizontal flip
-        view_scale = graphics_view_uniform_zoom(view)
-        viewport_to_scene_scale = 1.0 / view_scale
-
-        # Convert margin from viewport pixels to scene coordinates
-        margin_scene = margin * viewport_to_scene_scale
-
-        # Map viewport edges to scene coordinates
-        viewport_width = view.viewport().width()
-        viewport_height = view.viewport().height()
-
-        top_left_scene = view.mapToScene(0, 0)
-        top_right_scene = view.mapToScene(viewport_width, 0)
-        bottom_left_scene = view.mapToScene(0, viewport_height)
-        bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
-
-        # Diagnostic logging: mapToScene results and coordinate calculations (commented out - only for QGraphicsItem approach)
-        # if subwindow_container and not subwindow_container.is_focused:
-        #     print(f"[DEBUG-OVERLAY] Unfocused subwindow - viewport: {viewport_width}x{viewport_height}, "
-        #           f"view_scale: {view_scale:.3f}, viewport_to_scene_scale: {viewport_to_scene_scale:.6f}, "
-        #           f"top_left_scene: ({top_left_scene.x():.1f}, {top_left_scene.y():.1f}), "
-        #           f"top_right_scene: ({top_right_scene.x():.1f}, {top_right_scene.y():.1f})")
-        #     print(f"[DEBUG-DIAG] mapToScene(0,0)={top_left_scene}, mapToScene({viewport_width},0)={top_right_scene}")
-        #     print(f"[DEBUG-DIAG] mapToScene(0,{viewport_height})={bottom_left_scene}, mapToScene({viewport_width},{viewport_height})={bottom_right_scene}")
-
-        # Define corner positions and alignments
-        corners = [
-            ("upper_left", top_left_scene.x() + margin_scene, top_left_scene.y() + margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-            ("upper_right", top_right_scene.x(), top_right_scene.y() + margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
-            ("lower_left", bottom_left_scene.x() + margin_scene, bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
-            ("lower_right", bottom_right_scene.x(), bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        ]
-
-        # Update positions for each corner's items
-        for corner_key, x, y, alignment in corners:
-            items = self.corner_item_map.get(corner_key, [])
-
-            # Debug: Log calculated corner position for unfocused subwindows (commented out - only for QGraphicsItem approach)
-            # if subwindow_container and not subwindow_container.is_focused:
-            #     print(f"[DEBUG-OVERLAY] {corner_key} calculated position: x={x:.1f}, y={y:.1f}, alignment={alignment}")
-            #     print(f"[DEBUG-OVERLAY] Checking {corner_key}: found {len(items)} items in corner_item_map")
-
-            if not items:
-                continue
-
-            # Check if items are still valid (not deleted)
-            valid_items = [item for item in items if item is not None and item.scene() == scene]
-
-            # Debug: Log validation results for unfocused subwindows (commented out - only for QGraphicsItem approach)
-            # if subwindow_container and not subwindow_container.is_focused:
-            #     print(f"[DEBUG-OVERLAY] {corner_key}: {len(items)} total items, {len(valid_items)} valid items (scene match)")
-            #     # Verify ItemIgnoresTransformations flag and parent relationship
-            #     for item_idx, item in enumerate(valid_items[:1]):  # Check first item only
-            #         if item is not None:
-            #             flags = item.flags()
-            #             has_ignore_flag = bool(flags & QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
-            #             parent_item = item.parentItem()
-            #             is_direct_child = parent_item is None
-            #             item_pos = item.pos()
-            #             item_bounding_rect = item.boundingRect()
-            #             item_scene_pos = item.scenePos()
-            #             print(f"[DEBUG-OVERLAY] {corner_key} item {item_idx}: ItemIgnoresTransformations={has_ignore_flag}, parent_item={parent_item}, is_direct_child={is_direct_child}")
-            #             print(f"[DEBUG-DIAG] {corner_key} item {item_idx}: pos={item_pos}, scenePos={item_scene_pos}, boundingRect={item_bounding_rect}")
-
-            if len(valid_items) != len(items):
-                # Some items were deleted, need to recreate
-                total_slices = getattr(self, 'current_total_slices', None)
-                stack_position = getattr(self, 'current_stack_position', None)
-                self.create_overlay_items(
-                    scene, self.current_parser,
-                    total_slices=total_slices, stack_position=stack_position,
-                )
+        for corner in corners:
+            ok = self._update_one_corner_overlay_position(
+                scene,
+                corner.key,
+                corner.x,
+                corner.y,
+                corner.alignment,
+                margin_scene,
+                viewport_to_scene_scale,
+            )
+            if not ok:
                 return
 
-            is_right_aligned = bool(alignment & Qt.AlignmentFlag.AlignRight)
-
-            if is_right_aligned:
-                # Right-aligned: multiple items (one per line)
-                # Use cached max width to prevent jitter during cine playback
-                # The width is cached when items are created and only changes when items are recreated
-                max_text_width_viewport = self.corner_max_width_map.get(corner_key, 0)
-
-                # Fallback: if cache is missing (shouldn't happen), recalculate from items
-                if max_text_width_viewport == 0:
-                    for item in valid_items:
-                        if item is not None:
-                            item_width = item.boundingRect().width()
-                            max_text_width_viewport = max(max_text_width_viewport, item_width)
-                    max_text_width_viewport += 5  # Add padding
-                    # Cache it for future use
-                    if max_text_width_viewport > 0:
-                        self.corner_max_width_map[corner_key] = max_text_width_viewport
-
-                max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
-
-                # Calculate right edge position
-                right_edge_x = x - margin_scene
-                left_edge_x = right_edge_x - max_text_width_scene
-
-                # Get line height from first item
-                if valid_items:
-                    line_height_viewport = valid_items[0].boundingRect().height()
-                    line_height_scene = line_height_viewport * viewport_to_scene_scale
-                    line_spacing = line_height_scene * 0.9
-
-                    # Update positions for each line
-                    for line_idx, item in enumerate(valid_items):
-                        if item is not None:
-                            if alignment & Qt.AlignmentFlag.AlignBottom:
-                                text_y = y - (len(valid_items) - line_idx) * line_spacing
-                            else:
-                                text_y = y + line_idx * line_spacing
-                            old_pos = item.pos()
-
-                            # Verify flag before update
-                            flags_before = item.flags()
-                            has_flag_before = bool(flags_before & QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
-
-                            # Notify Qt that geometry is changing - required for ItemIgnoresTransformations items
-                            item.prepareGeometryChange()
-
-                            # Invalidate old position area before moving
-                            old_rect = item.boundingRect().translated(old_pos)
-                            scene.invalidate(old_rect)
-
-                            item.setPos(left_edge_x, text_y)
-
-                            # Re-apply flag if needed (shouldn't be necessary, but ensure it's set)
-                            if not has_flag_before:
-                                item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-                                # print(f"[DEBUG-OVERLAY] WARNING: {corner_key} item {line_idx} lost ItemIgnoresTransformations flag, re-applied")
-
-                            # Invalidate new position area after moving
-                            new_rect = item.boundingRect().translated(item.pos())
-                            scene.invalidate(new_rect)
-
-                            # Force item update to ensure Qt refreshes the item
-                            item.update()
-
-
-
-                            # Debug: Log position changes for unfocused subwindows (commented out - only for QGraphicsItem approach)
-                            # if subwindow_container and not subwindow_container.is_focused and line_idx == 0:
-                            #     print(f"[DEBUG-OVERLAY] Updated {corner_key} item {line_idx}: old_pos=({old_pos.x():.1f}, {old_pos.y():.1f}), new_pos=({left_edge_x:.1f}, {text_y:.1f}), flag_before={has_flag_before}, flag_after={has_flag_after}, transform_identity={is_identity_transform}")
-            else:
-                # Left-aligned: single item (may be multi-line)
-                if valid_items:
-                    item = valid_items[0]
-                    if item is not None:
-                        old_pos = item.pos()
-
-                        # Verify flag before update
-                        flags_before = item.flags()
-                        has_flag_before = bool(flags_before & QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
-
-                        # Notify Qt that geometry is changing - required for ItemIgnoresTransformations items
-                        item.prepareGeometryChange()
-
-                        # Invalidate old position area before moving
-                        old_rect = item.boundingRect().translated(old_pos)
-                        scene.invalidate(old_rect)
-
-                        item.setPos(x, y)
-
-                        # Adjust y position for bottom alignment
-                        if alignment & Qt.AlignmentFlag.AlignBottom:
-                            text_height_viewport = item.boundingRect().height()
-                            text_height_scene = text_height_viewport * viewport_to_scene_scale
-                            # Notify Qt again before second position change
-                            item.prepareGeometryChange()
-                            # Invalidate intermediate position
-                            intermediate_rect = item.boundingRect().translated(item.pos())
-                            scene.invalidate(intermediate_rect)
-                            item.setPos(item.pos().x(), y - text_height_scene)
-
-                        # Re-apply flag if needed (shouldn't be necessary, but ensure it's set)
-                        if not has_flag_before:
-                            item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-                            # print(f"[DEBUG-OVERLAY] WARNING: {corner_key} item lost ItemIgnoresTransformations flag, re-applied")
-
-                        # Invalidate new position area after moving
-                        new_rect = item.boundingRect().translated(item.pos())
-                        scene.invalidate(new_rect)
-
-                        # Force item update to ensure Qt refreshes the item
-                        item.update()
-
-
-
-                        # Debug: Log position changes for unfocused subwindows (commented out - only for QGraphicsItem approach)
-                        # if subwindow_container and not subwindow_container.is_focused:
-                        #     new_pos = item.pos()
-                        #     print(f"[DEBUG-OVERLAY] Updated {corner_key} item: old_pos=({old_pos.x():.1f}, {old_pos.y():.1f}), new_pos=({new_pos.x():.1f}, {new_pos.y():.1f}), flag_before={has_flag_before}, flag_after={has_flag_after}, transform_identity={is_identity_transform}")
-
-        # Force scene invalidation and viewport update after all positions are updated
-        # Use QTimer to defer update until after view transform is fully applied
-        # This ensures Qt immediately repaints with new positions for ItemIgnoresTransformations items
-        # Scene invalidation is needed to clear any cached rendering for these items
-        if view is not None:
-            # Diagnostic logging: Rendering pipeline (commented out - only for QGraphicsItem approach)
-            # if subwindow_container and not subwindow_container.is_focused:
-            #     print(f"[DEBUG-DIAG] Scheduling deferred scene invalidation and viewport update")
-
-            # Defer update to ensure view transform is fully applied before repainting
-            QTimer.singleShot(0, lambda: (
-                scene.invalidate(),  # Invalidate entire scene to clear cached rendering
-                view.viewport().update()  # Force immediate repaint
-            ))
+        schedule_scene_viewport_repaint(scene, view)
 

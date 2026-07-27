@@ -21,6 +21,7 @@ Requirements:
     - core.dicom_processor, core.export_rendering
 """
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 from PIL import Image
@@ -36,6 +37,71 @@ from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     from utils.deep_anonymizer import DeepAnonymizerOptions
+
+
+@dataclass
+class ExportSelectedRequest:
+    """Inputs for :meth:`ExportManager.export_selected`."""
+
+    selected_items: dict[tuple[str, str, int], Dataset]
+    output_dir: str
+    format: str
+    window_level_option: str = "dataset"
+    current_window_center: float | None = None
+    current_window_width: float | None = None
+    include_overlays: bool = False
+    use_rescaled_values: bool = False
+    roi_manager: Any = None
+    overlay_manager: Any = None
+    measurement_tool: Any = None
+    config_manager: Any = None
+    text_annotation_tool: Any = None
+    arrow_annotation_tool: Any = None
+    studies: dict[str, dict[str, list[Dataset]]] | None = None
+    export_scale: float = 1.0
+    scale_annotations_with_image: bool = False
+    anonymize: bool = False
+    deep_anonymize: bool = False
+    deep_anonymizer_options: Optional["DeepAnonymizerOptions"] = None
+    projection_enabled: bool = False
+    projection_type: str = "aip"
+    projection_slice_count: int = 4
+    subwindow_annotation_managers: list[dict[str, Any]] | None = None
+    deep_anonymized_items: dict[tuple[str, str, int], Dataset] | None = None
+
+
+@dataclass
+class ExportSliceRequest:
+    """Inputs for :meth:`ExportManager.export_slice`."""
+
+    dataset: Dataset
+    output_path: str
+    format: str
+    window_level_option: str = "dataset"
+    current_window_center: float | None = None
+    current_window_width: float | None = None
+    include_overlays: bool = False
+    use_rescaled_values: bool = False
+    roi_manager: Any = None
+    overlay_manager: Any = None
+    measurement_tool: Any = None
+    config_manager: Any = None
+    text_annotation_tool: Any = None
+    arrow_annotation_tool: Any = None
+    study_uid: str | None = None
+    series_uid: str | None = None
+    slice_index: int | None = None
+    total_slices: int | None = None
+    export_scale: float = 1.0
+    scale_annotations_with_image: bool = False
+    anonymize: bool = False
+    dataset_pre_anonymized: bool = False
+    projection_enabled: bool = False
+    projection_type: str = "aip"
+    projection_slice_count: int = 4
+    studies: dict[str, dict[str, list[Dataset]]] | None = None
+    subwindow_annotation_managers: list[dict[str, Any]] | None = None
+
 
 class ExportManager:
     """
@@ -191,69 +257,47 @@ class ExportManager:
         return paths
 
     def export_selected(
-        self,
-        selected_items: dict[tuple[str, str, int], Dataset],
-        output_dir: str,
-        format: str,
-        window_level_option: str = "dataset",
-        current_window_center: float | None = None,
-        current_window_width: float | None = None,
-        include_overlays: bool = False,
-        use_rescaled_values: bool = False,
-        roi_manager=None,
-        overlay_manager=None,
-        measurement_tool=None,
-        config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
-        studies: dict[str, dict[str, list[Dataset]]] | None = None,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
-        anonymize: bool = False,
-        deep_anonymize: bool = False,
-        deep_anonymizer_options: Optional["DeepAnonymizerOptions"] = None,
-        projection_enabled: bool = False,
-        projection_type: str = "aip",
-        projection_slice_count: int = 4,
-        subwindow_annotation_managers: list[dict[str, Any]] | None = None,
-        deep_anonymized_items: dict[tuple[str, str, int], Dataset] | None = None,
+        self, request: ExportSelectedRequest
     ) -> tuple[int, list[tuple[str, float, float]]]:
         """
         Export selected items based on hierarchical selection.
-        
+
+        Args:
+            request: ``ExportSelectedRequest`` holding export options and the
+                hierarchical selection fields (items, output dir, format, W/L,
+                overlays, anonymization, projection, and related managers).
+
         Returns:
             (exported_count, downgraded_list). downgraded_list is a list of
             (filename, requested_scale, actual_scale) for images exported at
             a lower magnification than requested (PNG/JPG only).
-        
-        Args:
-            selected_items: Dictionary of {(study_uid, series_uid, slice_index): dataset}
-            output_dir: Output directory
-            format: Export format ("PNG", "JPG", or "DICOM")
-            window_level_option: "current" or "dataset"
-            current_window_center: Current window center from viewer
-            current_window_width: Current window width from viewer
-            include_overlays: Whether to include overlays/ROIs (PNG/JPG only)
-            use_rescaled_values: Whether to apply rescale slope/intercept (matches viewer setting)
-            roi_manager: Optional ROI manager for rendering ROIs
-            overlay_manager: Optional overlay manager for rendering overlays
-            measurement_tool: Optional measurement tool for rendering measurements
-            config_manager: Optional config manager for overlay configuration
-            studies: Optional studies dictionary for calculating total_slices {study_uid: {series_uid: [datasets]}}
-            export_scale: Scale factor for image dimensions (1.0, 1.5, 2.0, or 4.0)
-            scale_annotations_with_image: If True, multiply annotation line/font sizes by export_scale
-            anonymize: Whether to anonymize DICOM exports (group 0010 only)
-            deep_anonymize: Whether to apply deep anonymization (DICOM only)
-            deep_anonymizer_options: Options for DeepDICOMAnonymizer when deep_anonymize is True
-            projection_enabled: Whether intensity projection (combine slices) is enabled
-            projection_type: Type of projection ("aip", "mip", or "minip")
-            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            subwindow_annotation_managers: Optional list of per-subwindow dicts with keys
-                roi_manager, measurement_tool, text_annotation_tool, arrow_annotation_tool.
-                When provided, annotations are aggregated from all subwindows for each slice (Option B).
-            deep_anonymized_items: Precomputed deep-anonymized selection from
-                build_deep_anonymized_selection, used to keep preflight and export paths identical.
         """
+        selected_items = request.selected_items
+        output_dir = request.output_dir
+        export_format = request.format
+        window_level_option = request.window_level_option
+        current_window_center = request.current_window_center
+        current_window_width = request.current_window_width
+        include_overlays = request.include_overlays
+        use_rescaled_values = request.use_rescaled_values
+        roi_manager = request.roi_manager
+        overlay_manager = request.overlay_manager
+        measurement_tool = request.measurement_tool
+        config_manager = request.config_manager
+        text_annotation_tool = request.text_annotation_tool
+        arrow_annotation_tool = request.arrow_annotation_tool
+        studies = request.studies
+        export_scale = request.export_scale
+        scale_annotations_with_image = request.scale_annotations_with_image
+        anonymize = request.anonymize
+        deep_anonymize = request.deep_anonymize
+        deep_anonymizer_options = request.deep_anonymizer_options
+        projection_enabled = request.projection_enabled
+        projection_type = request.projection_type
+        projection_slice_count = request.projection_slice_count
+        subwindow_annotation_managers = request.subwindow_annotation_managers
+        deep_anonymized_items = request.deep_anonymized_items
+
         exported = 0
         downgraded: list[tuple[str, float, float]] = []  # (filename, requested_scale, actual_scale)
 
@@ -276,7 +320,7 @@ class ExportManager:
 
         # Deep anonymize batch (DICOM): consistent UID remap and date shift across selection
         pre_anonymized: dict[tuple[str, str, int], Dataset] = {}
-        if deep_anonymize and format == "DICOM":
+        if deep_anonymize and export_format == "DICOM":
             pre_anonymized = deep_anonymized_items or self.build_deep_anonymized_selection(
                 selected_items,
                 deep_anonymizer_options,
@@ -290,7 +334,7 @@ class ExportManager:
                     continue
 
                 # Use anonymized tags for folder structure when anonymize or deep anonymize
-                if deep_anonymize and format == "DICOM":
+                if deep_anonymize and export_format == "DICOM":
                     first_key = (study_uid, series_uid, items[0][0])
                     folder_dataset = pre_anonymized.get(first_key, items[0][1])
                 elif anonymize:
@@ -349,7 +393,7 @@ class ExportManager:
                         break
 
                     export_dataset = dataset
-                    if deep_anonymize and format == "DICOM":
+                    if deep_anonymize and export_format == "DICOM":
                         slice_key = (study_uid, series_uid, slice_index)
                         export_dataset = pre_anonymized.get(slice_key, dataset)
 
@@ -362,9 +406,9 @@ class ExportManager:
                         projection_type_upper = projection_type.upper()
                         projection_suffix = f"_{projection_type_upper}_{projection_slice_count}slices"
 
-                    if format == "DICOM":
+                    if export_format == "DICOM":
                         filename = f"Instance_{instance_num:04d}{projection_suffix}.dcm"
-                    elif format == "PNG":
+                    elif export_format == "PNG":
                         filename = f"Instance_{instance_num:04d}{projection_suffix}.png"
                     else:  # JPG
                         filename = f"Instance_{instance_num:04d}{projection_suffix}.jpg"
@@ -377,37 +421,39 @@ class ExportManager:
                         total_slices = len(studies[study_uid][series_uid])
 
                     success, downgrade_info = self.export_slice(
-                        export_dataset,
-                        output_path,
-                        format,
-                        window_level_option,
-                        current_window_center,
-                        current_window_width,
-                        include_overlays,
-                        use_rescaled_values,
-                        roi_manager,
-                        overlay_manager,
-                        measurement_tool,
-                        config_manager,
-                        text_annotation_tool,
-                        arrow_annotation_tool,
-                        study_uid,
-                        series_uid,
-                        slice_index,
-                        total_slices,
-                        export_scale,
-                        scale_annotations_with_image,
-                        anonymize=anonymize and not deep_anonymize,
-                        dataset_pre_anonymized=deep_anonymize and format == "DICOM",
-                        projection_enabled=projection_enabled,
-                        projection_type=projection_type,
-                        projection_slice_count=projection_slice_count,
-                        studies=studies,
-                        subwindow_annotation_managers=subwindow_annotation_managers
+                        ExportSliceRequest(
+                            export_dataset,
+                            output_path,
+                            export_format,
+                            window_level_option,
+                            current_window_center,
+                            current_window_width,
+                            include_overlays,
+                            use_rescaled_values,
+                            roi_manager,
+                            overlay_manager,
+                            measurement_tool,
+                            config_manager,
+                            text_annotation_tool,
+                            arrow_annotation_tool,
+                            study_uid,
+                            series_uid,
+                            slice_index,
+                            total_slices,
+                            export_scale,
+                            scale_annotations_with_image,
+                            anonymize=anonymize and not deep_anonymize,
+                            dataset_pre_anonymized=deep_anonymize and export_format == "DICOM",
+                            projection_enabled=projection_enabled,
+                            projection_type=projection_type,
+                            projection_slice_count=projection_slice_count,
+                            studies=studies,
+                            subwindow_annotation_managers=subwindow_annotation_managers,
+                        )
                     )
                     if success:
                         exported += 1
-                        if downgrade_info is not None and format in ("PNG", "JPG"):
+                        if downgrade_info is not None and export_format in ("PNG", "JPG"):
                             req, act = downgrade_info
                             downgraded.append((os.path.basename(output_path), req, act))
 
@@ -421,71 +467,50 @@ class ExportManager:
         return (exported, downgraded)
 
     def export_slice(
-        self,
-        dataset: Dataset,
-        output_path: str,
-        format: str,
-        window_level_option: str = "dataset",
-        current_window_center: float | None = None,
-        current_window_width: float | None = None,
-        include_overlays: bool = False,
-        use_rescaled_values: bool = False,
-        roi_manager=None,
-        overlay_manager=None,
-        measurement_tool=None,
-        config_manager=None,
-        text_annotation_tool=None,
-        arrow_annotation_tool=None,
-        study_uid: str | None = None,
-        series_uid: str | None = None,
-        slice_index: int | None = None,
-        total_slices: int | None = None,
-        export_scale: float = 1.0,
-        scale_annotations_with_image: bool = False,
-        anonymize: bool = False,
-        dataset_pre_anonymized: bool = False,
-        projection_enabled: bool = False,
-        projection_type: str = "aip",
-        projection_slice_count: int = 4,
-        studies: dict[str, dict[str, list[Dataset]]] | None = None,
-        subwindow_annotation_managers: list[dict[str, Any]] | None = None
+        self, request: ExportSliceRequest
     ) -> tuple[bool, tuple[float, float] | None]:
         """
         Export a single slice or projection image.
 
         Args:
-            dataset: DICOM dataset
-            output_path: Output file path
-            format: Export format ("PNG", "JPG", or "DICOM")
-            window_level_option: "current" or "dataset"
-            current_window_center: Current window center from viewer
-            current_window_width: Current window width from viewer
-            include_overlays: Whether to include overlays/ROIs (PNG/JPG only)
-            use_rescaled_values: Whether to apply rescale slope/intercept (matches viewer setting)
-            roi_manager: Optional ROI manager for rendering ROIs
-            overlay_manager: Optional overlay manager for rendering overlays
-            measurement_tool: Optional measurement tool for rendering measurements
-            config_manager: Optional config manager for overlay configuration
-            study_uid: Optional study UID for ROI lookup
-            series_uid: Optional series UID for ROI lookup
-            slice_index: Optional slice index for ROI lookup
-            total_slices: Optional total number of slices in series (for "Slice X/Y" formatting)
-            export_scale: Scale factor for image dimensions (1.0, 1.5, 2.0, or 4.0)
-            scale_annotations_with_image: If True, multiply annotation sizes by export_scale
-            anonymize: Whether to anonymize DICOM exports (group 0010 only)
-            dataset_pre_anonymized: When True, DICOM export saves dataset as-is (already anonymized)
-            projection_enabled: Whether intensity projection (combine slices) is enabled
-            projection_type: Type of projection ("aip", "mip", or "minip")
-            projection_slice_count: Number of slices to combine (2, 3, 4, 6, or 8)
-            studies: Optional studies dictionary for gathering slices for projection
-            subwindow_annotation_managers: Optional list of per-subwindow annotation managers (Option B aggregate)
+            request: ``ExportSliceRequest`` holding the dataset, output path,
+                format, W/L, overlay/annotation managers, anonymization, and
+                optional projection fields.
 
         Returns:
             (success, downgrade_info). downgrade_info is (requested_scale, actual_scale) when
             image was exported at lower magnification than requested (PNG/JPG only), else None.
         """
+        dataset = request.dataset
+        output_path = request.output_path
+        export_format = request.format
+        window_level_option = request.window_level_option
+        current_window_center = request.current_window_center
+        current_window_width = request.current_window_width
+        include_overlays = request.include_overlays
+        use_rescaled_values = request.use_rescaled_values
+        roi_manager = request.roi_manager
+        overlay_manager = request.overlay_manager
+        measurement_tool = request.measurement_tool
+        config_manager = request.config_manager
+        text_annotation_tool = request.text_annotation_tool
+        arrow_annotation_tool = request.arrow_annotation_tool
+        study_uid = request.study_uid
+        series_uid = request.series_uid
+        slice_index = request.slice_index
+        total_slices = request.total_slices
+        export_scale = request.export_scale
+        scale_annotations_with_image = request.scale_annotations_with_image
+        anonymize = request.anonymize
+        dataset_pre_anonymized = request.dataset_pre_anonymized
+        projection_enabled = request.projection_enabled
+        projection_type = request.projection_type
+        projection_slice_count = request.projection_slice_count
+        studies = request.studies
+        subwindow_annotation_managers = request.subwindow_annotation_managers
+
         try:
-            if format == "DICOM":
+            if export_format == "DICOM":
                 # Export as DICOM
                 if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
                     # Create projection dataset for DICOM export
@@ -581,31 +606,33 @@ class ExportManager:
                 # Render overlays and ROIs if requested (on final-size image)
                 if include_overlays:
                     image = _er.render_overlays_and_rois(
-                        image,
-                        dataset,
-                        roi_manager,
-                        overlay_manager,
-                        measurement_tool,
-                        config_manager,
-                        text_annotation_tool,
-                        arrow_annotation_tool,
-                        study_uid,
-                        series_uid,
-                        slice_index,
-                        total_slices,
-                        coordinate_scale=effective_scale,
-                        export_scale=effective_scale,
-                        scale_annotations_with_image=scale_annotations_with_image,
-                        projection_enabled=projection_enabled,
-                        projection_type=projection_type,
-                        projection_slice_count=projection_slice_count,
-                        studies=studies,
-                        subwindow_annotation_managers=subwindow_annotation_managers
+                        _er.RenderOverlaysRequest(
+                            image,
+                            dataset,
+                            roi_manager,
+                            overlay_manager,
+                            measurement_tool,
+                            config_manager,
+                            text_annotation_tool,
+                            arrow_annotation_tool,
+                            study_uid,
+                            series_uid,
+                            slice_index,
+                            total_slices,
+                            coordinate_scale=effective_scale,
+                            export_scale=effective_scale,
+                            scale_annotations_with_image=scale_annotations_with_image,
+                            projection_enabled=projection_enabled,
+                            projection_type=projection_type,
+                            projection_slice_count=projection_slice_count,
+                            studies=studies,
+                            subwindow_annotation_managers=subwindow_annotation_managers
+                        )
                     )
 
-                if format == "PNG":
+                if export_format == "PNG":
                     image.save(output_path, "PNG")
-                elif format == "JPG":
+                elif export_format == "JPG":
                     image.save(output_path, "JPEG", quality=95)
 
                 return (True, downgrade_info)
