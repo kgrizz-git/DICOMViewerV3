@@ -538,11 +538,14 @@ def run_load_pipeline_async(
     on_pipeline_complete: Callable[[list[Any] | None, dict[str, Any] | None], None]
     | None = None,
 ):
-    """Async load pipeline; implementation lives in ``loading_pipeline_async``."""
-    from core.loading_pipeline_async import (
-        run_load_pipeline_async as _run_load_pipeline_async,
-    )
+    """Async load pipeline; implementation lives in ``loading_pipeline_async``.
 
-    return _run_load_pipeline_async(
+    Uses ``importlib`` so basedpyright does not treat this as an import cycle
+    with ``loading_pipeline_async`` (which imports shared types from here).
+    """
+    import importlib
+
+    async_mod = importlib.import_module("core.loading_pipeline_async")
+    return async_mod.run_load_pipeline_async(
         request, on_pipeline_complete=on_pipeline_complete
     )

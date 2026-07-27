@@ -62,9 +62,10 @@ RowPayload = tuple[list[str], dict[str, str], list[str]]
 
 
 def _svc():
-    from core import roi_export_service as svc
+    """Late-bind service helpers without a static import cycle for basedpyright."""
+    import importlib
 
-    return svc
+    return importlib.import_module("core.roi_export_service")
 
 
 def truncate_study_uid_for_csv(study_uid: str) -> str:

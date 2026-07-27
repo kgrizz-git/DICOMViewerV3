@@ -306,7 +306,7 @@ def _sync_series_navigator(app: Any, focused_idx: int) -> None:
 
 
 def _bootstrap_first_or_last_series(
-    app: Any, focused_idx: int, data: dict, focused_study_uid: str, direction: int
+    app: Any, focused_idx: int, data: dict[str, Any], focused_study_uid: str, direction: int
 ) -> None:
     """No series in the focused subwindow: load the first (dir>0) or last series."""
     if DEBUG_NAV and DEBUG_SERIES:
@@ -461,7 +461,7 @@ def _navigate_to_adjacent_series(
 
 
 def _resolve_navigation_context(
-    app: Any, focused_idx: int, data: dict, direction: int
+    app: Any, focused_idx: int, data: dict[str, Any], direction: int
 ) -> tuple[str, str, int] | None:
     """Resolve and repair the focused study/series/slice before navigating.
 

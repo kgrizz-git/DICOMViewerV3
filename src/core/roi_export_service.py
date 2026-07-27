@@ -419,8 +419,9 @@ def write_txt(
 
     Implementation lives in ``core.roi_export_txt`` (Sonar S3776 complexity slice).
     """
-    from core.roi_export_txt import write_txt_report
+    import importlib
 
+    write_txt_report = importlib.import_module("core.roi_export_txt").write_txt_report
     write_txt_report(
         file_path,
         collected,
@@ -446,8 +447,9 @@ def write_csv(
 
     Implementation lives in ``core.roi_export_csv`` (Sonar S3776 complexity slice).
     """
-    from core.roi_export_csv import write_csv_report
+    import importlib
 
+    write_csv_report = importlib.import_module("core.roi_export_csv").write_csv_report
     write_csv_report(
         file_path,
         collected,
@@ -472,8 +474,11 @@ def write_xlsx(
 
     Implementation lives in ``core.roi_export_xlsx`` (Sonar S3776 complexity slice).
     """
-    from core.roi_export_xlsx import write_xlsx_workbook
+    import importlib
 
+    write_xlsx_workbook = importlib.import_module(
+        "core.roi_export_xlsx"
+    ).write_xlsx_workbook
     write_xlsx_workbook(
         file_path,
         collected,

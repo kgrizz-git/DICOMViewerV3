@@ -8,6 +8,10 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-07-26
 
+- Cleared basedpyright push-gate errors introduced by recent S3776 helper
+  extractions: typed bare generics, overlay parser null guard, measurement
+  `QPointF` casts, and `importlib` loaders for load-pipeline / ROI-export
+  modules so import-cycle errors no longer block pre-push.
 - Completed a Sonar `python:S3776` slice on overlay bitmap conversion: moved byte
   extraction, LSB-first unpack, coordinate mapping, OpenCV/scipy path extraction,
   and no-NumPy fallback into `src/tools/annotation_overlay_bitmap.py`;

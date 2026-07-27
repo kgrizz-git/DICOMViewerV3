@@ -34,10 +34,10 @@ from core.spreadsheet_safety import (
 
 
 def _svc():
-    """Return the roi_export_service module (loaded after shared helpers exist)."""
-    from core import roi_export_service as svc
+    """Return roi_export_service without a static import cycle for basedpyright."""
+    import importlib
 
-    return svc
+    return importlib.import_module("core.roi_export_service")
 
 
 def resolve_export_roi_manager(

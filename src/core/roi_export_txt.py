@@ -31,9 +31,10 @@ from core.roi_export_xlsx import resolve_export_roi_manager
 
 
 def _svc():
-    from core import roi_export_service as svc
+    """Late-bind service helpers without a static import cycle for basedpyright."""
+    import importlib
 
-    return svc
+    return importlib.import_module("core.roi_export_service")
 
 
 def txt_area_line(area_mm2: float | int | None, area_px_f: float) -> str:

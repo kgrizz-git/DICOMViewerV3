@@ -279,7 +279,7 @@ def resolve_window_level_and_rescale(
     return window_center, window_width, out_slope, out_intercept
 
 
-def _nth_or_last(values: list, index: int):
+def _nth_or_last(values: list[Any], index: int):
     """Return ``values[index]``, falling back to the last value, or None if empty."""
     if index < len(values):
         return values[index]

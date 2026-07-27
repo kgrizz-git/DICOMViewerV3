@@ -19,7 +19,7 @@ Requirements:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QLineF, QPointF
 from PySide6.QtWidgets import QGraphicsItem
@@ -191,8 +191,8 @@ def process_measurement_handle_item_change(
 
 def resolve_measurement_group_position_change(
     measurement: Any,
-    value: object,
-) -> object:
+    value: QPointF,
+) -> QPointF:
     """Resolve MeasurementItem ItemPositionChange (allow, our setPos, or veto)."""
     if hasattr(measurement, "_updating_handles") and measurement._updating_handles:
         if DEBUG_MEASUREMENT_DRAG:
@@ -328,7 +328,9 @@ def process_measurement_group_item_change(
         ``(False, value)`` to call ``super().itemChange(change, value)``.
     """
     if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-        return True, resolve_measurement_group_position_change(measurement, value)
+        return True, resolve_measurement_group_position_change(
+            measurement, cast(QPointF, value)
+        )
 
     if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
         if apply_measurement_group_position_has_changed(measurement):

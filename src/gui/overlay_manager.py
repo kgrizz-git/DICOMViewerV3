@@ -922,11 +922,14 @@ class OverlayManager:
 
     def _recreate_overlay_items_for_current_state(self, scene) -> None:
         """Rebuild corner overlays after stale/deleted graphics items are detected."""
+        parser = self.current_parser
+        if parser is None:
+            return
         total_slices = getattr(self, "current_total_slices", None)
         stack_position = getattr(self, "current_stack_position", None)
         self.create_overlay_items(
             scene,
-            self.current_parser,
+            parser,
             total_slices=total_slices,
             stack_position=stack_position,
         )
