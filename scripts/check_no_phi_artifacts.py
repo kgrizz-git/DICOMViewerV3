@@ -244,7 +244,11 @@ DICOM_IDENTIFIER_KEYWORDS = {
     "StudyID",
 }
 
-CONTENT_RULES: list[tuple[re.Pattern[str], str]] = [
+class _Searcher(Protocol):
+    def search(self, string: str, /) -> re.Match[str] | None: ...
+
+
+CONTENT_RULES: list[tuple[_Searcher, str]] = [
     (
         re.compile(
             r'"(recent_files|last_path|last_export_path|last_pylinac_output_path)"'
