@@ -5,16 +5,15 @@ on:
     branches:
       - main
       - develop
-  pull_request:
-    branches:
-      - main
-      - develop
+  workflow_run:
+    workflows: ["Privacy Gate"]
+    types: [completed]
   schedule:
     # Run Grype at 3 AM UTC every Tuesday
     - cron: '0 3 * * 2'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -28,10 +27,16 @@ jobs:
   grype:
     name: Grype CVE Scan
     runs-on: ubuntu-latest
-    
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Run Grype scan
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
@@ -77,7 +82,11 @@ jobs:
           category: grype
 
       - name: Comment on PR with CVE results
-        if: github.event_name == 'pull_request' && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]'
+        if: |
+          (github.event_name == 'pull_request' ||
+           (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')) &&
+          steps.grype_sarif.outputs.upload == 'true' &&
+          github.actor != 'dependabot[bot]'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
@@ -86,19 +95,26 @@ jobs:
             const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf8'));
             const run0 = (sarif.runs && sarif.runs[0]) || {};
             const findings = run0.results || [];
-            
+
+            const prNumber = context.issue.number ||
+              context.payload.workflow_run?.pull_requests?.[0]?.number;
+            if (!prNumber) {
+              console.log('No PR number found, skipping comment.');
+              return;
+            }
+
             // Filter by severity
             const critical = findings.filter(f => f.level === 'error');
             const high = findings.filter(f => f.level === 'warning');
-            
+
             if (findings.length === 0) {
               console.log('✅ No known vulnerabilities found');
               return;
             }
-            
+
             let comment = '## 🛡️ Dependency Vulnerability Scan\n\n';
             comment += `**Summary**: ${critical.length} CRITICAL, ${high.length} HIGH, ${findings.length - critical.length - high.length} other\n\n`;
-            
+
             if (critical.length > 0) {
               comment += '### 🚨 Critical Issues\n';
               critical.slice(0, 5).forEach(issue => {
@@ -107,7 +123,7 @@ jobs:
                 comment += `- **${pkg}**: ${vuln}\n`;
               });
             }
-            
+
             if (high.length > 0) {
               comment += '\n### ⚠️ High Issues\n';
               high.slice(0, 5).forEach(issue => {
@@ -116,13 +132,13 @@ jobs:
                 comment += `- **${pkg}**: ${vuln}\n`;
               });
             }
-            
+
             if (findings.length > 10) {
               comment += `\n... and ${findings.length - 10} more vulnerabilities (see GitHub Security tab)`;
             }
-            
+
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment

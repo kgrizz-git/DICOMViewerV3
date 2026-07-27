@@ -1,22 +1,18 @@
 name: User docs links
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'user-docs/**'
-      - 'dev-docs/README.md'
   push:
     branches:
       - main
     paths:
       - 'user-docs/**'
       - 'dev-docs/README.md'
+  workflow_run:
+    workflows: ["Privacy Gate"]
+    types: [completed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -26,9 +22,15 @@ jobs:
   check-relative-links:
     name: Check user-docs relative links
     runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"

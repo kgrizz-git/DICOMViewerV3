@@ -9,16 +9,15 @@ on:
     branches:
       - main
       - develop
-  pull_request:
-    branches:
-      - main
-      - develop
+  workflow_run:
+    workflows: ["Privacy Gate"]
+    types: [completed]
   schedule:
     # Run Semgrep at 1 AM UTC every Sunday
     - cron: '0 1 * * 0'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -29,31 +28,38 @@ permissions:
   pull-requests: write
 
 jobs:
-  privacy-gate:
-    name: Privacy gate for Semgrep
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.12"
-      - run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5" "pypdf>=6.14.2,<7"
-      - run: python scripts/check_no_phi_artifacts.py
-      - run: python scripts/git_hook_privacy_checks.py --all --critical
-
   semgrep:
     name: Semgrep Security Audit
     runs-on: ubuntu-latest
-    needs: privacy-gate
     # Semgrep docs: skip Dependabot PRs to avoid permission/token issues
-    if: github.actor != 'dependabot[bot]'
+    if: |
+      github.actor != 'dependabot[bot]' && (
+        github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.event == 'pull_request' &&
+         github.event.workflow_run.conclusion == 'success')
+      )
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      # Push events to main/develop are not gated by the external Privacy Gate
+      # workflow (which only fires on PRs). Run the same checks inline so source
+      # is never uploaded to GitHub Code Scanning before they pass.
+      - name: Install PHI scan parsers (push gate)
+        if: github.event_name == 'push'
+        run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5" "pypdf>=6.14.2,<7"
+
+      - name: PHI artifact check (push gate)
+        if: github.event_name == 'push'
+        run: python scripts/check_no_phi_artifacts.py
+
+      - name: Privacy output check (push gate)
+        if: github.event_name == 'push'
+        run: python scripts/git_hook_privacy_checks.py --all --critical
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -106,7 +112,10 @@ jobs:
           category: semgrep
 
       - name: Comment on PR with results
-        if: github.event_name == 'pull_request' && hashFiles('semgrep.sarif') != ''
+        if: |
+          (github.event_name == 'pull_request' ||
+           (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')) &&
+          hashFiles('semgrep.sarif') != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
@@ -117,6 +126,13 @@ jobs:
 
             if (issues.length === 0) {
               console.log('✅ No security issues found by Semgrep');
+              return;
+            }
+
+            const prNumber = context.issue.number ||
+              context.payload.workflow_run?.pull_requests?.[0]?.number;
+            if (!prNumber) {
+              console.log('No PR number found, skipping comment.');
               return;
             }
 
@@ -144,7 +160,7 @@ jobs:
             comment += '\nPlease review and address security findings before merging.';
 
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment

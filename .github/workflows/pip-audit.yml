@@ -7,15 +7,6 @@ name: pip-audit
 on:
   schedule:
     - cron: "0 6 * * 1"   # 6 AM UTC every Monday
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - "requirements.txt"
-      - "requirements-dev.txt"
-      - "requirements-build.txt"
-      - "requirements-phi-tools.txt"
   push:
     branches:
       - main
@@ -25,9 +16,12 @@ on:
       - "requirements-dev.txt"
       - "requirements-build.txt"
       - "requirements-phi-tools.txt"
+  workflow_run:
+    workflows: ["Privacy Gate"]
+    types: [completed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -37,9 +31,15 @@ jobs:
   pip-audit:
     name: pip-audit (dependency CVEs)
     runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6

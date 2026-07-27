@@ -17,22 +17,12 @@ on:
       - 'plans/**'
       - 'logs/**'
       - 'LICENSE'
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths-ignore:
-      # Docs-only commits cannot change these results. repo-harness and
-      # user-docs-links still run on docs, so docs are not left unchecked.
-      - '**/*.md'
-      - 'user-docs/**'
-      - 'dev-docs/**'
-      - 'plans/**'
-      - 'logs/**'
-      - 'LICENSE'
+  workflow_run:
+    workflows: ["Privacy Gate"]
+    types: [completed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -42,9 +32,15 @@ jobs:
   lizard:
     name: lizard (CCN >= 15 or NLOC >= 200)
     runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
