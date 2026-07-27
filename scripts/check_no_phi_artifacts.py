@@ -278,6 +278,20 @@ CONTENT_RULES: list[tuple[re.Pattern[str], str]] = [
         "internal hostname",
     ),
 ]
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.privacy_checks.names import (
+    IDENTIFIER_CONTENT_PATTERN,
+    NAME_CONTENT_PATTERN,
+    name_in_path,
+)
+
+CONTENT_RULES.append((IDENTIFIER_CONTENT_PATTERN, "patient-identifier-in-content"))
+CONTENT_RULES.append((NAME_CONTENT_PATTERN, "patient-name-in-content"))
+
 DOCUMENTATION_NETWORKS = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
@@ -369,6 +383,9 @@ def _path_reasons(
             continue
         if _address_requires_redaction(address):
             reasons.append("network address in filename")
+    name_reason = name_in_path(path)
+    if name_reason:
+        reasons.append(name_reason)
     return list(dict.fromkeys(reasons))
 
 
