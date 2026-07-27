@@ -305,6 +305,12 @@ class TestUpdateOverlayPositionsOrchestration:
             mgr.current_parser,
             total_slices=9,
             stack_position=3,
+            projection_enabled=False,
+            projection_start_slice=None,
+            projection_end_slice=None,
+            projection_total_thickness=None,
+            projection_type=None,
+            multiframe_context=None,
         )
         sched.assert_not_called()
 
