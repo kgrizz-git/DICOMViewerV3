@@ -1,4 +1,30 @@
 {
-  "purpose": "Reviewed synthetic text or spreadsheet fixtures. An exception applies only to the listed rule categories while the file SHA-256 remains unchanged.",
-  "files": {}
+  "purpose": "Reviewed text or spreadsheet exceptions. File exceptions apply only to listed rule categories while their file SHA-256 remains unchanged; occurrence exceptions bind a listed rule to one exact line at one repository path.",
+  "files": {
+    "security/approved-media-sha256.json": {
+      "sha256": "5158d5fec21bac659813ad0b20fc5090d90b574456bdac8ec181f3be95fcc179",
+      "allowed_rules": ["patient-name-in-content"]
+    },
+    "src/utils/privacy/structural_event_schema_v1.json": {
+      "sha256": "133abcba22ad7373850a2764844dbb4f26abdde685575926ca4a227bc7f5222b",
+      "allowed_rules": ["patient-name-in-content"]
+    }
+  },
+  "occurrences": [
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "1ff6262e8ead19657ba6b9e7fedfe6732a90db668afcedb4190bbd2c1ec598cc"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "c3f8062e78ccd127270d619be29c72c0a22f633bfcbb64dfa77b2a569510b513"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "05970c2da5723c6f96fb23585a86230abd964a38464fa5eb452f7c67f67e90e1"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "661e1ee2cd560af2604cfa6ae03263f6002e95d6e9866d1e67b4a1ca6fd7ec67"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "d57a3f9ae32b4afc94441be4d705d3c80ea756ea6bdfdf9c5e49eb2a6a4f49af"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "fc6d994fa1aa1f8876c2cc03e638c0243b535df48c978b6a46e2f10534253ca2"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "f0a2b5383fccfa42a1bd0be1be92a5d515ee93715af2d9e8ff71178acf4ee46c"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "6a85accb69cd03454b3ff7c82efe55d1a656ede49a4af3decc05cf9f3678df04"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "5a299135d526ac484c1e43ca9a4b49f462f666aace4384e2414c1303392f81fc"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "95633d52e8d15843f20e834ed5ee8b982c8b1d044695c7d61c822653b94c65d6"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "5b9360719b865efd64953c0a3142887f05717b279eb93285878da4341cdf1b7e"},
+    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "04ee9a6d15bb070f2dfce9cf4c41209bcbce6b086c537f17fc58186414ddf0ee"},
+    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "61750ce71052d7bfc2ea41436a0e8de7a2183cb567886ee000273dcfea9f2bee"},
+    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "6f46456e5520419c75e056112aa60451bde0616dc6300c0529b486b25cae44b3"},
+    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "ca72891637a58d04040bb6fe79602ae411675d12a18f4897e29d16b919a82125"}
+  ]
 }

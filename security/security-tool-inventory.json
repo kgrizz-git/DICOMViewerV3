@@ -31,7 +31,7 @@
       "tested_version": "local 3.95.9; CI 3.95.8",
       "enforcement": ["pre-push blocking", "CI blocking"],
       "network_policy": "no-secret-verification",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/security-checks.yml"],
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {
@@ -43,7 +43,7 @@
       "tested_version": "1.5.0",
       "enforcement": ["pre-commit blocking on main", "CI advisory"],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/security-checks.yml"],
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {
@@ -55,7 +55,7 @@
       "tested_version": "1.169.0",
       "enforcement": ["pre-push blocking", "CI blocking"],
       "network_policy": "rules-download-only-no-source-upload",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/semgrep.yml"],
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {
@@ -67,7 +67,7 @@
       "tested_version": "2.10.1",
       "enforcement": ["pre-push blocking except reviewed advisories", "scheduled CI blocking except reviewed advisories"],
       "network_policy": "advisory-database-access-only",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/pip-audit.yml"],
+      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
       "tracked_configuration": ["security/pip-audit-exceptions.md"]
     },
     {
@@ -75,11 +75,11 @@
       "category": "dependency-vulnerability",
       "purpose": "Repository/package vulnerability scan with optional private-repository SARIF.",
       "install_scope": "pinned GitHub Action",
-      "install_reference": ".github/workflows/grype.yml",
+      "install_reference": ".github/workflows/ci.yml",
       "tested_version": "anchore/scan-action v7 commit-pinned",
       "enforcement": ["scheduled and branch CI advisory"],
       "network_policy": "github-actions-only",
-      "entrypoints": [".github/workflows/grype.yml"],
+      "entrypoints": [".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {
@@ -227,7 +227,7 @@
       "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
       "enforcement": ["privacy-gated CI blocking"],
       "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; Automatic Analysis disabled; no PR, test, coverage, artifact, or local-data upload",
-      "entrypoints": [".github/workflows/sonarqube-cloud-main.yml"],
+      "entrypoints": [".github/workflows/ci.yml"],
       "tracked_configuration": ["sonar-project.properties"]
     },
     {
@@ -239,7 +239,7 @@
       "tested_version": "1.39.9",
       "enforcement": ["pre-push blocking", "CI blocking"],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/check_basedpyright_errors.py", ".github/workflows/pyright.yml"],
+      "entrypoints": ["scripts/check_basedpyright_errors.py", ".github/workflows/ci.yml"],
       "tracked_configuration": ["pyrightconfig.json"]
     },
     {
@@ -251,7 +251,7 @@
       "tested_version": "0.15.21",
       "enforcement": ["pre-commit blocking", "CI blocking"],
       "network_policy": "offline-runtime",
-      "entrypoints": [".githooks/pre-commit", ".github/workflows/ruff.yml"],
+      "entrypoints": [".githooks/pre-commit", ".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {
@@ -263,7 +263,7 @@
       "tested_version": "1.23.0",
       "enforcement": ["pre-push blocking"],
       "network_policy": "offline-runtime",
-      "entrypoints": [".githooks/pre-push", ".github/workflows/lizard.yml"],
+      "entrypoints": [".githooks/pre-push", ".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {
@@ -275,7 +275,7 @@
       "tested_version": "7.1.0",
       "enforcement": ["pre-push blocking", "CI blocking"],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/run_local_sonarqube.py", ".github/workflows/tests.yml"],
+      "entrypoints": ["scripts/run_local_sonarqube.py", ".github/workflows/ci.yml"],
       "tracked_configuration": []
     },
     {

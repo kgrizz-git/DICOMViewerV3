@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-07-27
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -37,7 +37,7 @@ This project uses a **human-led, agent-assisted** workflow—not a fully agent-g
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
 | [`scripts/check_doc_feature_coverage.py`](../scripts/check_doc_feature_coverage.py) | Report-only: maps `QAction` labels in `src/` to mentions in `user-docs/` and lists candidate documentation gaps (heuristic; exit 0 unless `--fail-under RATIO`) |
 
-**CI:** [`.github/workflows/user-docs-links.yml`](../.github/workflows/user-docs-links.yml), [`.github/workflows/repo-harness.yml`](../.github/workflows/repo-harness.yml).
+**CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
 **Pytest:** `tests/test_user_docs_links.py`, `tests/test_repo_harness.py`, `tests/test_architecture_boundaries.py`, `tests/test_agent_smoke_harness.py`, `tests/test_doc_feature_coverage.py`.
 
@@ -56,7 +56,7 @@ This project uses a **human-led, agent-assisted** workflow—not a fully agent-g
 All optional diagnostic **`print`** paths are gated by **`DEBUG_*`** constants in **[`src/utils/debug_flags.py`](../src/utils/debug_flags.py)** (not environment variables). Open that file first when investigating layout, loading, W/L, fusion, MPR, 3D volume, pylinac, or navigation issues — each flag lists the modules it affects.
 
 - Set the relevant flag to **`True`** locally, reproduce, then set back to **`False`** before commit.
-- CI workflow **debug-flags-check** (see [`.github/workflows/security-checks.yml`](../.github/workflows/security-checks.yml)) rejects any `DEBUG_*: bool = True` in that file.
+- CI workflow **debug-flags-check** (see [`.github/workflows/privacy-gates.yml`](../.github/workflows/privacy-gates.yml)) rejects any `DEBUG_*: bool = True` in that file.
 - Human policy: [`CONTRIBUTING.md`](CONTRIBUTING.md) (debug flags section).
 
 Agents: also listed in [`AGENTS.md`](../AGENTS.md) repository map and conventions.

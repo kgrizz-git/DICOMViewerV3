@@ -27,9 +27,9 @@ from datetime import UTC, datetime
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
-from urllib.error import URLError
 from urllib.parse import quote, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+
+import requests
 
 try:
     from scripts.privacy_console import print_redacted
@@ -292,14 +292,16 @@ def check_submission_freshness(
 
 def get_server_status(host_url: str, timeout_seconds: float = 5.0) -> str:
     """Return SonarQube's system status or raise an actionable connection error."""
-    endpoint = f"{host_url}/api/system/status"
-    request = Request(endpoint, headers={"Accept": "application/json"})
+    endpoint = f"{normalize_host_url(host_url)}/api/system/status"
     try:
-        # The CLI normalizes host_url to an HTTP(S) loopback endpoint before this call.
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urlopen(request, timeout=timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (OSError, URLError, json.JSONDecodeError) as exc:
+        response = requests.get(
+            endpoint,
+            headers={"Accept": "application/json"},
+            timeout=timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
         raise RuntimeError(f"could not reach {endpoint}: {exc}") from exc
 
     status = payload.get("status") if isinstance(payload, dict) else None

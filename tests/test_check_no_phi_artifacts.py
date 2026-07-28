@@ -78,6 +78,25 @@ def _approve_synthetic_text_rule(repo: Path, path: str, rule: str) -> None:
     )
 
 
+def _approve_text_occurrence(repo: Path, path: str, rule: str, line: str) -> None:
+    manifest = repo / phi.APPROVED_TEXT_EXCEPTIONS_MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "occurrences": [
+                    {
+                        "path": path,
+                        "rule": rule,
+                        "sha256": phi._text_occurrence_sha256(path, line),
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _approve_reviewable_asset(repo: Path, path: str) -> None:
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True, exist_ok=True)
@@ -256,6 +275,25 @@ def test_synthetic_text_fixture_requires_hash_bound_exception(repo):
     assert _run(repo) == 0
 
     _stage(repo, path, '{"PatientName": "SYNTHETIC^CHANGED"}')
+    assert _run(repo) == 1
+
+
+def test_text_occurrence_exception_allows_only_the_reviewed_line(repo):
+    path = "CHANGELOG.md"
+    reviewed_line = "Technical note by Mark."
+    _stage(repo, path, f"{reviewed_line}\n")
+    assert _run(repo) == 1
+
+    _approve_text_occurrence(repo, path, "patient-name-in-content", reviewed_line)
+    assert _run(repo) == 0
+
+    _stage(repo, path, f"{reviewed_line}\nNew technical release note.\n")
+    assert _run(repo) == 0
+
+    _stage(repo, path, "Updated technical note by Mark.\n")
+    assert _run(repo) == 1
+
+    _stage(repo, path, f"{reviewed_line}\nNew note by White.\n")
     assert _run(repo) == 1
 
 

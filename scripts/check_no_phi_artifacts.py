@@ -244,7 +244,11 @@ DICOM_IDENTIFIER_KEYWORDS = {
     "StudyID",
 }
 
-CONTENT_RULES: list[tuple[re.Pattern[str], str]] = [
+class _Searcher(Protocol):
+    def search(self, string: str, /) -> re.Match[str] | None: ...
+
+
+CONTENT_RULES: list[tuple[_Searcher, str]] = [
     (
         re.compile(
             r'"(recent_files|last_path|last_export_path|last_pylinac_output_path)"'
@@ -278,6 +282,22 @@ CONTENT_RULES: list[tuple[re.Pattern[str], str]] = [
         "internal hostname",
     ),
 ]
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.privacy_checks.names import (
+    IDENTIFIER_CONTENT_PATTERN,
+    NAME_CONTENT_PATTERN,
+    PathCarveoutPattern,
+    _is_content_carved_out,
+    name_in_path,
+)
+
+CONTENT_RULES.append((IDENTIFIER_CONTENT_PATTERN, "patient-identifier-in-content"))
+CONTENT_RULES.append((NAME_CONTENT_PATTERN, "patient-name-in-content"))
+
 DOCUMENTATION_NETWORKS = (
     ipaddress.ip_network("192.0.2.0/24"),
     ipaddress.ip_network("198.51.100.0/24"),
@@ -369,6 +389,9 @@ def _path_reasons(
             continue
         if _address_requires_redaction(address):
             reasons.append("network address in filename")
+    name_reason = name_in_path(path)
+    if name_reason:
+        reasons.append(name_reason)
     return list(dict.fromkeys(reasons))
 
 
@@ -498,11 +521,14 @@ def check_paths(paths: list[str]) -> list[str]:
 
 
 def _content_reasons(
-    text: str, identities: frozenset[str] | None = None
+    text: str, path: str = "", identities: frozenset[str] | None = None
 ) -> list[str]:
     """Return PHI/PII rule categories found in one text value, never the value."""
     reasons: list[str] = []
+    carved_out = _is_content_carved_out(path) if path else False
     for pattern, why in CONTENT_RULES:
+        if carved_out and isinstance(pattern, PathCarveoutPattern):
+            continue
         match = pattern.search(text)
         if match is None:
             continue
@@ -536,6 +562,7 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
     """Rule 2: PHI/PII indicators inside data files."""
     problems = []
     approved = _approved_text_exceptions(root)
+    approved_occurrences = _approved_text_occurrences(root)
     for path in paths:
         if (
             Path(path).suffix.lower() not in DATA_SUFFIXES
@@ -556,8 +583,13 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
             )
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            for reason in _content_reasons(line):
-                if not _is_approved_text_exception(path, reason, root, approved):
+            for reason in _content_reasons(line, path):
+                if not (
+                    _is_approved_text_exception(path, reason, root, approved)
+                    or _is_approved_text_occurrence(
+                        path, reason, line, approved_occurrences
+                    )
+                ):
                     problems.append(f"{path}:{lineno}: possible PHI/PII ({reason})")
     return problems
 
@@ -600,6 +632,41 @@ def _is_approved_text_exception(
         and (root / path).is_file()
         and _sha256(root / path) == expected_hash
     )
+
+
+def _approved_text_occurrences(root: Path) -> frozenset[tuple[str, str, str]]:
+    """Load reviewed, path-bound text-occurrence exceptions from the manifest."""
+    try:
+        payload = json.loads(
+            (root / APPROVED_TEXT_EXCEPTIONS_MANIFEST).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return frozenset()
+    if not isinstance(payload, dict):
+        return frozenset()
+    occurrences = payload.get("occurrences", [])
+    if not isinstance(occurrences, list):
+        return frozenset()
+    return frozenset(
+        (path, rule, digest)
+        for entry in occurrences
+        if isinstance(entry, dict)
+        and isinstance((path := entry.get("path")), str)
+        and isinstance((rule := entry.get("rule")), str)
+        and isinstance((digest := entry.get("sha256")), str)
+    )
+
+
+def _text_occurrence_sha256(path: str, line: str) -> str:
+    """Return a path-bound digest for one exact scanned text line."""
+    return hashlib.sha256(f"{path}\0{line}".encode()).hexdigest()
+
+
+def _is_approved_text_occurrence(
+    path: str, reason: str, line: str, approved: frozenset[tuple[str, str, str]]
+) -> bool:
+    """Allow only a reviewed, unchanged content finding at this repository path."""
+    return (path, reason, _text_occurrence_sha256(path, line)) in approved
 
 
 def _approved_media(root: Path) -> dict[str, str]:
@@ -733,7 +800,7 @@ def _check_spreadsheet_stream(path: str, stream: BinaryIO, root: Path) -> list[s
                 for value in row:
                     if not isinstance(value, str):
                         continue
-                    for reason in _content_reasons(value):
+                    for reason in _content_reasons(value, path):
                         if not _is_approved_text_exception(
                             path, reason, root, approved
                         ):
@@ -836,7 +903,7 @@ def _check_pdf_stream(path: str, stream: BinaryIO, root: Path) -> list[str]:
     approved = _approved_text_exceptions(root)
     try:
         for page_number, page in enumerate(reader.pages, start=1):
-            for reason in _content_reasons(page.extract_text() or ""):
+            for reason in _content_reasons(page.extract_text() or "", path):
                 if not _is_approved_text_exception(path, reason, root, approved):
                     problems.append(
                         f"{path}: page {page_number}: possible PHI/PII ({reason})"
@@ -961,7 +1028,7 @@ def _check_archived_text(path: str, payload: bytes, root: Path) -> list[str]:
     text = payload.decode("utf-8", errors="ignore")
     return [
         f"{path}: archived text: possible PHI/PII ({reason})"
-        for reason in _content_reasons(text)
+        for reason in _content_reasons(text, path)
         if not _is_approved_text_exception(path, reason, root, approved)
     ]
 
