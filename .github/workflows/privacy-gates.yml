@@ -130,7 +130,8 @@ jobs:
 
       - name: TruffleHog skipped
         if: steps.trufflehog_range.outputs.should_scan != 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
-        run: echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
+        run: |
+          echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
 
       - name: Run detect-secrets informational scan
         continue-on-error: true
