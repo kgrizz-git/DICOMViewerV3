@@ -34,9 +34,12 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox, QProgressDialog
 
 from gui.dialogs.acr_ct_qa_dialog import prompt_acr_ct_options
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
+from gui.dialogs.ct_batch_result_dialog import create_ct_batch_result_dialog
+from gui.dialogs.ct_batch_select_dialog import prompt_batch_series_selection
 from gui.dialogs.mri_compare_result_dialog import create_mri_compare_result_dialog
 from gui.dialogs.nuclear_qa_dialog import prompt_nuclear_options
 from qa.analysis_types import (
+    CTBatchResult,
     MRIBatchResult,
     MRICompareRequest,
     QARequest,
@@ -101,7 +104,7 @@ _NUCLEAR_CLASS_ROUTING = {
         "qa-nuclear-simple-sensitivity",
     ),
 }
-from qa.worker import QAAnalysisWorker, QABatchWorker
+from qa.worker import QAAnalysisWorker, QABatchWorker, QACTBatchWorker
 from version import __version__ as APP_VERSION
 
 _BTN_USE_FOCUSED_SERIES = "Use Focused Series"
@@ -642,6 +645,188 @@ class QAAppFacade:
             json_inputs=json_inputs,
             analyzed_image_temp_dir=image_temp_dir,
         )
+
+    def open_acr_ct_batch_analysis(self) -> None:
+        """
+        Open the Stage 1 batch ACR CT (pylinac) analysis flow (Feature 2).
+
+        Prompts a checkbox-list series selection (plus "Add folder..."),
+        collects one shared CT options set applied to every selected series,
+        then runs ``QACTBatchWorker`` and shows the batch summary dialog. No
+        per-series modal -- all failures are collected into the final dialog.
+        """
+        app = self._app
+        selection = prompt_batch_series_selection(
+            app.main_window,
+            app.dicom_organizer,
+            app._file_series_coordinator.get_file_path_for_dataset,
+            open_folder=lambda: app.file_dialog.open_folder(app.main_window),
+        )
+        if selection is None:
+            return
+        requests, labels = selection
+
+        vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
+        ct_opts = prompt_acr_ct_options(
+            app.main_window, vanilla_pylinac_default=vanilla_def
+        )
+        if ct_opts is None:
+            return
+        ct_scan_tol, ct_origin_slice, ct_vanilla = ct_opts
+        app.config_manager.set_acr_qa_vanilla_pylinac(ct_vanilla)
+
+        requests = [
+            replace(
+                req,
+                origin_slice=ct_origin_slice,
+                scan_extent_tolerance_mm=float(ct_scan_tol),
+                vanilla_pylinac=ct_vanilla,
+            )
+            for req in requests
+        ]
+
+        self.start_ct_batch_worker(requests, labels)
+
+    def start_ct_batch_worker(
+        self,
+        requests: list[QARequest],
+        labels: list[str],
+    ) -> None:
+        """
+        Launch a ``QACTBatchWorker`` for a batch ACR CT run.
+
+        Shows an N-of-M progress dialog updated on ``series_completed``, then
+        the batch summary dialog on ``batch_result_ready``.
+        """
+        app = self._app
+        total = len(requests)
+        progress = QProgressDialog(
+            f"Running ACR CT batch analysis (0 of {total})...",
+            "Cancel",
+            0,
+            total,
+            app.main_window,
+        )
+        progress.setWindowTitle("ACR CT Phantom Analysis — Batch")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowFlags(progress.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        progress.show()
+        progress.activateWindow()
+        progress.raise_()
+
+        worker = QACTBatchWorker(requests, labels, app_version=APP_VERSION)
+        app._qa_ct_batch_worker = worker
+
+        def on_cancel() -> None:
+            worker.cancel()
+            app.main_window.update_status(
+                "ACR CT batch analysis cancelled (best-effort); finishing in-flight series."
+            )
+
+        progress.canceled.connect(on_cancel)
+
+        def on_series_completed(done: int, total_: int, result: QAResult) -> None:
+            progress.setValue(done)
+            progress.setLabelText(f"Running ACR CT batch analysis ({done} of {total_})...")
+
+        def on_batch_result(batch: CTBatchResult) -> None:
+            progress.close()
+            self.show_ct_batch_result_dialog(worker, batch)
+
+        worker.series_completed.connect(on_series_completed)
+        worker.batch_result_ready.connect(on_batch_result)
+        worker.finished.connect(progress.close)
+        worker.start()
+
+    def show_ct_batch_result_dialog(
+        self,
+        worker: QACTBatchWorker,
+        batch: CTBatchResult,
+    ) -> None:
+        """
+        Show the non-modal batch summary dialog and wire its export buttons.
+
+        The worker's ``image_temp_dir`` (holding the batch's analyzed-image
+        PNGs, see ``QACTBatchWorker`` docstring) is kept alive for the life of
+        this dialog -- the user may click Export XLSX more than once -- and is
+        cleaned up when the dialog closes (``on_destroyed``), mirroring
+        ``start_qa_worker``'s single-run temp-dir lifecycle (kept open through
+        export, cleaned in a finally/callback afterwards).
+        """
+        app = self._app
+        if not batch.run_results:
+            worker.image_temp_dir.cleanup()
+            return
+
+        if app._ct_batch_result_dialog is not None:
+            app._ct_batch_result_dialog.close()
+            app._ct_batch_result_dialog = None
+
+        def on_dialog_destroyed(*_args: Any) -> None:
+            app._ct_batch_result_dialog = None
+            worker.image_temp_dir.cleanup()
+
+        dialog = create_ct_batch_result_dialog(
+            app.main_window,
+            batch,
+            on_save_xlsx_clicked=lambda: self.export_ct_batch_xlsx(batch),
+            on_save_json_clicked=lambda: self.export_ct_batch_json(batch),
+            on_destroyed=on_dialog_destroyed,
+        )
+        app._ct_batch_result_dialog = dialog
+        dialog.activateWindow()
+        dialog.raise_()
+        dialog.show()
+
+    def export_ct_batch_xlsx(self, batch: CTBatchResult) -> None:
+        """Offer XLSX export for a finished ACR CT batch (Feature 3 reuse)."""
+        app = self._app
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
+        path = app._prompt_save_path(
+            "Save QA Batch Results XLSX",
+            f"qa-acr-ct-batch-{timestamp}.xlsx",
+            "Excel Files (*.xlsx)",
+            remember_pylinac_output_dir=True,
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".xlsx"):
+            path = f"{path}.xlsx"
+        workbook = build_qa_workbook(
+            batch.run_results, labels=batch.run_labels, app_version=APP_VERSION
+        )
+        workbook.save(path)
+        app.main_window.update_status(f"Saved QA batch XLSX: {path}")
+
+    def export_ct_batch_json(self, batch: CTBatchResult) -> None:
+        """
+        Offer JSON export for a finished ACR CT batch.
+
+        Emits a JSON array of per-run ``build_single_run_document`` documents
+        (schema_version "1.3" each), consistent with the single-run JSON
+        export -- there is no dedicated batch JSON schema for ACR CT (unlike
+        the MRI compare document), so a list wrapper keeps this simple and
+        lossless.
+        """
+        app = self._app
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
+        json_path = app._prompt_save_path(
+            "Save QA Batch Results JSON",
+            f"qa-acr-ct-batch-{timestamp}.json",
+            "JSON Files (*.json)",
+            remember_pylinac_output_dir=True,
+        )
+        if not json_path:
+            return
+        payload = [
+            build_single_run_document(
+                result, app_version=APP_VERSION, inputs={"series_label": label}
+            )
+            for label, result in zip(batch.run_labels, batch.run_results, strict=True)
+        ]
+        with open(json_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        app.main_window.update_status(f"Saved QA batch JSON: {json_path}")
 
     def open_acr_mri_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR MRI Large (pylinac) analysis flow."""

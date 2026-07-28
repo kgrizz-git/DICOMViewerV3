@@ -9,6 +9,7 @@ Exports:
     LcRunConfig          -- one low-contrast parameter set for compare mode
     MRICompareRequest    -- batch of up to 3 LcRunConfig rows from the dialog
     MRIBatchResult       -- collected QAResult objects for a compare-mode run
+    CTBatchResult        -- collected QAResult objects for a batch ACR CT run
     QARequest            -- input payload for a single QA analysis run
     QAResult             -- normalized output payload for a single QA run
     NuclearOptions       -- base for per-class pylinac.nuclear option payloads
@@ -578,3 +579,24 @@ class MRIBatchResult:
 
     run_results: list[QAResult] = field(default_factory=list)
     run_configs: list[LcRunConfig] = field(default_factory=list)
+
+
+@dataclass
+class CTBatchResult:
+    """
+    Result container for a multi-series ACR CT batch run.
+
+    run_results and run_labels are parallel lists (same length). Unlike
+    MRIBatchResult (one run per LcRunConfig with a single CT options set),
+    there is no per-series config analogue -- one set of CT options applies
+    to every series in the batch.
+
+    Fields:
+        run_results: One QAResult per selected series, in selection order.
+        run_labels: User-facing series label per result (built on the GUI
+            thread by the selection dialog; the worker never touches the
+            organizer, so labels ride in rather than being derived).
+    """
+
+    run_results: list[QAResult] = field(default_factory=list)
+    run_labels: list[str] = field(default_factory=list)

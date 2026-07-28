@@ -187,6 +187,7 @@ class MainWindow(QMainWindow):
     cut_annotation_requested = Signal()  # Emitted when cut annotation is requested
     paste_annotation_requested = Signal()  # Emitted when paste annotation is requested
     acr_ct_phantom_requested = Signal()  # Emitted when ACR CT (pylinac) analysis is requested
+    acr_ct_batch_requested = Signal()  # Emitted when batch ACR CT (pylinac) analysis is requested
     acr_mri_phantom_requested = Signal()  # Emitted when ACR MRI Large (pylinac) analysis is requested
     nuclear_qc_requested = Signal()  # Emitted when nuclear-medicine QC (pylinac) analysis is requested
     create_mpr_view_requested = Signal()  # Tools → Create MPR view (focused subwindow)

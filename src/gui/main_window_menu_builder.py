@@ -638,6 +638,11 @@ def build_menu_bar(main_window) -> None:
     acr_ct_phantom_action.triggered.connect(main_window.acr_ct_phantom_requested.emit)
     automated_qa_menu.addAction(acr_ct_phantom_action)
 
+    acr_ct_batch_action = QAction("ACR CT Batch (pylinac)...", main_window)
+    acr_ct_batch_action.setToolTip("Run ACR CT phantom analysis over multiple selected series via pylinac")
+    acr_ct_batch_action.triggered.connect(main_window.acr_ct_batch_requested.emit)
+    automated_qa_menu.addAction(acr_ct_batch_action)
+
     acr_mri_phantom_action = QAction("ACR MRI Phantom (pylinac)...", main_window)
     acr_mri_phantom_action.setToolTip("Run ACR MRI phantom analysis via pylinac")
     acr_mri_phantom_action.triggered.connect(main_window.acr_mri_phantom_requested.emit)
