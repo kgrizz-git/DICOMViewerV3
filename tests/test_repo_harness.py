@@ -195,21 +195,23 @@ class TestExternalAnalysisUploadPolicy(unittest.TestCase):
             root = Path(tmp)
             workflows = root / ".github" / "workflows"
             workflows.mkdir(parents=True)
-            (workflows / "sonarqube-cloud-main.yml").write_text(
+            (workflows / "ci.yml").write_text(
                 "on:\n"
                 "  push:\n"
-                "    branches:\n"
-                "      - main\n"
-                "steps:\n"
-                "  - uses: actions/checkout@v7\n"
-                "    with:\n"
-                "      fetch-depth: 0\n"
-                "      persist-credentials: false\n"
-                "  - uses: SonarSource/sonarqube-scan-action@"
+                "    branches: [main, develop]\n"
+                "jobs:\n"
+                "  sonarqube:\n"
+                "    needs: [privacy-gates]\n"
+                "    if: github.event_name == 'push' && (github.ref == 'refs/heads/main')\n"
+                "    steps:\n"
+                "      - uses: actions/checkout@v7\n"
+                "        with:\n"
+                "          fetch-depth: 0\n"
+                "          persist-credentials: false\n"
+                "      - uses: SonarSource/sonarqube-scan-action@"
                 "7006c4492b2e0ee0f816d36501671557c97f5995\n"
-                "    needs: privacy-gate\n"
-                "    env:\n"
-                "      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n",
+                "        env:\n"
+                "          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n",
                 encoding="utf-8",
             )
 
