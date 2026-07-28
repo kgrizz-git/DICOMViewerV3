@@ -77,8 +77,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | [`../scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files, slim `AGENTS.md`, `TO_DO.md` freshness, plan paths, harness doc links |
 | [`../scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary guard against new high-risk layer violations (`architecture_boundary_baseline.txt` tracks current legacy edges) |
 | [`../scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Imports, version, committed DICOM fixture; optional `--qt-smoke` |
-| [`.github/workflows/user-docs-links.yml`](../.github/workflows/user-docs-links.yml) | CI: user-docs links on `main` / `develop` |
-| [`.github/workflows/repo-harness.yml`](../.github/workflows/repo-harness.yml) | CI: harness docs + architecture boundaries + agent smoke on `main` / `develop` |
+| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI: user-docs links, harness docs, architecture boundaries, and agent smoke on `main` / `develop` |
 
 ## Agent smoke verification
 

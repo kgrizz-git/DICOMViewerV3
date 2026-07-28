@@ -1,0 +1,549 @@
+name: CI
+
+# Job DAG (privacy-first):
+#   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
+#   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
+#      repo-harness, user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
+#
+# Required status checks (KGRuleset1) — update these in the ruleset if you
+# rename or restructure jobs:
+#   "privacy-gates / Detect Secrets"              → privacy-gates.yml: no-secrets-scan
+#   "privacy-gates / No PHI artifacts tracked"    → privacy-gates.yml: phi-artifact-scan
+#   "privacy-gates / Blocking Privacy Output Scan"→ privacy-gates.yml: privacy-output-scan
+#   "Semgrep Security Audit"                      → ci.yml: semgrep
+#
+# Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
+# privacy checks pass via needs: [privacy-gates].
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Weekly health sweep: Sundays 01:00 UTC (replaces per-workflow schedules).
+    - cron: '0 1 * * 0'
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# ── Privacy gate (reusable workflow) ─────────────────────────────────────────
+
+jobs:
+  privacy-gates:
+    uses: ./.github/workflows/privacy-gates.yml
+    permissions:
+      contents: read
+      pull-requests: write
+
+  # ── Post-gate ─────────────────────────────────────────────────────────────
+
+  request-coderabbit-review:
+    name: Request CodeRabbit review after privacy gate
+    needs: [privacy-gates]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const marker = `<!-- coderabbit-privacy-gate:${context.payload.pull_request.head.sha} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            if (comments.some(comment => comment.body?.includes(marker))) {
+              console.log('CodeRabbit review already requested for this commit.');
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `@coderabbitai review\n\nPrivacy gate passed for ${context.payload.pull_request.head.sha}.\n\n${marker}`
+            });
+
+  # ── Tests & static analysis (gated) ──────────────────────────────────────
+
+  tests:
+    name: pytest (py3.12, ubuntu)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install system dependencies (Qt offscreen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1 libegl1 libxrandr2 libxss1 libxcursor1 libxcomposite1 \
+            libasound2t64 libxi6 libxtst6 libdbus-1-3 libfontconfig1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Run tests with coverage
+        env:
+          PYTHONPATH: src
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m pytest tests \
+            --cov=src \
+            --cov-report=term \
+            -v --tb=short
+
+  ruff:
+    name: ruff (src + tests + scripts, 0 findings)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install "ruff>=0.12.0"
+
+      - name: Run ruff (must be clean)
+        run: ruff check src/ tests/ scripts/ --output-format=github
+
+  pyright:
+    name: basedpyright (src + scripts, 0 errors)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Create virtual environment and install dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+          .venv/bin/pip install "basedpyright>=1.39.3"
+
+      - name: Run basedpyright (errors must be 0)
+        run: .venv/bin/python scripts/check_basedpyright_errors.py
+
+  lizard:
+    name: lizard (CCN >= 15 or NLOC >= 200)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install lizard
+        run: pip install "lizard>=1.23.0"
+
+      - name: Run lizard + annotations
+        run: |
+          cat > /tmp/lizard_report.py <<'PY'
+          import sys
+          import re
+
+          count = 0
+          pattern = re.compile(
+              r"^(.+?):(\d+):\s+warning:\s+(.+)$"
+          )
+          for line in sys.stdin:
+              m = pattern.match(line.rstrip("\n"))
+              if not m:
+                  continue
+              filepath, lineno, message = m.group(1), m.group(2), m.group(3)
+              print(
+                  f"::warning file={filepath},line={lineno}"
+                  f"::[lizard] {message}"
+              )
+              count += 1
+          if count == 0:
+              print("::notice::lizard: no high-complexity functions found")
+          else:
+              print(f"::notice::lizard: {count} high-complexity warning(s)")
+          PY
+          (lizard src/ --CCN 15 --length 200 -w 2>&1 || true) | python3 /tmp/lizard_report.py
+
+  pip-audit:
+    name: pip-audit (dependency CVEs)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.10.1"
+
+      - name: Run pip-audit
+        run: >-
+          pip-audit --requirement requirements.txt --requirement requirements-dev.txt
+          --requirement requirements-build.txt --ignore-vuln PYSEC-2026-2266
+          --ignore-vuln PYSEC-2026-2132
+          --ignore-vuln CVE-2026-52870 --ignore-vuln CVE-2026-52869
+          --ignore-vuln CVE-2026-59950
+
+      - name: Run pip-audit for isolated PHI tooling
+        run: pip-audit --requirement requirements-phi-tools.txt
+
+  repo-harness:
+    name: Harness docs and agent smoke
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check repo harness documentation
+        run: python scripts/check_repo_harness.py --root "${{ github.workspace }}"
+
+      - name: Check security and privacy tool inventory
+        run: python scripts/check_security_tool_inventory.py --root "${{ github.workspace }}"
+
+      - name: Check architecture boundaries
+        run: python scripts/check_architecture_boundaries.py --root "${{ github.workspace }}"
+
+      - name: Agent smoke (imports and fixture)
+        run: python scripts/agent_smoke_harness.py --root "${{ github.workspace }}"
+
+  user-docs-links:
+    name: Check user-docs relative links
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run link checker
+        run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
+
+  # ── Security scanners — cloud-uploading, gated ────────────────────────────
+
+  semgrep:
+    name: Semgrep Security Audit
+    needs: [privacy-gates]
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep
+        run: pip install --upgrade semgrep
+
+      - name: Run Semgrep
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          set +e
+          semgrep scan \
+            --metrics=off \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/python \
+            --sarif-output semgrep.sarif \
+            .
+          exit_code=$?
+          set -e
+          if [ ! -f semgrep.sarif ]; then
+            echo "::error::Semgrep did not write semgrep.sarif (exit ${exit_code})."
+            exit 1
+          fi
+          if [ "${exit_code}" -eq 2 ]; then
+            echo "::error::Semgrep exited with a fatal error."
+            exit 2
+          fi
+          exit "${exit_code}"
+
+      - name: Upload SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        if: always() && hashFiles('semgrep.sarif') != ''
+        continue-on-error: true
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && hashFiles('semgrep.sarif') != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const fs = require('fs');
+            const sarif = JSON.parse(fs.readFileSync('semgrep.sarif', 'utf8'));
+            const run = (sarif.runs && sarif.runs[0]) || {};
+            const issues = run.results || [];
+
+            if (issues.length === 0) {
+              console.log('✅ No security issues found by Semgrep');
+              return;
+            }
+
+            let comment = '## 🔒 Security Scan Results\n\n';
+            comment += `Found ${issues.length} potential issue(s) from Semgrep:\n\n`;
+
+            const severity_map = { 'warning': '⚠️', 'error': '❌', 'note': 'ℹ️' };
+            issues.slice(0, 10).forEach(issue => {
+              const severity = issue.level || 'note';
+              const icon = severity_map[severity] || 'ℹ️';
+              const msg = issue.message?.text || 'Unknown issue';
+              const rule = issue.ruleId || 'unknown';
+              comment += `${icon} **${rule}**: ${msg}\n`;
+            });
+
+            if (issues.length > 10) {
+              comment += `\n... and ${issues.length - 10} more (see GitHub Security tab for full list)\n`;
+            }
+
+            comment += '\nPlease review and address security findings before merging.';
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, actions]
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        if: matrix.language != 'python' && matrix.language != 'actions'
+        uses: github/codeql-action/autobuild@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  grype:
+    name: Grype CVE Scan
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run Grype scan
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        id: grype
+        with:
+          path: "."
+          fail-build: false
+          severity-cutoff: high
+
+      - name: Validate Grype SARIF for upload
+        id: grype_sarif
+        if: always()
+        shell: bash
+        run: |
+          report="${{ steps.grype.outputs.sarif }}"
+          rm -f grype-upload.sarif
+          if [ -z "$report" ] || [ ! -f "$report" ] || [ ! -s "$report" ]; then
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "Grype SARIF missing or empty; skipping Security tab upload."
+            exit 0
+          fi
+          if ! python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$report"; then
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Grype output is not valid JSON; skipping SARIF upload."
+            exit 0
+          fi
+          cp "$report" grype-upload.sarif
+          echo "upload=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Grype SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        if: always() && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]'
+        continue-on-error: true
+        with:
+          sarif_file: grype-upload.sarif
+          category: grype
+
+      - name: Comment on PR with CVE results
+        if: |
+          github.event_name == 'pull_request' &&
+          steps.grype_sarif.outputs.upload == 'true' &&
+          github.actor != 'dependabot[bot]'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const fs = require('fs');
+            const sarif = JSON.parse(fs.readFileSync('grype-upload.sarif', 'utf8'));
+            const run0 = (sarif.runs && sarif.runs[0]) || {};
+            const findings = run0.results || [];
+            const prNumber = context.issue.number;
+            if (!prNumber) { console.log('No PR number found, skipping comment.'); return; }
+
+            const critical = findings.filter(f => f.level === 'error');
+            const high = findings.filter(f => f.level === 'warning');
+
+            if (findings.length === 0) { console.log('✅ No known vulnerabilities found'); return; }
+
+            let comment = '## 🛡️ Dependency Vulnerability Scan\n\n';
+            comment += `**Summary**: ${critical.length} CRITICAL, ${high.length} HIGH, ${findings.length - critical.length - high.length} other\n\n`;
+
+            if (critical.length > 0) {
+              comment += '### 🚨 Critical Issues\n';
+              critical.slice(0, 5).forEach(issue => {
+                const pkg = issue.properties?.package || 'unknown';
+                const vuln = issue.properties?.cve || 'CVE-UNKNOWN';
+                comment += `- **${pkg}**: ${vuln}\n`;
+              });
+            }
+            if (high.length > 0) {
+              comment += '\n### ⚠️ High Issues\n';
+              high.slice(0, 5).forEach(issue => {
+                const pkg = issue.properties?.package || 'unknown';
+                const vuln = issue.properties?.cve || 'CVE-UNKNOWN';
+                comment += `- **${pkg}**: ${vuln}\n`;
+              });
+            }
+            if (findings.length > 10) {
+              comment += `\n... and ${findings.length - 10} more vulnerabilities (see GitHub Security tab)`;
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  sonarqube:
+    name: SonarQube Cloud scan
+    needs: [privacy-gates]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key -- pinned public GitHub Action commit SHA (v8.1.0), not a credential
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

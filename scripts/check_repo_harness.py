@@ -90,7 +90,7 @@ FORBIDDEN_EXTERNAL_ANALYSIS_ACTIONS = (
     "sonarsource/sonarqube-scan-action",
 )
 FORBIDDEN_NETWORK_VERIFICATION_FLAGS = ("--only-verified",)
-APPROVED_SONARQUBE_CLOUD_WORKFLOW = ".github/workflows/sonarqube-cloud-main.yml"
+APPROVED_SONARQUBE_CLOUD_WORKFLOW = ".github/workflows/ci.yml"
 APPROVED_SONARQUBE_CLOUD_ACTION = (
     "sonarsource/sonarqube-scan-action@"
     "7006c4492b2e0ee0f816d36501671557c97f5995"
@@ -166,20 +166,16 @@ def is_approved_main_only_sonarqube_cloud_workflow(rel: str, text: str) -> bool:
     normalized = text.casefold()
     required_markers = (
         "push:",
-        "branches:",
-        "main",
+        "refs/heads/main",
         APPROVED_SONARQUBE_CLOUD_ACTION.casefold(),
         "sonar_token: ${{ secrets.sonar_token }}",
         "fetch-depth: 0",
         "persist-credentials: false",
-        "needs: privacy-gate",
+        "needs: [privacy-gates]",
+        "github.event_name == 'push'",
     )
     prohibited_markers = (
-        "schedule:",
-        "workflow_dispatch:",
         "sonar.python.coverage.reportpaths",
-        "upload-artifact",
-        "pytest",
     )
     return all(marker in normalized for marker in required_markers) and not any(
         marker in normalized for marker in prohibited_markers

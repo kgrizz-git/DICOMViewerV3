@@ -1,45 +1,38 @@
 name: Privacy Gate
+# Reusable privacy admission workflow. Called from ci.yml before any cloud-analysis
+# or code-execution job runs. Jobs are separate so each appears as its own check run,
+# prefixed "privacy-gates / <name>" in the GitHub UI.
+#
+# KGRuleset1 required status checks — update these names in the ruleset if you
+# rename or restructure jobs here:
+#   "privacy-gates / Detect Secrets"
+#   "privacy-gates / No PHI artifacts tracked"
+#   "privacy-gates / Blocking Privacy Output Scan"
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-  push:
-    branches:
-      - main
-      - develop
-
-concurrency:
-  # A PR number groups all synchronize events for that PR, so only the newest
-  # run can request a CodeRabbit review. Pushes retain their branch-based group.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_call:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: write   # debug-flags-check comments on PR when it fails
 
 jobs:
   debug-flags-check:
     name: Check Debug Flags
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          fetch-depth: 0  # Full history for proper PR checking
+          fetch-depth: 0
 
       - name: Check for debug flags set to True
         id: check_flags
         run: |
-          set +e  # Don't exit on grep failure
-          
+          set +e
           echo "Checking src/utils/debug_flags.py for debug flags set to True..."
-          
           FLAGGED=$(grep -E "^\s*DEBUG_.*\s*:\s*bool\s*=\s*True" src/utils/debug_flags.py || true)
-          
           if [ -z "$FLAGGED" ]; then
               echo "✅ All debug flags are False"
               echo "status=pass" >> $GITHUB_OUTPUT
@@ -117,7 +110,6 @@ jobs:
             echo "TruffleHog range: $BASE_SHA..$HEAD_SHA"
           fi
 
-      # Pin action + image tag so CI is reproducible; bump with Dependabot or when releasing.
       - name: Run TruffleHog secret scanner
         if: steps.trufflehog_range.outputs.should_scan == 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
         uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
@@ -126,9 +118,6 @@ jobs:
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
           head: ${{ steps.trufflehog_range.outputs.head_sha }}
           version: "3.95.8"
-          # Never verify suspected credentials against provider APIs.
-          # The action already injects --no-update; passing it here too makes
-          # trufflehog abort with "flag 'no-update' cannot be repeated".
           extra_args: --no-verification
 
       - name: Run TruffleHog full-tree scanner for initial/new-ref push
@@ -137,16 +126,12 @@ jobs:
         with:
           path: ./
           version: "3.95.8"
-          # Never verify suspected credentials against provider APIs.
-          # The action already injects --no-update; passing it here too makes
-          # trufflehog abort with "flag 'no-update' cannot be repeated".
           extra_args: --no-verification
 
       - name: TruffleHog skipped
         if: steps.trufflehog_range.outputs.should_scan != 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
-        run: |
-          echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
-          
+        run: echo "TruffleHog was skipped: ${{ steps.trufflehog_range.outputs.skip_reason }}"
+
       - name: Run detect-secrets informational scan
         continue-on-error: true
         run: |
@@ -158,11 +143,6 @@ jobs:
     name: No PHI artifacts tracked
     runs-on: ubuntu-latest
 
-    # Blocking. The pre-commit hook runs the same check, but a hook can be skipped
-    # with --no-verify (and is not installed on every clone), so the server-side
-    # gate is the one that actually holds. Scans every tracked file, not just the
-    # diff: that catches artifacts committed before a .gitignore rule existed --
-    # exactly how three pytest temp dirs holding a real recent_files list survived.
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -174,9 +154,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The scanner parses tracked DICOM, Excel, and PDF files rather than merely
-      # matching their names. Keep these parser-only dependencies narrow so this
-      # security job does not install the full GUI/application stack.
       - name: Install PHI artifact scan parsers
         run: python -m pip install "pydicom>=2.4.0,<3" "openpyxl>=3.1.5" "pypdf>=6.14.2,<7"
 
@@ -200,30 +177,3 @@ jobs:
 
       - name: Block unsafe output sinks without echoing matched values
         run: python scripts/git_hook_privacy_checks.py --all --critical
-
-  request-coderabbit-review:
-    name: Request CodeRabbit review after privacy gate
-    needs: [no-secrets-scan, phi-artifact-scan, privacy-output-scan]
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          script: |
-            const marker = `<!-- coderabbit-privacy-gate:${context.payload.pull_request.head.sha} -->`;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            if (comments.some(comment => comment.body?.includes(marker))) {
-              console.log('CodeRabbit review already requested for this commit.');
-              return;
-            }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `@coderabbitai review\n\nPrivacy gate passed for ${context.payload.pull_request.head.sha}.\n\n${marker}`
-            });
