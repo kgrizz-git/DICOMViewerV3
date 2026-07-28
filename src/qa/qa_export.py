@@ -5,7 +5,7 @@ Shared by the facade auto-export and the nuclear result dialog's export
 buttons so the JSON schema stays in one place.
 
 Public:
-    build_single_run_document   -- schema_version "1.1" dict for a QAResult
+    build_single_run_document   -- schema_version "1.3" dict for a QAResult
     build_metrics_csv           -- flat metric,value CSV (any analysis type)
     build_nuclear_frames_csv    -- per-frame uniformity CSV text for a nuclear run
     build_nuclear_flat_csv      -- metric,value CSV over a flat nuclear result
@@ -57,17 +57,25 @@ def build_single_run_document(
     inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Build the schema_version "1.1" export document for a single QA run.
+    Build the schema_version "1.3" export document for a single QA run.
 
     ACR and nuclear runs share this shape; consumers discriminate on
     ``run.analysis_type``. Nuclear runs additionally carry
     ``run.nuclear_analysis_class`` so the payload is self-describing.
+
+    ``raw_pylinac`` is an **opaque, pylinac-version-dependent passthrough**
+    (not a stable contract) -- for CT runs it is now
+    ``analyzer.results_data(as_dict=True)``, a structured dict whose exact
+    keys/shape may change across pylinac releases. Consumers should treat it
+    as debugging/audit context, not a schema to depend on; schema_version was
+    bumped from "1.1" to "1.3" ("1.2" is already used by the MRI compare
+    document) to signal this change from the prior stringified blob.
     """
     profile = result.pylinac_analysis_profile or {}
     vanilla_run = bool(profile.get("vanilla_pylinac", False))
 
     payload: dict[str, Any] = {
-        "schema_version": "1.1",
+        "schema_version": "1.3",
         "run": {
             "timestamp_utc": datetime.now(UTC).isoformat(),
             "app_version": app_version,

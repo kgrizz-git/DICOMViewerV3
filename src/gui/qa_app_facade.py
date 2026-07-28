@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -44,6 +46,7 @@ from qa.analysis_types import (
 from qa.mri_compare_export import build_mri_compare_json_document
 from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
 from qa.qa_export import build_metrics_csv, build_single_run_document
+from qa.qa_xlsx_export import build_qa_workbook
 from utils.config.qa_nuclear_config import (
     CENTER_OF_ROTATION_CLASS,
     FOUR_BAR_RESOLUTION_CLASS,
@@ -282,19 +285,22 @@ class QAAppFacade:
         inputs: dict[str, Any] | None = None,
     ) -> None:
         """
-        Offer a single save dialog for a finished QA run as JSON or CSV.
+        Offer a single save dialog for a finished QA run as JSON, CSV, or XLSX.
 
-        One prompt with both filters (defaults to JSON). The format is chosen by
-        the saved file's extension: ``.csv`` writes a flat ``metric,value`` CSV
-        (full nested payload stays in JSON); anything else writes the JSON
-        document.
+        One prompt with all three filters (defaults to JSON). The format is
+        chosen by the saved file's extension: ``.csv`` writes a flat
+        ``metric,value`` CSV (full nested payload stays in JSON); ``.xlsx``
+        writes a workbook (Summary/Detail/Images sheets -- see
+        ``qa.qa_xlsx_export.build_qa_workbook``) with the analyzed CT image
+        embedded when one was captured for this run; anything else writes the
+        JSON document.
         """
         app = self._app
         timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = app._prompt_save_path(
-            "Save QA Results (JSON or CSV)",
+            "Save QA Results (JSON, CSV, or XLSX)",
             f"{default_stem}-{timestamp}.json",
-            "JSON Files (*.json);;CSV Files (*.csv)",
+            "JSON Files (*.json);;CSV Files (*.csv);;Excel Files (*.xlsx)",
             remember_pylinac_output_dir=True,
         )
         if not path:
@@ -303,6 +309,11 @@ class QAAppFacade:
             with open(path, "w", encoding="utf-8", newline="") as handle:
                 handle.write(build_metrics_csv(result))
             app.main_window.update_status(f"Saved QA CSV: {path}")
+            return
+        if path.lower().endswith(".xlsx"):
+            workbook = build_qa_workbook([result], app_version=APP_VERSION)
+            workbook.save(path)
+            app.main_window.update_status(f"Saved QA XLSX: {path}")
             return
         if not path.lower().endswith(".json"):
             path = f"{path}.json"
@@ -421,8 +432,19 @@ class QAAppFacade:
         json_default_stem: str,
         json_inputs: dict[str, Any] | None = None,
         allow_extent_retry: bool = True,
+        analyzed_image_temp_dir: tempfile.TemporaryDirectory | None = None,
     ) -> None:
-        """Show progress, run QA in a background thread, then summary + JSON export."""
+        """
+        Show progress, run QA in a background thread, then summary + JSON export.
+
+        ``analyzed_image_temp_dir``, when given, is a caller-owned
+        ``TemporaryDirectory`` holding the analyzed-image PNG that
+        ``request.analyzed_image_out_path`` points into (see
+        ``open_acr_ct_phantom_analysis``, F3 XLSX image embedding). It is kept
+        open until after the auto JSON/CSV/XLSX export prompt in
+        ``export_qa_results`` completes, then cleaned up here -- the runner
+        only writes the image; the facade owns its lifecycle.
+        """
         app = self._app
         progress = QProgressDialog(progress_label, "Cancel", 0, 0, app.main_window)
         progress.setWindowTitle(progress_title)
@@ -446,46 +468,60 @@ class QAAppFacade:
         def on_result(result: QAResult) -> None:
             if state["cancelled"]:
                 app.main_window.update_status("Ignored late QA result after cancellation.")
+                if analyzed_image_temp_dir is not None:
+                    analyzed_image_temp_dir.cleanup()
                 return
-            progress.close()
-            profile = result.pylinac_analysis_profile or {}
-            if profile.get("module") == "pylinac.nuclear" or str(
-                result.analysis_type
-            ).startswith("nuclear_"):
-                # Nuclear results carry their own Export JSON/CSV buttons, so we
-                # skip the ACR-style auto JSON prompt and PDF offer.
-                from gui.dialogs.nuclear_result_dialog import show_nuclear_result_dialog
+            try:
+                progress.close()
+                profile = result.pylinac_analysis_profile or {}
+                if profile.get("module") == "pylinac.nuclear" or str(
+                    result.analysis_type
+                ).startswith("nuclear_"):
+                    # Nuclear results carry their own Export JSON/CSV buttons, so we
+                    # skip the ACR-style auto JSON prompt and PDF offer.
+                    from gui.dialogs.nuclear_result_dialog import (
+                        show_nuclear_result_dialog,
+                    )
 
-                show_nuclear_result_dialog(
-                    app.main_window,
-                    result_dialog_title,
-                    result,
-                    inputs=json_inputs,
-                    app_version=APP_VERSION,
-                    default_stem=json_default_stem,
-                    prompt_save_path=app._prompt_save_path,
-                    on_status=app.main_window.update_status,
-                )
-                return
-            self.show_qa_result_dialog(result_dialog_title, result)
-            self.offer_open_single_run_pdf(result)
-            self.export_qa_results(result, json_default_stem, json_inputs)
-            if (
-                allow_extent_retry
-                and not result.success
-                and is_physical_scan_extent_failure(result.errors)
-                and float(request.scan_extent_tolerance_mm or 0) <= 0.0
-                and not bool(getattr(request, "vanilla_pylinac", False))
-                and request.qa_attempt < 2
-            ):
-                self.offer_extent_retry(
-                    request,
-                    json_inputs,
-                    progress_title=progress_title,
-                    progress_label=progress_label,
-                    result_dialog_title=result_dialog_title,
-                    json_default_stem=json_default_stem,
-                )
+                    show_nuclear_result_dialog(
+                        app.main_window,
+                        result_dialog_title,
+                        result,
+                        inputs=json_inputs,
+                        app_version=APP_VERSION,
+                        default_stem=json_default_stem,
+                        prompt_save_path=app._prompt_save_path,
+                        on_status=app.main_window.update_status,
+                    )
+                    return
+                self.show_qa_result_dialog(result_dialog_title, result)
+                self.offer_open_single_run_pdf(result)
+                self.export_qa_results(result, json_default_stem, json_inputs)
+                if (
+                    allow_extent_retry
+                    and not result.success
+                    and is_physical_scan_extent_failure(result.errors)
+                    and float(request.scan_extent_tolerance_mm or 0) <= 0.0
+                    and not bool(getattr(request, "vanilla_pylinac", False))
+                    and request.qa_attempt < 2
+                ):
+                    self.offer_extent_retry(
+                        request,
+                        json_inputs,
+                        progress_title=progress_title,
+                        progress_label=progress_label,
+                        result_dialog_title=result_dialog_title,
+                        json_default_stem=json_default_stem,
+                    )
+            finally:
+                # Keep the temp PNG alive through export_qa_results (XLSX save
+                # embeds it) before cleaning it up. Note: a scan-extent retry
+                # above starts a *new* worker without this temp dir, so the
+                # retry run's own XLSX export degrades to a note cell -- an
+                # accepted, documented limitation (retry is a rare secondary
+                # attempt on the same series).
+                if analyzed_image_temp_dir is not None:
+                    analyzed_image_temp_dir.cleanup()
 
         app._qa_worker.result_ready.connect(on_result)
         app._qa_worker.finished.connect(progress.close)
@@ -564,12 +600,24 @@ class QAAppFacade:
             pdf_path = None
 
         modality_eff = modality or "CT"
+
+        # F3: XLSX image embedding. The facade owns a single TemporaryDirectory
+        # for the analyzed-image PNG, created up front (before analysis runs)
+        # so run_acr_ct_analysis can call analyzer.save_analyzed_image() into
+        # it -- the worker/runner never sees the analyzer once analyze()
+        # returns, so this is the only point the path can be threaded in. The
+        # directory stays open through the post-run export prompt in
+        # start_qa_worker's on_result and is cleaned up there in a finally.
+        image_temp_dir = tempfile.TemporaryDirectory(prefix="qa-ct-image-")
+        image_out_path = os.path.join(image_temp_dir.name, f"{uuid.uuid4().hex}.png")
+
         request = QARequest(
             analysis_type="acr_ct",
             dicom_paths=ordered_paths,
             folder_path=folder_path,
             origin_slice=ct_origin_slice,
             output_pdf_path=pdf_path,
+            analyzed_image_out_path=image_out_path,
             study_uid=study_uid,
             series_uid=series_uid,
             modality=modality_eff,
@@ -592,6 +640,7 @@ class QAAppFacade:
             result_dialog_title="ACR CT Phantom Analysis",
             json_default_stem="qa-acr-ct",
             json_inputs=json_inputs,
+            analyzed_image_temp_dir=image_temp_dir,
         )
 
     def open_acr_mri_phantom_analysis(self) -> None:

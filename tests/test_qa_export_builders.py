@@ -52,7 +52,7 @@ def test_single_run_document_nuclear_fields() -> None:
     doc = build_single_run_document(
         _nuclear_result(), app_version="9.9.9", inputs={"input_path": "p.dcm"}
     )
-    assert doc["schema_version"] == "1.1"
+    assert doc["schema_version"] == "1.3"
     assert doc["run"]["app_version"] == "9.9.9"
     assert doc["run"]["analysis_type"] == "nuclear_planar_uniformity"
     assert doc["run"]["nuclear_analysis_class"] == "PlanarUniformity"

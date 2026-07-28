@@ -281,6 +281,18 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         # results_data(as_dict=True) (no background_rois / per-ROI std there).
         low_contrast_cnr = _extract_low_contrast_cnr_details(analyzer)
 
+        # F3: save the analyzed composite image for XLSX embedding, if the
+        # caller opted in. The runner is the only place that touches the live
+        # analyzer, so this transient side effect stays here rather than in
+        # the worker/facade (see QARequest.analyzed_image_out_path).
+        analyzed_image_path: str | None = None
+        if request.analyzed_image_out_path:
+            try:
+                analyzer.save_analyzed_image(request.analyzed_image_out_path)
+                analyzed_image_path = request.analyzed_image_out_path
+            except Exception:
+                analyzed_image_path = None
+
         pdf_report_path: str | None = None
         if request.output_pdf_path:
             try:
@@ -324,6 +336,7 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
             num_images=num_images,
             pylinac_version=py_ver,
             pylinac_analysis_profile=profile,
+            analyzed_image_path=analyzed_image_path,
         )
     except Exception as exc:
         err_text = f"ACR CT analysis failed: {exc}"

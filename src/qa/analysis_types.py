@@ -455,6 +455,10 @@ class QARequest:
     folder_path: str | None = None
     origin_slice: int | None = None
     output_pdf_path: str | None = None
+    # Transient input: when set, the runner calls analyzer.save_analyzed_image()
+    # to this path right after analyze() (CT only, see run_acr_ct_analysis).
+    # Not part of any serialized payload; XLSX export image embedding only.
+    analyzed_image_out_path: str | None = None
     study_uid: str = ""
     series_uid: str = ""
     modality: str = ""
@@ -507,6 +511,11 @@ class QAResult:
     num_images: int = 0
     pylinac_version: str | None = None
     pylinac_analysis_profile: dict[str, Any] = field(default_factory=dict)
+    # Transient output: local filesystem path to the analyzed-image PNG saved
+    # via QARequest.analyzed_image_out_path, if any. Not serialized (JSON/CSV
+    # builders name their fields explicitly, so this field cannot leak); used
+    # only by qa_xlsx_export.build_qa_workbook to embed the image.
+    analyzed_image_path: str | None = None
 
 
 # ---------------------------------------------------------------------------
