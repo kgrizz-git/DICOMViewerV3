@@ -1,4 +1,13 @@
 {
   "purpose": "Reviewed synthetic text or spreadsheet fixtures. An exception applies only to the listed rule categories while the file SHA-256 remains unchanged.",
-  "files": {}
+  "files": {
+    "security/approved-media-sha256.json": {
+      "sha256": "5158d5fec21bac659813ad0b20fc5090d90b574456bdac8ec181f3be95fcc179",
+      "allowed_rules": ["patient-name-in-content"]
+    },
+    "src/utils/privacy/structural_event_schema_v1.json": {
+      "sha256": "133abcba22ad7373850a2764844dbb4f26abdde685575926ca4a227bc7f5222b",
+      "allowed_rules": ["patient-name-in-content"]
+    }
+  }
 }
