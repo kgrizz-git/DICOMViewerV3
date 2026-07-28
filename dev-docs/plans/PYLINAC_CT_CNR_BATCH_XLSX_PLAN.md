@@ -1,6 +1,7 @@
 # Pylinac CT — CNR Intermediates, Batch Processing, and XLSX Export Plan
 
-Status: F1 implemented; F2/F3 ready for handoff
+Status: F1 + F3 + F2 implemented (commits 39dcd7a, 20c8f82, 5a5d3ed);
+pre-merge live-phantom value check for F1 still open
 Date: 2026-07-28
 Branch: `feature/pylinac-ct-cnr-batch-xlsx`
 Review: `tmp/PYLINAC_CT_CNR_BATCH_XLSX_PLAN_ASSESSMENT_2026-07-28-153637.md`
