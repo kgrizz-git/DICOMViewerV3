@@ -1,6 +1,6 @@
 # User guide — ACR phantom QA (pylinac)
 
-**Last updated:** 2026-06-12
+**Last updated:** 2026-07-28
 
 The viewer can run **automated ACR phantom analysis** using the **pylinac** library (pinned in `requirements.txt`, currently **3.43.2**). This is **optional QA tooling**; the app still runs if pylinac is missing until you use these menus.
 
@@ -9,6 +9,7 @@ The viewer can run **automated ACR phantom analysis** using the **pylinac** libr
 | Menu | Action |
 |------|--------|
 | **Tools → Automated QA** | **ACR CT Phantom (pylinac)…** |
+| **Tools → Automated QA** | **ACR CT Batch (pylinac)…** |
 | **Tools → Automated QA** | **ACR MRI Phantom (pylinac)…** |
 | **Tools → Automated QA** | **Nuclear Medicine QC (pylinac)…** |
 
@@ -22,7 +23,7 @@ The viewer can run **automated ACR phantom analysis** using the **pylinac** libr
 ## During and after the run
 
 - Work runs on a **background thread**; a progress dialog is shown.
-- Results include **metrics**, **warnings/errors**, and optional **JSON or CSV** export with reproducibility fields (pylinac version, analysis profile). The save dialog offers both formats; choose by the file extension (`.json` writes the full document, `.csv` writes a flat `metric,value` summary). Exported JSON records **vanilla pylinac** (stock **ACRCT** / **ACRMRILarge** vs viewer integration classes) under **`run.vanilla_pylinac`**, **`inputs.vanilla_pylinac`**, and **`pylinac_analysis_profile.vanilla_pylinac`**.
+- Results include **metrics**, **warnings/errors**, and optional **JSON, CSV, or XLSX** export with reproducibility fields (pylinac version, analysis profile). The save dialog offers all three formats; choose by the file extension (`.json` writes the full document, `.csv` writes a flat `metric,value` summary, `.xlsx` writes a workbook with **Summary**, **Detail**, and **Images** sheets — the last embeds pylinac's analyzed composite image when one was captured for the run). Exported JSON records **vanilla pylinac** (stock **ACRCT** / **ACRMRILarge** vs viewer integration classes) under **`run.vanilla_pylinac`**, **`inputs.vanilla_pylinac`**, and **`pylinac_analysis_profile.vanilla_pylinac`**. The single-run ACR document is **`schema_version` 1.3**; its **`raw_pylinac`** field is an opaque, pylinac-version-dependent passthrough (audit context, not a stable contract).
 - **PDF:** You can choose an output path for pylinac-generated PDFs where the flow supports it. After a **successful single** CT/MRI run, the app asks whether to **open that PDF** (compare mode still uses **Open PDF** on the results window).
 
 ### ACR MRI options (summary)
@@ -37,6 +38,8 @@ The MRI dialog can include:
 ### ACR CT
 
 - Similar worker flow; optional extent tolerance and JSON profile fields align with the MRI path where implemented.
+- **CNR intermediates:** the result dialog surfaces the values behind the low-contrast **contrast-to-noise ratio** — the **object ROI mean**, the **background mean**, the **background noise (σ)**, and the module **CNR**. These are also written to **`metrics.low_contrast_cnr`** in the JSON/CSV/XLSX exports (keys `object_rois`, `background`, `cnr`); any key may be absent if a given pylinac build does not expose it.
+- **Batch mode** (**ACR CT Batch (pylinac)…**): select **multiple loaded CT series** from a checkbox list (or **Add folder…** for on-disk series), then one shared CT options set is applied to every series. Series run **one at a time**; a progress dialog shows **N-of-M**, and **Cancel** stops after the in-flight series finishes (already-completed series are kept). The batch summary dialog shows **one row per series** (label, status/warnings, and the CNR block) with **Export XLSX…** (one workbook, one row per series, plus an embedded analyzed image per series) and **Export JSON…** (a JSON array of per-run documents). Per-series PDF output is not part of batch mode.
 
 ## Interpretation
 
