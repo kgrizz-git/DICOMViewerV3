@@ -61,7 +61,11 @@ jobs:
               issue_number: context.issue.number,
               per_page: 100,
             });
-            if (comments.some(comment => comment.body?.includes(marker))) {
+            if (comments.some(comment =>
+              comment.user?.login === 'github-actions[bot]' &&
+              comment.user?.type === 'Bot' &&
+              comment.body?.includes(marker)
+            )) {
               console.log('CodeRabbit review already requested for this commit.');
               return;
             }
