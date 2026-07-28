@@ -562,6 +562,7 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
     """Rule 2: PHI/PII indicators inside data files."""
     problems = []
     approved = _approved_text_exceptions(root)
+    approved_occurrences = _approved_text_occurrences(root)
     for path in paths:
         if (
             Path(path).suffix.lower() not in DATA_SUFFIXES
@@ -583,7 +584,12 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
             for reason in _content_reasons(line, path):
-                if not _is_approved_text_exception(path, reason, root, approved):
+                if not (
+                    _is_approved_text_exception(path, reason, root, approved)
+                    or _is_approved_text_occurrence(
+                        path, reason, line, approved_occurrences
+                    )
+                ):
                     problems.append(f"{path}:{lineno}: possible PHI/PII ({reason})")
     return problems
 
@@ -626,6 +632,41 @@ def _is_approved_text_exception(
         and (root / path).is_file()
         and _sha256(root / path) == expected_hash
     )
+
+
+def _approved_text_occurrences(root: Path) -> frozenset[tuple[str, str, str]]:
+    """Load reviewed, path-bound text-occurrence exceptions from the manifest."""
+    try:
+        payload = json.loads(
+            (root / APPROVED_TEXT_EXCEPTIONS_MANIFEST).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return frozenset()
+    if not isinstance(payload, dict):
+        return frozenset()
+    occurrences = payload.get("occurrences", [])
+    if not isinstance(occurrences, list):
+        return frozenset()
+    return frozenset(
+        (path, rule, digest)
+        for entry in occurrences
+        if isinstance(entry, dict)
+        and isinstance((path := entry.get("path")), str)
+        and isinstance((rule := entry.get("rule")), str)
+        and isinstance((digest := entry.get("sha256")), str)
+    )
+
+
+def _text_occurrence_sha256(path: str, line: str) -> str:
+    """Return a path-bound digest for one exact scanned text line."""
+    return hashlib.sha256(f"{path}\0{line}".encode()).hexdigest()
+
+
+def _is_approved_text_occurrence(
+    path: str, reason: str, line: str, approved: frozenset[tuple[str, str, str]]
+) -> bool:
+    """Allow only a reviewed, unchanged content finding at this repository path."""
+    return (path, reason, _text_occurrence_sha256(path, line)) in approved
 
 
 def _approved_media(root: Path) -> dict[str, str]:

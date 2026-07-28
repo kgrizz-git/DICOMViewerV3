@@ -97,9 +97,9 @@ def test_content_reasons_path_carveout() -> None:
     # src/utils/privacy/ — NOT skipped (only dev-docs/ and user-docs/ are carved out)
     assert "patient-name-in-content" in phi._content_reasons("kind: mark", "src/utils/privacy/schema_v1.json")
 
-    # Root-level markdown docs — skipped
-    assert "patient-name-in-content" not in phi._content_reasons("authored by Mark", "CHANGELOG.md")
-    assert "patient-name-in-content" not in phi._content_reasons("authored by Mark", "DESIGN.md")
+    # Root-level Markdown is not an approved carve-out.
+    assert "patient-name-in-content" in phi._content_reasons("authored by Mark", "CHANGELOG.md")
+    assert "patient-identifier-in-content" in phi._content_reasons("MRN_1234567", "DESIGN.md")
 
     # Other paths — NOT skipped
     assert "patient-name-in-content" in phi._content_reasons("referred by Smith", "tests/fixtures/data.csv")

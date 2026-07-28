@@ -66,8 +66,6 @@ _CONTENT_CARVEOUT_PREFIXES = ("dev-docs/", "user-docs/")
 def _is_content_carved_out(path: str) -> bool:
     """Return True when a repository path is exempt from name/identifier content scanning."""
     normalized = str(path).replace("\\", "/")
-    if "/" not in normalized and normalized.endswith(".md"):
-        return True
     return normalized.startswith(_CONTENT_CARVEOUT_PREFIXES)
 
 
