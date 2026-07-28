@@ -46,6 +46,18 @@ def test_normalize_host_url_rejects_non_loopback_or_non_http_hosts(host_url):
         module.normalize_host_url(host_url)
 
 
+def test_server_status_rejects_non_loopback_urls_before_requesting(monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(
+        module.requests,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("request should not be sent")),
+    )
+
+    with pytest.raises(ValueError, match="loopback http\\(s\\) URL"):
+        module.get_server_status("file:///etc/passwd")
+
+
 def test_docker_host_url_uses_only_the_docker_host_gateway():
     module = _load_module()
 

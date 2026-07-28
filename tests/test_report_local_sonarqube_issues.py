@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -26,14 +25,11 @@ class _Response:
     def __init__(self, payload: dict[str, Any]):
         self._payload = payload
 
-    def __enter__(self) -> _Response:
-        return self
+    def json(self) -> dict[str, Any]:
+        return self._payload
 
-    def __exit__(self, *_args: object) -> None:
+    def raise_for_status(self) -> None:
         return None
-
-    def read(self) -> bytes:
-        return json.dumps(self._payload).encode("utf-8")
 
 
 def _issue(*, component: str = "dicom-viewer-v3:src/example.py", line: int = 12) -> dict[str, Any]:
@@ -52,39 +48,39 @@ def _page(issues: list[dict[str, Any]], *, total: int, page: int) -> dict[str, A
 
 def test_fetch_issues_uses_component_filter_and_keeps_token_out_of_url(monkeypatch):
     module = _load_module()
-    requests = []
+    calls = []
 
-    def fake_urlopen(request, timeout):
-        requests.append((request, timeout))
+    def fake_get(url, headers, timeout):
+        calls.append((url, headers, timeout))
         return _Response(_page([_issue()], total=1, page=1))
 
-    monkeypatch.setattr(module, "urlopen", fake_urlopen)
+    monkeypatch.setattr(module.requests, "get", fake_get)
 
     issues = module.fetch_issues(
         "http://localhost:9000", "test-token", "dicom-viewer-v3", {"severities": "BLOCKER"}
     )
 
     assert len(issues) == 1
-    parsed = parse_qs(urlparse(requests[0][0].full_url).query)
+    parsed = parse_qs(urlparse(calls[0][0]).query)
     assert parsed["componentKeys"] == ["dicom-viewer-v3"]
     assert parsed["severities"] == ["BLOCKER"]
     assert parsed["statuses"] == ["OPEN,CONFIRMED,REOPENED"]
     assert "projectKeys" not in parsed
-    assert "test-token" not in requests[0][0].full_url
-    assert requests[0][0].get_header("Authorization") is not None
+    assert "test-token" not in calls[0][0]
+    assert calls[0][1]["Authorization"]
 
 
 def test_fetch_issues_collects_all_pages(monkeypatch):
     module = _load_module()
 
-    def fake_urlopen(request, timeout):
+    def fake_get(url, headers, timeout):
         assert timeout == 10.0
-        page = int(parse_qs(urlparse(request.full_url).query)["p"][0])
+        page = int(parse_qs(urlparse(url).query)["p"][0])
         if page == 1:
             return _Response(_page([_issue(line=12)], total=2, page=1))
         return _Response(_page([_issue(line=24)], total=2, page=2))
 
-    monkeypatch.setattr(module, "urlopen", fake_urlopen)
+    monkeypatch.setattr(module.requests, "get", fake_get)
 
     issues = module.fetch_issues(
         "http://localhost:9000", "token", "dicom-viewer-v3", {"severities": "BLOCKER"}
@@ -96,8 +92,8 @@ def test_fetch_issues_collects_all_pages(monkeypatch):
 def test_fetch_issues_rejects_foreign_component(monkeypatch):
     module = _load_module()
     monkeypatch.setattr(
-        module,
-        "urlopen",
+        module.requests,
+        "get",
         lambda *_args, **_kwargs: _Response(
             _page([_issue(component="other-project:src/example.py")], total=1, page=1)
         ),
@@ -111,14 +107,14 @@ def test_fetch_issues_rejects_foreign_component(monkeypatch):
 
 def test_fetch_issues_rejects_malformed_and_incomplete_responses(monkeypatch):
     module = _load_module()
-    monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: _Response({"issues": []}))
+    monkeypatch.setattr(module.requests, "get", lambda *_args, **_kwargs: _Response({"issues": []}))
 
     with pytest.raises(module.SonarReportError, match="incomplete issue-search payload"):
         module.fetch_issues(
             "http://localhost:9000", "token", "dicom-viewer-v3", {"severities": "BLOCKER"}
         )
 
-    monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: _Response(_page([], total=1, page=1)))
+    monkeypatch.setattr(module.requests, "get", lambda *_args, **_kwargs: _Response(_page([], total=1, page=1)))
     with pytest.raises(module.SonarReportError, match="pagination was incomplete"):
         module.fetch_issues(
             "http://localhost:9000", "token", "dicom-viewer-v3", {"severities": "BLOCKER"}

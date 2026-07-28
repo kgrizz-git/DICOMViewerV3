@@ -18,9 +18,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.error import URLError
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+import requests
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = Path(".sonar-local/last-update-check.json")
@@ -95,25 +94,31 @@ def local_image_details() -> tuple[str, str, str] | None:
 def remote_image_id() -> str | None:
     """Return Docker Hub's top-level tag digest without pulling an image."""
     try:
-        token_request = Request(
-            f"{DOCKER_TOKEN_URL}?{urlencode({'service': 'registry.docker.io', 'scope': 'repository:library/sonarqube:pull'})}",
+        token_response = requests.get(
+            DOCKER_TOKEN_URL,
+            params={
+                "service": "registry.docker.io",
+                "scope": "repository:library/sonarqube:pull",
+            },
             headers={"Accept": "application/json"},
+            timeout=10.0,
         )
-        with urlopen(token_request, timeout=10.0) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-            token_payload = json.loads(response.read().decode("utf-8"))
+        token_response.raise_for_status()
+        token_payload = token_response.json()
         token = token_payload.get("token") if isinstance(token_payload, dict) else None
         if not isinstance(token, str) or not token:
             return None
-        manifest_request = Request(
+        manifest_response = requests.get(
             DOCKER_MANIFEST_URL,
             headers={
                 "Accept": "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json",
                 "Authorization": f"Bearer {token}",
             },
+            timeout=10.0,
         )
-        with urlopen(manifest_request, timeout=10.0) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-            digest = response.headers.get("Docker-Content-Digest")
-    except (OSError, URLError, UnicodeDecodeError, json.JSONDecodeError):
+        manifest_response.raise_for_status()
+        digest = manifest_response.headers.get("Docker-Content-Digest")
+    except (requests.RequestException, ValueError):
         return None
     return digest if isinstance(digest, str) and digest.startswith("sha256:") else None
 
@@ -127,11 +132,15 @@ def native_scanner_version() -> str | None:
 
 def latest_scanner_version() -> str | None:
     """Read SonarSource's public latest-release metadata without uploading code."""
-    request = Request(SCANNER_RELEASE_URL, headers={"Accept": "application/vnd.github+json"})
     try:
-        with urlopen(request, timeout=10.0) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-            payload = json.loads(response.read().decode("utf-8"))
-    except (OSError, URLError, UnicodeDecodeError, json.JSONDecodeError):
+        response = requests.get(
+            SCANNER_RELEASE_URL,
+            headers={"Accept": "application/vnd.github+json"},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
         return None
     version = payload.get("tag_name") if isinstance(payload, dict) else None
     return version if isinstance(version, str) and version else None

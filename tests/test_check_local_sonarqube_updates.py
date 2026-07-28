@@ -44,13 +44,10 @@ def test_remote_image_id_reads_docker_hub_tag_digest(monkeypatch):
             self._body = body
             self.headers = headers or {}
 
-        def read(self) -> bytes:
-            return self._body
+        def json(self):
+            return __import__("json").loads(self._body.decode("utf-8"))
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
+        def raise_for_status(self) -> None:
             return None
 
     responses = iter(
@@ -59,7 +56,7 @@ def test_remote_image_id_reads_docker_hub_tag_digest(monkeypatch):
             Response(b"", {"Docker-Content-Digest": "sha256:tag"}),
         ]
     )
-    monkeypatch.setattr(module, "urlopen", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(module.requests, "get", lambda *_args, **_kwargs: next(responses))
 
     assert module.remote_image_id() == "sha256:tag"
 

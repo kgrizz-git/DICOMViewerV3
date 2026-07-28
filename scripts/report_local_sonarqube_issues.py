@@ -21,16 +21,15 @@ from __future__ import annotations
 
 import argparse
 import base64
-import json
 import os
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+import requests
 
 try:
     from scripts.privacy_console import print_redacted
@@ -100,19 +99,22 @@ def _authorization_header(token: str) -> str:
 
 def _read_json(url: str, token: str) -> dict[str, Any]:
     """Fetch one JSON payload without reflecting server-provided error details."""
-    request = Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "Authorization": _authorization_header(token),
-        },
-    )
     try:
-        # The CLI normalizes host_url to an HTTP(S) loopback endpoint before this call.
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with urlopen(request, timeout=10.0) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, OSError, URLError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        url = normalize_host_url(url)
+    except ValueError as exc:
+        raise SonarReportError("SonarQube URL must be a loopback HTTP(S) endpoint") from exc
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "Accept": "application/json",
+                "Authorization": _authorization_header(token),
+            },
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
         raise SonarReportError("SonarQube request could not be completed") from exc
     if not isinstance(payload, dict):
         raise SonarReportError("SonarQube returned a malformed JSON payload")
