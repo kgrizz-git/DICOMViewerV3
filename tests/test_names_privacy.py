@@ -106,8 +106,8 @@ def test_content_reasons_path_carveout() -> None:
     assert not _search(NAME_CONTENT_PATTERN, "referred by Smith", "user-docs/guide.md")
     assert not _search(IDENTIFIER_CONTENT_PATTERN, "MRN_1234567", "user-docs/guide.md")
 
-    # src/utils/privacy/ — skipped (schema/infrastructure, not patient data)
-    assert not _search(NAME_CONTENT_PATTERN, "kind: mark", "src/utils/privacy/schema_v1.json")
+    # src/utils/privacy/ — NOT skipped (only dev-docs/ and user-docs/ are carved out)
+    assert _search(NAME_CONTENT_PATTERN, "kind: mark", "src/utils/privacy/schema_v1.json")
 
     # Root-level markdown docs — skipped
     assert not _search(NAME_CONTENT_PATTERN, "authored by Mark", "CHANGELOG.md")

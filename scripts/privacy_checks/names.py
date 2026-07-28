@@ -61,7 +61,7 @@ PATIENT_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
 )
 
 
-_CONTENT_CARVEOUT_PREFIXES = ("dev-docs/", "user-docs/", "src/utils/privacy/", "security/")
+_CONTENT_CARVEOUT_PREFIXES = ("dev-docs/", "user-docs/")
 
 
 class PathCarveoutPattern:
@@ -127,13 +127,23 @@ def name_in_path(path: str) -> str | None:
 
         is_basename = (i == len(parts) - 1)
         safe_compounds = SAFE_NAME_COMPOUNDS if is_basename else SAFE_DIR_COMPOUNDS
-        # Exact match OR stem is a longer derivative of a safe compound (e.g.
-        # martin_fowler_refactoring.txt when martin_fowler is in SAFE_NAME_COMPOUNDS).
-        if stem_folded in safe_compounds or any(
-            stem_folded.startswith(c + sep)
-            for c in safe_compounds
-            for sep in ("_", "-", ".")
-        ):
+        if stem_folded in safe_compounds:
+            continue
+        # A derivative (e.g. martin_fowler_refactoring) is exempt only when the
+        # trailing suffix tokens are not themselves patient names.
+        safe_derivative = False
+        for c in safe_compounds:
+            for sep in ("_", "-", "."):
+                prefix = c + sep
+                if stem_folded.startswith(prefix):
+                    suffix = stem_folded[len(prefix):]
+                    suffix_tokens = [t for t in re.split(r"[-_.\s]", suffix) if len(t) > 1]
+                    if not any(t in PATIENT_NAME_TOKENS for t in suffix_tokens):
+                        safe_derivative = True
+                    break
+            if safe_derivative:
+                break
+        if safe_derivative:
             continue
 
         # Include ^ so DICOM-style LastName^FirstName paths are tokenised correctly.

@@ -454,8 +454,10 @@ jobs:
         id: grype_sarif
         if: always()
         shell: bash
+        env:
+          GRYPE_SARIF_PATH: ${{ steps.grype.outputs.sarif }}
         run: |
-          report="${{ steps.grype.outputs.sarif }}"
+          report="$GRYPE_SARIF_PATH"
           rm -f grype-upload.sarif
           if [ -z "$report" ] || [ ! -f "$report" ] || [ ! -s "$report" ]; then
             echo "upload=false" >> "$GITHUB_OUTPUT"

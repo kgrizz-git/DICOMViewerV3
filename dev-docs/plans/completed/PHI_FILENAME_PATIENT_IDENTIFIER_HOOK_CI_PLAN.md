@@ -1,9 +1,9 @@
 # PHI Filename & Patient-Identifier Hook/CI Hardening Plan
 
-**Status:** draft (not yet implemented — do not commit code, fixtures, or manifest entries listed here)
+**Status:** implemented
 **Last updated:** 2026-07-27 (revision 4: **expanded `PATIENT_NAME_TOKENS` from ~71 to ~266**, replacing the UK-census-weighted seed with an SSA-given-names + US-Census-surnames base (collision-filtered; `ward` excluded as a hospital-ward collision) so US Hispanic/Asian/African patient surnames are covered. **Cleaned up `SAFE_NAME_COMPOUNDS`**: removed dead single-word entries (`jackknife`, `davidson`, `evansville`, `goldsmith`, `johnson`, `jenkins`, `johansson`, `rabin_karp`) that the token-based lane can never flag — `johnson`/`jenkins`/`johansson` were real surnames wrongly parked in the allowlist — and added an explicit membership rule (an entry belongs only if its stem splits into ≥1 token). Revision 3: **reversed the basename-only name-lane scope** — this is a DICOM/medical-imaging repo where patient names routinely appear as directory components (`patients/SMITH_JOHN/…`), so basename-only left the *dominant* leak shape uncaught; the name lane now scans every path component like the identifier lane, with a new review-gated `SAFE_DIR_COMPOUNDS` allowlist for genuine org directories as the FP control instead of scope narrowing. Also: fixed the content-lane word-boundary spec — bare `\b` misses `_`-glued names like `patient_smith_id`; switched `NAME_CONTENT_PATTERN` to explicit ASCII-alnum boundary assertions. Fixed the migration audit-script invocation to `python -m scripts.audit_filename_phi` so the `scripts` package import resolves. Added a `casefold()` length-stability caveat for future non-ASCII seeds. Added a "Rejected assessment suggestions" section giving explicit merits-based rationale for declining warn-only mode, external config, and automated seed expansion — rev 2 had deferred these without stating why. Rev 2 added: audit script, rollback procedure, migration workflow, `SAFE_NAME_COMPOUNDS` governance, casefold/`os.path.splitext`/lookbehind specs, and directory/boundary test cases.)
 **Owner:** kevin (with agent assistance)
-**Blocking enforcement:** pre-commit hook + `security-checks.yml` CI job
+**Blocking enforcement:** pre-commit hook + `.github/workflows/privacy-gates.yml` CI job
 
 ## Problem
 
@@ -464,7 +464,7 @@ reviewed, ASCII-only for this slice, and recorded in the maintenance log.
 | Pre-commit (staged) | `scripts/check_no_phi_artifacts.py` `_path_reasons` | import and call `name_in_path` per basename; append the two new reason strings | every staged file path |
 | Pre-commit (staged) | `scripts/check_no_phi_artifacts.py` `_content_reasons` | append the two new `(pattern, reason)` tuples to `CONTENT_RULES` | every staged text/data file |
 | Pre-push (full tree) | `scripts/check_no_phi_artifacts.py` (no `--staged`) | same — already iterates all tracked files | `pre-push` hook |
-| CI (blocking) | `.github/workflows/security-checks.yml` `phi-artifact-scan` job | already invokes `scripts/check_no_phi_artifacts.py` | every PR + push to main/develop |
+| CI (blocking) | `.github/workflows/privacy-gates.yml` `phi-artifact-scan` job | already invokes `scripts/check_no_phi_artifacts.py` | every PR + push to main/develop |
 
 The plan intentionally reuses the existing gating script and the two existing
 hook + job seams rather than introducing a third script or workflow. That keeps
