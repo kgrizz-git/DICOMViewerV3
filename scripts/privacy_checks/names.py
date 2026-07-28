@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 
 PATIENT_NAME_TOKENS: frozenset[str] = frozenset([
     "abdi", "abigail", "adams", "adeyemi", "aguilar", "aiden", "alexander", "allen",
@@ -64,35 +63,26 @@ PATIENT_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
 _CONTENT_CARVEOUT_PREFIXES = ("dev-docs/", "user-docs/")
 
 
-class PathCarveoutPattern:
-    """Regex pattern wrapper that skips the new name/identifier rules on documentation paths.
+def _is_content_carved_out(path: str) -> bool:
+    """Return True when a repository path is exempt from name/identifier content scanning."""
+    normalized = str(path).replace("\\", "/")
+    if "/" not in normalized and normalized.endswith(".md"):
+        return True
+    return normalized.startswith(_CONTENT_CARVEOUT_PREFIXES)
 
-    Walks the call stack to find the ``path`` local in ``check_contents``' loop without
-    requiring a signature change to ``_content_reasons``.  Starts at frame 1 (the
-    immediate caller) so the ``_matched_path = None`` initialisation in this method
-    itself cannot shadow the real value.
+
+class PathCarveoutPattern:
+    """Marker wrapper for regex patterns subject to content carve-out rules.
+
+    Carve-out decisions are made by callers via _is_content_carved_out rather
+    than inside this class, so the pattern itself is always applied when search
+    is called directly.
     """
 
     def __init__(self, pattern: re.Pattern[str]) -> None:
         self.pattern = pattern
 
     def search(self, text: str) -> re.Match[str] | None:
-        _matched_path = None
-        frame = sys._getframe(1)  # skip this frame to avoid shadowing by locals
-        while frame is not None:
-            if "path" in frame.f_locals:
-                _matched_path = frame.f_locals["path"]
-                break
-            frame = frame.f_back
-
-        if _matched_path:
-            normalized = str(_matched_path).replace("\\", "/")
-            # Skip root-level markdown docs (e.g. CHANGELOG.md, DESIGN.md)
-            if "/" not in normalized and normalized.endswith(".md"):
-                return None
-            if normalized.startswith(_CONTENT_CARVEOUT_PREFIXES):
-                return None
-
         return self.pattern.search(text)
 
 

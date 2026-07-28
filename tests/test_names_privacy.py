@@ -8,12 +8,10 @@ from pathlib import Path
 import pytest
 
 from scripts.privacy_checks.names import (
-    IDENTIFIER_CONTENT_PATTERN,
     NAME_CONTENT_PATTERN,
     PATIENT_IDENTIFIER_PATTERN,
     PATIENT_NAME_TOKENS,
     SAFE_NAME_COMPOUNDS,
-    PathCarveoutPattern,
     name_in_path,
 )
 
@@ -87,35 +85,25 @@ def test_content_reasons() -> None:
 
 
 def test_content_reasons_path_carveout() -> None:
-    """The content lane skips name/identifier rules on documentation paths.
-
-    PathCarveoutPattern.search walks the call stack for a local named ``path``.
-    The wrapper below provides that local in frame 1, exactly as ``check_contents``
-    does via its ``for path in paths:`` loop.
-    """
-
-    def _search(pattern: PathCarveoutPattern, text: str, path: str) -> bool:
-        # ``path`` is a local here — frame walker finds it at frame 1.
-        return pattern.search(text) is not None
-
+    """The content lane skips name/identifier rules on documentation paths."""
     # dev-docs/ — skipped
-    assert not _search(NAME_CONTENT_PATTERN, "referred by Smith", "dev-docs/plans/foo.md")
-    assert not _search(IDENTIFIER_CONTENT_PATTERN, "MRN_1234567", "dev-docs/plans/foo.md")
+    assert "patient-name-in-content" not in phi._content_reasons("referred by Smith", "dev-docs/plans/foo.md")
+    assert "patient-identifier-in-content" not in phi._content_reasons("MRN_1234567", "dev-docs/plans/foo.md")
 
     # user-docs/ — skipped
-    assert not _search(NAME_CONTENT_PATTERN, "referred by Smith", "user-docs/guide.md")
-    assert not _search(IDENTIFIER_CONTENT_PATTERN, "MRN_1234567", "user-docs/guide.md")
+    assert "patient-name-in-content" not in phi._content_reasons("referred by Smith", "user-docs/guide.md")
+    assert "patient-identifier-in-content" not in phi._content_reasons("MRN_1234567", "user-docs/guide.md")
 
     # src/utils/privacy/ — NOT skipped (only dev-docs/ and user-docs/ are carved out)
-    assert _search(NAME_CONTENT_PATTERN, "kind: mark", "src/utils/privacy/schema_v1.json")
+    assert "patient-name-in-content" in phi._content_reasons("kind: mark", "src/utils/privacy/schema_v1.json")
 
     # Root-level markdown docs — skipped
-    assert not _search(NAME_CONTENT_PATTERN, "authored by Mark", "CHANGELOG.md")
-    assert not _search(NAME_CONTENT_PATTERN, "authored by Mark", "DESIGN.md")
+    assert "patient-name-in-content" not in phi._content_reasons("authored by Mark", "CHANGELOG.md")
+    assert "patient-name-in-content" not in phi._content_reasons("authored by Mark", "DESIGN.md")
 
     # Other paths — NOT skipped
-    assert _search(NAME_CONTENT_PATTERN, "referred by Smith", "tests/fixtures/data.csv")
-    assert _search(IDENTIFIER_CONTENT_PATTERN, "MRN_1234567", "tests/fixtures/data.csv")
+    assert "patient-name-in-content" in phi._content_reasons("referred by Smith", "tests/fixtures/data.csv")
+    assert "patient-identifier-in-content" in phi._content_reasons("MRN_1234567", "tests/fixtures/data.csv")
 
 
 def test_allowance_asymmetry(tmp_path: Path) -> None:

@@ -290,6 +290,8 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.privacy_checks.names import (
     IDENTIFIER_CONTENT_PATTERN,
     NAME_CONTENT_PATTERN,
+    PathCarveoutPattern,
+    _is_content_carved_out,
     name_in_path,
 )
 
@@ -519,11 +521,14 @@ def check_paths(paths: list[str]) -> list[str]:
 
 
 def _content_reasons(
-    text: str, identities: frozenset[str] | None = None
+    text: str, path: str = "", identities: frozenset[str] | None = None
 ) -> list[str]:
     """Return PHI/PII rule categories found in one text value, never the value."""
     reasons: list[str] = []
+    carved_out = _is_content_carved_out(path) if path else False
     for pattern, why in CONTENT_RULES:
+        if carved_out and isinstance(pattern, PathCarveoutPattern):
+            continue
         match = pattern.search(text)
         if match is None:
             continue
@@ -577,7 +582,7 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
             )
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            for reason in _content_reasons(line):
+            for reason in _content_reasons(line, path):
                 if not _is_approved_text_exception(path, reason, root, approved):
                     problems.append(f"{path}:{lineno}: possible PHI/PII ({reason})")
     return problems
@@ -754,7 +759,7 @@ def _check_spreadsheet_stream(path: str, stream: BinaryIO, root: Path) -> list[s
                 for value in row:
                     if not isinstance(value, str):
                         continue
-                    for reason in _content_reasons(value):
+                    for reason in _content_reasons(value, path):
                         if not _is_approved_text_exception(
                             path, reason, root, approved
                         ):
@@ -857,7 +862,7 @@ def _check_pdf_stream(path: str, stream: BinaryIO, root: Path) -> list[str]:
     approved = _approved_text_exceptions(root)
     try:
         for page_number, page in enumerate(reader.pages, start=1):
-            for reason in _content_reasons(page.extract_text() or ""):
+            for reason in _content_reasons(page.extract_text() or "", path):
                 if not _is_approved_text_exception(path, reason, root, approved):
                     problems.append(
                         f"{path}: page {page_number}: possible PHI/PII ({reason})"
@@ -982,7 +987,7 @@ def _check_archived_text(path: str, payload: bytes, root: Path) -> list[str]:
     text = payload.decode("utf-8", errors="ignore")
     return [
         f"{path}: archived text: possible PHI/PII ({reason})"
-        for reason in _content_reasons(text)
+        for reason in _content_reasons(text, path)
         if not _is_approved_text_exception(path, reason, root, approved)
     ]
 
