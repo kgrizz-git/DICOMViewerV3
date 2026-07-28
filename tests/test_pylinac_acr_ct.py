@@ -55,7 +55,7 @@ class _FakeAnalyzer:
     def analyze(self, **kwargs) -> None:
         self.analyze_kwargs = kwargs
 
-    def results_data(self):
+    def results_data(self, as_dict=False):
         return {
             "num_images": 3,
             "phantom_roll": 0.25,
@@ -69,7 +69,7 @@ class _FakeAnalyzer:
 
 
 class _FakeAnalyzerObjectResults(_FakeAnalyzer):
-    def results_data(self):
+    def results_data(self, as_dict=False):
         return types.SimpleNamespace(kind="object")
 
     def publish_pdf(self, path: str) -> None:

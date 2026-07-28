@@ -194,6 +194,7 @@ class QAAppFacade:
             nonvanilla = (
                 "\nNon-stock pylinac path: see JSON field pylinac_analysis_profile."
             )
+        cnr_text = self._format_low_contrast_cnr_summary(result)
         summary = (
             f"{status_text}\n"
             f"Study UID: {result.study_uid or '(folder run)'}\n"
@@ -203,6 +204,7 @@ class QAAppFacade:
             f"{vanilla_note}"
             f"{pdf_text}"
             f"{nonvanilla}"
+            f"{cnr_text}"
             f"{warning_text}"
             f"{error_text}"
         )
@@ -214,6 +216,36 @@ class QAAppFacade:
         box.activateWindow()
         box.raise_()
         box.exec()
+
+    @staticmethod
+    def _format_low_contrast_cnr_summary(result: QAResult) -> str:
+        """Format the F1 CNR intermediates (object mean / bg mean / bg σ / CNR).
+
+        Returns an empty string when the metrics are absent (e.g. MRI runs or a
+        pylinac version whose attributes drifted), so it is safe to append to
+        the shared status summary unconditionally.
+        """
+        details = (result.metrics or {}).get("low_contrast_cnr")
+        if not isinstance(details, dict):
+            return ""
+        lines: list[str] = []
+        obj_rois = details.get("object_rois")
+        if isinstance(obj_rois, list) and obj_rois:
+            means = [r.get("mean") for r in obj_rois if isinstance(r.get("mean"), (int, float))]
+            if means:
+                avg = sum(means) / len(means)
+                lines.append(f"Object ROI mean: {avg:.2f}")
+        bg = details.get("background")
+        if isinstance(bg, dict):
+            if isinstance(bg.get("mean"), (int, float)):
+                lines.append(f"Background mean: {bg['mean']:.2f}")
+            if isinstance(bg.get("std"), (int, float)):
+                lines.append(f"Background noise (σ): {bg['std']:.2f}")
+        if isinstance(details.get("cnr"), (int, float)):
+            lines.append(f"CNR: {details['cnr']:.2f}")
+        if not lines:
+            return ""
+        return "\nCNR intermediates:\n- " + "\n- ".join(lines)
 
     def offer_open_single_run_pdf(self, result: QAResult) -> None:
         """

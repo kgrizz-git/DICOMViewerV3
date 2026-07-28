@@ -1,6 +1,6 @@
 # Pylinac CT — CNR Intermediates, Batch Processing, and XLSX Export Plan
 
-Status: proposed (refined after review)
+Status: F1 implemented; F2/F3 ready for handoff
 Date: 2026-07-28
 Branch: `feature/pylinac-ct-cnr-batch-xlsx`
 Review: `tmp/PYLINAC_CT_CNR_BATCH_XLSX_PLAN_ASSESSMENT_2026-07-28-153637.md`
@@ -59,9 +59,17 @@ run.
   - **Therefore the background mean / σ (the noise term the user explicitly
     wants) is NOT in `results_data()` and requires the live analyzer** —
     live extraction is required, not redundant (resolves review r2 item 1
-    sub-point). Attribute **names** are confirmed via class introspection:
-    `LowContrastModule` has `rois`, `background_rois`, `cnr`;
-    `LowContrastDiskROI` has `mean`, `std`, `contrast_to_noise`, `pixel_value`.
+    sub-point). Attribute **names and shapes** confirmed via live source /
+    introspection against installed pylinac 3.43.2 (resolves review r3 item 1):
+    - `LowContrastModule.rois` and `.background_rois` are
+      **`dict[str, LowContrastDiskROI]`** (via `CatPhanModule`:
+      `self.rois: dict[str, HUDiskROI]`), keyed by ROI name — ACR CT has a
+      **single `"ROI"` key** in each. They are **not** lists and **not**
+      `dict[str, list[...]]`; extraction must iterate `.values()`.
+    - `LowContrastModule.cnr` is a **method** (`def cnr(self) -> float`,
+      `|A−B|/SD`), **not** a property → call `lcm.cnr()`, not `lcm.cnr`.
+    - `LowContrastDiskROI` exposes `mean`, `std`, `pixel_value`
+      (cached_property) and `contrast_to_noise` (property).
     A **live-phantom value check** (run against a real CatPhan dataset,
     confirming the numbers, not just the names) is a pre-merge checkpoint for F1.
   - **Source-of-truth split:** module `cnr` — take from `raw_pylinac`
@@ -81,18 +89,52 @@ run.
 
 ## Step 0 — Branch setup
 
-- Create `feature/pylinac-ct-cnr-batch-xlsx` off `main`.
-- Carry the `run.py` `sys.path` fix into this branch. Factor the insertion into a
-  tiny `_ensure_src_on_path()` helper in `run.py` (rather than an inline
-  statement) so it can be unit-tested without launching the Qt app (see Testing).
-  The fix inserts `<repo>/src` at `sys.path[0]` before `runpy.run_path`, so
-  top-level `core`/`gui`/… imports resolve identically via `launch.bat`→`run.py`
-  and via `python src/main.py`.
+- **Done:** branch `feature/pylinac-ct-cnr-batch-xlsx` exists (currently checked
+  out) and the raw `run.py` `sys.path` fix is already committed on it
+  (`6fbce73`, alongside this plan doc). It is **not** on `origin/main`, so it
+  still ships inside this branch's single PR / CI run as intended — nothing was
+  merged to main behind the PR (resolves review r3 item 2, which read the
+  committed fix as "already merged").
+- **Remaining (optional):** the fix is an inline `sys.path.insert` at
+  `run.py:10`. Refactor it into a tiny `_ensure_src_on_path()` helper so it can
+  be unit-tested without launching the Qt app (see Testing). If skipped, drop
+  `tests/test_run_launcher.py` from scope — but the helper is cheap and the test
+  is the only guard against a regression of the `launch.bat` import breakage.
 
-## Feature 1 — CNR intermediate values
+## Feature 1 — CNR intermediate values — **IMPLEMENTED**
 
-**Extraction sketch** (in `src/qa/pylinac_acr_ct.py`, called after
-`analyzer.analyze()`):
+**Status:** landed in `src/qa/pylinac_acr_ct.py` +
+`src/gui/qa_app_facade.py`; tests green
+(`tests/test_qa_pylinac_acr_ct_cnr.py`, 148 passed in the qa/acr/pylinac/facade
+subset). What shipped matches the sketch below:
+`_extract_low_contrast_cnr_details(analyzer)`, `_jsonable` numpy hardening,
+`results_data(as_dict=True)`, `metrics["low_contrast_cnr"]`, and a CNR summary
+block in `show_qa_result_dialog` via `_format_low_contrast_cnr_summary`.
+**Pre-merge checkpoint still open:** live-phantom numeric value check against a
+real CatPhan dataset (names/shapes already verified against installed 3.43.2).
+
+**Canonical `metrics["low_contrast_cnr"]` shape (produced by F1 — F2/F3 consume
+this exact structure):**
+
+```python
+{
+    "cnr": 4.5,                      # float, module-level CNR (may be absent)
+    "object_rois": [                 # list; absent if none harvestable
+        {"mean": 100.0, "pixel_value": 100.0, "contrast_to_noise": 3.0},
+    ],
+    "background": {                  # absent if no background ROI harvestable
+        "means": [10.0], "stds": [2.0],
+        "mean": 10.0,                # aggregate background mean (noise floor)
+        "std": 2.0,                  # aggregate background σ (noise term)
+    },
+}
+```
+
+Any key may be missing (defensive degradation); consumers must use `.get()` and
+type-check. The single object-ROI mean shown in the UI is the average of
+`object_rois[*].mean`.
+
+**Extraction sketch** (as implemented, for reference):
 
 ```python
 def _extract_low_contrast_cnr_details(analyzer) -> dict[str, Any]:
@@ -100,26 +142,33 @@ def _extract_low_contrast_cnr_details(analyzer) -> dict[str, Any]:
 
     Every access is guarded; missing/renamed attributes degrade to a partial
     or empty dict rather than raising (pylinac minor-version drift).
+
+    pylinac 3.43.2 shapes (verified against installed source):
+      - lcm.rois / lcm.background_rois are dict[str, LowContrastDiskROI]
+        (ACR CT: single "ROI" key each) -> iterate .values(), NOT as a list.
+      - lcm.cnr is a METHOD (|A-B|/SD), not a property -> call lcm.cnr().
+      - LowContrastDiskROI: .mean, .std, .pixel_value, .contrast_to_noise.
     """
     out: dict[str, Any] = {}
     lcm = getattr(analyzer, "low_contrast_module", None)
     if lcm is None:
         return out
     try:
-        out["cnr"] = float(lcm.cnr)                       # module-level CNR
+        out["cnr"] = float(lcm.cnr())                     # module-level CNR (method!)
     except Exception:
         pass
     obj = []
-    for roi in getattr(lcm, "rois", []) or []:
+    for roi in (getattr(lcm, "rois", {}) or {}).values():         # dict, not list
         try:
             obj.append({"mean": float(roi.mean),
+                        "pixel_value": float(roi.pixel_value),
                         "contrast_to_noise": float(roi.contrast_to_noise)})
         except Exception:
             continue
     if obj:
         out["object_rois"] = obj
     bg_means, bg_stds = [], []
-    for roi in getattr(lcm, "background_rois", []) or []:
+    for roi in (getattr(lcm, "background_rois", {}) or {}).values():   # dict, not list
         try:
             bg_means.append(float(roi.mean)); bg_stds.append(float(roi.std))
         except Exception:
@@ -139,6 +188,17 @@ def _extract_low_contrast_cnr_details(analyzer) -> dict[str, Any]:
 2. Also switch the `results_data()` capture to `as_dict=True` so `raw_pylinac`
    becomes structured (fixes the stringification noted above); keep the existing
    `metrics` cross-check for the module-level `cnr`.
+   - **numpy-scalar safety (resolves review r3 item 4):** the installed numpy is
+     **2.5.1**, where `np.float64` still subclasses `float` but `np.float32` /
+     `np.int64` / `np.int32` do **not**. `_jsonable`
+     (`src/qa/pylinac_acr_ct.py:33`) currently gates on
+     `isinstance(v, (bool, int, float, str))`, so any non-`float64` numpy scalar
+     surviving `as_dict=True` would be `str()`-ified into the JSON. Harden
+     `_jsonable` to coerce numpy scalars first: `np.integer → int`,
+     `np.floating → float` (guarded behind the existing optional-numpy import).
+     The F1 harvest already calls `float(...)` on every value, so
+     `metrics["low_contrast_cnr"]` is unaffected — this only protects the
+     `raw_pylinac` passthrough.
 3. Surface a short summary in the CT branch of `show_qa_result_dialog`
    (object mean / bg mean / bg σ / CNR).
 
@@ -147,7 +207,8 @@ targets pylinac 3.43.2 attribute names verified above.
 
 ## Feature 2 — Batch pylinac CT
 
-**Data model** — add to `src/qa/analysis_types.py`:
+**Data model** — add to `src/qa/analysis_types.py` alongside the existing
+compare-mode types (near `LcRunConfig`, `src/qa/analysis_types.py:517`):
 
 ```python
 @dataclass
@@ -155,6 +216,11 @@ class CTBatchResult:
     run_results: list[QAResult] = field(default_factory=list)
     run_labels: list[str] = field(default_factory=list)   # parallel to run_results
 ```
+
+The batch summary dialog's CNR columns read the same canonical
+`metrics["low_contrast_cnr"]` shape documented in F1 (object mean = avg of
+`object_rois[*].mean`, `background.mean`, `background.std`, `cnr`), via `.get()`
+with blanks for absent keys — identical to the F3 Summary sheet columns.
 
 (No per-series "config" — one CT options set applies to all series — so there is
 no `run_configs` analogue; identity/modality already ride on each `QAResult`,
@@ -169,11 +235,17 @@ Labels are **not** added to `QARequest` (which is per-series input, not display
 metadata). The worker copies `series_labels` straight into `CTBatchResult.run_labels`.
 
 1. **Selection dialog** `prompt_batch_series_selection`: checkbox list built from
-   `organizer.get_series_list()`, **filtered to CT** (first dataset's
-   `Modality == "CT"` via `organizer.studies[...]`); label =
-   `SeriesDescription` + `SeriesNumber` (fallback to series_key). Returns the
-   parallel `(requests, labels)` lists. "Add folder…" appends folder-path
-   pseudo-entries resolved to a `QARequest.folder_path` run (label = folder name).
+   `organizer.get_series_list()`, **filtered to CT** by reading the first dataset
+   of each series via `organizer.studies[study_uid][series_key][0]` and checking
+   `Modality == "CT"`. **Cost (resolves review r3 item 9):** the datasets are the
+   already-loaded in-memory pydicom objects — reading `Modality`,
+   `SeriesDescription`, `SeriesNumber` is attribute access, no file I/O or pixel
+   load — so the filter is cheap even for many series. Label =
+   `str(SeriesDescription)` + ` #` + `str(SeriesNumber)`, each guarded with
+   `getattr(ds, ..., "")`; fall back to `series_key` when both are empty
+   (resolves review r3 item 7). Returns the parallel `(requests, labels)` lists.
+   "Add folder…" appends folder-path pseudo-entries resolved to a
+   `QARequest.folder_path` run (label = folder basename).
 2. **Worker** `QACTBatchWorker` in `worker.py`:
    - **Concurrency: serial** (confirmed acceptable). Rationale: process-based
      parallelism is the only worthwhile kind (thread-based is unsafe because
@@ -194,12 +266,15 @@ metadata). The worker copies `series_labels` straight into `CTBatchResult.run_la
 3. **Facade + dialog:** `open_acr_ct_batch_analysis` in `QAAppFacade`
    (progress dialog updated on `series_completed`; **no per-series modal** — all
    failures collected into the final dialog). New
-   `src/gui/dialogs/ct_batch_result_dialog.py`, **modeled on the existing
-   `src/gui/dialogs/mri_compare_result_dialog.py`** (confirmed present) — a
-   `create_ct_batch_result_dialog(...)` factory with a `QTableWidget`
-   (series × key metrics incl. the CNR block + status/warnings) and separate
-   XLSX / JSON export buttons. The XLSX button calls `build_qa_workbook`
-   directly (Feature 3), reused rather than reimplemented.
+   `src/gui/dialogs/ct_batch_result_dialog.py`. **Borrow the scaffolding
+   (factory shape, `QTableWidget` + export-button row, window chrome) from
+   `src/gui/dialogs/mri_compare_result_dialog.py`, but NOT its semantics**
+   (resolves review r3 item 6): the MRI dialog is a side-by-side *compare* view;
+   this is a *batch summary* — **one row per series**, columns = series label,
+   status/warnings, and the key CNR block (object mean / bg mean / bg σ / CNR).
+   A `create_ct_batch_result_dialog(...)` factory with separate XLSX / JSON
+   export buttons. The XLSX button calls `build_qa_workbook` directly
+   (Feature 3), reused rather than reimplemented.
 4. **Signal wiring:** new `acr_ct_batch_requested` signal on the QA main window
    (no payload — the dialog resolves the selection), wired in
    `main_window_menu_builder.py` / `app_signal_wiring.py` beside the existing
@@ -216,26 +291,48 @@ from `qa_export.py`. Rationale: `qa_export.py` stays light (stdlib `csv`/`json`
 only); `qa_xlsx_export.py` isolates the heavier `openpyxl` + `Pillow` imports and
 the image-embed logic. Both remain Qt-free.
 
-1. `build_qa_workbook(results: list[QAResult], labels: list[str] | None, ...)`.
-   Single-run passes a 1-element list; batch passes N. Sheets:
+1. `build_qa_workbook(results: list[QAResult], labels: list[str] | None = None, *, app_version: str = "") -> Workbook`
+   (returns an `openpyxl.Workbook`; the caller saves it, so the builder stays
+   pure/Qt-free and testable via an in-memory round-trip). Single-run passes a
+   1-element list; batch passes N. `labels`, when given, must be parallel to
+   `results`; when `None`, fall back to `series_uid` per row. Sheets:
    - **Summary** — one row per run/series, first column **Series/Run ID**
-     (label or `series_uid`), then metrics incl. CNR intermediates.
-   - **Per-run detail** — flat metric rows reusing the `_flatten` output shape.
+     (label or `series_uid`), then key columns pulled from
+     `metrics["low_contrast_cnr"]` (see canonical shape in F1): object ROI mean
+     (avg of `object_rois[*].mean`), `background.mean`, `background.std`,
+     `cnr` — plus status and a joined warnings cell. Use `.get()` throughout;
+     blank cell when a key is absent.
+   - **Per-run detail** — flat metric rows. **Reuse `qa_export._flatten`**
+     (`src/qa/qa_export.py:98`) over `result.metrics` for the exact dotted-key /
+     list-join shape the CSV export already produces; one detail block per run,
+     separated by the Series/Run ID.
    - **Images** — one embedded PNG per run, each preceded by its Series/Run ID
      label cell (stacked vertically).
+   - **Import note:** `_flatten` is currently module-private; the F3 agent may
+     import it as `from qa.qa_export import _flatten` (same-package internal
+     reuse) rather than duplicating it.
 2. **Image lifecycle + ownership (resolves review r2 item 6).** `run_acr_ct_analysis`
    is a pure function that constructs the analyzer internally and lets it go out
    of scope — **the worker never sees the analyzer**, so it cannot call
    `save_analyzed_image` itself. Ownership split:
    - **Input:** add a **transient input** field
-     `QARequest.analyzed_image_out_path: str | None = None`. When set, the
-     runner calls `analyzer.save_analyzed_image(that_path)` right after
-     `analyze()` (same place F1 harvests CNR — all analyzer access stays inside
-     the runner), guarded in try/except, and echoes it onto the result.
+     `QARequest.analyzed_image_out_path: str | None = None` to the `QARequest`
+     dataclass (`src/qa/analysis_types.py:449`, e.g. after
+     `output_pdf_path` at line 457). When set, the runner calls
+     `analyzer.save_analyzed_image(that_path)` right after `analyze()` in
+     `run_acr_ct_analysis` (`src/qa/pylinac_acr_ct.py`, same block where F1 now
+     calls `_extract_low_contrast_cnr_details` — all analyzer access stays inside
+     the runner), guarded in try/except, and echoes the path onto the result.
    - **Output:** add a **transient, non-serialized** field
-     `QAResult.analyzed_image_path: str | None = None` (review r1 item 1) — a
-     local filesystem artifact, **not** emitted by the JSON/CSV builders (those
-     name fields explicitly, so it never leaks into exports).
+     `QAResult.analyzed_image_path: str | None = None` to the `QAResult`
+     dataclass (`src/qa/analysis_types.py:493`, after
+     `pylinac_analysis_profile` at line 509) — a local filesystem artifact.
+     **Leak-safety is already guaranteed:** `build_single_run_document`
+     (`src/qa/qa_export.py:69-92`) and `build_metrics_csv` (line 112, via
+     `_flatten` over `result.metrics` only) both name their fields explicitly and
+     never reflect arbitrary `QAResult` attributes, so a new field cannot leak
+     into JSON/CSV. Add a `test_qa_xlsx_export` assertion that neither export
+     contains the image path as a regression guard.
    - **Temp-dir owner:** the **caller** (`QAAppFacade` for single run;
      `QACTBatchWorker` for batch) creates one `tempfile.TemporaryDirectory`,
      puts a unique PNG path per run into `analyzed_image_out_path`, and keeps the
@@ -291,5 +388,7 @@ fix folded in.
   document). Decision: document `raw_pylinac` in the schema as an **opaque,
   pylinac-version-dependent passthrough** (not a stable contract) **and** bump the
   single-run `schema_version` to **"1.3"** to signal the change to any consumer.
+  (Review r3 item 15 recommended "1.2"; rejected — "1.2" is already taken by the
+  MRI compare document, so "1.3" avoids the collision.)
   Update the one place that reads `raw_pylinac` (none internally today beyond the
   dump) and the schema note in `qa_export.py`.
