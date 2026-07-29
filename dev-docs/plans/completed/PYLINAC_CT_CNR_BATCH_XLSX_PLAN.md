@@ -242,7 +242,7 @@ metadata). The worker copies `series_labels` straight into `CTBatchResult.run_la
    already-loaded in-memory pydicom objects — reading `Modality`,
    `SeriesDescription`, `SeriesNumber` is attribute access, no file I/O or pixel
    load — so the filter is cheap even for many series. Label =
-   `str(SeriesDescription)` + ` #` + `str(SeriesNumber)`, each guarded with
+   `str(SeriesDescription)` + `" #"` + `str(SeriesNumber)`, each guarded with
    `getattr(ds, ..., "")`; fall back to `series_key` when both are empty
    (resolves review r3 item 7). Returns the parallel `(requests, labels)` lists.
    "Add folder…" appends folder-path pseudo-entries resolved to a
