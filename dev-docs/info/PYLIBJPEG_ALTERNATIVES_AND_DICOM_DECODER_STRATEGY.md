@@ -2,9 +2,10 @@
 
 Last updated: 2026-07-29
 
-> **Execution:** this note is the *options analysis*. The actionable, phased spike (corpus,
-> golden-reference hash-diff, decision gates, productionization) is
-> [`DECODER_REPLACEMENT_SPIKE_PLAN.md`](../plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md).
+> **Execution:** this note is the *options analysis*. The completed corpus/decision work is in
+> [`DECODER_REPLACEMENT_SPIKE_PLAN.md`](../plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md);
+> the actionable implementation work is in
+> [`GDCM_DECODER_PRODUCTIONIZATION_PLAN.md`](../plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md).
 
 ## Purpose
 
@@ -40,10 +41,12 @@ Primary references checked while writing this note:
 
 The spike completed the staged decision: Pillow-only was rejected because it lost JPEG
 Lossless and some JPEG Extended coverage; `python-gdcm` was selected. GDCM had no new failures
-against the 42-file golden corpus and produced bit-exact lossless output. Production work remains
-before the commercial blocker is closed: the PyInstaller native-library check, the synthetic
-no-color-transform JPEG investigation, dependency/spec changes, user messaging/provenance,
-license-gate cleanup, and committed regression coverage.
+against the 42-file golden corpus and produced bit-exact lossless output. DCMTK and dcm4che now
+independently agree with GDCM on the synthetic marker-less RGB `.50` behavior and a valid 12-bit
+JPEG Extended `.51` fixture; the former GPL decoder differs on both. The reviewed expanded
+synthetic fixture matrix is now admitted. Production work remains before the commercial blocker is
+closed: the PyInstaller native-library check, the dependency/spec changes, native-diagnostic
+cleanup, user messaging/provenance, license-gate cleanup, and release verification.
 
 Use **GDCM as the one replacement for `pylibjpeg-libjpeg`**. Do not combine it with a custom
 PyTurboJPEG implementation. Pillow remains an ordinary pydicom fallback, while the existing
@@ -132,6 +135,9 @@ Low implementation effort if paired with Pillow-only testing. Medium product ris
 - GDCM may add significant bundle size.
 - It may still impose notice/relink/source-availability obligations depending on the exact package/license path. This is not a "no compliance work" option.
 - Decoder output can differ from `pylibjpeg-libjpeg`; quantitative and color-image checks are still required.
+- Successful 12-bit JPEG Extended decoding with the validated wheel currently writes a native
+  diagnostic even though pixels match DCMTK/dcm4che. Treat elimination or safe suppression of that
+  output as a release criterion, not as a harmless cosmetic issue.
 
 ### How easy is it?
 
@@ -246,6 +252,12 @@ For each sample record:
 - pixel hash or tolerance-based comparison to a trusted decoder,
 - visual smoke result.
 
+**Status 2026-07-29:** the in-repo generator now creates wholly synthetic `.50`, valid 12-bit
+`.51`, `.57`, `.70`, JPEG-LS, JPEG 2000, RLE, and uncompressed controls. Lossless fixtures are
+checked against deterministic source patterns; `.50` and `.51` use DCMTK+dcm4che-confirmed GDCM
+reference pixels. Human visual review and reviewed-asset hashes were completed on 2026-07-29; see
+the productionization plan for the exact contract.
+
 ## Implementation guardrails
 
 - Keep decoder detection in a focused core module rather than scattering string checks for `pylibjpeg`.
@@ -256,11 +268,10 @@ For each sample record:
 
 ## Next steps (post-spike)
 
-1. Validate GDCM native-library discovery and corpus decoding from a PyInstaller build; record the bundle-size delta.
-2. Resolve the synthetic no-color-transform `.50` JPEG color-space difference and preserve it as a regression guard if applicable.
-3. Replace `pylibjpeg-libjpeg` with `python-gdcm` in requirements and the PyInstaller specification; retain the other non-GPL decoder plugins.
-4. Add capability-aware user messaging and decoder-backend/version provenance.
-5. Remove the GPL exception, add committed non-PHI regression fixtures, and run the release verification suite.
+1. Resolve the successful `.51` GDCM native diagnostic before shipping it as a normal decode path.
+2. Validate GDCM native-library discovery and corpus decoding from a PyInstaller build; record the bundle-size delta.
+3. Replace `pylibjpeg-libjpeg` with the evidence-backed `python-gdcm` pin in requirements and the PyInstaller specification; retain the other non-GPL decoder plugins.
+4. Add capability-aware user messaging and decoder-backend/version provenance, remove the GPL exception, and run the release verification suite.
 
 ## Decoder options landscape & licenses (2026-06-14 spike findings)
 

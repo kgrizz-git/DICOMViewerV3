@@ -1,25 +1,53 @@
-"""Structural checks for the committed synthetic RGB JPEG decoder fixture."""
+"""Structural and decode checks for wholly synthetic decoder fixtures."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 from pathlib import Path
 
 import pydicom
+import pytest
 from pydicom.encaps import generate_pixel_data_frame
 from pydicom.uid import JPEGBaseline8Bit
 
 _ROOT = Path(__file__).resolve().parent.parent
-_FIXTURE = _ROOT / "tests" / "fixtures" / "dicom_decoder" / "synthetic_rgb_no_color_markers_jpeg_baseline.dcm"
+_FIXTURE_DIR = _ROOT / "tests" / "fixtures" / "dicom_decoder"
+_FIXTURE = _FIXTURE_DIR / "synthetic_rgb_no_color_markers_jpeg_baseline.dcm"
 _GENERATOR = _ROOT / "tests" / "scripts" / "generate_decoder_color_fixture.py"
 _SPEC = importlib.util.spec_from_file_location("generate_decoder_color_fixture", _GENERATOR)
 assert _SPEC and _SPEC.loader
 _generator = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_generator)
 
+_MONOCHROME_FIXTURES = {
+    "synthetic_monochrome_uncompressed_12_bit.dcm": "1.2.840.10008.1.2.1",
+    "synthetic_monochrome_uncompressed_16_bit.dcm": "1.2.840.10008.1.2.1",
+    "synthetic_monochrome_jpeg_extended_12_bit.dcm": "1.2.840.10008.1.2.4.51",
+    "synthetic_monochrome_jpeg_lossless_p14.dcm": "1.2.840.10008.1.2.4.57",
+    "synthetic_monochrome_jpeg_lossless_sv1.dcm": "1.2.840.10008.1.2.4.70",
+    "synthetic_monochrome_jpegls_lossless.dcm": "1.2.840.10008.1.2.4.80",
+    "synthetic_monochrome_jpeg2000_lossless_16_bit.dcm": "1.2.840.10008.1.2.4.90",
+    "synthetic_monochrome_rle_lossless.dcm": "1.2.840.10008.1.2.5",
+}
+_LOSSLESS_PIXEL_HASHES = {
+    "synthetic_monochrome_uncompressed_12_bit.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
+    "synthetic_monochrome_uncompressed_16_bit.dcm": "f5ca7eb45ebf49f510773f1fb5a4edb8978a7116a4116d0bebe0d4f5e79d0332",
+    "synthetic_monochrome_jpeg_lossless_p14.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
+    "synthetic_monochrome_jpeg_lossless_sv1.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
+    "synthetic_monochrome_jpegls_lossless.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
+    "synthetic_monochrome_jpeg2000_lossless_16_bit.dcm": "f5ca7eb45ebf49f510773f1fb5a4edb8978a7116a4116d0bebe0d4f5e79d0332",
+    "synthetic_monochrome_rle_lossless.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
+}
+_GDCM_REFERENCE_HASHES = {
+    "synthetic_rgb_no_color_markers_jpeg_baseline.dcm": "9d2130c830f7b173b355f25270a9eacbac1f5045acebd757a7f9264a1ef03c28",
+    "synthetic_monochrome_jpeg_extended_12_bit.dcm": "8cb01fc3dac525da7d1868dfb1b8aaf8524f75dbf226712c579eb0f226a1b6dc",
+}
 
-def test_synthetic_decoder_fixture_has_no_identifying_values() -> None:
-    dataset = pydicom.dcmread(_FIXTURE, stop_before_pixels=True)
+
+@pytest.mark.parametrize("filename", [_FIXTURE.name, *_MONOCHROME_FIXTURES])
+def test_synthetic_decoder_fixtures_have_no_identifying_values(filename: str) -> None:
+    dataset = pydicom.dcmread(_FIXTURE_DIR / filename, stop_before_pixels=True)
 
     assert str(dataset.PatientName) == ""
     assert dataset.PatientID == ""
@@ -50,3 +78,52 @@ def test_synthetic_decoder_fixture_decodes_to_color_pixels() -> None:
 
     assert pixels.shape == (48, 64, 3)
     assert pixels.dtype.name == "uint8"
+
+
+@pytest.mark.parametrize("filename, transfer_syntax", _MONOCHROME_FIXTURES.items())
+def test_synthetic_monochrome_decoder_matrix_has_expected_structure(
+    filename: str, transfer_syntax: str
+) -> None:
+    dataset = pydicom.dcmread(_FIXTURE_DIR / filename, stop_before_pixels=True)
+
+    assert str(dataset.file_meta.TransferSyntaxUID) == transfer_syntax
+    assert dataset.PhotometricInterpretation == "MONOCHROME2"
+    assert dataset.SamplesPerPixel == 1
+    assert dataset.BitsAllocated == 16
+    assert dataset.BitsStored in {12, 16}
+    assert dataset.HighBit == dataset.BitsStored - 1
+    assert dataset.BurnedInAnnotation == "NO"
+
+
+@pytest.mark.parametrize("filename, expected_hash", _LOSSLESS_PIXEL_HASHES.items())
+def test_synthetic_lossless_decoder_matrix_matches_known_source(
+    filename: str, expected_hash: str
+) -> None:
+    pixels = pydicom.dcmread(_FIXTURE_DIR / filename).pixel_array
+
+    assert pixels.shape == (48, 64)
+    assert pixels.dtype.name == "uint16"
+    assert hashlib.sha256(pixels.tobytes()).hexdigest() == expected_hash
+
+
+def test_synthetic_jpeg_extended_fixture_decodes_as_12_bit_grayscale() -> None:
+    dataset = pydicom.dcmread(_FIXTURE_DIR / "synthetic_monochrome_jpeg_extended_12_bit.dcm")
+    pixels = dataset.pixel_array
+
+    assert pixels.shape == (48, 64)
+    assert pixels.dtype.name == "uint16"
+    assert int(pixels.min()) >= 0
+    assert int(pixels.max()) <= 4095
+
+
+def test_gdcm_reference_pixels_when_gdcm_is_the_available_handler() -> None:
+    """Pin independently confirmed GDCM output without requiring GDCM pre-swap."""
+    from pydicom.pixel_data_handlers import gdcm_handler
+
+    if not gdcm_handler.is_available():
+        pytest.skip("GDCM is intentionally absent until the GPL decoder replacement lands")
+
+    for filename, expected_hash in _GDCM_REFERENCE_HASHES.items():
+        dataset = pydicom.dcmread(_FIXTURE_DIR / filename)
+        assert gdcm_handler.supports_transfer_syntax(dataset.file_meta.TransferSyntaxUID)
+        assert hashlib.sha256(dataset.pixel_array.tobytes()).hexdigest() == expected_hash

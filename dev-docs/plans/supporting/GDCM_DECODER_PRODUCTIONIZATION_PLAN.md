@@ -1,6 +1,6 @@
 # GDCM Decoder Productionization & Independent Validation Plan
 
-**Status:** In progress — synthetic color-edge fixture generated; human asset review and productionization pending  
+**Status:** In progress — independent color decision and reviewed synthetic fixture matrix complete; productionization pending
 **Last updated:** 2026-07-29  
 **Priority:** P0 — commercial-release Tier 0 blocker  
 **Branch:** `plan/gdcm-decoder-productionization`  
@@ -16,9 +16,10 @@ failures against the 42-file private corpus and produced bit-exact results for l
 Pillow-only was rejected because it lost JPEG Lossless (`.57`/`.70`) and some JPEG Extended (`.51`)
 coverage.
 
-This plan turns that selection into a shipped, validated dependency change. It also resolves the
-one remaining color-semantics question: a synthetic JPEG Baseline `.50` fixture without an APP14
-color-transform marker produces different colors with GDCM and the former GPL decoder.
+This plan turns that selection into a shipped, validated dependency change. It has resolved the
+remaining color-semantics question: a synthetic JPEG Baseline `.50` fixture without an APP14
+color-transform marker produces different colors with GDCM and the former GPL decoder; GDCM's
+result matches two independent DICOM implementations.
 
 **Target runtime decoder set**
 
@@ -49,7 +50,9 @@ This blocker is complete only when all of the following are true:
    corpus; their bundle-size deltas are recorded.
 5. Runtime errors name the unsupported transfer syntax without advising a user to install a GPL
    package. Decoder backend and version are available in privacy-safe diagnostics.
-6. Committed tests use only reviewed, wholly synthetic, non-PHI fixtures. The dependency license
+6. Expected successful decode does not write unreviewed native diagnostics to stdout/stderr or a
+   user-visible surface; failures remain privacy-safe and identify only the transfer syntax.
+7. Committed tests use only reviewed, wholly synthetic, non-PHI fixtures. The dependency license
    gate passes with no `pylibjpeg-libjpeg` exception.
 
 ## Scope, evidence, and non-goals
@@ -71,8 +74,24 @@ This blocker is complete only when all of the following are true:
 - **Initial validator result (2026-07-29):** DCMTK 3.7.0 with `+cn` and pydicom 3.0.2's GDCM
   handler produced exactly the same decoded pixels for the synthetic fixture. The current GPL
   handler produced a different result. This supports GDCM honoring the fixture's explicit RGB
-  semantics; retain dcm4che/fo-dicom as tie-breakers if later platform or standards evidence
-  conflicts.
+  semantics.
+- **Independent confirmation (2026-07-29):** dcm4che 5.34.3 `dcm2dcm` and DCMTK 3.7.0
+  `dcmdjpeg +cn` each decompressed the marker-less RGB `.50` fixture to the exact same raw-pixel
+  SHA-256 as pydicom 2.4.5 + GDCM 3.2.6. The former GPL handler produced a different hash.
+  dcm4che's separately rendered lossless PNG was also produced successfully. This satisfies the
+  two-independent-implementation rule for raw samples; fo-dicom is not needed unless a later
+  platform result conflicts.
+- **Valid 12-bit `.51` check (2026-07-29):** a reviewed in-repository fixture uses a libjpeg-turbo 3.2.0
+  `cjpeg -precision 12` SOF1 frame, not a GDCM-encoded frame. pydicom 2.4.5 + GDCM 3.2.6,
+  dcm4che 5.34.3, and DCMTK 3.7.0 agree exactly. The former GPL handler differs by at most two
+  sample values (285/3072 pixels; mean absolute difference 0.099609). This is a decoder
+  comparison result, not a clinical-accuracy claim.
+- **Runtime-line compatibility (2026-07-29):** `python-gdcm` 3.2.6 registered and decoded the
+  complete synthetic matrix with the application's pydicom 2.4.5 line under isolated CPython
+  3.11.15 and 3.12.10 macOS/arm64 environments. Windows and Linux packaging validation remains
+  required. The `.51` decode currently emits a native `Unsupported JPEG data precision 12`
+  diagnostic even though it returns the independently confirmed pixels; this must be investigated
+  or safely suppressed before release (Completion criterion 6).
 
 ### Non-goals
 
@@ -133,12 +152,16 @@ the **raw decoded samples** and the **display-ready RGB result**, recording meta
 
 ## Phase 0 — Reproducible validation setup
 
-- [ ] Record the target release matrix: Python 3.11 for current PyInstaller builds and Python
-      3.12 for CI tests; macOS, Windows, and Linux packaging targets.
-- [ ] Create isolated, disposable validation environments outside the repository for DCMTK and
-      dcm4che. Pin and record their versions in a safe local report. **Partial (2026-07-29):**
-      DCMTK 3.7.0 installed locally; dcm4che remains to be set up.
-- [ ] Confirm the chosen DCMTK package exposes `dcmdjpeg` and `dcm2img`; confirm pydicom 3 plus
+- [ ] Record the final target release matrix: Python 3.11 and 3.12; macOS, Windows, and Linux
+      packaging targets. **Partial (2026-07-29):** the exact application compatibility line
+      (`pydicom==2.4.5`, `python-gdcm==3.2.6`) works on isolated macOS/arm64 CPython 3.11.15 and
+      3.12.10 environments. Validate Windows and Linux wheels, then pin the selected version
+      before editing release requirements.
+- [x] Create isolated, disposable validation environments outside the repository for DCMTK and
+      dcm4che. Pin and record their versions in a safe local report. **Done 2026-07-29:** DCMTK
+      3.7.0 and dcm4che 5.34.3 ran locally outside the repository; dcm4che used OpenJDK 26 plus
+      its official Maven artifacts and matching macOS native library.
+- [x] Confirm the chosen DCMTK package exposes `dcmdjpeg` and `dcm2img`; confirm pydicom 3 plus
       imagecodecs exposes a decoder for the exact JPEG Baseline UID before relying on either.
       **Result (2026-07-29):** pydicom 3.0.2 exposes no imagecodecs decoder plugin for `.50`,
       so it is not a DICOM-aware reference candidate; use dcm4che instead.
@@ -147,6 +170,9 @@ the **raw decoded samples** and the **display-ready RGB result**, recording meta
 - [ ] Extend `scripts/decoder_corpus_report.py` only if it can record a requested backend without
       changing normal application behavior; otherwise keep validation helpers under `scripts/` as
       standalone, documented tooling.
+- [ ] Add a focused frozen-executable smoke runner that accepts only the committed synthetic
+      fixture directory, emits transfer syntax/backend/version plus hashes and aggregate metrics,
+      and returns non-zero for a missing handler, unexpected stdout/stderr, or a reference mismatch.
 
 **Gate 0:** every validator runs from its isolated environment, no validation output is staged,
 and the test file’s synthetic provenance is recorded.
@@ -159,41 +185,108 @@ and the test file’s synthetic provenance is recorded.
       reviewed-asset manifest updated.
 - [x] Decode the fixture with the GDCM candidate and independent DCMTK using `+cn` (do not infer
       YCbCr); the decoded arrays match exactly. **Done 2026-07-29.**
-- [ ] Read and safely record the fixture's transfer syntax and Image Pixel attributes needed for
+- [x] Read and safely record the fixture's transfer syntax and Image Pixel attributes needed for
       color interpretation: Samples per Pixel, Photometric Interpretation, Bits Allocated/Stored,
-      Planar Configuration, and any relevant encapsulated JPEG markers.
-- [ ] Use DCMTK to decode the source without an implicit presentation/display transform and,
+      Planar Configuration, and any relevant encapsulated JPEG markers. **Done 2026-07-29:** the
+      source is `.50`, RGB, 8-bit, planar 0, three RGB component IDs, and no APP0/APP14 marker.
+- [x] Use DCMTK to decode the source without an implicit presentation/display transform and,
       separately, to render/convert it according to its documented color option. Verify the exact
-      behavior from the installed tool's help/version rather than assuming flags.
-- [ ] Use dcm4che to decode raw samples and display-ready samples separately; record its returned
+      behavior from the installed tool's help/version rather than assuming flags. **Raw decode done
+      2026-07-29:** `dcmdjpeg +cn` matches GDCM exactly; retain command/output capture in the
+      validation runner.
+- [x] Use dcm4che to decode raw samples and display-ready samples separately; record its returned
       color-space metadata and aggregate difference metrics. Validate its exact options from the
-      installed distribution before relying on them.
+      installed distribution before relying on them. **Raw decode done 2026-07-29:** dcm4che 5.34.3
+      `dcm2dcm` matches both DCMTK and GDCM exactly; `dcm2jpg --usedis -F PNG` rendered a lossless
+      RGB PNG. Preserve this invocation in the validation runner rather than treating its PNG file
+      bytes as a raw-pixel comparison.
 - [ ] Optionally use direct imagecodecs after frame extraction to compare JPEG-codec output. It
       has no DICOM metadata context and cannot by itself resolve Photometric Interpretation.
 - [ ] Use libjpeg-turbo on the extracted synthetic JPEG frame to establish what the codestream
       itself signals. Treat this as marker/codec evidence only because it has no DICOM context.
-- [ ] Compare all outputs to the current GDCM and historical baseline results: exact hashes when
+- [x] Compare all outputs to the current GDCM and historical baseline results: exact hashes when
       representations match, otherwise max/mean absolute difference, changed-pixel proportion,
-      and a visual check of the wholly synthetic color pattern.
+      and a visual check of the wholly synthetic color pattern. **Done 2026-07-29:** DCMTK,
+      dcm4che, and GDCM agree for `.50` RGB and valid `.51` 12-bit grayscale fixtures; the old GPL
+      output differs for both. The `.51` delta is max 2, 285/3072 changed, mean 0.099609.
 - [ ] Write the conclusion, applicable standard rationale, expected raw representation, and
       expected display representation in the decoder strategy document and a regression-test
       comment. If GDCM is correct, retain it unchanged; otherwise define the smallest
       standards-conformant conversion step and obtain review before implementation.
 
-**Gate 1:** two independent DICOM-aware decoders agree, or an explicit review resolves a
-standards-backed disagreement. A match only to the old GPL decoder is insufficient.
+**Gate 1:** **Satisfied for raw samples on 2026-07-29.** DCMTK and dcm4che agree with GDCM on the
+marker-less RGB `.50` fixture, and DCMTK/dcm4che also agree with GDCM on a valid independently
+encoded 12-bit `.51` fixture. A match only to the old GPL decoder is insufficient. Retain fo-dicom
+as a tie-breaker only if a platform-specific result conflicts.
+
+### Compatibility and pin-decision checklist
+
+This is an execution checklist, not a second decision plan. Complete it immediately before editing
+`requirements.txt`.
+
+| Check | Required evidence | Current state |
+|---|---|---|
+| Runtime pair | Exact `pydicom` and `python-gdcm` versions, Python version, OS/architecture, and wheel origin | `pydicom==2.4.5` + `python-gdcm==3.2.6` passed on macOS/arm64 CPython 3.11.15 and 3.12.10; other release platforms pending |
+| Handler selection | `gdcm_handler.is_available()` and `supports_transfer_syntax()` for `.50`, `.51`, `.57`, `.70`; tests must not infer backend from an import alone | Verified for `.50`; add an application capability test for all at-risk UIDs |
+| Fixture matrix | All committed fixture hashes and shapes pass in a GDCM-only environment; lossless cases match their deterministic source patterns | Verified on macOS/arm64; add CI/frozen-runner invocation after dependency change |
+| Native diagnostics | A successful decode produces no unexpected process stderr/stdout and no user-facing raw library message | **Open:** successful `.51` decode emits `Unsupported JPEG data precision 12`; investigate the GDCM/pydicom path and suppress or eliminate it safely |
+| Release pin | Version is an exact, evidence-backed release pin at first shipment; upgrades follow the dependency-bump verification plan | Pending license, wheel, and frozen-build evidence |
+
+Do not use a pydicom 3/imagecodecs result to satisfy this checklist: the shipped dependency line is
+currently pydicom 2.x. Conversely, do not widen this task into a pydicom/pylinac upgrade merely
+because that future option exists.
+
+### Regression-test contract
+
+The source-controlled target suite is intentionally smaller than the private corpus but independently reproducible:
+
+| Fixture family | Expected assertion | Why it catches the relevant regression |
+|---|---|---|
+| RGB `.50` without APP0/APP14 | GDCM raw-pixel SHA-256 `9d2130…a1ef03c28`; RGB metadata/component IDs and no marker | Detects incorrect YCbCr inference or an unintended conversion |
+| Valid 12-bit JPEG Extended `.51` | GDCM/DCMTK/dcm4che raw-pixel SHA-256 `8cb01f…6a1b6dc`; shape/dtype/range | Detects an unavailable 12-bit decoder or different lossy rounding path |
+| JPEG Lossless `.57` and `.70` | Exact deterministic 12-bit source SHA-256 | Detects silent lossless corruption |
+| JPEG-LS, JPEG 2000, RLE, uncompressed controls | Exact 12- or 16-bit source SHA-256 | Proves the retained non-classic handlers did not regress |
+| Private corpus | Exact hashes for lossless; safe aggregate tolerances for lossy; no new failure | Preserves representative real-world coverage without committing private data |
+
+`tests/test_synthetic_decoder_fixture.py` performs structural/privacy checks, exact lossless checks
+in every supported environment, and GDCM-specific expected-output checks only when GDCM is
+installed. The human review and reviewed-asset hashes for the fixture matrix were completed on
+2026-07-29. After the requirements swap, the GDCM-specific checks must run rather than skip. The
+frozen runner must reuse the same fixture set and expected values; do not duplicate golden values in
+a separate undocumented script.
+
+### Frozen-build runbook
+
+For **each** macOS, Windows, and Linux release target:
+
+1. Create a clean build environment from the final locked requirements. Record only Python/OS/CPU,
+   package versions, wheel filenames/hashes, and GDCM handler availability.
+2. Run the focused fixture suite in that environment, then build the application using the final
+   PyInstaller specification. Record pre/post bundle size with the same build mode.
+3. Run the frozen executable's synthetic-fixture smoke runner, not Python from the build venv. It
+   must report transfer syntax, decoder backend/version, shape/dtype, expected-hash result, and
+   safe aggregate difference metrics only; no paths, identifiers, pixels, or raw exceptions.
+4. Confirm all committed fixtures decode as specified, the private corpus has no unreviewed failure,
+   and a successful `.51` decode has no native console diagnostic.
+5. Inspect the packaged dependency manifest/binary inventory for `pylibjpeg-libjpeg` and its
+   `libjpeg` plugin. Neither may be present. Capture required GDCM notices before release.
+
+Any Windows/Linux loader failure, platform output mismatch, unexpected native output, or GPL binary
+found in the bundle blocks the swap; it is not a reason to silently add the old decoder back.
 
 ## Phase 2 — Package GDCM safely
 
-- [ ] Add `python-gdcm` to `requirements.txt` with an evidence-backed compatible version/range;
-      remove `pylibjpeg-libjpeg`.
+- [ ] Add `python-gdcm` to `requirements.txt` as the exact version selected by the compatibility
+      checklist (start from the validated `3.2.6` wheel unless later evidence requires a different
+      version); remove `pylibjpeg-libjpeg`. Do not change pydicom's major version in this batch.
 - [ ] Update `DICOMViewerV3.spec` hidden imports, binaries, and data collection based on the
       actual `python-gdcm` wheel contents. Remove the `libjpeg` hidden import that existed only
       for `pylibjpeg-libjpeg`; do not guess native-library paths.
 - [ ] Build from a clean environment on macOS, Windows, and Linux. For each bundle, use the
       packaged executable—not the build venv—to run a privacy-safe corpus-decode check.
 - [ ] Record application startup, corpus result, selected backend/version, and before/after bundle
-      size. Investigate any platform-specific loader failure before changing the decoder choice.
+      size. Investigate any platform-specific loader failure or successful-decode native stderr
+      before changing the decoder choice.
 - [ ] Review the exact GDCM license/notices and dynamic-library distribution obligations with the
       license-compliance plan; do not treat the engineering result as legal advice.
 
@@ -210,7 +303,8 @@ GPL `pylibjpeg-libjpeg` dependency.
 - [ ] Record selected decoder backend and version through existing privacy-safe debug diagnostics
       and future About/System Info surfaces. Keep all debug flags false by default.
 - [ ] Add regression tests for: available classic JPEG decode; lossless exactness; expected
-      color-edge result; unsupported syntax messaging; and no GPL-install recommendation.
+      color-edge and 12-bit Extended results; unsupported syntax messaging; no GPL-install
+      recommendation; and absence of native decoder output during an expected successful decode.
 - [ ] Confirm JPEG 2000, JPEG-LS, RLE, uncompressed, multi-frame, RGB/YBR, ROI/statistics, and
       export paths still work with the final plugin set.
 
@@ -239,8 +333,9 @@ non-classic decoder paths retain coverage.
 | `DICOMViewerV3.spec` | Package actual GDCM native libraries; remove old `libjpeg` hidden import |
 | `src/core/` | Decoder capability and safe unsupported-syntax messaging |
 | `src/utils/` / About-System Info | Privacy-safe backend/version provenance |
-| `scripts/` | Optional isolated validation/corpus runner with safe output rules |
-| `tests/` | Non-PHI decoder and messaging regression coverage |
+| `scripts/` | Isolated validation/corpus runner and frozen-fixture smoke runner with safe output rules |
+| `tests/` | Non-PHI decoder, fixture provenance, expected-output, and messaging regression coverage |
+| `tests/scripts/` and `tests/fixtures/dicom_decoder/` | Deterministic fixture generators, reviewed source patterns, and fixture contract |
 | `dev-docs/info/dependency_license_policy.json` | Remove GPL exception |
 | License, strategy, readiness, and changelog docs | Record dependency and validation outcome |
 
@@ -259,8 +354,10 @@ python scripts/git_hook_privacy_checks.py --staged
 python scripts/git_hook_privacy_checks.py --all --critical
 ```
 
-Run the blocked frozen-build and corpus validation separately on each target platform, with
-reports outside the checkout. A scanner `SKIP` is not a passing result.
+Run the blocked frozen-build and corpus validation separately on each target platform using the
+frozen-build runbook, with reports outside the checkout. Run the artifact gate and isolated DICOM
+privacy-review lane for every newly generated or changed fixture; a scanner `SKIP` is not a passing
+result.
 
 ## Linked records
 

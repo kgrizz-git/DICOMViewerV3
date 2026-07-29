@@ -216,6 +216,23 @@ same `--baseline` diff:
   `jpeg_lossless_p14` = `.57`, `jpeg_lossless_sv1` = `.70`, `jpegls_lossless`, `jpeg2000*`, `rle`).
   Requires `python-gdcm` (tooling-only, not an app dependency).
 
+### 2026-07-29 — Independent color decision and reproducible synthetic matrix
+- **Independent tools:** DCMTK 3.7.0 and dcm4che 5.34.3 ran from isolated local validation
+  environments; neither is a runtime candidate. Both decompressed the wholly synthetic marker-less
+  RGB `.50` fixture to the exact GDCM raw-pixel hash under the application's pydicom 2.4.5 line.
+  The former GPL decoder produced a different hash.
+- **Valid `.51` fixture:** libjpeg-turbo 3.2.0 `cjpeg -precision 12` generated a valid 12-bit
+  JPEG Extended SOF1 frame independently of GDCM. GDCM, DCMTK, and dcm4che agree exactly; the
+  former GPL output differs by at most two values (285/3072 pixels; mean absolute difference
+  0.099609).
+- **Compatibility:** `python-gdcm` 3.2.6 registered with pydicom 2.4.5 and decoded the synthetic
+  matrix in isolated CPython 3.11.15 and 3.12.10 macOS/arm64 environments. Frozen Windows/Linux
+  builds remain unverified.
+- **Open production criterion:** expected `.51` decode currently emits a native diagnostic despite
+  returning the independently confirmed pixels. Resolve or safely suppress it before shipment.
+- **Fixture admission:** human visual review and reviewed-asset hashes for the expanded grayscale
+  matrix were completed on 2026-07-29.
+
 ### Decision Gate A/B — recommendation: **GDCM (Option C)**
 | | Pillow-only | **GDCM** |
 |---|---|---|
@@ -229,8 +246,10 @@ GDCM eliminates the coverage regression and is LGPL (compatible with the closed-
 **Recommended path: replace `pylibjpeg-libjpeg` with `python-gdcm`.** This is a single
 replacement for the GPL classic-JPEG plugin; retain the existing Pillow fallback and the
 separate JPEG 2000, JPEG-LS, and RLE plugins. Remaining before finalizing (Phases 4/6/7):
-- [ ] Validate the no-color-transform `.50` behavior — decide which decoder follows DICOM
-      `PhotometricInterpretation` correctly (likely GDCM); confirm real color JPEG is unaffected (it was here).
+- [x] Validate the no-color-transform `.50` behavior — DCMTK and dcm4che independently match
+      GDCM's raw RGB output for a wholly synthetic marker-less RGB fixture; the former GPL result
+      differs. **Done 2026-07-29;** details and the remaining production work are in the
+      [GDCM productionization plan](GDCM_DECODER_PRODUCTIONIZATION_PLAN.md).
 - [ ] **Frozen-build check** — confirm GDCM native libs load from a PyInstaller build (not just venv); record bundle-size delta.
 - [x] Source `.57` (JPEG Lossless process 14) and `.81` (JPEG-LS near-lossless) fixtures to close corpus gaps — completed 2026-06-14.
 - [ ] Then Phase 6 productionization (requirements swap, messaging, license-gate exception removal).
@@ -249,11 +268,10 @@ release, but do not change the recommendation (GDCM):
 2. ~~**`.57` and `.81` corpus fixtures.**~~ **DONE 2026-06-14** — `.57` generated via GDCM
    (`scripts/generate_decoder_fixtures.py`), `.81` downloaded from `pydicom-data`. Both verified
    and in the 42-file corpus.
-3. **No-color-transform `.50` investigation.** GDCM and `pylibjpeg-libjpeg` disagree by a large
-   margin on `SC_jpeg_no_color_transform.dcm` (YBR↔RGB interpretation when the APP14 marker is
-   absent). Real color baseline files matched bit-exact, so this is an edge case — but determine
-   which decoder correctly honors DICOM `PhotometricInterpretation`, and add a guard/test if real
-   data could hit it.
+3. ~~**No-color-transform `.50` investigation.**~~ **DONE 2026-07-29.** A wholly synthetic
+   marker-less RGB fixture was generated in-repo; DCMTK and dcm4che independently match GDCM's
+   raw output, while the former GPL result differs. The production plan retains fixture admission,
+   regression, and frozen-build requirements.
 4. **Wider real-world prevalence scan (optional).** The big MR/CT/PT/Fusion folders
    (7k–24k files) were not scanned for `.51/.57/.70` prevalence. Not needed for the GDCM path
    (GDCM covers them), but would quantify how much a Pillow-only fallback would have cost.
