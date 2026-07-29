@@ -31,14 +31,82 @@ _PYLINAC_IMAGE_INDEX_FAILURE_MARKERS = (
 
 
 def _jsonable(value: Any) -> Any:
-    """Best-effort conversion to JSON-friendly primitives."""
+    """Best-effort conversion to JSON-friendly primitives.
+
+    numpy scalars need explicit handling: on numpy 2.x, ``np.float64``
+    subclasses Python ``float`` (so it passes the ``isinstance`` gate below),
+    but ``np.float32`` / ``np.int64`` / ``np.int32`` do **not** — without the
+    coercion below those survive ``as_dict=True`` and get ``str()``-ified into
+    the JSON. numpy is an optional import, so the coercion is guarded.
+    """
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
+    try:
+        import numpy as np  # type: ignore[import-not-found]
+
+        if isinstance(value, np.integer):
+            return int(value)
+        if isinstance(value, np.floating):
+            return float(value)
+    except Exception:
+        pass
     if isinstance(value, (list, tuple)):
         return [_jsonable(v) for v in value]
     if isinstance(value, dict):
         return {str(k): _jsonable(v) for k, v in value.items()}
     return str(value)
+
+
+def _extract_low_contrast_cnr_details(analyzer: Any) -> dict[str, Any]:
+    """Harvest CNR intermediates from the live ACRCT low-contrast module.
+
+    Every access is guarded; missing/renamed attributes degrade to a partial
+    or empty dict rather than raising (pylinac minor-version drift).
+
+    pylinac 3.43.2 shapes (verified against installed source):
+      - lcm.rois / lcm.background_rois are dict[str, LowContrastDiskROI]
+        (ACR CT: single "ROI" key each) -> iterate .values(), NOT as a list.
+      - lcm.cnr is a METHOD (|A-B|/SD), not a property -> call lcm.cnr().
+      - LowContrastDiskROI: .mean, .std, .pixel_value, .contrast_to_noise.
+    """
+    out: dict[str, Any] = {}
+    lcm = getattr(analyzer, "low_contrast_module", None)
+    if lcm is None:
+        return out
+    try:
+        out["cnr"] = float(lcm.cnr())  # module-level CNR (method!)
+    except Exception:
+        pass
+    obj: list[dict[str, float]] = []
+    for roi in (getattr(lcm, "rois", {}) or {}).values():  # dict, not list
+        try:
+            obj.append(
+                {
+                    "mean": float(roi.mean),
+                    "pixel_value": float(roi.pixel_value),
+                    "contrast_to_noise": float(roi.contrast_to_noise),
+                }
+            )
+        except Exception:
+            continue
+    if obj:
+        out["object_rois"] = obj
+    bg_means: list[float] = []
+    bg_stds: list[float] = []
+    for roi in (getattr(lcm, "background_rois", {}) or {}).values():  # dict, not list
+        try:
+            bg_means.append(float(roi.mean))
+            bg_stds.append(float(roi.std))
+        except Exception:
+            continue
+    if bg_means:
+        out["background"] = {
+            "means": bg_means,
+            "stds": bg_stds,
+            "mean": sum(bg_means) / len(bg_means),  # aggregate noise floor
+            "std": sum(bg_stds) / len(bg_stds),
+        }
+    return out
 
 
 def _image_count(analyzer: Any, request: QARequest) -> int:
@@ -197,13 +265,33 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
 
         raw: dict[str, Any] = {}
         try:
-            rd = analyzer.results_data()
+            # as_dict=True returns a plain dict (structured), so the existing
+            # _jsonable pass still runs over it and preserves JSON-safety while
+            # keeping raw_pylinac structured instead of a stringified blob.
+            rd = analyzer.results_data(as_dict=True)
             if isinstance(rd, dict):
                 raw = _jsonable(rd)
             else:
                 raw = {"results_data": _jsonable(rd)}
         except Exception:
             raw = {}
+
+        # F1: harvest CNR intermediates (object mean, background mean/σ, module
+        # CNR) from the live analyzer — these are NOT all present in
+        # results_data(as_dict=True) (no background_rois / per-ROI std there).
+        low_contrast_cnr = _extract_low_contrast_cnr_details(analyzer)
+
+        # F3: save the analyzed composite image for XLSX embedding, if the
+        # caller opted in. The runner is the only place that touches the live
+        # analyzer, so this transient side effect stays here rather than in
+        # the worker/facade (see QARequest.analyzed_image_out_path).
+        analyzed_image_path: str | None = None
+        if request.analyzed_image_out_path:
+            try:
+                analyzer.save_analyzed_image(request.analyzed_image_out_path)
+                analyzed_image_path = request.analyzed_image_out_path
+            except Exception:
+                analyzed_image_path = None
 
         pdf_report_path: str | None = None
         if request.output_pdf_path:
@@ -225,6 +313,8 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         for key in ("num_images", "phantom_roll", "catphan_model", "origin_slice"):
             if key in raw:
                 metrics[key] = raw[key]
+        if low_contrast_cnr:
+            metrics["low_contrast_cnr"] = low_contrast_cnr
 
         ct_warnings: list[str] = []
         if warn_ignore_tol:
@@ -246,6 +336,7 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
             num_images=num_images,
             pylinac_version=py_ver,
             pylinac_analysis_profile=profile,
+            analyzed_image_path=analyzed_image_path,
         )
     except Exception as exc:
         err_text = f"ACR CT analysis failed: {exc}"

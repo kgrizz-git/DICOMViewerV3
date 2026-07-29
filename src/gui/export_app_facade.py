@@ -118,6 +118,22 @@ class ExportAppFacade:
             selected = dialog.selectedFiles()
             if selected:
                 path = selected[0]
+                _, ext = os.path.splitext(path)
+                if ext in ("", "."):
+                    if ext == ".":
+                        path = path[:-1]
+                    selected_filter = dialog.selectedNameFilter()
+                    if "*.xlsx" in selected_filter:
+                        path = f"{path}.xlsx"
+                    elif "*.json" in selected_filter:
+                        path = f"{path}.json"
+                    elif "*.csv" in selected_filter:
+                        path = f"{path}.csv"
+                    elif "*.png" in selected_filter:
+                        path = f"{path}.png"
+                    elif "*.pdf" in selected_filter:
+                        path = f"{path}.pdf"
+
                 if remember_pylinac_output_dir:
                     parent = os.path.dirname(os.path.abspath(path))
                     if parent:

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -32,9 +34,12 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox, QProgressDialog
 
 from gui.dialogs.acr_ct_qa_dialog import prompt_acr_ct_options
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
+from gui.dialogs.ct_batch_result_dialog import create_ct_batch_result_dialog
+from gui.dialogs.ct_batch_select_dialog import prompt_batch_series_selection
 from gui.dialogs.mri_compare_result_dialog import create_mri_compare_result_dialog
 from gui.dialogs.nuclear_qa_dialog import prompt_nuclear_options
 from qa.analysis_types import (
+    CTBatchResult,
     MRIBatchResult,
     MRICompareRequest,
     QARequest,
@@ -43,7 +48,12 @@ from qa.analysis_types import (
 )
 from qa.mri_compare_export import build_mri_compare_json_document
 from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
-from qa.qa_export import build_metrics_csv, build_single_run_document
+from qa.qa_export import (
+    build_metrics_csv,
+    build_single_run_document,
+    extract_low_contrast_cnr_values,
+)
+from qa.qa_xlsx_export import build_qa_workbook
 from utils.config.qa_nuclear_config import (
     CENTER_OF_ROTATION_CLASS,
     FOUR_BAR_RESOLUTION_CLASS,
@@ -98,7 +108,7 @@ _NUCLEAR_CLASS_ROUTING = {
         "qa-nuclear-simple-sensitivity",
     ),
 }
-from qa.worker import QAAnalysisWorker, QABatchWorker
+from qa.worker import QAAnalysisWorker, QABatchWorker, QACTBatchWorker
 from version import __version__ as APP_VERSION
 
 _BTN_USE_FOCUSED_SERIES = "Use Focused Series"
@@ -194,6 +204,7 @@ class QAAppFacade:
             nonvanilla = (
                 "\nNon-stock pylinac path: see JSON field pylinac_analysis_profile."
             )
+        cnr_text = self._format_low_contrast_cnr_summary(result)
         summary = (
             f"{status_text}\n"
             f"Study UID: {result.study_uid or '(folder run)'}\n"
@@ -203,6 +214,7 @@ class QAAppFacade:
             f"{vanilla_note}"
             f"{pdf_text}"
             f"{nonvanilla}"
+            f"{cnr_text}"
             f"{warning_text}"
             f"{error_text}"
         )
@@ -214,6 +226,28 @@ class QAAppFacade:
         box.activateWindow()
         box.raise_()
         box.exec()
+
+    @staticmethod
+    def _format_low_contrast_cnr_summary(result: QAResult) -> str:
+        """Format the F1 CNR intermediates (object mean / bg mean / bg σ / CNR).
+
+        Returns an empty string when the metrics are absent (e.g. MRI runs or a
+        pylinac version whose attributes drifted), so it is safe to append to
+        the shared status summary unconditionally.
+        """
+        obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
+        lines: list[str] = []
+        if obj_mean is not None:
+            lines.append(f"Object ROI mean: {obj_mean:.2f}")
+        if bg_mean is not None:
+            lines.append(f"Background mean: {bg_mean:.2f}")
+        if bg_std is not None:
+            lines.append(f"Background noise (σ): {bg_std:.2f}")
+        if cnr is not None:
+            lines.append(f"CNR: {cnr:.2f}")
+        if not lines:
+            return ""
+        return "\nCNR intermediates:\n- " + "\n- ".join(lines)
 
     def offer_open_single_run_pdf(self, result: QAResult) -> None:
         """
@@ -250,19 +284,22 @@ class QAAppFacade:
         inputs: dict[str, Any] | None = None,
     ) -> None:
         """
-        Offer a single save dialog for a finished QA run as JSON or CSV.
+        Offer a single save dialog for a finished QA run as JSON, CSV, or XLSX.
 
-        One prompt with both filters (defaults to JSON). The format is chosen by
-        the saved file's extension: ``.csv`` writes a flat ``metric,value`` CSV
-        (full nested payload stays in JSON); anything else writes the JSON
-        document.
+        One prompt with all three filters (defaults to JSON). The format is
+        chosen by the saved file's extension: ``.csv`` writes a flat
+        ``metric,value`` CSV (full nested payload stays in JSON); ``.xlsx``
+        writes a workbook (Summary/Detail/Images sheets -- see
+        ``qa.qa_xlsx_export.build_qa_workbook``) with the analyzed CT image
+        embedded when one was captured for this run; anything else writes the
+        JSON document.
         """
         app = self._app
         timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = app._prompt_save_path(
-            "Save QA Results (JSON or CSV)",
+            "Save QA Results (JSON, CSV, or XLSX)",
             f"{default_stem}-{timestamp}.json",
-            "JSON Files (*.json);;CSV Files (*.csv)",
+            "JSON Files (*.json);;CSV Files (*.csv);;Excel Files (*.xlsx)",
             remember_pylinac_output_dir=True,
         )
         if not path:
@@ -271,6 +308,11 @@ class QAAppFacade:
             with open(path, "w", encoding="utf-8", newline="") as handle:
                 handle.write(build_metrics_csv(result))
             app.main_window.update_status(f"Saved QA CSV: {path}")
+            return
+        if path.lower().endswith(".xlsx"):
+            workbook = build_qa_workbook([result], app_version=APP_VERSION)
+            workbook.save(path)
+            app.main_window.update_status(f"Saved QA XLSX: {path}")
             return
         if not path.lower().endswith(".json"):
             path = f"{path}.json"
@@ -389,8 +431,19 @@ class QAAppFacade:
         json_default_stem: str,
         json_inputs: dict[str, Any] | None = None,
         allow_extent_retry: bool = True,
+        analyzed_image_temp_dir: tempfile.TemporaryDirectory[str] | None = None,
     ) -> None:
-        """Show progress, run QA in a background thread, then summary + JSON export."""
+        """
+        Show progress, run QA in a background thread, then summary + JSON export.
+
+        ``analyzed_image_temp_dir``, when given, is a caller-owned
+        ``TemporaryDirectory`` holding the analyzed-image PNG that
+        ``request.analyzed_image_out_path`` points into (see
+        ``open_acr_ct_phantom_analysis``, F3 XLSX image embedding). It is kept
+        open until after the auto JSON/CSV/XLSX export prompt in
+        ``export_qa_results`` completes, then cleaned up here -- the runner
+        only writes the image; the facade owns its lifecycle.
+        """
         app = self._app
         progress = QProgressDialog(progress_label, "Cancel", 0, 0, app.main_window)
         progress.setWindowTitle(progress_title)
@@ -414,46 +467,60 @@ class QAAppFacade:
         def on_result(result: QAResult) -> None:
             if state["cancelled"]:
                 app.main_window.update_status("Ignored late QA result after cancellation.")
+                if analyzed_image_temp_dir is not None:
+                    analyzed_image_temp_dir.cleanup()
                 return
-            progress.close()
-            profile = result.pylinac_analysis_profile or {}
-            if profile.get("module") == "pylinac.nuclear" or str(
-                result.analysis_type
-            ).startswith("nuclear_"):
-                # Nuclear results carry their own Export JSON/CSV buttons, so we
-                # skip the ACR-style auto JSON prompt and PDF offer.
-                from gui.dialogs.nuclear_result_dialog import show_nuclear_result_dialog
+            try:
+                progress.close()
+                profile = result.pylinac_analysis_profile or {}
+                if profile.get("module") == "pylinac.nuclear" or str(
+                    result.analysis_type
+                ).startswith("nuclear_"):
+                    # Nuclear results carry their own Export JSON/CSV buttons, so we
+                    # skip the ACR-style auto JSON prompt and PDF offer.
+                    from gui.dialogs.nuclear_result_dialog import (
+                        show_nuclear_result_dialog,
+                    )
 
-                show_nuclear_result_dialog(
-                    app.main_window,
-                    result_dialog_title,
-                    result,
-                    inputs=json_inputs,
-                    app_version=APP_VERSION,
-                    default_stem=json_default_stem,
-                    prompt_save_path=app._prompt_save_path,
-                    on_status=app.main_window.update_status,
-                )
-                return
-            self.show_qa_result_dialog(result_dialog_title, result)
-            self.offer_open_single_run_pdf(result)
-            self.export_qa_results(result, json_default_stem, json_inputs)
-            if (
-                allow_extent_retry
-                and not result.success
-                and is_physical_scan_extent_failure(result.errors)
-                and float(request.scan_extent_tolerance_mm or 0) <= 0.0
-                and not bool(getattr(request, "vanilla_pylinac", False))
-                and request.qa_attempt < 2
-            ):
-                self.offer_extent_retry(
-                    request,
-                    json_inputs,
-                    progress_title=progress_title,
-                    progress_label=progress_label,
-                    result_dialog_title=result_dialog_title,
-                    json_default_stem=json_default_stem,
-                )
+                    show_nuclear_result_dialog(
+                        app.main_window,
+                        result_dialog_title,
+                        result,
+                        inputs=json_inputs,
+                        app_version=APP_VERSION,
+                        default_stem=json_default_stem,
+                        prompt_save_path=app._prompt_save_path,
+                        on_status=app.main_window.update_status,
+                    )
+                    return
+                self.show_qa_result_dialog(result_dialog_title, result)
+                self.offer_open_single_run_pdf(result)
+                self.export_qa_results(result, json_default_stem, json_inputs)
+                if (
+                    allow_extent_retry
+                    and not result.success
+                    and is_physical_scan_extent_failure(result.errors)
+                    and float(request.scan_extent_tolerance_mm or 0) <= 0.0
+                    and not bool(getattr(request, "vanilla_pylinac", False))
+                    and request.qa_attempt < 2
+                ):
+                    self.offer_extent_retry(
+                        request,
+                        json_inputs,
+                        progress_title=progress_title,
+                        progress_label=progress_label,
+                        result_dialog_title=result_dialog_title,
+                        json_default_stem=json_default_stem,
+                    )
+            finally:
+                # Keep the temp PNG alive through export_qa_results (XLSX save
+                # embeds it) before cleaning it up. Note: a scan-extent retry
+                # above starts a *new* worker without this temp dir, so the
+                # retry run's own XLSX export degrades to a note cell -- an
+                # accepted, documented limitation (retry is a rare secondary
+                # attempt on the same series).
+                if analyzed_image_temp_dir is not None:
+                    analyzed_image_temp_dir.cleanup()
 
         app._qa_worker.result_ready.connect(on_result)
         app._qa_worker.finished.connect(progress.close)
@@ -532,12 +599,24 @@ class QAAppFacade:
             pdf_path = None
 
         modality_eff = modality or "CT"
+
+        # F3: XLSX image embedding. The facade owns a single TemporaryDirectory
+        # for the analyzed-image PNG, created up front (before analysis runs)
+        # so run_acr_ct_analysis can call analyzer.save_analyzed_image() into
+        # it -- the worker/runner never sees the analyzer once analyze()
+        # returns, so this is the only point the path can be threaded in. The
+        # directory stays open through the post-run export prompt in
+        # start_qa_worker's on_result and is cleaned up there in a finally.
+        image_temp_dir = tempfile.TemporaryDirectory(prefix="qa-ct-image-")
+        image_out_path = os.path.join(image_temp_dir.name, f"{uuid.uuid4().hex}.png")
+
         request = QARequest(
             analysis_type="acr_ct",
             dicom_paths=ordered_paths,
             folder_path=folder_path,
             origin_slice=ct_origin_slice,
             output_pdf_path=pdf_path,
+            analyzed_image_out_path=image_out_path,
             study_uid=study_uid,
             series_uid=series_uid,
             modality=modality_eff,
@@ -560,7 +639,190 @@ class QAAppFacade:
             result_dialog_title="ACR CT Phantom Analysis",
             json_default_stem="qa-acr-ct",
             json_inputs=json_inputs,
+            analyzed_image_temp_dir=image_temp_dir,
         )
+
+    def open_acr_ct_batch_analysis(self) -> None:
+        """
+        Open the Stage 1 batch ACR CT (pylinac) analysis flow (Feature 2).
+
+        Prompts a checkbox-list series selection (plus "Add folder..."),
+        collects one shared CT options set applied to every selected series,
+        then runs ``QACTBatchWorker`` and shows the batch summary dialog. No
+        per-series modal -- all failures are collected into the final dialog.
+        """
+        app = self._app
+        selection = prompt_batch_series_selection(
+            app.main_window,
+            app.dicom_organizer,
+            app._file_series_coordinator.get_file_path_for_dataset,
+            open_folder=lambda: app.file_dialog.open_folder(app.main_window),
+        )
+        if selection is None:
+            return
+        requests, labels = selection
+
+        vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
+        ct_opts = prompt_acr_ct_options(
+            app.main_window, vanilla_pylinac_default=vanilla_def
+        )
+        if ct_opts is None:
+            return
+        ct_scan_tol, ct_origin_slice, ct_vanilla = ct_opts
+        app.config_manager.set_acr_qa_vanilla_pylinac(ct_vanilla)
+
+        requests = [
+            replace(
+                req,
+                origin_slice=ct_origin_slice,
+                scan_extent_tolerance_mm=float(ct_scan_tol),
+                vanilla_pylinac=ct_vanilla,
+            )
+            for req in requests
+        ]
+
+        self.start_ct_batch_worker(requests, labels)
+
+    def start_ct_batch_worker(
+        self,
+        requests: list[QARequest],
+        labels: list[str],
+    ) -> None:
+        """
+        Launch a ``QACTBatchWorker`` for a batch ACR CT run.
+
+        Shows an N-of-M progress dialog updated on ``series_completed``, then
+        the batch summary dialog on ``batch_result_ready``.
+        """
+        app = self._app
+        total = len(requests)
+        progress = QProgressDialog(
+            f"Running ACR CT batch analysis (0 of {total})...",
+            "Cancel",
+            0,
+            total,
+            app.main_window,
+        )
+        progress.setWindowTitle("ACR CT Phantom Analysis — Batch")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowFlags(progress.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        progress.show()
+        progress.activateWindow()
+        progress.raise_()
+
+        worker = QACTBatchWorker(requests, labels, app_version=APP_VERSION)
+        app._qa_ct_batch_worker = worker
+
+        def on_cancel() -> None:
+            worker.cancel()
+            app.main_window.update_status(
+                "ACR CT batch analysis cancelled (best-effort); finishing in-flight series."
+            )
+
+        progress.canceled.connect(on_cancel)
+
+        def on_series_completed(done: int, total_: int, result: QAResult) -> None:
+            progress.setValue(done)
+            progress.setLabelText(f"Running ACR CT batch analysis ({done} of {total_})...")
+
+        def on_batch_result(batch: CTBatchResult) -> None:
+            progress.close()
+            self.show_ct_batch_result_dialog(worker, batch)
+
+        worker.series_completed.connect(on_series_completed)
+        worker.batch_result_ready.connect(on_batch_result)
+        worker.finished.connect(progress.close)
+        worker.start()
+
+    def show_ct_batch_result_dialog(
+        self,
+        worker: QACTBatchWorker,
+        batch: CTBatchResult,
+    ) -> None:
+        """
+        Show the non-modal batch summary dialog and wire its export buttons.
+
+        The worker's ``image_temp_dir`` (holding the batch's analyzed-image
+        PNGs, see ``QACTBatchWorker`` docstring) is kept alive for the life of
+        this dialog -- the user may click Export XLSX more than once -- and is
+        cleaned up when the dialog closes (``on_destroyed``), mirroring
+        ``start_qa_worker``'s single-run temp-dir lifecycle (kept open through
+        export, cleaned in a finally/callback afterwards).
+        """
+        app = self._app
+        if not batch.run_results:
+            worker.image_temp_dir.cleanup()
+            return
+
+        if app._ct_batch_result_dialog is not None:
+            app._ct_batch_result_dialog.close()
+            app._ct_batch_result_dialog = None
+
+        def on_dialog_destroyed(*_args: Any) -> None:
+            app._ct_batch_result_dialog = None
+            worker.image_temp_dir.cleanup()
+
+        dialog = create_ct_batch_result_dialog(
+            app.main_window,
+            batch,
+            on_save_xlsx_clicked=lambda: self.export_ct_batch_xlsx(batch),
+            on_save_json_clicked=lambda: self.export_ct_batch_json(batch),
+            on_destroyed=on_dialog_destroyed,
+        )
+        app._ct_batch_result_dialog = dialog
+        dialog.activateWindow()
+        dialog.raise_()
+        dialog.show()
+
+    def export_ct_batch_xlsx(self, batch: CTBatchResult) -> None:
+        """Offer XLSX export for a finished ACR CT batch (Feature 3 reuse)."""
+        app = self._app
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
+        path = app._prompt_save_path(
+            "Save QA Batch Results XLSX",
+            f"qa-acr-ct-batch-{timestamp}.xlsx",
+            "Excel Files (*.xlsx)",
+            remember_pylinac_output_dir=True,
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".xlsx"):
+            path = f"{path}.xlsx"
+        workbook = build_qa_workbook(
+            batch.run_results, labels=batch.run_labels, app_version=APP_VERSION
+        )
+        workbook.save(path)
+        app.main_window.update_status(f"Saved QA batch XLSX: {path}")
+
+    def export_ct_batch_json(self, batch: CTBatchResult) -> None:
+        """
+        Offer JSON export for a finished ACR CT batch.
+
+        Emits a JSON array of per-run ``build_single_run_document`` documents
+        (schema_version "1.3" each), consistent with the single-run JSON
+        export -- there is no dedicated batch JSON schema for ACR CT (unlike
+        the MRI compare document), so a list wrapper keeps this simple and
+        lossless.
+        """
+        app = self._app
+        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
+        json_path = app._prompt_save_path(
+            "Save QA Batch Results JSON",
+            f"qa-acr-ct-batch-{timestamp}.json",
+            "JSON Files (*.json)",
+            remember_pylinac_output_dir=True,
+        )
+        if not json_path:
+            return
+        payload = [
+            build_single_run_document(
+                result, app_version=APP_VERSION, inputs={"series_label": label}
+            )
+            for label, result in zip(batch.run_labels, batch.run_results, strict=True)
+        ]
+        with open(json_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        app.main_window.update_status(f"Saved QA batch JSON: {json_path}")
 
     def open_acr_mri_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR MRI Large (pylinac) analysis flow."""

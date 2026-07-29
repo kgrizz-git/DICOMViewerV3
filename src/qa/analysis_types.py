@@ -9,6 +9,7 @@ Exports:
     LcRunConfig          -- one low-contrast parameter set for compare mode
     MRICompareRequest    -- batch of up to 3 LcRunConfig rows from the dialog
     MRIBatchResult       -- collected QAResult objects for a compare-mode run
+    CTBatchResult        -- collected QAResult objects for a batch ACR CT run
     QARequest            -- input payload for a single QA analysis run
     QAResult             -- normalized output payload for a single QA run
     NuclearOptions       -- base for per-class pylinac.nuclear option payloads
@@ -455,6 +456,10 @@ class QARequest:
     folder_path: str | None = None
     origin_slice: int | None = None
     output_pdf_path: str | None = None
+    # Transient input: when set, the runner calls analyzer.save_analyzed_image()
+    # to this path right after analyze() (CT only, see run_acr_ct_analysis).
+    # Not part of any serialized payload; XLSX export image embedding only.
+    analyzed_image_out_path: str | None = None
     study_uid: str = ""
     series_uid: str = ""
     modality: str = ""
@@ -507,6 +512,11 @@ class QAResult:
     num_images: int = 0
     pylinac_version: str | None = None
     pylinac_analysis_profile: dict[str, Any] = field(default_factory=dict)
+    # Transient output: local filesystem path to the analyzed-image PNG saved
+    # via QARequest.analyzed_image_out_path, if any. Not serialized (JSON/CSV
+    # builders name their fields explicitly, so this field cannot leak); used
+    # only by qa_xlsx_export.build_qa_workbook to embed the image.
+    analyzed_image_path: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -569,3 +579,24 @@ class MRIBatchResult:
 
     run_results: list[QAResult] = field(default_factory=list)
     run_configs: list[LcRunConfig] = field(default_factory=list)
+
+
+@dataclass
+class CTBatchResult:
+    """
+    Result container for a multi-series ACR CT batch run.
+
+    run_results and run_labels are parallel lists (same length). Unlike
+    MRIBatchResult (one run per LcRunConfig with a single CT options set),
+    there is no per-series config analogue -- one set of CT options applies
+    to every series in the batch.
+
+    Fields:
+        run_results: One QAResult per selected series, in selection order.
+        run_labels: User-facing series label per result (built on the GUI
+            thread by the selection dialog; the worker never touches the
+            organizer, so labels ride in rather than being derived).
+    """
+
+    run_results: list[QAResult] = field(default_factory=list)
+    run_labels: list[str] = field(default_factory=list)

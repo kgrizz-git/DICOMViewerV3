@@ -564,6 +564,11 @@ def open_acr_ct_phantom_analysis(app: DICOMViewerApp) -> None:
     app._qa_app_facade.open_acr_ct_phantom_analysis()
 
 
+def open_acr_ct_batch_analysis(app: DICOMViewerApp) -> None:
+    """Open the batch ACR CT (pylinac) analysis flow (menu / signal slot)."""
+    app._qa_app_facade.open_acr_ct_batch_analysis()
+
+
 def open_acr_mri_phantom_analysis(app: DICOMViewerApp) -> None:
     """Open the Stage 1 ACR MRI Large (pylinac) analysis flow (menu / signal slot)."""
     app._qa_app_facade.open_acr_mri_phantom_analysis()

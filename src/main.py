@@ -245,7 +245,7 @@ from qa.analysis_types import (
     QARequest,
     QAResult,
 )
-from qa.worker import QAAnalysisWorker, QABatchWorker
+from qa.worker import QAAnalysisWorker, QABatchWorker, QACTBatchWorker
 
 _PERF_IMPORTS_DONE = _time.perf_counter()
 
@@ -284,6 +284,8 @@ class DICOMViewerApp(QObject):
     _qa_worker: QAAnalysisWorker | None = None
     _qa_batch_worker: QABatchWorker | None = None
     _mri_compare_result_dialog: QDialog | None = None
+    _qa_ct_batch_worker: QACTBatchWorker | None = None
+    _ct_batch_result_dialog: QDialog | None = None
     _histogram_wl_update_timer: QTimer | None = None
     _histogram_update_timer: QTimer | None = None
     study_index_service: LocalStudyIndexService
@@ -1902,6 +1904,10 @@ class DICOMViewerApp(QObject):
     def _open_acr_ct_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR CT (pylinac) analysis flow (menu / signal slot)."""
         dialog_actions.open_acr_ct_phantom_analysis(self)
+
+    def _open_acr_ct_batch_analysis(self) -> None:
+        """Open the batch ACR CT (pylinac) analysis flow (menu / signal slot)."""
+        dialog_actions.open_acr_ct_batch_analysis(self)
 
     def _open_acr_mri_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR MRI Large (pylinac) analysis flow (menu / signal slot)."""

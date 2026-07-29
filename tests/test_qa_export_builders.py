@@ -70,6 +70,19 @@ def test_single_run_document_acr_has_no_nuclear_key() -> None:
     assert "nuclear_analysis_class" not in doc["run"]
 
 
+def test_single_run_document_mri_retains_schema_version_1_1() -> None:
+    """The CT-only 1.3 migration must not upgrade single-run MRI exports."""
+    mri = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        pylinac_analysis_profile={"engine": "ACRMRILargeForViewer"},
+    )
+
+    doc = build_single_run_document(mri, app_version="1.0.0")
+
+    assert doc["schema_version"] == "1.1"
+
+
 def test_nuclear_frames_csv_is_sorted_and_complete() -> None:
     text = build_nuclear_frames_csv(_nuclear_result())
     rows = list(csv.reader(io.StringIO(text)))
@@ -163,3 +176,40 @@ def test_metrics_csv_dotted_keys_for_nested() -> None:
     assert body["mtf.50%"] == "0.62"
     assert body["mtf.10%"] == "1.1"
     assert body["tags"] == "1; 2; 3"
+
+
+def test_extract_low_contrast_cnr_values_success() -> None:
+    from qa.qa_export import extract_low_contrast_cnr_values
+    metrics = {
+        "low_contrast_cnr": {
+            "cnr": 4.25,
+            "object_rois": [{"mean": 105.0}, {"mean": 95.0}],
+            "background": {"mean": 12.0, "std": 1.5},
+        }
+    }
+    obj, bg_m, bg_s, cnr = extract_low_contrast_cnr_values(metrics)
+    assert obj == 100.0
+    assert bg_m == 12.0
+    assert bg_s == 1.5
+    assert cnr == 4.25
+
+
+def test_extract_low_contrast_cnr_values_empty_and_missing() -> None:
+    from qa.qa_export import extract_low_contrast_cnr_values
+
+    assert extract_low_contrast_cnr_values(None) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values({}) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values(
+        {"low_contrast_cnr": ["not", "a", "dict"]}
+    ) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values(
+        {"low_contrast_cnr": {"object_rois": [None, {}, {"mean": "invalid"}]}}
+    ) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values(
+        {
+            "low_contrast_cnr": {
+                "background": {"mean": "invalid", "std": []},
+                "cnr": "invalid",
+            }
+        }
+    ) == (None, None, None, None)
