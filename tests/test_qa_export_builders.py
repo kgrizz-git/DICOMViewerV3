@@ -70,6 +70,19 @@ def test_single_run_document_acr_has_no_nuclear_key() -> None:
     assert "nuclear_analysis_class" not in doc["run"]
 
 
+def test_single_run_document_mri_retains_schema_version_1_1() -> None:
+    """The CT-only 1.3 migration must not upgrade single-run MRI exports."""
+    mri = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        pylinac_analysis_profile={"engine": "ACRMRILargeForViewer"},
+    )
+
+    doc = build_single_run_document(mri, app_version="1.0.0")
+
+    assert doc["schema_version"] == "1.1"
+
+
 def test_nuclear_frames_csv_is_sorted_and_complete() -> None:
     text = build_nuclear_frames_csv(_nuclear_result())
     rows = list(csv.reader(io.StringIO(text)))

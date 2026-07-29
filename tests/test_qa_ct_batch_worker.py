@@ -150,4 +150,3 @@ def test_qarequest_cloning_prevents_side_effect(qapp, monkeypatch) -> None:
     assert received_requests[0].analyzed_image_out_path is not None
     assert received_requests[0] is not original_req
     w.image_temp_dir.cleanup()
-

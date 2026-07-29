@@ -173,4 +173,3 @@ def test_prompt_batch_series_selection_all_valid(qapp):
         assert labels == ["Valid Series"]
         mock_warning.assert_not_called()
         mock_info.assert_not_called()
-

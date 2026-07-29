@@ -16,6 +16,7 @@ from pathlib import Path
 
 import openpyxl
 import pytest
+from openpyxl.utils.units import pixels_to_EMU
 
 from qa import qa_xlsx_export
 from qa.analysis_types import QAResult
@@ -158,9 +159,10 @@ def test_images_sheet_deterministic_dimensions_and_stride(tmp_path: Path) -> Non
     res1 = _result(series_uid="1.1", analyzed_image_path=str(img_path1))
     res2 = _result(series_uid="1.2", analyzed_image_path=str(img_path2))
 
-    wb = build_qa_workbook([res1, res2], labels=["Run 1", "Run 2"])
-    assert "Images" in wb.sheetnames
-    ws = wb["Images"]
+    workbook = build_qa_workbook([res1, res2], labels=["Run 1", "Run 2"])
+    reloaded = _save_and_reload(workbook)
+    assert "Images" in reloaded.sheetnames
+    ws = reloaded["Images"]
 
     # Cell positions for labels
     assert ws.cell(row=1, column=1).value == "Run 1"
@@ -168,12 +170,15 @@ def test_images_sheet_deterministic_dimensions_and_stride(tmp_path: Path) -> Non
     assert ws.cell(row=36, column=1).value == "Run 2"
 
     assert len(ws._images) == 2
-    assert ws._images[0].width == 480
-    assert ws._images[0].height == 480
-    assert ws._images[1].width == 480
-    assert ws._images[1].height == 480
-
-
+    expected_extent = pixels_to_EMU(480)
+    actual_anchors = [
+        (image.anchor._from.row, image.anchor.ext.width, image.anchor.ext.height)
+        for image in ws._images
+    ]
+    assert actual_anchors == [
+        (1, expected_extent, expected_extent),
+        (36, expected_extent, expected_extent),
+    ]
 
 def test_module_has_no_qt_import() -> None:
     """
