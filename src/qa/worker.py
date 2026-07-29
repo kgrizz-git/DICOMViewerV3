@@ -202,8 +202,8 @@ class QACTBatchWorker(QThread):
                 "acr_ct"), in selection order.
             series_labels: Display label per request, parallel to
                 ``requests``. Built on the GUI thread (organizer access) by
-                the selection dialog; copied straight into
-                ``CTBatchResult.run_labels``.
+                the selection dialog; appended to ``CTBatchResult.run_labels``
+                only when the corresponding result is collected.
             app_version: Reserved for parity with QABatchWorker; unused today
                 (ACR CT batch has no combined-PDF/summary-PDF step).
         """

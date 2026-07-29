@@ -21,6 +21,7 @@ class TestPromptSavePathExtensionFallback:
             ("/path/to/report", "CSV Files (*.csv)", "/path/to/report.csv"),
             ("/path/to/report", "PNG Files (*.png)", "/path/to/report.png"),
             ("/path/to/report", "PDF Files (*.pdf)", "/path/to/report.pdf"),
+            ("/path/to/report.", "JSON Files (*.json)", "/path/to/report.json"),
             ("/path/to/report.json", "Excel Files (*.xlsx)", "/path/to/report.json"),
             ("/path/to/report.xlsx", "JSON Files (*.json)", "/path/to/report.xlsx"),
         ],

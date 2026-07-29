@@ -233,7 +233,9 @@ the display labels on the GUI thread and passes them in. `QACTBatchWorker` takes
 two parallel lists in its constructor:
 `__init__(self, requests: list[QARequest], series_labels: list[str], *, app_version="")`.
 Labels are **not** added to `QARequest` (which is per-series input, not display
-metadata). The worker copies `series_labels` straight into `CTBatchResult.run_labels`.
+metadata). The worker appends each label to `CTBatchResult.run_labels` only when
+it appends that series' result, keeping partial cancellation results aligned and
+excluding skipped series.
 
 1. **Selection dialog** `prompt_batch_series_selection`: checkbox list built from
    `organizer.get_series_list()`, **filtered to CT** by reading the first dataset

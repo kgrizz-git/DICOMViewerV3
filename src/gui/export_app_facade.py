@@ -119,7 +119,9 @@ class ExportAppFacade:
             if selected:
                 path = selected[0]
                 _, ext = os.path.splitext(path)
-                if not ext:
+                if ext in ("", "."):
+                    if ext == ".":
+                        path = path[:-1]
                     selected_filter = dialog.selectedNameFilter()
                     if "*.xlsx" in selected_filter:
                         path = f"{path}.xlsx"

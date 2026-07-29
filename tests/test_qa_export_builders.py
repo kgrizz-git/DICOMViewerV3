@@ -196,5 +196,20 @@ def test_extract_low_contrast_cnr_values_success() -> None:
 
 def test_extract_low_contrast_cnr_values_empty_and_missing() -> None:
     from qa.qa_export import extract_low_contrast_cnr_values
+
     assert extract_low_contrast_cnr_values(None) == (None, None, None, None)
     assert extract_low_contrast_cnr_values({}) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values(
+        {"low_contrast_cnr": ["not", "a", "dict"]}
+    ) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values(
+        {"low_contrast_cnr": {"object_rois": [None, {}, {"mean": "invalid"}]}}
+    ) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values(
+        {
+            "low_contrast_cnr": {
+                "background": {"mean": "invalid", "std": []},
+                "cnr": "invalid",
+            }
+        }
+    ) == (None, None, None, None)
