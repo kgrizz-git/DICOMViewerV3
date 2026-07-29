@@ -18,7 +18,7 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from qa.analysis_types import QAResult
-from qa.qa_export import _flatten
+from qa.qa_export import extract_low_contrast_cnr_values, flatten_metrics
 
 
 # Guarded at import time so the Images-sheet builder can cheaply detect a
@@ -64,24 +64,13 @@ def _cnr_summary_values(result: QAResult) -> tuple[Any, Any, Any, Any]:
     ``object_rois[*].mean``; background mean/std and module ``cnr`` are read
     with ``.get()``. Any missing key degrades to a blank cell.
     """
-    details = (result.metrics or {}).get("low_contrast_cnr")
-    if not isinstance(details, dict):
-        return ("", "", "", "")
-    obj_mean: Any = ""
-    obj_rois = details.get("object_rois")
-    if isinstance(obj_rois, list) and obj_rois:
-        means: list[float] = [
-            float(roi["mean"])
-            for roi in obj_rois
-            if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
-        ]
-        if means:
-            obj_mean = sum(means) / len(means)
-    background = details.get("background")
-    bg_mean = background.get("mean", "") if isinstance(background, dict) else ""
-    bg_std = background.get("std", "") if isinstance(background, dict) else ""
-    cnr = details.get("cnr", "")
-    return (obj_mean, bg_mean, bg_std, cnr)
+    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
+    return (
+        "" if obj_mean is None else obj_mean,
+        "" if bg_mean is None else bg_mean,
+        "" if bg_std is None else bg_std,
+        "" if cnr is None else cnr,
+    )
 
 
 def _build_summary_sheet(
@@ -103,14 +92,14 @@ def _build_detail_sheet(
     """
     Flat metric rows, one block per run.
 
-    Reuses ``qa_export._flatten`` over ``result.metrics`` for the exact
+    Reuses ``qa_export.flatten_metrics`` over ``result.metrics`` for the exact
     dotted-key / list-joined shape the CSV export already produces, so the
     Detail sheet matches the CSV export field-for-field.
     """
     ws.append(["Metric", "Value"])
     for result, label in zip(results, row_labels, strict=True):
         ws.append([_row_label(result, label), ""])
-        for key, value in _flatten(result.metrics or {}):
+        for key, value in flatten_metrics(result.metrics or {}):
             ws.append([key, value])
         ws.append([])  # blank separator row between run blocks
 

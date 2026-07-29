@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from qa.analysis_types import CTBatchResult
+from qa.qa_export import extract_low_contrast_cnr_values
 
 _COLUMN_HEADERS = (
     "Series/Run",
@@ -61,31 +62,13 @@ def _cnr_summary_values(result: Any) -> tuple[str, str, str, str]:
     and module ``cnr`` read with ``.get()``; any missing key degrades to a
     blank cell).
     """
-    details = (result.metrics or {}).get("low_contrast_cnr")
-    if not isinstance(details, dict):
-        return ("", "", "", "")
-    obj_mean = ""
-    obj_rois = details.get("object_rois")
-    if isinstance(obj_rois, list) and obj_rois:
-        means: list[float] = [
-            float(roi["mean"])
-            for roi in obj_rois
-            if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
-        ]
-        if means:
-            obj_mean = f"{sum(means) / len(means):.3f}"
-    background = details.get("background")
-    bg_mean = ""
-    bg_std = ""
-    if isinstance(background, dict):
-        if isinstance(background.get("mean"), (int, float)):
-            bg_mean = f"{background['mean']:.3f}"
-        if isinstance(background.get("std"), (int, float)):
-            bg_std = f"{background['std']:.3f}"
-    cnr = ""
-    if isinstance(details.get("cnr"), (int, float)):
-        cnr = f"{details['cnr']:.3f}"
-    return (obj_mean, bg_mean, bg_std, cnr)
+    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
+    return (
+        "" if obj_mean is None else f"{obj_mean:.3f}",
+        "" if bg_mean is None else f"{bg_mean:.3f}",
+        "" if bg_std is None else f"{bg_std:.3f}",
+        "" if cnr is None else f"{cnr:.3f}",
+    )
 
 
 def create_ct_batch_result_dialog(

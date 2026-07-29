@@ -48,7 +48,11 @@ from qa.analysis_types import (
 )
 from qa.mri_compare_export import build_mri_compare_json_document
 from qa.preflight import collect_slice_position_warnings, modality_preflight_warning
-from qa.qa_export import build_metrics_csv, build_single_run_document
+from qa.qa_export import (
+    build_metrics_csv,
+    build_single_run_document,
+    extract_low_contrast_cnr_values,
+)
 from qa.qa_xlsx_export import build_qa_workbook
 from utils.config.qa_nuclear_config import (
     CENTER_OF_ROTATION_CLASS,
@@ -231,24 +235,16 @@ class QAAppFacade:
         pylinac version whose attributes drifted), so it is safe to append to
         the shared status summary unconditionally.
         """
-        details = (result.metrics or {}).get("low_contrast_cnr")
-        if not isinstance(details, dict):
-            return ""
+        obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
         lines: list[str] = []
-        obj_rois = details.get("object_rois")
-        if isinstance(obj_rois, list) and obj_rois:
-            means = [r.get("mean") for r in obj_rois if isinstance(r.get("mean"), (int, float))]
-            if means:
-                avg = sum(means) / len(means)
-                lines.append(f"Object ROI mean: {avg:.2f}")
-        bg = details.get("background")
-        if isinstance(bg, dict):
-            if isinstance(bg.get("mean"), (int, float)):
-                lines.append(f"Background mean: {bg['mean']:.2f}")
-            if isinstance(bg.get("std"), (int, float)):
-                lines.append(f"Background noise (σ): {bg['std']:.2f}")
-        if isinstance(details.get("cnr"), (int, float)):
-            lines.append(f"CNR: {details['cnr']:.2f}")
+        if obj_mean is not None:
+            lines.append(f"Object ROI mean: {obj_mean:.2f}")
+        if bg_mean is not None:
+            lines.append(f"Background mean: {bg_mean:.2f}")
+        if bg_std is not None:
+            lines.append(f"Background noise (σ): {bg_std:.2f}")
+        if cnr is not None:
+            lines.append(f"CNR: {cnr:.2f}")
         if not lines:
             return ""
         return "\nCNR intermediates:\n- " + "\n- ".join(lines)
