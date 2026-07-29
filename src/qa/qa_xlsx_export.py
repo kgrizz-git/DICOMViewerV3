@@ -152,11 +152,10 @@ def _build_images_sheet(
         if path and os.path.isfile(path):
             try:
                 image = XLImage(path)
+                image.width = 480
+                image.height = 480
                 ws.add_image(image, f"A{row}")
-                # Advance past the image's rendered height (~15px/row default
-                # openpyxl row height) plus a small gap before the next block.
-                rows_used = max(int(image.height / 15) + 1, 1)
-                row += rows_used + 1
+                row += 34
             except Exception:
                 ws.cell(row=row, column=1, value="(image could not be embedded)")
                 row += 2

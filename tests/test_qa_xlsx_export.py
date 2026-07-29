@@ -143,6 +143,38 @@ def test_pillow_missing_skips_images_sheet(monkeypatch: pytest.MonkeyPatch, tmp_
     assert reloaded["Detail"].max_row > 1
 
 
+def test_images_sheet_deterministic_dimensions_and_stride(tmp_path: Path) -> None:
+    """Verify image dimensions are set to 480x480 and row stride is 34 rows per run."""
+    try:
+        from PIL import Image as PILImage
+    except ImportError:
+        pytest.skip("Pillow is not installed")
+
+    img_path1 = tmp_path / "img1.png"
+    img_path2 = tmp_path / "img2.png"
+    PILImage.new("RGB", (200, 100), color="red").save(img_path1)
+    PILImage.new("RGB", (300, 300), color="blue").save(img_path2)
+
+    res1 = _result(series_uid="1.1", analyzed_image_path=str(img_path1))
+    res2 = _result(series_uid="1.2", analyzed_image_path=str(img_path2))
+
+    wb = build_qa_workbook([res1, res2], labels=["Run 1", "Run 2"])
+    assert "Images" in wb.sheetnames
+    ws = wb["Images"]
+
+    # Cell positions for labels
+    assert ws.cell(row=1, column=1).value == "Run 1"
+    # Row 1 (label) -> row 2 (image) -> row += 34 -> row 36 (label 2)
+    assert ws.cell(row=36, column=1).value == "Run 2"
+
+    assert len(ws._images) == 2
+    assert ws._images[0].width == 480
+    assert ws._images[0].height == 480
+    assert ws._images[1].width == 480
+    assert ws._images[1].height == 480
+
+
+
 def test_module_has_no_qt_import() -> None:
     """
     Static check: qa_xlsx_export.py must not import any Qt package, so it
