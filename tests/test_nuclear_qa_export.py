@@ -92,7 +92,7 @@ def test_nuclear_export_schema_and_fields(tmp_path) -> None:
     assert Path(json_out).exists()
     doc = json.loads(Path(json_out).read_text(encoding="utf-8"))
 
-    assert doc["schema_version"] == "1.3"
+    assert doc["schema_version"] == "1.1"
     assert doc["run"]["analysis_type"] == "nuclear_planar_uniformity"
     assert doc["run"]["status"] == "success"
     # Self-describing nuclear class on the run object.

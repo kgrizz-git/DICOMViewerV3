@@ -52,7 +52,7 @@ def test_single_run_document_nuclear_fields() -> None:
     doc = build_single_run_document(
         _nuclear_result(), app_version="9.9.9", inputs={"input_path": "p.dcm"}
     )
-    assert doc["schema_version"] == "1.3"
+    assert doc["schema_version"] == "1.1"
     assert doc["run"]["app_version"] == "9.9.9"
     assert doc["run"]["analysis_type"] == "nuclear_planar_uniformity"
     assert doc["run"]["nuclear_analysis_class"] == "PlanarUniformity"
@@ -163,3 +163,25 @@ def test_metrics_csv_dotted_keys_for_nested() -> None:
     assert body["mtf.50%"] == "0.62"
     assert body["mtf.10%"] == "1.1"
     assert body["tags"] == "1; 2; 3"
+
+
+def test_extract_low_contrast_cnr_values_success() -> None:
+    from qa.qa_export import extract_low_contrast_cnr_values
+    metrics = {
+        "low_contrast_cnr": {
+            "cnr": 4.25,
+            "object_rois": [{"mean": 105.0}, {"mean": 95.0}],
+            "background": {"mean": 12.0, "std": 1.5},
+        }
+    }
+    obj, bg_m, bg_s, cnr = extract_low_contrast_cnr_values(metrics)
+    assert obj == 100.0
+    assert bg_m == 12.0
+    assert bg_s == 1.5
+    assert cnr == 4.25
+
+
+def test_extract_low_contrast_cnr_values_empty_and_missing() -> None:
+    from qa.qa_export import extract_low_contrast_cnr_values
+    assert extract_low_contrast_cnr_values(None) == (None, None, None, None)
+    assert extract_low_contrast_cnr_values({}) == (None, None, None, None)

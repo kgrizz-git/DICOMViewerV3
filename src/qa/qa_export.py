@@ -74,8 +74,10 @@ def build_single_run_document(
     profile = result.pylinac_analysis_profile or {}
     vanilla_run = bool(profile.get("vanilla_pylinac", False))
 
+    schema_version = "1.1" if profile.get("module") == "pylinac.nuclear" else "1.3"
+
     payload: dict[str, Any] = {
-        "schema_version": "1.3",
+        "schema_version": schema_version,
         "run": {
             "timestamp_utc": datetime.now(UTC).isoformat(),
             "app_version": app_version,
@@ -103,18 +105,62 @@ def build_single_run_document(
     return payload
 
 
-def _flatten(data: dict[str, Any], prefix: str = "") -> list[tuple[str, Any]]:
+def flatten_metrics(data: dict[str, Any], prefix: str = "") -> list[tuple[str, Any]]:
     rows: list[tuple[str, Any]] = []
     for key in sorted(data, key=str):
         full = f"{prefix}{key}"
         value = data[key]
         if isinstance(value, dict):
-            rows.extend(_flatten(value, prefix=f"{full}."))
+            rows.extend(flatten_metrics(value, prefix=f"{full}."))
         elif isinstance(value, (list, tuple)):
             rows.append((full, "; ".join(str(v) for v in value)))
         else:
             rows.append((full, "" if value is None else value))
     return rows
+
+
+_flatten = flatten_metrics
+
+
+def extract_low_contrast_cnr_values(
+    metrics: dict[str, Any] | None
+) -> tuple[float | None, float | None, float | None, float | None]:
+    """
+    Extract low-contrast CNR intermediate values:
+    (object_mean, background_mean, background_std, cnr)
+    from the given metrics dictionary.
+    """
+    if not metrics:
+        return (None, None, None, None)
+    details = metrics.get("low_contrast_cnr")
+    if not isinstance(details, dict):
+        return (None, None, None, None)
+
+    obj_mean = None
+    obj_rois = details.get("object_rois")
+    if isinstance(obj_rois, list) and obj_rois:
+        means = [
+            float(roi["mean"])
+            for roi in obj_rois
+            if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
+        ]
+        if means:
+            obj_mean = sum(means) / len(means)
+
+    background = details.get("background")
+    bg_mean = None
+    bg_std = None
+    if isinstance(background, dict):
+        if isinstance(background.get("mean"), (int, float)):
+            bg_mean = float(background["mean"])
+        if isinstance(background.get("std"), (int, float)):
+            bg_std = float(background["std"])
+
+    cnr = None
+    if isinstance(details.get("cnr"), (int, float)):
+        cnr = float(details["cnr"])
+
+    return (obj_mean, bg_mean, bg_std, cnr)
 
 
 def build_metrics_csv(result: QAResult) -> str:
@@ -128,7 +174,7 @@ def build_metrics_csv(result: QAResult) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(["metric", "value"])
-    for key, value in _flatten(result.metrics or {}):
+    for key, value in flatten_metrics(result.metrics or {}):
         writer.writerow([key, value])
     return buffer.getvalue()
 
