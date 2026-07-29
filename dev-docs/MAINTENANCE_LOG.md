@@ -11,7 +11,7 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 - Landed three pylinac ACR CT features on `feature/pylinac-ct-cnr-batch-xlsx`
   (commits 39dcd7a, 20c8f82, 5a5d3ed), plus the `run.py` `sys.path` launcher
   fix folded into the same branch/PR/CI run. Plan:
-  `dev-docs/plans/PYLINAC_CT_CNR_BATCH_XLSX_PLAN.md`.
+  `dev-docs/plans/completed/PYLINAC_CT_CNR_BATCH_XLSX_PLAN.md`.
   - **F1 — CNR intermediates:** `_extract_low_contrast_cnr_details` in
     `src/qa/pylinac_acr_ct.py` harvests object ROI mean, background mean/σ, and
     module CNR from the live `low_contrast_module` (dict-valued `rois` /
