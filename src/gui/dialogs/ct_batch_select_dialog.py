@@ -191,6 +191,7 @@ def prompt_batch_series_selection(
 
     requests: list[QARequest] = []
     labels: list[str] = []
+    skipped_labels: list[str] = []
     for row in range(list_widget.count()):
         item = list_widget.item(row)
         if item.checkState() != Qt.CheckState.Checked:
@@ -217,6 +218,7 @@ def prompt_batch_series_selection(
             if path:
                 ordered_paths.append(path)
         if not ordered_paths:
+            skipped_labels.append(item.text())
             continue
         requests.append(
             QARequest(
@@ -236,5 +238,13 @@ def prompt_batch_series_selection(
             "No series were selected (or resolvable to files).",
         )
         return None
+
+    if skipped_labels:
+        QMessageBox.warning(
+            parent,
+            "ACR CT Batch Analysis",
+            "The following series had no resolvable files and were skipped:\n\n"
+            + "\n".join(skipped_labels),
+        )
 
     return requests, labels
