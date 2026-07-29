@@ -19,6 +19,7 @@ parallel to the requests.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import tempfile
 import uuid
@@ -233,11 +234,14 @@ class QACTBatchWorker(QThread):
                 # Cooperative cancellation: skip remaining series, emit the
                 # partial batch collected so far.
                 break
-            request.analyzed_image_out_path = os.path.join(
-                self.image_temp_dir.name, f"{uuid.uuid4().hex}.png"
+            cloned_request = dataclasses.replace(
+                request,
+                analyzed_image_out_path=os.path.join(
+                    self.image_temp_dir.name, f"{uuid.uuid4().hex}.png"
+                ),
             )
             try:
-                result = run_acr_ct_analysis(request)
+                result = run_acr_ct_analysis(cloned_request)
             except Exception as exc:
                 # Per-series error isolation: a failure here (e.g. a
                 # malformed request) must not abort the rest of the batch.

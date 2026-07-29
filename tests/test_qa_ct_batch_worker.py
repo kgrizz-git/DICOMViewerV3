@@ -126,3 +126,28 @@ def test_series_labels_must_be_parallel_to_requests() -> None:
     requests = _make_requests(2)
     with pytest.raises(ValueError, match="parallel"):
         worker_mod.QACTBatchWorker(requests, ["only-one-label"])
+
+
+def test_qarequest_cloning_prevents_side_effect(qapp, monkeypatch) -> None:
+    """Worker clones QARequest so input request analyzed_image_out_path remains unmodified."""
+    requests = _make_requests(1)
+    original_req = requests[0]
+    assert original_req.analyzed_image_out_path is None
+
+    received_requests: list[QARequest] = []
+
+    def fake_run(request: QARequest) -> QAResult:
+        received_requests.append(request)
+        return QAResult(success=True, analysis_type=request.analysis_type)
+
+    monkeypatch.setattr(worker_mod, "run_acr_ct_analysis", fake_run)
+
+    w = worker_mod.QACTBatchWorker(requests, ["Series 0"])
+    w.run()
+
+    assert original_req.analyzed_image_out_path is None
+    assert len(received_requests) == 1
+    assert received_requests[0].analyzed_image_out_path is not None
+    assert received_requests[0] is not original_req
+    w.image_temp_dir.cleanup()
+
