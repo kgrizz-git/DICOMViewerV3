@@ -1,10 +1,35 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-28
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-07-28
+
+- Landed three pylinac ACR CT features on `feature/pylinac-ct-cnr-batch-xlsx`
+  (commits 39dcd7a, 20c8f82, 5a5d3ed), plus the `run.py` `sys.path` launcher
+  fix folded into the same branch/PR/CI run. Plan:
+  `dev-docs/plans/PYLINAC_CT_CNR_BATCH_XLSX_PLAN.md`.
+  - **F1 — CNR intermediates:** `_extract_low_contrast_cnr_details` in
+    `src/qa/pylinac_acr_ct.py` harvests object ROI mean, background mean/σ, and
+    module CNR from the live `low_contrast_module` (dict-valued `rois` /
+    `background_rois`; `cnr()` is a method) into `metrics.low_contrast_cnr`.
+    `results_data(as_dict=True)` now feeds a structured `raw_pylinac`, and
+    `_jsonable` was hardened for non-`float64` numpy scalars.
+  - **F3 — XLSX export:** `src/qa/qa_xlsx_export.build_qa_workbook`
+    (Summary/Detail/Images, Qt-free, reuses `qa_export._flatten`); transient
+    `QARequest.analyzed_image_out_path` / `QAResult.analyzed_image_path` drive
+    `analyzer.save_analyzed_image()` inside the runner with facade-owned
+    `TemporaryDirectory` lifecycle. Single-run `schema_version` bumped 1.1 → 1.3.
+  - **F2 — batch CT:** `QACTBatchWorker` (serial, per-series error isolation,
+    cooperative cancel, worker-owned image temp dir), `CTBatchResult`, selection
+    and summary dialogs, and the `acr_ct_batch_requested` signal wiring.
+  - F1 built with Opus; F3 and F2 implemented by Sonnet subagents in isolated
+    worktrees (F3 first for the shared `build_qa_workbook` dependency, then F2),
+    reviewed and re-linted before merge. Pre-merge live-phantom numeric value
+    check for F1 (against a real CatPhan dataset) is still open.
 
 ## 2026-07-26
 
