@@ -27,6 +27,7 @@
     "resources/images/checkbox_checkmark_white.png": "8ac918c18d03d8aa6de91079e87eea59e24eaf641f8371c0988b826d55b8d8e9",
     "src/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/fixtures/dicom_decoder/synthetic_rgb_no_color_markers_jpeg_baseline.dcm": "12faf049f4b68d151dc95a1a018a8b5f629255e824ee41d097c8a3447490e6bc",
     "tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm": "6b3b33946aa1a2e2d0e2123e86b8ee278d3ca8866d3a0e7e69e335e7f5951385",
     "tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm": "749e7b1a407278ef5fc8554acf942a077d866c824d11d9ceb11f81e878f174d3",
     "tests/fixtures/dicom_rdsr/synthetic_enhanced_xray_rdsr.dcm": "a5c9685c62523c2f2930f607500f29e69a88c612aa8b483d9ed172798fa0dec1"

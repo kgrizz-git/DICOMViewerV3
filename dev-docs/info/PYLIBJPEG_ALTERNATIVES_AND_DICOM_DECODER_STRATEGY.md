@@ -1,6 +1,6 @@
 # pylibjpeg-libjpeg alternatives and DICOM decoder strategy
 
-Last updated: 2026-06-13
+Last updated: 2026-07-29
 
 > **Execution:** this note is the *options analysis*. The actionable, phased spike (corpus,
 > golden-reference hash-diff, decision gates, productionization) is
@@ -38,13 +38,17 @@ Primary references checked while writing this note:
 
 ## Summary recommendation
 
-Use a staged decision path:
+The spike completed the staged decision: Pillow-only was rejected because it lost JPEG
+Lossless and some JPEG Extended coverage; `python-gdcm` was selected. GDCM had no new failures
+against the 42-file golden corpus and produced bit-exact lossless output. Production work remains
+before the commercial blocker is closed: the PyInstaller native-library check, the synthetic
+no-color-transform JPEG investigation, dependency/spec changes, user messaging/provenance,
+license-gate cleanup, and committed regression coverage.
 
-1. Test a Pillow-only build without `pylibjpeg-libjpeg`.
-2. If representative customer data still decodes acceptably, remove `pylibjpeg-libjpeg` from the default/commercial profile and improve missing-decoder messaging.
-3. If coverage is not good enough, test `python-gdcm` as the next practical decoder option.
-4. Treat a custom PyTurboJPEG/libjpeg-turbo pydicom plugin as a deeper engineering fallback, not the first replacement.
-5. Keep `pylibjpeg-libjpeg` only in a clearly separated GPL-compatible or user-managed profile if a product decision allows that.
+Use **GDCM as the one replacement for `pylibjpeg-libjpeg`**. Do not combine it with a custom
+PyTurboJPEG implementation. Pillow remains an ordinary pydicom fallback, while the existing
+JPEG 2000 (`pylibjpeg-openjpeg`), JPEG-LS (`pyjpegls`), and RLE (`pylibjpeg-rle`) plugins remain
+in place because they cover different transfer syntaxes.
 
 ## Option matrix
 
@@ -250,15 +254,13 @@ For each sample record:
 - Log decoder backend/version in debug diagnostics and future QA provenance where compressed input may affect numerical results.
 - Keep commercial/default requirements separate from optional/GPL or full-research profiles if multiple profiles are adopted.
 
-## Proposed next steps
+## Next steps (post-spike)
 
-1. Create a `no-pylibjpeg-libjpeg` spike branch.
-2. Remove only `pylibjpeg-libjpeg`; keep other accepted decoders unchanged.
-3. Run the compressed-DICOM corpus and app smoke tests.
-4. Record failures by transfer syntax and modality.
-5. Decide whether Pillow-only is good enough for the default/commercial profile.
-6. If not, run the same corpus against GDCM.
-7. Only start PyTurboJPEG custom-plugin work if both Pillow-only and GDCM are rejected.
+1. Validate GDCM native-library discovery and corpus decoding from a PyInstaller build; record the bundle-size delta.
+2. Resolve the synthetic no-color-transform `.50` JPEG color-space difference and preserve it as a regression guard if applicable.
+3. Replace `pylibjpeg-libjpeg` with `python-gdcm` in requirements and the PyInstaller specification; retain the other non-GPL decoder plugins.
+4. Add capability-aware user messaging and decoder-backend/version provenance.
+5. Remove the GPL exception, add committed non-PHI regression fixtures, and run the release verification suite.
 
 ## Decoder options landscape & licenses (2026-06-14 spike findings)
 

@@ -1,6 +1,7 @@
 # Decoder Replacement Spike Plan (`pylibjpeg-libjpeg` GPL removal)
 
-**Status:** Ready to start — actionable spike
+**Status:** Spike complete — GDCM selected; productionization and frozen-build verification pending
+**Last updated:** 2026-07-29
 **Priority:** P0 — Tier 0 hard blocker for commercial release
 **TO_DO ref:** Release / Product → [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #1
 
@@ -225,12 +226,13 @@ same `--baseline` diff:
 | Frozen-build risk | low (Pillow already bundled) | **native libs need PyInstaller validation + bundle-size cost** |
 
 GDCM eliminates the coverage regression and is LGPL (compatible with the closed-source model).
-**Recommended path: replace `pylibjpeg-libjpeg` with `python-gdcm`.** Remaining before
-finalizing (Phase 4/6/7):
+**Recommended path: replace `pylibjpeg-libjpeg` with `python-gdcm`.** This is a single
+replacement for the GPL classic-JPEG plugin; retain the existing Pillow fallback and the
+separate JPEG 2000, JPEG-LS, and RLE plugins. Remaining before finalizing (Phases 4/6/7):
 - [ ] Validate the no-color-transform `.50` behavior — decide which decoder follows DICOM
       `PhotometricInterpretation` correctly (likely GDCM); confirm real color JPEG is unaffected (it was here).
 - [ ] **Frozen-build check** — confirm GDCM native libs load from a PyInstaller build (not just venv); record bundle-size delta.
-- [ ] Optionally source `.57` (JPEG Lossless process 14) and `.81` (JPEG-LS near-lossless) fixtures to close corpus gaps.
+- [x] Source `.57` (JPEG Lossless process 14) and `.81` (JPEG-LS near-lossless) fixtures to close corpus gaps — completed 2026-06-14.
 - [ ] Then Phase 6 productionization (requirements swap, messaging, license-gate exception removal).
 
 ---
@@ -278,5 +280,6 @@ pylinac bump (with ACR QA re-verification).
 
 ## Related
 - Strategy / options: [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md)
+- Production execution: [`GDCM_DECODER_PRODUCTIONIZATION_PLAN.md`](GDCM_DECODER_PRODUCTIONIZATION_PLAN.md)
 - Legal gate: [`LICENSE_AND_COMPLIANCE_PLAN.md` §0a](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg--gpl-30-jpeg-decoder-blocking)
 - Master gate: [`COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) item #1

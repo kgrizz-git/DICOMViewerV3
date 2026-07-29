@@ -1,7 +1,7 @@
 # Commercial Release Readiness — Master Gate
 
 **Status:** Active — the single "can we sell this yet?" checklist
-**Last updated:** 2026-06-13
+**Last updated:** 2026-07-29
 **Owner:** product/release
 
 > **Purpose.** One place to see everything that must be true **before charging money** for
@@ -21,7 +21,7 @@
 
 | # | Blocker | Tier | Owner plan | Status |
 |---|---------|------|-----------|--------|
-| 1 | Replace GPL `pylibjpeg-libjpeg` + verify decode | 0 | [Decoder spike plan](plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md) | 🟡 Spike done → **GDCM recommended** (LGPL, full coverage, lossless bit-exact). Pending: frozen-build check, then productionize |
+| 1 | Replace GPL `pylibjpeg-libjpeg` + verify decode | 0 | [Decoder spike plan](plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md) | 🟡 Spike complete → **GDCM selected** (LGPL; no new corpus failures; lossless bit-exact). Pending: color-edge decision, frozen-build check, then productionize |
 | 2 | Verify/replace FFmpeg (`imageio-ffmpeg`) license | 0 | [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker) | ❌ Not started |
 | 3 | Replace Liberation Sans font with OFL/Apache font | 0 | [Compliance §3b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#3b-per-component-checklist-post-phase-0) | ❌ Not started |
 | 4 | Choose project license + add `LICENSE` | 0 | [Compliance §1](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#1b-project-license-file) | ❌ Not started |
