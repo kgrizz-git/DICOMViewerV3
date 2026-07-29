@@ -67,8 +67,8 @@ def _cnr_summary_values(result: Any) -> tuple[str, str, str, str]:
     obj_mean = ""
     obj_rois = details.get("object_rois")
     if isinstance(obj_rois, list) and obj_rois:
-        means = [
-            roi.get("mean")
+        means: list[float] = [
+            float(roi["mean"])
             for roi in obj_rois
             if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
         ]

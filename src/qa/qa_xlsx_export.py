@@ -12,7 +12,7 @@ Public:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -20,16 +20,22 @@ from openpyxl.worksheet.worksheet import Worksheet
 from qa.analysis_types import QAResult
 from qa.qa_export import _flatten
 
+
 # Guarded at import time so the Images-sheet builder can cheaply detect a
 # missing Pillow install without repeatedly trying/catching per image. Pillow
 # is a declared/installed dependency (see requirements.txt); this guard only
 # protects against an unusual environment where it is absent.
-try:
-    from PIL import Image as _PILImage  # noqa: F401  (import-only availability probe)
+def _detect_pillow() -> bool:
+    """Probe for Pillow once at import (single assignment keeps pyright happy)."""
+    try:
+        from PIL import Image  # noqa: F401  (import-only availability probe)
 
-    _PILLOW_AVAILABLE = True
-except Exception:
-    _PILLOW_AVAILABLE = False
+        return True
+    except Exception:
+        return False
+
+
+_PILLOW_AVAILABLE = _detect_pillow()
 
 _SUMMARY_HEADERS = (
     "Series/Run ID",
@@ -64,8 +70,8 @@ def _cnr_summary_values(result: QAResult) -> tuple[Any, Any, Any, Any]:
     obj_mean: Any = ""
     obj_rois = details.get("object_rois")
     if isinstance(obj_rois, list) and obj_rois:
-        means = [
-            roi.get("mean")
+        means: list[float] = [
+            float(roi["mean"])
             for roi in obj_rois
             if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
         ]
@@ -133,11 +139,14 @@ def _build_images_sheet(
         _append_note(summary_ws, "Images sheet skipped: Pillow is not available for image embedding.")
         return
 
+    def _has_image(result: QAResult) -> bool:
+        path = getattr(result, "analyzed_image_path", None)
+        return bool(path) and os.path.isfile(path)
+
     available = [
         (result, label)
         for result, label in zip(results, row_labels, strict=True)
-        if getattr(result, "analyzed_image_path", None)
-        and os.path.isfile(result.analyzed_image_path)
+        if _has_image(result)
     ]
     if not available:
         _append_note(summary_ws, "Images sheet skipped: no analyzed images were available.")
@@ -201,7 +210,9 @@ def build_qa_workbook(
     row_labels: list[str | None] = list(labels) if labels is not None else [None] * len(results)
 
     wb = Workbook()
-    summary_ws = wb.active
+    # A fresh Workbook always has an active worksheet; cast narrows the
+    # Optional/chartsheet union that openpyxl's stubs declare for .active.
+    summary_ws = cast(Worksheet, wb.active)
     summary_ws.title = "Summary"
     _build_summary_sheet(summary_ws, results, row_labels)
 

@@ -435,7 +435,7 @@ class QAAppFacade:
         json_default_stem: str,
         json_inputs: dict[str, Any] | None = None,
         allow_extent_retry: bool = True,
-        analyzed_image_temp_dir: tempfile.TemporaryDirectory | None = None,
+        analyzed_image_temp_dir: tempfile.TemporaryDirectory[str] | None = None,
     ) -> None:
         """
         Show progress, run QA in a background thread, then summary + JSON export.
