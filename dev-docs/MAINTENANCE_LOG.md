@@ -1,10 +1,22 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-28
+**Last updated:** 2026-07-30
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-07-30
+
+- **Unused-symbol / correctness cleanup** on `chore/dead-branch-and-unused-cleanup`:
+  basedpyright `reportUnusedImport` + `reportUnusedVariable` +
+  `reportUnusedParameter` on `src/` went from **93 → 0** (dead imports/locals
+  removed or `_`-prefixed; intentional re-exports and keyword-stable params
+  kept with safe markers). Also removed the zoom-release dead pan branch,
+  bypassed the OVERLAY empty-coordinates gate, clamped palette LUTs per
+  channel, and zeroed flat `normalize_to_uint8` arrays. Overlay LSB no-NumPy
+  bit-order was already fixed earlier (`annotation_overlay_bitmap.py`); closed
+  the stale TO_DO item. See CHANGELOG `[Unreleased]` Fixed/Changed.
 
 ## 2026-07-28
 

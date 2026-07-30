@@ -260,7 +260,7 @@ class KeyboardEventHandler:
         self.set_mouse_mode(_MOUSE_MODE_KEYS[event.key()])
         return True
 
-    def _key_magnifier(self, event: QKeyEvent) -> bool:
+    def _key_magnifier(self, _event: QKeyEvent) -> bool:
         """G: magnifier. Intentionally has no Ctrl/Cmd passthrough."""
         self.set_mouse_mode("magnifier")
         return True
@@ -325,7 +325,7 @@ class KeyboardEventHandler:
             self.toggle_series_navigator_callback()
         return True
 
-    def _key_invert(self, event: QKeyEvent) -> bool:
+    def _key_invert(self, _event: QKeyEvent) -> bool:
         """I: invert image. Intentionally has no Ctrl/Cmd passthrough."""
         if self.invert_image_callback:
             self.invert_image_callback()

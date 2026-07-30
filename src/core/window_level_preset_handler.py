@@ -30,7 +30,7 @@ def apply_window_level_preset(app: Any, preset_index: int) -> None:
     if not (0 <= preset_index < len(vsm.window_level_presets)):
         return
 
-    wc, ww, is_rescaled, preset_name = vsm.window_level_presets[preset_index]
+    wc, ww, is_rescaled, _preset_name = vsm.window_level_presets[preset_index]
     use_rescaled_values = vsm.use_rescaled_values
     rescale_slope = vsm.rescale_slope
     rescale_intercept = vsm.rescale_intercept

@@ -468,7 +468,7 @@ class FusionHandler:
             return None
 
         # Phase 2: Check if 3D resampling is needed
-        use_3d, reason = self._should_use_3d_resampling(base_datasets, overlay_datasets)
+        use_3d, _reason = self._should_use_3d_resampling(base_datasets, overlay_datasets)
 
         if use_3d:
             # Use 3D resampling

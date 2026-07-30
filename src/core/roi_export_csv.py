@@ -191,8 +191,8 @@ def build_csv_measurement_row(
     series_num: Any,
     series_desc: str,
     z: int,
-    meas_idx: int,
-    m_item: Any,
+    meas_idx: int,  # pyright: ignore[reportUnusedParameter]
+    m_item: Any,  # pyright: ignore[reportUnusedParameter]
 ) -> list[str]:
     """Build base columns for one measurement CSV row."""
     row = empty_csv_base_row()

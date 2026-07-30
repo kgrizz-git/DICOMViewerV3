@@ -505,13 +505,14 @@ class MeasurementCoordinator:
         # Finalize the move immediately
         self._finalize_measurement_move(measurement_item)
 
-    def _on_handle_drag_start(self, scene_pos: QPointF, shift_held: bool) -> None:
+    def _on_handle_drag_start(self, scene_pos: QPointF, _shift_held: bool) -> None:
         """
         Handle start of measurement handle drag. Hide cursor and show magnifier by default.
 
         Args:
             scene_pos: Scene position of the handle (start of drag).
-            shift_held: Unused; kept for callback signature compatibility.
+            shift_held: Unused; kept for callback signature compatibility
+                (parameter name ``_shift_held``).
         """
         # Use QApplication.setOverrideCursor so the blank cursor takes priority over both the
         # view widget cursor and any QGraphicsItem cursor (e.g. the handle's SizeAllCursor).

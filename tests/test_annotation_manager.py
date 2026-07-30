@@ -9,7 +9,7 @@ from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset
 from pydicom.tag import Tag
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsTextItem
+from PySide6.QtWidgets import QGraphicsPathItem, QGraphicsScene, QGraphicsTextItem
 
 from tools.annotation_manager import AnnotationManager
 
@@ -272,6 +272,54 @@ def test_create_presentation_state_items_covers_shapes_and_overlay_fallback(qapp
     assert len(items) == 6
     assert len(scene.items()) == 6
     assert len(manager.annotations[scene]) == 6
+
+
+def test_create_presentation_state_items_overlay_without_coordinates(qapp, monkeypatch):
+    """OVERLAY with empty coordinates still renders bitmap and path fallbacks."""
+    manager = AnnotationManager()
+    scene = QGraphicsScene()
+    bitmap_item = QGraphicsTextItem("bitmap-no-coords")
+    monkeypatch.setattr(manager, "_create_overlay_bitmap_item", lambda *args, **kwargs: bitmap_item)
+
+    path_coords = [(40, 40), (44, 40), (44, 44), (40, 40)]
+    items = manager.create_presentation_state_items(
+        scene,
+        [
+            {
+                "type": "OVERLAY",
+                "coordinates": [],
+                "paths": [],
+                "overlay_rows": 2,
+                "overlay_cols": 2,
+                "overlay_origin_x": 0,
+                "overlay_origin_y": 0,
+                "overlay_data": bytes([0b00000001]),
+            },
+            {
+                "type": "OVERLAY",
+                "coordinates": [],
+                "paths": [path_coords],
+                "overlay_rows": 0,
+                "overlay_cols": 0,
+                "overlay_origin_x": 40,
+                "overlay_origin_y": 40,
+                "overlay_data": None,
+            },
+        ],
+        100,
+        100,
+    )
+
+    assert items[0] is bitmap_item
+    assert len(items) == 2
+    assert bitmap_item in scene.items()
+    assert bitmap_item in manager.annotations[scene]
+    # Path fallback creates a QGraphicsPathItem when overlay_data is absent.
+    path_item = items[1]
+    assert isinstance(path_item, QGraphicsPathItem)
+    assert path_item in scene.items()
+    assert path_item in manager.annotations[scene]
+    assert len(manager.annotations[scene]) == 2
 
 
 def test_create_presentation_state_items_uses_bitmap_item_when_available(qapp, monkeypatch):

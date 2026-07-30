@@ -868,9 +868,7 @@ class ImageViewerInputMixin:
                 self.zoom_start_pos = None
                 self.zoom_start_zoom = None
                 self.zoom_mouse_moved = False
-                # Restore ScrollHandDrag if we're in pan mode
-                if self.mouse_mode == "pan":
-                    self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+                # Zoom mode uses NoDrag; do not restore ScrollHandDrag here.
             elif self.mouse_mode == "measure" and self.measuring:
                 # Finish measurement (if not already finished by second click); restore cursor
                 self.measuring = False
@@ -1054,7 +1052,7 @@ class ImageViewerInputMixin:
 
         event.ignore()
 
-    def dragLeaveEvent(self, event) -> None:
+    def dragLeaveEvent(self, _event) -> None:
         self._drag_active = False
         self.viewport().update()
 

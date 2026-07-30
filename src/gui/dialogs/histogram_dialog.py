@@ -362,7 +362,7 @@ class HistogramDialog(QDialog):
         window_width = self.get_window_width()
         self.histogram_widget.set_window_level(window_center, window_width)
 
-    def _on_log_scale_toggled(self, checked: bool = False) -> None:
+    def _on_log_scale_toggled(self, _checked: bool = False) -> None:
         """Handle log scale toggle.
 
         Button text shows the mode that will be activated when clicked next,

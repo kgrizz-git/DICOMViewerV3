@@ -28,7 +28,7 @@ from qa.qa_export import extract_low_contrast_cnr_values, flatten_metrics
 def _detect_pillow() -> bool:
     """Probe for Pillow once at import (single assignment keeps pyright happy)."""
     try:
-        from PIL import Image  # noqa: F401  (import-only availability probe)
+        from PIL import Image  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
         return True
     except Exception:
@@ -168,7 +168,7 @@ def build_qa_workbook(
     results: list[QAResult],
     labels: list[str] | None = None,
     *,
-    app_version: str = "",
+    app_version: str = "",  # pyright: ignore[reportUnusedParameter]
 ) -> Workbook:
     """
     Build an in-memory openpyxl Workbook for one or more QA runs.

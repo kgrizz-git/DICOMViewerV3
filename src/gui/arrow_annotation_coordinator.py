@@ -82,7 +82,7 @@ class ArrowAnnotationCoordinator:
         if hasattr(self.image_viewer, 'zoom_changed'):
             self.image_viewer.zoom_changed.connect(self._on_zoom_changed_for_arrows)
 
-    def _on_zoom_changed_for_arrows(self, zoom_level: float) -> None:
+    def _on_zoom_changed_for_arrows(self, _zoom_level: float) -> None:
         """Handle zoom change by recomputing directional line endpoints for this view."""
         self._update_arrow_lines_for_view_scale()
 

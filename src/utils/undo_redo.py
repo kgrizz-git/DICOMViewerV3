@@ -970,5 +970,7 @@ class CompositeCommand(Command):
             command.undo()
 
 
-from utils.undo_redo_tag_commands import TagEditCommand  # noqa: F401 (re-exported)
+from utils.undo_redo_tag_commands import (
+    TagEditCommand,  # noqa: F401  # pyright: ignore[reportUnusedImport]
+)
 

@@ -71,7 +71,7 @@ except ImportError:
 # here for backward compatibility with existing callers.
 # ---------------------------------------------------------------------------
 
-from core.volume_render_presets import (  # noqa: F401
+from core.volume_render_presets import (
     BUILTIN_PRESETS,
     PRESET_CT_ANATOMY_COLORS,
     PRESET_CT_ANGIO,
@@ -96,6 +96,28 @@ from core.volume_render_presets import (  # noqa: F401
     is_steep_preset,
     preset_steepness,
 )
+
+# Mark re-exports as referenced for basedpyright without narrowing ``__all__``.
+_PRESET_REEXPORTS = (
+    BUILTIN_PRESETS,
+    PRESET_CT_ANATOMY_COLORS,
+    PRESET_CT_ANGIO,
+    PRESET_CT_FAT,
+    PRESET_CT_LUNG,
+    PRESET_CT_MUSCLE,
+    PRESET_CT_SKIN,
+    PRESET_CT_SMOOTH_ANATOMY,
+    PRESET_CT_SOFT_TISSUE,
+    PRESET_CT_VIVID_ANGIO,
+    PRESET_GROUPS,
+    PRESET_MR_MRA,
+    PRESET_MR_T1_BRAIN,
+    PRESET_MR_T2_BRAIN,
+    STEEP_PRESET_THRESHOLD,
+    is_steep_preset,
+    preset_steepness,
+)
+del _PRESET_REEXPORTS
 
 
 @dataclass

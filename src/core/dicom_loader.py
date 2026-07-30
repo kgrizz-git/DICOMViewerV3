@@ -547,14 +547,14 @@ class DICOMLoader:
                 # For single file loading, pass a progress callback that formats messages
                 file_progress_callback = None
                 if total_files == 1 and progress_callback:
-                    def single_file_progress(message: str, current_frames: int | None, total_frames: int | None) -> None:
+                    def single_file_progress(message: str, _current_frames: int | None, _total_frames: int | None) -> None:
                         # Format message for single file case - pass message as filename parameter
                         # This handles both loading messages and defer messages
                         progress_callback(1, 1, message)
                     file_progress_callback = single_file_progress
                 elif progress_callback:
                     # For multiple files, create a callback that can handle defer messages
-                    def multi_file_progress(message: str, current_frames: int | None, total_frames: int | None, idx: int = idx) -> None:
+                    def multi_file_progress(message: str, _current_frames: int | None, _total_frames: int | None, idx: int = idx) -> None:
                         # idx is bound per iteration so the closure cannot drift if the
                         # callback is ever invoked outside the current loop pass.
                         # If message starts with "Deferring", show it as a status message
@@ -675,7 +675,7 @@ class DICOMLoader:
                 # Create progress callback wrapper for load_file
                 file_progress_callback = None
                 if progress_callback:
-                    def multi_file_progress(message: str, current_frames: int | None, total_frames: int | None, idx: int = idx) -> None:
+                    def multi_file_progress(message: str, _current_frames: int | None, _total_frames: int | None, idx: int = idx) -> None:
                         # idx is bound per iteration so the closure cannot drift if the
                         # callback is ever invoked outside the current loop pass.
                         # If message starts with "Deferring", show it as a status message

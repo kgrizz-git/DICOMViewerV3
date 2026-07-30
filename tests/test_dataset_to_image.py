@@ -359,13 +359,30 @@ def test_palette_color_per_channel_first_value() -> None:
     assert np.array_equal(np.asarray(image), expected)
 
 
-def test_palette_color_short_green_lut_falls_back_to_grayscale() -> None:
+def test_palette_color_short_green_lut_renders_rgb() -> None:
     ds = _make_palette_color_dataset(indices=(0, 1, 2, 3), bits_allocated=8, short_green=True)
     image = DICOMProcessor.dataset_to_image(ds, window_center=127.5, window_width=255)
     assert image is not None
-    # A Green LUT shorter than Red raises IndexError inside the shared try/except,
-    # which must be swallowed -- silent fallback to grayscale, no exception escapes.
-    assert image.mode == "L"
+    # Per-channel clamp keeps Green indices within the shorter LUT so palette
+    # conversion succeeds instead of IndexError → silent grayscale fallback.
+    assert image.mode == "RGB"
+
+    # Two-entry Green LUT [0, 1]: indices 2 and 3 must clamp to the last entry (1),
+    # while Red/Blue still use the full ramp. Then apply the same identity W/L path
+    # dataset_to_image uses so the pixel assertion is unambiguous.
+    ramp = np.array([min(i, 255) for i in range(256)], dtype=np.uint8)
+    green_lut = ramp[:2]
+    expected_rgb = np.zeros((1, 4, 3), dtype=np.uint8)
+    for i, idx in enumerate((0, 1, 2, 3)):
+        expected_rgb[0, i, 0] = ramp[idx]
+        expected_rgb[0, i, 1] = green_lut[min(idx, len(green_lut) - 1)]
+        expected_rgb[0, i, 2] = ramp[idx]
+    expected = apply_color_window_level_luminance(expected_rgb, 127.5, 255, None, None)
+    assert np.array_equal(np.asarray(image), expected)
+    # Explicit clamp check: index 3's green channel matches the LUT's final value
+    # after W/L (not an unclamped ramp[3]).
+    assert int(np.asarray(image)[0, 3, 1]) == int(expected[0, 3, 1])
+    assert int(expected_rgb[0, 3, 1]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -417,9 +434,9 @@ def test_convert_window_level_units_all_combinations() -> None:
     assert convert_window_level_units(40, 400, True, True, False, None, None) == (40, 400)
 
 
-def test_normalize_to_uint8_flat_array_wraps() -> None:
+def test_normalize_to_uint8_flat_array_zeroed() -> None:
     flat = np.full((3, 3), 1000, dtype=np.float64)
-    assert np.all(normalize_to_uint8(flat) == 232)
+    assert np.all(normalize_to_uint8(flat) == 0)
 
 
 def test_normalize_channels_to_uint8_flat_channel_zeroed() -> None:

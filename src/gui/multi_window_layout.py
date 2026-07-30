@@ -763,7 +763,7 @@ class MultiWindowLayout(QWidget):
             return None
         return pix
 
-    def _on_assign_series_requested(self, series_uid: str, slice_index: int, study_uid: str = "") -> None:
+    def _on_assign_series_requested(self, series_uid: str, slice_index: int, _study_uid: str = "") -> None:
         """
         Handle series assignment request from a subwindow.
         

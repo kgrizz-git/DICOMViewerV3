@@ -521,7 +521,7 @@ class TagViewerDialog(QDialog):
 
         return tag_item
 
-    def _on_search_changed(self, text: str) -> None:
+    def _on_search_changed(self, _text: str) -> None:
         """
         Handle search text change with debouncing.
         

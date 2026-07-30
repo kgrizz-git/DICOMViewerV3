@@ -650,7 +650,7 @@ class MetadataPanel(QWidget):
 
         return tag_item
 
-    def _on_search_changed(self, text: str) -> None:
+    def _on_search_changed(self, _text: str) -> None:
         """
         Handle search text change with debouncing.
         
@@ -744,7 +744,7 @@ class MetadataPanel(QWidget):
         if self.config_manager is not None:
             self.config_manager.set_metadata_panel_group_expanded(self._group_expanded)
 
-    def _on_column_resized(self, logical_index: int, old_size: int, new_size: int) -> None:
+    def _on_column_resized(self, _logical_index: int, _old_size: int, _new_size: int) -> None:
         """
         Handle column resize event to save column widths.
         
@@ -764,7 +764,7 @@ class MetadataPanel(QWidget):
             # Save to config
             self.config_manager.set_metadata_panel_column_widths(widths)
 
-    def _on_column_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int) -> None:
+    def _on_column_moved(self, _logical_index: int, _old_visual_index: int, _new_visual_index: int) -> None:
         """
         Handle column move event to save column order.
         

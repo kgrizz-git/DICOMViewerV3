@@ -309,7 +309,7 @@ class MprVolume:
         sorted_positions: list[float] = list(initial_stack.positions)
 
         # Step 3: Deduplicate by position (average coincident slices).
-        deduped_datasets, deduped_positions, averaged_arrays = cls._deduplicate_sorted(
+        deduped_datasets, _deduped_positions, averaged_arrays = cls._deduplicate_sorted(
             sorted_datasets, sorted_positions
         )
         if len(deduped_datasets) < 1:

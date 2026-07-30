@@ -638,7 +638,7 @@ class FusionControlsWidget(QWidget):
     def update_series_lists(
         self,
         series_list: list[tuple[str, str]],
-        current_base_uid: str = "",
+        current_base_uid: str = "",  # pyright: ignore[reportUnusedParameter]
         current_overlay_uid: str = ""
     ) -> None:
         """
@@ -1122,17 +1122,20 @@ class FusionControlsWidget(QWidget):
             self.interpolation_combo.setCurrentIndex(index)
         self._updating = False
 
-    def set_resampling_status(self, mode_display: str, reason: str, show_warning: bool = False, warning_text: str = "") -> None:
+    def set_resampling_status(self, _mode_display: str, _reason: str, show_warning: bool = False, warning_text: str = "") -> None:
         """
         Update resampling warning display.
         
         Args:
-            mode_display: Mode display string (e.g., "Fast Mode (2D)" or "High Accuracy (3D)")
-            reason: Reason string (e.g., "Compatible: same orientation")
+            mode_display: Unused display string; kept for call-site compatibility
+                (e.g. "Fast Mode (2D)" or "High Accuracy (3D)").
+            reason: Unused reason string; kept for call-site compatibility
+                (e.g. "Compatible: same orientation").
             show_warning: Whether to show warning label
             warning_text: Warning text to display
         """
         # Show/hide warning only; summary text is handled by the main status log.
+        # ``_mode_display`` / ``_reason`` are unused here by design.
         if show_warning and warning_text:
             self.resampling_warning_label.setText(warning_text)
             self.resampling_warning_label.setVisible(True)

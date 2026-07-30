@@ -220,7 +220,7 @@ class TagEditDialog(QDialog):
                 self.new_value = value_str
             elif self.vr in self.NUMERIC_VR_TYPES:
                 # For numeric types using QLineEdit (like UL), convert to appropriate type
-                num_type, min_val, max_val = self.NUMERIC_VR_TYPES[self.vr]
+                num_type, _min_val, max_val = self.NUMERIC_VR_TYPES[self.vr]
                 try:
                     if num_type is float:
                         self.new_value = float(value_str)

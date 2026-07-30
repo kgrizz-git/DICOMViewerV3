@@ -399,14 +399,14 @@ class SeriesThumbnail(QFrame):
                 height, width = img_array.shape
                 return QImage(img_array.data, width, height, width, QImage.Format.Format_Grayscale8)
             elif pil_image.mode == 'RGB':
-                height, width, channels = img_array.shape
+                height, width, _channels = img_array.shape
                 return QImage(img_array.data, width, height, width * 3, QImage.Format.Format_RGB888)
             else:
                 rgb_image = pil_image.convert('RGB')
                 img_array = np.array(rgb_image)
                 if not img_array.flags['C_CONTIGUOUS']:
                     img_array = np.ascontiguousarray(img_array)
-                height, width, channels = img_array.shape
+                height, width, _channels = img_array.shape
                 return QImage(img_array.data, width, height, width * 3, QImage.Format.Format_RGB888)
         except Exception:
             # Fallback: create empty QImage
@@ -440,7 +440,7 @@ class SeriesThumbnail(QFrame):
                                   width, QImage.Format.Format_Grayscale8)
                 elif self.thumbnail_image.mode == 'RGB':
                     # RGB: shape is (height, width, 3)
-                    height, width, channels = img_array.shape
+                    height, width, _channels = img_array.shape
                     qimage = QImage(img_array.data, width, height,
                                   width * 3, QImage.Format.Format_RGB888)
                 else:
@@ -449,7 +449,7 @@ class SeriesThumbnail(QFrame):
                     img_array = np.array(rgb_image)
                     if not img_array.flags['C_CONTIGUOUS']:
                         img_array = np.ascontiguousarray(img_array)
-                    height, width, channels = img_array.shape
+                    height, width, _channels = img_array.shape
                     qimage = QImage(img_array.data, width, height,
                                   width * 3, QImage.Format.Format_RGB888)
 

@@ -35,17 +35,19 @@ _logger = logging.getLogger(__name__)
 
 
 def normalize_to_uint8(array: np.ndarray) -> np.ndarray:
-    """Normalize an array to 0-255 uint8. No clip, no zeroing of flat arrays (see
-    dev-docs/TO_DO.md for the flat-array uint8-wraparound quirk this preserves)."""
+    """Normalize an array to 0-255 uint8. Flat arrays (max == min) are zeroed,
+    matching ``normalize_channels_to_uint8``."""
     processed = array.astype(np.float32)
     if processed.max() > processed.min():
         processed = ((processed - processed.min()) / (processed.max() - processed.min()) * 255.0)
+    else:
+        processed = np.zeros_like(processed)
     return processed.astype(np.uint8)
 
 
 def normalize_channels_to_uint8(array: np.ndarray) -> np.ndarray:
     """Normalize a (height, width, channels) array to 0-255 uint8, per channel.
-    Flat channels are zeroed (unlike normalize_to_uint8) and the result is clipped."""
+    Flat channels are zeroed (same as ``normalize_to_uint8``) and the result is clipped."""
     processed = array.astype(np.float32)
     for channel in range(processed.shape[2]):
         channel_data = processed[:, :, channel]

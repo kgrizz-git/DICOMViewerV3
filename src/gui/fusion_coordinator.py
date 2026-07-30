@@ -627,15 +627,16 @@ class FusionCoordinator:
                 combo.setCurrentIndex(i)
                 break
 
-    def handle_translation_offset_changed(self, x_offset: float, y_offset: float) -> None:
+    def handle_translation_offset_changed(self, _x_offset: float, _y_offset: float) -> None:
         """
         Handle translation offset change.
         
         Args:
-            x_offset: X offset in pixels
-            y_offset: Y offset in pixels
+            x_offset: Unused X offset in pixels; kept for signal/callback compatibility.
+            y_offset: Unused Y offset in pixels; kept for signal/callback compatibility.
         """
-        # Request display update if fusion is enabled
+        # Request display update if fusion is enabled (offsets applied elsewhere).
+        # ``_x_offset`` / ``_y_offset`` are unused here by design.
         if self.fusion_handler.fusion_enabled:
             self.request_display_update()
 
