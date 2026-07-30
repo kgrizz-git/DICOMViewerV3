@@ -251,7 +251,7 @@ def build_managers_for_subwindow(
         "roi_coordinator"
     ].update_roi_statistics_overlays
 
-    def on_inversion_state_changed(inverted: bool, i=idx) -> None:
+    def on_inversion_state_changed(inverted: bool, _i=idx) -> None:
         if managers["view_state_manager"].current_series_identifier:
             managers["view_state_manager"].set_series_inversion_state(
                 managers["view_state_manager"].current_series_identifier,
@@ -260,7 +260,7 @@ def build_managers_for_subwindow(
 
     image_viewer.inversion_state_changed_callback = on_inversion_state_changed
 
-    def on_orientation_changed(flip_h: bool, flip_v: bool, rotation_deg: int, i=idx) -> None:
+    def on_orientation_changed(_flip_h: bool, _flip_v: bool, _rotation_deg: int, _i=idx) -> None:
         """Persist orientation state whenever the user flips or rotates the image."""
         managers["view_state_manager"].save_orientation()
 

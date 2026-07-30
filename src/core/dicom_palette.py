@@ -84,10 +84,9 @@ def _apply_one_lut(indexed_array: np.ndarray, lut: np.ndarray, first_value: int,
     """Map indices through a single channel's LUT, using that channel's own
     first_value (per DICOM PS3.3 C.7.6.3.1.5, each of Red/Green/Blue has its own).
     Indices are computed in a signed dtype so a negative first_value (or an index
-    below it) does not wrap the way it would on an unsigned array. ``clamp_max`` is
-    shared across channels (see apply_palette_luts) -- a Green/Blue LUT shorter
-    than Red can still raise IndexError here, a known, deliberately-preserved
-    quirk (dev-docs/TO_DO.md)."""
+    below it) does not wrap the way it would on an unsigned array. ``clamp_max``
+    should be ``len(lut) - 1`` for this channel so a shorter Green/Blue LUT cannot
+    raise IndexError at lookup."""
     indexed_signed = indexed_array.astype(np.int32) - first_value
     indexed_signed = np.clip(indexed_signed, 0, clamp_max)
     if lut.dtype == np.uint16:
@@ -104,13 +103,11 @@ def apply_palette_luts(
     green_first_value: int,
     blue_first_value: int,
 ) -> np.ndarray:
-    """Clamp indices against the Red LUT's length for all three channels (a known
-    quirk, not fixed here -- see dev-docs/TO_DO.md), normalize 16-bit LUTs to
-    8-bit, look up (each channel using its own first_value), and stack to RGB."""
-    clamp_max = len(red_lut) - 1
-    red_channel = _apply_one_lut(indexed_array, red_lut, red_first_value, clamp_max)
-    green_channel = _apply_one_lut(indexed_array, green_lut, green_first_value, clamp_max)
-    blue_channel = _apply_one_lut(indexed_array, blue_lut, blue_first_value, clamp_max)
+    """Clamp indices per channel against that LUT's length, normalize 16-bit LUTs
+    to 8-bit, look up (each channel using its own first_value), and stack to RGB."""
+    red_channel = _apply_one_lut(indexed_array, red_lut, red_first_value, len(red_lut) - 1)
+    green_channel = _apply_one_lut(indexed_array, green_lut, green_first_value, len(green_lut) - 1)
+    blue_channel = _apply_one_lut(indexed_array, blue_lut, blue_first_value, len(blue_lut) - 1)
 
     if len(indexed_array.shape) == 2:
         return np.stack([red_channel, green_channel, blue_channel], axis=2)

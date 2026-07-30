@@ -505,7 +505,7 @@ class MeasurementCoordinator:
         # Finalize the move immediately
         self._finalize_measurement_move(measurement_item)
 
-    def _on_handle_drag_start(self, scene_pos: QPointF, shift_held: bool) -> None:
+    def _on_handle_drag_start(self, scene_pos: QPointF, _shift_held: bool) -> None:
         """
         Handle start of measurement handle drag. Hide cursor and show magnifier by default.
 

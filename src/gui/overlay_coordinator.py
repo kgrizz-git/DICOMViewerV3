@@ -240,7 +240,7 @@ class OverlayCoordinator:
             # Force scene update to refresh immediately
             self.image_viewer.scene.update()
 
-    def hide_roi_labels(self, hide: bool) -> None:
+    def hide_roi_labels(self, _hide: bool) -> None:
         """
         Hide or show ROI labels.
         

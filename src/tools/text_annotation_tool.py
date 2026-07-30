@@ -332,7 +332,7 @@ class TextAnnotationItem(QGraphicsTextItem):
         # Let other events through
         return False
 
-    def _on_contents_changed(self, position: int, chars_removed: int, chars_added: int) -> None:
+    def _on_contents_changed(self, _position: int, _chars_removed: int, _chars_added: int) -> None:
         """
         Handle document contents change - detect and remove newlines.
         

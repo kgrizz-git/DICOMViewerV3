@@ -30,19 +30,8 @@ import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
 
-# Try to import pydicom's convert_color_space (available in pydicom 3.0+)
-try:
-    # pydicom 3.x: convert_color_space lives in pydicom.pixels.processing (absent in 2.x).
-    from pydicom.pixels.processing import (  # pyright: ignore[reportMissingImports]
-        convert_color_space,
-    )
-
-    pydicom_convert_available = True
-except ImportError:
-    pydicom_convert_available = False
-    convert_color_space = None
-
 # Phase 2 refactor: domain modules (facade delegates to these)
+# YBR/convert_color_space lives in core.dicom_color (not re-imported here).
 from core import (
     dicom_color,
     dicom_image_render,

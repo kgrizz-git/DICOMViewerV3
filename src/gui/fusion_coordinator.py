@@ -627,7 +627,7 @@ class FusionCoordinator:
                 combo.setCurrentIndex(i)
                 break
 
-    def handle_translation_offset_changed(self, x_offset: float, y_offset: float) -> None:
+    def handle_translation_offset_changed(self, _x_offset: float, _y_offset: float) -> None:
         """
         Handle translation offset change.
         

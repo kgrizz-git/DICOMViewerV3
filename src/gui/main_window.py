@@ -1310,7 +1310,7 @@ class MainWindow(QMainWindow):
         # Update the recent menu after dialog closes (in case items were removed)
         self._update_recent_menu()
 
-    def _on_splitter_moved(self, pos: int, index: int) -> None:
+    def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         """
         Handle splitter movement.
         

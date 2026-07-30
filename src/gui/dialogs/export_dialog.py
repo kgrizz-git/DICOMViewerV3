@@ -361,7 +361,7 @@ class ExportDialog(QDialog):
         if dialog.exec():
             self.anonymizer_options = dialog.get_options()
 
-    def _on_resolution_changed(self, index: int) -> None:
+    def _on_resolution_changed(self, _index: int) -> None:
         """Sync export_scale from resolution combo."""
         scale = self.resolution_combo.currentData()
         if scale is not None:

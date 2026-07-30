@@ -1189,7 +1189,7 @@ class DICOMViewerApp(QObject):
         """Update tag viewer with dataset."""
         self.dialog_coordinator.update_tag_viewer(dataset)
 
-    def _on_tag_edited(self, tag_str: str, new_value) -> None:
+    def _on_tag_edited(self, _tag_str: str, _new_value) -> None:
         """
         Handle tag edit from either panel - refresh both panels.
         

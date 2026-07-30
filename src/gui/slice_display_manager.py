@@ -327,7 +327,7 @@ class SliceDisplayManager:
 
     def _create_projection_image(
         self,
-        dataset: Dataset,
+        _dataset: Dataset,
         current_studies: dict[str, dict[str, list[Dataset]]],
         current_study_uid: str,
         current_series_uid: str,

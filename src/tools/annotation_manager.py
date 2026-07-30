@@ -332,9 +332,11 @@ class AnnotationManager:
                 color = ann.get('color', (255, 255, 0))
                 units = ann.get('units', 'PIXEL')
 
-                # Transform coordinates based on units
+                # Transform coordinates based on units. OVERLAY annotations render
+                # from overlay_data / paths and must not be skipped when coordinates
+                # are empty (bitmap / path branches do not need pre-populated coords).
                 transformed_coords = self._transform_coordinates(coords, units, image_width, image_height)
-                if not transformed_coords:
+                if not transformed_coords and ann_type != 'OVERLAY':
                     continue
 
                 # Convert color tuple to QColor
@@ -812,8 +814,8 @@ class AnnotationManager:
         self,
         overlay_paths: list[list[tuple[float, float]]],
         coords: list[tuple[float, float]],
-        paths: list[list[tuple[float, float]]],
-        pen: QPen,
+        _paths: list[list[tuple[float, float]]],
+        _pen: QPen,
         color: QColor,
         scene,
         items: list[QGraphicsItem],

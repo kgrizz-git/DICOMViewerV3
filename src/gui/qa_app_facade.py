@@ -721,7 +721,7 @@ class QAAppFacade:
 
         progress.canceled.connect(on_cancel)
 
-        def on_series_completed(done: int, total_: int, result: QAResult) -> None:
+        def on_series_completed(done: int, total_: int, _result: QAResult) -> None:
             progress.setValue(done)
             progress.setLabelText(f"Running ACR CT batch analysis ({done} of {total_})...")
 

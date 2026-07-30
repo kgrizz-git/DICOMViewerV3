@@ -35,11 +35,13 @@ _logger = logging.getLogger(__name__)
 
 
 def normalize_to_uint8(array: np.ndarray) -> np.ndarray:
-    """Normalize an array to 0-255 uint8. No clip, no zeroing of flat arrays (see
-    dev-docs/TO_DO.md for the flat-array uint8-wraparound quirk this preserves)."""
+    """Normalize an array to 0-255 uint8. Flat arrays (max == min) are zeroed,
+    matching ``normalize_channels_to_uint8``."""
     processed = array.astype(np.float32)
     if processed.max() > processed.min():
         processed = ((processed - processed.min()) / (processed.max() - processed.min()) * 255.0)
+    else:
+        processed = np.zeros_like(processed)
     return processed.astype(np.uint8)
 
 

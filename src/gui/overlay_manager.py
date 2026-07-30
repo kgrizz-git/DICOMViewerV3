@@ -552,7 +552,7 @@ class OverlayManager:
         )
 
     def create_overlay_items(self, scene, parser: DICOMParser,
-                            position: tuple[int, int] = (10, 10), total_slices: int | None = None,
+                            _position: tuple[int, int] = (10, 10), total_slices: int | None = None,
                             projection_enabled: bool = False, projection_start_slice: int | None = None,
                             projection_end_slice: int | None = None, projection_total_thickness: float | None = None,
                             projection_type: str | None = None,

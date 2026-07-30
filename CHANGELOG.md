@@ -6,6 +6,15 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Fixed
+- **Zoom release dead branch:** removed an unreachable nested `mouse_mode == "pan"` check inside the zoom `mouseReleaseEvent` path in `image_viewer_input.py` (ScrollHandDrag was never restored there because zoom mode uses NoDrag). **Semantic versioning note: patch**.
+- **OVERLAY annotations without coordinates:** `AnnotationManager.create_presentation_state_items` no longer skips `OVERLAY` items when `coordinates` is empty; bitmap/`paths` overlays render without a dummy coordinate. **Semantic versioning note: patch**.
+- **Palette short secondary LUT:** `apply_palette_luts` clamps indices per channel to that LUT's length so a shorter G or B table no longer IndexErrors into silent grayscale fallback. **Semantic versioning note: patch**.
+- **Flat-image normalize wraparound:** `normalize_to_uint8` zeroes constant-valued arrays instead of casting to `uint8` (e.g. 1000 → 232). Matches `normalize_channels_to_uint8`. **Semantic versioning note: patch**.
+
+### Changed
+- **Unused symbol cleanup:** cleared remaining basedpyright `reportUnusedImport` / `reportUnusedVariable` / `reportUnusedParameter` findings in `src/` (true dead imports/locals removed or `_`-prefixed; intentional re-exports and keyword API params kept with safe markers). **Semantic versioning note: patch** (maintainability only).
+
 ### Added
 - **ACR CT CNR intermediates:** the ACR CT result dialog now surfaces the values behind the low-contrast **contrast-to-noise ratio** — object ROI mean, background mean, background noise (σ), and module CNR — and writes them to **`metrics.low_contrast_cnr`** (`object_rois`, `background`, `cnr`) in the JSON/CSV/XLSX exports. **Semantic versioning note: minor** (new user-facing capability).
 - **ACR CT batch analysis:** new **Tools → Automated QA → ACR CT Batch (pylinac)…** runs one shared CT options set over **multiple selected CT series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); the batch summary dialog shows one row per series with **Export XLSX…** / **Export JSON…**. **Semantic versioning note: minor**.

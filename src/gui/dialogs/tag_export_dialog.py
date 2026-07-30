@@ -781,7 +781,7 @@ class TagExportDialog(QDialog):
             item.setExpanded(True)
         return visible
 
-    def _on_series_selection_changed(self, item: QTreeWidgetItem, column: int) -> None:
+    def _on_series_selection_changed(self, item: QTreeWidgetItem, _column: int) -> None:
         """Handle series and instance selection changes."""
         # Block signals to prevent recursive calls
         self.series_tree.blockSignals(True)
@@ -863,7 +863,7 @@ class TagExportDialog(QDialog):
         self.series_tree.blockSignals(False)
         self._update_selected_series()
 
-    def _on_tag_selection_changed(self, item: QTreeWidgetItem, column: int) -> None:
+    def _on_tag_selection_changed(self, item: QTreeWidgetItem, _column: int) -> None:
         """
         Handle tag selection changes, recursively: checking/unchecking any node
         (group header, SQ parent, ``Item N``, or leaf) propagates that state to
@@ -1147,7 +1147,7 @@ class TagExportDialog(QDialog):
         self.preset_combo.addItem(_ITEM_NO_PRESET)
         self.preset_combo.setCurrentIndex(self.preset_combo.count() - 1)
 
-    def _on_preset_selected(self, preset_name: str) -> None:
+    def _on_preset_selected(self, _preset_name: str) -> None:
         """Handle preset selection (for future use, e.g., auto-load on selection)."""
         pass
 

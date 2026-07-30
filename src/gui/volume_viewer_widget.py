@@ -1467,7 +1467,7 @@ class VolumeViewerWidget(QWidget):
         self._renderer.clear_cropping()
         self._render()
 
-    def _on_crop_box_changed(self, obj=None, event=None) -> None:
+    def _on_crop_box_changed(self, _obj=None, _event=None) -> None:
         """Update clipping planes from the current box widget position."""
         if not hasattr(self, "_box_widget") or self._box_widget is None:
             return
@@ -1599,7 +1599,7 @@ class VolumeViewerWidget(QWidget):
     _KEY_VIEW_MAP: ClassVar[dict[str, str]] = {"1": "Anterior", "2": "Posterior", "3": "Left",
                       "4": "Right", "5": "Superior", "6": "Inferior"}
 
-    def _on_key_press(self, obj: Any = None, event: str = "") -> None:
+    def _on_key_press(self, _obj: Any = None, _event: str = "") -> None:
         """Handle keyboard shortcuts in the 3D viewport."""
         iren = self._interactor.GetRenderWindow().GetInteractor() if self._interactor else None
         if iren is None:
@@ -1634,13 +1634,13 @@ class VolumeViewerWidget(QWidget):
             if idx >= 0:
                 self._preset_combo.setCurrentIndex(idx)
 
-    def _on_interaction_start(self, obj: Any = None, event: str = "") -> None:
+    def _on_interaction_start(self, _obj: Any = None, _event: str = "") -> None:
         """Switch to coarse sampling during mouse interaction for responsiveness."""
         self._renderer.set_interactive_quality(True)
         if self._auto_rotate_btn.isChecked():
             self._auto_rotate_btn.setChecked(False)
 
-    def _on_interaction_end(self, obj: Any = None, event: str = "") -> None:
+    def _on_interaction_end(self, _obj: Any = None, _event: str = "") -> None:
         """Restore fine sampling after interaction and re-render."""
         self._renderer.set_interactive_quality(False)
         self._render()

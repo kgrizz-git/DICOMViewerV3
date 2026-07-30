@@ -274,6 +274,36 @@ def test_create_presentation_state_items_covers_shapes_and_overlay_fallback(qapp
     assert len(manager.annotations[scene]) == 6
 
 
+def test_create_presentation_state_items_overlay_without_coordinates(qapp, monkeypatch):
+    """OVERLAY with overlay_data must render even when coordinates are empty."""
+    manager = AnnotationManager()
+    scene = QGraphicsScene()
+    bitmap_item = QGraphicsTextItem("bitmap-no-coords")
+    monkeypatch.setattr(manager, "_create_overlay_bitmap_item", lambda *args, **kwargs: bitmap_item)
+
+    items = manager.create_presentation_state_items(
+        scene,
+        [
+            {
+                "type": "OVERLAY",
+                "coordinates": [],
+                "paths": [],
+                "overlay_rows": 2,
+                "overlay_cols": 2,
+                "overlay_origin_x": 0,
+                "overlay_origin_y": 0,
+                "overlay_data": bytes([0b00000001]),
+            }
+        ],
+        100,
+        100,
+    )
+
+    assert items == [bitmap_item]
+    assert scene.items()
+    assert manager.annotations[scene] == [bitmap_item]
+
+
 def test_create_presentation_state_items_uses_bitmap_item_when_available(qapp, monkeypatch):
     manager = AnnotationManager()
     scene = QGraphicsScene()

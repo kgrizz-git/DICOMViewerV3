@@ -412,7 +412,7 @@ def _navigate_to_adjacent_series(
     new_index = current_index + direction
     if new_index < 0 or new_index >= len(flat_series_list):
         return
-    _, target_study_uid, target_series_uid, target_first_dataset = flat_series_list[new_index]
+    _, target_study_uid, target_series_uid, _target_first_dataset = flat_series_list[new_index]
     if target_study_uid not in app.current_studies or target_series_uid not in app.current_studies[target_study_uid]:
         return
     target_datasets = app.current_studies[target_study_uid][target_series_uid]

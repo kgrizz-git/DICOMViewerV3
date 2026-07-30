@@ -67,8 +67,8 @@ class LocalStudyIndexService:
     @staticmethod
     def is_backend_available() -> bool:
         try:
-            import keyring  # noqa: F401
-            import sqlcipher3.dbapi2  # noqa: F401
+            import keyring  # noqa: F401  # pyright: ignore[reportUnusedImport]
+            import sqlcipher3.dbapi2  # noqa: F401  # pyright: ignore[reportUnusedImport]
             return True
         except ImportError:
             return False

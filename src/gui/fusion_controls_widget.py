@@ -638,7 +638,7 @@ class FusionControlsWidget(QWidget):
     def update_series_lists(
         self,
         series_list: list[tuple[str, str]],
-        current_base_uid: str = "",
+        current_base_uid: str = "",  # pyright: ignore[reportUnusedParameter]
         current_overlay_uid: str = ""
     ) -> None:
         """
@@ -1122,7 +1122,7 @@ class FusionControlsWidget(QWidget):
             self.interpolation_combo.setCurrentIndex(index)
         self._updating = False
 
-    def set_resampling_status(self, mode_display: str, reason: str, show_warning: bool = False, warning_text: str = "") -> None:
+    def set_resampling_status(self, _mode_display: str, _reason: str, show_warning: bool = False, warning_text: str = "") -> None:
         """
         Update resampling warning display.
         

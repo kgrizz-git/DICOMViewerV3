@@ -498,9 +498,9 @@ def convert_ybr_to_rgb(ybr_array: np.ndarray,
 
 
 def detect_and_fix_rgb_channel_order(pixel_array: np.ndarray,
-                                     photometric_interpretation: str | None = None,  # NOSONAR
-                                     transfer_syntax: str | None = None,  # NOSONAR
-                                     dataset: Dataset | None = None) -> np.ndarray:  # NOSONAR
+                                     photometric_interpretation: str | None = None,  # pyright: ignore[reportUnusedParameter]
+                                     transfer_syntax: str | None = None,  # pyright: ignore[reportUnusedParameter]
+                                     dataset: Dataset | None = None) -> np.ndarray:  # pyright: ignore[reportUnusedParameter]
     """
     Detect and fix RGB/BGR channel order issues.
 

@@ -359,13 +359,13 @@ def test_palette_color_per_channel_first_value() -> None:
     assert np.array_equal(np.asarray(image), expected)
 
 
-def test_palette_color_short_green_lut_falls_back_to_grayscale() -> None:
+def test_palette_color_short_green_lut_renders_rgb() -> None:
     ds = _make_palette_color_dataset(indices=(0, 1, 2, 3), bits_allocated=8, short_green=True)
     image = DICOMProcessor.dataset_to_image(ds, window_center=127.5, window_width=255)
     assert image is not None
-    # A Green LUT shorter than Red raises IndexError inside the shared try/except,
-    # which must be swallowed -- silent fallback to grayscale, no exception escapes.
-    assert image.mode == "L"
+    # Per-channel clamp keeps Green indices within the shorter LUT so palette
+    # conversion succeeds instead of IndexError → silent grayscale fallback.
+    assert image.mode == "RGB"
 
 
 # ---------------------------------------------------------------------------
@@ -417,9 +417,9 @@ def test_convert_window_level_units_all_combinations() -> None:
     assert convert_window_level_units(40, 400, True, True, False, None, None) == (40, 400)
 
 
-def test_normalize_to_uint8_flat_array_wraps() -> None:
+def test_normalize_to_uint8_flat_array_zeroed() -> None:
     flat = np.full((3, 3), 1000, dtype=np.float64)
-    assert np.all(normalize_to_uint8(flat) == 232)
+    assert np.all(normalize_to_uint8(flat) == 0)
 
 
 def test_normalize_channels_to_uint8_flat_channel_zeroed() -> None:
