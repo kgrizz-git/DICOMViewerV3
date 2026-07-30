@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 import pydicom
@@ -43,6 +45,7 @@ _GDCM_REFERENCE_HASHES = {
     "synthetic_rgb_no_color_markers_jpeg_baseline.dcm": "9d2130c830f7b173b355f25270a9eacbac1f5045acebd757a7f9264a1ef03c28",
     "synthetic_monochrome_jpeg_extended_12_bit.dcm": "8cb01fc3dac525da7d1868dfb1b8aaf8524f75dbf226712c579eb0f226a1b6dc",
 }
+_GDCM_12_BIT_DIAGNOSTIC = b"Unsupported JPEG data precision 12\n"
 
 
 @pytest.mark.parametrize("filename", [_FIXTURE.name, *_MONOCHROME_FIXTURES])
@@ -117,13 +120,43 @@ def test_synthetic_jpeg_extended_fixture_decodes_as_12_bit_grayscale() -> None:
 
 
 def test_gdcm_reference_pixels_when_gdcm_is_the_available_handler() -> None:
-    """Pin independently confirmed GDCM output without requiring GDCM pre-swap."""
+    """Pin independently confirmed GDCM output for the selected runtime dependency."""
     from pydicom.pixel_data_handlers import gdcm_handler
 
-    if not gdcm_handler.is_available():
-        pytest.skip("GDCM is intentionally absent until the GPL decoder replacement lands")
+    assert gdcm_handler.is_available(), "python-gdcm is a required runtime dependency"
 
     for filename, expected_hash in _GDCM_REFERENCE_HASHES.items():
         dataset = pydicom.dcmread(_FIXTURE_DIR / filename)
         assert gdcm_handler.supports_transfer_syntax(dataset.file_meta.TransferSyntaxUID)
         assert hashlib.sha256(dataset.pixel_array.tobytes()).hexdigest() == expected_hash
+
+
+def test_gdcm_12_bit_fallback_diagnostic_is_exactly_allowlisted() -> None:
+    """Keep the one accepted native fallback message narrow and independently observable."""
+    fixture = _FIXTURE_DIR / "synthetic_monochrome_jpeg_extended_12_bit.dcm"
+    child = """
+import hashlib
+import sys
+
+import pydicom
+from pydicom.pixel_data_handlers import gdcm_handler
+
+dataset = pydicom.dcmread(sys.argv[1])
+assert gdcm_handler.is_available()
+assert gdcm_handler.supports_transfer_syntax(dataset.file_meta.TransferSyntaxUID)
+pixels = dataset.pixel_array
+print(hashlib.sha256(pixels.tobytes()).hexdigest())
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", child, str(fixture)],
+        cwd=_ROOT,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == (
+        _GDCM_REFERENCE_HASHES[fixture.name].encode("ascii") + b"\n"
+    )
+    assert result.stderr == _GDCM_12_BIT_DIAGNOSTIC

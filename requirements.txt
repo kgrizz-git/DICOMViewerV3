@@ -47,12 +47,12 @@ pypdf>=6.14.2  # PDF merging for compare-mode combined PDF report
 # HTTP(S) client for local SonarQube utilities and public update metadata checks.
 requests>=2.32.5
 
-# Optional dependencies for compressed DICOM support
-# These are recommended for decoding JPEG-compressed DICOM files (JPEG, JPEG-LS, JPEG 2000)
-# Required for lossyJPEG-YBR_FULL_422 and other compressed transfer syntaxes
-# Note: GDCM support may require additional system libraries and is not included here
+# Compressed DICOM support
+# `python-gdcm` is the selected classic JPEG Baseline/Extended/Lossless decoder.
+# Keep the independently verified release pin until the productionization plan's
+# cross-platform dependency-bump verification is complete.
 pylibjpeg>=2.1.0  # For JPEG 2000 and other compressed formats
-pylibjpeg-libjpeg>=2.4.0  # JPEG decoder plugin for pylibjpeg (required for JPEG Baseline/Extended)
+python-gdcm==3.2.6  # Classic JPEG Baseline/Extended/Lossless pydicom handler
 pylibjpeg-openjpeg>=2.5.0  # JPEG 2000 decoder plugin for pylibjpeg
 pylibjpeg-rle>=2.2.0  # RLE decoder plugin for pylibjpeg
 pyjpegls>=1.5.1  # For JPEG-LS compression

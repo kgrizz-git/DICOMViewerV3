@@ -40,6 +40,7 @@ import pydicom
 from pydicom.errors import InvalidDicomError
 from PySide6.QtWidgets import QApplication
 
+from core.decoder_capabilities import compressed_decode_failure_message
 from core.dicom_loader_file import (
     build_compression_install_error_detail,
     build_generic_load_error_message,
@@ -256,7 +257,7 @@ def _classify_pixel_data_error(dataset, error_msg: str) -> tuple[bool, str]:
         "decoder" in lowered
     )
     if is_compression_error:
-        return True, "Compressed DICOM pixel data cannot be decoded."
+        return True, compressed_decode_failure_message(dataset)
 
     return False, error_msg
 

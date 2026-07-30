@@ -99,7 +99,8 @@ def test_build_post_load_status_cancelled_and_compression_hint() -> None:
         was_cancelled=False,
         check_compression_errors=True,
     )
-    assert "pylibjpeg" in ok
+    assert "compressed file(s) could not be decoded" in ok
+    assert "pylibjpeg" not in ok.lower()
 
 
 def test_update_loading_progress_dialog_honors_cancel() -> None:

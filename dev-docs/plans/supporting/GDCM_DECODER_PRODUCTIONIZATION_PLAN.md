@@ -1,6 +1,6 @@
 # GDCM Decoder Productionization & Independent Validation Plan
 
-**Status:** In progress — independent color decision and reviewed synthetic fixture matrix complete; productionization pending
+**Status:** In progress — synthetic decision/matrix, dependency swap, capability messaging, and local regression coverage complete; frozen-build validation pending
 **Last updated:** 2026-07-29  
 **Priority:** P0 — commercial-release Tier 0 blocker  
 **Branch:** `plan/gdcm-decoder-productionization`  
@@ -51,7 +51,11 @@ This blocker is complete only when all of the following are true:
 5. Runtime errors name the unsupported transfer syntax without advising a user to install a GPL
    package. Decoder backend and version are available in privacy-safe diagnostics.
 6. Expected successful decode does not write unreviewed native diagnostics to stdout/stderr or a
-   user-visible surface; failures remain privacy-safe and identify only the transfer syntax.
+   user-visible surface. The sole current exception is the exact, documented one-line native
+   diagnostic from `python-gdcm==3.2.6` while it successfully falls back to decode the approved
+   12-bit JPEG Extended `.51` fixture; an isolated subprocess must assert that exact output and
+   the independently confirmed pixels. Failures remain privacy-safe and identify only the
+   transfer syntax.
 7. Committed tests use only reviewed, wholly synthetic, non-PHI fixtures. The dependency license
    gate passes with no `pylibjpeg-libjpeg` exception.
 
@@ -89,9 +93,25 @@ This blocker is complete only when all of the following are true:
 - **Runtime-line compatibility (2026-07-29):** `python-gdcm` 3.2.6 registered and decoded the
   complete synthetic matrix with the application's pydicom 2.4.5 line under isolated CPython
   3.11.15 and 3.12.10 macOS/arm64 environments. Windows and Linux packaging validation remains
-  required. The `.51` decode currently emits a native `Unsupported JPEG data precision 12`
-  diagnostic even though it returns the independently confirmed pixels; this must be investigated
-  or safely suppressed before release (Completion criterion 6).
+  required.
+- **12-bit native-diagnostic investigation (2026-07-29):** the current published
+  `python-gdcm` 3.2.6 wheel and Homebrew's default GDCM 3.2.7 build both correctly decode the
+  valid `.51` fixture but write `Unsupported JPEG data precision 12`. Upstream GDCM 3.2.6 source
+  shows why: it initially selects its fixed-precision JPEG decoder from DICOM `Bits Allocated`
+  (16), that decoder rejects the valid 12-bit JPEG codestream, and GDCM retries the 12-bit
+  decoder successfully. The source deliberately cannot simply select `Bits Stored`, because some
+  valid inputs have 12 bits stored in a 16-bit JPEG codestream. A locally built GDCM 3.2.7 with
+  `GDCM_USE_JPEGTURBO=ON` and libjpeg-turbo 3.2.0 made the full approved synthetic matrix quiet
+  and produced the independently confirmed `.50` and `.51` hashes. This is evidence for the
+  optional backend, not release evidence: PyPI currently publishes only `python-gdcm` 3.2.6.
+- **Native-diagnostic release decision (2026-07-29):** permit the exact native stderr line
+  `Unsupported JPEG data precision 12` only when the approved `.51` fixture decodes successfully
+  to its independently confirmed GDCM/DCMTK/dcm4che pixel hash. Assert this contract in an
+  isolated subprocess, so the test captures native stderr without process-wide redirection. Any
+  other decoder stdout/stderr, a changed message, a non-zero exit, or a pixel/reference mismatch
+  is a release failure. Do not redirect or hide process stderr in application code. The
+  libjpeg-turbo-backed GDCM configuration remains the preferred cleanup, and the packaged-wheel
+  behavior is tracked upstream in [python-gdcm issue #35](https://github.com/tfmoraes/python-gdcm/issues/35).
 
 ### Non-goals
 
@@ -172,7 +192,9 @@ the **raw decoded samples** and the **display-ready RGB result**, recording meta
       standalone, documented tooling.
 - [ ] Add a focused frozen-executable smoke runner that accepts only the committed synthetic
       fixture directory, emits transfer syntax/backend/version plus hashes and aggregate metrics,
-      and returns non-zero for a missing handler, unexpected stdout/stderr, or a reference mismatch.
+      and returns non-zero for a missing handler, unallowlisted stdout/stderr, or a reference
+      mismatch. It must capture the `.51` decode in an isolated child process and allow only the
+      exact approved diagnostic.
 
 **Gate 0:** every validator runs from its isolated environment, no validation output is staged,
 and the test file’s synthetic provenance is recorded.
@@ -229,7 +251,7 @@ This is an execution checklist, not a second decision plan. Complete it immediat
 | Runtime pair | Exact `pydicom` and `python-gdcm` versions, Python version, OS/architecture, and wheel origin | `pydicom==2.4.5` + `python-gdcm==3.2.6` passed on macOS/arm64 CPython 3.11.15 and 3.12.10; other release platforms pending |
 | Handler selection | `gdcm_handler.is_available()` and `supports_transfer_syntax()` for `.50`, `.51`, `.57`, `.70`; tests must not infer backend from an import alone | Verified for `.50`; add an application capability test for all at-risk UIDs |
 | Fixture matrix | All committed fixture hashes and shapes pass in a GDCM-only environment; lossless cases match their deterministic source patterns | Verified on macOS/arm64; add CI/frozen-runner invocation after dependency change |
-| Native diagnostics | A successful decode produces no unexpected process stderr/stdout and no user-facing raw library message | **Open:** successful `.51` decode emits `Unsupported JPEG data precision 12`; investigate the GDCM/pydicom path and suppress or eliminate it safely |
+| Native diagnostics | A successful decode produces no unreviewed process stderr/stdout and no application-level suppression | **Approved narrow exception:** an isolated subprocess must assert that the `.51` fixture exits successfully, has its confirmed hash, writes exactly `Unsupported JPEG data precision 12` plus its line ending to stderr, and writes no other output. Any other output or mismatch blocks release. Track [python-gdcm #35](https://github.com/tfmoraes/python-gdcm/issues/35); a turbo-backed wheel remains preferred cleanup. |
 | Release pin | Version is an exact, evidence-backed release pin at first shipment; upgrades follow the dependency-bump verification plan | Pending license, wheel, and frozen-build evidence |
 
 Do not use a pydicom 3/imagecodecs result to satisfy this checklist: the shipped dependency line is
@@ -243,17 +265,19 @@ The source-controlled target suite is intentionally smaller than the private cor
 | Fixture family | Expected assertion | Why it catches the relevant regression |
 |---|---|---|
 | RGB `.50` without APP0/APP14 | GDCM raw-pixel SHA-256 `9d2130…a1ef03c28`; RGB metadata/component IDs and no marker | Detects incorrect YCbCr inference or an unintended conversion |
-| Valid 12-bit JPEG Extended `.51` | GDCM/DCMTK/dcm4che raw-pixel SHA-256 `8cb01f…6a1b6dc`; shape/dtype/range | Detects an unavailable 12-bit decoder or different lossy rounding path |
+| Valid 12-bit JPEG Extended `.51` | GDCM/DCMTK/dcm4che raw-pixel SHA-256 `8cb01f…6a1b6dc`; shape/dtype/range; isolated-subprocess stderr exactly `Unsupported JPEG data precision 12` | Detects an unavailable 12-bit decoder, different lossy rounding path, or changed/unexpected native output |
 | JPEG Lossless `.57` and `.70` | Exact deterministic 12-bit source SHA-256 | Detects silent lossless corruption |
 | JPEG-LS, JPEG 2000, RLE, uncompressed controls | Exact 12- or 16-bit source SHA-256 | Proves the retained non-classic handlers did not regress |
 | Private corpus | Exact hashes for lossless; safe aggregate tolerances for lossy; no new failure | Preserves representative real-world coverage without committing private data |
 
 `tests/test_synthetic_decoder_fixture.py` performs structural/privacy checks, exact lossless checks
 in every supported environment, and GDCM-specific expected-output checks only when GDCM is
-installed. The human review and reviewed-asset hashes for the fixture matrix were completed on
-2026-07-29. After the requirements swap, the GDCM-specific checks must run rather than skip. The
-frozen runner must reuse the same fixture set and expected values; do not duplicate golden values in
-a separate undocumented script.
+installed. Its `.51` regression invokes an isolated Python subprocess and asserts both the exact
+approved native diagnostic and the independently confirmed pixel hash. The human review and
+reviewed-asset hashes for the fixture matrix were completed on 2026-07-29. After the requirements
+swap, the GDCM-specific checks must run rather than skip. The frozen runner must reuse the same
+fixture set, expected values, and diagnostic allowlist; do not duplicate golden values in a
+separate undocumented script.
 
 ### Frozen-build runbook
 
@@ -266,27 +290,52 @@ For **each** macOS, Windows, and Linux release target:
 3. Run the frozen executable's synthetic-fixture smoke runner, not Python from the build venv. It
    must report transfer syntax, decoder backend/version, shape/dtype, expected-hash result, and
    safe aggregate difference metrics only; no paths, identifiers, pixels, or raw exceptions.
-4. Confirm all committed fixtures decode as specified, the private corpus has no unreviewed failure,
-   and a successful `.51` decode has no native console diagnostic.
+4. Confirm all committed fixtures decode as specified, the private corpus has no unreviewed
+   failure, and the successful `.51` child-process decode emits exactly the approved native
+   diagnostic and no other output.
 5. Inspect the packaged dependency manifest/binary inventory for `pylibjpeg-libjpeg` and its
    `libjpeg` plugin. Neither may be present. Capture required GDCM notices before release.
 
 Any Windows/Linux loader failure, platform output mismatch, unexpected native output, or GPL binary
 found in the bundle blocks the swap; it is not a reason to silently add the old decoder back.
 
+### Native GDCM asset and SBOM notice checklist
+
+Complete this once per release target, using the **final frozen artifact**, not the development
+environment or a generic package-license result:
+
+- [ ] Preserve the exact `python-gdcm` wheel filename, version, SHA-256, and build platform in the
+      release evidence.
+- [ ] Produce a bundle-relative inventory of every collected `_gdcm` native library and data file,
+      including file SHA-256 and the library/version it belongs to. Do not record local paths.
+- [ ] Identify each library's license and required copyright/notice text from the exact wheel and
+      its upstream release materials; include transitive native libraries revealed by platform
+      linkage inspection.
+- [ ] Reconcile that inventory with the generated release SBOM and `THIRD_PARTY_LICENSES.md`:
+      every collected GDCM/native dependency has an entry and required notice, and no entry claims
+      a license solely from Python package metadata.
+- [ ] Confirm the final artifact contains neither `pylibjpeg-libjpeg` nor its GPL `libjpeg`
+      plugin, and record the result with the frozen-fixture smoke evidence.
+- [ ] Have the release/compliance owner review the completed inventory and required distribution
+      obligations before shipment. This is an evidence and notice review, not legal advice.
+
 ## Phase 2 — Package GDCM safely
 
-- [ ] Add `python-gdcm` to `requirements.txt` as the exact version selected by the compatibility
+- [x] Add `python-gdcm` to `requirements.txt` as the exact version selected by the compatibility
       checklist (start from the validated `3.2.6` wheel unless later evidence requires a different
       version); remove `pylibjpeg-libjpeg`. Do not change pydicom's major version in this batch.
-- [ ] Update `DICOMViewerV3.spec` hidden imports, binaries, and data collection based on the
+      **Done 2026-07-29:** `python-gdcm==3.2.6` replaces the GPL plugin in the release
+      requirements and the local release-line test environment.
+- [x] Update `DICOMViewerV3.spec` hidden imports, binaries, and data collection based on the
       actual `python-gdcm` wheel contents. Remove the `libjpeg` hidden import that existed only
-      for `pylibjpeg-libjpeg`; do not guess native-library paths.
+      for `pylibjpeg-libjpeg`; do not guess native-library paths. **Done 2026-07-29:** the spec
+      collects `_gdcm` dynamic libraries and data through PyInstaller hooks (47 native libraries
+      and 71 data files in the validated macOS wheel) and imports `gdcm`/`_gdcm.gdcmswig`.
 - [ ] Build from a clean environment on macOS, Windows, and Linux. For each bundle, use the
       packaged executable—not the build venv—to run a privacy-safe corpus-decode check.
 - [ ] Record application startup, corpus result, selected backend/version, and before/after bundle
-      size. Investigate any platform-specific loader failure or successful-decode native stderr
-      before changing the decoder choice.
+      size. Investigate any platform-specific loader failure, unallowlisted successful-decode
+      output, or `.51` diagnostic/pixel-contract change before changing the decoder choice.
 - [ ] Review the exact GDCM license/notices and dynamic-library distribution obligations with the
       license-compliance plan; do not treat the engineering result as legal advice.
 
@@ -295,16 +344,24 @@ GPL `pylibjpeg-libjpeg` dependency.
 
 ## Phase 3 — Application behavior and provenance
 
-- [ ] Add one focused capability module mapping relevant transfer-syntax UIDs to available
+- [x] Add one focused capability module mapping relevant transfer-syntax UIDs to available
       decoder support. Avoid scattered package-name checks and import-error control flow.
-- [ ] Update `src/core/dicom_pixel_array.py` and loader error handling to name the unsupported
+      **Done 2026-07-29:** `core.decoder_capabilities` exposes installed pydicom handler support
+      and package versions using only transfer-syntax and package metadata.
+- [x] Update `src/core/dicom_pixel_array.py` and loader error handling to name the unsupported
       transfer syntax safely and provide product-profile-aware guidance; never advise installing a
-      GPL decoder from a commercial build.
+      GPL decoder from a commercial build. **Done 2026-07-29:** errors identify the syntax and
+      distinguish missing support from an installed-handler decode failure without raw native text
+      or package-install advice.
 - [ ] Record selected decoder backend and version through existing privacy-safe debug diagnostics
       and future About/System Info surfaces. Keep all debug flags false by default.
 - [ ] Add regression tests for: available classic JPEG decode; lossless exactness; expected
-      color-edge and 12-bit Extended results; unsupported syntax messaging; no GPL-install
-      recommendation; and absence of native decoder output during an expected successful decode.
+      color-edge and 12-bit Extended results; the exact `.51` native-diagnostic allowlist in an
+      isolated subprocess; unsupported syntax messaging; no GPL-install recommendation; and
+      absence of all other native decoder output during an expected successful decode. **Partial
+      2026-07-29:** the committed synthetic matrix, subprocess allowlist/hash assertion, and
+      capability/error-message tests are complete; frozen executable and remaining workflow-path
+      coverage remain.
 - [ ] Confirm JPEG 2000, JPEG-LS, RLE, uncompressed, multi-frame, RGB/YBR, ROI/statistics, and
       export paths still work with the final plugin set.
 
@@ -313,9 +370,10 @@ non-classic decoder paths retain coverage.
 
 ## Phase 4 — Compliance, documentation, and release verification
 
-- [ ] Remove the `pylibjpeg-libjpeg` accepted exception from
+- [x] Remove the `pylibjpeg-libjpeg` accepted exception from
       `dev-docs/info/dependency_license_policy.json`; run the dependency license check in the
-      release environment and resolve any newly surfaced licenses.
+      release environment and resolve any newly surfaced licenses. **Done 2026-07-29:** the policy
+      is empty and the updated local release-line environment has zero forbidden distributions.
 - [ ] Update `BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`, the decoder strategy, commercial release
       readiness gate, `TO_DO.md`, and the spike plan with the final evidence and any bundled GDCM
       notices required by the compliance review.
@@ -366,4 +424,4 @@ result.
 - [Decoder strategy](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) — option
   landscape and final technical rationale.
 - [Commercial release readiness](../../COMMERCIAL_RELEASE_READINESS.md) — owner gate.
-- [License & library compliance plan](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg--gpl-30-jpeg-decoder-blocking) — license-review workstream.
+- [License & library compliance plan](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg-replacement--gdcm-productionization-blocking) — license-review workstream.

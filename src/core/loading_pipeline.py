@@ -219,8 +219,7 @@ def build_post_load_status(
         ]
         if compression_errors:
             final_status += (
-                f". {len(compression_errors)} compressed file(s) require pylibjpeg:"
-                " pip install pylibjpeg pyjpegls"
+                f". {len(compression_errors)} compressed file(s) could not be decoded"
             )
     return final_status
 

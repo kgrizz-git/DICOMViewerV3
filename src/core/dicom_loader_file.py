@@ -128,11 +128,8 @@ def build_slow_load_timing_parts(
 
 
 def build_compression_install_error_detail(classified_message: str) -> str:
-    """User-facing compression decode failure with optional dependency hint."""
-    return (
-        f"{classified_message} "
-        f"Install optional dependencies: pip install pylibjpeg pyjpegls"
-    )
+    """Return a user-facing compression failure without package-install advice."""
+    return classified_message
 
 
 def build_generic_load_error_message(classified_message: str, error_type: str) -> str:

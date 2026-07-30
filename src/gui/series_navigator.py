@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.decoder_capabilities import is_compressed_transfer_syntax, transfer_syntax_uid
 from core.dicom_organizer import MultiFrameSeriesInfo
 from core.dicom_processor import DICOMProcessor
 from core.slice_display_lut import apply_window_level_rescale_conversion
@@ -889,33 +890,12 @@ class SeriesNavigator(QWidget):
             PIL Image thumbnail (resized) or None if generation fails
         """
         try:
-            # Check if this is a compressed file that can't be decoded
-            if hasattr(dataset, 'file_meta') and hasattr(dataset.file_meta, 'TransferSyntaxUID'):
-                transfer_syntax = str(dataset.file_meta.TransferSyntaxUID)
-                # Check for JPEG compression transfer syntaxes that require pylibjpeg
-                jpeg_transfer_syntaxes = [
-                    '1.2.840.10008.1.2.4.50',  # JPEG Baseline (Process 1)
-                    '1.2.840.10008.1.2.4.51',  # JPEG Extended (Process 2 & 4)
-                    '1.2.840.10008.1.2.4.57',  # JPEG Lossless, Non-Hierarchical (Process 14)
-                    '1.2.840.10008.1.2.4.70',  # JPEG Lossless, Non-Hierarchical (Process 14 [Selection Value 1])
-                    '1.2.840.10008.1.2.4.80',  # JPEG-LS Lossless Image Compression
-                    '1.2.840.10008.1.2.4.81',  # JPEG-LS Lossy (Near-Lossless) Image Compression
-                    '1.2.840.10008.1.2.4.90',  # JPEG 2000 Image Compression (Lossless Only)
-                    '1.2.840.10008.1.2.4.91',  # JPEG 2000 Image Compression
-                ]
-                if transfer_syntax in jpeg_transfer_syntaxes:
-                    # Try to check if pixel array can be accessed (this will fail if pylibjpeg not installed)
-                    try:
-                        # Just check if we can access pixel_array property (don't actually load it)
-                        _ = dataset.pixel_array
-                    except Exception as e:
-                        error_msg = str(e)
-                        if ("pylibjpeg" in error_msg.lower() or
-                            "missing required dependencies" in error_msg.lower() or
-                            "unable to convert" in error_msg.lower()):
-                            # This is a compressed file that can't be decoded
-                            # Return a special marker image that will show compression error
-                            return self._create_compression_error_thumbnail()
+            transfer_syntax = transfer_syntax_uid(dataset)
+            if is_compressed_transfer_syntax(transfer_syntax):
+                try:
+                    _ = dataset.pixel_array
+                except Exception:
+                    return self._create_compression_error_thumbnail()
 
             wc, ww, use_rescaled = self._resolve_thumbnail_window_level(
                 dataset, series_datasets
@@ -940,11 +920,7 @@ class SeriesNavigator(QWidget):
 
             return image
         except Exception as e:
-            error_msg = str(e)
-            # Check if this is a compression error
-            if ("pylibjpeg" in error_msg.lower() or
-                "missing required dependencies" in error_msg.lower() or
-                "unable to convert" in error_msg.lower()):
+            if is_compressed_transfer_syntax(transfer_syntax_uid(dataset)):
                 return self._create_compression_error_thumbnail()
             print_redacted(f"Error generating thumbnail: {e}")
             return None

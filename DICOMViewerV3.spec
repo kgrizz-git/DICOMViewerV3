@@ -16,6 +16,8 @@ import os
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+
 block_cipher = None
 
 # macOS: UPX-packed Mach-O binaries often break or complicate codesign, stapling, and notarization.
@@ -56,17 +58,22 @@ main_py = src_dir / 'main.py'
 main_py_abs = str(main_py.resolve())
 src_dir_abs = str(src_dir.resolve())
 
+# `python-gdcm` ships its Python bindings plus native GDCM libraries and XML dictionaries in the
+# `_gdcm` package. Collect from the installed wheel; do not hard-code platform-specific filenames.
+_GDCM_BINARIES = collect_dynamic_libs('_gdcm')
+_GDCM_DATA = collect_data_files('_gdcm', include_py_files=False)
+
 a = Analysis(
     [main_py_abs],
     pathex=[src_dir_abs],
-    binaries=[],
+    binaries=_GDCM_BINARIES,
     datas=[
         ('resources', 'resources'),  # Include resources directory (images, etc.)
         (
             'src/utils/privacy/structural_event_schema_v1.json',
             'utils/privacy',
         ),
-    ],
+    ] + _GDCM_DATA,
     hiddenimports=[
         # Application modules - explicitly include all submodules
         'gui',
@@ -115,9 +122,9 @@ a = Analysis(
         'core.dicom_processor',
         'core.dicom_editor',
         'core.tag_edit_history',
-        'core.view_state_manager',
-        'core.file_operations_handler',
-        'core.slice_display_manager',
+        'gui.view_state_manager',
+        'gui.file_operations_handler',
+        'gui.slice_display_manager',
         'core.slice_grouping',
         'core.multiframe_handler',
         'core.key_object_handler',
@@ -142,11 +149,10 @@ a = Analysis(
         'pydicom.dataelem',
         'pydicom.uid',
         'pydicom.multival',
-        'pydicom.pixels',
         'pydicom.errors',
         'pydicom.dataset',
         # Note: pydicom.decoders doesn't exist as a separate module
-        # Note: pydicom.encoders.gdcm requires GDCM system libraries (not installed)
+        # `python-gdcm` bundles its GDCM libraries in `_gdcm`; see collected wheel contents above.
         # Note: pydicom.encoders.pylibjpeg doesn't exist - pylibjpeg is used via pydicom's plugin system
         # Image processing
         'numpy',
@@ -164,7 +170,9 @@ a = Analysis(
         'pylibjpeg',
         'openjpeg',  # JPEG 2000 support (from pylibjpeg-openjpeg)
         'rle',  # RLE support (from pylibjpeg-rle)
-        'libjpeg',  # JPEG support (from pylibjpeg-libjpeg)
+        'gdcm',  # Classic JPEG handler (from python-gdcm)
+        '_gdcm',
+        '_gdcm.gdcmswig',
         'jpeg_ls',  # JPEG-LS codec (from pyjpegls)
         '_CharLS',  # JPEG-LS C extension (from pyjpegls)
         # Qt/PySide6 modules

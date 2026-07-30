@@ -1,6 +1,6 @@
 # License & Library Compliance Plan
 
-**Status:** Not started  
+**Status:** In progress
 **Priority:** P0  
 **TO_DO ref:** Release / Product — "Figure out license; also check which libraries are covered by which licenses and make sure we are compliant."
 
@@ -10,13 +10,13 @@
 
 **The project may be sold commercially, possibly as a closed-source product (or a closed-source paid tier).** This is the dominant constraint for every decision below. Commercial distribution does not by itself trigger copyleft obligations — GPL does not prohibit charging money. What matters is **whether recipients receive the binary without corresponding source under GPL terms**, which is incompatible with closed-source distribution.
 
-**This plan is not legal advice.** The decisions made here have real legal and financial consequences. Engage qualified IP counsel before distributing commercially — especially on the Qt LGPL relinking obligation, the `pylibjpeg-libjpeg` GPL question, and any medical device regulatory angle.
+**This plan is not legal advice.** The decisions made here have real legal and financial consequences. Engage qualified IP counsel before distributing commercially — especially on the Qt LGPL relinking obligation, the final GDCM release-asset inventory, and any medical device regulatory angle.
 
 ---
 
 ## Prior work
 
-- **Dependency inventory:** `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md` — detailed assessment (last updated 2026-04-17). Key problem components identified: `pylibjpeg-libjpeg` (GPL-3.0), PySide6 (LGPL-3.0), FFmpeg via `imageio-ffmpeg` (LGPL or GPL build-dependent), Liberation Sans font (GPL-2.0 + embedding exception). For the detailed decoder replacement assessment, see [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md).
+- **Dependency inventory:** `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md` — detailed assessment (last updated 2026-07-29). `pylibjpeg-libjpeg` (GPL-3.0) has been removed from the runtime requirements in favor of `python-gdcm==3.2.6`; the final frozen GDCM native-asset inventory remains required. Other key problem components are PySide6 (LGPL-3.0), FFmpeg via `imageio-ffmpeg` (LGPL or GPL build-dependent), and Liberation Sans font (GPL-2.0 + embedding exception). For the detailed decoder replacement assessment, see [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md).
 - **SemVer guide:** `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 - **Releases guide:** `dev-docs/info/GITHUB_RELEASES_AND_VERSIONING.md`.
 
@@ -26,9 +26,13 @@
 
 These are **hard blockers** for closed-source commercial sale. Nothing else in this plan matters until these are resolved.
 
-### 0a. `pylibjpeg-libjpeg` — GPL-3.0 JPEG decoder (BLOCKING)
+### 0a. `pylibjpeg-libjpeg` replacement — GDCM productionization (BLOCKING)
 
-`pylibjpeg-libjpeg` is **GPL-3.0**. Distributing a closed-source binary that links or bundles GPL-3.0 code without providing corresponding source under GPL terms is a license violation. This is the single most critical item.
+`pylibjpeg-libjpeg` is **GPL-3.0** and was the critical decoder blocker. It was removed from
+`requirements.txt` and the accepted-exception policy on 2026-07-29; `python-gdcm==3.2.6` is now
+the selected classic JPEG decoder. This gate remains open until the final release bundles prove
+that GDCM loads on every target platform, contain no GPL `pylibjpeg-libjpeg` asset, and have a
+reviewed GDCM native-library notice inventory.
 
 Detailed engineering assessment: [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md).
 
@@ -39,16 +43,20 @@ Detailed engineering assessment: [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRA
 | Option | License | Effort | Notes |
 |--------|---------|--------|-------|
 | **A. Pillow-only JPEG decode** | MIT-CMU | Low | Already in stack. pydicom uses Pillow for JPEG Baseline in many cases. Pillow bundles libjpeg/libjpeg-turbo internally — both permissively licensed (IJG/BSD). Test coverage on your actual dataset mix first. **Best starting point.** |
-| **B. GDCM via `python-gdcm`** | LGPL-2.0 | Medium | Broad DICOM decompression including JPEG Baseline, Extended, and others. Commercially viable under LGPL (same compliance path as Qt). Verify wheel availability on Windows/macOS/Linux for target Python versions. |
+| **B. GDCM via `python-gdcm` — selected** | `python-gdcm` wheel metadata declares Apache-2.0; review collected native assets | Medium | Broad DICOM decompression including JPEG Baseline, Extended, and Lossless. Validate wheel availability and final notices on Windows/macOS/Linux. |
 | **C. PyTurboJPEG / `libjpeg-turbo`** | MIT + BSD | High | libjpeg-turbo is BSD-licensed. Not wired into pydicom's decode pipeline today — needs a custom decoder plugin. Best coverage but most integration work. |
 | **D. Remove; warn user on failure** | N/A | Low | Users who need it install `pylibjpeg-libjpeg` themselves (GPL becomes theirs). Acceptable if your target market is primarily CT/MR and coverage gaps affect only older CR/DX files. |
 | **E. Keep GPL; release app source under GPL-3.0** | GPL-3.0 | Low | Forces the app to be open-source. Commercial sale is still permitted (GPL allows selling) but customers can redistribute source freely — undermines most proprietary models. |
 
-**Recommendation:** Try **Option A** (Pillow-only) first — zero effort. If Pillow coverage on your real data is adequate (likely for CT/MR-focused workflows), just drop `pylibjpeg-libjpeg`. If gaps remain on CR/DX files, move to **Option B** (GDCM, LGPL).
+**Decision (2026-07-29):** Option B, `python-gdcm==3.2.6`, is selected. DCMTK and dcm4che
+independently agree with GDCM on the approved synthetic JPEG Baseline and valid 12-bit JPEG
+Extended reference fixtures. The exact successful 12-bit fallback diagnostic is an isolated-test
+allowlist; all other decoder output remains a failure. See the GDCM productionization plan for
+the remaining frozen-build and artifact-inventory gates.
 
-- [ ] **Action:** Test Pillow-only JPEG decode coverage on representative datasets (CT, MR, CR, XA, US). Log which transfer syntaxes fail and with what error.
-- [ ] **Action:** Remove `pylibjpeg-libjpeg` from `requirements.txt` in a test branch; run full test suite and manual smoke test.
-- [ ] **Decision:** Document the chosen option in `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md` with rationale.
+- [x] **Action:** Remove `pylibjpeg-libjpeg` from `requirements.txt` and its accepted-exception policy. **Done 2026-07-29:** the local release-line environment decodes the synthetic matrix with `python-gdcm==3.2.6` and the dependency license gate reports no forbidden distributions.
+- [x] **Decision:** Record `python-gdcm==3.2.6` as the selected replacement in the dependency inventory and decoder strategy. **Done 2026-07-29.**
+- [ ] **Action:** Complete clean frozen-bundle and corpus validation on macOS, Windows, and Linux; inspect each artifact for GDCM notices and absence of the old GPL plugin before clearing this blocker.
 
 ### 0b. FFmpeg via `imageio-ffmpeg` — likely LGPL-only, but verify (VERIFY BEFORE TREATING AS BLOCKER)
 
@@ -209,7 +217,7 @@ The study index stores patient names, IDs, study dates, and modalities locally. 
 
 ## Phase 6 — Ongoing maintenance
 
-- [x] **Dependency license gate implemented.** `scripts/check_dependency_licenses.py` (zero-dependency, stdlib only — no `pip-licenses` needed) classifies every installed dist and **fails** on a new strong-copyleft (GPL/AGPL) dependency unless it is in the policy's `accepted_exceptions`. Wired into `.githooks/pre-commit`. Policy: `dev-docs/info/dependency_license_policy.json`. Docs: `dev-docs/info/DEPENDENCY_LICENSE_POLICY.md`. (`pylibjpeg-libjpeg` is currently an accepted exception pending Phase 0a.)
+- [x] **Dependency license gate implemented.** `scripts/check_dependency_licenses.py` (zero-dependency, stdlib only — no `pip-licenses` needed) classifies every installed dist and **fails** on a new strong-copyleft (GPL/AGPL) dependency unless it is in the policy's `accepted_exceptions`. Wired into `.githooks/pre-commit`. Policy: `dev-docs/info/dependency_license_policy.json`. Docs: `dev-docs/info/DEPENDENCY_LICENSE_POLICY.md`. The accepted-exception list is empty after the 2026-07-29 decoder replacement.
 - [ ] Add the same check as a CI step (run `python scripts/check_dependency_licenses.py` in the release venv) so PRs and release builds are also gated.
 - [ ] Document in `dev-docs/CONTRIBUTING.md` that any new dependency must be reviewed for license before merging.
 - [ ] Update `BUNDLED_PACKAGES_AND_FONTS_LICENSES.md` "Last updated" and basis version on each release.
@@ -222,7 +230,7 @@ The study index stores patient names, IDs, study dates, and modalities locally. 
 | Item | Decision | Date |
 |------|----------|------|
 | Business model | | |
-| `pylibjpeg-libjpeg` resolution | | |
+| `pylibjpeg-libjpeg` resolution | `python-gdcm==3.2.6` selected; synthetic matrix and license gate pass locally; cross-platform frozen artifacts and notices pending | 2026-07-29 |
 | FFmpeg license (LGPL or GPL) | | |
 | Qt: LGPL compliance vs commercial license | | |
 | Liberation Sans: keep (verify exception) or replace with OFL font | | |
@@ -234,7 +242,7 @@ The study index stores patient names, IDs, study dates, and modalities locally. 
 ## Open questions requiring counsel
 
 1. **LGPL relinking obligation (Qt):** What is the minimum you must provide for a PyInstaller-frozen app? Object files? Source of Qt-interfacing layers? This is jurisdiction- and fact-specific.
-2. **`pylibjpeg-libjpeg` GPL — Pillow-only alternative:** If some DICOM files fail to decode, is that an acceptable product limitation or does it affect your target market too much?
+2. **GDCM release asset inventory:** Are the exact wheel and collected native-library notices complete for each commercial distribution target?
 3. **SaMD classification:** Is a commercially sold DICOM viewer for general "workflow" use a medical device under FDA/MDR? What intended-use language avoids triggering clearance requirements?
 4. **Copyright registration:** Worth filing before public commercial launch.
 5. **Contributor IP:** If anyone else has contributed code (pull requests, etc.), do you have their IP or do you need a CLA to relicense?
