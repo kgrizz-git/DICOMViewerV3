@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from core import decoder_fixture_smoke
 from core.decoder_fixture_smoke import run_fixture_smoke
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +20,7 @@ def test_run_fixture_smoke_enforces_hashes_and_exact_12_bit_diagnostic() -> None
     assert exit_code == 0
     assert report["passed"] is True
     assert report["fixture_count"] == 9
+    assert all(item["diagnostic_matches"] is True for item in report["fixtures"])
     extended = next(
         item
         for item in report["fixtures"]
@@ -43,3 +45,30 @@ def test_main_decoder_fixture_smoke_reports_no_local_fixture_path() -> None:
     report = json.loads(result.stdout)
     assert report["passed"] is True
     assert str(_FIXTURE_DIR) not in result.stdout
+
+
+def test_run_fixture_smoke_rejects_unallowlisted_output(monkeypatch) -> None:
+    def unexpected_output(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=b'{"fixture":"synthetic_rgb_no_color_markers_jpeg_baseline.dcm","hash_matches":true}',
+            stderr=b"unexpected native output\n",
+        )
+
+    monkeypatch.setattr(decoder_fixture_smoke.subprocess, "run", unexpected_output)
+
+    exit_code, report = run_fixture_smoke(_FIXTURE_DIR)
+
+    assert exit_code == 1
+    assert report["passed"] is False
+    assert all(item["diagnostic_matches"] is False for item in report["fixtures"])
+
+
+def test_unknown_child_fixture_fails_without_raw_exception(capsys) -> None:
+    exit_code = decoder_fixture_smoke.main(["--decoder-fixture-child", "unknown.dcm"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert json.loads(captured.out) == {"fixture": "unknown.dcm", "hash_matches": False}
+    assert captured.err == ""

@@ -89,7 +89,10 @@ def test_build_post_load_status_cancelled_and_compression_hint() -> None:
     assert "Study index update skipped" in cancelled
 
     loader.get_failed_files.return_value = [
-        ("/c.dcm", "Compressed DICOM not supported"),
+        (
+            "/c.dcm",
+            "JPEG Extended pixel data cannot be decoded (transfer syntax 1.2.840.10008.1.2.4.51).",
+        ),
     ]
     loader.get_extension_skipped_count.return_value = 0
     ok = build_post_load_status(

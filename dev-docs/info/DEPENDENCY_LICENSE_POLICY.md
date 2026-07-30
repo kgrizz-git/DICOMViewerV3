@@ -1,6 +1,6 @@
 # Dependency License Policy & Check
 
-**Last updated:** 2026-06-09
+**Last updated:** 2026-07-29
 
 This is the **single source of documentation** for the automated dependency
 license check. It explains what the check does, the policy it enforces, how to

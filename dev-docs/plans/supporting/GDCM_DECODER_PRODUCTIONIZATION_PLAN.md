@@ -23,9 +23,10 @@ are preserved in the [archived implementation record](../completed/GDCM_DECODER_
 - The `.51` frozen child process may write exactly `Unsupported JPEG data precision 12\n` to stderr
   and must return the approved pixel hash. Any other stdout/stderr, changed line ending, non-zero
   child exit, or hash mismatch blocks release. Do not suppress process stderr in application code.
-- Reports may contain fixture names, transfer-syntax UIDs, handler/package versions, shapes, dtypes,
-  hashes, and aggregate metrics only. They must not contain file paths, DICOM identity attributes,
-  pixels, or raw native exceptions.
+- Decoder smoke reports may contain fixture names, transfer-syntax UIDs, handler/package versions,
+  shapes, dtypes, hashes, and aggregate metrics only. They must not contain file paths, DICOM
+  identity attributes, pixels, or raw native exceptions. Native-asset inventory reports may contain
+  bundle-relative asset paths and hashes, as required by Phase 2, but no local paths or DICOM data.
 
 ## Completion criteria
 

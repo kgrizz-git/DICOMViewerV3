@@ -215,7 +215,11 @@ def build_post_load_status(
         compression_errors = [
             f
             for f in loader.get_failed_files()
-            if "Compressed DICOM" in f[1] or "pylibjpeg" in f[1].lower()
+            if (
+                "Compressed DICOM" in f[1]
+                or "pylibjpeg" in f[1].lower()
+                or "pixel data cannot be decoded" in f[1].lower()
+            )
         ]
         if compression_errors:
             final_status += (

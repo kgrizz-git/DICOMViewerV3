@@ -150,12 +150,15 @@ In practice for a PyInstaller desktop app this means:
 - [x] **Generator tooling added.** `scripts/generate_third_party_licenses.py` (wraps `pip-licenses`, a dev dependency in `requirements-dev.txt`) produces `THIRD_PARTY_LICENSES.md`. Run `python scripts/generate_third_party_licenses.py --release [--with-texts]` in the release venv. The output file is git-ignored (regenerated at packaging time). See `dev-docs/info/DEPENDENCY_LICENSE_POLICY.md`.
 - [ ] In the **release** venv (after Phase 0 changes), generate the final SBOM and verify contents.
 - [ ] Check transitive deps via `pip freeze` — not just direct pins.
-- [ ] Flag any **GPL / LGPL / MPL / EUPL** hits for review. After Phase 0, the only remaining copyleft should be LGPL (PySide6, possibly FFmpeg).
+- [ ] Flag any **GPL / LGPL / MPL / EUPL** hits for review. No unreviewed runtime strong-copyleft
+      dependency should remain after Phase 0; PySide6 and possibly FFmpeg require LGPL review, and
+      bundled Liberation Sans requires separate GPL-2.0 plus embedding-exception review.
 - [ ] Cross-check each release with complementary tools: the existing `pip-licenses` attribution
       document; CycloneDX Python for a machine-readable release-venv dependency graph; Syft for
       a CycloneDX/SPDX scan of the final frozen artifact; and targeted ScanCode Toolkit analysis
       of native GDCM assets and their notice files. Investigate differences rather than treating a
-      single tool's package-name or file-name match as dispositive.
+      single tool's package-name or file-name match as dispositive. Retain bundled Liberation Sans
+      in this review for its GPL-2.0 and embedding-exception obligations.
 - [ ] Run Grype against the Syft SBOM for the release vulnerability report. Keep this distinct
       from license/notice review: Grype evaluates known vulnerabilities, not distribution rights.
 

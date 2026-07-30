@@ -27,26 +27,18 @@ assert _SPEC and _SPEC.loader
 _generator = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_generator)
 
+_EXPECTED_BY_FILENAME = {item.filename: item for item in DECODER_FIXTURE_EXPECTATIONS}
+_LOSSY_EXTENDED_FIXTURE = "synthetic_monochrome_jpeg_extended_12_bit.dcm"
 _MONOCHROME_FIXTURES = {
-    "synthetic_monochrome_uncompressed_12_bit.dcm": "1.2.840.10008.1.2.1",
-    "synthetic_monochrome_uncompressed_16_bit.dcm": "1.2.840.10008.1.2.1",
-    "synthetic_monochrome_jpeg_extended_12_bit.dcm": "1.2.840.10008.1.2.4.51",
-    "synthetic_monochrome_jpeg_lossless_p14.dcm": "1.2.840.10008.1.2.4.57",
-    "synthetic_monochrome_jpeg_lossless_sv1.dcm": "1.2.840.10008.1.2.4.70",
-    "synthetic_monochrome_jpegls_lossless.dcm": "1.2.840.10008.1.2.4.80",
-    "synthetic_monochrome_jpeg2000_lossless_16_bit.dcm": "1.2.840.10008.1.2.4.90",
-    "synthetic_monochrome_rle_lossless.dcm": "1.2.840.10008.1.2.5",
+    item.filename: item.transfer_syntax_uid
+    for item in DECODER_FIXTURE_EXPECTATIONS
+    if item.filename != _FIXTURE.name
 }
 _LOSSLESS_PIXEL_HASHES = {
-    "synthetic_monochrome_uncompressed_12_bit.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
-    "synthetic_monochrome_uncompressed_16_bit.dcm": "f5ca7eb45ebf49f510773f1fb5a4edb8978a7116a4116d0bebe0d4f5e79d0332",
-    "synthetic_monochrome_jpeg_lossless_p14.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
-    "synthetic_monochrome_jpeg_lossless_sv1.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
-    "synthetic_monochrome_jpegls_lossless.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
-    "synthetic_monochrome_jpeg2000_lossless_16_bit.dcm": "f5ca7eb45ebf49f510773f1fb5a4edb8978a7116a4116d0bebe0d4f5e79d0332",
-    "synthetic_monochrome_rle_lossless.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
+    item.filename: item.pixel_sha256
+    for item in DECODER_FIXTURE_EXPECTATIONS
+    if item.filename not in {_FIXTURE.name, _LOSSY_EXTENDED_FIXTURE}
 }
-_EXPECTED_BY_FILENAME = {item.filename: item for item in DECODER_FIXTURE_EXPECTATIONS}
 
 
 @pytest.mark.parametrize("filename", [_FIXTURE.name, *_MONOCHROME_FIXTURES])

@@ -21,9 +21,10 @@ evidence. It is not evidence that a commercial frozen release has been cleared o
   GDCM, DCMTK, and dcm4che agree exactly. The former GPL decoder has a small, documented lossy
   difference.
 - `python-gdcm==3.2.6` successfully decodes the `.51` fixture but emits exactly
-  `Unsupported JPEG data precision 12\n` while it falls back to its 12-bit decoder. The narrow
-  release decision is to allow only that byte-exact child-process diagnostic with the confirmed
-  hash; all other native output or any mismatch fails. Application stderr is not redirected.
+  `Unsupported JPEG data precision 12\n` while it falls back to its 12-bit decoder. Every
+  synthetic fixture is decoded in an isolated child process: only that byte-exact `.51`
+  diagnostic is allowed with the confirmed hash, and any other native output or mismatch fails.
+  Application stderr is not redirected.
 - A GDCM build with libjpeg-turbo removed the diagnostic locally and remains the preferred future
   upstream/wheel cleanup. The published wheel behavior is tracked in
   [python-gdcm issue #35](https://github.com/tfmoraes/python-gdcm/issues/35).

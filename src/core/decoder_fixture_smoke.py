@@ -32,8 +32,16 @@ def _fixture_result(fixture: Path, expected: DecoderFixtureExpectation) -> dict[
 
 
 def _child_result(fixture: Path) -> int:
-    expected = next(item for item in DECODER_FIXTURE_EXPECTATIONS if item.filename == fixture.name)
-    result = _fixture_result(fixture, expected)
+    expected = next(
+        (item for item in DECODER_FIXTURE_EXPECTATIONS if item.filename == fixture.name), None
+    )
+    if expected is None:
+        print(json.dumps({"fixture": fixture.name, "hash_matches": False}, sort_keys=True))
+        return 1
+    try:
+        result = _fixture_result(fixture, expected)
+    except Exception:
+        result = {"fixture": expected.filename, "hash_matches": False}
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0 if result["hash_matches"] else 1
 
@@ -45,34 +53,28 @@ def run_fixture_smoke(fixture_dir: Path) -> tuple[int, dict[str, object]]:
     for expected in DECODER_FIXTURE_EXPECTATIONS:
         fixture = fixture_dir / expected.filename
         result: dict[str, object]
-        if expected.allowed_stderr:
-            child_command = [sys.executable]
-            if not getattr(sys, "frozen", False):
-                child_command.append(str(Path(__file__).resolve().parents[1] / "main.py"))
-            child_command.extend(("--decoder-fixture-child", str(fixture)))
-            child = subprocess.run(
-                child_command,
-                capture_output=True,
-                check=False,
+        child_command = [sys.executable]
+        if not getattr(sys, "frozen", False):
+            child_command.append(str(Path(__file__).resolve().parents[1] / "main.py"))
+        child_command.extend(("--decoder-fixture-child", str(fixture)))
+        child = subprocess.run(
+            child_command,
+            capture_output=True,
+            check=False,
+        )
+        try:
+            parsed = json.loads(child.stdout)
+            result = (
+                {str(key): value for key, value in parsed.items()}
+                if isinstance(parsed, dict)
+                else {"fixture": expected.filename, "hash_matches": False}
             )
-            try:
-                parsed = json.loads(child.stdout)
-                result = (
-                    {str(key): value for key, value in parsed.items()}
-                    if isinstance(parsed, dict)
-                    else {"fixture": expected.filename, "hash_matches": False}
-                )
-            except json.JSONDecodeError:
-                result = {"fixture": expected.filename, "hash_matches": False}
-            diagnostic_matches = child.stderr == expected.allowed_stderr
-            result["diagnostic_matches"] = diagnostic_matches
-            result["child_exit_matches"] = child.returncode == 0
-            passed = passed and diagnostic_matches and child.returncode == 0
-        else:
-            try:
-                result = _fixture_result(fixture, expected)
-            except Exception:
-                result = {"fixture": expected.filename, "hash_matches": False}
+        except json.JSONDecodeError:
+            result = {"fixture": expected.filename, "hash_matches": False}
+        diagnostic_matches = child.stderr == expected.allowed_stderr
+        result["diagnostic_matches"] = diagnostic_matches
+        result["child_exit_matches"] = child.returncode == 0
+        passed = passed and diagnostic_matches and child.returncode == 0
         passed = passed and bool(result.get("hash_matches"))
         results.append(result)
     return (0 if passed else 1), {

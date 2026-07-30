@@ -110,9 +110,11 @@ success/fail, **pixel array SHA-256** (or tolerance metric), decode time, visual
       profile-aware unsupported-transfer-syntax message naming the syntax. **Done 2026-07-29.**
 - [ ] **Log decoder backend/version** in debug diagnostics + About/System Info (provenance —
       compressed input can affect numerical results in QA/export).
-- [ ] **Remove the license-gate exception** for `pylibjpeg-libjpeg` from
+- [x] **Remove the license-gate exception** for `pylibjpeg-libjpeg` from
       `dev-docs/info/dependency_license_policy.json`; re-run `scripts/check_dependency_licenses.py`
-      in the release venv → must pass with **no** GPL exception.
+      in the release venv → must pass with **no** GPL exception. **Done 2026-07-29:** the policy
+      exception is removed and the local release-line environment reports zero forbidden
+      distributions.
 
 ## Phase 7 — Verification & docs
 - [ ] Add a regression test that asserts the corpus decodes (lossless hashes exact) using the
@@ -227,12 +229,14 @@ same `--baseline` diff:
 - **Compatibility:** `python-gdcm` 3.2.6 registered with pydicom 2.4.5 and decoded the synthetic
   matrix in isolated CPython 3.11.15 and 3.12.10 macOS/arm64 environments. Frozen Windows/Linux
   builds remain unverified.
-- **Open production criterion:** expected `.51` decode currently emits a native diagnostic despite
-  returning the independently confirmed pixels. Resolve or safely suppress it before shipment.
+- **Approved production criterion:** `.51` may emit exactly `Unsupported JPEG data precision 12\n`
+  on stderr when it returns the independently confirmed pixel hash. The diagnostic and hash must
+  remain visible to isolated shipment validation; any other output or mismatch is a release failure.
 - **Fixture admission:** human visual review and reviewed-asset hashes for the expanded grayscale
   matrix were completed on 2026-07-29.
 
 ### Decision Gate A/B — recommendation: **GDCM (Option C)**
+
 | | Pillow-only | **GDCM** |
 |---|---|---|
 | Coverage (failures vs golden) | 4 fail (`.50` edge, `.51`, `.70`×2) | **0 fail** |
@@ -240,6 +244,7 @@ same `--baseline` diff:
 | Lossy diff vs GPL ref | none (refuses) | `.51` ±1 LSB; `.50` no-color-transform color-space (synthetic only) |
 | License | MIT | `python-gdcm` wheel metadata declares Apache-2.0; release native assets need notice review |
 | Frozen-build risk | low (Pillow already bundled) | **native libs need PyInstaller validation + bundle-size cost** |
+
 
 GDCM eliminates the coverage regression; the selected wheel's package metadata declares
 Apache-2.0, while its collected native assets remain subject to final notice review.

@@ -26,7 +26,11 @@ def _relative_paths(bundle: Path) -> list[Path]:
     return sorted(
         path.relative_to(bundle)
         for path in bundle.rglob("*")
-        if path.is_file() and "gdcm" in path.name.lower()
+        if path.is_file()
+        and (
+            "gdcm" in path.name.lower()
+            or "_gdcm" in path.relative_to(bundle).parts
+        )
     )
 
 
