@@ -69,8 +69,9 @@ def transcode(src: str, dst: str, syntax_key: str, jpegls_error: int = 2) -> str
         # low-level JPEGLSCodec; some python-gdcm builds do not expose it through
         # ImageChangeTransferSyntax. If unavailable, fall back (output may be
         # effectively lossless) — prefer a real downloaded .81 sample instead.
-        if hasattr(change, "SetJPEGLSError"):
-            change.SetJPEGLSError(jpegls_error)
+        set_jpegls_error = getattr(change, "SetJPEGLSError", None)
+        if callable(set_jpegls_error):
+            set_jpegls_error(jpegls_error)
         else:
             print(
                 "  NOTE: this GDCM build cannot set JPEG-LS NEAR via "

@@ -1,7 +1,7 @@
 # Commercial Release Readiness — Master Gate
 
 **Status:** Active — the single "can we sell this yet?" checklist
-**Last updated:** 2026-06-13
+**Last updated:** 2026-07-29
 **Owner:** product/release
 
 > **Purpose.** One place to see everything that must be true **before charging money** for
@@ -21,7 +21,7 @@
 
 | # | Blocker | Tier | Owner plan | Status |
 |---|---------|------|-----------|--------|
-| 1 | Replace GPL `pylibjpeg-libjpeg` + verify decode | 0 | [Decoder spike plan](plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md) | 🟡 Spike done → **GDCM recommended** (LGPL, full coverage, lossless bit-exact). Pending: frozen-build check, then productionize |
+| 1 | Replace GPL `pylibjpeg-libjpeg` + verify decode | 0 | [GDCM release validation plan](plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md) | 🟡 `python-gdcm==3.2.6` now replaces the GPL requirement and policy exception; DCMTK+dcm4che confirm `.50` color and valid `.51` output. Exact successful `.51` native diagnostic is allowlisted with a subprocess/hash test. Pending: clean frozen builds/corpus smokes on all targets and final GDCM asset-notice review |
 | 2 | Verify/replace FFmpeg (`imageio-ffmpeg`) license | 0 | [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker) | ❌ Not started |
 | 3 | Replace Liberation Sans font with OFL/Apache font | 0 | [Compliance §3b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#3b-per-component-checklist-post-phase-0) | ❌ Not started |
 | 4 | Choose project license + add `LICENSE` | 0 | [Compliance §1](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#1b-project-license-file) | ❌ Not started |
@@ -49,14 +49,18 @@ trust in a paid product.
 
 ### Licensing of dependencies (legal blockers)
 - [ ] **Replace `pylibjpeg-libjpeg` (GPL-3.0)** and **verify the replacement decodes your real data.**
-      This is *the* gating item — a closed-source paid binary cannot bundle GPL. Likely just drop it
-      for **Pillow-only** decode; if CR/DX JPEG coverage gaps remain, use **GDCM (LGPL)**.
-      → **executable plan: [Decoder Replacement Spike Plan](plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md)**
-      (golden-reference + hash-diff to catch silent pixel corruption); options analysis:
+      This is *the* gating item — a closed-source paid binary cannot bundle GPL. **`python-gdcm`
+      is selected; Pillow-only was rejected for lost classic JPEG coverage. Its final native-asset
+      notice review remains part of the release gate.**
+      → **executable plan: [GDCM release validation](plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md)**
+      (golden-reference + hash-diff + independent decoder comparison to catch silent pixel
+      corruption); options analysis:
       [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md);
-      legal gate: [Compliance §0a](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg--gpl-30-jpeg-decoder-blocking).
+      legal gate: [Compliance §0a](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg-replacement--gdcm-productionization-blocking).
       **Verification is part of the blocker**: test decode on CT, MR, CR, DX, XA, US; log any
-      transfer syntax that fails; run full test suite + manual smoke after removal.
+      transfer syntax that fails; assert the single documented successful `.51` native diagnostic
+      in an isolated subprocess and clear every other native diagnostic; run full test suite +
+      manual smoke after removal.
 - [ ] **Verify `imageio-ffmpeg` is the LGPL-only build** (likely fine) or replace it.
       → [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker).
 - [ ] **Replace Liberation Sans** (GPL-2.0 + ambiguous embedding exception) with an SIL OFL /

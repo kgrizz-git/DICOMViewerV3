@@ -76,7 +76,8 @@ def test_build_slow_load_timing_parts_thresholds() -> None:
 
 def test_build_error_messages() -> None:
     detail = build_compression_install_error_detail("Compressed DICOM pixel data cannot be decoded.")
-    assert "pylibjpeg" in detail
+    assert detail == "Compressed DICOM pixel data cannot be decoded."
+    assert "pip install" not in detail
     assert build_generic_load_error_message("read failed", "RuntimeError") == (
         "RuntimeError: Error reading file: read failed"
     )

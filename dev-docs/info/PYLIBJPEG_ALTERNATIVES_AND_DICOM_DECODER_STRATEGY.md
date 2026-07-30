@@ -1,10 +1,11 @@
 # pylibjpeg-libjpeg alternatives and DICOM decoder strategy
 
-Last updated: 2026-06-13
+Last updated: 2026-07-29
 
-> **Execution:** this note is the *options analysis*. The actionable, phased spike (corpus,
-> golden-reference hash-diff, decision gates, productionization) is
-> [`DECODER_REPLACEMENT_SPIKE_PLAN.md`](../plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md).
+> **Execution:** this note is the *options analysis*. The completed corpus/decision work is in
+> [`DECODER_REPLACEMENT_SPIKE_PLAN.md`](../plans/supporting/DECODER_REPLACEMENT_SPIKE_PLAN.md);
+> the actionable implementation work is in
+> [`GDCM_DECODER_PRODUCTIONIZATION_PLAN.md`](../plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md).
 
 ## Purpose
 
@@ -38,13 +39,21 @@ Primary references checked while writing this note:
 
 ## Summary recommendation
 
-Use a staged decision path:
+The spike completed the staged decision: Pillow-only was rejected because it lost JPEG
+Lossless and some JPEG Extended coverage; `python-gdcm` was selected. GDCM had no new failures
+against the 42-file golden corpus and produced bit-exact lossless output. DCMTK and dcm4che now
+independently agree with GDCM on the synthetic marker-less RGB `.50` behavior and a valid 12-bit
+JPEG Extended `.51` fixture; the former GPL decoder differs on both. The reviewed expanded
+synthetic fixture matrix is now admitted. The dependency/spec swap, native-diagnostic allowlist
+regression, safe capability messaging, and GPL-exception removal are complete locally. Production
+work remains before the commercial blocker is closed: clean frozen-build/native-library validation
+on all release targets, GDCM artifact notice/SBOM review, future native-diagnostic cleanup, and
+release verification.
 
-1. Test a Pillow-only build without `pylibjpeg-libjpeg`.
-2. If representative customer data still decodes acceptably, remove `pylibjpeg-libjpeg` from the default/commercial profile and improve missing-decoder messaging.
-3. If coverage is not good enough, test `python-gdcm` as the next practical decoder option.
-4. Treat a custom PyTurboJPEG/libjpeg-turbo pydicom plugin as a deeper engineering fallback, not the first replacement.
-5. Keep `pylibjpeg-libjpeg` only in a clearly separated GPL-compatible or user-managed profile if a product decision allows that.
+Use **GDCM as the one replacement for `pylibjpeg-libjpeg`**. Do not combine it with a custom
+PyTurboJPEG implementation. Pillow remains an ordinary pydicom fallback, while the existing
+JPEG 2000 (`pylibjpeg-openjpeg`), JPEG-LS (`pyjpegls`), and RLE (`pylibjpeg-rle`) plugins remain
+in place because they cover different transfer syntaxes.
 
 ## Option matrix
 
@@ -52,7 +61,7 @@ Use a staged decision path:
 |--------|--------------------------|--------------------|-------------------|----------------|
 | A. Pillow-only | Permissive MIT-CMU style Pillow license | Low | Good for JPEG Baseline 8-bit; limited for 12-bit/extended/lossless paths | First experiment and likely default for CT/MR-heavy users |
 | B. Omit plugin and warn | Removes GPL plugin from shipped build | Low to medium | Whatever remaining installed handlers cover | Lightweight/commercial profile where unsupported JPEG files can fail gracefully |
-| C. GDCM / `python-gdcm` | Copyleft/notice obligations need review, often treated as weaker than GPL app-source exposure | Medium | Broad DICOM JPEG coverage, but still has known pydicom plugin limits | If Pillow-only fails on important CR/DX/XA/US data |
+| C. GDCM / `python-gdcm` | `python-gdcm` wheel metadata declares Apache-2.0; native asset notices still need review | Medium | Broad DICOM JPEG coverage, but still has known pydicom plugin limits | Selected replacement for important CR/DX/XA/US data |
 | D. PyTurboJPEG / libjpeg-turbo custom plugin | libjpeg-turbo is BSD/IJG-style, but Python wrapper/wheel must be verified | High | Potentially strong classic JPEG baseline performance; DICOM integration unproven in this repo | Engineering fallback when GDCM is undesirable |
 | E. User-installed decoder pack | App avoids bundling GPL decoder by default | Medium | Depends on what user installs | Power-user or site-managed deployments |
 | F. GPL-compatible distribution profile | GPL-compatible if app source/license path permits | Low technically, high product/legal impact | Keeps current behavior | Open-source/GPL build or internal-only experiments |
@@ -128,6 +137,14 @@ Low implementation effort if paired with Pillow-only testing. Medium product ris
 - GDCM may add significant bundle size.
 - It may still impose notice/relink/source-availability obligations depending on the exact package/license path. This is not a "no compliance work" option.
 - Decoder output can differ from `pylibjpeg-libjpeg`; quantitative and color-image checks are still required.
+- The published `python-gdcm` 3.2.6 wheel correctly decodes valid 12-bit JPEG Extended but writes
+  a native diagnostic because GDCM probes a 16-bit decoder before retrying its 12-bit decoder.
+  GDCM 3.2.7 built with its optional libjpeg-turbo backend is quiet across the approved synthetic
+  matrix, but that configuration is not yet an available `python-gdcm` wheel. The release plan
+  permits this one exact diagnostic only for a successful, hash-confirmed synthetic `.51` decode;
+  it is asserted in an isolated subprocess, not suppressed in application code. Any other native
+  output or a pixel/reference mismatch remains a failure. A released turbo-backed wheel or an
+  upstream fix remains the preferred cleanup; see [python-gdcm issue #35](https://github.com/tfmoraes/python-gdcm/issues/35).
 
 ### How easy is it?
 
@@ -242,6 +259,12 @@ For each sample record:
 - pixel hash or tolerance-based comparison to a trusted decoder,
 - visual smoke result.
 
+**Status 2026-07-29:** the in-repo generator now creates wholly synthetic `.50`, valid 12-bit
+`.51`, `.57`, `.70`, JPEG-LS, JPEG 2000, RLE, and uncompressed controls. Lossless fixtures are
+checked against deterministic source patterns; `.50` and `.51` use DCMTK+dcm4che-confirmed GDCM
+reference pixels. Human visual review and reviewed-asset hashes were completed on 2026-07-29; see
+the productionization plan for the exact contract.
+
 ## Implementation guardrails
 
 - Keep decoder detection in a focused core module rather than scattering string checks for `pylibjpeg`.
@@ -250,15 +273,12 @@ For each sample record:
 - Log decoder backend/version in debug diagnostics and future QA provenance where compressed input may affect numerical results.
 - Keep commercial/default requirements separate from optional/GPL or full-research profiles if multiple profiles are adopted.
 
-## Proposed next steps
+## Next steps (post-spike)
 
-1. Create a `no-pylibjpeg-libjpeg` spike branch.
-2. Remove only `pylibjpeg-libjpeg`; keep other accepted decoders unchanged.
-3. Run the compressed-DICOM corpus and app smoke tests.
-4. Record failures by transfer syntax and modality.
-5. Decide whether Pillow-only is good enough for the default/commercial profile.
-6. If not, run the same corpus against GDCM.
-7. Only start PyTurboJPEG custom-plugin work if both Pillow-only and GDCM are rejected.
+1. Validate GDCM native-library discovery and corpus decoding from a clean PyInstaller build on every release target; record the bundle-size delta.
+2. Complete frozen-executable smoke coverage and expose the existing safe decoder backend/version provenance in the planned About/System Info surface.
+3. Include GDCM native-library notices in the release SBOM/attribution review, confirm the GPL plugin is absent from each artifact, and run the release verification suite.
+4. Track a quiet published wheel or upstream fix for the exact `.51` fallback diagnostic; do not broaden its allowlist before independently validating the new behavior.
 
 ## Decoder options landscape & licenses (2026-06-14 spike findings)
 
@@ -268,15 +288,16 @@ recorded in [`DECODER_REPLACEMENT_SPIKE_PLAN.md`](../plans/supporting/DECODER_RE
 
 | Decoder | License | At-risk JPEG coverage | Drop-in with current **pydicom 2.4.5**? |
 |---------|---------|-----------------------|------------------------------------------|
-| **GDCM** (`python-gdcm`) | **LGPL** | **Full** (spike: 0 failures, lossless bit-exact, `.57` bit-exact) | ✅ Registered pydicom handler today — **recommended** |
+| **GDCM** (`python-gdcm`) | **Apache-2.0** package metadata; final native-asset review required | **Full** (spike: 0 failures, lossless bit-exact, `.57` bit-exact) | ✅ Registered pydicom handler today — **selected** |
 | **imagecodecs** (cgohlke) | **BSD-3** (most permissive) | Full — incl. lossless JPEG (`jpegsof3`/`ljpeg`), 12-bit | ⚠️ **pydicom 3.x plugin only** — not a 2.4.5 handler |
 | **Pillow** | MIT/HPND | Partial — drops lossless (`.57/.70`) + 12-bit extended (`.51`) | ✅ but incomplete (spike: 7 failures) |
 | **PyTurboJPEG / libjpeg-turbo** | BSD/IJG | Lossy baseline/extended only; lossless weak | ✗ no pydicom integration; not full |
 | **DCMTK** CLI (`dcmdjpeg`) | OFFIS (BSD-like) | Full | ✗ shell-out to bundled binaries; heavy to package |
 | **nvImageCodec** (NVIDIA) | proprietary, **CUDA/GPU** | Full, GPU-accelerated | ✗ needs NVIDIA GPU — not viable on the dev Parallels/CPU setup |
 
-**Conclusion:** with **pydicom 2.4.5**, **GDCM (LGPL) is effectively the only drop-in non-GPL
-full-coverage decoder**. LGPL is commercially acceptable (same compliance path as PySide6/Qt).
+**Conclusion:** with **pydicom 2.4.5**, `python-gdcm` is effectively the only selected drop-in,
+full-coverage decoder. Its package metadata is Apache-2.0; the final native-asset notice review is
+still required before commercial release.
 
 **imagecodecs is the most license-clean (BSD) full-coverage engine**, but it is a **pydicom 3.x**
 decoder plugin. **pydicom 3.x is currently blocked by `pylinac` → `pydicom<3,>=2.0`** — the

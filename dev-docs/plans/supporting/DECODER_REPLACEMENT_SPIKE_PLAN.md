@@ -1,6 +1,7 @@
 # Decoder Replacement Spike Plan (`pylibjpeg-libjpeg` GPL removal)
 
-**Status:** Ready to start — actionable spike
+**Status:** Spike complete — GDCM selected; productionization and frozen-build verification pending
+**Last updated:** 2026-07-29
 **Priority:** P0 — Tier 0 hard blocker for commercial release
 **TO_DO ref:** Release / Product → [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #1
 
@@ -11,7 +12,7 @@
 > **This plan operationalizes** the strategy/option analysis in
 > [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md)
 > (the option matrix A–F). Read that for the *why*; this is the *what to do, in order*.
-> Legal context: [`LICENSE_AND_COMPLIANCE_PLAN.md` §0a](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg--gpl-30-jpeg-decoder-blocking).
+> Legal context: [`LICENSE_AND_COMPLIANCE_PLAN.md` §0a](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg-replacement--gdcm-productionization-blocking).
 
 ---
 
@@ -24,15 +25,14 @@
 
 ## Current state (grounding)
 
-- **Pinned decoders** — `requirements.txt`:
-  - L48 `pylibjpeg>=2.1.0`, **L49 `pylibjpeg-libjpeg>=2.4.0` ← the GPL blocker**,
-    L50 `pylibjpeg-openjpeg` (JPEG2000, MIT), L51 `pylibjpeg-rle` (RLE), L52 `pyjpegls` (JPEG-LS, MIT).
+- **Production update (2026-07-29)** — `python-gdcm==3.2.6` replaces `pylibjpeg-libjpeg` in
+  `requirements.txt`; the retained plugins cover JPEG 2000, JPEG-LS, and RLE. The GPL decoder's
+  accepted-exception entry was removed from the dependency-license policy.
 - **Decode entry point** — `src/core/dicom_pixel_array.py` `get_pixel_array()` → `dataset.pixel_array`;
   failures classified by `_classify_pixel_array_error()` (L31).
-- **Messaging to fix** — `dicom_pixel_array.py` L149-150 currently tells users to
-  `pip install pylibjpeg pyjpegls` (points at the GPL path); must become profile-aware.
-- **License gate** — `pylibjpeg-libjpeg` is an *accepted exception* in
-  `dev-docs/info/dependency_license_policy.json`; removing the dep lets us delete that exception.
+- **Messaging update (2026-07-29)** — `core.decoder_capabilities` provides transfer-syntax and
+  installed-handler information; pixel/loader failures use it without raw native text or
+  package-install advice.
 
 ## Transfer syntaxes `pylibjpeg-libjpeg` currently covers (the at-risk set)
 - `1.2.840.10008.1.2.4.50` JPEG Baseline 8-bit
@@ -92,7 +92,7 @@ success/fail, **pixel array SHA-256** (or tolerance metric), decode time, visual
 - [ ] Confirm pydicom selects the `gdcm` plugin for the target syntaxes; re-run corpus + diff.
 - [ ] **Validate frozen-build discovery** of GDCM native libs via PyInstaller (`DICOMViewerV3.spec`)
       — decode from a built executable, not just the venv. Record bundle-size delta.
-- [ ] Review GDCM (LGPL) obligations against the closed-source model with the compliance plan.
+- [ ] Review the exact GDCM wheel/native-library notices in each release asset with the compliance plan.
 
 ## Phase 5 — Decision Gate B (only if Phase 4 ran)
 - [ ] **Decision:** GDCM acceptable (coverage + frozen build + license)? If yes → Phase 6 with
@@ -100,19 +100,21 @@ success/fail, **pixel array SHA-256** (or tolerance metric), decode time, visual
       reduced-coverage profile (Option B) — **do not** start D without explicit sign-off.
 
 ## Phase 6 — Productionize the chosen path
-- [ ] **`requirements.txt`** — remove L49 `pylibjpeg-libjpeg`; add `python-gdcm` if Option C.
-      Comment the rationale + link this plan.
-- [ ] **Capability-detection module** — a focused helper mapping transfer-syntax UID → installed
+- [x] **`requirements.txt`** — remove `pylibjpeg-libjpeg`; add `python-gdcm` for Option C.
+      **Done 2026-07-29:** pinned `python-gdcm==3.2.6` is the selected dependency.
+- [x] **Capability-detection module** — a focused helper mapping transfer-syntax UID → installed
       decoder support + a clear user message (per strategy "Implementation guardrails": don't
-      scatter `pylibjpeg` string checks; don't drive control flow off import errors).
-- [ ] **Fix messaging** — `dicom_pixel_array.py` L149-150: stop recommending the GPL
-      `pip install pylibjpeg`; show a profile-aware unsupported-transfer-syntax message naming
-      the syntax. Update `_classify_pixel_array_error` if backend strings change.
+      scatter `pylibjpeg` string checks; don't drive control flow off import errors). **Done
+      2026-07-29:** `core.decoder_capabilities` is the single runtime capability source.
+- [x] **Fix messaging** — stop recommending the GPL `pip install pylibjpeg`; show a
+      profile-aware unsupported-transfer-syntax message naming the syntax. **Done 2026-07-29.**
 - [ ] **Log decoder backend/version** in debug diagnostics + About/System Info (provenance —
       compressed input can affect numerical results in QA/export).
-- [ ] **Remove the license-gate exception** for `pylibjpeg-libjpeg` from
+- [x] **Remove the license-gate exception** for `pylibjpeg-libjpeg` from
       `dev-docs/info/dependency_license_policy.json`; re-run `scripts/check_dependency_licenses.py`
-      in the release venv → must pass with **no** GPL exception.
+      in the release venv → must pass with **no** GPL exception. **Done 2026-07-29:** the policy
+      exception is removed and the local release-line environment reports zero forbidden
+      distributions.
 
 ## Phase 7 — Verification & docs
 - [ ] Add a regression test that asserts the corpus decodes (lossless hashes exact) using the
@@ -215,23 +217,48 @@ same `--baseline` diff:
   `jpeg_lossless_p14` = `.57`, `jpeg_lossless_sv1` = `.70`, `jpegls_lossless`, `jpeg2000*`, `rle`).
   Requires `python-gdcm` (tooling-only, not an app dependency).
 
+### 2026-07-29 — Independent color decision and reproducible synthetic matrix
+- **Independent tools:** DCMTK 3.7.0 and dcm4che 5.34.3 ran from isolated local validation
+  environments; neither is a runtime candidate. Both decompressed the wholly synthetic marker-less
+  RGB `.50` fixture to the exact GDCM raw-pixel hash under the application's pydicom 2.4.5 line.
+  The former GPL decoder produced a different hash.
+- **Valid `.51` fixture:** libjpeg-turbo 3.2.0 `cjpeg -precision 12` generated a valid 12-bit
+  JPEG Extended SOF1 frame independently of GDCM. GDCM, DCMTK, and dcm4che agree exactly; the
+  former GPL output differs by at most two values (285/3072 pixels; mean absolute difference
+  0.099609).
+- **Compatibility:** `python-gdcm` 3.2.6 registered with pydicom 2.4.5 and decoded the synthetic
+  matrix in isolated CPython 3.11.15 and 3.12.10 macOS/arm64 environments. Frozen Windows/Linux
+  builds remain unverified.
+- **Approved production criterion:** `.51` may emit exactly `Unsupported JPEG data precision 12\n`
+  on stderr when it returns the independently confirmed pixel hash. The diagnostic and hash must
+  remain visible to isolated shipment validation; any other output or mismatch is a release failure.
+- **Fixture admission:** human visual review and reviewed-asset hashes for the expanded grayscale
+  matrix were completed on 2026-07-29.
+
 ### Decision Gate A/B — recommendation: **GDCM (Option C)**
+
 | | Pillow-only | **GDCM** |
 |---|---|---|
 | Coverage (failures vs golden) | 4 fail (`.50` edge, `.51`, `.70`×2) | **0 fail** |
 | Lossless bit-exact | yes (where decoded) | **yes** |
 | Lossy diff vs GPL ref | none (refuses) | `.51` ±1 LSB; `.50` no-color-transform color-space (synthetic only) |
-| License | MIT | LGPL (commercial-OK, same path as Qt) |
+| License | MIT | `python-gdcm` wheel metadata declares Apache-2.0; release native assets need notice review |
 | Frozen-build risk | low (Pillow already bundled) | **native libs need PyInstaller validation + bundle-size cost** |
 
-GDCM eliminates the coverage regression and is LGPL (compatible with the closed-source model).
-**Recommended path: replace `pylibjpeg-libjpeg` with `python-gdcm`.** Remaining before
-finalizing (Phase 4/6/7):
-- [ ] Validate the no-color-transform `.50` behavior — decide which decoder follows DICOM
-      `PhotometricInterpretation` correctly (likely GDCM); confirm real color JPEG is unaffected (it was here).
+
+GDCM eliminates the coverage regression; the selected wheel's package metadata declares
+Apache-2.0, while its collected native assets remain subject to final notice review.
+**Recommended path: replace `pylibjpeg-libjpeg` with `python-gdcm`.** This is a single
+replacement for the GPL classic-JPEG plugin; retain the existing Pillow fallback and the
+separate JPEG 2000, JPEG-LS, and RLE plugins. Remaining before finalizing (Phases 4/6/7):
+- [x] Validate the no-color-transform `.50` behavior — DCMTK and dcm4che independently match
+      GDCM's raw RGB output for a wholly synthetic marker-less RGB fixture; the former GPL result
+      differs. **Done 2026-07-29;** details and the remaining production work are in the
+      [GDCM release validation plan](GDCM_DECODER_PRODUCTIONIZATION_PLAN.md).
 - [ ] **Frozen-build check** — confirm GDCM native libs load from a PyInstaller build (not just venv); record bundle-size delta.
-- [ ] Optionally source `.57` (JPEG Lossless process 14) and `.81` (JPEG-LS near-lossless) fixtures to close corpus gaps.
-- [ ] Then Phase 6 productionization (requirements swap, messaging, license-gate exception removal).
+- [x] Source `.57` (JPEG Lossless process 14) and `.81` (JPEG-LS near-lossless) fixtures to close corpus gaps — completed 2026-06-14.
+- [x] Phase 6 dependency swap, capability messaging, and license-gate exception removal. **Done
+      2026-07-29;** frozen-executable validation and provenance UI remain in the production plan.
 
 ---
 
@@ -247,19 +274,18 @@ release, but do not change the recommendation (GDCM):
 2. ~~**`.57` and `.81` corpus fixtures.**~~ **DONE 2026-06-14** — `.57` generated via GDCM
    (`scripts/generate_decoder_fixtures.py`), `.81` downloaded from `pydicom-data`. Both verified
    and in the 42-file corpus.
-3. **No-color-transform `.50` investigation.** GDCM and `pylibjpeg-libjpeg` disagree by a large
-   margin on `SC_jpeg_no_color_transform.dcm` (YBR↔RGB interpretation when the APP14 marker is
-   absent). Real color baseline files matched bit-exact, so this is an edge case — but determine
-   which decoder correctly honors DICOM `PhotometricInterpretation`, and add a guard/test if real
-   data could hit it.
+3. ~~**No-color-transform `.50` investigation.**~~ **DONE 2026-07-29.** A wholly synthetic
+   marker-less RGB fixture was generated in-repo; DCMTK and dcm4che independently match GDCM's
+   raw output, while the former GPL result differs. The production plan retains fixture admission,
+   regression, and frozen-build requirements.
 4. **Wider real-world prevalence scan (optional).** The big MR/CT/PT/Fusion folders
    (7k–24k files) were not scanned for `.51/.57/.70` prevalence. Not needed for the GDCM path
    (GDCM covers them), but would quantify how much a Pillow-only fallback would have cost.
-5. **imagecodecs (BSD) instead of GDCM (LGPL) — gated by pydicom 3.** `imagecodecs` is a fully
+5. **imagecodecs (BSD) instead of the selected GDCM path — gated by pydicom 3.** `imagecodecs` is a fully
    permissive (BSD-3) full-coverage decoder, but only as a **pydicom 3.x** plugin. **pydicom 3 is
    blocked by `pylinac 3.43.2` (`pydicom<3,>=2.0`)** — the same ceiling as highdicom (see
-   [`HIGHDICOM_OVERVIEW.md`](../../info/HIGHDICOM_OVERVIEW.md) §4a). Only relevant if avoiding LGPL
-   entirely matters; otherwise GDCM is the lower-effort choice. Full landscape in the strategy
+   [`HIGHDICOM_OVERVIEW.md`](../../info/HIGHDICOM_OVERVIEW.md) §4a). Only relevant if a fully
+   permissive alternative becomes preferable; otherwise GDCM is the lower-effort choice. Full landscape in the strategy
    doc. Tracked in `TO_DO.md` (Maintenance).
 
 ### Why pydicom 2.x (not 3)?
@@ -278,5 +304,6 @@ pylinac bump (with ACR QA re-verification).
 
 ## Related
 - Strategy / options: [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](../../info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md)
-- Legal gate: [`LICENSE_AND_COMPLIANCE_PLAN.md` §0a](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg--gpl-30-jpeg-decoder-blocking)
+- Production execution: [`GDCM_DECODER_PRODUCTIONIZATION_PLAN.md`](GDCM_DECODER_PRODUCTIONIZATION_PLAN.md)
+- Legal gate: [`LICENSE_AND_COMPLIANCE_PLAN.md` §0a](LICENSE_AND_COMPLIANCE_PLAN.md#0a-pylibjpeg-libjpeg-replacement--gdcm-productionization-blocking)
 - Master gate: [`COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) item #1

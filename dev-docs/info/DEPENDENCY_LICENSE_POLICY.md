@@ -1,6 +1,6 @@
 # Dependency License Policy & Check
 
-**Last updated:** 2026-06-09
+**Last updated:** 2026-07-29
 
 This is the **single source of documentation** for the automated dependency
 license check. It explains what the check does, the policy it enforces, how to
@@ -131,9 +131,9 @@ All policy lives in [`dependency_license_policy.json`](dependency_license_policy
 
 ### Current accepted exceptions
 
-| Package | License | Why it's allowed (for now) |
-|---------|---------|----------------------------|
-| `pylibjpeg-libjpeg` | GPL-3.0 | **Unresolved Phase 0a blocker.** DICOM JPEG Baseline/Extended decoder. Must be removed or replaced (Pillow-only, or GDCM/LGPL) **before** commercial distribution. Tracked in the compliance plan, Phase 0a; detailed replacement strategy: [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md). |
+None. `pylibjpeg-libjpeg` was removed from the runtime requirements on 2026-07-29 in favor of
+`python-gdcm`; the policy must remain empty so a future strong-copyleft decoder is rejected by the
+gate rather than silently accepted.
 
 > Keep this table in sync with `accepted_exceptions` in the JSON when you add or
 > remove an entry.

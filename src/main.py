@@ -29,6 +29,11 @@ import sys
 from collections.abc import Callable
 from typing import Any, cast
 
+if "--decoder-fixture-smoke" in sys.argv or "--decoder-fixture-child" in sys.argv:
+    from core.decoder_fixture_smoke import main as _decoder_fixture_smoke_main
+
+    raise SystemExit(_decoder_fixture_smoke_main(sys.argv[1:]))
+
 from pydicom.dataset import Dataset
 from PySide6.QtCore import QObject, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor

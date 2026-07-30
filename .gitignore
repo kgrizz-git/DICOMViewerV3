@@ -258,6 +258,7 @@ logs/
 *.dicom
 *.ima
 !tests/fixtures/dicom_rdsr/*.dcm
+!tests/fixtures/dicom_decoder/*.dcm
 
 # Local study indexes and SQLite sidecars may contain patient metadata.
 *.db

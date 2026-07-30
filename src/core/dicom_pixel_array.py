@@ -22,6 +22,7 @@ import logging
 import numpy as np
 from pydicom.dataset import Dataset
 
+from core.decoder_capabilities import compressed_decode_failure_message
 from core.multiframe_handler import is_multiframe
 from core.sr_sop_classes import is_structured_report_dataset
 from utils.privacy import safe_event_fields
@@ -62,7 +63,7 @@ def _classify_pixel_array_error(dataset: Dataset, error_msg: str) -> tuple[bool,
         "decoder" in lowered
     )
     if is_compression_error:
-        return True, "Compressed DICOM pixel data cannot be decoded."
+        return True, compressed_decode_failure_message(dataset)
 
     return False, error_msg
 

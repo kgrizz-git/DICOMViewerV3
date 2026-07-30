@@ -120,21 +120,21 @@ Enhanced Multi-frame DICOM support is **production-ready** and handles the compl
 
 ## 3. Compressed DICOM Support
 
-### Status: ⚠️ Improved Error Handling
+### Status: ✅ Selected decoder coverage with safe failure handling
 
 The application has **improved error handling** for compressed DICOM files:
 
 #### ✅ What Works
 - **Error Detection**: Compressed DICOM decoding errors are detected and handled gracefully
-- **User-Friendly Messages**: Clear error messages guide users to install optional dependencies
+- **User-Friendly Messages**: Errors name the transfer syntax and distinguish a missing compatible handler from a decode failure without exposing raw library output
 - **Graceful Degradation**: Application continues to work even when compressed files cannot be decoded
-- **Optional Dependencies Documented**: `requirements.txt` includes optional dependencies with installation instructions
+- **Selected Runtime Decoder**: `python-gdcm==3.2.6` covers classic JPEG Baseline, Extended, and Lossless alongside the retained JPEG 2000, JPEG-LS, and RLE plugins
 
 #### Implementation Details
 
 1. **Error Detection in `get_pixel_array()`**
    - Detects "missing required dependencies" errors from pydicom
-   - Provides installation instructions: `pip install pylibjpeg pyjpegls`
+   - Reports the non-identifying transfer-syntax UID and installed-handler state
    - Returns None gracefully instead of crashing
 
 2. **Error Handling in `dicom_loader.py`**
@@ -142,21 +142,20 @@ The application has **improved error handling** for compressed DICOM files:
    - Adds files to `failed_files` list with descriptive error messages
    - Continues loading other files even if one fails
 
-3. **Optional Dependencies**
-   - `pylibjpeg`: For JPEG 2000 and other compressed formats
+3. **Compressed Decoder Set**
+   - `python-gdcm`: Classic JPEG Baseline, Extended, and Lossless
+   - `pylibjpeg`: Host for retained JPEG 2000 and RLE plugins
    - `pyjpegls`: For JPEG-LS compression
-   - Documented in `requirements.txt` with installation instructions
+   - Defined in `requirements.txt`; user-facing errors do not instruct users to install a GPL decoder
 
 #### Limitations
-- Compressed DICOM files require optional dependencies to decode
-- GDCM support not included (requires additional system libraries)
-- Users must install optional dependencies manually if needed
+- Frozen builds must still prove GDCM native-library discovery on every release platform
+- A malformed or unsupported compressed object can still fail even when a compatible handler is installed
 
 ### Recommendation
-For users working with compressed DICOM files, install optional dependencies:
-```bash
-pip install pylibjpeg pyjpegls
-```
+Use the supported release build. If a compressed object cannot be decoded, the failure message
+identifies its transfer syntax without exposing raw decoder diagnostics; report that safe detail to
+support rather than installing an unreviewed decoder.
 
 ## 4. Modality Support Analysis
 
@@ -634,4 +633,3 @@ The DICOM Viewer V3 has:
 9. Consider palette color lookup table support (Future enhancement)
 
 These improvements significantly enhance the application's capability to handle the full spectrum of DICOM imaging modalities and formats, with comprehensive support for color DICOM images.
-
