@@ -9,7 +9,7 @@ from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset
 from pydicom.tag import Tag
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsTextItem
+from PySide6.QtWidgets import QGraphicsPathItem, QGraphicsScene, QGraphicsTextItem
 
 from tools.annotation_manager import AnnotationManager
 
@@ -315,7 +315,10 @@ def test_create_presentation_state_items_overlay_without_coordinates(qapp, monke
     assert bitmap_item in scene.items()
     assert bitmap_item in manager.annotations[scene]
     # Path fallback creates a QGraphicsPathItem when overlay_data is absent.
-    assert any(item is not bitmap_item for item in items)
+    path_item = items[1]
+    assert isinstance(path_item, QGraphicsPathItem)
+    assert path_item in scene.items()
+    assert path_item in manager.annotations[scene]
     assert len(manager.annotations[scene]) == 2
 
 
