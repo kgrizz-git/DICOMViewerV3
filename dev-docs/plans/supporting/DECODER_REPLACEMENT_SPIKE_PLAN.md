@@ -249,7 +249,7 @@ separate JPEG 2000, JPEG-LS, and RLE plugins. Remaining before finalizing (Phase
 - [x] Validate the no-color-transform `.50` behavior — DCMTK and dcm4che independently match
       GDCM's raw RGB output for a wholly synthetic marker-less RGB fixture; the former GPL result
       differs. **Done 2026-07-29;** details and the remaining production work are in the
-      [GDCM productionization plan](GDCM_DECODER_PRODUCTIONIZATION_PLAN.md).
+      [GDCM release validation plan](GDCM_DECODER_PRODUCTIONIZATION_PLAN.md).
 - [ ] **Frozen-build check** — confirm GDCM native libs load from a PyInstaller build (not just venv); record bundle-size delta.
 - [x] Source `.57` (JPEG Lossless process 14) and `.81` (JPEG-LS near-lossless) fixtures to close corpus gaps — completed 2026-06-14.
 - [x] Phase 6 dependency swap, capability messaging, and license-gate exception removal. **Done

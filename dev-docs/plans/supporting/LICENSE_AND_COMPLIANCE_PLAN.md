@@ -51,7 +51,7 @@ Detailed engineering assessment: [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRA
 **Decision (2026-07-29):** Option B, `python-gdcm==3.2.6`, is selected. DCMTK and dcm4che
 independently agree with GDCM on the approved synthetic JPEG Baseline and valid 12-bit JPEG
 Extended reference fixtures. The exact successful 12-bit fallback diagnostic is an isolated-test
-allowlist; all other decoder output remains a failure. See the GDCM productionization plan for
+allowlist; all other decoder output remains a failure. See the GDCM release validation plan for
 the remaining frozen-build and artifact-inventory gates.
 
 - [x] **Action:** Remove `pylibjpeg-libjpeg` from `requirements.txt` and its accepted-exception policy. **Done 2026-07-29:** the local release-line environment decodes the synthetic matrix with `python-gdcm==3.2.6` and the dependency license gate reports no forbidden distributions.
