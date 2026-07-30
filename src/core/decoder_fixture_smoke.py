@@ -44,6 +44,7 @@ def run_fixture_smoke(fixture_dir: Path) -> tuple[int, dict[str, object]]:
     passed = True
     for expected in DECODER_FIXTURE_EXPECTATIONS:
         fixture = fixture_dir / expected.filename
+        result: dict[str, object]
         if expected.allowed_stderr:
             child_command = [sys.executable]
             if not getattr(sys, "frozen", False):
@@ -55,7 +56,12 @@ def run_fixture_smoke(fixture_dir: Path) -> tuple[int, dict[str, object]]:
                 check=False,
             )
             try:
-                result = json.loads(child.stdout)
+                parsed = json.loads(child.stdout)
+                result = (
+                    {str(key): value for key, value in parsed.items()}
+                    if isinstance(parsed, dict)
+                    else {"fixture": expected.filename, "hash_matches": False}
+                )
             except json.JSONDecodeError:
                 result = {"fixture": expected.filename, "hash_matches": False}
             diagnostic_matches = child.stderr == expected.allowed_stderr
