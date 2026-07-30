@@ -47,7 +47,7 @@ def normalize_to_uint8(array: np.ndarray) -> np.ndarray:
 
 def normalize_channels_to_uint8(array: np.ndarray) -> np.ndarray:
     """Normalize a (height, width, channels) array to 0-255 uint8, per channel.
-    Flat channels are zeroed (unlike normalize_to_uint8) and the result is clipped."""
+    Flat channels are zeroed (same as ``normalize_to_uint8``) and the result is clipped."""
     processed = array.astype(np.float32)
     for channel in range(processed.shape[2]):
         channel_data = processed[:, :, channel]

@@ -367,6 +367,23 @@ def test_palette_color_short_green_lut_renders_rgb() -> None:
     # conversion succeeds instead of IndexError → silent grayscale fallback.
     assert image.mode == "RGB"
 
+    # Two-entry Green LUT [0, 1]: indices 2 and 3 must clamp to the last entry (1),
+    # while Red/Blue still use the full ramp. Then apply the same identity W/L path
+    # dataset_to_image uses so the pixel assertion is unambiguous.
+    ramp = np.array([min(i, 255) for i in range(256)], dtype=np.uint8)
+    green_lut = ramp[:2]
+    expected_rgb = np.zeros((1, 4, 3), dtype=np.uint8)
+    for i, idx in enumerate((0, 1, 2, 3)):
+        expected_rgb[0, i, 0] = ramp[idx]
+        expected_rgb[0, i, 1] = green_lut[min(idx, len(green_lut) - 1)]
+        expected_rgb[0, i, 2] = ramp[idx]
+    expected = apply_color_window_level_luminance(expected_rgb, 127.5, 255, None, None)
+    assert np.array_equal(np.asarray(image), expected)
+    # Explicit clamp check: index 3's green channel matches the LUT's final value
+    # after W/L (not an unclamped ramp[3]).
+    assert int(np.asarray(image)[0, 3, 1]) == int(expected[0, 3, 1])
+    assert int(expected_rgb[0, 3, 1]) == 1
+
 
 # ---------------------------------------------------------------------------
 # 10. Forced PIL failure

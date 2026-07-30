@@ -14,6 +14,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ### Changed
 - **Unused symbol cleanup:** cleared remaining basedpyright `reportUnusedImport` / `reportUnusedVariable` / `reportUnusedParameter` findings in `src/` (true dead imports/locals removed or `_`-prefixed; intentional re-exports and keyword API params kept with safe markers). **Semantic versioning note: patch** (maintainability only).
+- **PR #38 CodeRabbit follow-ups:** aligned flat-normalize docstring with zeroing behavior, restored `OverlayManager.create_overlay_items(..., position=...)` keyword name with pyright suppress, synced a few callback Args docs, and strengthened empty-coordinate OVERLAY path + short secondary-palette clamp tests. **Semantic versioning note: patch**.
 
 ### Added
 - **ACR CT CNR intermediates:** the ACR CT result dialog now surfaces the values behind the low-contrast **contrast-to-noise ratio** — object ROI mean, background mean, background noise (σ), and module CNR — and writes them to **`metrics.low_contrast_cnr`** (`object_rois`, `background`, `cnr`) in the JSON/CSV/XLSX exports. **Semantic versioning note: minor** (new user-facing capability).

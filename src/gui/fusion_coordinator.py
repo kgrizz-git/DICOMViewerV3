@@ -632,10 +632,11 @@ class FusionCoordinator:
         Handle translation offset change.
         
         Args:
-            x_offset: X offset in pixels
-            y_offset: Y offset in pixels
+            x_offset: Unused X offset in pixels; kept for signal/callback compatibility.
+            y_offset: Unused Y offset in pixels; kept for signal/callback compatibility.
         """
-        # Request display update if fusion is enabled
+        # Request display update if fusion is enabled (offsets applied elsewhere).
+        # ``_x_offset`` / ``_y_offset`` are unused here by design.
         if self.fusion_handler.fusion_enabled:
             self.request_display_update()
 

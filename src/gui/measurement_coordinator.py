@@ -511,7 +511,8 @@ class MeasurementCoordinator:
 
         Args:
             scene_pos: Scene position of the handle (start of drag).
-            shift_held: Unused; kept for callback signature compatibility.
+            shift_held: Unused; kept for callback signature compatibility
+                (parameter name ``_shift_held``).
         """
         # Use QApplication.setOverrideCursor so the blank cursor takes priority over both the
         # view widget cursor and any QGraphicsItem cursor (e.g. the handle's SizeAllCursor).
