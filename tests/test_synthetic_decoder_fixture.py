@@ -13,6 +13,11 @@ import pytest
 from pydicom.encaps import generate_pixel_data_frame
 from pydicom.uid import JPEGBaseline8Bit
 
+from core.decoder_fixture_contract import (
+    DECODER_FIXTURE_EXPECTATIONS,
+    GDCM_12_BIT_FALLBACK_DIAGNOSTIC,
+)
+
 _ROOT = Path(__file__).resolve().parent.parent
 _FIXTURE_DIR = _ROOT / "tests" / "fixtures" / "dicom_decoder"
 _FIXTURE = _FIXTURE_DIR / "synthetic_rgb_no_color_markers_jpeg_baseline.dcm"
@@ -41,11 +46,7 @@ _LOSSLESS_PIXEL_HASHES = {
     "synthetic_monochrome_jpeg2000_lossless_16_bit.dcm": "f5ca7eb45ebf49f510773f1fb5a4edb8978a7116a4116d0bebe0d4f5e79d0332",
     "synthetic_monochrome_rle_lossless.dcm": "05c899747e8b1cbb4eeef12f342374b56424ed3932572f79d928a89e2f25f68e",
 }
-_GDCM_REFERENCE_HASHES = {
-    "synthetic_rgb_no_color_markers_jpeg_baseline.dcm": "9d2130c830f7b173b355f25270a9eacbac1f5045acebd757a7f9264a1ef03c28",
-    "synthetic_monochrome_jpeg_extended_12_bit.dcm": "8cb01fc3dac525da7d1868dfb1b8aaf8524f75dbf226712c579eb0f226a1b6dc",
-}
-_GDCM_12_BIT_DIAGNOSTIC = b"Unsupported JPEG data precision 12\n"
+_EXPECTED_BY_FILENAME = {item.filename: item for item in DECODER_FIXTURE_EXPECTATIONS}
 
 
 @pytest.mark.parametrize("filename", [_FIXTURE.name, *_MONOCHROME_FIXTURES])
@@ -125,10 +126,15 @@ def test_gdcm_reference_pixels_when_gdcm_is_the_available_handler() -> None:
 
     assert gdcm_handler.is_available(), "python-gdcm is a required runtime dependency"
 
-    for filename, expected_hash in _GDCM_REFERENCE_HASHES.items():
+    for filename in (
+        "synthetic_rgb_no_color_markers_jpeg_baseline.dcm",
+        "synthetic_monochrome_jpeg_extended_12_bit.dcm",
+    ):
         dataset = pydicom.dcmread(_FIXTURE_DIR / filename)
         assert gdcm_handler.supports_transfer_syntax(dataset.file_meta.TransferSyntaxUID)
-        assert hashlib.sha256(dataset.pixel_array.tobytes()).hexdigest() == expected_hash
+        assert hashlib.sha256(dataset.pixel_array.tobytes()).hexdigest() == _EXPECTED_BY_FILENAME[
+            filename
+        ].pixel_sha256
 
 
 def test_gdcm_12_bit_fallback_diagnostic_is_exactly_allowlisted() -> None:
@@ -157,6 +163,6 @@ print(hashlib.sha256(pixels.tobytes()).hexdigest())
 
     assert result.returncode == 0
     assert result.stdout == (
-        _GDCM_REFERENCE_HASHES[fixture.name].encode("ascii") + b"\n"
+        _EXPECTED_BY_FILENAME[fixture.name].pixel_sha256.encode("ascii") + b"\n"
     )
-    assert result.stderr == _GDCM_12_BIT_DIAGNOSTIC
+    assert result.stderr == GDCM_12_BIT_FALLBACK_DIAGNOSTIC

@@ -16,7 +16,7 @@ import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, copy_metadata
 
 block_cipher = None
 
@@ -62,6 +62,9 @@ src_dir_abs = str(src_dir.resolve())
 # `_gdcm` package. Collect from the installed wheel; do not hard-code platform-specific filenames.
 _GDCM_BINARIES = collect_dynamic_libs('_gdcm')
 _GDCM_DATA = collect_data_files('_gdcm', include_py_files=False)
+# `decoder_fixture_smoke` reports the selected decoder package version from installed metadata.
+# Preserve the selected wheel's metadata in frozen builds so the report is evidence, not "unknown".
+_GDCM_METADATA = copy_metadata('python-gdcm')
 
 a = Analysis(
     [main_py_abs],
@@ -73,7 +76,7 @@ a = Analysis(
             'src/utils/privacy/structural_event_schema_v1.json',
             'utils/privacy',
         ),
-    ] + _GDCM_DATA,
+    ] + _GDCM_DATA + _GDCM_METADATA,
     hiddenimports=[
         # Application modules - explicitly include all submodules
         'gui',

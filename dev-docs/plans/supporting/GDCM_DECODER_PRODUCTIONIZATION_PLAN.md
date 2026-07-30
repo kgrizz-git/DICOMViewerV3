@@ -190,11 +190,12 @@ the **raw decoded samples** and the **display-ready RGB result**, recording meta
 - [ ] Extend `scripts/decoder_corpus_report.py` only if it can record a requested backend without
       changing normal application behavior; otherwise keep validation helpers under `scripts/` as
       standalone, documented tooling.
-- [ ] Add a focused frozen-executable smoke runner that accepts only the committed synthetic
+- [x] Add a focused frozen-executable smoke runner that accepts only the committed synthetic
       fixture directory, emits transfer syntax/backend/version plus hashes and aggregate metrics,
       and returns non-zero for a missing handler, unallowlisted stdout/stderr, or a reference
       mismatch. It must capture the `.51` decode in an isolated child process and allow only the
-      exact approved diagnostic.
+      exact approved diagnostic. **Done 2026-07-29:** `--decoder-fixture-smoke` produces a
+      path-free JSON report; its child mode keeps the `.51` native diagnostic assertion isolated.
 
 **Gate 0:** every validator runs from its isolated environment, no validation output is staged,
 and the test file’s synthetic provenance is recorded.
@@ -294,7 +295,9 @@ For **each** macOS, Windows, and Linux release target:
    failure, and the successful `.51` child-process decode emits exactly the approved native
    diagnostic and no other output.
 5. Inspect the packaged dependency manifest/binary inventory for `pylibjpeg-libjpeg` and its
-   `libjpeg` plugin. Neither may be present. Capture required GDCM notices before release.
+   `pylibjpeg_libjpeg` Python/native plugin. Neither may be present. A `libjpeg` library supplied
+   by Pillow or GDCM is not, by filename alone, evidence of the removed GPL plugin; inventory it
+   under its actual owning component and license. Capture required GDCM notices before release.
 
 Any Windows/Linux loader failure, platform output mismatch, unexpected native output, or GPL binary
 found in the bundle blocks the swap; it is not a reason to silently add the old decoder back.
@@ -308,14 +311,27 @@ environment or a generic package-license result:
       release evidence.
 - [ ] Produce a bundle-relative inventory of every collected `_gdcm` native library and data file,
       including file SHA-256 and the library/version it belongs to. Do not record local paths.
+      Use `python scripts/report_gdcm_bundle_inventory.py <bundle>` and keep its JSON report
+      outside the checkout as release evidence.
+      **macOS/arm64 local evidence 2026-07-29:** the generated report contains 142 GDCM-named asset
+      entries and no `pylibjpeg_libjpeg` paths. It also identifies three `libjpeg` paths requiring
+      component review; they are attributable to Pillow collection, not evidence of the removed
+      plugin. Repeat this inventory for every release target and complete notice attribution.
 - [ ] Identify each library's license and required copyright/notice text from the exact wheel and
       its upstream release materials; include transitive native libraries revealed by platform
       linkage inspection.
 - [ ] Reconcile that inventory with the generated release SBOM and `THIRD_PARTY_LICENSES.md`:
       every collected GDCM/native dependency has an entry and required notice, and no entry claims
       a license solely from Python package metadata.
-- [ ] Confirm the final artifact contains neither `pylibjpeg-libjpeg` nor its GPL `libjpeg`
-      plugin, and record the result with the frozen-fixture smoke evidence.
+- [ ] Produce and compare complementary release artifacts: `pip-licenses` for human-readable
+      attribution/license texts; CycloneDX Python for the release-venv dependency graph; Syft for
+      a CycloneDX or SPDX inventory of the final frozen artifact; and ScanCode Toolkit for
+      file-level license/notice review of the exact GDCM wheel and collected native assets.
+      Differences are review findings, not automatic failures. Run Grype against the Syft SBOM as
+      the separate vulnerability check; it does not validate license attribution.
+- [ ] Confirm the final artifact contains neither `pylibjpeg-libjpeg` nor its GPL
+      `pylibjpeg_libjpeg` plugin, and record the result with the frozen-fixture smoke evidence.
+      Do not flag a same-named library from Pillow or GDCM without tracing its owning component.
 - [ ] Have the release/compliance owner review the completed inventory and required distribution
       obligations before shipment. This is an evidence and notice review, not legal advice.
 
@@ -333,9 +349,15 @@ environment or a generic package-license result:
       and 71 data files in the validated macOS wheel) and imports `gdcm`/`_gdcm.gdcmswig`.
 - [ ] Build from a clean environment on macOS, Windows, and Linux. For each bundle, use the
       packaged executable—not the build venv—to run a privacy-safe corpus-decode check.
+      **macOS/arm64 local evidence 2026-07-29:** PyInstaller 6.21.0 built the `.app`; its
+      executable passed all nine committed synthetic fixtures, including the isolated `.51`
+      contract. Repeat this in a clean release environment; Windows and Linux remain required.
 - [ ] Record application startup, corpus result, selected backend/version, and before/after bundle
       size. Investigate any platform-specific loader failure, unallowlisted successful-decode
       output, or `.51` diagnostic/pixel-contract change before changing the decoder choice.
+      **Partial 2026-07-29:** the macOS/arm64 `.app` is 1.1 GiB and the frozen synthetic runner
+      reports GDCM 3.2.6 with all expected hashes and the exact `.51` diagnostic. Collect the
+      comparable Windows/Linux figures and release-corpus results.
 - [ ] Review the exact GDCM license/notices and dynamic-library distribution obligations with the
       license-compliance plan; do not treat the engineering result as legal advice.
 
@@ -360,8 +382,8 @@ GPL `pylibjpeg-libjpeg` dependency.
       isolated subprocess; unsupported syntax messaging; no GPL-install recommendation; and
       absence of all other native decoder output during an expected successful decode. **Partial
       2026-07-29:** the committed synthetic matrix, subprocess allowlist/hash assertion, and
-      capability/error-message tests are complete; frozen executable and remaining workflow-path
-      coverage remain.
+      capability/error-message tests are complete; the macOS frozen executable passes the shared
+      fixture contract. Remaining workflow-path and Windows/Linux frozen coverage remain.
 - [ ] Confirm JPEG 2000, JPEG-LS, RLE, uncompressed, multi-frame, RGB/YBR, ROI/statistics, and
       export paths still work with the final plugin set.
 

@@ -151,6 +151,13 @@ In practice for a PyInstaller desktop app this means:
 - [ ] In the **release** venv (after Phase 0 changes), generate the final SBOM and verify contents.
 - [ ] Check transitive deps via `pip freeze` — not just direct pins.
 - [ ] Flag any **GPL / LGPL / MPL / EUPL** hits for review. After Phase 0, the only remaining copyleft should be LGPL (PySide6, possibly FFmpeg).
+- [ ] Cross-check each release with complementary tools: the existing `pip-licenses` attribution
+      document; CycloneDX Python for a machine-readable release-venv dependency graph; Syft for
+      a CycloneDX/SPDX scan of the final frozen artifact; and targeted ScanCode Toolkit analysis
+      of native GDCM assets and their notice files. Investigate differences rather than treating a
+      single tool's package-name or file-name match as dispositive.
+- [ ] Run Grype against the Syft SBOM for the release vulnerability report. Keep this distinct
+      from license/notice review: Grype evaluates known vulnerabilities, not distribution rights.
 
 ### 3b. Per-component checklist (post Phase 0)
 
