@@ -7,6 +7,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **Launcher incomplete venv:** `launch.bat` / `launch.command` now install and run with the venv interpreter directly (`…/python.exe -m pip` / `…/bin/python -m pip`) instead of relying on `activate` + bare `pip`/`python`, which can leave an empty `venv` folder on Windows (especially with pyenv/multiple Pythons). Choosing **Run** detects a missing core stack (`pydicom` / `PySide6` / `numpy` / `PIL`) and installs requirements before starting; failed installs keep the window open with recovery hints. **Semantic versioning note: patch**.
 - **Zoom release dead branch:** removed an unreachable nested `mouse_mode == "pan"` check inside the zoom `mouseReleaseEvent` path in `image_viewer_input.py` (ScrollHandDrag was never restored there because zoom mode uses NoDrag). **Semantic versioning note: patch**.
 - **OVERLAY annotations without coordinates:** `AnnotationManager.create_presentation_state_items` no longer skips `OVERLAY` items when `coordinates` is empty; bitmap/`paths` overlays render without a dummy coordinate. **Semantic versioning note: patch**.
 - **Palette short secondary LUT:** `apply_palette_luts` clamps indices per channel to that LUT's length so a shorter G or B table no longer IndexErrors into silent grayscale fallback. **Semantic versioning note: patch**.

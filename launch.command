@@ -4,38 +4,104 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$SCRIPT_DIR/venv"
+VENV_PY="$VENV/bin/python"
+
+install_requirements() {
+    echo ""
+    echo "Installing requirements into:"
+    echo "  $VENV_PY"
+    echo "This can take several minutes. Do not close this window."
+    # Always use the venv interpreter explicitly instead of relying on activate + bare pip.
+    "$VENV_PY" -m pip install --upgrade pip || {
+        echo "ERROR: Failed to upgrade pip inside the virtual environment."
+        return 1
+    }
+    "$VENV_PY" -m pip install -r "$SCRIPT_DIR/requirements.txt" || {
+        echo "ERROR: Failed to install requirements into the virtual environment."
+        echo "The venv folder may exist but be incomplete. Choose option 2"
+        echo "(Reinstall / update requirements) after fixing the error, or delete"
+        echo "the venv and create it again."
+        return 1
+    }
+    # Canary imports: enough of the app stack that a half-finished pip install still fails.
+    "$VENV_PY" -c "import pydicom, PySide6, numpy, PIL" || {
+        echo "ERROR: Requirements appeared to install, but required packages are still missing."
+        echo "Try option 2 (Reinstall / update requirements) or delete and recreate the venv."
+        return 1
+    }
+    echo "Requirements installed successfully."
+    return 0
+}
 
 run_activated() {
     echo ""
     echo "Starting DICOM Viewer..."
-    python "$SCRIPT_DIR/run.py"
+    if ! "$VENV_PY" "$SCRIPT_DIR/run.py"; then
+        echo ""
+        echo "DICOM Viewer exited with an error."
+        read -rp "Press Enter to close..."
+        exit 1
+    fi
     exit 0
 }
 
 run_sys() {
     echo ""
     echo "Starting DICOM Viewer (system Python)..."
-    python3 "$SCRIPT_DIR/run.py"
+    if ! python3 "$SCRIPT_DIR/run.py"; then
+        echo ""
+        echo "DICOM Viewer exited with an error."
+        echo "If you see ModuleNotFoundError, install requirements for this Python:"
+        echo "  python3 -m pip install -r \"$SCRIPT_DIR/requirements.txt\""
+        read -rp "Press Enter to close..."
+        exit 1
+    fi
     exit 0
 }
 
 setup_and_run() {
     echo ""
     echo "Creating virtual environment..."
-    python3 -m venv "$VENV" || { echo "ERROR: Failed to create virtual environment."; exit 1; }
-    # shellcheck disable=SC1091
-    source "$VENV/bin/activate"
-    echo "Installing requirements..."
-    pip install -r "$SCRIPT_DIR/requirements.txt" || { echo "ERROR: Failed to install requirements."; exit 1; }
+    python3 -m venv "$VENV" || {
+        echo "ERROR: Failed to create virtual environment."
+        exit 1
+    }
+    if [[ ! -x "$VENV_PY" ]]; then
+        echo "ERROR: Virtual environment was created but python is missing:"
+        echo "  $VENV_PY"
+        exit 1
+    fi
+    install_requirements || exit 1
     run_activated
 }
 
 reinstall() {
-    # shellcheck disable=SC1091
-    source "$VENV/bin/activate"
+    if [[ ! -x "$VENV_PY" ]]; then
+        echo "ERROR: Virtual environment python not found:"
+        echo "  $VENV_PY"
+        exit 1
+    fi
     echo ""
     echo "Updating requirements..."
-    pip install -r "$SCRIPT_DIR/requirements.txt" || { echo "ERROR: Failed to install requirements."; exit 1; }
+    install_requirements || exit 1
+    run_activated
+}
+
+run_with_check() {
+    if [[ ! -x "$VENV_PY" ]]; then
+        echo "ERROR: Virtual environment python not found:"
+        echo "  $VENV_PY"
+        exit 1
+    fi
+    # Recover from a half-created venv (folder exists, packages never installed).
+    if ! "$VENV_PY" -c "import pydicom, PySide6, numpy, PIL" >/dev/null 2>&1; then
+        echo ""
+        echo "Virtual environment is incomplete (required packages missing)."
+        echo "Installing requirements before starting..."
+        install_requirements || exit 1
+    fi
+    # shellcheck disable=SC1091
+    source "$VENV/bin/activate"
     run_activated
 }
 
@@ -57,7 +123,7 @@ show_menu() {
     echo "==============================="
     echo ""
 
-    if [ -f "$VENV/bin/activate" ]; then
+    if [[ -x "$VENV_PY" ]]; then
         echo "Virtual environment: FOUND"
         echo ""
         echo "  1  Run DICOM Viewer"
@@ -67,7 +133,7 @@ show_menu() {
         echo ""
         read -rp "Choose [1-4]: " choice
         case "$choice" in
-            1) source "$VENV/bin/activate" && run_activated ;;
+            1) run_with_check ;;
             2) reinstall ;;
             3) delete_venv ;;
             4) exit 0 ;;
@@ -75,6 +141,11 @@ show_menu() {
         esac
     else
         echo "Virtual environment: NOT FOUND"
+        echo ""
+        echo "What is a venv? A separate folder of Python packages used only by this app."
+        echo "It avoids mixing versions with other Python programs on your PC and makes"
+        echo "updates or cleanup simpler. Using one is recommended, not required."
+        echo "You can run with system Python instead (option 2 below) if you prefer."
         echo ""
         echo "  1  Create venv, install requirements, then run"
         echo "  2  Run using system Python (no venv)"
