@@ -57,7 +57,7 @@ From the **project root** (folder containing `requirements.txt` and `src/`):
 pip install -r requirements.txt
 ```
 
-Using a **virtual environment** is recommended (`python -m venv .venv`, then activate — see **[AGENTS.md](AGENTS.md)**). On Windows, **`launch.bat`** picks the first existing env among `venv`, `.venv`, `env`, and `virtualenv`.
+Using a **virtual environment** is recommended (`python -m venv .venv`, then activate — see **[AGENTS.md](AGENTS.md)**). On Windows, **`launch.bat`** picks the first existing env among `venv`, `.venv`, `env`, and `virtualenv` (each must contain `Scripts\python.exe`). It installs and runs via that interpreter directly; if the env folder exists but packages are missing, **Run** will install `requirements.txt` before starting.
 
 ### Run the application
 
