@@ -108,7 +108,7 @@ After editing `user-docs/` or `dev-docs/README.md`, run the link checker (CI: **
 
 ## CI (summary)
 
-Workflows on **main** / **develop**: tests, Semgrep, Grype, debug flags, user-docs links, repo harness. Coverage remains in local/CI console output and is not uploaded to external analysis services. Details: [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md). Storage/CI review: [`GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md`](dev-docs/plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md).
+Workflows on **main** / **develop**: tests, Semgrep, Grype, debug flags, user-docs links, repo harness, SonarQube Cloud. The approved SonarQube Cloud scan imports pytest coverage (`coverage.xml`, `src/` paths only) via an internal CI artifact; coverage goes to no other external service. Preview new-code coverage locally with `scripts/new_code_coverage.py`. Details: [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md). Storage/CI review: [`GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md`](dev-docs/plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md).
 
 ## View and display (agent-relevant defaults)
 
