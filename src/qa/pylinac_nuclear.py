@@ -107,7 +107,8 @@ def _resolve_input_path(request: QARequest) -> tuple[str | None, list[str]]:
             f"{len(paths)} files supplied; nuclear analysis uses only the first "
             "(single-file input)."
         )
-    return paths[0], warnings
+    first_path, *_ = paths
+    return first_path, warnings
 
 
 def _resolve_run_inputs(

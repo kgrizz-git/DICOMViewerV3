@@ -371,7 +371,7 @@ class FusionCoordinator:
         max_slices = 24
         if len(datasets) <= max_slices:
             return datasets
-        step = (len(datasets) - 1) / (max_slices - 1) if max_slices > 1 else 0
+        step = (len(datasets) - 1) / (max_slices - 1)
         indices = (
             [0]
             + [int(round(step * i)) for i in range(1, max_slices - 1)]
