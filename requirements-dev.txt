@@ -30,3 +30,5 @@ pytest-cov>=7.1.0
 ruff>=0.15.21
 # Complexity analysis (cyclomatic complexity, NLOC, etc.)
 lizard>=1.23.0
+# XXE-hardened XML parsing for scripts/new_code_coverage.py (reads coverage.xml).
+defusedxml>=0.7.1

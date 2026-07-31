@@ -30,8 +30,9 @@ import argparse
 import re
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from defusedxml.ElementTree import parse as parse_xml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASE_REF = "main"
@@ -48,8 +49,10 @@ def parse_coverage(coverage_path: Path) -> dict[str, dict[int, bool]]:
     Each root is normalized to a repo-relative directory so line data keys
     match the paths ``git diff`` reports (e.g. ``src/core/foo.py``).
     """
-    tree = ET.parse(coverage_path)
+    tree = parse_xml(coverage_path)
     root = tree.getroot()
+    if root is None:
+        raise ValueError("coverage report has no root element")
 
     source_dirs: list[str] = []
     for source in root.findall("./sources/source"):
