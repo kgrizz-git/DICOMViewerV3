@@ -84,6 +84,5 @@ def test_export_json_writes_when_path_chosen(qapp, monkeypatch, tmp_path) -> Non
     dlg._anonymize_cb.setChecked(True)
     dlg._export_json()
     write.assert_called_once()
-    assert write.call_args.kwargs.get("anonymize") is True or write.call_args[0][0] == out or True
     assert write.call_args.args[0] == out
     assert write.call_args.kwargs["anonymize"] is True
