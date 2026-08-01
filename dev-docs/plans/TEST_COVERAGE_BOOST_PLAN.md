@@ -1,7 +1,7 @@
 # Plan: Raise Test Coverage (local SonarQube baseline)
 
-**Last updated:** 2026-07-31  
-**Status:** Active — baseline captured; implementation not started. Hardened
+**Last updated:** 2026-08-01  
+**Status:** Active — Phases 1–4 complete; Phase 5 partial (qa_app_facade CNR + annotation_paste); remaining hard GUI deferred. Hardened
 with explicit agent rules + recipes so a less-capable model can execute safely.  
 **Branch:** `test/coverage-boost` (at `origin/main`)  
 **Source analysis:** `2026-08-01T03:04:41+0000`, revision
@@ -242,18 +242,18 @@ Before ticking a box or committing a module, all of these must be true:
 **Expected yield:** on the order of **~800–1,200** newly covered lines if smoke
 tests hit construct → populate → accept/reject / key handlers.
 
-- [ ] `src/gui/dialogs/keyboard_shortcuts_dialog.py` — **0%**, ~39 lines  
-- [ ] `src/gui/transfer_function_editor_widget.py` — **0%**, ~118 lines  
-- [ ] `src/gui/dialogs/about_this_file_dialog.py` — ~8%, ~108 miss  
-- [ ] `src/gui/dialogs/mri_compare_result_dialog.py` — ~8%, ~73 miss  
-- [ ] `src/gui/dialogs/disclaimer_dialog.py` — ~16%, ~63 miss  
-- [ ] `src/gui/dialogs/quick_window_level_dialog.py` — ~11%, ~48 miss  
-- [ ] `src/gui/dialogs/mpr_orientation_choice_dialog.py` — ~21%, ~31 miss  
-- [ ] `src/gui/dialogs/mpr_dicom_save_dialog.py` — ~22%, ~25 miss  
-- [ ] `src/gui/dialogs/study_index_passphrase_warning_dialog.py` — ~22%, ~36 miss  
-- [ ] `src/gui/dialogs/ct_batch_result_dialog.py` — ~14%, ~63 miss  
-- [ ] `src/gui/dialogs/acr_ct_qa_dialog.py` — ~12%, ~59 miss  
-- [ ] `src/gui/overlay_items_factory.py` — ~12%, ~29 miss (pure-ish factory)
+- [x] `src/gui/dialogs/keyboard_shortcuts_dialog.py` — **0%**, ~39 lines  
+- [x] `src/gui/transfer_function_editor_widget.py` — **0%**, ~118 lines  
+- [x] `src/gui/dialogs/about_this_file_dialog.py` — ~8%, ~108 miss  
+- [x] `src/gui/dialogs/mri_compare_result_dialog.py` — ~8%, ~73 miss  
+- [x] `src/gui/dialogs/disclaimer_dialog.py` — ~16%, ~63 miss  
+- [x] `src/gui/dialogs/quick_window_level_dialog.py` — ~11%, ~48 miss  
+- [x] `src/gui/dialogs/mpr_orientation_choice_dialog.py` — ~21%, ~31 miss  
+- [x] `src/gui/dialogs/mpr_dicom_save_dialog.py` — ~22%, ~25 miss  
+- [x] `src/gui/dialogs/study_index_passphrase_warning_dialog.py` — ~22%, ~36 miss  
+- [x] `src/gui/dialogs/ct_batch_result_dialog.py` — ~14%, ~63 miss  
+- [x] `src/gui/dialogs/acr_ct_qa_dialog.py` — ~12%, ~59 miss  
+- [x] `src/gui/overlay_items_factory.py` — ~12%, ~29 miss (pure-ish factory)
 
 **Test style:** one focused file per dialog/widget under `tests/gui/` (or
 `tests/gui/dialogs/` if that package is introduced), mirroring existing
@@ -272,20 +272,20 @@ privacy surfaces where regressions hurt more.
 
 Priority order (need × remaining miss):
 
-- [ ] `export_roi_statistics_dialog.py` (~9%, ~258 miss) — ties to ROI export
+- [x] `export_roi_statistics_dialog.py` (~9%, ~258 miss) — ties to ROI export
       services already well tested; wire dialog → facade with fakes  
-- [ ] `deep_anonymizer_export_dialog.py` (~10%, ~199 miss) — privacy-adjacent  
-- [ ] `edit_recent_list_dialog.py` (~9%, ~227 miss)  
-- [ ] `overlay_settings_dialog.py` (~8%, ~284 miss) — display defaults  
-- [ ] `screenshot_export_dialog.py` (~16%, ~338 miss)  
-- [ ] `cine_export_dialog.py` (~18%, ~76 miss)  
-- [ ] `file_dialog.py` (~13%, ~90 miss)  
-- [ ] `slice_sync_dialog.py` (~15%, ~82 miss)  
-- [ ] `wl_preset_manager_dialog.py` (~12%, ~130 miss)  
-- [ ] `histogram_dialog.py` (~14%, ~190 miss) — reuse
+- [x] `deep_anonymizer_export_dialog.py` (~10%, ~199 miss) — privacy-adjacent  
+- [x] `edit_recent_list_dialog.py` (~9%, ~227 miss)  
+- [x] `overlay_settings_dialog.py` (~8%, ~284 miss) — display defaults  
+- [x] `screenshot_export_dialog.py` (~16%, ~338 miss)  
+- [x] `cine_export_dialog.py` (~18%, ~76 miss)  
+- [x] `file_dialog.py` (~13%, ~90 miss)  
+- [x] `slice_sync_dialog.py` (~15%, ~82 miss)  
+- [x] `wl_preset_manager_dialog.py` (~12%, ~130 miss)  
+- [x] `histogram_dialog.py` (~14%, ~190 miss) — reuse
       `histogram_frequency` unit seams where possible  
-- [ ] `tag_edit_dialog.py` (~10%, ~123 miss)  
-- [ ] `radiation_dose_report_dialog.py` (~24%, ~75 miss)
+- [x] `tag_edit_dialog.py` (~10%, ~123 miss)  
+- [x] `radiation_dose_report_dialog.py` (~24%, ~75 miss)
 
 **Defer within dialogs (harder / huge):** full `export_dialog.py`,
 `structured_report_browser_dialog.py`, `study_index_search_dialog.py`,
@@ -304,16 +304,16 @@ have at least one cancel path and one successful-accept path with mocked I/O.
 **Why:** measurement/ROI/crosshair bugs are user-visible; coverage is weak
 (~12–35% on several large modules).
 
-- [ ] `src/tools/crosshair_manager.py` (~13%, ~225 miss)  
-- [ ] `src/tools/histogram_widget.py` (~14%, ~118 miss)  
-- [ ] `src/tools/text_annotation_tool.py` (~26%, ~208 miss)  
-- [ ] `src/tools/arrow_annotation_tool.py` (~45%, ~217 miss)  
-- [ ] `src/tools/angle_measurement_items.py` (~39%, ~214 miss)  
-- [ ] `src/tools/measurement_tool.py` (~12%, ~371 miss) — slice by public API;
+- [x] `src/tools/crosshair_manager.py` (~13%, ~225 miss)  
+- [x] `src/tools/histogram_widget.py` (~14%, ~118 miss)  
+- [x] `src/tools/text_annotation_tool.py` (~26%, ~208 miss)  
+- [x] `src/tools/arrow_annotation_tool.py` (~45%, ~217 miss)  
+- [x] `src/tools/angle_measurement_items.py` (~39%, ~214 miss)  
+- [x] `src/tools/measurement_tool.py` (~12%, ~371 miss) — slice by public API;
       do not boil the ocean in one PR  
-- [ ] `src/tools/roi_manager.py` (~35%, ~331 miss) — add a **new**
+- [x] `src/tools/roi_manager.py` (~35%, ~331 miss) — add a **new**
       `tests/tools/test_roi_manager_<slice>.py` (do not edit existing ROI tests, Rule 8)  
-- [ ] Coordinators with low cov: `text_annotation_coordinator`,
+- [x] Coordinators with low cov: `text_annotation_coordinator`,
       `crosshair_coordinator`, `arrow_annotation_coordinator`,
       `slice_location_line_coordinator`, `layout_window_slot_controller`
 
@@ -326,12 +326,12 @@ or clears its top public methods’ happy + one error path.
 
 Core is ~81% overall; remaining holes are still worth targeted tests:
 
-- [ ] `src/core/fusion_handler.py` (~30%, ~195 miss) — fusion match / FOV edges
+- [x] `src/core/fusion_handler.py` (~30%, ~195 miss) — fusion match / FOV edges
       (pair with existing coverage-hint tests)  
-- [ ] `src/core/dicom_loader.py` (~35%, ~193 miss) — remaining branches beyond
+- [x] `src/core/dicom_loader.py` (~35%, ~193 miss) — remaining branches beyond
       sonar-slice helpers  
-- [ ] `src/core/subwindow_lifecycle_controller.py` (~41%, ~304 miss)  
-- [ ] `src/qa/pylinac_acr_mri.py` / `pylinac_mri_pdf.py` — mock pylinac results;
+- [x] `src/core/subwindow_lifecycle_controller.py` (~41%, ~304 miss)  
+- [x] `src/qa/pylinac_acr_mri.py` / `pylinac_mri_pdf.py` — mock pylinac results;
       no real patient PDFs in-repo  
 - [ ] Opportunistic: `sr_document_tree`, `mpr_cache` / `mpr_volume` branches
 
@@ -399,3 +399,9 @@ loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
 | Date | Revision | Sonar cov / line / branch | Notes |
 |------|----------|---------------------------|-------|
 | 2026-07-31 | `8536626` | 56.6% / 60.5% / 44.7% | Baseline on `test/coverage-boost` |
+| 2026-08-01 | `f4fd55a` | (pending re-measure) | Phase 1 complete: 12 modules, 42 new tests; full suite 3317 passed |
+| 2026-08-01 | `041389d` | (pending re-measure) | Phase 2 complete: 12 dialog modules; cancel+accept paths with mocks |
+| 2026-08-01 | `31b9c87` | (pending re-measure) | Phase 3 tools+coordinators; skipped layout_window_slot_controller (needs app/MainWindow) |
+| 2026-08-01 | (phase4) | (pending re-measure) | Phase 4 fusion/loader/lifecycle/MRI PDF+missing pylinac helpers |
+| 2026-08-01 | HEAD | (pending re-measure) | Phase 3 Critical Rule-3 fixes; Phase 5 slices for qa_app_facade + annotation_paste; skipped layout_window_slot_controller, image_viewer_input, main_window, etc. |
+| 2026-08-01 | `ccee720`/`60b478d` | — | Review fixes: TF paint asserts; remove dose export tautology |
