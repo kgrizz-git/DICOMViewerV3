@@ -9,6 +9,13 @@ body:
 
         ⚠️ **Do not attach patient data** (DICOM files, study screenshots, or
         logs with identifiers). Use synthetic or de-identified examples only.
+  - type: checkboxes
+    id: phi-ack
+    attributes:
+      label: Privacy acknowledgement
+      options:
+        - label: I confirm this request contains no patient data (PHI/PII) or DICOM study files.
+          required: true
   - type: textarea
     id: problem
     attributes:

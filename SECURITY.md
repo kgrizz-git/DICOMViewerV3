@@ -11,9 +11,9 @@ Instead, use GitHub's private vulnerability reporting:
 3. Provide a description, reproduction steps, affected version/commit, and impact.
 
 This routes the report privately to the maintainer. If private reporting is not
-available to you, open a minimal public issue that says only "requesting a
-security contact" — with **no vulnerability details** — and the maintainer will
-follow up privately.
+available to you, open a regular issue using the **Bug report** template that
+asks only for a private security contact — include **no vulnerability details**
+— and the maintainer will follow up privately.
 
 ### Please never include patient data
 
