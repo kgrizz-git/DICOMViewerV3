@@ -201,17 +201,18 @@ python scripts/report_local_sonarqube_issues.py \
       datasets only ([`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md)).
 - [ ] Prefer thin Qt dialogs constructed with the `qapp` fixture + mocks over
       full `MainWindow` boots (there is **no** `qtbot` in this repo — see Rules).
-- [ ] **`src/main.py` policy — default: option B (tests-only).** The
-      entrypoint reads 0% because pytest never imports it. On this tests-only
-      branch, use **B**: add a minimal import/smoke test under `tests/` that
-      exercises argument parsing / early-exit paths only (do **not** try to cover
-      the full GUI bootstrap). **Do NOT do option A here** — excluding
-      `**/main.py` would require editing
-      `tools/sonarqube/sonar-project.properties`, which is not a `tests/` file
-      and is therefore forbidden on this branch (Rule 1). If the owner prefers
-      exclusion (option A), it must land as a **separate chore PR**, not here.
-      When scoring milestones, mentally set `main.py` aside so it doesn't distort
-      the "largest file" priority.
+- [ ] **`src/main.py` policy — default: option B (tests-only), but expect
+      little.** The entrypoint reads 0% because pytest never imports it.
+      **Do not `import main` under pytest** — that pulls in `MainWindow` and the
+      full heavy stack. The only cheap tests-only seam is the **module-level
+      early-exit** for the decoder-fixture flags (`--decoder-fixture-smoke` /
+      `--decoder-fixture-child`, near the top of `main.py`), best exercised with
+      a **subprocess** call, not a direct import. This will **not** clear
+      Sonar's ~996 uncovered `main.py` lines — so when scoring milestones,
+      mentally set `main.py` aside entirely. **Do NOT do option A here**
+      (excluding `**/main.py` edits `tools/sonarqube/sonar-project.properties`,
+      forbidden on this tests-only branch — Rule 1); option A is a **separate
+      chore PR** if the owner wants it.
 - [ ] After each merged slice on this branch, refresh local Sonar with
       `--with-coverage` and record line/branch % in this plan’s progress notes.
 
@@ -289,8 +290,9 @@ Priority order (need × remaining miss):
 **Defer within dialogs (harder / huge):** full `export_dialog.py`,
 `structured_report_browser_dialog.py`, `study_index_search_dialog.py`,
 `tag_export_dialog.py`, `fusion_technical_doc_dialog.py`,
-`quick_start_guide_dialog.py` — attack via extracted helpers first if still
-below 40% after M1–M2, or accept documentation-only dialogs as low priority.
+`quick_start_guide_dialog.py` — cover via their existing public API only (no
+`src/` extraction on this branch, Rule 1); if still below 40% after M1–M2,
+either skip and note them or accept documentation-only dialogs as low priority.
 
 **Done when:** Phase 2 list average ≥50% line coverage; export/privacy dialogs
 have at least one cancel path and one successful-accept path with mocked I/O.
@@ -309,7 +311,8 @@ have at least one cancel path and one successful-accept path with mocked I/O.
 - [ ] `src/tools/angle_measurement_items.py` (~39%, ~214 miss)  
 - [ ] `src/tools/measurement_tool.py` (~12%, ~371 miss) — slice by public API;
       do not boil the ocean in one PR  
-- [ ] `src/tools/roi_manager.py` (~35%, ~331 miss) — extend existing ROI tests  
+- [ ] `src/tools/roi_manager.py` (~35%, ~331 miss) — add a **new**
+      `tests/tools/test_roi_manager_<slice>.py` (do not edit existing ROI tests, Rule 8)  
 - [ ] Coordinators with low cov: `text_annotation_coordinator`,
       `crosshair_coordinator`, `arrow_annotation_coordinator`,
       `slice_location_line_coordinator`, `layout_window_slot_controller`
@@ -353,10 +356,10 @@ heavier fixtures.
 | `image_viewer_input.py` | 16% | 551 | Drive existing public event handlers with synthesized `QMouseEvent`s; do **not** extract helpers |
 | `qa_app_facade.py` | 16% | 454 | Facade method tests with fake QA workers |
 | `main_window.py` | 56% | 425 | Only menu/action handlers with mocks; no full boot marathon |
-| `series_navigator.py` | 26% | 393 | Extend list-update sonar-slice tests |
+| `series_navigator.py` | 26% | 393 | New `test_series_navigator_<slice>.py` for list-update paths (new file, Rule 8) |
 | `image_viewer_view.py` | 40% | 384 | View-state seams only |
 | `annotation_paste_handler.py` | 24% | 333 | Clipboard fake + paste/undo |
-| `mpr_controller.py` | 61% | 359 | Finish unfinished sonar-slice plans if still open |
+| `mpr_controller.py` | 61% | 359 | Add tests only for its public methods; **ignore any `src/` extraction items** in older sonar-slice plans (Rule 1) |
 
 **Explicitly out of scope for unit coverage:** full interactive drag/WL/cine
 loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
