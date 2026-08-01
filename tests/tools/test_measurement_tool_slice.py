@@ -41,7 +41,8 @@ def test_clear_slice_measurements(qapp) -> None:
     scene = QGraphicsScene()
     tool.start_measurement(QPointF(0, 0))
     tool.update_measurement(QPointF(8, 0), scene)
-    tool.finish_measurement(scene)
-    assert tool.get_measurements_for_slice("st", "se", 2)
+    item = tool.finish_measurement(scene)
+    assert item is not None
+    assert tool.get_measurements_for_slice("st", "se", 2) == [item]
     tool.clear_slice_measurements("st", "se", 2, scene)
     assert tool.get_measurements_for_slice("st", "se", 2) == []
