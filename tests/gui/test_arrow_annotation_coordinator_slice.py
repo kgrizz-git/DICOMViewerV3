@@ -46,3 +46,4 @@ def test_display_noop_without_scene(qapp) -> None:
         get_current_slice_index=lambda: 0,
     )
     coord.display_arrows_for_slice("st", "se", 0)
+    assert tool.get_arrows_for_slice("st", "se", 0) == []
