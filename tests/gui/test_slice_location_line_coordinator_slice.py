@@ -25,4 +25,6 @@ def test_ensure_and_remove_manager(qapp) -> None:
 @pytest.mark.qt
 def test_remove_missing_manager_is_noop(qapp) -> None:
     coord = SliceLocationLineCoordinator(SimpleNamespace())
-    coord.remove_manager(99)  # should not raise
+    coord.remove_manager(99)
+    assert 99 not in coord._managers
+    assert coord._managers == {}
