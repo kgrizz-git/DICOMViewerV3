@@ -19,11 +19,17 @@ improvise around it. If you cannot follow a rule, **stop and leave a note in
 
 ### Hard rules — NEVER do these
 
-1. **NEVER edit files under `src/` to make a test pass or to make a line
-   "coverable."** This branch adds tests only. The only files you may create or
-   edit are under `tests/`. If a real product bug blocks a test, write the test
-   as `@pytest.mark.xfail(reason="...", strict=False)` and record it in Progress
-   notes — do **not** patch `src/`.
+1. **NEVER edit files under `src/` — this branch is strictly tests-only.**
+   Do not edit `src/` to make a test pass, to make a line "coverable," to
+   "extract a pure helper," or to fix a bug you notice. The only files you may
+   create or edit are under `tests/` (plus this plan's Progress notes). If a real
+   product bug blocks a test, write the test as
+   `@pytest.mark.xfail(reason="...", strict=False)` and record it in Progress
+   notes — do **not** patch `src/`. **Extractions/refactors are explicitly
+   forbidden on this branch** and require separate owner approval on a separate
+   branch; wherever later phases mention "extract helpers," cover the code
+   through its existing public API / events instead. (This overrides Phase 5 and
+   the Non-goals note.)
 2. **NEVER weaken, delete, `skip`, or `xfail` an *existing* test** to get green.
    Existing tests must keep passing untouched.
 3. **NEVER assert something just to raise the number.** Every test must assert a
@@ -34,9 +40,11 @@ improvise around it. If you cannot follow a rule, **stop and leave a note in
    file paths from a scanner. Use only existing fixtures under `tests/` or
    synthetic data you build in-test. See
    [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md).
-5. **NEVER commit with a personal email.** Commits must use the GitHub noreply
-   author email (repo convention). Do not change git config; if unsure, ask
-   before committing.
+5. **NEVER commit with a personal email, and NEVER change git config.** Commits
+   must use the GitHub noreply author already configured on this machine:
+   `216068303+kgrizz-git@users.noreply.github.com`. Checkpoint commits on
+   `test/coverage-boost` are allowed after each module passes the Definition of
+   Done (owner-approved 2026-07-31). **Do not `git push`** unless the owner asks.
 6. **NEVER boot the full `MainWindow`** to test a single dialog or tool.
    Construct the one class under test with mocks/fakes for its dependencies.
 
@@ -48,7 +56,9 @@ improvise around it. If you cannot follow a rule, **stop and leave a note in
    Use the same imports, the `qapp` fixture, and the `@pytest.mark.qt` marker.
 8. **One new test file per source module.** Name it
    `tests/gui/test_<module>.py` (or `tests/<pkg>/test_<module>.py` matching the
-   source package). Do not append to unrelated existing files.
+   source package). Do not append to unrelated existing files. Even where a
+   later phase says "extend existing X tests," create a **new** file
+   `tests/<pkg>/test_<module>_<slice>.py` rather than editing the existing one.
 9. **Run your new tests and confirm they pass before committing** (see Recipes).
 10. **Do one module per commit.** Small, reviewable commits. Do not batch ten
     modules into one PR.
@@ -70,10 +80,13 @@ improvise around it. If you cannot follow a rule, **stop and leave a note in
 ### Copy-paste recipes (run from repo root)
 
 ```bash
+# 0. ALWAYS activate the venv first (per AGENTS.md). Usually .venv:
+source .venv/bin/activate
+
 # 1. Run ONE new test file (headless Qt), verbose:
 QT_QPA_PLATFORM=offscreen python -m pytest tests/gui/test_<module>.py -v
 
-# 2. Run the whole suite before committing (must stay green):
+# 2. Run the whole suite before committing (must stay green; ~3 min):
 QT_QPA_PLATFORM=offscreen python -m pytest tests -q
 
 # 3. Lint your new test files (must be clean):
@@ -82,9 +95,18 @@ ruff check tests/gui/test_<module>.py
 # 4. Confirm no PHI / privacy-gate violations in what you added:
 python scripts/check_no_phi_artifacts.py
 
-# 5. Re-measure coverage after a batch of modules:
+# 5. Re-measure coverage — this is HEAVY; run once per PHASE (or every ~5
+#    modules), NOT after every module. Steps 1–4 run after every module.
 python scripts/run_local_sonarqube.py --with-coverage
 ```
+
+**Interactive widgets (mouse/drag/key handlers):** the skeleton below covers
+construct-and-assert dialogs. For widgets that need synthesized input events
+(`QMouseEvent` / `QKeyEvent`) — e.g. `transfer_function_editor_widget.py`,
+`histogram_widget.py` — mirror an existing example that already does this:
+[`tests/gui/test_series_navigator_view.py`](../../tests/gui/test_series_navigator_view.py)
+or [`tests/gui/test_image_viewer_context_menu.py`](../../tests/gui/test_image_viewer_context_menu.py).
+Do not invent an event-injection pattern; copy one of those.
 
 ### Copy-paste test skeleton (adapt names; keep the shape)
 
@@ -179,12 +201,17 @@ python scripts/report_local_sonarqube_issues.py \
       datasets only ([`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md)).
 - [ ] Prefer thin Qt dialogs constructed with the `qapp` fixture + mocks over
       full `MainWindow` boots (there is **no** `qtbot` in this repo — see Rules).
-- [ ] Decide **`src/main.py` policy** (pick one before M2 scoreboard debates):
-  - **A (recommended):** add `sonar.coverage.exclusions=**/main.py` in
-    `tools/sonarqube/sonar-project.properties` and document that entrypoint
-    coverage is agent-smoke / manual, **or**
-  - **B:** add a minimal import/smoke that exercises argument parsing / early
-    exits only (do not try to cover the full GUI bootstrap in unit tests).
+- [ ] **`src/main.py` policy — default: option B (tests-only).** The
+      entrypoint reads 0% because pytest never imports it. On this tests-only
+      branch, use **B**: add a minimal import/smoke test under `tests/` that
+      exercises argument parsing / early-exit paths only (do **not** try to cover
+      the full GUI bootstrap). **Do NOT do option A here** — excluding
+      `**/main.py` would require editing
+      `tools/sonarqube/sonar-project.properties`, which is not a `tests/` file
+      and is therefore forbidden on this branch (Rule 1). If the owner prefers
+      exclusion (option A), it must land as a **separate chore PR**, not here.
+      When scoring milestones, mentally set `main.py` aside so it doesn't distort
+      the "largest file" priority.
 - [ ] After each merged slice on this branch, refresh local Sonar with
       `--with-coverage` and record line/branch % in this plan’s progress notes.
 
@@ -313,11 +340,17 @@ controller has create/destroy/error characterization.
 ## Phase 5 — Hard GUI (largest misses; last)
 
 Defer until Phases 1–4 pay off. These dominate uncovered-line rankings but need
-heavier fixtures:
+heavier fixtures.
 
-| File | ~cov | ~miss | Approach |
+> **Tests-only reminder (Rule 1):** the "Approach" column below predates the
+> tests-only rule. **Do NOT extract helpers or otherwise edit `src/`.** Cover
+> these modules through their existing public methods and synthesized events
+> only. If a module is genuinely untestable without a refactor, **skip it** and
+> note it in Progress notes for a future owner-approved refactor branch.
+
+| File | ~cov | ~miss | Approach (tests-only) |
 |------|-----:|------:|----------|
-| `image_viewer_input.py` | 16% | 551 | Extract pure helpers; unit-test those; light event tests |
+| `image_viewer_input.py` | 16% | 551 | Drive existing public event handlers with synthesized `QMouseEvent`s; do **not** extract helpers |
 | `qa_app_facade.py` | 16% | 454 | Facade method tests with fake QA workers |
 | `main_window.py` | 56% | 425 | Only menu/action handlers with mocks; no full boot marathon |
 | `series_navigator.py` | 26% | 393 | Extend list-update sonar-slice tests |
@@ -345,13 +378,20 @@ loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
 ## Non-goals
 
 - Raising coverage by excluding large swaths of `src/` without documentation.
-- Editing production code solely to make lines “coverable” (extractions are OK
-  when they also reduce complexity or match existing sonar-slice style).
+- **Editing production code at all on this branch** (see Rule 1). Extractions /
+  refactors — even ones that would reduce complexity — belong on a separate,
+  owner-approved branch, not here.
 - Changing failing tests to force green (per project test rules).
 - Uploading coverage or analysis outside the local SonarQube / approved
   main-only Cloud workflow.
 
 ## Progress notes
+
+**Known deferred (do NOT fix on this branch — tests-only, Rule 1):**
+- Open Sonar bug `python:S1226` (MINOR) in
+  `src/gui/file_series_first_slice_load.py` (~L255): parameter `managers_0`
+  reassigned without using its initial value. Belongs on a separate `src/` fix
+  branch, not this coverage branch.
 
 | Date | Revision | Sonar cov / line / branch | Notes |
 |------|----------|---------------------------|-------|
