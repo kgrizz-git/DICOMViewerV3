@@ -207,6 +207,7 @@ TEXT_CONFIG_FILENAMES = {
     ".env.example",
     ".envrc",
     ".githooks/pre-push",
+    ".github/CODEOWNERS",
     ".semgrepignore",
 }
 
