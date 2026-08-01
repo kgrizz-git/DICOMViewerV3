@@ -84,7 +84,10 @@ def test_drag_endpoint_changes_opacity_only(qapp) -> None:
 def test_paint_event_noop_without_points(qapp) -> None:
     w = TransferFunctionEditorWidget()
     w.resize(220, 100)
-    # Should not raise when empty
+    # Empty paint must not raise and must leave points unchanged.
     w.paintEvent(None)
-    w.set_points([(0.0, 0.0), (1.0, 1.0)])
+    assert w.get_points() == []
+    pts = [(0.0, 0.0), (1.0, 1.0)]
+    w.set_points(pts)
     w.paintEvent(None)
+    assert w.get_points() == pts
