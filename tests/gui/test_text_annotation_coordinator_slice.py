@@ -46,5 +46,5 @@ def test_display_noop_without_scene(qapp) -> None:
         get_current_dataset=lambda: None,
         get_current_slice_index=lambda: 0,
     )
-    # Should not raise
     coord.display_annotations_for_slice("st", "se", 0)
+    assert tool.get_annotations_for_slice("st", "se", 0) == []
