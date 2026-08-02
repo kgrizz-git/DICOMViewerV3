@@ -117,3 +117,21 @@ def test_export_success_calls_run_export(qapp, monkeypatch, tmp_path) -> None:
     run.assert_called_once()
     assert run.call_args.kwargs["format_key"] == "CSV"
     assert dlg.result() == int(dlg.DialogCode.Accepted)
+
+
+@pytest.mark.qt
+def test_browse_cancel_leaves_path_unchanged(qapp, monkeypatch) -> None:
+    """Canceling the save dialog must not change the export path or call run_export."""
+    run = MagicMock()
+    monkeypatch.setattr(
+        "gui.dialogs.export_roi_statistics_dialog.run_export", run
+    )
+    monkeypatch.setattr(
+        "gui.dialogs.export_roi_statistics_dialog.QFileDialog.getSaveFileName",
+        lambda *a, **k: ("", ""),
+    )
+    dlg = ExportROIStatisticsDialog(_studies(), {})
+    before = dlg.file_path_edit.text()
+    dlg._browse_file()
+    assert dlg.file_path_edit.text() == before
+    run.assert_not_called()

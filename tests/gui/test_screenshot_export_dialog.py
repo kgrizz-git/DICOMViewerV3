@@ -81,3 +81,18 @@ def test_export_separate_accept_path_with_mocked_writer(qapp, tmp_path, monkeypa
     dlg._export_separate.assert_called_once()
     assert "Export complete" in infos
     assert dlg.result() == int(dlg.DialogCode.Accepted)
+
+
+@pytest.mark.qt
+def test_browse_cancel_leaves_output_path_unchanged(qapp, tmp_path, monkeypatch) -> None:
+    """Canceling the directory picker must not change output_path or export."""
+    monkeypatch.setattr(
+        "gui.dialogs.screenshot_export_dialog.QFileDialog.getExistingDirectory",
+        lambda *a, **k: "",
+    )
+    dlg = ScreenshotExportDialog([_FakeSub()], config_manager=_cm(tmp_path))
+    dlg.output_path = str(tmp_path / "keep")
+    dlg._export_separate = MagicMock()  # type: ignore[method-assign]
+    dlg._browse()
+    assert dlg.output_path == str(tmp_path / "keep")
+    dlg._export_separate.assert_not_called()

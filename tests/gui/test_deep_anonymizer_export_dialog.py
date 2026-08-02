@@ -103,3 +103,47 @@ def test_export_success_mocks_manager(qapp, tmp_path, monkeypatch) -> None:
     dlg._on_export()
     mgr.export_selected.assert_called_once()
     assert dlg.result() == int(dlg.DialogCode.Accepted)
+
+
+@pytest.mark.qt
+def test_browse_cancel_leaves_output_path_unchanged(qapp, tmp_path, monkeypatch) -> None:
+    """Canceling the directory picker must not change output_path or start export."""
+    from PySide6.QtWidgets import QFileDialog
+
+    export_cls = MagicMock()
+    monkeypatch.setattr(
+        "gui.dialogs.deep_anonymizer_export_dialog.ExportManager",
+        export_cls,
+    )
+
+    class _CancelDialog:
+        # Preserve enum access used by _browse_output (QFileDialog.FileMode.Directory).
+        FileMode = QFileDialog.FileMode
+
+        def __init__(self, *a, **k) -> None:
+            pass
+
+        def setFileMode(self, *a, **k) -> None:
+            return None
+
+        def setWindowTitle(self, *a, **k) -> None:
+            return None
+
+        def setDirectory(self, *a, **k) -> None:
+            return None
+
+        def exec(self) -> int:
+            return 0
+
+        def selectedFiles(self) -> list[str]:
+            return []
+
+    monkeypatch.setattr(
+        "gui.dialogs.deep_anonymizer_export_dialog.QFileDialog",
+        _CancelDialog,
+    )
+    dlg = DeepAnonymizerExportDialog(_studies(), config_manager=_cm(tmp_path))
+    before = dlg.output_path
+    dlg._browse_output()
+    assert dlg.output_path == before
+    export_cls.assert_not_called()

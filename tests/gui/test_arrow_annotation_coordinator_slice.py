@@ -32,6 +32,8 @@ def test_display_arrows_for_slice(qapp) -> None:
     )
     coord.display_arrows_for_slice("st", "se", 0)
     assert tool.get_arrows_for_slice("st", "se", 0) == [item]
+    assert item.scene() is scene
+    assert item.isVisible()
 
 
 @pytest.mark.qt

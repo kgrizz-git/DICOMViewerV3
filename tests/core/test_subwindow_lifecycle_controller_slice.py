@@ -54,4 +54,8 @@ def test_get_focused_subwindow_index() -> None:
     app = _fake_app(focused=2)
     ctrl = SubwindowLifecycleController(app)
     assert ctrl.get_focused_subwindow_index() == 2
-    assert 2 in app.subwindow_data
+
+    # Controller returns the app field even when no subwindow_data entry exists.
+    app.subwindow_data = {}
+    app.focused_subwindow_index = 3
+    assert ctrl.get_focused_subwindow_index() == 3

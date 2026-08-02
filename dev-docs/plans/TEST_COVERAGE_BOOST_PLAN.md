@@ -315,7 +315,9 @@ have at least one cancel path and one successful-accept path with mocked I/O.
       `tests/tools/test_roi_manager_<slice>.py` (do not edit existing ROI tests, Rule 8)  
 - [x] Coordinators with low cov: `text_annotation_coordinator`,
       `crosshair_coordinator`, `arrow_annotation_coordinator`,
-      `slice_location_line_coordinator`, `layout_window_slot_controller`
+      `slice_location_line_coordinator`
+- [ ] `layout_window_slot_controller` — **skipped** (needs `DICOMViewerApp` /
+      `MainWindow`; Rule 6/11). See Progress notes.
 
 **Done when:** each touched tool module gains ≥15 absolute percentage points
 or clears its top public methods’ happy + one error path.
@@ -405,3 +407,4 @@ loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
 | 2026-08-01 | (phase4) | (pending re-measure) | Phase 4 fusion/loader/lifecycle/MRI PDF+missing pylinac helpers |
 | 2026-08-01 | HEAD | (pending re-measure) | Phase 3 Critical Rule-3 fixes; Phase 5 slices for qa_app_facade + annotation_paste; skipped layout_window_slot_controller, image_viewer_input, main_window, etc. |
 | 2026-08-01 | `ccee720`/`60b478d` | — | Review fixes: TF paint asserts; remove dose export tautology |
+| 2026-08-01 | post-final-review | (pending re-measure) | Addressed Important findings: lifecycle focused-index assert; split layout_window_slot_controller checklist; arrow scene/visibility; histogram Slice label; export browse-cancel no-I/O paths. Full suite 3415 passed at `b9576df`. Sonar re-measure still pending. |

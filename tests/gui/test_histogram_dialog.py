@@ -31,7 +31,7 @@ def test_update_with_pixel_array_callback(qapp) -> None:
         get_current_pixel_array=lambda: pixels,
     )
     dlg.update_histogram()
-    assert dlg.info_label.text() != "No image loaded"
+    assert dlg.info_label.text() == "Histogram of current image (Slice 1)"
 
 
 @pytest.mark.qt
