@@ -14,7 +14,7 @@
 
 -r requirements.txt
 
-semgrep>=1.168.0
+semgrep>=1.169.0
 detect-secrets>=1.5.0
 pip-audit>=2.10.1
 # Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
