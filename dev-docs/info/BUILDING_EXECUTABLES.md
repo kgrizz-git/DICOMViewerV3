@@ -205,6 +205,30 @@ To create a distributable DMG file for macOS:
    ```
 3. The executable will be created at `dist/DICOMViewerV3` (executable file)
 
+### Decoder fixture smoke (all platforms)
+
+After a local or CI PyInstaller build, validate that compressed-pixel decoders (especially GDCM native libraries) are bundled correctly:
+
+```bash
+# From source (venv active):
+python src/main.py --decoder-fixture-smoke tests/fixtures/dicom_decoder
+
+# Frozen executable (path varies by platform):
+dist/DICOMViewerV3/DICOMViewerV3.exe --decoder-fixture-smoke tests/fixtures/dicom_decoder   # Windows
+dist/DICOMViewerV3.app/Contents/MacOS/DICOMViewerV3 --decoder-fixture-smoke tests/fixtures/dicom_decoder   # macOS
+dist/DICOMViewerV3 --decoder-fixture-smoke tests/fixtures/dicom_decoder   # Linux
+```
+
+The command prints JSON with `passed: true` when all nine reviewed synthetic fixtures decode to the expected pixel hashes. It also enforces the exact allowlisted GDCM stderr diagnostic for the 12-bit JPEG Extended fixture. No paths or PHI appear in the output.
+
+For release evidence, inventory GDCM assets in the bundle:
+
+```bash
+python scripts/report_gdcm_bundle_inventory.py dist/DICOMViewerV3
+```
+
+See [`GDCM_DECODER_PRODUCTIONIZATION_PLAN.md`](../plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md) for the full release-validation checklist.
+
 #### Creating an AppImage (Optional)
 
 For maximum portability on Linux, you can create an AppImage:
