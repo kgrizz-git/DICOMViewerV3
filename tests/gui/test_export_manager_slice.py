@@ -59,10 +59,8 @@ def test_build_deep_anonymized_selection_preserves_keys() -> None:
     assert set(out.keys()) == set(items.keys())
     for key, anon in out.items():
         assert anon is not items[key]
-        # Patient identifiers should change under standard-share anonymization.
-        assert getattr(anon, "PatientID", None) != "SYNTH01" or getattr(
-            anon, "PatientName", None
-        ) != "Synthetic^Patient"
+        assert getattr(anon, "PatientID", None) != "SYNTH01"
+        assert str(getattr(anon, "PatientName", "")) != "Synthetic^Patient"
 
 
 def test_scale_and_thickness_delegates() -> None:

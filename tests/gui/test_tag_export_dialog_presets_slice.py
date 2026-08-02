@@ -65,14 +65,21 @@ def test_filter_tags_hides_non_matches(qapp, tmp_path) -> None:
     dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
     before = dlg.tags_tree.topLevelItemCount()
     assert before >= 1
-    dlg._filter_tags("PatientID")
-    # Filter may hide groups; remaining visible top-level count should be <= before.
-    visible = sum(
-        1
-        for i in range(dlg.tags_tree.topLevelItemCount())
-        if not dlg.tags_tree.topLevelItem(i).isHidden()
-    )
-    assert visible <= before
+    dlg._filter_tags("Patient ID")
+    visible_texts: list[str] = []
+    for i in range(dlg.tags_tree.topLevelItemCount()):
+        item = dlg.tags_tree.topLevelItem(i)
+        if item.isHidden():
+            continue
+        visible_texts.append(f"{item.text(0)} {item.text(1)}")
+        for j in range(item.childCount()):
+            child = item.child(j)
+            if not child.isHidden():
+                visible_texts.append(f"{child.text(0)} {child.text(1)}")
+    assert any("Patient ID" in text for text in visible_texts)
+    # Unrelated groups (e.g. pixel data) should be hidden by the filter.
+    assert any(item.isHidden() for i in range(dlg.tags_tree.topLevelItemCount())
+               for item in [dlg.tags_tree.topLevelItem(i)])
     dlg._filter_tags("")
     assert dlg.tags_tree.topLevelItemCount() == before
     dlg.close()
@@ -80,10 +87,12 @@ def test_filter_tags_hides_non_matches(qapp, tmp_path) -> None:
 
 @pytest.mark.qt
 def test_load_presets_list_runs(qapp, tmp_path) -> None:
+    from gui.dialogs.tag_export_dialog import _ITEM_NO_PRESET
+
     cm = _cm(tmp_path)
     dlg = TagExportDialog(_studies(), config_manager=cm)
     dlg._load_presets_list()
-    # Combo exists and is populated with at least a default/empty state.
-    assert dlg.preset_combo.count() >= 0
-    assert isinstance(dlg.preset_combo.currentText(), str)
+    assert dlg.preset_combo is not None
+    assert dlg.preset_combo.count() >= 1
+    assert dlg.preset_combo.currentText() == _ITEM_NO_PRESET
     dlg.close()

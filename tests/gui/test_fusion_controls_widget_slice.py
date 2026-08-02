@@ -25,9 +25,9 @@ def test_opacity_threshold_colormap_and_wl(qapp) -> None:
     window, level = widget.get_overlay_window_level()
     assert window == pytest.approx(400.0)
     assert level == pytest.approx(40.0)
-    assert 0.0 <= widget.get_opacity() <= 1.0
-    assert isinstance(widget.get_threshold(), float)
-    assert widget.get_colormap()
+    widget.opacity_slider.setValue(75)
+    assert widget.get_opacity() == pytest.approx(0.75)
+    assert widget.get_colormap() == "hot"
 
 
 @pytest.mark.qt
@@ -66,9 +66,9 @@ def test_offset_and_resampling_mode(qapp) -> None:
     ox, oy = widget.get_translation_offset()
     assert ox == pytest.approx(3.0)
     assert oy == pytest.approx(-2.0)
-    widget.set_resampling_mode("overlay_to_base")
-    assert widget.get_resampling_mode()
-    widget.set_interpolation_method("linear")
-    assert widget.get_interpolation_method()
+    widget.set_resampling_mode("fast")
+    assert widget.get_resampling_mode() == "fast"
+    widget.set_interpolation_method("cubic")
+    assert widget.get_interpolation_method() == "cubic"
     widget.reset_user_modified_offset()
     assert widget.has_user_modified_offset() is False

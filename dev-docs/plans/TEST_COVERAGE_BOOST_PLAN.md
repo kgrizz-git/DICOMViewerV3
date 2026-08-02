@@ -1,7 +1,7 @@
 # Plan: Raise Test Coverage (local SonarQube baseline)
 
 **Last updated:** 2026-08-01  
-**Status:** Active — Phases 1–4 complete; Phase 5 partial (qa_app_facade CNR + annotation_paste); remaining hard GUI deferred. Hardened
+**Status:** Active — Phases 1–4 complete; Phase 5 partial + deferred-dialog/high-miss slices; local Sonar remeasured (+7–8 pp line vs baseline). Hardened
 with explicit agent rules + recipes so a less-capable model can execute safely.  
 **Branch:** `test/coverage-boost` (at `origin/main`)  
 **Source analysis:** `2026-08-01T03:04:41+0000`, revision
@@ -335,7 +335,10 @@ Core is ~81% overall; remaining holes are still worth targeted tests:
 - [x] `src/core/subwindow_lifecycle_controller.py` (~41%, ~304 miss)  
 - [x] `src/qa/pylinac_acr_mri.py` / `pylinac_mri_pdf.py` — mock pylinac results;
       no real patient PDFs in-repo  
-- [ ] Opportunistic: `sr_document_tree`, `mpr_cache` / `mpr_volume` branches
+- [x] Opportunistic deferred dialogs/widgets: `structured_report_browser_dialog`, `export_dialog`,
+      `tag_export` presets, `fusion_controls_widget`, `overlay_manager`, `window_slot_map_widget`,
+      `export_rendering` / `export_manager` helpers, `series_navigator` behavior slice
+- [ ] Opportunistic: `sr_document_tree`, `mpr_cache` / `mpr_volume` branches (existing coverage strong)
 
 **Done when:** fusion_handler and dicom_loader ≥55% line coverage; lifecycle
 controller has create/destroy/error characterization.
@@ -358,7 +361,7 @@ heavier fixtures.
 | `image_viewer_input.py` | 16% | 551 | Drive existing public event handlers with synthesized `QMouseEvent`s; do **not** extract helpers |
 | `qa_app_facade.py` | 16% | 454 | Facade method tests with fake QA workers |
 | `main_window.py` | 56% | 425 | Only menu/action handlers with mocks; no full boot marathon |
-| `series_navigator.py` | 26% | 393 | New `test_series_navigator_<slice>.py` for list-update paths (new file, Rule 8) |
+| `series_navigator.py` | 26% | 393 | **Partial:** `test_series_navigator_behavior_slice.py` (privacy/list/MPR/keys) |
 | `image_viewer_view.py` | 40% | 384 | View-state seams only |
 | `annotation_paste_handler.py` | 24% | 333 | Clipboard fake + paste/undo |
 | `mpr_controller.py` | 61% | 359 | Add tests only for its public methods; **ignore any `src/` extraction items** in older sonar-slice plans (Rule 1) |
@@ -409,3 +412,4 @@ loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
 | 2026-08-01 | `ccee720`/`60b478d` | — | Review fixes: TF paint asserts; remove dose export tautology |
 | 2026-08-01 | post-final-review | (pending re-measure) | Addressed Important findings: lifecycle focused-index assert; split layout_window_slot_controller checklist; arrow scene/visibility; histogram Slice label; export browse-cancel no-I/O paths. Full suite 3415 passed at `b9576df`. Sonar re-measure still pending. |
 | 2026-08-01 | `1f29082` | pytest-cov 63% (34,018 / 53,860) | Full re-measure: 3,418 passed, 19 skipped. Reaching 70% needs at least 3,684 additional covered statements before branch coverage; continue with high-yield behavior slices rather than superficial assertions. |
+| 2026-08-02 | `2e4e689` | **64.0% / 68.5% / 50.3%** | Local Sonar `--with-coverage` after Phase5+deferred slices (window_slot_map, overlay_manager, SR browser, series_navigator, fusion_controls, export_dialog, export_rendering helpers, tag_export presets, export_manager). Baseline was 56.6/60.5/44.7 (+7.4 / +8.0 / +5.6 pp). Suite 3459+ passed. |
