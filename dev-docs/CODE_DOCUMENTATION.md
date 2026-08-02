@@ -22,7 +22,8 @@ This file lists documentation that explains how the application works or serves 
 
 | Document | Description |
 |----------|-------------|
-| [DICOM_SUPPORT_ANALYSIS.md](DICOM_SUPPORT_ANALYSIS.md) | Analysis of DICOM support in the codebase. |
+| [DICOM_SUPPORT_ANALYSIS.md](DICOM_SUPPORT_ANALYSIS.md) | Analysis of DICOM support in the codebase (includes compressed-decoder stack in §3). |
+| [PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) | Selected `python-gdcm` decoder strategy, transfer-syntax coverage, and release validation notes. |
 | [IMAGE_FUSION_RESEARCH.md](IMAGE_FUSION_RESEARCH.md) | Research and background for image fusion. |
 | [IMAGE_FUSION_IMPLEMENTATION_PLAN.md](IMAGE_FUSION_IMPLEMENTATION_PLAN.md) | Implementation plan for image fusion. |
 | [KO_PR_OVERLAYS_EXPLANATION.md](KO_PR_OVERLAYS_EXPLANATION.md) | Key Object and PR overlays in the viewer. |

@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-07-18  
+**Last updated:** 2026-08-02  
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -21,6 +21,7 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 | **Window / level** | `dicom_window_level.py`, `slice_display_lut.py`, `wl_preset_catalog.py`, `window_level_preset_handler.py` | Raw vs rescaled W/L alignment, preset catalog, context-menu apply |
 | **Slice sync / reference lines** | `slice_geometry.py`, `slice_sync_coordinator.py`, `slice_location_line_*` | Anatomic linked-pane sync; cross-view slice-location reference lines |
 | **Loading / organize** | `src/core/loading_*`, DICOM organizer, `FileOperationsHandler` | Open folder/files, navigator population |
+| **Compressed-pixel decode** | `decoder_capabilities.py`, `dicom_loader.py`, `dicom_pixel_array.py` | Transfer-syntax labels, installed-handler detection, safe decode-failure messages; `python-gdcm` for classic JPEG |
 | **MPR** | `src/core/mpr_*.py`, `mpr_controller.py`, `mpr_geometry.py` | Volume build, reslice, detached navigator thumbnail |
 | **Fusion** | `src/core/fusion_*`, `fusion_handler_io.py` | 2D/3D registration display |
 | **ROI / tools** | `src/roi/`, `src/tools/`, `src/gui/roi_*` | ROIs, measurements, annotations, crosshair |
@@ -63,6 +64,8 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 |------|------------|
 | New menu action / shortcut | `src/core/actions/`, `src/gui/main_window_menu_builder.py`, then `app_signal_wiring.py` |
 | File open / folder load | `FileOperationsHandler`, loading pipeline, `DICOMOrganizer` |
+| Compressed DICOM decode errors | `decoder_capabilities.py`, `dicom_loader.py`, `dicom_pixel_array.py` |
+| Frozen-build decoder smoke | `decoder_fixture_smoke.py`, `decoder_fixture_contract.py`, `tests/fixtures/dicom_decoder/` |
 | Navigator / thumbnails | `src/gui/series_navigator_*` |
 | Overlay text / Spacebar cycle | `overlay_config`, `KeyboardEventHandler`, `OverlayManager` |
 | MPR behavior | `src/core/mpr_controller.py`, `mpr_navigator_thumbnail.py` |
@@ -92,6 +95,7 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | Human contributor workflow | [`dev-docs/CONTRIBUTING.md`](dev-docs/CONTRIBUTING.md) |
 | Developer doc index | [`dev-docs/README.md`](dev-docs/README.md) |
 | End-user docs | [`user-docs/USER_GUIDE.md`](user-docs/USER_GUIDE.md) |
+| Compressed DICOM / decoder strategy | [`dev-docs/info/DICOM_SUPPORT_ANALYSIS.md`](dev-docs/info/DICOM_SUPPORT_ANALYSIS.md) §3, [`dev-docs/info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](dev-docs/info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) |
 
 ---
 

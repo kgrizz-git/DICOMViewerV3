@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-07-27
+**Last updated:** 2026-08-02
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -37,7 +37,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 | [`../security/security-tool-inventory.json`](../security/security-tool-inventory.json) | Canonical security/privacy tool, model, control, version, network, and enforcement inventory |
 | [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md) | Prepared clean-history private-repository replacement procedure |
 | [`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md) | Dependency and font license inventory |
-| [`info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) | `pylibjpeg-libjpeg` replacement options and decoder tradeoffs |
+| [`info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) | Selected `python-gdcm` decoder strategy and transfer-syntax coverage |
 
 ## Plans and tracking
 

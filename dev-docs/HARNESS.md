@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-07-27
+**Last updated:** 2026-08-02
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -73,6 +73,14 @@ For UI or integration validation after changes:
 4. Launch app: `python src/main.py` or `launch.bat` → option 1.
 5. Manual checklist: [`orchestration/AGENT_SMOKE.md`](orchestration/AGENT_SMOKE.md)
 6. Full regression: `python -m pytest tests/ -v` (allow several minutes).
+
+**Decoder fixture smoke** (after decoder or PyInstaller changes):
+
+```bash
+python src/main.py --decoder-fixture-smoke tests/fixtures/dicom_decoder
+```
+
+Frozen executables use the same flag. The runner decodes nine reviewed synthetic fixtures, checks pixel hashes, and (for the 12-bit JPEG Extended fixture) asserts the exact allowlisted GDCM native diagnostic on stderr. Output is JSON with handler versions only — no file paths or PHI. See also `scripts/report_gdcm_bundle_inventory.py` for release SBOM evidence.
 
 Agents with browser MCP can drive the running app per project UX skills; logs and version come from `src/version.py` and test output.
 

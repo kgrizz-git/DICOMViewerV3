@@ -1,10 +1,14 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-02
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-08-02
+
+- **Engineering documentation sync:** aligned top-level developer docs with the GDCM decoder productionization and launcher incomplete-venv fix. Updated `README.md` technology stack, `ARCHITECTURE.md` decoder domain, `SOURCE_LAYOUT.md` decoder modules, `DEVELOPER_SETUP.md` troubleshooting (venv + compressed DICOM), `HARNESS.md` decoder fixture smoke command, `BUILDING_EXECUTABLES.md` frozen-build decoder validation, and `CODE_DOCUMENTATION.md` / `dev-docs/README.md` index entries.
 
 ## 2026-07-30
 
