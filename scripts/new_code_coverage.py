@@ -201,14 +201,23 @@ def main(argv: list[str] | None = None) -> int:
     if not coverage_path.is_file():
         print(  # privacy-check: allow[unsafe-print-argument] review=kgrizz-git
             f"coverage file not found: {coverage_path}\n"
-            "Generate it first, e.g. "
+            "Activate the project virtual environment, then generate it first, e.g.\n"
+            "source .venv/bin/activate\n"
             "PYTHONPATH=src pytest tests --cov=src --cov-report=xml:coverage.xml",
             file=sys.stderr,
         )
         return 2
 
     coverage = parse_coverage(coverage_path)
-    changed = changed_lines(args.base)
+    try:
+        changed = changed_lines(args.base)
+    except subprocess.CalledProcessError as exc:
+        message = (exc.stderr or exc.stdout or str(exc)).strip()
+        print(  # privacy-check: allow[unsafe-print-argument] review=kgrizz-git
+            f"Could not compare against base ref '{args.base}': {message}",
+            file=sys.stderr,
+        )
+        return 2
     covered, coverable, uncovered = compute(coverage, changed)
 
     print(f"New-code coverage vs '{args.base}' (approximation of SonarQube new_coverage):")

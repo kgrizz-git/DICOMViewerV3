@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-08-02
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -106,9 +106,10 @@ after pushes to `main`/`develop`; SonarQube Cloud Automatic Analysis must remain
 disabled. That approved scan **also imports the pytest coverage report**: the
 `tests` job writes `coverage.xml` (`src/` paths and line numbers only — no PHI)
 and hands it to the `sonarqube` job as an internal GitHub Actions artifact,
-which the scan reads via `sonar.python.coverage.reportPaths`. PR and non-main
-branch analysis, and local-data uploads, remain prohibited, and coverage is
-never sent to Codecov/Coveralls or any service other than the approved scan.
+which the scan reads via `sonar.python.coverage.reportPaths`. PR analysis,
+analysis on branches other than `main` and `develop`, and local-data uploads
+remain prohibited, and coverage is never sent to Codecov/Coveralls or any
+service other than the approved scan.
 The local scan is intentionally **not** a Git hook: it can take time, and
 `--with-coverage` runs the full pytest suite first.
 
@@ -235,9 +236,9 @@ contacts SonarQube. The base ref is a stand-in for the New Code period, so the
 number approximates, but does not replace, the server's `new_coverage`.
 
 The root [`sonar-project.properties`](../sonar-project.properties) is reserved
-for the approved GitHub Actions main-only Cloud scan. Do not point the local
-runner at it, add another Cloud workflow, or enable Automatic Analysis. The
-separate local settings file is passed only by this runner.
+for the approved GitHub Actions `main`/`develop` Cloud scan. Do not point the
+local runner at it, add another Cloud workflow, or enable Automatic Analysis.
+The separate local settings file is passed only by this runner.
 
 **Privacy / logging gate:** `scripts/git-hook-security-gate.py` invokes **`scripts/git_hook_privacy_checks.py`** on every **pre-commit** and **pre-push** invocation (before branch-gated scans). It reads the **staged** index for **`src/*.py`**: forbids real **`traceback.print_exc(`** calls (matches inside **`tokenize`** **STRING**/**COMMENT** tokens—e.g. docstrings—are skipped); on **git-added** lines only, applies heuristics for patient tag names in logs, path-like literals in **`logger.*`** calls, raw-exception patterns in **`QMessageBox`**-style calls, and **`logger.*`** with non-literal messages without **`sanitize_message`** / **`sanitize_exception`**. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to print findings without blocking. From repo root: `.venv\Scripts\python.exe scripts\git_hook_privacy_checks.py`.
 
