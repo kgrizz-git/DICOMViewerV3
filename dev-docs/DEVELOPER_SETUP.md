@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-08-02
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -98,13 +98,20 @@ can continue exporting variables and activating the venv manually.
 
 This repository supports opt-in analysis against a local SonarQube Community
 Build instance. Other external analysis uploads are disabled by policy. The
-approved [SonarQube Cloud main-only workflow](../.github/workflows/sonarqube-cloud-main.yml)
-uses the repository `SONAR_TOKEN` secret and root
+approved SonarQube Cloud scan is the `sonarqube` job in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml); it uses the
+repository `SONAR_TOKEN` secret and root
 [`sonar-project.properties`](../sonar-project.properties) to analyze `src/`
-after pushes to `main`; SonarQube Cloud Automatic Analysis must remain
-disabled. PR, non-main branch, test, coverage, artifact, and local-data uploads
-remain prohibited. The local scan is intentionally **not** a Git hook: it can
-take time, and `--with-coverage` runs the full pytest suite first.
+after pushes to `main`/`develop`; SonarQube Cloud Automatic Analysis must remain
+disabled. That approved scan **also imports the pytest coverage report**: the
+`tests` job writes `coverage.xml` (`src/` paths and line numbers only — no PHI)
+and hands it to the `sonarqube` job as an internal GitHub Actions artifact,
+which the scan reads via `sonar.python.coverage.reportPaths`. PR analysis,
+analysis on branches other than `main` and `develop`, and local-data uploads
+remain prohibited, and coverage is never sent to Codecov/Coveralls or any
+service other than the approved scan.
+The local scan is intentionally **not** a Git hook: it can take time, and
+`--with-coverage` runs the full pytest suite first.
 
 1. Start the existing local SonarQube Community Build service and confirm its UI
    is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
@@ -208,10 +215,30 @@ freshness without contacting SonarQube:
 python scripts/run_local_sonarqube.py --check-freshness-days 14
 ```
 
+### Approximating coverage on new code locally
+
+SonarQube computes **coverage on new code** on the server: it intersects the
+uploaded per-line coverage with the lines a git diff marks as new for the
+project's New Code period (`previous_version` on SonarQube Cloud). Neither the
+scanner nor SonarLint reports that number locally, and the Cloud value only
+appears after a `main`/`develop` push. To sanity-check a branch first, generate
+a coverage report and run the advisory approximation:
+
+```bash
+PYTHONPATH=src pytest tests --cov=src --cov-report=xml:coverage.xml
+python scripts/new_code_coverage.py --base main
+```
+
+It reports the ratio of covered to coverable `src/` lines that changed versus
+the base ref, lists the uncovered new lines, and accepts `--fail-under PCT` for
+scripted checks. It reads only `coverage.xml` and git history — it never
+contacts SonarQube. The base ref is a stand-in for the New Code period, so the
+number approximates, but does not replace, the server's `new_coverage`.
+
 The root [`sonar-project.properties`](../sonar-project.properties) is reserved
-for the approved GitHub Actions main-only Cloud scan. Do not point the local
-runner at it, add another Cloud workflow, or enable Automatic Analysis. The
-separate local settings file is passed only by this runner.
+for the approved GitHub Actions `main`/`develop` Cloud scan. Do not point the
+local runner at it, add another Cloud workflow, or enable Automatic Analysis.
+The separate local settings file is passed only by this runner.
 
 **Privacy / logging gate:** `scripts/git-hook-security-gate.py` invokes **`scripts/git_hook_privacy_checks.py`** on every **pre-commit** and **pre-push** invocation (before branch-gated scans). It reads the **staged** index for **`src/*.py`**: forbids real **`traceback.print_exc(`** calls (matches inside **`tokenize`** **STRING**/**COMMENT** tokens—e.g. docstrings—are skipped); on **git-added** lines only, applies heuristics for patient tag names in logs, path-like literals in **`logger.*`** calls, raw-exception patterns in **`QMessageBox`**-style calls, and **`logger.*`** with non-literal messages without **`sanitize_message`** / **`sanitize_exception`**. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to print findings without blocking. From repo root: `.venv\Scripts\python.exe scripts\git_hook_privacy_checks.py`.
 

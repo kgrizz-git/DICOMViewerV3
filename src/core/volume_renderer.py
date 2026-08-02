@@ -849,8 +849,13 @@ class VolumeRenderer:
             return
         self._ssao_enabled = bool(enabled)
         if self._ssao_enabled:
+            if self._steps_pass_class is None or self._ssao_pass_class is None:
+                _log.warning("SSAO pass classes unavailable; disabling")
+                self._ssao_enabled = False
+                self._ssao_pass = None
+                self._renderer.SetPass(None)
+                return
             try:
-                assert self._steps_pass_class is not None and self._ssao_pass_class is not None
                 delegate = self._steps_pass_class()
                 ssao = self._ssao_pass_class()
                 ssao.SetDelegatePass(delegate)

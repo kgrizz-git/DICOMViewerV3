@@ -1202,7 +1202,7 @@ class ViewStateManager:
         """
         if series_identifier is None:
             series_identifier = self.current_series_identifier
-        defaults = self.series_defaults.get(series_identifier or '', {}) if series_identifier else {}
+        defaults = self.series_defaults.get(series_identifier or '', {})
         flip_h = defaults.get('flip_h', False)
         flip_v = defaults.get('flip_v', False)
         rotation_deg = defaults.get('rotation_deg', 0)

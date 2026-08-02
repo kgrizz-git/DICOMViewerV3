@@ -119,7 +119,16 @@ jobs:
           python -m pytest tests \
             --cov=src \
             --cov-report=term \
+            --cov-report=xml:coverage.xml \
             -v --tb=short
+
+      - name: Upload coverage report for SonarQube scan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 1
+          if-no-files-found: error
 
   ruff:
     name: ruff (src + tests + scripts, 0 findings)
@@ -536,7 +545,7 @@ jobs:
 
   sonarqube:
     name: SonarQube Cloud scan
-    needs: [privacy-gates]
+    needs: [privacy-gates, tests]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     permissions:
@@ -548,6 +557,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Download coverage report from the tests job
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: coverage-xml
 
       - name: SonarQube Cloud scan
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key -- pinned public GitHub Action commit SHA (v8.1.0), not a credential

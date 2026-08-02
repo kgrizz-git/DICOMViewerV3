@@ -339,3 +339,19 @@ def test_spatial_alignment_calculates_and_caches_offset() -> None:
     handler.set_alignment.assert_called_once_with(
         "base-1", "overlay-1", (2.0, 2.0), (5.0, -3.0)
     )
+
+
+def test_overlay_load_sample_datasets_returns_small_series_unchanged() -> None:
+    """A series at or below the sampling cap is returned unchanged."""
+    datasets = list(range(10))
+    assert FusionCoordinator._overlay_load_sample_datasets(datasets) is datasets
+
+
+def test_overlay_load_sample_datasets_caps_large_series() -> None:
+    """A large series is downsampled to the cap, keeping the first and last slice."""
+    datasets = list(range(100))
+    sampled = FusionCoordinator._overlay_load_sample_datasets(datasets)
+    assert len(sampled) <= 24
+    assert sampled[0] == 0
+    assert sampled[-1] == 99
+    assert sampled == sorted(sampled)

@@ -57,6 +57,11 @@ pylibjpeg-openjpeg>=2.5.0  # JPEG 2000 decoder plugin for pylibjpeg
 pylibjpeg-rle>=2.2.0  # RLE decoder plugin for pylibjpeg
 pyjpegls>=1.5.1  # For JPEG-LS compression
 
+# XXE-hardened XML parsing. Used by scripts/new_code_coverage.py (reads
+# coverage.xml); in requirements.txt so the src+scripts type-check and every CI
+# job resolve it. Tiny, pure-Python, permissively licensed.
+defusedxml>=0.7.1
+
 # Testing (recommended for project venv; run: pip install -r requirements.txt)
 pytest>=9.1.1  # Test runner; supports tests/ and unittest-style tests
 # Minimum version addresses AdlLexer security issue in pygments<2.20.0 (transitive via pytest, rich).

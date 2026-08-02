@@ -252,7 +252,6 @@ def _sync_subwindow_zero_data(
 
 def _sync_focused_managers_from_subwindow_zero(
     app: Any,
-    managers_0: dict[str, Any],
     *,
     slice_display_manager_0: Any,
     view_state_manager_0: Any,
@@ -275,8 +274,8 @@ def _sync_focused_managers_from_subwindow_zero(
     app.view_state_manager = view_state_manager_0
     app.slice_display_manager = slice_display_manager_0
     if 0 in app.subwindow_managers:
-        managers_0 = app.subwindow_managers[0]
-        app.roi_coordinator = managers_0.get("roi_coordinator")
+        subwindow_zero_managers = app.subwindow_managers[0]
+        app.roi_coordinator = subwindow_zero_managers.get("roi_coordinator")
 
     app._disconnect_focused_subwindow_signals()
     app._connect_focused_subwindow_signals()
@@ -383,7 +382,6 @@ def apply_first_slice_load(
     )
     _sync_focused_managers_from_subwindow_zero(
         app,
-        managers_0,
         slice_display_manager_0=slice_display_manager_0,
         view_state_manager_0=view_state_manager_0,
         first_slice_info=first_slice_info,

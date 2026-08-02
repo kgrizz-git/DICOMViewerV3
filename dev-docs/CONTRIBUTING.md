@@ -63,9 +63,15 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
   pushes to `main`/`develop`.
   It uses the repository `SONAR_TOKEN` secret and root
   [`sonar-project.properties`](../sonar-project.properties). SonarQube Cloud
-  Automatic Analysis must remain disabled. Coverage is printed in CI logs but
-  is not sent to Codecov/Coveralls or SonarQube Cloud; test, coverage,
-  artifact, and local-data uploads remain prohibited.
+  Automatic Analysis must remain disabled. That approved scan imports the pytest
+  coverage report (`coverage.xml`, `src/` paths and line numbers only), handed
+  from the `tests` job to the `sonarqube` job as an internal GitHub Actions
+  artifact and read via `sonar.python.coverage.reportPaths`. Coverage is not
+  sent to Codecov/Coveralls or any service other than that approved scan;
+  test-source, artifact, and local-data uploads remain prohibited. To preview
+  coverage on new code before a push (SonarQube computes it server-side only),
+  see `scripts/new_code_coverage.py` in
+  [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md).
   DeepSource, Sentry, and similar repository integrations should remain
   uninstalled or disabled. Use the opt-in local SonarQube runner and local
   security tools when deeper analysis is needed.

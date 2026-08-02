@@ -438,6 +438,16 @@ def test_ssao_enable_disable_does_not_crash() -> None:
     assert r._ssao_pass is None
 
 
+def test_ssao_enable_disables_when_pass_classes_unavailable() -> None:
+    """A missing SSAO/steps pass class disables the effect instead of raising."""
+    r = _make_renderer()
+    r._ssao_available = True
+    r._steps_pass_class = None
+    r.set_ssao_enabled(True)
+    assert r._ssao_enabled is False
+    assert r._ssao_pass is None
+
+
 def test_false_color_presets_have_distinct_hues() -> None:
     """CT Anatomy Colors preset should use more saturated color than CT Bone."""
     def saturation(r, g, b):

@@ -279,3 +279,24 @@ class TestHandleViewportResized:
         vsm._viewport_pixel_size_at_last_resize = (800, 600)
         vsm.handle_viewport_resized()
         assert vsm._viewport_pixel_size_at_last_resize is None
+
+
+def test_restore_orientation_applies_saved_defaults() -> None:
+    """Saved flip/rotation defaults are pushed onto the image viewer."""
+    vsm = _make_vsm()
+    vsm.series_defaults = {"s1": {"flip_h": True, "flip_v": True, "rotation_deg": 90}}
+    vsm.restore_orientation("s1")
+    assert vsm.image_viewer._flip_h is True
+    assert vsm.image_viewer._flip_v is True
+    assert vsm.image_viewer._rotation_deg == 90
+    vsm.image_viewer._apply_view_transform.assert_called_once_with()
+
+
+def test_restore_orientation_resets_when_no_saved_defaults() -> None:
+    """An unknown series resets the viewer to the neutral orientation."""
+    vsm = _make_vsm()
+    vsm.series_defaults = {}
+    vsm.restore_orientation("unknown")
+    assert vsm.image_viewer._flip_h is False
+    assert vsm.image_viewer._flip_v is False
+    assert vsm.image_viewer._rotation_deg == 0
