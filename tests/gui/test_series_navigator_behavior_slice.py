@@ -46,7 +46,7 @@ def test_build_instance_entries_and_can_expand(qapp) -> None:
         _ds(SOPInstanceUID="1.2.3.2", InstanceNumber=2),
     ]
     entries = nav.build_instance_entries(datasets)
-    assert len(entries) >= 1
+    assert len(entries) == 2
     assert all(isinstance(e[0], int) for e in entries)
 
     assert nav.can_expand_series("st", "se") is False
@@ -74,7 +74,7 @@ def test_update_series_list_builds_thumbnails(qapp) -> None:
     studies = {"1.2.840.10008.10.20.0.10": {"1.2.840.10008.10.20.0.20": [ds]}}
     nav.update_series_list(studies, "1.2.840.10008.10.20.0.10", "1.2.840.10008.10.20.0.20")
     assert nav._last_studies == studies
-    assert len(nav.thumbnails) >= 1
+    assert len(nav.thumbnails) == 1
     nav.set_current_series("1.2.840.10008.10.20.0.20", "1.2.840.10008.10.20.0.10")
     assert nav.current_series_uid == "1.2.840.10008.10.20.0.20"
     nav.clear()

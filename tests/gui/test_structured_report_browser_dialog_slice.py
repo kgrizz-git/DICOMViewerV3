@@ -36,6 +36,7 @@ def test_construct_populates_tree_and_tabs(qapp, rdsr_ds) -> None:
     assert dlg._tree_data.total_nodes >= 1
     assert dlg._tabs.count() >= 2
     assert dlg._model.rowCount() >= 1
+    assert len(dlg._events.rows) == 2
     dlg.close()
 
 
@@ -97,22 +98,12 @@ def test_export_events_cancel_skips_write(qapp, rdsr_ds, monkeypatch) -> None:
         lambda *a, **k: ("", ""),
     )
     dlg = StructuredReportBrowserDialog(None, rdsr_ds, get_privacy_enabled=lambda: False)
+    assert len(dlg._events.rows) == 2
     write_csv = MagicMock()
     write_xlsx = MagicMock()
     dlg._write_events_csv = write_csv  # type: ignore[method-assign]
     dlg._write_events_xlsx = write_xlsx  # type: ignore[method-assign]
-    if dlg._events.rows:
-        dlg._export_events_csv_xlsx(xlsx=False)
-        write_csv.assert_not_called()
-        write_xlsx.assert_not_called()
-    else:
-        # No rows: information path, still no writers.
-        infos: list[str] = []
-        monkeypatch.setattr(
-            QMessageBox,
-            "information",
-            lambda *a, **k: infos.append(str(a[1])) or QMessageBox.StandardButton.Ok,
-        )
-        dlg._export_events_csv_xlsx(xlsx=False)
-        assert infos
+    dlg._export_events_csv_xlsx(xlsx=False)
+    write_csv.assert_not_called()
+    write_xlsx.assert_not_called()
     dlg.close()

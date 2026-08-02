@@ -27,8 +27,8 @@ def test_viewport_overlay_setters_and_clear(qapp) -> None:
     assert widget.mpr_banner_label is not None
     assert "MPR Axial" in widget.mpr_banner_label.text()
     widget.clear_all()
-    # After clear, corner labels are emptied / banner cleared.
-    assert widget.mpr_banner_label.text() == "" or not widget.mpr_banner_label.isVisible()
+    assert widget.mpr_banner_label.text() == ""
+    assert not widget.mpr_banner_label.isVisible()
 
 
 @pytest.mark.qt
@@ -45,7 +45,8 @@ def test_overlay_manager_mode_and_visibility_cycle(qapp) -> None:
     assert mgr.should_show_text_overlays() is False
 
     state1 = mgr.toggle_overlay_visibility()
-    assert state1 in (0, 1, 2)
+    assert state1 == 1
+    assert mgr.visibility_state == 1
     mgr.set_visibility_state(2)
     assert mgr.visibility_state == 2
     assert mgr.should_show_text_overlays() is False
