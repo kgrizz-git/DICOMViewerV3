@@ -6,9 +6,6 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
-### Changed
-- **Test coverage boost (tests-only):** added focused Qt/unit tests for easy dialogs/widgets (Phase 1), export/privacy/settings dialogs (Phase 2), tools and annotation coordinators (Phase 3), fusion/loader/lifecycle/MRI helpers (Phase 4), plus thin `QAAppFacade` CNR and annotation-paste slices (Phase 5). No `src/` changes. Plan: `dev-docs/plans/TEST_COVERAGE_BOOST_PLAN.md`. **Semantic versioning note: patch** (test/maintainability only; no user-facing behavior change).
-
 ### Fixed
 - **Launcher incomplete venv:** `launch.bat` / `launch.command` now install and run with the venv interpreter directly (`…/python.exe -m pip` / `…/bin/python -m pip`) instead of relying on `activate` + bare `pip`/`python`, which can leave an empty `venv` folder on Windows (especially with pyenv/multiple Pythons). Choosing **Run** detects a missing core stack (`pydicom` / `PySide6` / `numpy` / `PIL`) and installs requirements before starting; failed installs keep the window open with recovery hints. **Semantic versioning note: patch**.
 - **Zoom release dead branch:** removed an unreachable nested `mouse_mode == "pan"` check inside the zoom `mouseReleaseEvent` path in `image_viewer_input.py` (ScrollHandDrag was never restored there because zoom mode uses NoDrag). **Semantic versioning note: patch**.
