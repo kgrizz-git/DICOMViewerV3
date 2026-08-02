@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a defect in DICOM Viewer V3
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        ⚠️ **Do not attach patient data.** This is a medical imaging app. Never
+        upload DICOM files, pixel data, study screenshots, or logs containing
+        patient identifiers (PHI/PII). Use synthetic or fully de-identified data
+        only. Comments or attachments with patient data may be removed.
+  - type: checkboxes
+    id: phi-ack
+    attributes:
+      label: Privacy acknowledgement
+      options:
+        - label: I confirm this report contains no patient data (PHI/PII) or DICOM study files.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Use synthetic/de-identified data only.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Release version or git commit SHA (Help → About, or `git rev-parse HEAD`).
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste sanitized log text. Remove any file paths or identifiers that could reveal patient data.
+      render: shell
+    validations:
+      required: false
