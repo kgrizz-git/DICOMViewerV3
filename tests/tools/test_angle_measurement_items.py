@@ -35,4 +35,8 @@ def test_construct_angle_item_and_geometry(qapp) -> None:
     item.show_handles()
     item.update_angle_geometry()
     assert item.scene() is scene
+    assert item.h0.scene() is scene
+    assert item.h1.scene() is scene
+    assert item.h2.scene() is scene
     assert abs(item.p1.x() - p1.x()) < 1e-6
+    assert abs(item.p1.y() - p1.y()) < 1e-6
