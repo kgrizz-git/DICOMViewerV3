@@ -1,6 +1,6 @@
 # Plan: Raise Test Coverage (local SonarQube baseline)
 
-**Last updated:** 2026-08-01  
+**Last updated:** 2026-08-03  
 **Status:** Active — Phases 1–4 complete; Phase 5 partial + deferred-dialog/high-miss slices; local Sonar remeasured (+7–8 pp line vs baseline). Hardened
 with explicit agent rules + recipes so a less-capable model can execute safely.  
 **Branch:** `test/coverage-boost` (at `origin/main`)  
@@ -222,7 +222,8 @@ python scripts/report_local_sonarqube_issues.py \
 
 Before ticking a box or committing a module, all of these must be true:
 
-- [ ] New file `tests/<pkg>/test_<module>.py` exists and mirrors a neighbor.
+- [ ] New file `tests/<pkg>/test_<module>.py` or
+      `tests/<pkg>/test_<module>_<slice>.py` exists and mirrors a neighbor.
 - [ ] Every test asserts a real outcome (rule 3) — no bare construction tests.
 - [ ] No `src/` file was modified (rule 1). `git diff --name-only` shows only
       `tests/` (and this plan).

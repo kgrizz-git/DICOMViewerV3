@@ -25,6 +25,14 @@ def test_construct_angle_item_and_geometry(qapp) -> None:
     deg = interior_angle_at_vertex_degrees(p1, p2, p3)
     assert abs(deg - 90.0) < 1e-6
     item.show_handles()
+    assert item.h0.scene() is scene
+    assert item.h1.scene() is scene
+    assert item.h2.scene() is scene
     item.hide_handles()
+    assert item.h0.scene() is None
+    assert item.h1.scene() is None
+    assert item.h2.scene() is None
+    item.show_handles()
     item.update_angle_geometry()
     assert item.scene() is scene
+    assert abs(item.p1.x() - p1.x()) < 1e-6

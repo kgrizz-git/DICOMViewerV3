@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QGraphicsScene
@@ -47,7 +46,9 @@ def test_roi_mask_covers_bounds(qapp) -> None:
     assert roi is not None
     mask = roi.get_mask(32, 32)
     assert mask.shape == (32, 32)
-    assert bool(np.any(mask))
+    assert bool(mask[10, 10])  # interior of 5..15 rectangle
+    assert not bool(mask[0, 0])  # exterior
+    assert not bool(mask[31, 31])
 
 
 @pytest.mark.qt

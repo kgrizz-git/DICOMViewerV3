@@ -74,16 +74,9 @@ def test_confirm_large_files_empty_returns_true(qapp, tmp_path) -> None:
 
 @pytest.mark.qt
 def test_confirm_large_files_continue(qapp, tmp_path, monkeypatch) -> None:
-    fd = FileDialog(_cm(tmp_path))
-    box = MagicMock()
-    continue_btn = object()
-    box.addButton.side_effect = [continue_btn, object()]
-    box.clickedButton.return_value = continue_btn
-    monkeypatch.setattr("gui.dialogs.file_dialog.QMessageBox", MagicMock(return_value=box))
-    # Re-bind Icon/ButtonRole used in method via the MagicMock is awkward;
-    # instead patch exec path by replacing the whole method body target:
     from PySide6.QtWidgets import QMessageBox
 
+    fd = FileDialog(_cm(tmp_path))
     real_box = QMessageBox()
     real_box.setIcon = MagicMock()
     real_box.setWindowTitle = MagicMock()
@@ -98,7 +91,6 @@ def test_confirm_large_files_continue(qapp, tmp_path, monkeypatch) -> None:
     real_box.setDefaultButton = MagicMock()
     real_box.clickedButton = MagicMock(return_value=cont)
     monkeypatch.setattr("gui.dialogs.file_dialog.QMessageBox", MagicMock(return_value=real_box))
-    # Need StandardButton enums still on class
     monkeypatch.setattr(
         "gui.dialogs.file_dialog.QMessageBox.Icon", QMessageBox.Icon
     )

@@ -27,4 +27,8 @@ def test_build_mri_compare_pdf_notes_lists_runs() -> None:
     )
     notes = build_mri_compare_pdf_notes(batch)
     assert isinstance(notes, list)
-    assert any("Run A" in n or "Run B" in n or "fail" in n.lower() for n in notes)
+    text = "\n".join(notes)
+    assert "Run A" in text
+    assert "Run B" in text
+    assert "score=10" in text
+    assert "score=FAILED" in text

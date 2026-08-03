@@ -12,13 +12,15 @@ from tools.measurement_tool import MeasurementTool
 @pytest.mark.qt
 def test_finish_distance_measurement_with_spacing(qapp) -> None:
     tool = MeasurementTool()
-    tool.set_pixel_spacing((1.0, 1.0))  # row, col mm
+    # Non-square spacing: 10 px horizontal uses column spacing (2.0 mm) → 20.0 mm.
+    tool.set_pixel_spacing((1.0, 2.0))  # row, col mm
     tool.set_current_slice("st", "se", 0)
     scene = QGraphicsScene()
     tool.start_measurement(QPointF(0, 0))
     tool.update_measurement(QPointF(10, 0), scene)
     item = tool.finish_measurement(scene)
     assert item is not None
+    assert "20.0 mm" in item.text_item.toPlainText()
     assert len(tool.get_measurements_for_slice("st", "se", 0)) == 1
 
 

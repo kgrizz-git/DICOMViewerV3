@@ -29,14 +29,15 @@ def test_extent_tolerance_only_when_enabled_and_not_vanilla(qapp) -> None:
 
 @pytest.mark.qt
 def test_vanilla_mode_disables_extent_and_zeros_tol(qapp) -> None:
-    dlg = AcrCtQaOptionsDialog(vanilla_pylinac_default=True)
+    dlg = AcrCtQaOptionsDialog(vanilla_pylinac_default=False)
     dlg._extent_tol.setChecked(True)
     dlg._tol_spin.setValue(2.0)
-    # Toggling vanilla on clears extent checkbox via _on_vanilla_toggled
+    # Enabling vanilla emits toggled → _on_vanilla_toggled clears extent.
     dlg._vanilla.setChecked(True)
     tol, origin, vanilla = dlg.get_options()
     assert vanilla is True
     assert tol == 0.0
+    assert dlg._extent_tol.isChecked() is False
     assert dlg._geom.isEnabled() is False
 
 

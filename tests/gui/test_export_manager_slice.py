@@ -45,7 +45,7 @@ def test_get_export_paths_dicom_and_projection_suffix(tmp_path: Path) -> None:
     )
     assert len(paths) == 1
     assert paths[0].lower().endswith(".dcm")
-    assert "mip" in paths[0].lower() or "4" in paths[0]
+    assert "_MIP_4slices" in paths[0]
 
 
 def test_build_deep_anonymized_selection_preserves_keys() -> None:

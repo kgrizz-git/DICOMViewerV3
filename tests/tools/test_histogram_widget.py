@@ -50,6 +50,6 @@ def test_roi_mask_and_global_range(qapp) -> None:
 def test_font_tier_updates_title_stylesheet(qapp) -> None:
     w = HistogramWidget()
     w.update_font_sizes_for_size(200, 200)
-    assert "7pt" in w._title_label.styleSheet() or "font-size" in w._title_label.styleSheet()
+    assert "font-size: 7pt" in w._title_label.styleSheet()
     w.update_font_sizes_for_size(800, 800)
-    assert "12pt" in w._title_label.styleSheet()
+    assert "font-size: 12pt" in w._title_label.styleSheet()
