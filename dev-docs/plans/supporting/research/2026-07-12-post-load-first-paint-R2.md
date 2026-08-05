@@ -25,7 +25,7 @@ Other `DEBUG_*` flags (LAYOUT, CROSSHAIR, MAGNIFIER, MPR, MEASUREMENT_*, PROJECT
 
 - `PERF_LOG` (`src/utils/debug_flags.py:131`) is unique among the flags: it is **not** a hardcoded `False` but reads env `DICOM_PERF_LOG=1`. This means it is CI-safe by default (stays `False` in the repo) and can be turned on at runtime without editing source — a good fit for opt-in load timing.
 - `perf_timer(label)` (`src/utils/perf_timer.py`) is a zero-overhead context manager that logs `"[PERF] <label>: <ms>ms"` at INFO on the `"perf"` logger, but only when `PERF_LOG` is true. Otherwise it yields immediately with no `time.perf_counter()` call.
-- **Current usage (pre-S1 snapshot):** `perf_timer` the context manager was only exercised by `tests/test_perf_timer.py`; no `src/` module wrapped a block with it yet. S1 later added first-paint instrumentation using this helper; see the archived plan completion notes.
+- **Current usage (pre-S1 snapshot):** `perf_timer` the context manager was only exercised by `tests/utils/test_perf_timer.py`; no `src/` module wrapped a block with it yet. S1 later added first-paint instrumentation using this helper; see the archived plan completion notes.
 - Tooling: `scripts/benchmark_startup.py` launches the app with `DICOM_PERF_LOG=1` and parses `[PERF]` lines — a precedent for automated timing capture that T1/T6/T12 could mirror.
 
 ### Deferred-work markers already in the hot path (from R1)
@@ -72,4 +72,4 @@ A reasonable path (coder decides in T2): use `PERF_LOG` + `perf_timer` for the *
 | `DEBUG_SERIES` use (coordinator) | `src/gui/file_series_loading_coordinator.py` | 271, 330, 334 |
 | `DEBUG_NAV` use (navigator) | `src/gui/series_navigator.py` | 55, 1114, 1122 |
 | Benchmark harness precedent | `scripts/benchmark_startup.py` | 1, 20 |
-| `perf_timer` tests | `tests/test_perf_timer.py` | — |
+| `perf_timer` tests | `tests/utils/test_perf_timer.py` | — |

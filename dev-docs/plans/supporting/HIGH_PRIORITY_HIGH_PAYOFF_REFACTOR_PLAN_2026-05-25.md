@@ -51,7 +51,7 @@ The code moved enough after this plan was drafted that the execution order neede
 - [x] `tests/test_main_signals_view.py`
 - [x] `tests/test_subwindow_lifecycle_signals.py`
 - [x] `tests/test_study_cache.py`
-- [x] `tests/test_dataset_cache_utils.py`
+- [x] `tests/core/test_dataset_cache_utils.py`
 
 ### Important note
 

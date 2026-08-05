@@ -16,7 +16,7 @@ import numpy as np
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from utils.dicom_utils import (
     calculate_pixel_spacing_from_fov,

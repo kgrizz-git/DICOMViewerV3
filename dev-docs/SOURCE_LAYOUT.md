@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-07-26  
+**Last updated:** 2026-08-05
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -51,7 +51,7 @@ src/
 │   ├── roi_export_xlsx.py             # XLSX worksheet helpers for write_xlsx (S3776 slice)
 │   ├── spreadsheet_safety.py          # Neutralize formula-like spreadsheet cell prefixes on export
 │   ├── study_navigation_handlers.py   # Study/series navigation menu slots (delegated from main)
-│   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/test_direction_labels.py)
+│   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/core/test_direction_labels.py)
 │   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
 │   ├── sr_sop_classes.py              # SR storage SOP class registry; ``is_structured_report_dataset``
 │   ├── sr_document_tree.py            # Generic SR ``ContentSequence`` tree builder + JSON export helper

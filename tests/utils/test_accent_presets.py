@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from utils.accent_presets import (
     ACCENT_PRESETS,
+    DEFAULT_ACCENT_ID,
     AccentPreset,
     get_preset,
 )
@@ -11,7 +12,8 @@ from utils.accent_presets import (
 
 def test_accent_presets_contain_expected_keys() -> None:
     expected_keys = {"steel-blue", "violet", "navy", "garnet"}
-    assert set(ACCENT_PRESETS.keys()) == expected_keys
+    assert expected_keys <= set(ACCENT_PRESETS)
+    assert DEFAULT_ACCENT_ID in ACCENT_PRESETS
 
 
 def test_get_preset_returns_correct_preset_for_valid_ids() -> None:

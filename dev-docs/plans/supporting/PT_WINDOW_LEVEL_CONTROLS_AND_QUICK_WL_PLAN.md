@@ -215,7 +215,7 @@ width_max = max(width from presets, dicom_ww, pixel_hi - pixel_lo, wc span) * ma
 
 ### Phase 4 — Regression and docs
 
-- [ ] (T9) Run `pytest` subset: new tests + `tests/test_dicom_window_level.py` + `tests/test_window_level_preset_handler.py` (owner: tester, parallel-safe: no, stream: none, after: T6).
+- [ ] (T9) Run `pytest` subset: new tests + `tests/core/test_dicom_window_level.py` + `tests/test_window_level_preset_handler.py` (owner: tester, parallel-safe: no, stream: none, after: T6).
 - [ ] (T10) Manual smoke: CT load, PET→CT switch, right-drag W/L, preset apply (owner: tester, parallel-safe: no, stream: none, after: T9).
 - [ ] (T11) Update `CHANGELOG.md` (patch: PT W/L control range + slider sync); check off both TO_DO items with plan link (owner: coder, parallel-safe: no, stream: none, after: T10).
 
@@ -243,7 +243,7 @@ width_max = max(width from presets, dicom_ww, pixel_hi - pixel_lo, wc span) * ma
 
 ```text
 .\.venv\Scripts\python.exe -m pytest tests/test_window_level_controls.py -v
-.\.venv\Scripts\python.exe -m pytest tests/test_dicom_window_level.py tests/test_window_level_preset_handler.py -v
+.\.venv\Scripts\python.exe -m pytest tests/core/test_dicom_window_level.py tests/test_window_level_preset_handler.py -v
 ```
 
 Manual (document dataset ID in completion notes):
