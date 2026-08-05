@@ -97,6 +97,14 @@ def _ref_categories(root: Path, ref_name: str, identities: frozenset[str]) -> li
 def _commit_oids(
     root: Path, update: RefUpdate, remote_name: str = ""
 ) -> tuple[list[str], str | None]:
+    """Return the local oids to inspect, or ([] , reason) when unresolvable.
+
+    Deletions yield no oids. For non-initial pushes only the remote..local
+    range is inspected. For initial pushes (zero remote oid) commits already
+    reachable from the target remote's tracking refs are excluded, optionally
+    scoped to the named remote, so legacy history that is already upstream
+    does not trip the author-email policy on a first push.
+    """
     if _is_zero_oid(update.local_oid):
         return [], None  # deletion
     if _is_zero_oid(update.remote_oid):

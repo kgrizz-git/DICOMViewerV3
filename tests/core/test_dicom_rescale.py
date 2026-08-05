@@ -20,7 +20,7 @@ class TestInferRescaleType(unittest.TestCase):
             "HU",
         )
 
-    def test_rescale_type_tag_wins(self):
+    def test_display_none_rescale_type_falls_back_to_ct_hu(self):
         ds = Dataset()
         ds.Modality = "CT"
         self.assertEqual(

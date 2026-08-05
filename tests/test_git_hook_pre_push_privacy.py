@@ -37,6 +37,7 @@ def _init_repo(
 
 
 def _line(repo: Path, old_oid: str = ZERO_OID, ref: str = "refs/heads/main") -> str:
+    """Build one pre-push stdin line; a zero old-oid denotes an initial push."""
     return f"{ref} {_git(repo, 'rev-parse', 'HEAD')} {ref} {old_oid}\n"
 
 
