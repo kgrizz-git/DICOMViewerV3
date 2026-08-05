@@ -24,7 +24,9 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def _init_repo(tmp_path: Path, email: str = "1+synthetic@users.noreply.github.com") -> Path:
+def _init_repo(
+    tmp_path: Path, email: str = "1+synthetic@users.noreply.github.com"
+) -> Path:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.name", "Synthetic Author")
     _git(tmp_path, "config", "user.email", email)
@@ -35,6 +37,7 @@ def _init_repo(tmp_path: Path, email: str = "1+synthetic@users.noreply.github.co
 
 
 def _line(repo: Path, old_oid: str = ZERO_OID, ref: str = "refs/heads/main") -> str:
+    """Build one pre-push stdin line; a zero old-oid denotes an initial push."""
     return f"{ref} {_git(repo, 'rev-parse', 'HEAD')} {ref} {old_oid}\n"
 
 
@@ -44,7 +47,12 @@ def test_initial_push_zero_oid_covers_all_reachable_commits(tmp_path: Path) -> N
     (repo / "README.md").write_text("synthetic update\n", encoding="utf-8")
     _git(repo, "commit", "-qam", "Synthetic update")
 
-    assert pre_push.validate_push(repo, _line(repo), remote_url="https://github.com/example/repo.git") == {}
+    assert (
+        pre_push.validate_push(
+            repo, _line(repo), remote_url="https://github.com/example/repo.git"
+        )
+        == {}
+    )
     assert first != _git(repo, "rev-parse", "HEAD")
 
 
@@ -56,6 +64,21 @@ def test_nonzero_base_checks_only_new_commits(tmp_path: Path) -> None:
     _git(repo, "commit", "-qam", "New safe commit")
 
     assert pre_push.validate_push(repo, _line(repo, base)) == {}
+
+
+def test_initial_branch_push_excludes_commits_already_on_target_remote(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path, email="legacy@example.test")
+    main_commit = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", main_commit)
+    _git(repo, "config", "user.email", "new-branch@example.test")
+    (repo / "README.md").write_text("branch update\n", encoding="utf-8")
+    _git(repo, "commit", "-qam", "Branch update")
+
+    assert pre_push.validate_push(repo, _line(repo), remote_name="origin") == {
+        "author email policy": 1
+    }
 
 
 def test_initial_push_blocks_non_noreply_author_without_echoing_value(

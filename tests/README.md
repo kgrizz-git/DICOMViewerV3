@@ -46,12 +46,17 @@ python tests/run_tests.py --unittest
 
 | Area | Path | Notes |
 |------|------|--------|
-| Root tests | `tests/test_*.py` | Parser, loader, export, MPR, pylinac extent, SR document tree (`test_sr_document_tree.py`), user-docs relative links (`test_user_docs_links.py`), etc. |
+| Root tests | `tests/test_*.py` | Cross-cutting integration, privacy, harness, workflow, and legacy tests that span multiple source packages. |
 | Config mixins | `tests/config/` | Display, layout, ROI, paths, … |
-| Metadata | `tests/metadata/` | Metadata controller |
-| ROI | `tests/roi/` | ROI / measurement controller |
-| Core | `tests/core/` | Subwindow ROI focus, loading progress |
+| Core | `tests/core/` | Tests mirroring `src/core/`, including DICOM parsing, pixels, rescale, loading, and subwindow behavior. |
+| GUI | `tests/gui/` | Tests mirroring `src/gui/` dialogs, widgets, and coordinators. |
+| Metadata | `tests/metadata/` | Tests mirroring `src/metadata/`. |
+| QA | `tests/qa/` | Tests mirroring `src/qa/`. |
+| ROI | `tests/roi/` | Tests mirroring `src/roi/`. |
+| Scripts | `tests/scripts/` | Repository-script tests. |
 | Smoke | `tests/smoke/` | Regression / resource presence |
+| Tools | `tests/tools/` | Tests mirroring `src/tools/`. |
+| Utils | `tests/utils/` | Tests mirroring `src/utils/`. |
 
 Most tests **do not require DICOM files** on disk; they use synthetic data or mocks.
 

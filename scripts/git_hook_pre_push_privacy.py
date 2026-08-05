@@ -3,7 +3,8 @@
 
 Git supplies one stdin line per ref update:
 ``local-ref local-oid remote-ref remote-oid``. A zero remote object ID denotes
-an initial push, so every commit reachable from the local object is inspected.
+an initial branch push.  In that case, commits already reachable from the
+target remote's tracking refs are excluded from inspection.
 The validator is read-only and reports only fixed rule categories and counts.
 """
 
@@ -43,7 +44,9 @@ class RefUpdate:
     remote_oid: str
 
 
-def _git(root: Path, args: list[str], *, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+def _git(
+    root: Path, args: list[str], *, input_text: str | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args],
         cwd=root,
@@ -91,15 +94,25 @@ def _ref_categories(root: Path, ref_name: str, identities: frozenset[str]) -> li
     return list(dict.fromkeys(categories))
 
 
-def _commit_oids(root: Path, update: RefUpdate) -> tuple[list[str], str | None]:
+def _commit_oids(
+    root: Path, update: RefUpdate, remote_name: str = ""
+) -> tuple[list[str], str | None]:
+    """Return the local oids to inspect, or ([] , reason) when unresolvable.
+
+    Deletions yield no oids. For non-initial pushes only the remote..local
+    range is inspected. For initial pushes (zero remote oid) commits already
+    reachable from the target remote's tracking refs are excluded, optionally
+    scoped to the named remote, so legacy history that is already upstream
+    does not trip the author-email policy on a first push.
+    """
     if _is_zero_oid(update.local_oid):
         return [], None  # deletion
-    revision = (
-        update.local_oid
-        if _is_zero_oid(update.remote_oid)
-        else f"{update.remote_oid}..{update.local_oid}"
-    )
-    completed = _git(root, ["rev-list", revision])
+    if _is_zero_oid(update.remote_oid):
+        remote_selector = f"--remotes={remote_name}" if remote_name else "--remotes"
+        rev_list_args = ["rev-list", update.local_oid, "--not", remote_selector]
+    else:
+        rev_list_args = ["rev-list", f"{update.remote_oid}..{update.local_oid}"]
+    completed = _git(root, rev_list_args)
     if completed.returncode != 0:
         return [], "commit range could not be inspected"
     return [line for line in completed.stdout.splitlines() if line], None
@@ -107,7 +120,9 @@ def _commit_oids(root: Path, update: RefUpdate) -> tuple[list[str], str | None]:
 
 def _author_email_allowed(email: str) -> bool:
     lowered = email.strip().lower()
-    return lowered.endswith("@users.noreply.github.com") or lowered == "noreply@github.com"
+    return (
+        lowered.endswith("@users.noreply.github.com") or lowered == "noreply@github.com"
+    )
 
 
 def _remote_has_userinfo(remote_url: str) -> bool:
@@ -119,6 +134,7 @@ def validate_push(
     root: Path,
     stdin_text: str,
     *,
+    remote_name: str = "",
     remote_url: str = "",
 ) -> Counter[str]:
     """Return category counts for a proposed push; never mutate repository state."""
@@ -133,7 +149,7 @@ def validate_push(
         for ref_name in (update.local_ref, update.remote_ref):
             for category in _ref_categories(root, ref_name, identities):
                 violations[category] += 1
-        commits, error = _commit_oids(root, update)
+        commits, error = _commit_oids(root, update, remote_name)
         if error:
             violations[error] += 1
             continue
@@ -160,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         violations = validate_push(
             args.root,
             stdin_text,
+            remote_name=args.remote_name,
             remote_url=args.remote_url,
         )
     except (OSError, subprocess.SubprocessError) as exc:
@@ -171,7 +188,9 @@ def main(argv: list[str] | None = None) -> int:
     if not violations:
         print("[pre-push privacy] CLEAN: proposed Git metadata passed")
         return 0
-    print("[pre-push privacy] BLOCKED: Git metadata policy violation(s):", file=sys.stderr)
+    print(
+        "[pre-push privacy] BLOCKED: Git metadata policy violation(s):", file=sys.stderr
+    )
     for category, count in sorted(violations.items()):
         print(f"  {category}: {count}", file=sys.stderr)
     print("Matched metadata values are intentionally omitted.", file=sys.stderr)

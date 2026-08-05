@@ -1,3 +1,5 @@
+"""Unit tests for core.dataset_cache_utils pixel-array cache clearing."""
+
 from pydicom.dataset import Dataset
 
 from core.dataset_cache_utils import clear_cached_pixel_array

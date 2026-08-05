@@ -140,7 +140,7 @@ Goal: on MPR views, make overlay content represent the constructed MPR stack (no
 - [x] Add/extend overlay text tests (new file if needed, e.g. `tests/gui/test_overlay_text_builder.py`) for:
   - MPR-style `SliceThickness` display,
   - projection label/range formatting for MPR context.
-- **Note:** Corner/projection strings live in `tests/test_mpr_overlay_and_rescale.py` (`get_corner_text`). CT HU inference: `tests/test_dicom_rescale.py`.
+- **Note:** Corner/projection strings live in `tests/test_mpr_overlay_and_rescale.py` (`get_corner_text`). CT HU inference: `tests/core/test_dicom_rescale.py`.
 
 ### 4.2 Manual QA scenarios
 

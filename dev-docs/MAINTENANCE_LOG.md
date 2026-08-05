@@ -1,10 +1,30 @@
 # Maintenance Log
 
-**Last updated:** 2026-07-30
+**Last updated:** 2026-08-05
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
+
+## 2026-08-05
+
+- **Sonar new-code coverage batch** on `test/sonar-new-code-coverage` (PR #46,
+  22 commits): reorganized `tests/` into source-mirrored suites
+  (`tests/core/`, `tests/gui/`, `tests/tools/`, `tests/utils/`) and added unit
+  coverage for DICOM processing/loading, FusionHandler, StudyIndex threads,
+  annotation clipboard / ROI serialization, and utility modules; synced
+  `tests/README.md` and `dev-docs/SOURCE_LAYOUT.md` to the new layout.
+  - **Pre-push privacy hook fix** (`scripts/git_hook_pre_push_privacy.py`):
+    initial branch pushes now exclude commits already reachable from the target
+    remote's tracking refs (`rev-list <local> --not --remotes=<remote>`), so
+    legacy history already upstream no longer trips the author-email policy on
+    a first push; the remote name now flows through validation with regression
+    coverage.
+  - Resolved the CodeRabbit review threads from the run on this branch (7 of 8
+    findings fixed; the "US vs HU" rescale comment was closed as stale — the
+    hook treats `US` as a display-none placeholder). The PR-scoped docstring
+    coverage pre-merge warning was left standing: test suites intentionally
+    use module-level docstrings only.
 
 ## 2026-07-30
 

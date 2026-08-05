@@ -165,3 +165,86 @@ def test_detect_already_rgb_true_for_rgb_like_data() -> None:
 def test_detect_already_rgb_false_for_low_variance_chroma() -> None:
     ybr = _low_variance_ybr([50, 100, 150], cb=130, cr=126)
     assert dc._detect_already_rgb(ybr, "YBR_FULL", None) is False
+
+
+def test_is_color_image_samples_per_pixel_grayscale() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.SamplesPerPixel = 1
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is False
+    assert pi is None
+
+
+def test_is_color_image_samples_per_pixel_color() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.SamplesPerPixel = 3
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is True
+    assert pi is None
+
+
+def test_is_color_image_samples_per_pixel_list() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.SamplesPerPixel = [3]
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is True
+    assert pi is None
+
+
+def test_is_color_image_photometric_interpretation_rgb() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.SamplesPerPixel = 1
+    ds.PhotometricInterpretation = "RGB"
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is True
+    assert pi == "RGB"
+
+
+def test_is_color_image_photometric_interpretation_list() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.PhotometricInterpretation = ["YBR_FULL_422"]
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is True
+    assert pi == "YBR_FULL_422"
+
+
+def test_is_color_image_photometric_interpretation_monochrome() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.SamplesPerPixel = 3
+    ds.PhotometricInterpretation = "MONOCHROME2"
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is False
+    assert pi == "MONOCHROME2"
+
+
+def test_is_color_image_empty_photometric_interpretation() -> None:
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.PhotometricInterpretation = "   "
+    is_color, pi = dc.is_color_image(ds)
+    assert is_color is False
+    assert pi is None
+
+
+def test_is_color_image_exception_handling() -> None:
+    class ExplodingDataset:
+        @property
+        def SamplesPerPixel(self):
+            raise RuntimeError("unreadable tag")
+
+    is_color, pi = dc.is_color_image(ExplodingDataset())
+    assert is_color is False
+    assert pi is None
