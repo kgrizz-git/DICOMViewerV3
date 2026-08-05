@@ -1,7 +1,7 @@
 # Plan: Local SonarQube Top-Complexity Five-Function Slice
 
 **Last updated:** 2026-08-05
-**Status:** Ready for implementation
+**Status:** Implemented
 **Branch:** `refactor/sonar-top-complexity-rendering-export`
 **Scope:** One behavior-preserving PR; five `python:S3776` findings in four
 production files.
@@ -12,6 +12,21 @@ Close the five selected, highest-ranked local SonarQube cognitive-complexity
 findings through small private-helper extractions. Preserve existing tag
 export, presentation-state annotation, graphics-overlay, and DICOM tag-edit
 behavior exactly; do not add features, change UI copy, or change public APIs.
+
+## Outcome
+
+Implemented as one behavior-preserving branch with characterization and
+refactor commits kept separate. The final local analysis at source revision
+`9a08fcd4b6930343a771fce5c6c63429c254e08d` reported **238** active
+BLOCKER/CRITICAL/MAJOR findings, down from 243. All five selected
+`python:S3776` findings are absent: both tag-export methods,
+`create_presentation_state_items`, `create_overlay_items`, and `_create_ui`.
+
+The report retains seven pre-existing `S3776` findings in the four touched
+files; those methods were explicitly out of scope. A first final scan exposed
+an `S107` parameter-count warning in a newly extracted graphics helper. The
+helper now accepts a private `OverlayTextContext`, and the final report has no
+new `S107` finding.
 
 ## Baseline and selection
 
@@ -275,6 +290,22 @@ The PR is complete only when all five selected S3776 findings are absent from
 the scoped report, all verification gates pass, and the final documentation
 records the actual remaining finding total without treating unrelated backlog
 as a failure of this scoped pass.
+
+## Verification outcome
+
+- The combined affected test suite passed: **175 tests plus 3 subtests**.
+- The full `tests/` suite completed successfully (3,633 collected tests).
+- `check_architecture_boundaries.py`, `check_repo_harness.py`,
+  `agent_smoke_harness.py --write-report`, the harness smoke-test suite, and
+  the staged privacy check passed. Each local commit's repository hooks also
+  passed.
+- `python src/main.py` launched without a traceback. The required interactive
+  manual smoke could not be completed because the PySide application window
+  was not exposed to the available Computer Use environment; that visual check
+  remains for a local desktop session with approved non-PHI data.
+- A final local SonarQube report was obtained against
+  `9a08fcd4b6930343a771fce5c6c63429c254e08d`; it contains 238 priority
+  findings and no selected target location.
 
 ## Explicitly out of scope
 

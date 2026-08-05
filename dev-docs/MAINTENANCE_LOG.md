@@ -8,6 +8,17 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-08-05
 
+- **Top-complexity Sonar slice** on
+  `refactor/sonar-top-complexity-rendering-export`: completed the five selected
+  `python:S3776` refactors in tag export, presentation-state annotations,
+  graphics overlays, and tag-edit dialog construction, with characterization
+  coverage. The final local analysis at `9a08fcd` reported **238** priority
+  findings (243 → 238); every selected target is absent. The remaining seven
+  `S3776` findings in the four touched files remain intentionally deferred.
+  The refactor initially introduced an overlay-helper `S107`; grouping its
+  shared inputs in a private `OverlayTextContext` cleared it before closeout.
+  Plan: [Top-complexity five-function slice](plans/completed/SONARQUBE_TOP_COMPLEXITY_FIVE_FUNCTION_SLICE_PLAN_20260805.md).
+
 - **Sonar new-code coverage batch** on `test/sonar-new-code-coverage` (PR #46,
   22 commits): reorganized `tests/` into source-mirrored suites
   (`tests/core/`, `tests/gui/`, `tests/tools/`, `tests/utils/`) and added unit
