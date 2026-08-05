@@ -97,7 +97,10 @@ def test_get_bundled_ttf_path() -> None:
 
     # Test PyInstaller frozen sys mode path resolution
     fake_meipass = "/tmp/fake_meipass_bundled_fonts"
-    with patch("sys.frozen", True, create=True), patch("sys._MEIPASS", fake_meipass, create=True):
+    with (
+        patch("sys.frozen", True, create=True),
+        patch("sys._MEIPASS", fake_meipass, create=True),
+    ):
         frozen_path = get_bundled_ttf_path("IBM Plex Sans", "Regular")
         assert frozen_path.startswith(fake_meipass)
         assert "resources" in frozen_path
@@ -125,10 +128,8 @@ def test_get_variant_weight_italic() -> None:
     assert get_variant_weight_italic("NonExistentVariant") == (700, False)
 
 
-def test_make_qfont_and_register_fonts_with_qt() -> None:
-    """Test make_qfont output properties and register_fonts_with_qt execution."""
-    from PySide6.QtWidgets import QApplication
-    _app = QApplication.instance() or QApplication([])
+def test_make_qfont() -> None:
+    """Test make_qfont output properties and graceful fallback."""
     # Standard font creation
     font = make_qfont("IBM Plex Sans", "Regular", 14)
     assert isinstance(font, QFont)
@@ -147,7 +148,26 @@ def test_make_qfont_and_register_fonts_with_qt() -> None:
     # Invalid font fallback creation
     font_fallback = make_qfont("UnknownFamily", "UnknownVariant", 10)
     assert isinstance(font_fallback, QFont)
+    assert font_fallback.family() == DEFAULT_FONT_FAMILY
     assert font_fallback.pointSize() == 10
 
-    # Ensure register_fonts_with_qt executes without error
-    register_fonts_with_qt()
+
+def test_register_fonts_with_qt_registers_existing_files(tmp_path) -> None:
+    """Only existing bundled font files are sent to Qt's application registry."""
+    existing_font = tmp_path / "existing.ttf"
+    existing_font.touch()
+    font_catalog = {
+        "Test Family": {
+            "Regular": "existing.ttf",
+            "Missing": "missing.ttf",
+        }
+    }
+
+    with (
+        patch("utils.bundled_fonts.BUNDLED_FONTS", font_catalog),
+        patch("utils.bundled_fonts._fonts_dir", return_value=tmp_path),
+        patch("utils.bundled_fonts.QFontDatabase.addApplicationFont") as register,
+    ):
+        register_fonts_with_qt()
+
+    register.assert_called_once_with(str(existing_font))
