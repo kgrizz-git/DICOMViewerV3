@@ -18,6 +18,7 @@ Requirements:
     - DICOMParser for metadata
 """
 
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QRectF, Qt
@@ -51,6 +52,21 @@ _MPR_BANNER_FONT_MIN_PT = 9
 _MPR_BANNER_FONT_OFFSET_PT = 1
 # Semi-transparent panel so edge direction labels remain visible if overlap occurs.
 _MPR_BANNER_BG_STYLE = "rgba(0, 0, 0, 88)"
+
+
+@dataclass(frozen=True)
+class OverlayTextContext:
+    """Inputs shared by all four graphics-overlay corner renderers."""
+
+    parser: DICOMParser
+    total_slices: int | None
+    projection_enabled: bool
+    projection_start_slice: int | None
+    projection_end_slice: int | None
+    projection_total_thickness: float | None
+    projection_type: str | None
+    multiframe_context: dict[str, Any] | None
+    stack_position: int | None
 
 
 class ViewportOverlayWidget(QWidget):
@@ -635,30 +651,22 @@ class OverlayManager:
 
     def _corner_overlay_text(
         self,
-        parser: DICOMParser,
+        context: OverlayTextContext,
         tags: list[str],
-        total_slices: int | None,
-        projection_enabled: bool,
-        projection_start_slice: int | None,
-        projection_end_slice: int | None,
-        projection_total_thickness: float | None,
-        projection_type: str | None,
-        multiframe_context: dict[str, Any] | None,
-        stack_position: int | None,
     ) -> str:
         """Build one corner's text with every caller-provided display context."""
         return get_corner_text(
-            parser,
+            context.parser,
             tags,
             self.privacy_mode,
-            total_slices,
-            projection_enabled,
-            projection_start_slice,
-            projection_end_slice,
-            projection_total_thickness,
-            projection_type,
-            multiframe_context,
-            stack_position,
+            context.total_slices,
+            context.projection_enabled,
+            context.projection_start_slice,
+            context.projection_end_slice,
+            context.projection_total_thickness,
+            context.projection_type,
+            context.multiframe_context,
+            context.stack_position,
         )
 
     def _track_graphics_overlay_item(self, scene, corner_key: str, item: QGraphicsTextItem) -> None:
@@ -736,7 +744,7 @@ class OverlayManager:
     def _render_graphics_corner(
         self,
         scene,
-        parser: DICOMParser,
+        context: OverlayTextContext,
         corner_key: str,
         x: float,
         y: float,
@@ -744,29 +752,13 @@ class OverlayManager:
         tags: list[str],
         margin_scene: float,
         viewport_to_scene_scale: float,
-        total_slices: int | None,
-        projection_enabled: bool,
-        projection_start_slice: int | None,
-        projection_end_slice: int | None,
-        projection_total_thickness: float | None,
-        projection_type: str | None,
-        multiframe_context: dict[str, Any] | None,
-        stack_position: int | None,
     ) -> None:
         """Build and render the configured text for one graphics-overlay corner."""
         if not tags:
             return
         text = self._corner_overlay_text(
-            parser,
+            context,
             tags,
-            total_slices,
-            projection_enabled,
-            projection_start_slice,
-            projection_end_slice,
-            projection_total_thickness,
-            projection_type,
-            multiframe_context,
-            stack_position,
         )
         if not text:
             return
@@ -839,10 +831,21 @@ class OverlayManager:
         viewport_to_scene_scale, margin_scene, corners = self._graphics_corner_anchors(
             view, scene_width, scene_height, margin=10
         )
+        text_context = OverlayTextContext(
+            parser=parser,
+            total_slices=total_slices,
+            projection_enabled=projection_enabled,
+            projection_start_slice=projection_start_slice,
+            projection_end_slice=projection_end_slice,
+            projection_total_thickness=projection_total_thickness,
+            projection_type=projection_type,
+            multiframe_context=multiframe_context,
+            stack_position=stack_position,
+        )
         for corner_key, x, y, alignment in corners:
             self._render_graphics_corner(
                 scene,
-                parser,
+                text_context,
                 corner_key,
                 x,
                 y,
@@ -850,14 +853,6 @@ class OverlayManager:
                 corner_tags.get(corner_key, []),
                 margin_scene,
                 viewport_to_scene_scale,
-                total_slices,
-                projection_enabled,
-                projection_start_slice,
-                projection_end_slice,
-                projection_total_thickness,
-                projection_type,
-                multiframe_context,
-                stack_position,
             )
 
         return self.overlay_items
