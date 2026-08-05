@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import os
-import sys
 from unittest.mock import Mock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from utils.log_sanitizer import (
     SafeExceptionLogger,
@@ -26,7 +22,7 @@ def test_sanitize_message_redacts_patient_fields_and_ids() -> None:
 
 
 def test_sanitize_message_redacts_paths_only_when_requested() -> None:
-    message = 'Failed to open /Users/john/Desktop/study.dcm'
+    message = "Failed to open /Users/john/Desktop/study.dcm"
     partially_redacted = sanitize_message(message, redact_paths=False)
     assert "/Users/john/Desktop/study.dcm" not in partially_redacted
     assert "study.dcm" not in partially_redacted
@@ -37,7 +33,9 @@ def test_sanitize_message_redacts_paths_only_when_requested() -> None:
     assert "[REDACTED]" in redacted
 
 
-def test_sanitize_exception_redacts_file_lines_and_preserves_traceback_structure() -> None:
+def test_sanitize_exception_redacts_file_lines_and_preserves_traceback_structure() -> (
+    None
+):
     traceback_str = 'Traceback\n  File "/Users/john/Documents/case.py", line 4\nValueError: PatientName=John'
     sanitized = sanitize_exception(traceback_str)
     assert "Traceback" in sanitized

@@ -139,11 +139,17 @@ def test_study_index_folder_thread_cancelled(tmp_path):
     assert failed_reason == "Cancelled"
 
 
-def test_study_index_folder_thread_failure(tmp_path):
-    from core.study_index.index_folder_thread import StudyIndexFolderThread
+def test_study_index_folder_thread_failure(tmp_path, monkeypatch):
+    from core.study_index import index_folder_thread
 
-    # Walk path is valid, but db_path is None which triggers exception inside run()
-    thread = StudyIndexFolderThread(str(tmp_path), None, "pw-folder", lambda: False)
+    monkeypatch.setattr(
+        index_folder_thread,
+        "StudyIndexStore",
+        MagicMock(side_effect=RuntimeError("store unavailable")),
+    )
+    thread = index_folder_thread.StudyIndexFolderThread(
+        str(tmp_path), "folder.sqlite", "pw-folder", lambda: False
+    )
 
     failed_reason = None
 
@@ -154,4 +160,4 @@ def test_study_index_folder_thread_failure(tmp_path):
     thread.failed.connect(on_failed)
     thread.run()
 
-    assert failed_reason is not None
+    assert failed_reason == "RuntimeError: store unavailable"

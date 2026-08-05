@@ -11,14 +11,18 @@ from core import dicom_loader as loader_module
 from core.dicom_loader import DICOMLoader
 
 
-def test_validate_dicom_file_handles_multiframe_metadata_and_padding(monkeypatch) -> None:
+def test_validate_dicom_file_handles_multiframe_metadata_and_padding(
+    monkeypatch,
+) -> None:
     """Validation accepts safe inputs and rejects malformed multiframe payloads."""
     loader = DICOMLoader()
     monkeypatch.setattr(loader_module.os.path, "getsize", lambda _path: 2_000_000)
 
     enhanced = Dataset()
     enhanced.PerFrameFunctionalGroupsSequence = []
-    monkeypatch.setattr(loader_module.pydicom, "dcmread", lambda *_args, **_kwargs: enhanced)
+    monkeypatch.setattr(
+        loader_module.pydicom, "dcmread", lambda *_args, **_kwargs: enhanced
+    )
     assert loader.validate_dicom_file("enhanced.dcm") == (True, None)
 
     missing_dimensions = Dataset()
@@ -39,7 +43,9 @@ def test_validate_dicom_file_handles_multiframe_metadata_and_padding(monkeypatch
     padded.Columns = 1
     padded.BitsAllocated = 16
     padded.PixelData = b"x" * 20
-    monkeypatch.setattr(loader_module.pydicom, "dcmread", lambda *_args, **_kwargs: padded)
+    monkeypatch.setattr(
+        loader_module.pydicom, "dcmread", lambda *_args, **_kwargs: padded
+    )
     is_valid, message = loader.validate_dicom_file("padded.dcm")
     assert is_valid is False
     assert message is not None and "excessive padding" in message
@@ -50,11 +56,15 @@ def test_validate_dicom_file_handles_multiframe_metadata_and_padding(monkeypatch
     valid.Columns = 1
     valid.BitsAllocated = 16
     valid.PixelData = b"x" * 4
-    monkeypatch.setattr(loader_module.pydicom, "dcmread", lambda *_args, **_kwargs: valid)
+    monkeypatch.setattr(
+        loader_module.pydicom, "dcmread", lambda *_args, **_kwargs: valid
+    )
     assert loader.validate_dicom_file("valid.dcm") == (True, None)
 
 
-def test_validate_dicom_file_skips_small_files_and_reports_read_error(monkeypatch) -> None:
+def test_validate_dicom_file_skips_small_files_and_reports_read_error(
+    monkeypatch,
+) -> None:
     loader = DICOMLoader()
     dcmread = MagicMock()
     monkeypatch.setattr(loader_module.pydicom, "dcmread", dcmread)
@@ -73,7 +83,9 @@ def test_validate_dicom_file_skips_small_files_and_reports_read_error(monkeypatc
     assert message == "Validation failed: bad metadata"
 
 
-def test_read_dicom_dataset_defers_large_files_and_reports_progress(monkeypatch) -> None:
+def test_read_dicom_dataset_defers_large_files_and_reports_progress(
+    monkeypatch,
+) -> None:
     dataset = Dataset()
     dcmread = MagicMock(return_value=dataset)
     progress = MagicMock()
@@ -94,7 +106,9 @@ def test_read_dicom_dataset_defers_large_files_and_reports_progress(monkeypatch)
     assert "Deferring pixel data" in progress.call_args.args[0]
 
 
-def test_finalize_multiframe_metadata_handles_single_cancelled_and_completed_paths(monkeypatch) -> None:
+def test_finalize_multiframe_metadata_handles_single_cancelled_and_completed_paths(
+    monkeypatch,
+) -> None:
     loader = DICOMLoader()
     dataset = Dataset()
     progress = MagicMock()
@@ -105,6 +119,7 @@ def test_finalize_multiframe_metadata_handles_single_cancelled_and_completed_pat
     ) == (0.0, False)
     assert dataset._num_frames == 1
     assert dataset._is_multiframe is False
+    progress.assert_not_called()
 
     multi = Dataset()
     multi.PerFrameFunctionalGroupsSequence = []
@@ -114,8 +129,11 @@ def test_finalize_multiframe_metadata_handles_single_cancelled_and_completed_pat
     assert loader_module._finalize_multiframe_metadata(
         loader, multi, "cancelled.dcm", "cancelled.dcm", progress
     ) == (0.0, True)
+    progress.assert_called_once()
+    assert progress.call_args.args[1:] == (None, 3)
 
     loader.reset_cancellation()
+    progress.reset_mock()
     preloader = MagicMock(return_value=(0.25, False))
     monkeypatch.setattr(loader_module, "preload_enhanced_multiframe_pixels", preloader)
     assert loader_module._finalize_multiframe_metadata(
@@ -124,10 +142,14 @@ def test_finalize_multiframe_metadata_handles_single_cancelled_and_completed_pat
     assert multi._num_frames == 3
     assert multi._is_multiframe is True
     preloader.assert_called_once()
-    assert progress.call_count == 3
+    assert progress.call_count == 2
+    assert progress.call_args_list[0].args[1:] == (None, 3)
+    assert progress.call_args_list[1].args[1:] == (3, 3)
 
 
-def test_record_generic_load_exception_deduplicates_compression_failures(monkeypatch) -> None:
+def test_record_generic_load_exception_deduplicates_compression_failures(
+    monkeypatch,
+) -> None:
     loader = DICOMLoader()
     dataset = Dataset()
     monkeypatch.setattr(
@@ -145,10 +167,14 @@ def test_record_generic_load_exception_deduplicates_compression_failures(monkeyp
 
     assert loader._compression_error_files == {"compressed.dcm"}
     assert len(loader.failed_files) == 2
-    assert all("decode unavailable" in message for _path, message in loader.failed_files)
+    assert all(
+        "decode unavailable" in message for _path, message in loader.failed_files
+    )
 
 
-def test_load_file_records_validation_failure_and_successful_dataset(monkeypatch) -> None:
+def test_load_file_records_validation_failure_and_successful_dataset(
+    monkeypatch,
+) -> None:
     loader = DICOMLoader()
     monkeypatch.setattr(loader, "validate_dicom_file", lambda _path: (False, None))
     assert loader.load_file("invalid.dcm") is None
@@ -172,7 +198,9 @@ def test_load_file_records_validation_failure_and_successful_dataset(monkeypatch
     assert loader.failed_files == []
 
 
-def test_load_files_collects_successes_defers_messages_and_reports_final_progress(monkeypatch) -> None:
+def test_load_files_collects_successes_defers_messages_and_reports_final_progress(
+    monkeypatch,
+) -> None:
     loader = DICOMLoader()
     first, third = Dataset(), Dataset()
     outcomes = iter((first, None, third))

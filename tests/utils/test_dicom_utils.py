@@ -7,16 +7,12 @@ Does not require DICOM files.
 Runnable with pytest or unittest.
 """
 
-import os
-import sys
 import unittest
 from types import SimpleNamespace
 
 import numpy as np
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from utils.dicom_utils import (
     calculate_pixel_spacing_from_fov,
@@ -47,7 +43,11 @@ def _functional_group_dataset(
 ) -> Dataset:
     dataset = Dataset()
     item = Dataset()
-    if pixel_spacing is not None or slice_thickness is not None or spacing_between_slices is not None:
+    if (
+        pixel_spacing is not None
+        or slice_thickness is not None
+        or spacing_between_slices is not None
+    ):
         pixel_measures = Dataset()
         if pixel_spacing is not None:
             pixel_measures.PixelSpacing = pixel_spacing
@@ -123,15 +123,11 @@ class TestCanonicalDicomTagString(unittest.TestCase):
     """Tests for canonical_dicom_tag_string (preset / import compatibility)."""
 
     def test_pydicom_style_with_space(self):
-        self.assertEqual(
-            canonical_dicom_tag_string("(0010, 0010)"), "(0010, 0010)"
-        )
+        self.assertEqual(canonical_dicom_tag_string("(0010, 0010)"), "(0010, 0010)")
 
     def test_no_space_after_comma_matches_tree_keys(self):
         """Editors and older strings often omit the space pydicom uses in str(Tag)."""
-        self.assertEqual(
-            canonical_dicom_tag_string("(0010,0010)"), "(0010, 0010)"
-        )
+        self.assertEqual(canonical_dicom_tag_string("(0010,0010)"), "(0010, 0010)")
 
     def test_concatenated_hex(self):
         self.assertEqual(canonical_dicom_tag_string("00100010"), "(0010, 0010)")
@@ -250,7 +246,9 @@ class TestImageGeometryReaders(unittest.TestCase):
         ds = Dataset()
         ds.SliceLocation = " 12.75 "
         self.assertEqual(get_slice_location(ds), 12.75)
-        self.assertIsNone(get_slice_location(SimpleNamespace(SliceLocation="not-a-float")))
+        self.assertIsNone(
+            get_slice_location(SimpleNamespace(SliceLocation="not-a-float"))
+        )
 
 
 class TestPixelToPatientCoordinates(unittest.TestCase):

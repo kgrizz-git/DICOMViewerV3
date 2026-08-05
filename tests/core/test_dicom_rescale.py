@@ -2,13 +2,9 @@
 Unit tests for core.dicom_rescale (rescale parameters and type inference).
 """
 
-import os
-import sys
 import unittest
 
 from pydicom.dataset import Dataset
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from core.dicom_rescale import infer_rescale_type
 
