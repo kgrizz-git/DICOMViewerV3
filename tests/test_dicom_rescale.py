@@ -48,5 +48,84 @@ class TestInferRescaleType(unittest.TestCase):
         )
 
 
+class TestGetRescaleParameters(unittest.TestCase):
+    """Tests for get_rescale_parameters."""
+
+    def test_top_level_scalar_values(self):
+        from core.dicom_rescale import get_rescale_parameters
+
+        ds = Dataset()
+        ds.RescaleSlope = 1.5
+        ds.RescaleIntercept = -100.0
+        ds.RescaleType = "HU"
+        self.assertEqual(get_rescale_parameters(ds), (1.5, -100.0, "HU"))
+
+    def test_top_level_list_values(self):
+        from core.dicom_rescale import get_rescale_parameters
+
+        ds = Dataset()
+        ds.RescaleSlope = [1.5]
+        ds.RescaleIntercept = [-100.0]
+        ds.RescaleType = ["HU"]
+        self.assertEqual(get_rescale_parameters(ds), (1.5, -100.0, "HU"))
+
+    def test_shared_functional_groups_fallback(self):
+        from core.dicom_rescale import get_rescale_parameters
+
+        ds = Dataset()
+        # Create Enhanced multi-frame functional groups
+        pvt_item = Dataset()
+        pvt_item.RescaleSlope = 2.0
+        pvt_item.RescaleIntercept = 10.0
+        pvt_item.RescaleType = "US"
+
+        pvt_seq = [pvt_item]
+
+        shared_item = Dataset()
+        shared_item.PixelValueTransformationSequence = pvt_seq
+
+        ds.SharedFunctionalGroupsSequence = [shared_item]
+
+        self.assertEqual(get_rescale_parameters(ds), (2.0, 10.0, "US"))
+
+    def test_per_frame_functional_groups_fallback(self):
+        from core.dicom_rescale import get_rescale_parameters
+
+        ds = Dataset()
+        # Create Enhanced multi-frame functional groups in PerFrame
+        pvt_item = Dataset()
+        pvt_item.RescaleSlope = [2.5]
+        pvt_item.RescaleIntercept = [5.0]
+        pvt_item.RescaleType = ["OD"]
+
+        pvt_seq = [pvt_item]
+
+        per_frame_item = Dataset()
+        per_frame_item.PixelValueTransformationSequence = pvt_seq
+
+        ds.PerFrameFunctionalGroupsSequence = [per_frame_item]
+
+        self.assertEqual(get_rescale_parameters(ds), (2.5, 5.0, "OD"))
+
+    def test_empty_rescale_type_becomes_none(self):
+        from core.dicom_rescale import get_rescale_parameters
+
+        ds = Dataset()
+        ds.RescaleSlope = 1.0
+        ds.RescaleIntercept = 0.0
+        ds.RescaleType = "   "
+        self.assertEqual(get_rescale_parameters(ds), (1.0, 0.0, None))
+
+    def test_exception_returns_nones(self):
+        from core.dicom_rescale import get_rescale_parameters
+
+        class ExplodingDataset:
+            @property
+            def RescaleSlope(self):
+                raise RuntimeError("unreadable tag")
+
+        self.assertEqual(get_rescale_parameters(ExplodingDataset()), (None, None, None))
+
+
 if __name__ == "__main__":
     unittest.main()
