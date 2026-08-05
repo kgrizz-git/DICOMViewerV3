@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 
 import utils.debug_flags
 
@@ -28,12 +29,17 @@ def test_perf_log_respects_env_disabled(monkeypatch) -> None:
 
 
 def test_perf_log_respects_env_enabled(monkeypatch) -> None:
-    monkeypatch.setenv("DICOM_PERF_LOG", "1")
-    importlib.reload(utils.debug_flags)
-    assert utils.debug_flags.PERF_LOG is True
-    # Clean up after reload
-    monkeypatch.delenv("DICOM_PERF_LOG", raising=False)
-    importlib.reload(utils.debug_flags)
+    original_value = os.environ.get("DICOM_PERF_LOG")
+    try:
+        monkeypatch.setenv("DICOM_PERF_LOG", "1")
+        importlib.reload(utils.debug_flags)
+        assert utils.debug_flags.PERF_LOG is True
+    finally:
+        if original_value is None:
+            monkeypatch.delenv("DICOM_PERF_LOG", raising=False)
+        else:
+            monkeypatch.setenv("DICOM_PERF_LOG", original_value)
+        importlib.reload(utils.debug_flags)
 
 
 def test_debug_flags_type() -> None:

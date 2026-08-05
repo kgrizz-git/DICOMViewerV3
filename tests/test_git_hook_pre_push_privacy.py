@@ -71,11 +71,13 @@ def test_initial_branch_push_excludes_commits_already_on_target_remote(
     repo = _init_repo(tmp_path, email="legacy@example.test")
     main_commit = _git(repo, "rev-parse", "HEAD")
     _git(repo, "update-ref", "refs/remotes/origin/main", main_commit)
-    _git(repo, "config", "user.email", "1+synthetic@users.noreply.github.com")
-    (repo / "README.md").write_text("safe branch update\n", encoding="utf-8")
-    _git(repo, "commit", "-qam", "Safe branch update")
+    _git(repo, "config", "user.email", "new-branch@example.test")
+    (repo / "README.md").write_text("branch update\n", encoding="utf-8")
+    _git(repo, "commit", "-qam", "Branch update")
 
-    assert pre_push.validate_push(repo, _line(repo), remote_name="origin") == {}
+    assert pre_push.validate_push(repo, _line(repo), remote_name="origin") == {
+        "author email policy": 1
+    }
 
 
 def test_initial_push_blocks_non_noreply_author_without_echoing_value(

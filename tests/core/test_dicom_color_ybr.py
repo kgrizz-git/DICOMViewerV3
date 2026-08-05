@@ -194,6 +194,7 @@ def test_is_color_image_samples_per_pixel_list() -> None:
     ds.SamplesPerPixel = [3]
     is_color, pi = dc.is_color_image(ds)
     assert is_color is True
+    assert pi is None
 
 
 def test_is_color_image_photometric_interpretation_rgb() -> None:

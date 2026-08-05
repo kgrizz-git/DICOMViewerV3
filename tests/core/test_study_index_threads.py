@@ -30,9 +30,17 @@ def test_study_index_write_thread(tmp_path):
     assert finished_called is True
 
 
-def test_study_index_write_thread_failure():
-    # Pass None as db_path to trigger an exception
-    thread = StudyIndexWriteThread(None, "pw-write", [])
+def test_study_index_write_thread_failure(tmp_path, monkeypatch):
+    from core.study_index import index_write_thread
+
+    monkeypatch.setattr(
+        index_write_thread,
+        "StudyIndexStore",
+        MagicMock(side_effect=RuntimeError("store unavailable")),
+    )
+    thread = index_write_thread.StudyIndexWriteThread(
+        str(tmp_path / "thread.sqlite"), "pw-write", []
+    )
     failed_reason = None
 
     def on_failed(reason):
@@ -41,8 +49,7 @@ def test_study_index_write_thread_failure():
 
     thread.failed.connect(on_failed)
     thread.run()
-    assert failed_reason is not None
-    assert "TypeError" in failed_reason or "AttributeError" in failed_reason
+    assert failed_reason == "RuntimeError: store unavailable"
 
 
 def test_study_index_integrity_thread():
@@ -148,7 +155,7 @@ def test_study_index_folder_thread_failure(tmp_path, monkeypatch):
         MagicMock(side_effect=RuntimeError("store unavailable")),
     )
     thread = index_folder_thread.StudyIndexFolderThread(
-        str(tmp_path), "folder.sqlite", "pw-folder", lambda: False
+        str(tmp_path), str(tmp_path / "folder.sqlite"), "pw-folder", lambda: False
     )
 
     failed_reason = None

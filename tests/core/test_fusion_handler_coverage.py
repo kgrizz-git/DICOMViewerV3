@@ -48,15 +48,26 @@ def test_duplicate_locations_and_available_series_are_classified_and_sorted() ->
     handler = FusionHandler()
     assert handler.has_duplicate_locations([]) == (False, 0)
     assert handler.has_duplicate_locations([_slice(1.0)]) == (False, 0)
-    assert handler.has_duplicate_locations([_slice(1.0), _slice(1.005), _slice(2.0)]) == (
+    assert handler.has_duplicate_locations(
+        [_slice(1.0), _slice(1.005), _slice(2.0)]
+    ) == (
         True,
         1,
     )
 
-    first = SimpleNamespace(SeriesNumber="10", Modality="CT", SeriesDescription="Anatomy")
+    first = SimpleNamespace(
+        SeriesNumber="10", Modality="CT", SeriesDescription="Anatomy"
+    )
     second = SimpleNamespace(SeriesNumber="2", Modality="PT", SeriesDescription="PET")
     unnamed = SimpleNamespace()
-    studies = {"study": {"late": [first], "early": [second], "empty": [], "uid-only": [unnamed]}}
+    studies = {
+        "study": {
+            "late": [first],
+            "early": [second],
+            "empty": [],
+            "uid-only": [unnamed],
+        }
+    }
 
     assert handler.get_available_series_for_fusion({}, "study") == []
     assert handler.get_available_series_for_fusion(studies, "study") == [
@@ -122,7 +133,9 @@ def test_interpolate_uses_successful_3d_resampling() -> None:
     handler.resampling_mode = "high_accuracy"
     handler.image_resampler = MagicMock()
     handler.image_resampler.needs_resampling.return_value = (True, "different geometry")
-    handler.image_resampler.get_resampled_slice.return_value = np.array([[5]], dtype=np.int16)
+    handler.image_resampler.get_resampled_slice.return_value = np.array(
+        [[5]], dtype=np.int16
+    )
 
     result = handler.interpolate_overlay_slice(
         0,
@@ -183,7 +196,7 @@ def test_interpolate_blends_2d_slices_and_rejects_shape_mismatch(monkeypatch) ->
     assert np.array_equal(fallback, np.array([[0]], dtype=np.float32))
 
 
-def test_translation_offset_alignment_guards_and_resampling_status() -> None:
+def test_calculate_translation_offset() -> None:
     handler = FusionHandler()
     base = Dataset()
     base.ImagePositionPatient = [10.0, 20.0, 30.0]
@@ -191,20 +204,32 @@ def test_translation_offset_alignment_guards_and_resampling_status() -> None:
     overlay = Dataset()
     overlay.ImagePositionPatient = [18.0, 26.0, 99.0]
 
-    assert handler.calculate_translation_offset(base, overlay, (2.0, 4.0), (2.0, 4.0)) == (
+    assert handler.calculate_translation_offset(
+        base, overlay, (2.0, 4.0), (2.0, 4.0)
+    ) == (
         2.0,
         3.0,
     )
+
+
+def test_alignment_guards() -> None:
+    handler = FusionHandler()
     assert handler.get_alignment(None, "overlay") is None
     handler.set_alignment("same", "same", None, None)
     assert handler.get_alignment("same", "same") is None
 
+
+def test_get_resampling_status() -> None:
+    handler = FusionHandler()
     assert handler.get_resampling_status([], [_slice(0.0)]) == (
         "Disabled",
         "No datasets available",
     )
     handler.image_resampler = MagicMock()
-    handler.image_resampler.needs_resampling.return_value = (True, "orientation differs")
+    handler.image_resampler.needs_resampling.return_value = (
+        True,
+        "orientation differs",
+    )
     handler.resampling_mode = "high_accuracy"
     handler._actual_resampling_mode_used = False
     handler._resampling_failure_reason = "3D failed"
