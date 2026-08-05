@@ -323,13 +323,12 @@ class AnnotationManager:
         Returns:
             List of graphics items
         """
-        items = []
+        items: list[QGraphicsItem] = []
 
         try:
             for ann in annotations:
                 ann_type = ann.get('type', '')
                 coords = ann.get('coordinates', [])
-                color = ann.get('color', (255, 255, 0))
                 units = ann.get('units', 'PIXEL')
 
                 # Transform coordinates based on units. OVERLAY annotations render
@@ -339,156 +338,237 @@ class AnnotationManager:
                 if not transformed_coords and ann_type != 'OVERLAY':
                     continue
 
-                # Convert color tuple to QColor
-                if isinstance(color, tuple) and len(color) >= 3:
-                    qcolor = QColor(color[0], color[1], color[2])
-                else:
-                    qcolor = QColor(255, 255, 0)  # Default yellow
-
-                pen = QPen(qcolor, 2)
-
-                # Use transformed coordinates
-                coords = transformed_coords
-
-                if ann_type == 'TEXT':
-                    # Create text item
-                    text = ann.get('text', '')
-                    if text and coords:
-                        text_item = QGraphicsTextItem(text)
-                        text_item.setDefaultTextColor(qcolor)
-                        if coords:
-                            x, y = coords[0][0], coords[0][1]
-                            # Bounds check
-                            if 0 <= x <= image_width and 0 <= y <= image_height:
-                                text_item.setPos(QPointF(x, y))
-                                text_item.setZValue(200)  # Above image
-                                text_item.setVisible(True)
-                                scene.addItem(text_item)
-                                items.append(text_item)
-                                self._add_annotation_to_scene(scene, text_item)
-
-                elif ann_type == 'POLYLINE':
-                    # Create polyline (path)
-                    if len(coords) >= 2:
-                        path = QPainterPath()
-                        # Check if first point is in bounds
-                        first_x, first_y = coords[0][0], coords[0][1]
-                        if 0 <= first_x <= image_width and 0 <= first_y <= image_height:
-                            path.moveTo(QPointF(first_x, first_y))
-                            for i in range(1, len(coords)):
-                                x, y = coords[i][0], coords[i][1]
-                                path.lineTo(QPointF(x, y))
-
-                            path_item = QGraphicsPathItem(path)
-                            path_item.setPen(pen)
-                            path_item.setZValue(200)  # Above image
-                            path_item.setVisible(True)
-                            scene.addItem(path_item)
-                            items.append(path_item)
-                            self._add_annotation_to_scene(scene, path_item)
-
-                elif ann_type == 'CIRCLE':
-                    # Create circle
-                    if len(coords) >= 2:
-                        center = coords[0]
-                        point_on_circle = coords[1]
-
-                        # Calculate radius
-                        dx = point_on_circle[0] - center[0]
-                        dy = point_on_circle[1] - center[1]
-                        radius = (dx * dx + dy * dy) ** 0.5
-
-                        # Bounds check (allow some margin for circles extending beyond image)
-                        if -radius <= center[0] <= image_width + radius and -radius <= center[1] <= image_height + radius:
-                            ellipse_item = QGraphicsEllipseItem(
-                                center[0] - radius, center[1] - radius,
-                                2 * radius, 2 * radius
-                            )
-                            ellipse_item.setPen(pen)
-                            ellipse_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            ellipse_item.setZValue(200)  # Above image
-                            ellipse_item.setVisible(True)
-                            scene.addItem(ellipse_item)
-                            items.append(ellipse_item)
-                            self._add_annotation_to_scene(scene, ellipse_item)
-
-                elif ann_type == 'ELLIPSE':
-                    # Create ellipse (simplified - using bounding box)
-                    if len(coords) >= 3:
-                        # Use first three points to define ellipse
-                        # This is simplified - proper ellipse would need more calculation
-                        min_x = min(c[0] for c in coords)
-                        max_x = max(c[0] for c in coords)
-                        min_y = min(c[1] for c in coords)
-                        max_y = max(c[1] for c in coords)
-
-                        # Bounds check
-                        if -100 <= min_x <= image_width + 100 and -100 <= min_y <= image_height + 100:
-                            ellipse_item = QGraphicsEllipseItem(
-                                min_x, min_y,
-                                max_x - min_x, max_y - min_y
-                            )
-                            ellipse_item.setPen(pen)
-                            ellipse_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                            ellipse_item.setZValue(200)  # Above image
-                            ellipse_item.setVisible(True)
-                            scene.addItem(ellipse_item)
-                            items.append(ellipse_item)
-                            self._add_annotation_to_scene(scene, ellipse_item)
-
-                elif ann_type == 'POINT':
-                    # Create point (small circle)
-                    if coords:
-                        point = coords[0]
-                        radius = 3  # Small radius for point
-                        x, y = point[0], point[1]
-                        # Bounds check
-                        if 0 <= x <= image_width and 0 <= y <= image_height:
-                            ellipse_item = QGraphicsEllipseItem(
-                                x - radius, y - radius,
-                                2 * radius, 2 * radius
-                            )
-                            ellipse_item.setPen(pen)
-                            ellipse_item.setBrush(QBrush(qcolor))
-                            ellipse_item.setZValue(200)  # Above image
-                            ellipse_item.setVisible(True)
-                            scene.addItem(ellipse_item)
-                            items.append(ellipse_item)
-                            self._add_annotation_to_scene(scene, ellipse_item)
-
-                elif ann_type == 'OVERLAY':
-                    # Render overlay graphics from bitmap
-                    overlay_rows = ann.get('overlay_rows', 0)
-                    overlay_cols = ann.get('overlay_cols', 0)
-                    overlay_origin_x = ann.get('overlay_origin_x', 0)
-                    overlay_origin_y = ann.get('overlay_origin_y', 0)
-                    overlay_paths = ann.get('paths', [])
-                    overlay_data = ann.get('overlay_data', None)
-
-                    # Try bitmap rendering first for better quality
-                    if overlay_data is not None and overlay_rows > 0 and overlay_cols > 0:
-                        bitmap_item = self._create_overlay_bitmap_item(
-                            overlay_data, overlay_cols, overlay_rows,
-                            overlay_origin_x, overlay_origin_y, qcolor
-                        )
-                        if bitmap_item:
-                            scene.addItem(bitmap_item)
-                            items.append(bitmap_item)
-                            self._add_annotation_to_scene(scene, bitmap_item)
-                        else:
-                            # Fallback to path rendering if bitmap fails
-                            self._render_overlay_paths(
-                                overlay_paths, coords, overlay_paths, pen, qcolor, scene, items
-                            )
-                    else:
-                        # Render paths (connected components)
-                        self._render_overlay_paths(
-                            overlay_paths, coords, overlay_paths, pen, qcolor, scene, items
-                        )
+                qcolor = self._presentation_state_color(ann.get('color', (255, 255, 0)))
+                self._render_presentation_state_annotation(
+                    scene,
+                    ann_type,
+                    ann,
+                    transformed_coords,
+                    qcolor,
+                    image_width,
+                    image_height,
+                    items,
+                )
         except Exception:
             _logger.debug("%s", sanitized_format_exc())
 
         return items
+
+    @staticmethod
+    def _presentation_state_color(color: Any) -> QColor:
+        """Return the annotation color, preserving the yellow fallback."""
+        if isinstance(color, tuple) and len(color) >= 3:
+            return QColor(color[0], color[1], color[2])
+        return QColor(255, 255, 0)
+
+    def _render_presentation_state_annotation(
+        self,
+        scene: QGraphicsScene,
+        ann_type: str,
+        annotation: dict[str, Any],
+        coords: list[tuple[float, float]],
+        color: QColor,
+        image_width: float,
+        image_height: float,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Dispatch one transformed presentation-state annotation to its renderer."""
+        pen = QPen(color, 2)
+        if ann_type == 'TEXT':
+            self._render_presentation_state_text(scene, annotation, coords, color, image_width, image_height, items)
+        elif ann_type == 'POLYLINE':
+            self._render_presentation_state_polyline(scene, coords, pen, image_width, image_height, items)
+        elif ann_type == 'CIRCLE':
+            self._render_presentation_state_circle(scene, coords, pen, image_width, image_height, items)
+        elif ann_type == 'ELLIPSE':
+            self._render_presentation_state_ellipse(scene, coords, pen, image_width, image_height, items)
+        elif ann_type == 'POINT':
+            self._render_presentation_state_point(scene, coords, color, pen, image_width, image_height, items)
+        elif ann_type == 'OVERLAY':
+            self._render_presentation_state_overlay(scene, annotation, coords, color, pen, items)
+
+    def _render_presentation_state_text(
+        self,
+        scene: QGraphicsScene,
+        annotation: dict[str, Any],
+        coords: list[tuple[float, float]],
+        color: QColor,
+        image_width: float,
+        image_height: float,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Render a bounded TEXT annotation."""
+        text = annotation.get('text', '')
+        if not text or not coords:
+            return
+
+        x, y = coords[0][0], coords[0][1]
+        if not (0 <= x <= image_width and 0 <= y <= image_height):
+            return
+
+        text_item = QGraphicsTextItem(text)
+        text_item.setDefaultTextColor(color)
+        text_item.setPos(QPointF(x, y))
+        self._register_presentation_state_item(scene, text_item, items)
+
+    def _render_presentation_state_polyline(
+        self,
+        scene: QGraphicsScene,
+        coords: list[tuple[float, float]],
+        pen: QPen,
+        image_width: float,
+        image_height: float,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Render a POLYLINE when its first point is in image bounds."""
+        if len(coords) < 2:
+            return
+
+        first_x, first_y = coords[0][0], coords[0][1]
+        if not (0 <= first_x <= image_width and 0 <= first_y <= image_height):
+            return
+
+        path = QPainterPath()
+        path.moveTo(QPointF(first_x, first_y))
+        for x, y in coords[1:]:
+            path.lineTo(QPointF(x, y))
+
+        path_item = QGraphicsPathItem(path)
+        path_item.setPen(pen)
+        self._register_presentation_state_item(scene, path_item, items)
+
+    def _render_presentation_state_circle(
+        self,
+        scene: QGraphicsScene,
+        coords: list[tuple[float, float]],
+        pen: QPen,
+        image_width: float,
+        image_height: float,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Render a CIRCLE using its centre and one point on the circumference."""
+        if len(coords) < 2:
+            return
+
+        center, point_on_circle = coords[:2]
+        dx = point_on_circle[0] - center[0]
+        dy = point_on_circle[1] - center[1]
+        radius = (dx * dx + dy * dy) ** 0.5
+        if not (-radius <= center[0] <= image_width + radius
+                and -radius <= center[1] <= image_height + radius):
+            return
+
+        ellipse_item = QGraphicsEllipseItem(
+            center[0] - radius,
+            center[1] - radius,
+            2 * radius,
+            2 * radius,
+        )
+        ellipse_item.setPen(pen)
+        ellipse_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        self._register_presentation_state_item(scene, ellipse_item, items)
+
+    def _render_presentation_state_ellipse(
+        self,
+        scene: QGraphicsScene,
+        coords: list[tuple[float, float]],
+        pen: QPen,
+        image_width: float,
+        image_height: float,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Render an ELLIPSE from the bounding box of at least three points."""
+        if len(coords) < 3:
+            return
+
+        min_x = min(coord[0] for coord in coords)
+        max_x = max(coord[0] for coord in coords)
+        min_y = min(coord[1] for coord in coords)
+        max_y = max(coord[1] for coord in coords)
+        if not (-100 <= min_x <= image_width + 100
+                and -100 <= min_y <= image_height + 100):
+            return
+
+        ellipse_item = QGraphicsEllipseItem(min_x, min_y, max_x - min_x, max_y - min_y)
+        ellipse_item.setPen(pen)
+        ellipse_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        self._register_presentation_state_item(scene, ellipse_item, items)
+
+    def _render_presentation_state_point(
+        self,
+        scene: QGraphicsScene,
+        coords: list[tuple[float, float]],
+        color: QColor,
+        pen: QPen,
+        image_width: float,
+        image_height: float,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Render a bounded POINT annotation as a filled three-pixel circle."""
+        if not coords:
+            return
+
+        x, y = coords[0][0], coords[0][1]
+        if not (0 <= x <= image_width and 0 <= y <= image_height):
+            return
+
+        radius = 3
+        ellipse_item = QGraphicsEllipseItem(x - radius, y - radius, 2 * radius, 2 * radius)
+        ellipse_item.setPen(pen)
+        ellipse_item.setBrush(QBrush(color))
+        self._register_presentation_state_item(scene, ellipse_item, items)
+
+    def _render_presentation_state_overlay(
+        self,
+        scene: QGraphicsScene,
+        annotation: dict[str, Any],
+        coords: list[tuple[float, float]],
+        color: QColor,
+        pen: QPen,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Render an OVERLAY bitmap first, falling back to vector paths."""
+        overlay_paths = annotation.get('paths', [])
+        bitmap_item = self._create_presentation_state_overlay_bitmap(annotation, color)
+        if bitmap_item:
+            self._register_presentation_state_item(scene, bitmap_item, items)
+            return
+
+        self._render_overlay_paths(overlay_paths, coords, overlay_paths, pen, color, scene, items)
+
+    def _create_presentation_state_overlay_bitmap(
+        self,
+        annotation: dict[str, Any],
+        color: QColor,
+    ) -> QGraphicsItem | None:
+        """Create an overlay bitmap item when the annotation has valid bitmap metadata."""
+        overlay_data = annotation.get('overlay_data')
+        overlay_rows = annotation.get('overlay_rows', 0)
+        overlay_cols = annotation.get('overlay_cols', 0)
+        if overlay_data is None or overlay_rows <= 0 or overlay_cols <= 0:
+            return None
+
+        return self._create_overlay_bitmap_item(
+            overlay_data,
+            overlay_cols,
+            overlay_rows,
+            annotation.get('overlay_origin_x', 0),
+            annotation.get('overlay_origin_y', 0),
+            color,
+        )
+
+    def _register_presentation_state_item(
+        self,
+        scene: QGraphicsScene,
+        item: QGraphicsItem,
+        items: list[QGraphicsItem],
+    ) -> None:
+        """Style, add, return-track, and scene-track a presentation-state item."""
+        item.setZValue(200)
+        item.setVisible(True)
+        scene.addItem(item)
+        items.append(item)
+        self._add_annotation_to_scene(scene, item)
 
     def _transform_coordinates(
         self,
@@ -873,11 +953,7 @@ class AnnotationManager:
                     path_item = QGraphicsPathItem(path)
                     path_item.setPen(thick_pen)
                     path_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-                    path_item.setZValue(200)
-                    path_item.setVisible(True)
-                    scene.addItem(path_item)
-                    items.append(path_item)
-                    self._add_annotation_to_scene(scene, path_item)
+                    self._register_presentation_state_item(scene, path_item, items)
 
         # Render individual points only if no paths
         if coords and len(coords) > 0 and not overlay_paths:
@@ -890,11 +966,7 @@ class AnnotationManager:
                 )
                 point_item.setPen(thick_pen)
                 point_item.setBrush(QBrush(color))
-                point_item.setZValue(200)
-                point_item.setVisible(True)
-                scene.addItem(point_item)
-                items.append(point_item)
-                self._add_annotation_to_scene(scene, point_item)
+                self._register_presentation_state_item(scene, point_item, items)
 
     def clear_annotations(self, scene) -> None:
         """
@@ -912,4 +984,3 @@ class AnnotationManager:
                     scene.removeItem(item)
             # Clear the list for this scene
             self.annotations[scene] = []
-
