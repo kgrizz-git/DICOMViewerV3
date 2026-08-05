@@ -88,96 +88,115 @@ class TagEditDialog(QDialog):
     def _create_ui(self) -> None:
         """Create the UI components."""
         layout = QVBoxLayout(self)
+        layout.addLayout(self._create_tag_information_layout())
+        layout.addLayout(self._create_value_input_layout())
+        layout.addWidget(self._create_button_box())
 
-        # Tag information
+    def _create_tag_information_layout(self) -> QVBoxLayout:
+        """Build the read-only tag identity section."""
         info_layout = QVBoxLayout()
+        info_layout.addWidget(QLabel(f"<b>Tag:</b> {self.tag_str}"))
+        info_layout.addWidget(QLabel(f"<b>Name:</b> {self.tag_name}"))
+        info_layout.addWidget(QLabel(f"<b>VR:</b> {self.vr}"))
+        return info_layout
 
-        tag_label = QLabel(f"<b>Tag:</b> {self.tag_str}")
-        info_layout.addWidget(tag_label)
-
-        name_label = QLabel(f"<b>Name:</b> {self.tag_name}")
-        info_layout.addWidget(name_label)
-
-        vr_label = QLabel(f"<b>VR:</b> {self.vr}")
-        info_layout.addWidget(vr_label)
-
-        layout.addLayout(info_layout)
-
-        # Value input
+    def _create_value_input_layout(self) -> QVBoxLayout:
+        """Build the value label and the VR-appropriate input widget."""
         value_layout = QVBoxLayout()
-        value_label = QLabel("Value:")
-        value_layout.addWidget(value_label)
-
-        # Create appropriate input widget based on VR type
-        if self.vr in self.READ_ONLY_VR_TYPES:
-            # Read-only for complex types
-            self.value_input = QLineEdit()
-            self.value_input.setReadOnly(True)
-            self.value_input.setText("(Read-only: Complex VR type)")
-            self.value_input.setStyleSheet("background-color: #f0f0f0; color: #666;")
-        elif self.vr in self.NUMERIC_VR_TYPES:
-            # Numeric input
-            num_type, min_val, max_val = self.NUMERIC_VR_TYPES[self.vr]
-            if num_type is float:
-                self.value_input = QDoubleSpinBox()
-                self.value_input.setDecimals(6)
-                if min_val is not None:
-                    self.value_input.setMinimum(min_val)
-                if max_val is not None:
-                    self.value_input.setMaximum(max_val)
-            else:  # int
-                # QSpinBox can only handle signed 32-bit integers (max 2147483647)
-                # For UL (Unsigned Long) which can go up to 4294967295, use QLineEdit with validation
-                if self.vr == "UL" and max_val is not None and max_val > 2147483647:
-                    # Use QLineEdit for UL to handle full unsigned long range
-                    self.value_input = QLineEdit()
-                    # Set current value
-                    try:
-                        if isinstance(self.current_value, list):
-                            val_str = str(self.current_value[0]) if self.current_value else "0"
-                        else:
-                            val_str = str(int(self.current_value)) if self.current_value else "0"
-                        self.value_input.setText(val_str)
-                    except (ValueError, TypeError):
-                        self.value_input.setText("0")
-                else:
-                    # Use QSpinBox for other integer types
-                    self.value_input = QSpinBox()
-                    if min_val is not None:
-                        self.value_input.setMinimum(min_val)
-                    if max_val is not None:
-                        # Cap at QSpinBox maximum if needed
-                        actual_max = min(max_val, 2147483647) if max_val > 2147483647 else max_val
-                        self.value_input.setMaximum(actual_max)
-
-                    # Set current value
-                    try:
-                        if isinstance(self.current_value, list):
-                            raw = self.current_value[0] if self.current_value else 0
-                        else:
-                            raw = num_type(self.current_value) if self.current_value else 0
-                        self.value_input.setValue(int(round(float(raw))))
-                    except (ValueError, TypeError):
-                        self.value_input.setValue(0)
-        else:
-            # String input (default)
-            self.value_input = QLineEdit()
-            if isinstance(self.current_value, list):
-                value_str = ", ".join(str(v) for v in self.current_value)
-            else:
-                value_str = str(self.current_value) if self.current_value else ""
-            self.value_input.setText(value_str)
-
+        value_layout.addWidget(QLabel("Value:"))
+        self.value_input = self._create_value_input()
         value_layout.addWidget(self.value_input)
-        layout.addLayout(value_layout)
+        return value_layout
 
-        # Buttons
+    def _create_value_input(self) -> QLineEdit | QDoubleSpinBox | QSpinBox:
+        """Return the input control for the dialog's value representation."""
+        if self.vr in self.READ_ONLY_VR_TYPES:
+            return self._create_read_only_input()
+        if self.vr in self.NUMERIC_VR_TYPES:
+            return self._create_numeric_input()
+        return self._create_string_input()
+
+    def _create_read_only_input(self) -> QLineEdit:
+        """Create the fixed explanatory field for complex VR types."""
+        value_input = QLineEdit()
+        value_input.setReadOnly(True)
+        value_input.setText("(Read-only: Complex VR type)")
+        value_input.setStyleSheet("background-color: #f0f0f0; color: #666;")
+        return value_input
+
+    def _create_numeric_input(self) -> QLineEdit | QDoubleSpinBox | QSpinBox:
+        """Create and populate the numeric control appropriate for ``self.vr``."""
+        num_type, min_val, max_val = self.NUMERIC_VR_TYPES[self.vr]
+        if num_type is float:
+            return self._create_float_input(min_val, max_val)
+        if self.vr == "UL" and max_val is not None and max_val > 2147483647:
+            return self._create_unsigned_long_input()
+        return self._create_integer_input(num_type, min_val, max_val)
+
+    @staticmethod
+    def _create_float_input(min_val: int | None, max_val: int | None) -> QDoubleSpinBox:
+        """Create the existing six-decimal floating-point editor."""
+        value_input = QDoubleSpinBox()
+        value_input.setDecimals(6)
+        if min_val is not None:
+            value_input.setMinimum(min_val)
+        if max_val is not None:
+            value_input.setMaximum(max_val)
+        return value_input
+
+    def _create_unsigned_long_input(self) -> QLineEdit:
+        """Create the line editor required for unsigned values beyond QSpinBox range."""
+        value_input = QLineEdit()
+        try:
+            if isinstance(self.current_value, list):
+                value = self.current_value[0] if self.current_value else "0"
+            else:
+                value = int(self.current_value) if self.current_value else "0"
+            value_input.setText(str(value))
+        except (ValueError, TypeError):
+            value_input.setText("0")
+        return value_input
+
+    def _create_integer_input(
+        self,
+        num_type: type,
+        min_val: int | None,
+        max_val: int | None,
+    ) -> QSpinBox:
+        """Create the bounded signed-integer editor and initialize its value."""
+        value_input = QSpinBox()
+        if min_val is not None:
+            value_input.setMinimum(min_val)
+        if max_val is not None:
+            value_input.setMaximum(min(max_val, 2147483647))
+        try:
+            if isinstance(self.current_value, list):
+                raw_value = self.current_value[0] if self.current_value else 0
+            else:
+                raw_value = num_type(self.current_value) if self.current_value else 0
+            value_input.setValue(int(round(float(raw_value))))
+        except (ValueError, TypeError):
+            value_input.setValue(0)
+        return value_input
+
+    def _create_string_input(self) -> QLineEdit:
+        """Create the default text editor with the existing list display format."""
+        value_input = QLineEdit()
+        if isinstance(self.current_value, list):
+            value = ", ".join(str(item) for item in self.current_value)
+        else:
+            value = str(self.current_value) if self.current_value else ""
+        value_input.setText(value)
+        return value_input
+
+    def _create_button_box(self) -> QDialogButtonBox:
+        """Create and wire the dialog action buttons."""
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         button_box.accepted.connect(self._validate_and_accept)
         button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
+        return button_box
 
     def _setup_validation(self) -> None:
         """Set up validation based on VR type."""
@@ -338,4 +357,3 @@ class TagEditDialog(QDialog):
             New tag value, or None if dialog was cancelled
         """
         return self.new_value
-
