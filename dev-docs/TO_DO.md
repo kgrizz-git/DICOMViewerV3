@@ -58,7 +58,8 @@ This file tracks active and near-term tasks.
   [Slice display manager slice](plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md),
   [MAJOR mechanical sweep](plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md),
   [View state manager slice](plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md),
-  [Top-complexity five-function slice](plans/completed/SONARQUBE_TOP_COMPLEXITY_FIVE_FUNCTION_SLICE_PLAN_20260805.md).
+  [Top-complexity five-function slice](plans/completed/SONARQUBE_TOP_COMPLEXITY_FIVE_FUNCTION_SLICE_PLAN_20260805.md),
+  [Merge and resampling slice](plans/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
 
 
 ## Bugs / Correctness
