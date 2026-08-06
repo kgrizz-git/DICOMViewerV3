@@ -8,6 +8,19 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-08-05
 
+- **Merge and resampling Sonar slice:** completed the automated implementation
+  of the two next highest-ranked distinct-file `python:S3776` targets:
+  `DICOMOrganizer.merge_batch` (65) and
+  `ImageResampler.get_resampled_slice` (63). Characterization coverage now
+  locks down additive path/multiframe bookkeeping and sorted-slice, cache, and
+  float32 resampling behavior. The fresh local analysis at `c573548` reported
+  **236** priority findings (238 → 236), with both target findings cleared.
+  Focused tests (117), the full suite (3,639), architecture boundaries, repo
+  harness, automated agent smoke, and staged privacy checks passed. The
+  additive-load and fusion-scrolling interactive smoke remains the required
+  contributor check before the plan can be archived. Plan:
+  [Merge and resampling slice](plans/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
+
 - **Portable coverage XML configuration:** enabled `relative_files = True` in
   `.coveragerc`, so coverage XML names `src` rather than a workstation or
   scanner-container path. The staged artifact gate now treats this tracked

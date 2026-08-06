@@ -1,7 +1,7 @@
 # Plan: Local SonarQube Merge and Resampling Slice
 
 **Last updated:** 2026-08-05
-**Status:** Ready for implementation
+**Status:** Implementation complete — manual smoke pending
 **Branch:** `refactor/sonar-top-complexity-rendering-export`
 **Scope:** Extend the existing, unpushed PR with two behavior-preserving
 `python:S3776` refactors in two production files.
@@ -143,10 +143,29 @@ Continue the current PR with reviewable, independently green commits:
 6. `docs: record merge and resampling remediation`
 
 Do not combine a characterization commit with its corresponding refactor.
-The final documentation commit updates this plan to **Implemented**, moves it
-to `plans/completed/`, records the fresh scan result, and updates the static
-analysis references. No user-visible behavior change is intended, so do not
-add a CHANGELOG entry for the refactor itself.
+No user-visible behavior change is intended, so do not add a CHANGELOG entry
+for the refactor itself.
+
+## Implementation outcome
+
+- `c971576` adds merge characterization for retained mappings, missing paths,
+  and multi-frame instance identifiers; `c573548` makes `merge_batch` a short
+  orchestration method backed by private, timing-preserving helpers.
+- `d013709` adds resampling characterization for sorted-index mapping,
+  duplicate-location fallback, cache-disabled conversion, and paired LRU
+  eviction; `c58a491` makes `get_resampled_slice` an orchestration method with
+  private reference-grid and cache helpers.
+- The focused combined suite passed **117** tests and the full suite passed
+  **3,639** tests. Architecture boundaries, repository harness, automated
+  agent-smoke report, and staged privacy checks passed.
+- A fresh local SonarQube analysis for source revision `c573548` reported
+  **236** priority findings (238 → 236). It has no open `python:S3776`
+  finding at either selected target; the highest remaining one is now
+  `ExportManager` at 62.
+- The automated implementation is complete. Retain this active plan until a
+  contributor completes the specified additive-load and fusion-scrolling
+  interactive smoke; then mark it implemented and archive it under
+  `plans/completed/`.
 
 ## Verification and acceptance criteria
 
