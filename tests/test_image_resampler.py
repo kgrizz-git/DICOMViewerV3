@@ -246,6 +246,20 @@ class TestGetResampledSlice:
         assert result.dtype == np.float32
         np.testing.assert_allclose(result, np.full((4, 4), 20.0), atol=1e-4)
 
+    def test_maps_unsorted_reference_index_to_sorted_resampled_slice(self, resampler):
+        reference = _make_series([1, 2, 3])
+        overlay = _make_series([10, 20, 30])
+
+        result = resampler.get_resampled_slice(
+            overlay,
+            [reference[2], reference[0], reference[1]],
+            0,
+        )
+
+        assert result is not None
+        assert result.dtype == np.float32
+        np.testing.assert_allclose(result, np.full((4, 4), 30.0), atol=1e-4)
+
     def test_caches_resampled_volume_across_calls(self, resampler, monkeypatch):
         reference = _make_series([1, 2, 3])
         overlay = _make_series([10, 20, 30])
@@ -281,6 +295,30 @@ class TestGetResampledSlice:
         assert result1 is not None
         np.testing.assert_allclose(result1, result2, atol=1e-4)
 
+    def test_use_cache_false_repeats_sitk_conversion(self, resampler, monkeypatch):
+        reference = _make_series([1, 2, 3])
+        overlay = _make_series([10, 20, 30])
+        call_count = {"n": 0}
+        original = resampler.dicom_series_to_sitk
+
+        def counting_wrapper(datasets, series_uid=None):
+            call_count["n"] += 1
+            return original(datasets, series_uid)
+
+        monkeypatch.setattr(resampler, "dicom_series_to_sitk", counting_wrapper)
+
+        for _ in range(2):
+            assert resampler.get_resampled_slice(
+                overlay,
+                reference,
+                0,
+                use_cache=False,
+                overlay_series_uid="ov",
+                reference_series_uid="ref",
+            ) is not None
+
+        assert call_count["n"] == 4
+
     def test_returns_none_when_overlay_conversion_fails(self, resampler):
         reference = _make_series([1, 2])
         overlay = [Dataset()]  # no spatial metadata -> conversion fails
@@ -297,6 +335,7 @@ class TestGetResampledSlice:
         overlay = _make_series([10, 20])
         result = resampler.get_resampled_slice(overlay, reference, 1)  # ds_b, duplicate of ds_a
         assert result is not None
+        np.testing.assert_allclose(result, np.full((4, 4), 10.0), atol=1e-4)
 
 
 class TestCalculateSliceSpacing:
@@ -408,3 +447,18 @@ class TestCacheEviction:
                 overlay_series_uid=f"ov{i}", reference_series_uid="ref",
             )
         assert len(resampler._cache) == resampler._MAX_CACHE_ENTRIES
+
+    def test_lru_eviction_removes_matching_numpy_volume(self, resampler):
+        reference = _make_series([1, 2])
+        for i in range(resampler._MAX_CACHE_ENTRIES + 1):
+            overlay = _make_series([i, i + 1])
+            assert resampler.get_resampled_slice(
+                overlay,
+                reference,
+                0,
+                overlay_series_uid=f"ov{i}",
+                reference_series_uid="ref",
+            ) is not None
+
+        assert ("ov0", "ref") not in resampler._cache
+        assert ("ov0", "ref") not in resampler._numpy_cache
