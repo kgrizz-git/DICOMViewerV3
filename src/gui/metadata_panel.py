@@ -275,6 +275,7 @@ class MetadataPanel(QWidget):
 
         # Tree widget for tags
         self.tree_widget = QTreeWidget()
+        self.tree_widget.setObjectName("metadata_tag_tree")
         self.tree_widget.setHeaderLabels(["Tag", "Name", "VR", "Value"])
         # Root decorations ON: this is what draws the expand/collapse triangle on group
         # headings and on sequence rows. It used to be off, and a custom delegate then

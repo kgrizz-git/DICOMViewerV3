@@ -133,6 +133,7 @@ def _layout_fixed_signal_pairs(app: Any, image_viewer: Any, subwindow: Any) -> l
         (subwindow.expand_to_1x1_requested, app._on_expand_to_1x1_requested),
         (image_viewer.swap_view_requested, app._on_swap_view_requested),
         (image_viewer.window_slot_map_popup_requested, app._on_window_slot_map_popup_requested),
+        (image_viewer.overlay_font_size_adjust_requested, app.main_window.adjust_overlay_font_size),
     ]
 
 

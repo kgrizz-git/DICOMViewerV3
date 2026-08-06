@@ -17,6 +17,7 @@ from PySide6.QtGui import QColor
 from gui.main_window_theme import (
     get_theme_stylesheet,
     get_theme_viewer_background_color,
+    metadata_tag_band_color,
 )
 
 
@@ -68,6 +69,23 @@ class TestGetThemeStylesheet(unittest.TestCase):
         result = get_theme_stylesheet("dark", white_p, black_p, accent_id="garnet")
         self.assertIn("alternate-background-color: #32151a", result)
         self.assertNotIn("alternate-background-color: #a0303f", result)
+
+    def test_metadata_bands_are_subtly_derived_from_the_selected_accent(self):
+        white_p, black_p = _dummy_paths()
+
+        light = get_theme_stylesheet("light", white_p, black_p, accent_id="garnet")
+        dark = get_theme_stylesheet("dark", white_p, black_p, accent_id="garnet")
+
+        expected_light = metadata_tag_band_color("light", "#a0303f")
+        expected_dark = metadata_tag_band_color("dark", "#a0303f")
+        self.assertIn(
+            f"QTreeWidget#metadata_tag_tree {{\n                    alternate-background-color: {expected_light};",
+            light,
+        )
+        self.assertIn(
+            f"QTreeWidget#metadata_tag_tree {{\n                    alternate-background-color: {expected_dark};",
+            dark,
+        )
 
     def test_light_theme_uses_black_checkmark_path(self):
         white_p, black_p = _dummy_paths()

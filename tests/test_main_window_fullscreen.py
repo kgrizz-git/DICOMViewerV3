@@ -91,6 +91,22 @@ def test_fullscreen_action_is_available_from_toolbar(qapp):
 
 
 @pytest.mark.qt
+def test_overlay_font_actions_are_available_in_view_menu(qapp):
+    w = MainWindow(ConfigManager())
+
+    assert w.increase_overlay_font_action is not None
+    assert w.decrease_overlay_font_action is not None
+    assert w.increase_overlay_font_action.text() == "Increase Font Size"
+    assert w.decrease_overlay_font_action.text() == "Decrease Font Size"
+
+    increase_shortcuts = {shortcut.toString() for shortcut in w.increase_overlay_font_action.shortcuts()}
+    decrease_shortcuts = {shortcut.toString() for shortcut in w.decrease_overlay_font_action.shortcuts()}
+    assert "Ctrl++" in increase_shortcuts
+    assert "Ctrl+=" in increase_shortcuts
+    assert "Ctrl+-" in decrease_shortcuts
+
+
+@pytest.mark.qt
 def test_toolbar_places_export_and_index_immediately_after_open(qapp):
     w = MainWindow(ConfigManager())
     assert w.main_toolbar is not None

@@ -79,6 +79,8 @@ _SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Cycle Overlay Detail (all panes)", "Space"),
             ("Legacy Overlay Cycle (focused pane)", "Shift+Space"),
             ("Overlay Tags Config", "Ctrl+Shift+L"),
+            ("Decrease Overlay Text", "Ctrl/Cmd+-  or  Ctrl/Cmd+scroll down"),
+            ("Increase Overlay Text", "Ctrl/Cmd++  or  Ctrl/Cmd+scroll up"),
             ("DICOM File Info", "Ctrl+I"),
             ("Histogram", "Ctrl+Shift+H"),
             ("Flip Horizontal", "Alt+H"),

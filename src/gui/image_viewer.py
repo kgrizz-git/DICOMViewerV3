@@ -115,6 +115,7 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
     annotation_options_requested = Signal()  # Emitted when annotation options dialog is requested
     overlay_settings_requested = Signal()  # Emitted when Overlay Settings dialog is requested from context menu
     overlay_config_requested = Signal()  # Emitted when Configure Overlay Tags dialog is requested from context menu
+    overlay_font_size_adjust_requested = Signal(int)  # +/- point-size request from Ctrl/Cmd+wheel
     crosshair_clicked = Signal(QPointF, str, int, int, int)  # Emitted when crosshair tool is clicked (pos, pixel_value_str, x, y, z)
     about_this_file_requested = Signal()  # Emitted when About this File is requested from context menu
     assign_series_requested = Signal(str)  # Emitted when series assignment is requested (series_uid)
@@ -631,4 +632,3 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
             bar_h = overlay.sizeHint().height()
         bar_h = min(bar_h, vp.height())
         overlay.setGeometry(0, vp.height() - bar_h, width, bar_h)
-

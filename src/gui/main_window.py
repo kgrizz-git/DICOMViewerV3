@@ -1098,16 +1098,16 @@ class MainWindow(QMainWindow):
 
     def _on_font_size_decrease(self) -> None:
         """Handle font size decrease button click."""
-        current_size = self.config_manager.get_overlay_font_size()
-        new_size = max(1, current_size - 1)  # Minimum is 1pt
-        if new_size != current_size:
-            self.config_manager.set_overlay_font_size(new_size)
-            self.overlay_font_size_changed.emit(new_size)
+        self.adjust_overlay_font_size(-1)
 
     def _on_font_size_increase(self) -> None:
         """Handle font size increase button click."""
+        self.adjust_overlay_font_size(1)
+
+    def adjust_overlay_font_size(self, delta: int) -> None:
+        """Adjust the shared corner-overlay font size, clamped to its supported range."""
         current_size = self.config_manager.get_overlay_font_size()
-        new_size = min(24, current_size + 1)  # Maximum is 24pt
+        new_size = max(1, min(24, current_size + delta))
         if new_size != current_size:
             self.config_manager.set_overlay_font_size(new_size)
             self.overlay_font_size_changed.emit(new_size)

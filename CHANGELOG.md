@@ -7,6 +7,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **macOS toolbar pop-up menus:** restored an opaque background for the Open and Recent
+  folder-menu popups; the toolbar's transparent-widget style was leaking into their
+  `QMenu` background. **Semantic versioning note: patch**.
 - **Coverage/SonarQube path mapping:** added `relative_files = True` to `.coveragerc` so `pytest-cov` generates relative paths in `coverage.xml`. This fixes local SonarQube 0% coverage when the Docker scanner falls back to `/usr/src` mounts and improves CI coverage artifact portability. **Semantic versioning note: patch**.
 - **Launcher incomplete venv:** `launch.bat` / `launch.command` now install and run with the venv interpreter directly (`…/python.exe -m pip` / `…/bin/python -m pip`) instead of relying on `activate` + bare `pip`/`python`, which can leave an empty `venv` folder on Windows (especially with pyenv/multiple Pythons). Choosing **Run** detects a missing core stack (`pydicom` / `PySide6` / `numpy` / `PIL`) and installs requirements before starting; failed installs keep the window open with recovery hints. **Semantic versioning note: patch**.
 - **Zoom release dead branch:** removed an unreachable nested `mouse_mode == "pan"` check inside the zoom `mouseReleaseEvent` path in `image_viewer_input.py` (ScrollHandDrag was never restored there because zoom mode uses NoDrag). **Semantic versioning note: patch**.
@@ -15,10 +18,17 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Flat-image normalize wraparound:** `normalize_to_uint8` zeroes constant-valued arrays instead of casting to `uint8` (e.g. 1000 → 232). Matches `normalize_channels_to_uint8`. **Semantic versioning note: patch**.
 
 ### Changed
+- **Metadata-panel tag rows:** added extremely subtle bands derived from the selected accent,
+  quieter row separators, and more vertical padding for easier scanning in the left pane.
+  **Semantic versioning note: patch** (UX polish).
 - **Unused symbol cleanup:** cleared remaining basedpyright `reportUnusedImport` / `reportUnusedVariable` / `reportUnusedParameter` findings in `src/` (true dead imports/locals removed or `_`-prefixed; intentional re-exports and keyword API params kept with safe markers). **Semantic versioning note: patch** (maintainability only).
 - **PR #38 CodeRabbit follow-ups:** aligned flat-normalize docstring with zeroing behavior, restored `OverlayManager.create_overlay_items(..., position=...)` keyword name with pyright suppress, synced a few callback Args docs, and strengthened empty-coordinate OVERLAY path + short secondary-palette clamp tests. **Semantic versioning note: patch**.
 
 ### Added
+- **Overlay-text quick sizing:** **View → Overlay Text** now includes increase/decrease
+  actions with **Ctrl/Cmd++** / **Ctrl/Cmd+-** shortcuts; **Ctrl/Cmd+scroll** over an
+  image pane adjusts the same shared corner-overlay font size. **Semantic versioning note:
+  patch**.
 - **ACR CT CNR intermediates:** the ACR CT result dialog now surfaces the values behind the low-contrast **contrast-to-noise ratio** — object ROI mean, background mean, background noise (σ), and module CNR — and writes them to **`metrics.low_contrast_cnr`** (`object_rois`, `background`, `cnr`) in the JSON/CSV/XLSX exports. **Semantic versioning note: minor** (new user-facing capability).
 - **ACR CT batch analysis:** new **Tools → Automated QA → ACR CT Batch (pylinac)…** runs one shared CT options set over **multiple selected CT series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); the batch summary dialog shows one row per series with **Export XLSX…** / **Export JSON…**. **Semantic versioning note: minor**.
 - **XLSX export for pylinac QA:** the single-run save dialog and the batch summary dialog can export **`.xlsx`** workbooks (**Summary**, **Detail**, and **Images** sheets); the Images sheet embeds pylinac's analyzed composite image per run, degrading gracefully when no image is available. **Semantic versioning note: minor**.
