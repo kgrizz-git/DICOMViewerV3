@@ -46,20 +46,9 @@ This file tracks active and near-term tasks.
   regression tests. The completed `utils/privacy/structural_schema.py` slice
   reduced priority findings 285 → 280. Next candidates include
   `roi_manager`, annotation, subwindow-lifecycle, loading, and image-input
-  clusters. Plan references:
-  [Fusion coordinator finish slice](plans/SONARQUBE_FUSION_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
-  [Fusion coordinator first slice](plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md),
-  [ROI coordinator finish slice](plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md),
-  [MPR controller finish slice](plans/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md),
-  [MPR controller slice](plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md),
-  [Critical first slice](plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md),
-  [Undo/redo annotation commands slice](plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md),
-  [ROI coordinator stats slice](plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md),
-  [Slice display manager slice](plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md),
-  [MAJOR mechanical sweep](plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md),
-  [View state manager slice](plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md),
-  [Top-complexity five-function slice](plans/completed/SONARQUBE_TOP_COMPLEXITY_FIVE_FUNCTION_SLICE_PLAN_20260805.md),
-  [Merge and resampling slice](plans/completed/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
+  clusters. Completed static-analysis records are archived under
+  [`plans/completed/`](plans/completed/); keep this item limited to active
+  remediation work.
 
 
 ## Bugs / Correctness
