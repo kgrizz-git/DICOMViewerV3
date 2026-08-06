@@ -281,6 +281,31 @@ class TestGetResampledSlice:
         )
         assert call_count["n"] == first_call_count  # no new sitk conversion on cache hit
 
+    def test_cache_separates_normalized_interpolation_methods(self, resampler, monkeypatch):
+        reference = _make_series([1, 2, 3])
+        overlay = _make_series([10, 20, 30])
+        call_count = {"n": 0}
+        original = resampler.dicom_series_to_sitk
+
+        def counting_wrapper(datasets, series_uid=None):
+            call_count["n"] += 1
+            return original(datasets, series_uid)
+
+        monkeypatch.setattr(resampler, "dicom_series_to_sitk", counting_wrapper)
+
+        for interpolator in ("linear", "nearest", "LINEAR"):
+            assert resampler.get_resampled_slice(
+                overlay,
+                reference,
+                0,
+                interpolator=interpolator,
+                overlay_series_uid="ov",
+                reference_series_uid="ref",
+            ) is not None
+
+        assert call_count["n"] == 4
+        assert set(resampler._cache) == {("ov", "ref", "linear"), ("ov", "ref", "nearest")}
+
     def test_use_cache_false_bypasses_cache(self, resampler):
         reference = _make_series([1, 2, 3])
         overlay = _make_series([10, 20, 30])

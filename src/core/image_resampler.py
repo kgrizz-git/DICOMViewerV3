@@ -56,7 +56,7 @@ class _ResamplingContext:
     overlay_series_uid: str | None
     reference_series_uid: str | None
     interpolator: str
-    cache_key: tuple[str, str] | None
+    cache_key: tuple[str, str, str] | None
 
 
 class ImageResampler:
@@ -85,14 +85,14 @@ class ImageResampler:
         if not sitk_available:
             print("Warning: SimpleITK not available. 3D resampling will not work.")
 
-        # Cache for resampled volumes: key = (overlay_uid, base_uid), value = sitk.Image
+        # Cache for resampled volumes: key = (overlay_uid, base_uid, interpolator).
         # OrderedDict for LRU eviction (bounded by _MAX_CACHE_ENTRIES)
-        self._cache: OrderedDict[tuple[str, str], Any] = OrderedDict()
+        self._cache: OrderedDict[tuple[str, str, str], Any] = OrderedDict()
         self._cache_lock = threading.Lock()  # For thread-safe caching
 
         # Numpy array cache: avoids repeated sitk_to_numpy() on every scroll
-        # key = same as _cache (overlay_uid, base_uid), value = np.ndarray (z, y, x)
-        self._numpy_cache: dict[tuple[str, str], np.ndarray] = {}
+        # key = same as _cache, value = np.ndarray (z, y, x)
+        self._numpy_cache: dict[tuple[str, str, str], np.ndarray] = {}
 
         # Sorted reference datasets cache: avoids O(N^2) sort+filter per scroll
         # key = reference_series_uid, value = sorted+filtered dataset list
@@ -484,14 +484,16 @@ class ImageResampler:
             slice_idx,
             sorted_reference_datasets,
         )
+        normalized_interpolator = interpolator.lower()
         context = _ResamplingContext(
             overlay_series_uid=overlay_series_uid,
             reference_series_uid=reference_series_uid,
-            interpolator=interpolator,
+            interpolator=normalized_interpolator,
             cache_key=self._get_volume_cache_key(
                 use_cache,
                 overlay_series_uid,
                 reference_series_uid,
+                normalized_interpolator,
             ),
         )
         resampled_volume = self._get_resampled_volume(
@@ -556,10 +558,11 @@ class ImageResampler:
         use_cache: bool,
         overlay_series_uid: str | None,
         reference_series_uid: str | None,
-    ) -> tuple[str, str] | None:
-        """Return the paired series key only when volume caching is enabled."""
+        interpolator: str,
+    ) -> tuple[str, str, str] | None:
+        """Return the series-and-interpolator key only when caching is enabled."""
         if use_cache and overlay_series_uid and reference_series_uid:
-            return (overlay_series_uid, reference_series_uid)
+            return (overlay_series_uid, reference_series_uid, interpolator.lower())
         return None
 
     def _get_resampled_volume(
@@ -595,7 +598,7 @@ class ImageResampler:
         self._cache_resampled_volume(context.cache_key, resampled_volume)
         return resampled_volume
 
-    def _get_cached_volume(self, cache_key: tuple[str, str] | None) -> Any | None:
+    def _get_cached_volume(self, cache_key: tuple[str, str, str] | None) -> Any | None:
         """Read a volume cache entry and refresh its LRU position."""
         if cache_key is None:
             return None
@@ -607,7 +610,7 @@ class ImageResampler:
 
     def _cache_resampled_volume(
         self,
-        cache_key: tuple[str, str] | None,
+        cache_key: tuple[str, str, str] | None,
         resampled_volume: Any,
     ) -> None:
         """Store a volume and evict its paired NumPy cache entry with the LRU key."""
@@ -622,7 +625,7 @@ class ImageResampler:
     def _get_numpy_volume(
         self,
         resampled_volume: Any,
-        cache_key: tuple[str, str] | None,
+        cache_key: tuple[str, str, str] | None,
     ) -> np.ndarray | None:
         """Read or construct the cached NumPy representation of a volume."""
         volume_array = None
@@ -635,7 +638,8 @@ class ImageResampler:
                 return None
             if cache_key is not None:
                 with self._cache_lock:
-                    self._numpy_cache[cache_key] = volume_array
+                    if self._cache.get(cache_key) is resampled_volume:
+                        self._numpy_cache[cache_key] = volume_array
         return volume_array
 
     def needs_resampling(

@@ -645,6 +645,7 @@ class OverlayManager:
             ("upper_left", top_left_scene.x() + margin_scene, top_left_scene.y() + margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
             ("upper_right", top_right_scene.x(), top_right_scene.y() + margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
             ("lower_left", bottom_left_scene.x() + margin_scene, bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+            # Intentionally retain the legacy bottom-left y anchor for rendering parity.
             ("lower_right", bottom_right_scene.x(), bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom),
         ]
         return viewport_to_scene_scale, margin_scene, corners
@@ -680,15 +681,11 @@ class OverlayManager:
     ) -> float:
         """Measure the padded fixed document width used by one right corner."""
         max_text_width_viewport = 0
-        temporary_items = []
         for line in lines:
             temporary_item = self._create_text_item(line, 0, 0, alignment)
             max_text_width_viewport = max(
                 max_text_width_viewport, temporary_item.boundingRect().width()
             )
-            temporary_items.append(temporary_item)
-        for item in temporary_items:
-            del item
         return max_text_width_viewport + 5
 
     def _render_right_aligned_corner(
@@ -827,7 +824,6 @@ class OverlayManager:
         modality = get_modality(parser)
         corner_tags = self._corner_tags_for_current_mode(modality)
         scene_width, scene_height = self._resolve_scene_dimensions(scene)
-        view = self._first_scene_view(scene)
         viewport_to_scene_scale, margin_scene, corners = self._graphics_corner_anchors(
             view, scene_width, scene_height, margin=10
         )

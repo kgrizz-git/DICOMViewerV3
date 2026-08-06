@@ -64,6 +64,7 @@ def test_create_ui_configures_float_and_bounded_integer_inputs(qapp) -> None:
     float_dialog = TagEditDialog(vr="FD", current_value=3.25)
     assert isinstance(float_dialog.value_input, QDoubleSpinBox)
     assert float_dialog.value_input.decimals() == 6
+    assert float_dialog.value_input.value() == 3.25
 
     integer_dialog = TagEditDialog(vr="US", current_value=[42])
     assert isinstance(integer_dialog.value_input, QSpinBox)

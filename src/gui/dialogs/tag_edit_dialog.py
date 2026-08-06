@@ -132,13 +132,17 @@ class TagEditDialog(QDialog):
         """Create and populate the numeric control appropriate for ``self.vr``."""
         num_type, min_val, max_val = self.NUMERIC_VR_TYPES[self.vr]
         if num_type is float:
-            return self._create_float_input(min_val, max_val)
+            return self._create_float_input(min_val, max_val, self.current_value)
         if self.vr == "UL" and max_val is not None and max_val > 2147483647:
             return self._create_unsigned_long_input()
         return self._create_integer_input(num_type, min_val, max_val)
 
     @staticmethod
-    def _create_float_input(min_val: int | None, max_val: int | None) -> QDoubleSpinBox:
+    def _create_float_input(
+        min_val: int | None,
+        max_val: int | None,
+        current_value: Any,
+    ) -> QDoubleSpinBox:
         """Create the existing six-decimal floating-point editor."""
         value_input = QDoubleSpinBox()
         value_input.setDecimals(6)
@@ -146,6 +150,10 @@ class TagEditDialog(QDialog):
             value_input.setMinimum(min_val)
         if max_val is not None:
             value_input.setMaximum(max_val)
+        try:
+            value_input.setValue(float(current_value))
+        except (TypeError, ValueError):
+            pass
         return value_input
 
     def _create_unsigned_long_input(self) -> QLineEdit:

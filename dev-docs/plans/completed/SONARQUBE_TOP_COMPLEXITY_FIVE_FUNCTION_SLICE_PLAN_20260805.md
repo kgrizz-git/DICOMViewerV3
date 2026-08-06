@@ -261,15 +261,16 @@ is an internal behavior-preserving refactor.
 Run the relevant focused suites after each stream, then run the complete final
 gate with the project virtual environment active:
 
-1. `python -m pytest tests/test_tag_export_writer.py tests/test_tag_export_controller.py tests/smoke/test_export_smoke.py -v`
-2. `python -m pytest tests/test_annotation_manager.py tests/tools/test_annotation_overlay_bitmap_sonar_slice.py tests/gui/test_slice_display_manager_sonar_slice.py -v`
-3. `python -m pytest tests/gui/test_overlay_manager_slice.py tests/gui/test_overlay_position_updater_sonar_slice.py tests/test_keyboard_overlay_shortcuts.py tests/test_export_rendering_overlays.py -v`
-4. `python -m pytest tests/gui/test_tag_edit_dialog.py tests/test_tag_viewer_dialog.py tests/test_metadata_panel.py tests/test_nested_tag_roundtrip.py -v`
-5. `python -m pytest tests/ -v`
-6. `python scripts/check_architecture_boundaries.py`
-7. `python scripts/check_repo_harness.py`
-8. `python scripts/agent_smoke_harness.py`
-9. `python scripts/git_hook_privacy_checks.py --staged`
+1. `source .venv/bin/activate && python -m pytest tests/test_tag_export_writer.py tests/test_tag_export_controller.py tests/smoke/test_export_smoke.py -v`
+2. `source .venv/bin/activate && python -m pytest tests/test_annotation_manager.py tests/tools/test_annotation_overlay_bitmap_sonar_slice.py tests/gui/test_slice_display_manager_sonar_slice.py -v`
+3. `source .venv/bin/activate && python -m pytest tests/gui/test_overlay_manager_slice.py tests/gui/test_overlay_position_updater_sonar_slice.py tests/test_keyboard_overlay_shortcuts.py tests/test_export_rendering_overlays.py -v`
+4. `source .venv/bin/activate && python -m pytest tests/gui/test_tag_edit_dialog.py tests/test_tag_viewer_dialog.py tests/test_metadata_panel.py tests/test_nested_tag_roundtrip.py -v`
+5. `source .venv/bin/activate && python -m pytest tests/ -v`
+6. `source .venv/bin/activate && python scripts/check_architecture_boundaries.py`
+7. `source .venv/bin/activate && python scripts/check_repo_harness.py`
+8. `source .venv/bin/activate && python scripts/check_user_docs_links.py`
+9. `source .venv/bin/activate && python scripts/agent_smoke_harness.py`
+10. `source .venv/bin/activate && python scripts/git_hook_privacy_checks.py --staged`
 
 Before the final Sonar analysis, manually smoke the changed UI paths using
 synthetic or already-approved non-PHI data only: tag export to CSV/TXT/XLSX,
@@ -281,8 +282,8 @@ Finally, run a fresh local analysis with coverage and report the result against
 the checked-out revision:
 
 ```sh
-python scripts/run_local_sonarqube.py --with-coverage
-python scripts/report_local_sonarqube_issues.py \
+source .venv/bin/activate && python scripts/run_local_sonarqube.py --with-coverage
+source .venv/bin/activate && python scripts/report_local_sonarqube_issues.py \
   --expected-revision "$(git rev-parse HEAD)"
 ```
 
@@ -296,10 +297,11 @@ as a failure of this scoped pass.
 - The combined affected test suite passed: **175 tests plus 3 subtests**.
 - The full `tests/` suite completed successfully (3,633 collected tests).
 - `check_architecture_boundaries.py`, `check_repo_harness.py`,
-  `agent_smoke_harness.py --write-report`, the harness smoke-test suite, and
-  the staged privacy check passed. Each local commit's repository hooks also
-  passed.
-- `python src/main.py` launched without a traceback. The contributor-completed
+  `check_user_docs_links.py`, `agent_smoke_harness.py --write-report`, the
+  harness smoke-test suite, and the staged privacy check passed. Each local
+  commit's repository hooks also passed.
+- `source .venv/bin/activate && python src/main.py` launched without a
+  traceback. The contributor-completed
   interactive manual smoke was reported as looking okay, closing the remaining
   local-desktop visual check.
 - A final local SonarQube report was obtained against

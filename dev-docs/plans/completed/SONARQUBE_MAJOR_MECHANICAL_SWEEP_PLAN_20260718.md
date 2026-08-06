@@ -7,6 +7,11 @@ active priority findings (344 CRITICAL, 110 MAJOR).
 **Post-fix analysis:** scoped reporter **408** active priority findings
 (343 CRITICAL, 65 MAJOR). Targeted rules cleared: `S125` 24 → 0,
 `S1066` 23 → 0, `S1172` 17 → 0.
+**Scope note:** the 64 targeted findings are the per-rule remediation worklist
+across the two mechanical passes. The 454 → 408 priority totals are separate
+all-priority reporter snapshots at their respective scan revisions, so their
+net −46 (−1 CRITICAL, −45 MAJOR) is not an arithmetic cross-check of the
+per-rule worklist; unrelated findings also changed between those snapshots.
 **Predecessor:**
 [`SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md`](SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md)
 
@@ -23,7 +28,8 @@ CRITICAL complexity refactors.
 | `S125` | 24 | 0 |
 | `S1066` | 23 | 0 |
 | `S1172` | 17 | 0 |
-| **Priority total** | **454** | **408** (−46) |
+| **Targeted rule total** | **64** | **0** (−64) |
+| **Scoped priority total** | **454** | **408** (−46; separate snapshot scope) |
 
 ## Approach completed
 

@@ -362,24 +362,27 @@ class DICOMOrganizer:
     def _append_batch_series(
         self,
         batch_series: _BatchSeries,
+        effective_key: str,
         result: MergeResult,
     ) -> None:
         """Append a same-source series, re-sort it, and preserve its existing path mappings."""
         study_uid = batch_series.study_uid
-        series_key = batch_series.base_key
-        existing_datasets = self.studies[study_uid][series_key]
+        existing_datasets = self.studies[study_uid][effective_key]
         existing_tuples = self._series_dataset_path_tuples(
-            study_uid, series_key, existing_datasets, self.file_paths
+            study_uid, effective_key, existing_datasets, self.file_paths
         )
         new_tuples = self._series_dataset_path_tuples(
-            study_uid, series_key, batch_series.datasets, batch_series.file_paths
+            study_uid,
+            batch_series.base_key,
+            batch_series.datasets,
+            batch_series.file_paths,
         )
         with perf_timer("first_paint.merge_batch.apply.resort_appended_series"):
             sorted_slices = self._sort_slices(existing_tuples + new_tuples)
-        self.studies[study_uid][series_key] = [dataset for dataset, _ in sorted_slices]
-        self._add_batch_file_path_mappings(batch_series, series_key)
-        self._update_merged_series_metadata(study_uid, series_key)
-        result.appended_series.append((study_uid, series_key))
+        self.studies[study_uid][effective_key] = [dataset for dataset, _ in sorted_slices]
+        self._add_batch_file_path_mappings(batch_series, effective_key)
+        self._update_merged_series_metadata(study_uid, effective_key)
+        result.appended_series.append((study_uid, effective_key))
 
     def _create_batch_series(
         self,
@@ -396,6 +399,24 @@ class DICOMOrganizer:
         self._update_merged_series_metadata(study_uid, effective_key)
         result.new_series.append((study_uid, effective_key))
 
+    def _find_source_variant_key(
+        self,
+        study_uid: str,
+        base_key: str,
+        source_dir: str,
+    ) -> str | None:
+        """Return the existing source-specific series key for an incoming batch."""
+        variant_prefix = f"{base_key}_v"
+        for (known_study_uid, series_key), known_source_dir in self.series_source_dirs.items():
+            if (
+                known_study_uid == study_uid
+                and known_source_dir == source_dir
+                and series_key.startswith(variant_prefix)
+                and series_key in self.studies[study_uid]
+            ):
+                return series_key
+        return None
+
     def _merge_batch_series(
         self,
         batch_series: _BatchSeries,
@@ -407,6 +428,14 @@ class DICOMOrganizer:
         base_key = batch_series.base_key
         existing_source = self.series_source_dirs.get((study_uid, base_key))
         if existing_source is not None and existing_source != source_dir:
+            existing_variant_key = self._find_source_variant_key(
+                study_uid,
+                base_key,
+                source_dir,
+            )
+            if existing_variant_key is not None:
+                self._append_batch_series(batch_series, existing_variant_key, result)
+                return
             suffix = self._disambiguation_counters.get((study_uid, base_key), 2)
             effective_key = f"{base_key}_v{suffix}"
             self._disambiguation_counters[(study_uid, base_key)] = suffix + 1
@@ -418,7 +447,7 @@ class DICOMOrganizer:
             )
         elif base_key in self.studies[study_uid]:
             self.series_source_dirs[(study_uid, base_key)] = source_dir
-            self._append_batch_series(batch_series, result)
+            self._append_batch_series(batch_series, base_key, result)
         else:
             self._create_batch_series(
                 batch_series,

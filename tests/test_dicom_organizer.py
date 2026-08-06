@@ -392,6 +392,33 @@ def test_merge_batch_handles_empty_new_series_append_skip_and_disambiguation() -
     assert organizer._disambiguation_counters[(STUDY_UID, SERIES_UID)] == 3
 
 
+def test_merge_batch_appends_to_existing_non_base_source_variant() -> None:
+    organizer = DICOMOrganizer()
+    base = _dataset(StudyInstanceUID=STUDY_UID, SeriesInstanceUID=SERIES_UID, InstanceNumber=1)
+    variant_first = _dataset(StudyInstanceUID=STUDY_UID, SeriesInstanceUID=SERIES_UID, InstanceNumber=3)
+    variant_second = _dataset(StudyInstanceUID=STUDY_UID, SeriesInstanceUID=SERIES_UID, InstanceNumber=2)
+
+    organizer.merge_batch([base], ["/tmp/base.dcm"], source_dir="/source/a")
+    first_variant_result = organizer.merge_batch(
+        [variant_first],
+        ["/tmp/variant-first.dcm"],
+        source_dir="/source/b",
+    )
+    second_variant_result = organizer.merge_batch(
+        [variant_second],
+        ["/tmp/variant-second.dcm"],
+        source_dir="/source/b",
+    )
+
+    variant_key = f"{SERIES_UID}_v2"
+    assert first_variant_result.new_series == [(STUDY_UID, variant_key)]
+    assert second_variant_result.appended_series == [(STUDY_UID, variant_key)]
+    assert [ds.InstanceNumber for ds in organizer.studies[STUDY_UID][variant_key]] == [2, 3]
+    assert organizer.series_source_dirs[(STUDY_UID, variant_key)] == "/source/b"
+    assert organizer.get_file_path(STUDY_UID, variant_key, 2) == "/tmp/variant-second.dcm"
+    assert organizer._disambiguation_counters[(STUDY_UID, SERIES_UID)] == 3
+
+
 def test_merge_batch_without_file_paths_tracks_studies_but_not_loaded_paths() -> None:
     organizer = DICOMOrganizer()
     ds = _dataset(StudyInstanceUID=STUDY_UID, SeriesInstanceUID=OTHER_SERIES_UID, InstanceNumber=1)

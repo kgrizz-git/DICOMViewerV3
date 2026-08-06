@@ -361,6 +361,16 @@ class AnnotationManager:
             return QColor(color[0], color[1], color[2])
         return QColor(255, 255, 0)
 
+    @staticmethod
+    def _is_within_image_bounds(
+        x: float,
+        y: float,
+        image_width: float,
+        image_height: float,
+    ) -> bool:
+        """Return whether a point is within the inclusive image bounds."""
+        return 0 <= x <= image_width and 0 <= y <= image_height
+
     def _render_presentation_state_annotation(
         self,
         scene: QGraphicsScene,
@@ -403,7 +413,7 @@ class AnnotationManager:
             return
 
         x, y = coords[0][0], coords[0][1]
-        if not (0 <= x <= image_width and 0 <= y <= image_height):
+        if not self._is_within_image_bounds(x, y, image_width, image_height):
             return
 
         text_item = QGraphicsTextItem(text)
@@ -425,7 +435,12 @@ class AnnotationManager:
             return
 
         first_x, first_y = coords[0][0], coords[0][1]
-        if not (0 <= first_x <= image_width and 0 <= first_y <= image_height):
+        if not self._is_within_image_bounds(
+            first_x,
+            first_y,
+            image_width,
+            image_height,
+        ):
             return
 
         path = QPainterPath()
@@ -509,7 +524,7 @@ class AnnotationManager:
             return
 
         x, y = coords[0][0], coords[0][1]
-        if not (0 <= x <= image_width and 0 <= y <= image_height):
+        if not self._is_within_image_bounds(x, y, image_width, image_height):
             return
 
         radius = 3
