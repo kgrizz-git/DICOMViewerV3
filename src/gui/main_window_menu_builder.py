@@ -397,7 +397,7 @@ def build_menu_bar(main_window) -> None:
         [QKeySequence("Ctrl+-"), QKeySequence("Ctrl+_")]
     )
     main_window.decrease_overlay_font_action.setStatusTip(
-        "Decrease corner-overlay text size (Ctrl/Cmd+- or Ctrl/Cmd+scroll down)"
+        "Decrease corner-overlay text size (Ctrl/Cmd+- or Shift+scroll down)"
     )
     main_window.decrease_overlay_font_action.triggered.connect(
         main_window._on_font_size_decrease
@@ -409,7 +409,7 @@ def build_menu_bar(main_window) -> None:
         [QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")]
     )
     main_window.increase_overlay_font_action.setStatusTip(
-        "Increase corner-overlay text size (Ctrl/Cmd++ or Ctrl/Cmd+scroll up)"
+        "Increase corner-overlay text size (Ctrl/Cmd++ or Shift+scroll up)"
     )
     main_window.increase_overlay_font_action.triggered.connect(
         main_window._on_font_size_increase

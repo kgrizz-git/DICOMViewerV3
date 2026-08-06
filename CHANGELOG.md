@@ -7,6 +7,10 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **Trackpad pinch-to-zoom:** restored the established **Ctrl+scroll** zoom path,
+  including Windows precision touchpads that report a pinch as Ctrl+wheel.
+  **Shift+scroll** now adjusts corner-overlay text size instead. **Semantic
+  versioning note: patch**.
 - **macOS toolbar pop-up menus:** restored an opaque background for the Open and Recent
   folder-menu popups; the toolbar's transparent-widget style was leaking into their
   `QMenu` background. **Semantic versioning note: patch**.
@@ -29,7 +33,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ### Added
 - **Overlay-text quick sizing:** **View → Overlay Text** now includes increase/decrease
-  actions with **Ctrl/Cmd++** / **Ctrl/Cmd+-** shortcuts; **Ctrl/Cmd+scroll** over an
+  actions with **Ctrl/Cmd++** / **Ctrl/Cmd+-** shortcuts; **Shift+scroll** over an
   image pane adjusts the same shared corner-overlay font size. The adjacent toolbar
   **text-size** icon opens compact **− / +** controls for the same setting. **Semantic
   versioning note: patch**.

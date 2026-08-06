@@ -1,6 +1,6 @@
 # Keyboard shortcuts
 
-**Last updated:** 2026-06-16
+**Last updated:** 2026-08-06
 
 A consolidated reference for every keyboard shortcut. The app also shows a built-in list at **Help → Keyboard Shortcuts…** (or **F1**).
 
@@ -66,8 +66,8 @@ These switch the active mouse tool (see [Measurements & annotations](USER_GUIDE_
 | Cycle overlay detail (Simple → Detailed → Hidden, all panes) | **Space** |
 | Legacy overlay-visibility cycle (focused pane) | **Shift+Space** |
 | Overlay Tags Configuration | **Ctrl+Shift+L** |
-| Decrease corner-overlay text | **Ctrl/Cmd+-** or **Ctrl/Cmd+scroll down** over an image pane |
-| Increase corner-overlay text | **Ctrl/Cmd++** or **Ctrl/Cmd+scroll up** over an image pane |
+| Decrease corner-overlay text | **Ctrl/Cmd+-** or **Shift+scroll down** over an image pane |
+| Increase corner-overlay text | **Ctrl/Cmd++** or **Shift+scroll up** over an image pane |
 | DICOM File Info (About this file) | **Ctrl+I** |
 | Histogram | **Ctrl+Shift+H** |
 | Flip horizontal | **Alt+H** |
