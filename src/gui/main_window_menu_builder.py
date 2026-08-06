@@ -390,7 +390,8 @@ def build_menu_bar(main_window) -> None:
     overlay_settings_action.triggered.connect(main_window.overlay_settings_requested.emit)
     view_menu.addAction(overlay_settings_action)
 
-    overlay_text_menu = view_menu.addMenu("Overlay &Text")
+    # Use X as the mnemonic: T is already assigned to the Theme submenu.
+    overlay_text_menu = view_menu.addMenu("Overlay Te&xt")
     main_window.decrease_overlay_font_action = QAction("Decrease Font Size", main_window)
     main_window.decrease_overlay_font_action.setShortcuts(
         [QKeySequence("Ctrl+-"), QKeySequence("Ctrl+_")]

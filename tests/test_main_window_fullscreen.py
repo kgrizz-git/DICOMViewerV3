@@ -20,7 +20,7 @@ if _src not in sys.path:
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent, QKeySequence
+from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QLineEdit
 
 from gui.main_app_key_event_filter import (
@@ -104,6 +104,29 @@ def test_overlay_font_actions_are_available_in_view_menu(qapp):
     assert "Ctrl++" in increase_shortcuts
     assert "Ctrl+=" in increase_shortcuts
     assert "Ctrl+-" in decrease_shortcuts
+    assert "Ctrl+_" in decrease_shortcuts
+
+
+@pytest.mark.qt
+def test_main_window_actions_have_no_duplicate_shortcuts(qapp):
+    """Keep global action accelerators unambiguous as menu actions are added."""
+    w = MainWindow(ConfigManager())
+    actions_by_shortcut: dict[str, list[str]] = {}
+
+    for action in w.findChildren(QAction):
+        for shortcut in action.shortcuts():
+            if shortcut.isEmpty():
+                continue
+            actions_by_shortcut.setdefault(shortcut.toString(), []).append(
+                action.text().replace("&", "")
+            )
+
+    duplicates = {
+        shortcut: actions
+        for shortcut, actions in actions_by_shortcut.items()
+        if len(actions) > 1
+    }
+    assert duplicates == {}
 
 
 @pytest.mark.qt
