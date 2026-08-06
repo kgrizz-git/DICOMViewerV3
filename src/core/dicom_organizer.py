@@ -55,6 +55,15 @@ class MergeResult:
 
 
 @dataclass(frozen=True)
+class _BatchSeries:
+    """One organized incoming series and the file-path mappings produced with it."""
+    study_uid: str
+    base_key: str
+    datasets: list[Dataset]
+    file_paths: dict[tuple[str, str, int], str]
+
+
+@dataclass(frozen=True)
 class MultiFrameSeriesInfo:
     """Per-series summary of multi-frame structure."""
     instance_count: int
@@ -290,6 +299,144 @@ class DICOMOrganizer:
             return int(base_instance) * 10000 + ds._frame_index
         return self._get_tag_value(ds, "InstanceNumber", idx_fallback)
 
+    @staticmethod
+    def _normalize_file_path(path: str) -> str:
+        """Return the canonical form used for the additive-load deduplication set."""
+        return os.path.normpath(os.path.abspath(path))
+
+    def _filter_new_batch_inputs(
+        self,
+        datasets: list[Dataset],
+        file_paths_input: list[str] | None,
+        result: MergeResult,
+    ) -> tuple[list[Dataset], list[str] | None]:
+        """Exclude already-loaded paths while retaining the existing missing-path behavior."""
+        datasets_new: list[Dataset] = []
+        file_paths_new: list[str] | None = [] if file_paths_input is not None else None
+        with perf_timer("first_paint.merge_batch.dedup_filter"):
+            for idx, ds in enumerate(datasets):
+                path = (
+                    file_paths_input[idx]
+                    if file_paths_input is not None and idx < len(file_paths_input)
+                    else None
+                )
+                if path and self._normalize_file_path(path) in self.loaded_file_paths:
+                    result.skipped_file_count += 1
+                    continue
+                datasets_new.append(ds)
+                if file_paths_new is not None and path is not None:
+                    file_paths_new.append(path)
+        return datasets_new, file_paths_new
+
+    def _series_dataset_path_tuples(
+        self,
+        study_uid: str,
+        series_key: str,
+        datasets: list[Dataset],
+        file_paths: dict[tuple[str, str, int], str],
+    ) -> list[tuple[Dataset, str | None]]:
+        """Build sortable dataset/path tuples using the organizer's instance-key convention."""
+        return [
+            (
+                ds,
+                file_paths.get((study_uid, series_key, self._get_instance_identifier(ds, idx))),
+            )
+            for idx, ds in enumerate(datasets)
+        ]
+
+    def _add_batch_file_path_mappings(
+        self,
+        batch_series: _BatchSeries,
+        effective_key: str,
+    ) -> None:
+        """Copy a batch's path mappings, replacing the key for a disambiguated series."""
+        for (study_uid, series_key, instance_num), path in batch_series.file_paths.items():
+            if study_uid == batch_series.study_uid and series_key == batch_series.base_key:
+                self.file_paths[(study_uid, effective_key, instance_num)] = path
+
+    def _update_merged_series_metadata(self, study_uid: str, series_key: str) -> None:
+        """Refresh the cached multi-frame summary after changing one series."""
+        with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
+            self._update_series_multiframe_info(study_uid, series_key)
+
+    def _append_batch_series(
+        self,
+        batch_series: _BatchSeries,
+        result: MergeResult,
+    ) -> None:
+        """Append a same-source series, re-sort it, and preserve its existing path mappings."""
+        study_uid = batch_series.study_uid
+        series_key = batch_series.base_key
+        existing_datasets = self.studies[study_uid][series_key]
+        existing_tuples = self._series_dataset_path_tuples(
+            study_uid, series_key, existing_datasets, self.file_paths
+        )
+        new_tuples = self._series_dataset_path_tuples(
+            study_uid, series_key, batch_series.datasets, batch_series.file_paths
+        )
+        with perf_timer("first_paint.merge_batch.apply.resort_appended_series"):
+            sorted_slices = self._sort_slices(existing_tuples + new_tuples)
+        self.studies[study_uid][series_key] = [dataset for dataset, _ in sorted_slices]
+        self._add_batch_file_path_mappings(batch_series, series_key)
+        self._update_merged_series_metadata(study_uid, series_key)
+        result.appended_series.append((study_uid, series_key))
+
+    def _create_batch_series(
+        self,
+        batch_series: _BatchSeries,
+        effective_key: str,
+        source_dir: str,
+        result: MergeResult,
+    ) -> None:
+        """Store a new base or source-disambiguated series and its batch metadata."""
+        study_uid = batch_series.study_uid
+        self.series_source_dirs[(study_uid, effective_key)] = source_dir
+        self.studies[study_uid][effective_key] = batch_series.datasets
+        self._add_batch_file_path_mappings(batch_series, effective_key)
+        self._update_merged_series_metadata(study_uid, effective_key)
+        result.new_series.append((study_uid, effective_key))
+
+    def _merge_batch_series(
+        self,
+        batch_series: _BatchSeries,
+        source_dir: str,
+        result: MergeResult,
+    ) -> None:
+        """Merge one incoming series as an append, new base series, or source variant."""
+        study_uid = batch_series.study_uid
+        base_key = batch_series.base_key
+        existing_source = self.series_source_dirs.get((study_uid, base_key))
+        if existing_source is not None and existing_source != source_dir:
+            suffix = self._disambiguation_counters.get((study_uid, base_key), 2)
+            effective_key = f"{base_key}_v{suffix}"
+            self._disambiguation_counters[(study_uid, base_key)] = suffix + 1
+            self._create_batch_series(
+                batch_series,
+                effective_key,
+                source_dir,
+                result,
+            )
+        elif base_key in self.studies[study_uid]:
+            self.series_source_dirs[(study_uid, base_key)] = source_dir
+            self._append_batch_series(batch_series, result)
+        else:
+            self._create_batch_series(
+                batch_series,
+                base_key,
+                source_dir,
+                result,
+            )
+
+    def _record_loaded_file_paths(self, file_paths: list[str] | None) -> int:
+        """Record normalized source paths and return the count of distinct additions."""
+        with perf_timer("first_paint.merge_batch.record_loaded_paths"):
+            added_paths = {
+                self._normalize_file_path(path)
+                for path in file_paths or []
+            }
+            self.loaded_file_paths.update(added_paths)
+        return len(added_paths)
+
     def merge_batch(
         self,
         datasets: list[Dataset],
@@ -310,28 +457,9 @@ class DICOMOrganizer:
         if not datasets:
             return result
 
-        # Normalize paths for dedup; build parallel lists of new-only datasets/paths
-        def norm(p: str) -> str:
-            return os.path.normpath(os.path.abspath(p))
-
-        datasets_new: list[Dataset] = []
-        file_paths_new: list[str] | None = [] if file_paths_input is not None else None
-        with perf_timer("first_paint.merge_batch.dedup_filter"):
-            for idx, ds in enumerate(datasets):
-                path = (
-                    file_paths_input[idx]
-                    if file_paths_input is not None and idx < len(file_paths_input)
-                    else None
-                )
-                if path and norm(path) in self.loaded_file_paths:
-                    result.skipped_file_count += 1
-                    continue
-                datasets_new.append(ds)
-                # Preserve behavior: if we don't have a file path for this dataset index,
-                # downstream organization will treat it as missing (no file-path mapping).
-                # We avoid `None` placeholders here to satisfy typing for `_organize_files_into_batch`.
-                if file_paths_new is not None and path is not None:
-                    file_paths_new.append(path)
+        datasets_new, file_paths_new = self._filter_new_batch_inputs(
+            datasets, file_paths_input, result
+        )
 
         if not datasets_new:
             return result
@@ -347,74 +475,18 @@ class DICOMOrganizer:
 
         with perf_timer("first_paint.merge_batch.apply_batch"):
             for study_uid, series_dict in batch_studies.items():
-                if study_uid not in self.studies:
-                    self.studies[study_uid] = {}
+                self.studies.setdefault(study_uid, {})
                 for base_key, new_datasets_list in series_dict.items():
-                    existing_source = self.series_source_dirs.get((study_uid, base_key))
-                    if existing_source is None or existing_source == source_dir:
-                        self.series_source_dirs[(study_uid, base_key)] = source_dir
-                        if base_key in self.studies.get(study_uid, {}):
-                            # Slice append: merge and re-sort; existing file_paths stay, add only new from batch_fp
-                            existing_list = self.studies[study_uid][base_key]
-                            existing_tuples = [
-                                (
-                                    ds,
-                                    self.file_paths.get(
-                                        (study_uid, base_key, self._get_instance_identifier(ds, i))
-                                    ),
-                                )
-                                for i, ds in enumerate(existing_list)
-                            ]
-                            new_tuples = [
-                                (
-                                    ds,
-                                    batch_fp.get(
-                                        (study_uid, base_key, self._get_instance_identifier(ds, i))
-                                    ),
-                                )
-                                for i, ds in enumerate(new_datasets_list)
-                            ]
-                            combined = existing_tuples + new_tuples
-                            with perf_timer("first_paint.merge_batch.apply.resort_appended_series"):
-                                sorted_slices = self._sort_slices(combined)
-                            self.studies[study_uid][base_key] = [ds for ds, _ in sorted_slices]
-                            for k, v in batch_fp.items():
-                                if k[0] == study_uid and k[1] == base_key:
-                                    self.file_paths[k] = v
-                            with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
-                                self._update_series_multiframe_info(study_uid, base_key)
-                            result.appended_series.append((study_uid, base_key))
-                        else:
-                            self.studies[study_uid][base_key] = new_datasets_list
-                            for k, v in batch_fp.items():
-                                if k[0] == study_uid and k[1] == base_key:
-                                    self.file_paths[k] = v
-                            with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
-                                self._update_series_multiframe_info(study_uid, base_key)
-                            result.new_series.append((study_uid, base_key))
-                    else:
-                        n = self._disambiguation_counters.get((study_uid, base_key), 2)
-                        effective_key = f"{base_key}_v{n}"
-                        self._disambiguation_counters[(study_uid, base_key)] = n + 1
-                        self.series_source_dirs[(study_uid, effective_key)] = source_dir
-                        self.studies[study_uid][effective_key] = new_datasets_list
-                        for k, v in batch_fp.items():
-                            if k[0] == study_uid and k[1] == base_key:
-                                self.file_paths[(study_uid, effective_key, k[2])] = v
-                        with perf_timer("first_paint.merge_batch.apply.update_multiframe_info"):  # NOSONAR(S1192) - privacy AST gate requires literal perf labels
-                            self._update_series_multiframe_info(study_uid, effective_key)
-                        result.new_series.append((study_uid, effective_key))
+                    self._merge_batch_series(
+                        _BatchSeries(study_uid, base_key, new_datasets_list, batch_fp),
+                        source_dir,
+                        result,
+                    )
 
         self.presentation_states.update(batch_ps)
         self.key_objects.update(batch_ko)
 
-        with perf_timer("first_paint.merge_batch.record_loaded_paths"):
-            added_paths = set()
-            if file_paths_new:
-                for path in file_paths_new:
-                    added_paths.add(norm(path))
-            self.loaded_file_paths.update(added_paths)
-        result.added_file_count = len(added_paths)
+        result.added_file_count = self._record_loaded_file_paths(file_paths_new)
         perf_mark(
             "first_paint.merge_batch.result_summary",
             new_series=len(result.new_series),
