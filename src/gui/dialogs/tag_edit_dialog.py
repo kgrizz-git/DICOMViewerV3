@@ -82,15 +82,17 @@ class TagEditDialog(QDialog):
         self.setWindowTitle(f"Edit Tag: {tag_name}")
         self.setMinimumWidth(400)
 
-        self._create_ui()
+        self.value_input = self._create_ui()
         self._setup_validation()
 
-    def _create_ui(self) -> None:
+    def _create_ui(self) -> QLineEdit | QDoubleSpinBox | QSpinBox:
         """Create the UI components."""
         layout = QVBoxLayout(self)
         layout.addLayout(self._create_tag_information_layout())
-        layout.addLayout(self._create_value_input_layout())
+        value_layout, value_input = self._create_value_input_layout()
+        layout.addLayout(value_layout)
         layout.addWidget(self._create_button_box())
+        return value_input
 
     def _create_tag_information_layout(self) -> QVBoxLayout:
         """Build the read-only tag identity section."""
@@ -100,13 +102,15 @@ class TagEditDialog(QDialog):
         info_layout.addWidget(QLabel(f"<b>VR:</b> {self.vr}"))
         return info_layout
 
-    def _create_value_input_layout(self) -> QVBoxLayout:
+    def _create_value_input_layout(
+        self,
+    ) -> tuple[QVBoxLayout, QLineEdit | QDoubleSpinBox | QSpinBox]:
         """Build the value label and the VR-appropriate input widget."""
         value_layout = QVBoxLayout()
         value_layout.addWidget(QLabel("Value:"))
-        self.value_input = self._create_value_input()
-        value_layout.addWidget(self.value_input)
-        return value_layout
+        value_input = self._create_value_input()
+        value_layout.addWidget(value_input)
+        return value_layout, value_input
 
     def _create_value_input(self) -> QLineEdit | QDoubleSpinBox | QSpinBox:
         """Return the input control for the dialog's value representation."""
