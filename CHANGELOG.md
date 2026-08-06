@@ -18,6 +18,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Flat-image normalize wraparound:** `normalize_to_uint8` zeroes constant-valued arrays instead of casting to `uint8` (e.g. 1000 → 232). Matches `normalize_channels_to_uint8`. **Semantic versioning note: patch**.
 
 ### Changed
+- **Text-annotation toolbar icon:** replaced the typography/size glyph with a simple
+  **T**, so the annotation tool is distinct from the overlay-text size controls.
+  **Semantic versioning note: patch** (UX clarity).
 - **Metadata-panel tag rows:** added extremely subtle bands derived from the selected accent,
   quieter row separators, and more vertical padding for easier scanning in the left pane.
   **Semantic versioning note: patch** (UX polish).
@@ -27,8 +30,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Added
 - **Overlay-text quick sizing:** **View → Overlay Text** now includes increase/decrease
   actions with **Ctrl/Cmd++** / **Ctrl/Cmd+-** shortcuts; **Ctrl/Cmd+scroll** over an
-  image pane adjusts the same shared corner-overlay font size. **Semantic versioning note:
-  patch**.
+  image pane adjusts the same shared corner-overlay font size. The adjacent toolbar
+  **text-size** icon opens compact **− / +** controls for the same setting. **Semantic
+  versioning note: patch**.
 - **ACR CT CNR intermediates:** the ACR CT result dialog now surfaces the values behind the low-contrast **contrast-to-noise ratio** — object ROI mean, background mean, background noise (σ), and module CNR — and writes them to **`metrics.low_contrast_cnr`** (`object_rois`, `background`, `cnr`) in the JSON/CSV/XLSX exports. **Semantic versioning note: minor** (new user-facing capability).
 - **ACR CT batch analysis:** new **Tools → Automated QA → ACR CT Batch (pylinac)…** runs one shared CT options set over **multiple selected CT series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); the batch summary dialog shows one row per series with **Export XLSX…** / **Export JSON…**. **Semantic versioning note: minor**.
 - **XLSX export for pylinac QA:** the single-run save dialog and the batch summary dialog can export **`.xlsx`** workbooks (**Summary**, **Detail**, and **Images** sheets); the Images sheet embeds pylinac's analyzed composite image per run, degrading gracefully when no image is available. **Semantic versioning note: minor**.

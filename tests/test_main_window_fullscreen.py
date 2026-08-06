@@ -21,7 +21,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
-from PySide6.QtWidgets import QApplication, QLineEdit
+from PySide6.QtWidgets import QApplication, QLineEdit, QToolButton
 
 from gui.main_app_key_event_filter import (
     _escape_may_exit_fullscreen,
@@ -105,6 +105,30 @@ def test_overlay_font_actions_are_available_in_view_menu(qapp):
     assert "Ctrl+=" in increase_shortcuts
     assert "Ctrl+-" in decrease_shortcuts
     assert "Ctrl+_" in decrease_shortcuts
+
+
+@pytest.mark.qt
+def test_overlay_font_toolbar_button_opens_compact_adjustment_controls(qapp):
+    w = MainWindow(ConfigManager())
+
+    assert isinstance(w._overlay_font_size_toolbar_btn, QToolButton)
+    assert (
+        w._overlay_font_size_toolbar_btn.popupMode()
+        == QToolButton.ToolButtonPopupMode.InstantPopup
+    )
+    assert w._overlay_font_size_toolbar_btn.menu() is w.overlay_font_size_toolbar_menu
+
+    popup_buttons = {
+        button.text(): button
+        for button in w.overlay_font_size_toolbar_menu.findChildren(QToolButton)
+    }
+    assert set(popup_buttons) == {"−", "+"}
+
+    initial_size = w.config_manager.get_overlay_font_size()
+    popup_buttons["+"].click()
+    assert w.config_manager.get_overlay_font_size() == min(24, initial_size + 1)
+    popup_buttons["−"].click()
+    assert w.config_manager.get_overlay_font_size() == initial_size
 
 
 @pytest.mark.qt

@@ -10,8 +10,8 @@ in the SVG bytes before rasterising with QSvgRenderer at 48×48 pixels
 Action texts are short labels (≤12 chars) suitable for the "text under icon"
 display mode.  Tooltips always carry the full description and shortcut.
 
-Commented-out items (font size controls, scroll-wheel mode) are intentionally
-preserved for future customisable-toolbar support.
+Commented-out scroll-wheel controls are intentionally preserved for future
+customisable-toolbar support.
 
 Inputs:
     - MainWindow instance with ``config_manager``, ``reset_view_action``,
@@ -22,7 +22,7 @@ Inputs:
 Outputs:
     - QToolBar added to the window.
     - Action/widget references on main_window:
-        main_toolbar, _open_split_btn,
+        main_toolbar, _open_split_btn, _overlay_font_size_toolbar_btn,
         mouse_mode_* actions, series_navigator_action,
         prev/next_series_action, cine_play_pause_action.
     - Toggled-state icon references refreshed on theme change:
@@ -42,9 +42,12 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
+    QHBoxLayout,
     QMenu,
     QToolBar,
     QToolButton,
+    QWidget,
+    QWidgetAction,
 )
 
 # ---------------------------------------------------------------------------
@@ -197,7 +200,11 @@ def build_main_toolbar(main_window) -> None:
         text_under = style == "text_under_icon"
         # The Open and Recent buttons follow the label style but are plain menu
         # buttons (InstantPopup), so they skip the split-button arrow-strip layout.
-        for _plain_btn_attr in ("_open_split_btn", "_recent_toolbar_btn"):
+        for _plain_btn_attr in (
+            "_open_split_btn",
+            "_recent_toolbar_btn",
+            "_overlay_font_size_toolbar_btn",
+        ):
             plain_btn = getattr(main_window, _plain_btn_attr, None)
             if plain_btn is not None:
                 plain_btn.setToolButtonStyle(qt_style)
@@ -326,6 +333,55 @@ def build_main_toolbar(main_window) -> None:
     )
     _ri(main_window.mouse_mode_text_annotation_action, "text-annotation")
     toolbar.addAction(main_window.mouse_mode_text_annotation_action)
+
+    # Keep the overlay-size controls beside text annotation, but distinct from
+    # the annotation tool's simple T icon. The compact palette opens on click.
+    overlay_font_size_btn = QToolButton(toolbar)
+    overlay_font_size_btn.setText("Text Size")
+    overlay_font_size_btn.setToolTip(
+        "Adjust corner-overlay text size (Ctrl/Cmd+- or Ctrl/Cmd++; click for − / +)"
+    )
+    overlay_font_size_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    overlay_font_size_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    overlay_font_size_btn.setStyleSheet(
+        "QToolButton::menu-indicator { image: none; width: 0; }"
+    )
+    _ri(overlay_font_size_btn, "overlay-font-size")
+
+    overlay_font_size_menu = QMenu(overlay_font_size_btn)
+    overlay_font_size_controls = QWidget(overlay_font_size_menu)
+    overlay_font_size_layout = QHBoxLayout(overlay_font_size_controls)
+    overlay_font_size_layout.setContentsMargins(4, 4, 4, 4)
+    overlay_font_size_layout.setSpacing(2)
+
+    def _add_overlay_font_size_button(
+        text: str, tooltip: str, action: QAction
+    ) -> None:
+        button = QToolButton(overlay_font_size_controls)
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setFixedSize(28, 26)
+
+        def _trigger() -> None:
+            action.trigger()
+            overlay_font_size_menu.close()
+
+        button.clicked.connect(_trigger)
+        overlay_font_size_layout.addWidget(button)
+
+    _add_overlay_font_size_button(
+        "−", "Decrease corner-overlay text size", main_window.decrease_overlay_font_action
+    )
+    _add_overlay_font_size_button(
+        "+", "Increase corner-overlay text size", main_window.increase_overlay_font_action
+    )
+    overlay_font_size_widget_action = QWidgetAction(overlay_font_size_menu)
+    overlay_font_size_widget_action.setDefaultWidget(overlay_font_size_controls)
+    overlay_font_size_menu.addAction(overlay_font_size_widget_action)
+    overlay_font_size_btn.setMenu(overlay_font_size_menu)
+    toolbar.addWidget(overlay_font_size_btn)
+    main_window._overlay_font_size_toolbar_btn = overlay_font_size_btn
+    main_window.overlay_font_size_toolbar_menu = overlay_font_size_menu
 
     main_window.mouse_mode_arrow_annotation_action = QAction("Arrow", main_window)
     main_window.mouse_mode_arrow_annotation_action.setCheckable(True)
@@ -544,17 +600,6 @@ def build_main_toolbar(main_window) -> None:
     _apply_label_style(saved_style)
 
     # ── Commented-out items — preserved for customisable-toolbar support ──
-    #
-    # toolbar.addSeparator()
-    # toolbar.addWidget(QLabel("Font Size:"))
-    # font_size_decrease_action = QAction("−", main_window)
-    # font_size_decrease_action.setToolTip("Decrease overlay font size")
-    # font_size_decrease_action.triggered.connect(main_window._on_font_size_decrease)
-    # toolbar.addAction(font_size_decrease_action)
-    # font_size_increase_action = QAction("+", main_window)
-    # font_size_increase_action.setToolTip("Increase overlay font size")
-    # font_size_increase_action.triggered.connect(main_window._on_font_size_increase)
-    # toolbar.addAction(font_size_increase_action)
     #
     # toolbar.addSeparator()
     # spacer = QWidget()
