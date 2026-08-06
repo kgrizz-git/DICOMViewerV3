@@ -8,6 +8,37 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-08-05
 
+- **Merge and resampling Sonar slice:** completed the automated implementation
+  of the two next highest-ranked distinct-file `python:S3776` targets:
+  `DICOMOrganizer.merge_batch` (65) and
+  `ImageResampler.get_resampled_slice` (63). Characterization coverage now
+  locks down additive path/multiframe bookkeeping and sorted-slice, cache, and
+  float32 resampling behavior. The fresh local analysis at `c573548` reported
+  **236** priority findings (238 → 236), with both target findings cleared.
+  Focused tests (117), the full suite (3,639), architecture boundaries, repo
+  harness, automated agent smoke, and staged privacy checks passed. The
+  contributor completed the additive-load and fusion-scrolling interactive
+  smoke successfully; the plan is archived:
+  [Merge and resampling slice](plans/completed/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
+
+- **Portable coverage XML configuration:** enabled `relative_files = True` in
+  `.coveragerc`, so coverage XML names `src` rather than a workstation or
+  scanner-container path. The staged artifact gate now treats this tracked
+  text configuration as content-scanned config rather than an opaque
+  extensionless asset; regression coverage confirms it still blocks local-path
+  content.
+
+- **Top-complexity Sonar slice** on
+  `refactor/sonar-top-complexity-rendering-export`: completed the five selected
+  `python:S3776` refactors in tag export, presentation-state annotations,
+  graphics overlays, and tag-edit dialog construction, with characterization
+  coverage. The final local analysis at `9a08fcd` reported **238** priority
+  findings (243 → 238); every selected target is absent. The remaining seven
+  `S3776` findings in the four touched files remain intentionally deferred.
+  The refactor initially introduced an overlay-helper `S107`; grouping its
+  shared inputs in a private `OverlayTextContext` cleared it before closeout.
+  Plan: [Top-complexity five-function slice](plans/completed/SONARQUBE_TOP_COMPLEXITY_FIVE_FUNCTION_SLICE_PLAN_20260805.md).
+
 - **Sonar new-code coverage batch** on `test/sonar-new-code-coverage` (PR #46,
   22 commits): reorganized `tests/` into source-mirrored suites
   (`tests/core/`, `tests/gui/`, `tests/tools/`, `tests/utils/`) and added unit
@@ -237,13 +268,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 ## 2026-07-18
 
 - Completed the fusion coordinator Sonar finish slice
-  (`plans/SONARQUBE_FUSION_COORDINATOR_FINISH_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_FUSION_COORDINATOR_FINISH_SLICE_PLAN_20260718.md`): extracted
   helpers for `_finish_overlay_series_load`, `get_fused_image`, and
   `_update_spatial_alignment`. Extended
   `tests/gui/test_fusion_coordinator_sonar_slice.py`. Fresh analysis: **287**
   priority findings (down from 290); `fusion_coordinator` `S3776` → 0.
 - Completed the fusion coordinator Sonar first slice
-  (`plans/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_FUSION_COORDINATOR_SLICE_PLAN_20260718.md`): extracted
   helpers for `handle_fusion_enabled_changed`, `_update_base_display`,
   `sync_ui_from_handler_state`, `_update_resampling_status`, and
   `_auto_detect_fusion_candidates`. Added
@@ -251,19 +282,19 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
   priority findings (down from 295); five targeted `S3776` cleared (3 remaining
   in-file deferred: overlay load, fused image, spatial alignment).
 - Completed the ROI coordinator Sonar finish slice
-  (`plans/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_ROI_COORDINATOR_FINISH_SLICE_PLAN_20260718.md`): extracted
   helpers for `handle_roi_drawing_finished`, `handle_roi_delete_requested`,
   `delete_all_rois_current_slice`, and `handle_scene_selection_changed`. Added
   `tests/gui/test_roi_coordinator_sonar_finish_slice.py`. Fresh analysis:
   **295** priority findings (down from 299); `roi_coordinator` `S3776` → 0.
 - Completed the MPR controller Sonar finish slice
-  (`plans/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_MPR_CONTROLLER_FINISH_SLICE_PLAN_20260718.md`): extracted
   helpers for `prompt_save_mpr_as_dicom`, `attach_floating_mpr`,
   `_on_mpr_requested`, and `_reset_window_level_for_mpr`. Extended
   `tests/gui/test_mpr_controller_sonar_slice.py`. Fresh analysis: **299**
   priority findings (down from 303); `mpr_controller` `S3776` → 0.
 - Completed the MPR controller Sonar slice
-  (`plans/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md`): extracted helpers
+  (`plans/completed/SONARQUBE_MPR_CONTROLLER_SLICE_PLAN_20260718.md`): extracted helpers
   for `display_mpr_slice`, `_activate_mpr`, `_tear_down_mpr_at_subwindow`,
   `_install_mpr_payload_at_subwindow`, and `_build_overlay_dataset`. Added
   `tests/gui/test_mpr_controller_sonar_slice.py`. Fresh analysis: **303**
@@ -282,20 +313,20 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
   (down from 399); `S108` at 0; `S1192` remaining **39** (16 in
   `bundled_fonts`).
 - Completed the view state manager Sonar slice
-  (`plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md`): extracted
   helpers for `store_initial_view_state`, `reset_view`,
   `handle_window_changed`, `handle_rescale_toggle`, and
   `handle_viewport_resized`. Added
   `tests/gui/test_view_state_manager_sonar_slice.py`. Fresh analysis: **399**
   priority findings (down from 408); five targeted `S3776` cleared.
 - Completed the Sonar MAJOR mechanical sweep
-  (`plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md`): cleared all open
+  (`plans/completed/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md`): cleared all open
   `python:S125`, `python:S1066`, and `python:S1172` findings (commented-out
   code, collapsible ifs, unused parameters with signature-safe removals or
   `_ = param` retention). Fresh analysis: **408** priority findings (down from
   454); targeted three MAJOR rules at 0.
 - Completed the slice display manager Sonar slice
-  (`plans/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_SLICE_DISPLAY_MANAGER_SLICE_PLAN_20260718.md`): extracted
   helpers for `_render_base_image_pipeline`, `_sync_controls_and_metadata`,
   `_render_scene_overlays_annotations`, `display_rois_for_slice`, and
   `handle_series_navigation`. Added
@@ -303,21 +334,21 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
   **454** priority findings (down from 461); five targeted `S3776` cleared
   (`python:S3776` 282 → 277).
 - Completed the ROI coordinator statistics-path Sonar slice
-  (`plans/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md`): extracted
+  (`plans/completed/SONARQUBE_ROI_COORDINATOR_STATS_SLICE_PLAN_20260718.md`): extracted
   projection/spacing/ownership helpers for
   `_get_pixel_array_for_statistics`, `update_roi_statistics`, and
   `update_roi_statistics_overlays`; removed dead closure-debug code. Added
   `tests/gui/test_roi_coordinator_statistics.py`. Fresh analysis: **461**
   priority findings (down from 464); targeted stats-path `S3776` cleared.
 - Completed the undo/redo annotation-command Sonar slice
-  (`plans/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md`):
+  (`plans/completed/SONARQUBE_UNDO_REDO_ANNOTATION_COMMANDS_SLICE_PLAN_20260718.md`):
   extracted add/remove helpers for `MeasurementCommand`,
   `TextAnnotationCommand`, `ArrowAnnotationCommand`, and `CrosshairCommand`.
   Added `tests/test_undo_redo_annotation_commands.py`. Fresh local analysis +
   scoped reporter: **464** active priority findings (down from 472);
   `undo_redo.py` targeted `S3776` findings cleared (293 → 285 overall).
 - Completed the first CRITICAL code-smell remediation slice
-  (`plans/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md`):
+  (`plans/completed/SONARQUBE_CRITICAL_CODE_SMELL_FIRST_SLICE_PLAN_20260718.md`):
   - **S5727:** removed redundant `None` guards before
     `FusionCoordinator._update_spatial_alignment` cache writes; every branch
     already assigned `(scale, offset)` tuples. Added

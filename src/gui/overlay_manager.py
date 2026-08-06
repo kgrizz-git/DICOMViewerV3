@@ -18,6 +18,7 @@ Requirements:
     - DICOMParser for metadata
 """
 
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QRectF, Qt
@@ -51,6 +52,21 @@ _MPR_BANNER_FONT_MIN_PT = 9
 _MPR_BANNER_FONT_OFFSET_PT = 1
 # Semi-transparent panel so edge direction labels remain visible if overlap occurs.
 _MPR_BANNER_BG_STYLE = "rgba(0, 0, 0, 88)"
+
+
+@dataclass(frozen=True)
+class OverlayTextContext:
+    """Inputs shared by all four graphics-overlay corner renderers."""
+
+    parser: DICOMParser
+    total_slices: int | None
+    projection_enabled: bool
+    projection_start_slice: int | None
+    projection_end_slice: int | None
+    projection_total_thickness: float | None
+    projection_type: str | None
+    multiframe_context: dict[str, Any] | None
+    stack_position: int | None
 
 
 class ViewportOverlayWidget(QWidget):
@@ -551,6 +567,207 @@ class OverlayManager:
             text, x, y, self.font_color, self.font_size, alignment, text_width
         )
 
+    def _store_overlay_context(
+        self,
+        scene,
+        parser: DICOMParser,
+        total_slices: int | None,
+        projection_enabled: bool,
+        projection_start_slice: int | None,
+        projection_end_slice: int | None,
+        projection_total_thickness: float | None,
+        projection_type: str | None,
+        multiframe_context: dict[str, Any] | None,
+        stack_position: int | None,
+    ) -> None:
+        """Record the rendering inputs used when overlays are repositioned."""
+        self.current_parser = parser
+        self.current_scene = scene
+        if total_slices is not None:
+            self.current_total_slices = total_slices
+        self.current_stack_position = stack_position
+        self.current_projection_enabled = projection_enabled
+        self.current_projection_start_slice = projection_start_slice
+        self.current_projection_end_slice = projection_end_slice
+        self.current_projection_total_thickness = projection_total_thickness
+        self.current_projection_type = projection_type
+        self.current_multiframe_context = multiframe_context
+
+    @staticmethod
+    def _first_scene_view(scene):
+        """Return the scene's first view, matching the legacy overlay path."""
+        return scene.views()[0] if scene.views() else None
+
+    @staticmethod
+    def _resolve_scene_dimensions(scene) -> tuple[float, float]:
+        """Resolve graphics-overlay dimensions from the scene, items, or defaults."""
+        scene_rect = scene.sceneRect()
+        if scene_rect.width() > 0 and scene_rect.height() > 0:
+            return scene_rect.width(), scene_rect.height()
+
+        items = scene.items()
+        if items:
+            max_rect = QRectF()
+            for item in items:
+                if hasattr(item, "boundingRect"):
+                    item_rect = item.boundingRect()
+                    if item_rect.width() * item_rect.height() > max_rect.width() * max_rect.height():
+                        max_rect = item_rect
+            if max_rect.width() > 0 and max_rect.height() > 0:
+                return max_rect.width(), max_rect.height()
+        return 800, 600
+
+    @staticmethod
+    def _graphics_corner_anchors(
+        view, scene_width: float, scene_height: float, margin: float
+    ) -> tuple[float, float, list[tuple[str, float, float, Qt.AlignmentFlag]]]:
+        """Return the fixed-scene or viewport-mapped corner anchors."""
+        viewport_to_scene_scale = 1.0
+        corners = [
+            ("upper_left", margin, margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+            ("upper_right", scene_width - margin, margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+            ("lower_left", margin, scene_height - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+            ("lower_right", scene_width - margin, scene_height - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom),
+        ]
+        if view is None:
+            return viewport_to_scene_scale, margin, corners
+
+        viewport_to_scene_scale = 1.0 / graphics_view_uniform_zoom(view)
+        margin_scene = margin * viewport_to_scene_scale
+        viewport = view.viewport()
+        viewport_width = viewport.width()
+        viewport_height = viewport.height()
+        top_left_scene = view.mapToScene(0, 0)
+        top_right_scene = view.mapToScene(viewport_width, 0)
+        bottom_left_scene = view.mapToScene(0, viewport_height)
+        bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
+        corners = [
+            ("upper_left", top_left_scene.x() + margin_scene, top_left_scene.y() + margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+            ("upper_right", top_right_scene.x(), top_right_scene.y() + margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+            ("lower_left", bottom_left_scene.x() + margin_scene, bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+            # Intentionally retain the legacy bottom-left y anchor for rendering parity.
+            ("lower_right", bottom_right_scene.x(), bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom),
+        ]
+        return viewport_to_scene_scale, margin_scene, corners
+
+    def _corner_overlay_text(
+        self,
+        context: OverlayTextContext,
+        tags: list[str],
+    ) -> str:
+        """Build one corner's text with every caller-provided display context."""
+        return get_corner_text(
+            context.parser,
+            tags,
+            self.privacy_mode,
+            context.total_slices,
+            context.projection_enabled,
+            context.projection_start_slice,
+            context.projection_end_slice,
+            context.projection_total_thickness,
+            context.projection_type,
+            context.multiframe_context,
+            context.stack_position,
+        )
+
+    def _track_graphics_overlay_item(self, scene, corner_key: str, item: QGraphicsTextItem) -> None:
+        """Add an overlay item to the scene and the two manager-owned collections."""
+        scene.addItem(item)
+        self.overlay_items.append(item)
+        self.corner_item_map[corner_key].append(item)
+
+    def _right_aligned_text_width(
+        self, lines: list[str], alignment: Qt.AlignmentFlag
+    ) -> float:
+        """Measure the padded fixed document width used by one right corner."""
+        max_text_width_viewport = 0
+        for line in lines:
+            temporary_item = self._create_text_item(line, 0, 0, alignment)
+            max_text_width_viewport = max(
+                max_text_width_viewport, temporary_item.boundingRect().width()
+            )
+        return max_text_width_viewport + 5
+
+    def _render_right_aligned_corner(
+        self,
+        scene,
+        corner_key: str,
+        text: str,
+        x: float,
+        y: float,
+        alignment: Qt.AlignmentFlag,
+        margin_scene: float,
+        viewport_to_scene_scale: float,
+    ) -> None:
+        """Render independent fixed-width lines so a right corner stays aligned."""
+        lines = [line for line in text.split("\n") if line.strip()]
+        max_text_width_viewport = self._right_aligned_text_width(lines, alignment)
+        self.corner_max_width_map[corner_key] = max_text_width_viewport
+        max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
+        left_edge_x = x - margin_scene - max_text_width_scene
+        line_height_viewport = None
+        for line_idx, line in enumerate(lines):
+            text_item = self._create_text_item(
+                line, 0, 0, alignment, text_width=max_text_width_viewport
+            )
+            if line_height_viewport is None:
+                line_height_viewport = text_item.boundingRect().height()
+            line_spacing = line_height_viewport * viewport_to_scene_scale * 0.9
+            if alignment & Qt.AlignmentFlag.AlignBottom:
+                text_y = y - (len(lines) - line_idx) * line_spacing
+            else:
+                text_y = y + line_idx * line_spacing
+            text_item.setPos(left_edge_x, text_y)
+            self._track_graphics_overlay_item(scene, corner_key, text_item)
+
+    def _render_left_aligned_corner(
+        self,
+        scene,
+        corner_key: str,
+        text: str,
+        x: float,
+        y: float,
+        alignment: Qt.AlignmentFlag,
+        viewport_to_scene_scale: float,
+    ) -> None:
+        """Render one multiline text item for a left-aligned corner."""
+        text_item = self._create_text_item(text, x, y, alignment)
+        text_item.setPos(x, y)
+        if alignment & Qt.AlignmentFlag.AlignBottom:
+            text_height_scene = text_item.boundingRect().height() * viewport_to_scene_scale
+            text_item.setPos(text_item.pos().x(), y - text_height_scene)
+        self._track_graphics_overlay_item(scene, corner_key, text_item)
+
+    def _render_graphics_corner(
+        self,
+        scene,
+        context: OverlayTextContext,
+        corner_key: str,
+        x: float,
+        y: float,
+        alignment: Qt.AlignmentFlag,
+        tags: list[str],
+        margin_scene: float,
+        viewport_to_scene_scale: float,
+    ) -> None:
+        """Build and render the configured text for one graphics-overlay corner."""
+        if not tags:
+            return
+        text = self._corner_overlay_text(
+            context,
+            tags,
+        )
+        if not text:
+            return
+        if alignment & Qt.AlignmentFlag.AlignRight:
+            self._render_right_aligned_corner(
+                scene, corner_key, text, x, y, alignment, margin_scene, viewport_to_scene_scale
+            )
+            return
+        self._render_left_aligned_corner(
+            scene, corner_key, text, x, y, alignment, viewport_to_scene_scale
+        )
+
     def create_overlay_items(self, scene, parser: DICOMParser,
                             position: tuple[int, int] = (10, 10),  # pyright: ignore[reportUnusedParameter]
                             total_slices: int | None = None,
@@ -578,230 +795,61 @@ class OverlayManager:
         Returns:
             List of overlay text items
         """
-        # Store current parser and scene for position updates
-        self.current_parser = parser
-        self.current_scene = scene
-        # Store total_slices / stack_position for position updates
-        if total_slices is not None:
-            self.current_total_slices = total_slices
-        self.current_stack_position = stack_position
-        self.current_projection_enabled = projection_enabled
-        self.current_projection_start_slice = projection_start_slice
-        self.current_projection_end_slice = projection_end_slice
-        self.current_projection_total_thickness = projection_total_thickness
-        self.current_projection_type = projection_type
-        self.current_multiframe_context = multiframe_context
-
-        # Get view for QWidget overlay creation
-        view = scene.views()[0] if scene.views() else None
-
-        # Use QWidget overlays if enabled
+        self._store_overlay_context(
+            scene,
+            parser,
+            total_slices,
+            projection_enabled,
+            projection_start_slice,
+            projection_end_slice,
+            projection_total_thickness,
+            projection_type,
+            multiframe_context,
+            stack_position,
+        )
+        view = self._first_scene_view(scene)
         if self.use_widget_overlays and view is not None:
-            return self._create_widget_overlays(view, parser, total_slices, projection_enabled,
-                                                projection_start_slice, projection_end_slice,
-                                                projection_total_thickness, projection_type,
-                                                multiframe_context, stack_position)
+            return self._create_widget_overlays(
+                view, parser, total_slices, projection_enabled, projection_start_slice,
+                projection_end_slice, projection_total_thickness, projection_type,
+                multiframe_context, stack_position,
+            )
 
-        # Clear existing items and corner mapping (QGraphicsItem approach)
         self.clear_overlay_items(scene)
-        # Reset corner mapping
         for corner_key in self.corner_item_map:
             self.corner_item_map[corner_key].clear()
-
-        # Hide overlays based on visibility state
-        # State 1 and 2 hide corner text overlays
         if not self.should_show_text_overlays():
             return []
 
-        # Get modality and corner tags (simple vs simple+detailed extras)
         modality = get_modality(parser)
         corner_tags = self._corner_tags_for_current_mode(modality)
-
-        # Get scene dimensions for positioning
-        # Try to get from scene rect, or use image item if available
-        scene_rect = scene.sceneRect()
-        if scene_rect.width() > 0 and scene_rect.height() > 0:
-            scene_width = scene_rect.width()
-            scene_height = scene_rect.height()
-        else:
-            # Try to get from items in scene (e.g., image item)
-            items = scene.items()
-            if items:
-                # Find the largest item (likely the image)
-                max_rect = QRectF()
-                for item in items:
-                    if hasattr(item, 'boundingRect'):
-                        item_rect = item.boundingRect()
-                        if item_rect.width() * item_rect.height() > max_rect.width() * max_rect.height():
-                            max_rect = item_rect
-                if max_rect.width() > 0 and max_rect.height() > 0:
-                    scene_width = max_rect.width()
-                    scene_height = max_rect.height()
-                else:
-                    scene_width = 800
-                    scene_height = 600
-            else:
-                scene_width = 800
-                scene_height = 600
-
-        margin = 10  # Margin in viewport pixels
-
-        # Get view for coordinate conversion (needed for ItemIgnoresTransformations)
-        view = scene.views()[0] if scene.views() else None
-
-        # Calculate viewport-to-scene scale factor first
-        # This is needed for converting viewport pixel dimensions to scene coordinates
-        # when using ItemIgnoresTransformations
-        if view is not None:
-            # Use uniform zoom (not m11): rotation / flip break m11 as a scalar.
-            view_scale = graphics_view_uniform_zoom(view)
-            viewport_to_scene_scale = 1.0 / view_scale
-        else:
-            viewport_to_scene_scale = 1.0
-
-        # Convert margin from viewport pixels to scene coordinates
-        margin_scene = margin * viewport_to_scene_scale
-
-        # Create overlay for each corner (fallback for when view is None)
-        corners = [
-            ("upper_left", margin, margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-            ("upper_right", scene_width - margin, margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
-            ("lower_left", margin, scene_height - margin, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
-            ("lower_right", scene_width - margin, scene_height - margin, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        ]
-
-        # For ItemIgnoresTransformations items, we need to position based on viewport edges
-        # mapped to scene coordinates, so text stays anchored to viewport when zooming
-        if view is not None:
-            viewport_width = view.viewport().width()
-            viewport_height = view.viewport().height()
-
-            # Map viewport edges to scene coordinates
-            top_left_scene = view.mapToScene(0, 0)
-            top_right_scene = view.mapToScene(viewport_width, 0)
-            bottom_left_scene = view.mapToScene(0, viewport_height)
-            bottom_right_scene = view.mapToScene(viewport_width, viewport_height)
-
-            # Update corner positions based on viewport-to-scene mapping
-            # Use margin_scene (converted to scene coordinates) instead of margin
-            # For right-aligned corners, use the actual right edge (top_right_scene.x()) without subtracting margin
-            # This ensures text is flush with the viewport right edge, matching left-aligned text behavior
-            corners = [
-                ("upper_left", top_left_scene.x() + margin_scene, top_left_scene.y() + margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                ("upper_right", top_right_scene.x(), top_right_scene.y() + margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
-                ("lower_left", bottom_left_scene.x() + margin_scene, bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
-                ("lower_right", bottom_right_scene.x(), bottom_left_scene.y() - margin_scene, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-            ]
-
+        scene_width, scene_height = self._resolve_scene_dimensions(scene)
+        viewport_to_scene_scale, margin_scene, corners = self._graphics_corner_anchors(
+            view, scene_width, scene_height, margin=10
+        )
+        text_context = OverlayTextContext(
+            parser=parser,
+            total_slices=total_slices,
+            projection_enabled=projection_enabled,
+            projection_start_slice=projection_start_slice,
+            projection_end_slice=projection_end_slice,
+            projection_total_thickness=projection_total_thickness,
+            projection_type=projection_type,
+            multiframe_context=multiframe_context,
+            stack_position=stack_position,
+        )
         for corner_key, x, y, alignment in corners:
-            tags = corner_tags.get(corner_key, [])
-            if tags:
-                text = get_corner_text(
-                                    parser, tags, self.privacy_mode, total_slices,
-                                    projection_enabled, projection_start_slice,
-                                    projection_end_slice, projection_total_thickness,
-                                    projection_type, multiframe_context, stack_position
-                                )
-                if text:
-                    # For right-aligned corners, create separate text items for each line
-                    # so each row can be individually right-aligned
-                    is_right_aligned = bool(alignment & Qt.AlignmentFlag.AlignRight)
-
-                    if is_right_aligned:
-                        # Split text into lines and create separate items for each
-                        lines = [line for line in text.split('\n') if line.strip()]  # Filter empty lines
-
-                        # First pass: calculate maximum text width for all lines in viewport pixels
-                        # With ItemIgnoresTransformations, text renders at fixed viewport size
-                        # so we need to calculate width in viewport pixels, then convert to scene coords
-                        max_text_width_viewport = 0
-                        temp_items = []
-                        for line in lines:
-                            temp_item = self._create_text_item(line, 0, 0, alignment)
-                            # Get width in viewport pixels (ItemIgnoresTransformations renders at fixed size)
-                            temp_width = temp_item.boundingRect().width()
-                            max_text_width_viewport = max(max_text_width_viewport, temp_width)
-                            temp_items.append(temp_item)
-
-                        # Clean up temp items
-                        for item in temp_items:
-                            del item
-
-                        # Add some padding to max width for better appearance
-                        max_text_width_viewport += 5
-
-                        # Cache the max width for this corner to prevent jitter during cine playback
-                        # This ensures consistent positioning even when text content changes between slices
-                        self.corner_max_width_map[corner_key] = max_text_width_viewport
-
-                        # Convert viewport pixel width to scene coordinates
-                        # viewport_to_scene_scale is already calculated above for all corners
-                        max_text_width_scene = max_text_width_viewport * viewport_to_scene_scale
-
-                        # Position: right edge should be at (x - margin_scene) in scene coordinates
-                        # where x is the viewport right edge in scene coords
-                        # So left edge is at (x - margin_scene - max_text_width_scene)
-                        # Use margin_scene (converted to scene coordinates) instead of margin
-                        right_edge_x = x - margin_scene  # x is viewport right edge in scene coords
-                        left_edge_x = right_edge_x - max_text_width_scene
-
-                        line_height_viewport = None
-
-                        for line_idx, line in enumerate(lines):
-                            # Create text item with fixed width for right alignment
-                            # Use viewport pixel width for the document
-                            text_item = self._create_text_item(line, 0, 0, alignment, text_width=max_text_width_viewport)
-
-                            # Get line height from first line (in viewport pixels)
-                            if line_height_viewport is None:
-                                line_height_viewport = text_item.boundingRect().height()
-
-                            # Convert line height from viewport pixels to scene coordinates
-                            # This ensures spacing remains constant when zooming
-                            line_height_scene = line_height_viewport * viewport_to_scene_scale
-
-                            # Calculate vertical position based on line index
-                            # Use tighter spacing (0.9) for minimal gaps between lines
-                            # This ensures consistent spacing across all modalities
-                            line_spacing = line_height_scene * 0.9
-                            if alignment & Qt.AlignmentFlag.AlignBottom:
-                                # Bottom alignment: stack from bottom
-                                # y is already the bottom edge position from viewport mapping
-                                text_y = y - (len(lines) - line_idx) * line_spacing
-                            else:
-                                # Top alignment: stack from top
-                                # y is already the top edge position from viewport mapping
-                                text_y = y + line_idx * line_spacing
-
-                            # Position at left edge (right edge will align at right_edge_x)
-                            text_item.setPos(left_edge_x, text_y)
-
-                            scene.addItem(text_item)
-                            self.overlay_items.append(text_item)
-                            # Track this item for this corner
-                            self.corner_item_map[corner_key].append(text_item)
-                    else:
-                        # Left-aligned corners: create single multi-line text item
-                        text_item = self._create_text_item(text, x, y, alignment)
-
-                        # Position: for left-aligned, use viewport edge positions (mapped to scene)
-                        # With ItemIgnoresTransformations, position is in scene coordinates
-                        # x and y are already set from viewport-to-scene mapping
-                        text_item.setPos(x, y)
-
-                        # Adjust y position for bottom alignment
-                        if alignment & Qt.AlignmentFlag.AlignBottom:
-                            # Get text height in viewport pixels (ItemIgnoresTransformations renders at fixed size)
-                            text_height_viewport = text_item.boundingRect().height()
-                            # Convert from viewport pixels to scene coordinates
-                            # This ensures the text stays anchored when zooming
-                            text_height_scene = text_height_viewport * viewport_to_scene_scale
-                            text_item.setPos(text_item.pos().x(), y - text_height_scene)
-
-                        scene.addItem(text_item)
-                        self.overlay_items.append(text_item)
-                        # Track this item for this corner
-                        self.corner_item_map[corner_key].append(text_item)
+            self._render_graphics_corner(
+                scene,
+                text_context,
+                corner_key,
+                x,
+                y,
+                alignment,
+                corner_tags.get(corner_key, []),
+                margin_scene,
+                viewport_to_scene_scale,
+            )
 
         return self.overlay_items
 
@@ -1061,4 +1109,3 @@ class OverlayManager:
                 return
 
         schedule_scene_viewport_repaint(scene, view)
-

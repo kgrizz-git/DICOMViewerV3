@@ -20,6 +20,7 @@ Requirements:
 import logging
 import threading
 from collections import OrderedDict
+from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import numpy as np
@@ -48,6 +49,16 @@ from utils.log_sanitizer import sanitized_format_exc
 _logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _ResamplingContext:
+    """Inputs shared while resolving one cached resampled volume."""
+
+    overlay_series_uid: str | None
+    reference_series_uid: str | None
+    interpolator: str
+    cache_key: tuple[str, str, str] | None
+
+
 class ImageResampler:
     """
     Handles 3D volume resampling for image fusion.
@@ -74,14 +85,14 @@ class ImageResampler:
         if not sitk_available:
             print("Warning: SimpleITK not available. 3D resampling will not work.")
 
-        # Cache for resampled volumes: key = (overlay_uid, base_uid), value = sitk.Image
+        # Cache for resampled volumes: key = (overlay_uid, base_uid, interpolator).
         # OrderedDict for LRU eviction (bounded by _MAX_CACHE_ENTRIES)
-        self._cache: OrderedDict[tuple[str, str], Any] = OrderedDict()
+        self._cache: OrderedDict[tuple[str, str, str], Any] = OrderedDict()
         self._cache_lock = threading.Lock()  # For thread-safe caching
 
         # Numpy array cache: avoids repeated sitk_to_numpy() on every scroll
-        # key = same as _cache (overlay_uid, base_uid), value = np.ndarray (z, y, x)
-        self._numpy_cache: dict[tuple[str, str], np.ndarray] = {}
+        # key = same as _cache, value = np.ndarray (z, y, x)
+        self._numpy_cache: dict[tuple[str, str, str], np.ndarray] = {}
 
         # Sorted reference datasets cache: avoids O(N^2) sort+filter per scroll
         # key = reference_series_uid, value = sorted+filtered dataset list
@@ -464,123 +475,172 @@ class ImageResampler:
         if slice_idx < 0 or not reference_datasets or slice_idx >= len(reference_datasets):
             return None
 
-        # DEBUG: Log slice index mapping from unsorted to sorted order
-        # print(f"[3D RESAMPLE DEBUG] get_resampled_slice: Slice index mapping check")
-        # print(f"[3D RESAMPLE DEBUG]   Requested slice_idx (unsorted): {slice_idx}")
-        # print(f"[3D RESAMPLE DEBUG]   Total reference_datasets (unsorted): {len(reference_datasets)}")
+        sorted_reference_datasets = self._get_sorted_reference_datasets(
+            reference_datasets,
+            reference_series_uid,
+        )
+        sorted_slice_idx = self._get_sorted_slice_index(
+            reference_datasets,
+            slice_idx,
+            sorted_reference_datasets,
+        )
+        normalized_interpolator = interpolator.lower()
+        context = _ResamplingContext(
+            overlay_series_uid=overlay_series_uid,
+            reference_series_uid=reference_series_uid,
+            interpolator=normalized_interpolator,
+            cache_key=self._get_volume_cache_key(
+                use_cache,
+                overlay_series_uid,
+                reference_series_uid,
+                normalized_interpolator,
+            ),
+        )
+        resampled_volume = self._get_resampled_volume(
+            overlay_datasets,
+            reference_datasets,
+            context,
+        )
+        if resampled_volume is None:
+            return None
 
-        # Get the dataset at slice_idx in unsorted reference_datasets
-        target_dataset = reference_datasets[slice_idx]
-        target_slice_loc = getattr(target_dataset, 'SliceLocation', None)
-        if target_slice_loc is None and hasattr(target_dataset, 'ImagePositionPatient'):
-            ipp = target_dataset.ImagePositionPatient
-            target_slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-        # print(f"[3D RESAMPLE DEBUG]   Target dataset at unsorted_idx={slice_idx}: SliceLocation={target_slice_loc}")
+        volume_array = self._get_numpy_volume(resampled_volume, context.cache_key)
+        if volume_array is None or sorted_slice_idx >= volume_array.shape[0]:
+            return None
 
-        # Find its position in sorted datasets (used to create reference_sitk).
-        # Cache the sorted+filtered list to avoid O(N^2) re-sort on every scroll (P1.2).
-        _ref_cache_key = reference_series_uid or ""
-        sorted_reference_datasets = self._sorted_ref_cache.get(_ref_cache_key) if _ref_cache_key else None
+        slice_array = volume_array[sorted_slice_idx]
+        return slice_array if slice_array.dtype == np.float32 else slice_array.astype(np.float32)
+
+    def _get_sorted_reference_datasets(
+        self,
+        reference_datasets: list[Dataset],
+        reference_series_uid: str | None,
+    ) -> list[Dataset]:
+        """Resolve the sorted, duplicate-filtered reference grid for a request."""
+        reference_cache_key = reference_series_uid or ""
+        sorted_reference_datasets = (
+            self._sorted_ref_cache.get(reference_cache_key)
+            if reference_cache_key
+            else None
+        )
         if sorted_reference_datasets is None:
-            sorted_reference_datasets = self._sort_datasets_by_location(reference_datasets)
-            sorted_reference_datasets = self._filter_duplicate_locations(sorted_reference_datasets)
-            if _ref_cache_key:
-                self._sorted_ref_cache[_ref_cache_key] = sorted_reference_datasets
-        # print(f"[3D RESAMPLE DEBUG]   Total sorted reference_datasets: {len(sorted_reference_datasets)}")
+            sorted_reference_datasets = self._filter_duplicate_locations(
+                self._sort_datasets_by_location(reference_datasets)
+            )
+            if reference_cache_key:
+                self._sorted_ref_cache[reference_cache_key] = sorted_reference_datasets
+        return sorted_reference_datasets
 
-        # Map unsorted index to sorted index
-        sorted_slice_idx = slice_idx
+    def _get_sorted_slice_index(
+        self,
+        reference_datasets: list[Dataset],
+        slice_idx: int,
+        sorted_reference_datasets: list[Dataset],
+    ) -> int:
+        """Map an original reference index to the duplicate-filtered grid."""
+        target_dataset = reference_datasets[slice_idx]
         try:
-            sorted_slice_idx = sorted_reference_datasets.index(target_dataset)
-            # print(f"[3D RESAMPLE DEBUG]   Slice index mapping: unsorted_idx={slice_idx} -> sorted_idx={sorted_slice_idx}")
-            if sorted_slice_idx < len(sorted_reference_datasets):
-                sorted_ds = sorted_reference_datasets[sorted_slice_idx]
-                sorted_slice_loc = getattr(sorted_ds, 'SliceLocation', None)
-                if sorted_slice_loc is None and hasattr(sorted_ds, 'ImagePositionPatient'):
-                    ipp = sorted_ds.ImagePositionPatient
-                    sorted_slice_loc = float(ipp[2]) if ipp and len(ipp) >= 3 else None
-                # print(f"[3D RESAMPLE DEBUG]   Sorted dataset at sorted_idx={sorted_slice_idx}: SliceLocation={sorted_slice_loc}")
+            return sorted_reference_datasets.index(target_dataset)
         except ValueError:
-            # Dataset not found in sorted list - may have been filtered as duplicate
-            # Find first dataset at the same location (within tolerance)
             target_location = self._get_location(target_dataset)
             if target_location is not None:
-                # Search for first dataset with same location
-                found = False
-                for idx, ds in enumerate(sorted_reference_datasets):
-                    ds_location = self._get_location(ds)
-                    if ds_location is not None and abs(ds_location - target_location) < 0.01:
-                        sorted_slice_idx = idx
-                        found = True
-                        break
-                if not found:
-                    # Fall back to original index if location not found
-                    sorted_slice_idx = slice_idx
-            else:
-                # No location available, fall back to original index
-                sorted_slice_idx = slice_idx
+                for idx, dataset in enumerate(sorted_reference_datasets):
+                    dataset_location = self._get_location(dataset)
+                    if (
+                        dataset_location is not None
+                        and abs(dataset_location - target_location) < 0.01
+                    ):
+                        return idx
+            return slice_idx
 
-        # Create cache key
-        cache_key = None
+    @staticmethod
+    def _get_volume_cache_key(
+        use_cache: bool,
+        overlay_series_uid: str | None,
+        reference_series_uid: str | None,
+        interpolator: str,
+    ) -> tuple[str, str, str] | None:
+        """Return the series-and-interpolator key only when caching is enabled."""
         if use_cache and overlay_series_uid and reference_series_uid:
-            cache_key = (overlay_series_uid, reference_series_uid)
+            return (overlay_series_uid, reference_series_uid, interpolator.lower())
+        return None
 
-        # Check cache
-        resampled_volume = None
-        if cache_key and use_cache:
-            with self._cache_lock:
-                resampled_volume = self._cache.get(cache_key)
-                if resampled_volume is not None:
-                    self._cache.move_to_end(cache_key)
+    def _get_resampled_volume(
+        self,
+        overlay_datasets: list[Dataset],
+        reference_datasets: list[Dataset],
+        context: _ResamplingContext,
+    ) -> Any | None:
+        """Read or construct the resampled volume and maintain its LRU cache."""
+        resampled_volume = self._get_cached_volume(context.cache_key)
+        if resampled_volume is not None:
+            return resampled_volume
 
-        # Resample if not cached
+        overlay_sitk = self.dicom_series_to_sitk(
+            overlay_datasets,
+            context.overlay_series_uid,
+        )
+        reference_sitk = self.dicom_series_to_sitk(
+            reference_datasets,
+            context.reference_series_uid,
+        )
+        if overlay_sitk is None or reference_sitk is None:
+            return None
+
+        resampled_volume = self.resample_to_reference(
+            overlay_sitk,
+            reference_sitk,
+            context.interpolator,
+        )
         if resampled_volume is None:
-            # Convert to SimpleITK
-            overlay_sitk = self.dicom_series_to_sitk(overlay_datasets, overlay_series_uid)
-            reference_sitk = self.dicom_series_to_sitk(reference_datasets, reference_series_uid)
+            return None
 
-            if overlay_sitk is None or reference_sitk is None:
-                return None
+        self._cache_resampled_volume(context.cache_key, resampled_volume)
+        return resampled_volume
 
-            # Resample overlay to match reference grid
-            resampled_volume = self.resample_to_reference(
-                overlay_sitk,
-                reference_sitk,
-                interpolator
-            )
+    def _get_cached_volume(self, cache_key: tuple[str, str, str] | None) -> Any | None:
+        """Read a volume cache entry and refresh its LRU position."""
+        if cache_key is None:
+            return None
+        with self._cache_lock:
+            resampled_volume = self._cache.get(cache_key)
+            if resampled_volume is not None:
+                self._cache.move_to_end(cache_key)
+            return resampled_volume
 
-            if resampled_volume is None:
-                return None
+    def _cache_resampled_volume(
+        self,
+        cache_key: tuple[str, str, str] | None,
+        resampled_volume: Any,
+    ) -> None:
+        """Store a volume and evict its paired NumPy cache entry with the LRU key."""
+        if cache_key is None:
+            return
+        with self._cache_lock:
+            self._cache[cache_key] = resampled_volume
+            while len(self._cache) > self._MAX_CACHE_ENTRIES:
+                evicted_key, _ = self._cache.popitem(last=False)
+                self._numpy_cache.pop(evicted_key, None)
 
-            # Cache the resampled volume
-            if cache_key and use_cache:
-                with self._cache_lock:
-                    self._cache[cache_key] = resampled_volume
-                    # LRU eviction: remove oldest entries when over capacity
-                    while len(self._cache) > self._MAX_CACHE_ENTRIES:
-                        evicted_key, _ = self._cache.popitem(last=False)
-                        self._numpy_cache.pop(evicted_key, None)
-
-        # Extract requested slice — use cached numpy array to avoid
-        # re-extracting the full 3D volume on every scroll (P1.1).
+    def _get_numpy_volume(
+        self,
+        resampled_volume: Any,
+        cache_key: tuple[str, str, str] | None,
+    ) -> np.ndarray | None:
+        """Read or construct the cached NumPy representation of a volume."""
         volume_array = None
-        if cache_key:
+        if cache_key is not None:
             with self._cache_lock:
                 volume_array = self._numpy_cache.get(cache_key)
         if volume_array is None:
             volume_array = self.sitk_to_numpy(resampled_volume)
             if volume_array is None:
                 return None
-            if cache_key:
+            if cache_key is not None:
                 with self._cache_lock:
-                    self._numpy_cache[cache_key] = volume_array
-
-        if sorted_slice_idx < volume_array.shape[0]:
-            slice_array = volume_array[sorted_slice_idx]
-        else:
-            return None
-
-        return slice_array if slice_array.dtype == np.float32 else slice_array.astype(np.float32)
+                    if self._cache.get(cache_key) is resampled_volume:
+                        self._numpy_cache[cache_key] = volume_array
+        return volume_array
 
     def needs_resampling(
         self,

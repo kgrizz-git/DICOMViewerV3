@@ -5,11 +5,17 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset
 from pydicom.tag import Tag
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGraphicsPathItem, QGraphicsScene, QGraphicsTextItem
+from PySide6.QtWidgets import (
+    QGraphicsEllipseItem,
+    QGraphicsPathItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
 from tools.annotation_manager import AnnotationManager
 
@@ -349,6 +355,115 @@ def test_create_presentation_state_items_uses_bitmap_item_when_available(qapp, m
     assert items == [bitmap_item]
     assert scene.items()
     assert manager.annotations[scene] == [bitmap_item]
+
+
+@pytest.mark.parametrize(
+    ("annotation", "item_type", "expected_color"),
+    [
+        (
+            {"type": "TEXT", "text": "note", "coordinates": [(5, 6)], "color": (1, 2, 3)},
+            QGraphicsTextItem,
+            QColor(1, 2, 3),
+        ),
+        (
+            {"type": "POLYLINE", "coordinates": [(0, 0), (4, 4)]},
+            QGraphicsPathItem,
+            QColor(255, 255, 0),
+        ),
+        (
+            {"type": "CIRCLE", "coordinates": [(10, 10), (13, 10)]},
+            QGraphicsEllipseItem,
+            QColor(255, 255, 0),
+        ),
+        (
+            {"type": "ELLIPSE", "coordinates": [(20, 20), (24, 22), (21, 26)]},
+            QGraphicsEllipseItem,
+            QColor(255, 255, 0),
+        ),
+        (
+            {"type": "POINT", "coordinates": [(30, 30)], "color": "not-a-color-tuple"},
+            QGraphicsEllipseItem,
+            QColor(255, 255, 0),
+        ),
+    ],
+    ids=["text", "polyline", "circle", "ellipse", "point"],
+)
+def test_create_presentation_state_items_registers_each_shape(
+    qapp,
+    annotation,
+    item_type,
+    expected_color,
+):
+    """Each shape keeps its type, style, z-order, scene, and manager tracking."""
+    manager = AnnotationManager()
+    scene = QGraphicsScene()
+
+    items = manager.create_presentation_state_items(scene, [annotation], 100, 100)
+
+    assert len(items) == 1
+    item = items[0]
+    assert isinstance(item, item_type)
+    assert item.scene() is scene
+    assert scene.items() == [item]
+    assert manager.annotations[scene] == [item]
+    assert item.zValue() == 200
+    assert item.isVisible()
+    if isinstance(item, QGraphicsTextItem):
+        assert item.defaultTextColor() == expected_color
+    else:
+        assert item.pen().color() == expected_color
+
+
+def test_create_presentation_state_items_rejects_insufficient_or_out_of_bounds_shapes(qapp):
+    """Minimum-coordinate and established bounds checks remain shape-specific."""
+    manager = AnnotationManager()
+    scene = QGraphicsScene()
+    annotations = [
+        {"type": "TEXT", "text": "outside", "coordinates": [(101, 0)]},
+        {"type": "POLYLINE", "coordinates": [(101, 0), (102, 1)]},
+        {"type": "POLYLINE", "coordinates": [(1, 1)]},
+        {"type": "CIRCLE", "coordinates": [(102, 0), (103, 0)]},
+        {"type": "CIRCLE", "coordinates": [(1, 1)]},
+        {"type": "ELLIPSE", "coordinates": [(-101, 0), (-100, 1), (-99, 2)]},
+        {"type": "ELLIPSE", "coordinates": [(1, 1), (2, 2)]},
+        {"type": "POINT", "coordinates": [(0, 101)]},
+    ]
+
+    assert manager.create_presentation_state_items(scene, annotations, 100, 100) == []
+    assert scene.items() == []
+    assert scene not in manager.annotations
+
+
+def test_create_presentation_state_items_stops_after_a_renderer_error(qapp, monkeypatch):
+    """The public method retains its broad exception boundary around the full loop."""
+    manager = AnnotationManager()
+    scene = QGraphicsScene()
+
+    def _raise_bitmap_error(*_args, **_kwargs):
+        raise RuntimeError("malformed annotation")
+
+    monkeypatch.setattr(manager, "_create_overlay_bitmap_item", _raise_bitmap_error)
+    items = manager.create_presentation_state_items(
+        scene,
+        [
+            {"type": "POINT", "coordinates": [(1, 1)]},
+            {
+                "type": "OVERLAY",
+                "coordinates": [],
+                "overlay_rows": 1,
+                "overlay_cols": 1,
+                "overlay_data": bytes([1]),
+            },
+            {"type": "POINT", "coordinates": [(3, 3)]},
+        ],
+        100,
+        100,
+    )
+
+    assert len(items) == 1
+    assert isinstance(items[0], QGraphicsEllipseItem)
+    assert scene.items() == items
+    assert manager.annotations[scene] == items
 
 
 def test_create_overlay_bitmap_item_and_clear_annotations(qapp):

@@ -42,20 +42,22 @@ echo "[secrets] Scanning reachable history with mandatory Gitleaks..."
 echo "[pyright] Running basedpyright error gate..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_basedpyright_errors.py" || exit 1
 
-# Coverage gate (warn only — does not block push or upload results).
-# Threshold: 50 %. Run pytest-cov locally and parse TOTAL %.
+# Coverage gate (blocks pushes below the required project-wide coverage).
+# Threshold: 60 %. Run pytest-cov locally and parse TOTAL %.
 echo "[coverage] Running pytest --cov=src..."
 COV_OUTPUT="$("$PY_BIN" -m pytest tests --cov=src --cov-report=term -q --no-header 2>&1)" || true
 TOTAL_PCT=$(echo "$COV_OUTPUT" | awk '/^TOTAL/{gsub(/%/,""); print $NF}')
 if [[ -n "$TOTAL_PCT" ]]; then
   echo "[coverage] Total coverage: ${TOTAL_PCT}%"
-  if (( $(echo "$TOTAL_PCT < 50" | bc -l 2>/dev/null || echo 0) )); then
-    echo "[coverage] ⚠  Coverage ${TOTAL_PCT}% is below the 50 % threshold — push allowed, but please improve coverage." >&2
+  if (( $(echo "$TOTAL_PCT < 60" | bc -l 2>/dev/null || echo 0) )); then
+    echo "[coverage] FAIL: Coverage ${TOTAL_PCT}% is below the 60 % threshold." >&2
+    exit 1
   else
-    echo "[coverage] Coverage meets the 50 % threshold."
+    echo "[coverage] Coverage meets the 60 % threshold."
   fi
 else
-  echo "[coverage] Could not determine coverage percentage (continuing)." >&2
+  echo "[coverage] FAIL: Could not determine coverage percentage." >&2
+  exit 1
 fi
 
 # Complexity gate (warn only — does not block push).

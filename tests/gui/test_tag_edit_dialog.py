@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QDialogButtonBox, QMessageBox
+from PySide6.QtWidgets import (
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QLineEdit,
+    QMessageBox,
+    QSpinBox,
+)
 
 from gui.dialogs.tag_edit_dialog import TagEditDialog
 
@@ -47,6 +53,43 @@ def test_read_only_sq_disables_ok(qapp) -> None:
     ok = button_box.button(QDialogButtonBox.StandardButton.Ok)
     assert ok is not None
     assert ok.isEnabled() is False
+    assert isinstance(dlg.value_input, QLineEdit)
+    assert dlg.value_input.isReadOnly() is True
+    assert dlg.value_input.text() == "(Read-only: Complex VR type)"
+    assert dlg.value_input.styleSheet() == "background-color: #f0f0f0; color: #666;"
+
+
+@pytest.mark.qt
+def test_create_ui_configures_float_and_bounded_integer_inputs(qapp) -> None:
+    float_dialog = TagEditDialog(vr="FD", current_value=3.25)
+    assert isinstance(float_dialog.value_input, QDoubleSpinBox)
+    assert float_dialog.value_input.decimals() == 6
+    assert float_dialog.value_input.value() == 3.25
+
+    integer_dialog = TagEditDialog(vr="US", current_value=[42])
+    assert isinstance(integer_dialog.value_input, QSpinBox)
+    assert integer_dialog.value_input.minimum() == 0
+    assert integer_dialog.value_input.maximum() == 65535
+    assert integer_dialog.value_input.value() == 42
+
+
+@pytest.mark.qt
+def test_create_ui_uses_line_edit_for_unsigned_long_and_fallbacks(qapp) -> None:
+    maximum_unsigned_long = 4294967295
+    dialog = TagEditDialog(vr="UL", current_value=[maximum_unsigned_long])
+    assert isinstance(dialog.value_input, QLineEdit)
+    assert dialog.value_input.text() == str(maximum_unsigned_long)
+
+    invalid_dialog = TagEditDialog(vr="UL", current_value="not-a-number")
+    assert isinstance(invalid_dialog.value_input, QLineEdit)
+    assert invalid_dialog.value_input.text() == "0"
+
+
+@pytest.mark.qt
+def test_create_ui_joins_string_list_values(qapp) -> None:
+    dialog = TagEditDialog(vr="LO", current_value=["first", "second"])
+    assert isinstance(dialog.value_input, QLineEdit)
+    assert dialog.value_input.text() == "first, second"
 
 
 @pytest.mark.qt

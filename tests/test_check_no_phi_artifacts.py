@@ -152,12 +152,19 @@ def test_blocks_staged_removal_of_required_gitignore_rule(repo: Path) -> None:
 def test_allows_safe_tracked_environment_templates(repo: Path) -> None:
     _stage(repo, ".env.example", "SONAR_TOKEN=\n")
     _stage(repo, ".envrc", "dotenv_if_exists .env\n")
+    _stage(repo, ".coveragerc", "[run]\nrelative_files = True\n")
 
     assert _run(repo) == 0
 
 
 def test_scans_tracked_envrc_as_text(repo: Path) -> None:
     _stage(repo, ".envrc", 'export recent_files="C:\\\\Users\\\\someone\\\\study.dcm"\n')
+
+    assert _run(repo) == 1
+
+
+def test_scans_tracked_coveragerc_as_text(repo: Path) -> None:
+    _stage(repo, ".coveragerc", "data_file = /Users/someone/.coverage\n")
 
     assert _run(repo) == 1
 

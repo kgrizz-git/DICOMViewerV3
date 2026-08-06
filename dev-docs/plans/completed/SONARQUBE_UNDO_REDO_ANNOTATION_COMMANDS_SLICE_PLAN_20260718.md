@@ -105,12 +105,14 @@ Constraints:
 ## Phase 3 — Verify and close out
 
 - [x] Run focused tests:
-      `python -m pytest tests/test_undo_redo_annotation_commands.py tests/test_undo_redo_roi_commands.py tests/test_roi_delete_resize_handles.py tests/gui/test_measurement_move_tracking.py -v`
-- [x] Run `python scripts/agent_smoke_harness.py`,
-      `python scripts/check_architecture_boundaries.py`, and
-      `python scripts/check_repo_harness.py`.
-- [x] Submit fresh analysis: `python scripts/run_local_sonarqube.py`, then
-      `python scripts/report_local_sonarqube_issues.py --expected-revision "$(git rev-parse HEAD)"`.
+      `source .venv/bin/activate && python -m pytest tests/test_undo_redo_annotation_commands.py tests/test_undo_redo_roi_commands.py tests/test_roi_delete_resize_handles.py tests/gui/test_measurement_move_tracking.py -v`
+- [x] Run `source .venv/bin/activate && python scripts/agent_smoke_harness.py`,
+      `source .venv/bin/activate && python scripts/check_architecture_boundaries.py`,
+      `source .venv/bin/activate && python scripts/check_repo_harness.py`, and
+      `source .venv/bin/activate && python scripts/check_user_docs_links.py`.
+- [x] Submit fresh analysis:
+      `source .venv/bin/activate && python scripts/run_local_sonarqube.py`, then
+      `source .venv/bin/activate && python scripts/report_local_sonarqube_issues.py --expected-revision "$(git rev-parse HEAD)"`.
       Confirm the eight targeted S3776 findings are closed; record the new
       total without treating the absolute count as a hard fail.
 - [x] Update `dev-docs/MAINTENANCE_LOG.md`, a brief `CHANGELOG.md` Unreleased
