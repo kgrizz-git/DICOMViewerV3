@@ -485,5 +485,6 @@ class TestCacheEviction:
                 reference_series_uid="ref",
             ) is not None
 
-        assert ("ov0", "ref") not in resampler._cache
-        assert ("ov0", "ref") not in resampler._numpy_cache
+        evicted_key = ("ov0", "ref", "linear")
+        assert evicted_key not in resampler._cache
+        assert evicted_key not in resampler._numpy_cache

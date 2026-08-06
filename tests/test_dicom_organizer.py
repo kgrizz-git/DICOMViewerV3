@@ -413,9 +413,11 @@ def test_merge_batch_appends_to_existing_non_base_source_variant() -> None:
     variant_key = f"{SERIES_UID}_v2"
     assert first_variant_result.new_series == [(STUDY_UID, variant_key)]
     assert second_variant_result.appended_series == [(STUDY_UID, variant_key)]
+    assert [ds.InstanceNumber for ds in organizer.studies[STUDY_UID][SERIES_UID]] == [1]
     assert [ds.InstanceNumber for ds in organizer.studies[STUDY_UID][variant_key]] == [2, 3]
     assert organizer.series_source_dirs[(STUDY_UID, variant_key)] == "/source/b"
     assert organizer.get_file_path(STUDY_UID, variant_key, 2) == "/tmp/variant-second.dcm"
+    assert organizer.get_file_path(STUDY_UID, variant_key, 3) == "/tmp/variant-first.dcm"
     assert organizer._disambiguation_counters[(STUDY_UID, SERIES_UID)] == 3
 
 

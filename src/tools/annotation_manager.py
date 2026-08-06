@@ -549,7 +549,7 @@ class AnnotationManager:
             self._register_presentation_state_item(scene, bitmap_item, items)
             return
 
-        self._render_overlay_paths(overlay_paths, coords, overlay_paths, pen, color, scene, items)
+        self._render_overlay_paths(overlay_paths, coords, color, scene, items)
 
     def _create_presentation_state_overlay_bitmap(
         self,
@@ -909,8 +909,6 @@ class AnnotationManager:
         self,
         overlay_paths: list[list[tuple[float, float]]],
         coords: list[tuple[float, float]],
-        _paths: list[list[tuple[float, float]]],
-        _pen: QPen,
         color: QColor,
         scene,
         items: list[QGraphicsItem],
@@ -921,8 +919,6 @@ class AnnotationManager:
         Args:
             overlay_paths: List of path coordinate lists
             coords: List of individual coordinates
-            paths: Same as overlay_paths (for compatibility)
-            pen: Pen to use for drawing
             color: Color for paths
             scene: QGraphicsScene to add items to
             items: List to append created items to
