@@ -173,6 +173,7 @@ def test_toolbar_places_export_and_index_immediately_after_open(qapp):
 
     # Recent sits immediately after Open; Export/Index follow.
     assert visible_texts[:5] == ["Open", "Recent", "Export", "Index", "Ellipse"]
+    assert visible_texts.index("Text Size") == visible_texts.index("Overlay") + 1
 
 
 @pytest.mark.qt

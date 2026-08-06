@@ -334,55 +334,6 @@ def build_main_toolbar(main_window) -> None:
     _ri(main_window.mouse_mode_text_annotation_action, "text-annotation")
     toolbar.addAction(main_window.mouse_mode_text_annotation_action)
 
-    # Keep the overlay-size controls beside text annotation, but distinct from
-    # the annotation tool's simple T icon. The compact palette opens on click.
-    overlay_font_size_btn = QToolButton(toolbar)
-    overlay_font_size_btn.setText("Text Size")
-    overlay_font_size_btn.setToolTip(
-        "Adjust corner-overlay text size (Ctrl/Cmd+- or Ctrl/Cmd++; click for − / +)"
-    )
-    overlay_font_size_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-    overlay_font_size_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-    overlay_font_size_btn.setStyleSheet(
-        "QToolButton::menu-indicator { image: none; width: 0; }"
-    )
-    _ri(overlay_font_size_btn, "overlay-font-size")
-
-    overlay_font_size_menu = QMenu(overlay_font_size_btn)
-    overlay_font_size_controls = QWidget(overlay_font_size_menu)
-    overlay_font_size_layout = QHBoxLayout(overlay_font_size_controls)
-    overlay_font_size_layout.setContentsMargins(4, 4, 4, 4)
-    overlay_font_size_layout.setSpacing(2)
-
-    def _add_overlay_font_size_button(
-        text: str, tooltip: str, action: QAction
-    ) -> None:
-        button = QToolButton(overlay_font_size_controls)
-        button.setText(text)
-        button.setToolTip(tooltip)
-        button.setFixedSize(28, 26)
-
-        def _trigger() -> None:
-            action.trigger()
-            overlay_font_size_menu.close()
-
-        button.clicked.connect(_trigger)
-        overlay_font_size_layout.addWidget(button)
-
-    _add_overlay_font_size_button(
-        "−", "Decrease corner-overlay text size", main_window.decrease_overlay_font_action
-    )
-    _add_overlay_font_size_button(
-        "+", "Increase corner-overlay text size", main_window.increase_overlay_font_action
-    )
-    overlay_font_size_widget_action = QWidgetAction(overlay_font_size_menu)
-    overlay_font_size_widget_action.setDefaultWidget(overlay_font_size_controls)
-    overlay_font_size_menu.addAction(overlay_font_size_widget_action)
-    overlay_font_size_btn.setMenu(overlay_font_size_menu)
-    toolbar.addWidget(overlay_font_size_btn)
-    main_window._overlay_font_size_toolbar_btn = overlay_font_size_btn
-    main_window.overlay_font_size_toolbar_menu = overlay_font_size_menu
-
     main_window.mouse_mode_arrow_annotation_action = QAction("Arrow", main_window)
     main_window.mouse_mode_arrow_annotation_action.setCheckable(True)
     main_window.mouse_mode_arrow_annotation_action.setShortcut(QKeySequence("A"))
@@ -531,6 +482,55 @@ def build_main_toolbar(main_window) -> None:
     overlay_toggle_action.triggered.connect(main_window.toggle_overlay_requested.emit)
     _ri(overlay_toggle_action, "overlay-toggle")
     toolbar.addAction(overlay_toggle_action)
+
+    # Keep the corner-overlay size controls with the overlay visibility control,
+    # rather than with the separate text-annotation drawing tool.
+    overlay_font_size_btn = QToolButton(toolbar)
+    overlay_font_size_btn.setText("Text Size")
+    overlay_font_size_btn.setToolTip(
+        "Adjust corner-overlay text size (Ctrl/Cmd+- or Ctrl/Cmd++; click for − / +)"
+    )
+    overlay_font_size_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    overlay_font_size_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    overlay_font_size_btn.setStyleSheet(
+        "QToolButton::menu-indicator { image: none; width: 0; }"
+    )
+    _ri(overlay_font_size_btn, "overlay-font-size")
+
+    overlay_font_size_menu = QMenu(overlay_font_size_btn)
+    overlay_font_size_controls = QWidget(overlay_font_size_menu)
+    overlay_font_size_layout = QHBoxLayout(overlay_font_size_controls)
+    overlay_font_size_layout.setContentsMargins(4, 4, 4, 4)
+    overlay_font_size_layout.setSpacing(2)
+
+    def _add_overlay_font_size_button(
+        text: str, tooltip: str, action: QAction
+    ) -> None:
+        button = QToolButton(overlay_font_size_controls)
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setFixedSize(28, 26)
+
+        def _trigger() -> None:
+            action.trigger()
+            overlay_font_size_menu.close()
+
+        button.clicked.connect(_trigger)
+        overlay_font_size_layout.addWidget(button)
+
+    _add_overlay_font_size_button(
+        "−", "Decrease corner-overlay text size", main_window.decrease_overlay_font_action
+    )
+    _add_overlay_font_size_button(
+        "+", "Increase corner-overlay text size", main_window.increase_overlay_font_action
+    )
+    overlay_font_size_widget_action = QWidgetAction(overlay_font_size_menu)
+    overlay_font_size_widget_action.setDefaultWidget(overlay_font_size_controls)
+    overlay_font_size_menu.addAction(overlay_font_size_widget_action)
+    overlay_font_size_btn.setMenu(overlay_font_size_menu)
+    toolbar.addWidget(overlay_font_size_btn)
+    main_window._overlay_font_size_toolbar_btn = overlay_font_size_btn
+    main_window.overlay_font_size_toolbar_menu = overlay_font_size_menu
 
     toolbar.addSeparator()
 
