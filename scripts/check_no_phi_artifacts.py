@@ -204,6 +204,7 @@ SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 # conventional data suffix. Keep them content-scanned rather than hash-approving
 # them as opaque media.
 TEXT_CONFIG_FILENAMES = {
+    ".coveragerc",
     ".env.example",
     ".envrc",
     ".githooks/pre-push",

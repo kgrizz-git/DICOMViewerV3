@@ -7,6 +7,7 @@
 [run]
 source = src
 branch = True
+relative_files = True
 omit =
     src/__pycache__/*
     src/**/__pycache__/*

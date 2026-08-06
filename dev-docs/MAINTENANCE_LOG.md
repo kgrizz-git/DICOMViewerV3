@@ -8,6 +8,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 
 ## 2026-08-05
 
+- **Portable coverage XML configuration:** enabled `relative_files = True` in
+  `.coveragerc`, so coverage XML names `src` rather than a workstation or
+  scanner-container path. The staged artifact gate now treats this tracked
+  text configuration as content-scanned config rather than an opaque
+  extensionless asset; regression coverage confirms it still blocks local-path
+  content.
+
 - **Top-complexity Sonar slice** on
   `refactor/sonar-top-complexity-rendering-export`: completed the five selected
   `python:S3776` refactors in tag export, presentation-state annotations,
