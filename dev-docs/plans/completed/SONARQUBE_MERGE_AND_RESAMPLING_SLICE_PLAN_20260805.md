@@ -1,7 +1,7 @@
 # Plan: Local SonarQube Merge and Resampling Slice
 
 **Last updated:** 2026-08-05
-**Status:** Implementation complete — manual smoke pending
+**Status:** Implemented
 **Branch:** `refactor/sonar-top-complexity-rendering-export`
 **Scope:** Extend the existing, unpushed PR with two behavior-preserving
 `python:S3776` refactors in two production files.
@@ -162,9 +162,9 @@ for the refactor itself.
   **236** priority findings (238 → 236). It has no open `python:S3776`
   finding at either selected target; the highest remaining one is now
   `ExportManager` at 62.
-- The automated implementation is complete. Retain this active plan until a
-  contributor completes the specified additive-load and fusion-scrolling
-  interactive smoke; then mark it implemented and archive it under
+- Contributor manual smoke passed: the additive different-source load retained
+  one study with two series thumbnails, and fusion overlay scrolling behaved
+  correctly. The implementation plan is ready to archive under
   `plans/completed/`.
 
 ## Verification and acceptance criteria

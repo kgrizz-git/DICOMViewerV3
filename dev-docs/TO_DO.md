@@ -59,7 +59,7 @@ This file tracks active and near-term tasks.
   [MAJOR mechanical sweep](plans/SONARQUBE_MAJOR_MECHANICAL_SWEEP_PLAN_20260718.md),
   [View state manager slice](plans/SONARQUBE_VIEW_STATE_MANAGER_SLICE_PLAN_20260718.md),
   [Top-complexity five-function slice](plans/completed/SONARQUBE_TOP_COMPLEXITY_FIVE_FUNCTION_SLICE_PLAN_20260805.md),
-  [Merge and resampling slice — implementation complete, manual smoke pending](plans/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
+  [Merge and resampling slice](plans/completed/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
 
 
 ## Bugs / Correctness
@@ -216,7 +216,6 @@ This file tracks active and near-term tasks.
 ### Tier B — MPR / 3D / derived DICOM (P1–P2)
 
 - [ ] **[P1]** **2D↔MPR↔3D navigation polish:** extend sync to 3D plane indicator and shared focus behavior where feasible — **Gap:** §3. **Dup:** 3D spikes (MPR plane in 3D).
-- [ ] **[P2]** **Fusion overlays on MPR** — **Gap:** §3. **Dup:** Features (fusion on MPR).
 - [ ] **[P2]** **Interactive oblique MPR** (drag handles / crosshairs) — **Gap:** §3. **Dup:** Features.
 - [ ] **[P1]** **Export AIP/MIP/MinIP stacks** (DICOM + images) — **Gap:** §5. **Dup:** Features (projection export). **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md).
 - [ ] **[P2]** **Save fused view as DICOM (SC)** — **Gap:** §5. **Dup:** Fusion follow-up.

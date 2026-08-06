@@ -17,9 +17,9 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
   **236** priority findings (238 → 236), with both target findings cleared.
   Focused tests (117), the full suite (3,639), architecture boundaries, repo
   harness, automated agent smoke, and staged privacy checks passed. The
-  additive-load and fusion-scrolling interactive smoke remains the required
-  contributor check before the plan can be archived. Plan:
-  [Merge and resampling slice](plans/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
+  contributor completed the additive-load and fusion-scrolling interactive
+  smoke successfully; the plan is archived:
+  [Merge and resampling slice](plans/completed/SONARQUBE_MERGE_AND_RESAMPLING_SLICE_PLAN_20260805.md).
 
 - **Portable coverage XML configuration:** enabled `relative_files = True` in
   `.coveragerc`, so coverage XML names `src` rather than a workstation or
