@@ -299,10 +299,9 @@ as a failure of this scoped pass.
   `agent_smoke_harness.py --write-report`, the harness smoke-test suite, and
   the staged privacy check passed. Each local commit's repository hooks also
   passed.
-- `python src/main.py` launched without a traceback. The required interactive
-  manual smoke could not be completed because the PySide application window
-  was not exposed to the available Computer Use environment; that visual check
-  remains for a local desktop session with approved non-PHI data.
+- `python src/main.py` launched without a traceback. The contributor-completed
+  interactive manual smoke was reported as looking okay, closing the remaining
+  local-desktop visual check.
 - A final local SonarQube report was obtained against
   `9a08fcd4b6930343a771fce5c6c63429c254e08d`; it contains 238 priority
   findings and no selected target location.
