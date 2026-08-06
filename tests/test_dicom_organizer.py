@@ -379,6 +379,8 @@ def test_merge_batch_handles_empty_new_series_append_skip_and_disambiguation() -
     assert append_result.new_series == []
     assert append_result.appended_series == [(STUDY_UID, SERIES_UID)]
     assert [ds.InstanceNumber for ds in organizer.studies[STUDY_UID][SERIES_UID]] == [1, 2]
+    assert organizer.get_file_path(STUDY_UID, SERIES_UID, 1) == "/tmp/append.dcm"
+    assert organizer.get_file_path(STUDY_UID, SERIES_UID, 2) == "/tmp/first.dcm"
 
     assert skip_result.skipped_file_count == 1
     assert skip_result.added_file_count == 0
@@ -400,6 +402,49 @@ def test_merge_batch_without_file_paths_tracks_studies_but_not_loaded_paths() ->
     assert result.added_file_count == 0
     assert organizer.loaded_file_paths == set()
     assert organizer.get_file_path(STUDY_UID, OTHER_SERIES_UID, 1) is None
+
+
+def test_merge_batch_keeps_missing_trailing_path_out_of_file_path_state() -> None:
+    organizer = DICOMOrganizer()
+    mapped = _dataset(StudyInstanceUID=STUDY_UID, SeriesInstanceUID=SERIES_UID, InstanceNumber=1)
+    unmapped = _dataset(StudyInstanceUID=STUDY_UID, SeriesInstanceUID=SERIES_UID, InstanceNumber=2)
+
+    result = organizer.merge_batch([mapped, unmapped], ["/tmp/mapped.dcm"], source_dir="/source/a")
+
+    assert result.new_series == [(STUDY_UID, SERIES_UID)]
+    assert result.added_file_count == 1
+    assert organizer.get_file_path(STUDY_UID, SERIES_UID, 1) == "/tmp/mapped.dcm"
+    assert organizer.get_file_path(STUDY_UID, SERIES_UID, 2) is None
+    assert organizer.loaded_file_paths == {os.path.normpath(os.path.abspath("/tmp/mapped.dcm"))}
+
+
+def test_merge_batch_tracks_multiframe_paths_by_frame_instance_identifier() -> None:
+    organizer = DICOMOrganizer()
+    original = _dataset(
+        StudyInstanceUID=STUDY_UID,
+        SeriesInstanceUID=SERIES_UID,
+        InstanceNumber=4,
+    )
+    frame0 = _dataset()
+    frame1 = _dataset()
+
+    with (
+        patch("core.dicom_organizer.is_multiframe", return_value=True),
+        patch("core.dicom_organizer.get_frame_count", return_value=2),
+        patch("core.dicom_organizer.create_frame_dataset", side_effect=[frame0, frame1]),
+        patch("core.dicom_organizer.classify_frame_type", return_value=FrameType.TEMPORAL),
+    ):
+        result = organizer.merge_batch([original], ["/tmp/multiframe.dcm"], source_dir="/source/a")
+
+    assert result.new_series == [(STUDY_UID, SERIES_UID)]
+    assert [frame._frame_index for frame in organizer.studies[STUDY_UID][SERIES_UID]] == [0, 1]
+    assert organizer.get_file_path(STUDY_UID, SERIES_UID, 40000) == "/tmp/multiframe.dcm"
+    assert organizer.get_file_path(STUDY_UID, SERIES_UID, 40001) == "/tmp/multiframe.dcm"
+    assert organizer.get_series_multiframe_info(STUDY_UID, SERIES_UID) == MultiFrameSeriesInfo(
+        instance_count=1,
+        max_frame_count=2,
+        frame_type=FrameType.TEMPORAL,
+    )
 
 
 def test_remove_series_cleans_paths_loaded_state_and_study_if_last_series() -> None:
