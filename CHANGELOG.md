@@ -13,7 +13,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   range/tree scans remain. Push-scoped (`--from-pre-push-stdin`) and
   `--since-main` options stay available for ad-hoc use. **Semantic versioning
   note: patch** (CI / hooks).
-- **CI basedpyright + lizard:** pyright and pytest jobs install ``lizard`` so
+- **CI basedpyright + lizard:** pytest and pyright jobs install
+  ``requirements-dev.txt`` (shared lizard / basedpyright pins) so
   ``scripts/git_hook_line_complexity.py`` type-checks and its tests run.
   **Semantic versioning note: patch** (CI).
 - **Line-complexity parse-failure safety:** grandfather ratchet skips a file when
