@@ -1,8 +1,17 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-07
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-07
+
+- Documented local SonarQube Community Build persistence (container vs volume,
+  generic shared-server naming, restore-first migration, backups) in
+  [`tools/sonarqube/README.md`](../tools/sonarqube/README.md) and linked it from
+  [`DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md). Branch
+  `chore/local-devtools-hooks-and-docs` is the landing place for related local
+  hook/docs follow-ups.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
 

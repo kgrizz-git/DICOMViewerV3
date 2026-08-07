@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-02
+**Last updated:** 2026-08-07
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -113,12 +113,18 @@ service other than the approved scan.
 The local scan is intentionally **not** a Git hook: it can take time, and
 `--with-coverage` runs the full pytest suite first.
 
-1. Start the existing local SonarQube Community Build service and confirm its UI
-   is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
+1. Start the local SonarQube Community Build **server** (Docker) and confirm its
+   UI is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
    loopback URL such as `http://127.0.0.1:9000`). Remote hosts are rejected so
-   the local analysis token cannot be sent off-machine.
+   the local analysis token cannot be sent off-machine. Use one shared server for
+   all local projects: generic container name (`sonarqube`), durable **named**
+   data volumes, and `--restart unless-stopped`. Prefer restoring an existing
+   data volume (so admin password and tokens keep working) over creating a fresh
+   empty database. Full container-vs-volume explanation, restore steps, and
+   backup notes: [`tools/sonarqube/README.md`](../tools/sonarqube/README.md).
 2. In its UI, create a user or project analysis token at **User → My Account →
-   Security**. Do not put the token in a tracked file. Copy `.env.example` to
+   Security** (skip this if you restored a volume that already has a working
+   token). Do not put the token in a tracked file. Copy `.env.example` to
    ignored `.env` and populate `SONAR_TOKEN`. Both the runner and reporter load
    simple `KEY=VALUE` entries from that file automatically; an explicitly
    exported variable takes precedence. With direnv, also run `direnv allow`.

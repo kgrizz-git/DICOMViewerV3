@@ -6,6 +6,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **Local SonarQube docs:** added [`tools/sonarqube/README.md`](tools/sonarqube/README.md)
+  for shared Community Build persistence (container vs volume, restore-first
+  recovery of admin/tokens, generic container naming) and linked it from
+  developer setup. **Semantic versioning note: patch** (developer docs only).
+
 ---
 
 ## [0.4.0] - (not yet released)

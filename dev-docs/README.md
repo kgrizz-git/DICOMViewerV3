@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-07-27
+**Last updated:** 2026-08-07
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -10,7 +10,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 
 | Document | Purpose |
 |----------|---------|
-| [`DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md) | Environment setup, hooks, troubleshooting installs |
+| [`DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md) | Environment setup, hooks, troubleshooting installs; links local SonarQube persistence at [`../tools/sonarqube/README.md`](../tools/sonarqube/README.md) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human contributor playbook: hooks, CI, releases, pylinac bumps, licenses |
 | [`CODE_DOCUMENTATION.md`](CODE_DOCUMENTATION.md) | Where major UI modules, dialogs, and bundled help files live |
 | [`../AGENTS.md`](../AGENTS.md) | AI agents: venv, privacy rules, run/test commands (short table of contents) |
