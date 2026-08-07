@@ -444,7 +444,7 @@ def _print_violation_groups(
 def _persist_ratchet(
     root: Path,
     gf_path: Path,
-    data: dict,
+    data: GrandfatherData,
     notes: list[str],
     *,
     from_index: bool,
