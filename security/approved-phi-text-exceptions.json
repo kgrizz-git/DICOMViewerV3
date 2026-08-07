@@ -2,7 +2,7 @@
   "purpose": "Reviewed text or spreadsheet exceptions. File exceptions apply only to listed rule categories while their file SHA-256 remains unchanged; occurrence exceptions bind a listed rule to one exact line at one repository path.",
   "files": {
     "security/approved-media-sha256.json": {
-      "sha256": "7eaa989d759f1affb71043108faeb97e4700305a5015aca8ddf2e0725754d77a",
+      "sha256": "260b639fe5155ce11cf3652ef9590c5ed957fc50ca8328a863a8db78dced46f8",
       "allowed_rules": ["patient-name-in-content"]
     },
     "src/utils/privacy/structural_event_schema_v1.json": {

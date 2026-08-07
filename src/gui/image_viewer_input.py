@@ -167,14 +167,29 @@ class ImageViewerInputMixin:
     def wheelEvent(self, event: QWheelEvent) -> None:
         """
         Handle mouse wheel events for zooming or slice navigation.
-        Ctrl+wheel is always treated as zoom (e.g. Windows trackpad pinch sent as Ctrl+wheel).
+        Ctrl+wheel remains zoom for Windows trackpad pinch compatibility;
+        Shift+wheel adjusts the shared corner-overlay font size.
         """
-        # Ctrl+wheel: always zoom (common for trackpad pinch on Windows)
-        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        modifiers = event.modifiers()
+        # Preserve the established Ctrl+wheel zoom route. Windows precision
+        # touchpads can report pinch gestures this way instead of as a native
+        # gesture event.
+        if modifiers & Qt.KeyboardModifier.ControlModifier:
             if event.angleDelta().y() > 0:
                 self.zoom_in()
             elif event.angleDelta().y() < 0:
                 self.zoom_out()
+            event.accept()
+            return
+        # Shift is intentionally the only modifier accepted for font sizing, so
+        # Cmd/Meta and any other modified wheel gesture retain normal behavior.
+        if modifiers == Qt.KeyboardModifier.ShiftModifier:
+            delta = event.angleDelta()
+            delta_y = delta.y() or delta.x()
+            if delta_y > 0:
+                self.overlay_font_size_adjust_requested.emit(1)
+            elif delta_y < 0:
+                self.overlay_font_size_adjust_requested.emit(-1)
             event.accept()
             return
         # Use scroll wheel mode to determine behavior

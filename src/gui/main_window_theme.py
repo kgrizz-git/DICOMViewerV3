@@ -21,9 +21,37 @@ Requirements:
 """
 
 import sys
+from colorsys import hsv_to_rgb, rgb_to_hsv
 from pathlib import Path
 
 from PySide6.QtGui import QColor
+
+
+def _blend_hex_colors(base: str, tint: str, tint_fraction: float) -> str:
+    """Return *base* with a restrained amount of *tint* mixed in."""
+    base_rgb = tuple(int(base[index : index + 2], 16) for index in (1, 3, 5))
+    tint_rgb = tuple(int(tint[index : index + 2], 16) for index in (1, 3, 5))
+    fraction = max(0.0, min(1.0, tint_fraction))
+    mixed = tuple(
+        round(base_channel * (1.0 - fraction) + tint_channel * fraction)
+        for base_channel, tint_channel in zip(base_rgb, tint_rgb, strict=True)
+    )
+    return "#" + "".join(f"{channel:02x}" for channel in mixed)
+
+
+def _boost_hex_saturation(color: str, factor: float) -> str:
+    """Increase a dark tint's chroma without making its value brighter."""
+    red, green, blue = (int(color[index : index + 2], 16) / 255 for index in (1, 3, 5))
+    hue, saturation, value = rgb_to_hsv(red, green, blue)
+    saturated = hsv_to_rgb(hue, min(1.0, saturation * factor), value)
+    return "#" + "".join(f"{round(channel * 255):02x}" for channel in saturated)
+
+
+def metadata_tag_band_color(theme: str, accent: str) -> str:
+    """Return the restrained, accent-derived alternate-row color for metadata tags."""
+    if theme == "dark":
+        return _boost_hex_saturation(_blend_hex_colors("#141414", accent, 0.045), 1.18)
+    return _blend_hex_colors("#ffffff", accent, 0.08)
 
 
 def _themes_dir() -> Path:
@@ -50,6 +78,10 @@ def get_theme_stylesheet(
 
     Loads the QSS from ``resources/themes/{theme}.qss`` and substitutes the
     checkmark image paths and accent colour placeholders before returning.
+    Missing theme files fall back to ``light.qss``; ``{metadata_tag_band}`` is
+    derived from that *effective* resolved theme (``qss_file.stem``), not the
+    originally requested name, so a dark request that lands on light QSS still
+    gets a light-appropriate band tint.
 
     QSS placeholder tokens substituted:
 
@@ -59,6 +91,7 @@ def get_theme_stylesheet(
     * ``{accent_dark}``   – darker accent (light-theme hover/press states)
     * ``{accent_soft}``   – pale accent tint for readable light-theme rows
     * ``{accent_muted}``  – dark accent tint for readable dark-theme rows
+    * ``{metadata_tag_band}`` – deliberately subtle tint for metadata row bands
 
     Args:
         theme: ``"light"`` or ``"dark"``
@@ -69,6 +102,7 @@ def get_theme_stylesheet(
 
     Returns:
         Stylesheet string to pass to ``QApplication.instance().setStyleSheet()``.
+        Empty string if neither the requested nor the light fallback QSS exists.
     """
     from gui.accent_presets import get_preset
 
@@ -80,7 +114,10 @@ def get_theme_stylesheet(
         # Keep startup resilient in mis-packaged bundles: log and continue unstyled.
         print("Warning: Theme stylesheet resources were not found.")
         return ""
+    # Stem of the resolved file (may differ from *theme* after light.qss fallback).
+    effective_theme = qss_file.stem
     preset = get_preset(accent_id)
+    metadata_tag_band = metadata_tag_band_color(effective_theme, preset.accent)
     stylesheet = qss_file.read_text(encoding="utf-8")
     return (
         stylesheet
@@ -91,6 +128,7 @@ def get_theme_stylesheet(
         .replace("{accent_dark}", preset.accent_dark)
         .replace("{accent_soft}", preset.accent_soft)
         .replace("{accent_muted}", preset.accent_muted)
+        .replace("{metadata_tag_band}", metadata_tag_band)
     )
 
 

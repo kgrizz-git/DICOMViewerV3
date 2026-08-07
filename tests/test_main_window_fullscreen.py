@@ -20,8 +20,8 @@ if _src not in sys.path:
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent, QKeySequence
-from PySide6.QtWidgets import QApplication, QLineEdit
+from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
+from PySide6.QtWidgets import QApplication, QLineEdit, QToolButton
 
 from gui.main_app_key_event_filter import (
     _escape_may_exit_fullscreen,
@@ -91,6 +91,69 @@ def test_fullscreen_action_is_available_from_toolbar(qapp):
 
 
 @pytest.mark.qt
+def test_overlay_font_actions_are_available_in_view_menu(qapp):
+    w = MainWindow(ConfigManager())
+
+    assert w.increase_overlay_font_action is not None
+    assert w.decrease_overlay_font_action is not None
+    assert w.increase_overlay_font_action.text() == "Increase Font Size"
+    assert w.decrease_overlay_font_action.text() == "Decrease Font Size"
+
+    increase_shortcuts = {shortcut.toString() for shortcut in w.increase_overlay_font_action.shortcuts()}
+    decrease_shortcuts = {shortcut.toString() for shortcut in w.decrease_overlay_font_action.shortcuts()}
+    assert "Ctrl++" in increase_shortcuts
+    assert "Ctrl+=" in increase_shortcuts
+    assert "Ctrl+-" in decrease_shortcuts
+    assert "Ctrl+_" in decrease_shortcuts
+
+
+@pytest.mark.qt
+def test_overlay_font_toolbar_button_opens_compact_adjustment_controls(qapp):
+    w = MainWindow(ConfigManager())
+
+    assert isinstance(w._overlay_font_size_toolbar_btn, QToolButton)
+    assert (
+        w._overlay_font_size_toolbar_btn.popupMode()
+        == QToolButton.ToolButtonPopupMode.InstantPopup
+    )
+    assert w._overlay_font_size_toolbar_btn.menu() is w.overlay_font_size_toolbar_menu
+
+    popup_buttons = {
+        button.text(): button
+        for button in w.overlay_font_size_toolbar_menu.findChildren(QToolButton)
+    }
+    assert set(popup_buttons) == {"−", "+"}
+
+    initial_size = w.config_manager.get_overlay_font_size()
+    popup_buttons["+"].click()
+    assert w.config_manager.get_overlay_font_size() == min(24, initial_size + 1)
+    popup_buttons["−"].click()
+    assert w.config_manager.get_overlay_font_size() == initial_size
+
+
+@pytest.mark.qt
+def test_main_window_actions_have_no_duplicate_shortcuts(qapp):
+    """Keep global action accelerators unambiguous as menu actions are added."""
+    w = MainWindow(ConfigManager())
+    actions_by_shortcut: dict[str, list[str]] = {}
+
+    for action in w.findChildren(QAction):
+        for shortcut in action.shortcuts():
+            if shortcut.isEmpty():
+                continue
+            actions_by_shortcut.setdefault(shortcut.toString(), []).append(
+                action.text().replace("&", "")
+            )
+
+    duplicates = {
+        shortcut: actions
+        for shortcut, actions in actions_by_shortcut.items()
+        if len(actions) > 1
+    }
+    assert duplicates == {}
+
+
+@pytest.mark.qt
 def test_toolbar_places_export_and_index_immediately_after_open(qapp):
     w = MainWindow(ConfigManager())
     assert w.main_toolbar is not None
@@ -110,6 +173,7 @@ def test_toolbar_places_export_and_index_immediately_after_open(qapp):
 
     # Recent sits immediately after Open; Export/Index follow.
     assert visible_texts[:5] == ["Open", "Recent", "Export", "Index", "Ellipse"]
+    assert visible_texts.index("Text Size") == visible_texts.index("Overlay") + 1
 
 
 @pytest.mark.qt

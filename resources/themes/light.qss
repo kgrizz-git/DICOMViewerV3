@@ -77,6 +77,15 @@
                 QToolBar QWidget {
                     background-color: transparent;
                 }
+
+                /* Toolbar menu buttons own popup QMenus. Without this override the
+                   broad QToolBar QWidget rule above makes those popups transparent
+                   on macOS. */
+                QToolBar QMenu {
+                    background-color: #f0f0f0;
+                    color: #000000;
+                    border: 1px solid #c0c0c0;
+                }
                 
                 /* Toolbar combobox - override transparent background */
                 QToolBar QComboBox {
@@ -169,6 +178,17 @@
                 
                 QTreeWidget::item:selected, QTableWidget::item:selected, QListWidget::item:selected {
                     background-color: {accent};
+                }
+
+                /* The left-pane tag list gets a low-contrast version of the selected
+                   accent: enough for tracking, but never a competing visual band. */
+                QTreeWidget#metadata_tag_tree {
+                    alternate-background-color: {metadata_tag_band};
+                }
+
+                QTreeWidget#metadata_tag_tree::item {
+                    padding: 3px 2px;
+                    border-bottom: 1px solid #e7eaed;
                 }
                 
                 /* Headers */
@@ -506,5 +526,3 @@
                     background-color: #e4e4e4;
                     color: #3a3a3a;
                 }
-            
-        

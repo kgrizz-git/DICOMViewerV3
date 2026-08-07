@@ -390,6 +390,32 @@ def build_menu_bar(main_window) -> None:
     overlay_settings_action.triggered.connect(main_window.overlay_settings_requested.emit)
     view_menu.addAction(overlay_settings_action)
 
+    # Use X as the mnemonic: T is already assigned to the Theme submenu.
+    overlay_text_menu = view_menu.addMenu("Overlay Te&xt")
+    main_window.decrease_overlay_font_action = QAction("Decrease Font Size", main_window)
+    main_window.decrease_overlay_font_action.setShortcuts(
+        [QKeySequence("Ctrl+-"), QKeySequence("Ctrl+_")]
+    )
+    main_window.decrease_overlay_font_action.setStatusTip(
+        "Decrease corner-overlay text size (Ctrl/Cmd+- or Shift+scroll down)"
+    )
+    main_window.decrease_overlay_font_action.triggered.connect(
+        main_window._on_font_size_decrease
+    )
+    overlay_text_menu.addAction(main_window.decrease_overlay_font_action)
+
+    main_window.increase_overlay_font_action = QAction("Increase Font Size", main_window)
+    main_window.increase_overlay_font_action.setShortcuts(
+        [QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")]
+    )
+    main_window.increase_overlay_font_action.setStatusTip(
+        "Increase corner-overlay text size (Ctrl/Cmd++ or Shift+scroll up)"
+    )
+    main_window.increase_overlay_font_action.triggered.connect(
+        main_window._on_font_size_increase
+    )
+    overlay_text_menu.addAction(main_window.increase_overlay_font_action)
+
     annotation_options_action = QAction("Annotation &Options...", main_window)
     annotation_options_action.triggered.connect(main_window.annotation_options_requested.emit)
     view_menu.addAction(annotation_options_action)
