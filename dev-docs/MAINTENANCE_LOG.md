@@ -9,6 +9,10 @@ This file records development and repository-maintenance history that is useful 
 - Restored **full-history Gitleaks on local pre-push** (same as CI; ~1s on this
   repo). Push-scoped `--from-pre-push-stdin` remains for optional ad-hoc use.
 
+- **Grandfather ratchet:** staged line/CCN improvements automatically lower or
+  drop caps in `line_complexity_grandfather.json` and `git add` the file into
+  the same commit so ceilings cannot climb back up.
+
 - Added **CI full-history Gitleaks** to `privacy-gates.yml` Detect Secrets
   (pinned 8.30.1 binary + redacted wrapper). Raised CI coverage
   floor from 60% to **65%** (measured TOTAL ~67%).

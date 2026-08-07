@@ -73,7 +73,8 @@ else
 fi
 
 # Line-count and complexity gate: warn at 600 lines, block at 750; block CCN>20.
-# Grandfathered files/functions (scripts/line_complexity_grandfather.json) warn only.
+# Grandfathered files/functions (scripts/line_complexity_grandfather.json) warn
+# only at/below their cap; growth blocks. Improved caps auto-ratchet downward.
 echo "[line-complexity] Checking staged files for line count and complexity..."
 "$PY_BIN" "$REPO_ROOT/scripts/git_hook_line_complexity.py" --staged || exit 1
 

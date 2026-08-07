@@ -13,6 +13,10 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   range/tree scans remain. Push-scoped (`--from-pre-push-stdin`) and
   `--since-main` options stay available for ad-hoc use. **Semantic versioning
   note: patch** (CI / hooks).
+- **Line-complexity grandfather ratchet:** pre-commit automatically lowers or
+  removes caps in `scripts/line_complexity_grandfather.json` when staged files
+  improve, and stages the JSON into the same commit. **Semantic versioning
+  note: patch** (developer tooling).
 - **Coverage floor 65%:** CI `pytest` uses `--cov-fail-under=65` (was 60). Local
   measured TOTAL coverage is about **67%**. **Semantic versioning note: patch**.
 - **Pre-push speed:** removed the full `pytest --cov` run from

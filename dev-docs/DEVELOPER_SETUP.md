@@ -75,7 +75,10 @@ immediately without re-running the installer.
 (**CCN**) above **20**. Paths already over threshold are listed in
 `scripts/line_complexity_grandfather.json` with their measured size/CCN: staying
 at or below that baseline warns only; **growing past the recorded baseline
-blocks** (regression). Refresh the baseline with
+blocks** (regression). When a staged change **improves** a grandfathered
+file/function, the hook **ratchets the cap down** (or removes the entry if it
+falls under the block threshold) and `git add`s the JSON into the same commit
+so the ceiling cannot climb back up later. Refresh the full baseline with
 `python scripts/git_hook_line_complexity.py --all --generate-grandfather`
 (requires `lizard` from `requirements-dev.txt`). Use `--all` (worktree) for
 visibility; `--staged` reads the Git index (correct for the hook).

@@ -450,3 +450,72 @@ def test_check_files_all_mode_uses_worktree_not_index(
 
     assert result == 1
     assert "FAIL" in capsys.readouterr().out
+
+
+def test_ratchet_lowers_file_cap_on_improvement() -> None:
+    body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(780))
+    violations = ghlc.analyze_content("big.py", body)
+    data: dict = {"files": {"big.py": 900}, "functions": {}}
+    notes = ghlc.ratchet_grandfather(data, "big.py", violations)
+    assert data["files"]["big.py"] == 781
+    assert any("900 -> 781" in note for note in notes)
+
+
+def test_ratchet_removes_file_cap_when_under_block_threshold() -> None:
+    body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(700))
+    violations = ghlc.analyze_content("big.py", body)
+    data: dict = {"files": {"big.py": 900}, "functions": {}}
+    notes = ghlc.ratchet_grandfather(data, "big.py", violations)
+    assert "big.py" not in data["files"]
+    assert any("removed file cap" in note for note in notes)
+
+
+def test_ratchet_removes_stale_function_cap() -> None:
+    body = '"""Module."""\n\ndef small():\n    return 1\n'
+    violations = ghlc.analyze_content("mod.py", body)
+    data: dict = {
+        "files": {},
+        "functions": {"mod.py::gone": 25},
+    }
+    notes = ghlc.ratchet_grandfather(data, "mod.py", violations)
+    assert "mod.py::gone" not in data["functions"]
+    assert any("removed function cap" in note for note in notes)
+
+
+def test_check_files_ratchet_persists_lower_cap(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    tmp_gf = tmp_path / "grandfather.json"
+    tmp_gf.write_text(
+        '{"files": {"big.py": 900}, "functions": {}}', encoding="utf-8"
+    )
+    big = tmp_path / "big.py"
+    big.write_text(
+        '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800)),
+        encoding="utf-8",
+    )
+    staged: list[str] = []
+    monkeypatch.setattr(
+        ghlc,
+        "stage_grandfather_file",
+        lambda root, path: staged.append(str(path)),
+    )
+    monkeypatch.setattr(
+        ghlc,
+        "staged_file_content",
+        lambda root, relpath: (tmp_path / relpath).read_text(encoding="utf-8"),
+    )
+
+    result = ghlc.check_files(
+        tmp_path,
+        ["big.py"],
+        from_index=True,
+        grandfather_path=tmp_gf,
+        ratchet=True,
+    )
+
+    saved = json.loads(tmp_gf.read_text(encoding="utf-8"))
+    assert result == 0
+    assert saved["files"]["big.py"] == 801
+    assert staged == [str(tmp_gf)]
+    assert "Ratcheted" in capsys.readouterr().out

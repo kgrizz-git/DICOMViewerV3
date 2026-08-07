@@ -12,6 +12,10 @@ Grandfathering:
   baseline produce a warning but do NOT block the commit. Any increase
   above the recorded baseline is a regression and blocks the commit.
   New violations (not in the grandfather list) also block the commit.
+  When a staged check finds a grandfathered item has improved (smaller
+  size/CCN), the recorded cap is automatically ratcheted down (or removed
+  if the item falls under the block threshold) and the updated JSON is
+  staged so it lands in the same commit — preventing later climbs back up.
   Regenerating the baseline (``--generate-grandfather``) rewrites the
   list from scratch, so entries for files that have since shrunk below
   the threshold are dropped.
@@ -43,6 +47,9 @@ BLOCK_LINES = 750
 BLOCK_CCN = 20
 
 GRANDFATHER_PATH = Path(__file__).resolve().parent / "line_complexity_grandfather.json"
+
+# Grandfather allowlist shape: per-file and per-function recorded baselines.
+GrandfatherData = dict[str, dict[str, int]]
 
 
 @dataclass
@@ -160,7 +167,7 @@ def worktree_file_content(root: Path, relpath: str) -> str | None:
         return None
 
 
-def load_grandfather(path: Path | None = None) -> dict:
+def load_grandfather(path: Path | None = None) -> GrandfatherData:
     """Load the grandfather JSON allowlist (empty structure when missing)."""
 
     grandfather_path = path or GRANDFATHER_PATH
@@ -170,7 +177,7 @@ def load_grandfather(path: Path | None = None) -> dict:
         return json.load(f)
 
 
-def save_grandfather(data: dict, path: Path | None = None) -> None:
+def save_grandfather(data: GrandfatherData, path: Path | None = None) -> None:
     """Write the grandfather JSON allowlist with stable formatting."""
 
     grandfather_path = path or GRANDFATHER_PATH
@@ -254,7 +261,7 @@ def analyze_content(relpath: str, content: str, *, lizard_module=None) -> list[V
     return violations
 
 
-def mark_grandfathered(violations: list[Violation], data: dict) -> None:
+def mark_grandfathered(violations: list[Violation], data: GrandfatherData) -> None:
     """Record blocking violations into a grandfather dict (in place)."""
 
     for v in violations:
@@ -266,7 +273,7 @@ def mark_grandfathered(violations: list[Violation], data: dict) -> None:
             data["functions"].setdefault(f"{v.relpath}::{v.label}", v.value)
 
 
-def _grandfather_baseline(data: dict, violation: Violation) -> int | None:
+def _grandfather_baseline(data: GrandfatherData, violation: Violation) -> int | None:
     """Return the recorded baseline for ``violation``, or ``None`` if absent."""
 
     if violation.kind == "file_lines":
@@ -281,7 +288,7 @@ def _grandfather_baseline(data: dict, violation: Violation) -> int | None:
         return None
 
 
-def apply_grandfather(violations: list[Violation], data: dict) -> list[Violation]:
+def apply_grandfather(violations: list[Violation], data: GrandfatherData) -> list[Violation]:
     """Apply grandfather baselines: allow at/below recorded value; block growth.
 
     When a finding is listed in the grandfather JSON:
@@ -309,6 +316,70 @@ def apply_grandfather(violations: list[Violation], data: dict) -> list[Violation
     return violations
 
 
+def ratchet_grandfather(
+    data: GrandfatherData, relpath: str, violations: list[Violation]
+) -> list[str]:
+    """Lower or drop grandfather caps for one file based on current metrics.
+
+    Call with violations from :func:`analyze_content` (before or after
+    :func:`apply_grandfather`; uses ``kind`` / ``value`` / ``blocking`` only).
+
+    Returns:
+        Human-readable descriptions of each change (empty if unchanged).
+    """
+
+    changes: list[str] = []
+    files = data.setdefault("files", {})
+    functions = data.setdefault("functions", {})
+
+    file_hit = next((v for v in violations if v.kind == "file_lines"), None)
+    if relpath in files:
+        recorded = int(files[relpath])
+        if file_hit is None or not file_hit.blocking:
+            del files[relpath]
+            changes.append(f"{relpath}: removed file cap (was {recorded})")
+        elif file_hit.value < recorded:
+            files[relpath] = file_hit.value
+            changes.append(
+                f"{relpath}: file cap {recorded} -> {file_hit.value}"
+            )
+
+    prefix = f"{relpath}::"
+    current_funcs = {
+        f"{v.relpath}::{v.label}": v.value
+        for v in violations
+        if v.kind == "function_ccn" and v.blocking
+    }
+    for key in [k for k in functions if k.startswith(prefix)]:
+        recorded = int(functions[key])
+        if key not in current_funcs:
+            del functions[key]
+            changes.append(f"{key}: removed function cap (was {recorded})")
+        elif current_funcs[key] < recorded:
+            functions[key] = current_funcs[key]
+            changes.append(
+                f"{key}: function cap {recorded} -> {current_funcs[key]}"
+            )
+
+    return changes
+
+
+def stage_grandfather_file(root: Path, grandfather_path: Path) -> None:
+    """``git add`` the grandfather JSON so a ratchet lands in the same commit."""
+
+    try:
+        rel = grandfather_path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        rel = str(grandfather_path)
+    subprocess.run(
+        ["git", "-C", str(root), "add", "--", rel],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
+    )
+
+
 def generate_grandfather(
     root: Path,
     files: list[str],
@@ -319,7 +390,7 @@ def generate_grandfather(
     """Rebuild the grandfather baseline from the given worktree files."""
 
     lizard = lizard_module or require_lizard()
-    data: dict = {"files": {}, "functions": {}}
+    data: GrandfatherData = {"files": {}, "functions": {}}
     for relpath in files:
         content = worktree_file_content(root, relpath)
         if content is None:
@@ -334,40 +405,10 @@ def generate_grandfather(
     return 0
 
 
-def check_files(
-    root: Path,
-    files: list[str],
-    *,
-    from_index: bool = True,
-    grandfather_path: Path | None = None,
-    lizard_module=None,
-) -> int:
-    """Check files and return process exit code (0 ok, 1 new blocking findings).
-
-    Args:
-        root: Repository root.
-        files: Repo-relative Python paths to inspect.
-        from_index: When True, read staged index blobs (pre-commit). When False,
-            read the worktree (``--all`` visibility mode).
-        grandfather_path: Optional override for the allowlist JSON path.
-        lizard_module: Optional pre-imported lizard module.
-    """
-
-    lizard = lizard_module or require_lizard()
-    data = load_grandfather(grandfather_path)
-    all_violations: list[Violation] = []
-    reader = staged_file_content if from_index else worktree_file_content
-    for relpath in files:
-        content = reader(root, relpath)
-        if content is None:
-            continue
-        violations = analyze_content(relpath, content, lizard_module=lizard)
-        violations = apply_grandfather(violations, data)
-        all_violations.extend(violations)
-
-    if not all_violations:
-        print("[line-complexity] OK — no new line-count or complexity violations.")
-        return 0
+def _partition_violations(
+    all_violations: list[Violation],
+) -> tuple[list[Violation], list[Violation]]:
+    """Split findings into blocking vs warn-only lists."""
 
     blocking = [
         v
@@ -379,12 +420,18 @@ def check_files(
         for v in all_violations
         if v not in blocking and (not v.blocking or v.grandfathered)
     ]
+    return blocking, warning
+
+
+def _print_violation_groups(
+    warning: list[Violation], blocking: list[Violation]
+) -> None:
+    """Emit WARN / FAIL sections for partitioned findings."""
 
     if warning:
         print("[line-complexity] WARN (not blocking):")
         for v in warning:
             print(f"  - {v.format()}")
-
     if blocking:
         print(
             "[line-complexity] FAIL — new violations or grandfather "
@@ -392,9 +439,81 @@ def check_files(
         )
         for v in blocking:
             print(f"  - {v.format()}")
-        return 1
 
-    return 0
+
+def _persist_ratchet(
+    root: Path,
+    gf_path: Path,
+    data: dict,
+    notes: list[str],
+    *,
+    from_index: bool,
+) -> None:
+    """Write ratcheted grandfather JSON and optionally stage it."""
+
+    if not notes:
+        return
+    save_grandfather(data, path=gf_path)
+    if from_index:
+        stage_grandfather_file(root, gf_path)
+    print("[line-complexity] Ratcheted grandfather caps downward:")
+    for note in notes:
+        print(f"  - {note}")
+
+
+def check_files(
+    root: Path,
+    files: list[str],
+    *,
+    from_index: bool = True,
+    grandfather_path: Path | None = None,
+    lizard_module=None,
+    ratchet: bool | None = None,
+) -> int:
+    """Check files and return process exit code (0 ok, 1 new blocking findings).
+
+    Args:
+        root: Repository root.
+        files: Repo-relative Python paths to inspect.
+        from_index: When True, read staged index blobs (pre-commit). When False,
+            read the worktree (``--all`` visibility mode).
+        grandfather_path: Optional override for the allowlist JSON path.
+        lizard_module: Optional pre-imported lizard module.
+        ratchet: When True, lower/drop grandfather caps that improved and persist
+            the JSON (and ``git add`` it when ``from_index``). Defaults to True
+            for staged checks and False for ``--all``.
+    """
+
+    if ratchet is None:
+        ratchet = from_index
+
+    lizard = lizard_module or require_lizard()
+    gf_path = grandfather_path or GRANDFATHER_PATH
+    data = load_grandfather(gf_path)
+    all_violations: list[Violation] = []
+    ratchet_notes: list[str] = []
+    reader = staged_file_content if from_index else worktree_file_content
+    for relpath in files:
+        content = reader(root, relpath)
+        if content is None:
+            continue
+        violations = analyze_content(relpath, content, lizard_module=lizard)
+        if ratchet:
+            ratchet_notes.extend(ratchet_grandfather(data, relpath, violations))
+        all_violations.extend(apply_grandfather(violations, data))
+
+    if ratchet:
+        _persist_ratchet(
+            root, gf_path, data, ratchet_notes, from_index=from_index
+        )
+
+    if not all_violations:
+        print("[line-complexity] OK — no new line-count or complexity violations.")
+        return 0
+
+    blocking, warning = _partition_violations(all_violations)
+    _print_violation_groups(warning, blocking)
+    return 1 if blocking else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -416,6 +535,15 @@ def main(argv: list[str] | None = None) -> int:
         "--generate-grandfather",
         action="store_true",
         help="regenerate the grandfather baseline from current worktree files",
+    )
+    parser.add_argument(
+        "--ratchet",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "lower/drop improved grandfather caps and save the JSON "
+            "(default: on for --staged, off for --all)"
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -441,6 +569,7 @@ def main(argv: list[str] | None = None) -> int:
         files,
         from_index=args.staged,
         lizard_module=lizard,
+        ratchet=args.ratchet,
     )
 
 
