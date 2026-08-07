@@ -19,9 +19,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Line-complexity parse-failure safety:** grandfather ratchet skips a file when
   ``ast.parse`` fails or lizard raises (real lizard returns an empty function
   list on syntax errors without raising — do not treat that as an improvement).
-  Gitleaks push-range helper skips ref-deletion updates. Pre-commit runs the
-  line-complexity gate before privacy/Gitleaks so ratcheted grandfather JSON is
-  scanned in the same commit. **Semantic versioning note: patch** (hooks).
+  Duplicate lizard function names in one file are labeled as
+  ``<function>@<lineno>`` so ratchet and allowlist recording cannot collapse
+  caps onto one survivor. Gitleaks push-range helper
+  skips ref-deletion updates. Pre-commit runs the line-complexity gate before
+  privacy/Gitleaks so ratcheted grandfather JSON is scanned in the same commit.
+  **Semantic versioning note: patch** (hooks).
 - **Line-complexity grandfather ratchet:** pre-commit automatically lowers or
   removes caps in `scripts/line_complexity_grandfather.json` when staged files
   improve, and stages the JSON into the same commit. **Semantic versioning

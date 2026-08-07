@@ -395,6 +395,45 @@ def test_ratchet_removes_stale_function_cap() -> None:
     assert any("removed function cap" in note for note in notes)
 
 
+def _two_hot_run_methods_source() -> str:
+    """Two same-named high-CCN methods (lizard reports bare ``run`` for both)."""
+
+    method_lines = ["    def run(self, a):"]
+    for i in range(22):
+        method_lines.append(f"        if a == {i}:")
+        method_lines.append(f"            return {i}")
+    method_lines.append("        return -1")
+    method = "\n".join(method_lines)
+    return f"class A:\n{method}\n\nclass B:\n{method}\n"
+
+
+def test_duplicate_lizard_names_get_start_line_labels() -> None:
+    violations, ok = ghlc.analyze_content("m.py", _two_hot_run_methods_source())
+    assert ok
+    func_violations = [v for v in violations if v.kind == "function_ccn"]
+    assert len(func_violations) == 2
+    labels = {v.label for v in func_violations}
+    assert all(label.startswith("run@") for label in labels)
+    assert len(labels) == 2
+
+    data: dict = {"files": {}, "functions": {}}
+    ghlc.mark_grandfathered(func_violations, data)
+    assert len(data["functions"]) == 2
+    assert all(key.startswith("m.py::run@") for key in data["functions"])
+
+    # Distinct caps must not collapse when ratcheting (LongCat collision case).
+    caps = {
+        f"{v.relpath}::{v.label}": v.value + 5 for v in func_violations
+    }
+    data = {"files": {}, "functions": caps}
+    notes = ghlc.ratchet_grandfather(data, "m.py", func_violations)
+    assert len(data["functions"]) == 2
+    for v in func_violations:
+        key = f"m.py::{v.label}"
+        assert data["functions"][key] == v.value
+        assert any(key in note and "->" in note for note in notes)
+
+
 def test_analyze_content_parse_failure_skips_ratchet_in_check_files(
     tmp_path: Path, monkeypatch
 ) -> None:

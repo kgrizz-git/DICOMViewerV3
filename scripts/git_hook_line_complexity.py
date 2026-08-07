@@ -40,6 +40,7 @@ import ast
 import json
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -210,6 +211,21 @@ def require_lizard():
     return lizard
 
 
+def function_label(func, name_counts: Counter[str]) -> str:
+    """Return a stable grandfather/report label for one lizard function.
+
+    Lizard often reports bare names (``run``) for methods on different classes.
+    When the same name appears more than once in a file, append ``@start_line``
+    so grandfather keys and ratchet maps cannot collide. Unique names keep the
+    short form so existing ``path::name`` allowlist entries continue to match.
+    """
+
+    name = str(func.name)
+    if name_counts[name] > 1:
+        return f"{name}@{int(func.start_line)}"
+    return name
+
+
 def analyze_content(
     relpath: str, content: str, *, lizard_module=None
 ) -> tuple[list[Violation], bool]:
@@ -271,13 +287,14 @@ def analyze_content(
         )
         return violations, False
 
+    name_counts: Counter[str] = Counter(str(f.name) for f in analysis.function_list)
     for func in analysis.function_list:
         if func.cyclomatic_complexity > BLOCK_CCN:
             violations.append(
                 Violation(
                     relpath=relpath,
                     kind="function_ccn",
-                    label=func.name,
+                    label=function_label(func, name_counts),
                     value=func.cyclomatic_complexity,
                     threshold=BLOCK_CCN,
                     blocking=True,
@@ -379,29 +396,43 @@ def ratchet_grandfather(
                 )
 
     prefix = f"{relpath}::"
-    current_funcs = {
-        f"{v.relpath}::{v.label}": v.value
-        for v in violations
-        if v.kind == "function_ccn" and v.blocking
-    }
-    for key in [k for k in functions if k.startswith(prefix)]:
-        try:
-            recorded = int(functions[key])
-        except (TypeError, ValueError):
+    current_funcs: dict[str, int] = {}
+    skip_function_ratchet = False
+    for v in violations:
+        if v.kind != "function_ccn" or not v.blocking:
+            continue
+        key = f"{v.relpath}::{v.label}"
+        # Duplicate labels should not occur after function_label disambiguation;
+        # if they do, skip function ratcheting for this file rather than
+        # silently collapsing caps onto one survivor.
+        if key in current_funcs:
             print(
-                "[line-complexity] WARN: skipping malformed function grandfather "
-                "entry (non-integer cap).",
+                "[line-complexity] WARN: duplicate function labels while "
+                "ratcheting; skipping function-cap updates for this file.",
                 file=sys.stderr,
             )
-            continue
-        if key not in current_funcs:
-            del functions[key]
-            changes.append(f"{key}: removed function cap (was {recorded})")
-        elif current_funcs[key] < recorded:
-            functions[key] = current_funcs[key]
-            changes.append(
-                f"{key}: function cap {recorded} -> {current_funcs[key]}"
-            )
+            skip_function_ratchet = True
+            break
+        current_funcs[key] = v.value
+    if not skip_function_ratchet:
+        for key in [k for k in functions if k.startswith(prefix)]:
+            try:
+                recorded = int(functions[key])
+            except (TypeError, ValueError):
+                print(
+                    "[line-complexity] WARN: skipping malformed function "
+                    "grandfather entry (non-integer cap).",
+                    file=sys.stderr,
+                )
+                continue
+            if key not in current_funcs:
+                del functions[key]
+                changes.append(f"{key}: removed function cap (was {recorded})")
+            elif current_funcs[key] < recorded:
+                functions[key] = current_funcs[key]
+                changes.append(
+                    f"{key}: function cap {recorded} -> {current_funcs[key]}"
+                )
 
     return changes
 

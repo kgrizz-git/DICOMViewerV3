@@ -10,7 +10,8 @@ This file records development and repository-maintenance history that is useful 
   ``ast.parse`` fails (real lizard does not raise on syntax errors); defensive
   ``int()`` on malformed grandfather caps; surface failed ``git add`` of
   ratcheted JSON; fix DEVELOPER_SETUP hook-order docs; extract shared high-CCN
-  test fixture.
+  test fixture; disambiguate duplicate lizard function names with
+  ``<function>@<lineno>`` labels.
 
 - Restored **full-history Gitleaks on local pre-push** (same as CI; ~1s on this
   repo). Push-scoped `--from-pre-push-stdin` remains for optional ad-hoc use.
