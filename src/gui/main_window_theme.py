@@ -78,6 +78,10 @@ def get_theme_stylesheet(
 
     Loads the QSS from ``resources/themes/{theme}.qss`` and substitutes the
     checkmark image paths and accent colour placeholders before returning.
+    Missing theme files fall back to ``light.qss``; ``{metadata_tag_band}`` is
+    derived from that *effective* resolved theme (``qss_file.stem``), not the
+    originally requested name, so a dark request that lands on light QSS still
+    gets a light-appropriate band tint.
 
     QSS placeholder tokens substituted:
 
@@ -98,6 +102,7 @@ def get_theme_stylesheet(
 
     Returns:
         Stylesheet string to pass to ``QApplication.instance().setStyleSheet()``.
+        Empty string if neither the requested nor the light fallback QSS exists.
     """
     from gui.accent_presets import get_preset
 
@@ -109,8 +114,10 @@ def get_theme_stylesheet(
         # Keep startup resilient in mis-packaged bundles: log and continue unstyled.
         print("Warning: Theme stylesheet resources were not found.")
         return ""
+    # Stem of the resolved file (may differ from *theme* after light.qss fallback).
+    effective_theme = qss_file.stem
     preset = get_preset(accent_id)
-    metadata_tag_band = metadata_tag_band_color(theme, preset.accent)
+    metadata_tag_band = metadata_tag_band_color(effective_theme, preset.accent)
     stylesheet = qss_file.read_text(encoding="utf-8")
     return (
         stylesheet

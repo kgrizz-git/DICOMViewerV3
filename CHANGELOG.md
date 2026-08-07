@@ -6,7 +6,16 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - (not yet released)
+
 ### Fixed
+- **Theme QSS fallback band tint:** when a requested theme file is missing and
+  `get_theme_stylesheet` falls back to `light.qss`, the metadata tag-band color
+  now follows the effective resolved theme instead of the originally requested
+  name (avoids a near-black band on a light stylesheet). **Semantic versioning
+  note: patch**.
 - **Trackpad pinch-to-zoom:** restored the established **Ctrl+scroll** zoom path,
   including Windows precision touchpads that report a pinch as Ctrl+wheel.
   **Shift+scroll** now adjusts corner-overlay text size instead. **Semantic
@@ -580,7 +589,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Notes
 - No official release has been made yet. Version 0.1.0 marks initial development; move to 1.0.0 when the public API is stable (see dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md).
 
-[Unreleased]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.2...v0.4.0
 [0.1.2]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/kgrizz-git/DICOMViewerV3/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kgrizz-git/DICOMViewerV3/releases/tag/v0.1.0
