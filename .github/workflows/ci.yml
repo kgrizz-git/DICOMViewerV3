@@ -177,7 +177,9 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/pip install -r requirements.txt
-          .venv/bin/pip install "basedpyright>=1.39.3"
+          # lizard is a requirements-dev hook dependency imported by
+          # scripts/git_hook_line_complexity.py (type-checked under scripts/).
+          .venv/bin/pip install "basedpyright>=1.39.3" "lizard>=1.23.0"
 
       - name: Run basedpyright (errors must be 0)
         run: .venv/bin/python scripts/check_basedpyright_errors.py

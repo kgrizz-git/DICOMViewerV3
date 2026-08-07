@@ -191,7 +191,7 @@ def require_lizard():
     """Import lizard or exit with an actionable install message."""
 
     try:
-        import lizard
+        import lizard  # type: ignore  # pyright: ignore[reportMissingImports]  # requirements-dev / CI pyright job
     except ImportError:
         print(
             "[line-complexity] FAIL: the 'lizard' package is required. "
