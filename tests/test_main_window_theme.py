@@ -66,7 +66,7 @@ class TestGetThemeStylesheet(unittest.TestCase):
     def test_light_theme_uses_accent_tinted_alternate_rows(self):
         """Light theme substitutes accent_soft (#f6e5e7 for garnet) as the
         alternate-row color, not the raw accent (#a0303f) — keep rows readable
-        against the light background. See src/utils/accent_presets.py
+        against the light background. See src/gui/accent_presets.py
         (accent_soft / accent_muted) for the palette derivation."""
         white_p, black_p = _dummy_paths()
         result = get_theme_stylesheet("light", white_p, black_p, accent_id="garnet")
@@ -76,7 +76,7 @@ class TestGetThemeStylesheet(unittest.TestCase):
     def test_dark_theme_uses_readable_accent_tinted_alternate_rows(self):
         """Dark theme substitutes accent_muted (#32151a for garnet) as the
         alternate-row color, not the raw accent (#a0303f) — keep rows readable
-        against the dark background. See src/utils/accent_presets.py (accent_soft / accent_muted)."""
+        against the dark background. See src/gui/accent_presets.py (accent_soft / accent_muted)."""
         white_p, black_p = _dummy_paths()
         result = get_theme_stylesheet("dark", white_p, black_p, accent_id="garnet")
         self.assertIn("alternate-background-color: #32151a", result)
