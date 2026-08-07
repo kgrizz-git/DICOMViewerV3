@@ -36,6 +36,7 @@ tracked Python file under ``src/``, ``scripts/``, and ``tests/`` is included.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import subprocess
 import sys
@@ -245,6 +246,19 @@ def analyze_content(
             )
         )
 
+    # Real lizard often returns an empty function_list on syntax errors without
+    # raising. Reject unparseable Python first so ratchet does not treat "no
+    # functions found" as an improvement and delete grandfather caps.
+    try:
+        ast.parse(content, filename=relpath)
+    except SyntaxError:
+        print(
+            f"[line-complexity] WARN: could not analyze {relpath} "
+            "(syntax error or parse failure)",
+            file=sys.stderr,
+        )
+        return violations, False
+
     try:
         analysis = lizard.analyze_file.analyze_source_code(relpath, content)
     except Exception:
@@ -346,15 +360,23 @@ def ratchet_grandfather(
 
     file_hit = next((v for v in violations if v.kind == "file_lines"), None)
     if relpath in files:
-        recorded = int(files[relpath])
-        if file_hit is None or not file_hit.blocking:
-            del files[relpath]
-            changes.append(f"{relpath}: removed file cap (was {recorded})")
-        elif file_hit.value < recorded:
-            files[relpath] = file_hit.value
-            changes.append(
-                f"{relpath}: file cap {recorded} -> {file_hit.value}"
+        try:
+            recorded = int(files[relpath])
+        except (TypeError, ValueError):
+            print(
+                "[line-complexity] WARN: skipping malformed file grandfather "
+                "entry (non-integer cap).",
+                file=sys.stderr,
             )
+        else:
+            if file_hit is None or not file_hit.blocking:
+                del files[relpath]
+                changes.append(f"{relpath}: removed file cap (was {recorded})")
+            elif file_hit.value < recorded:
+                files[relpath] = file_hit.value
+                changes.append(
+                    f"{relpath}: file cap {recorded} -> {file_hit.value}"
+                )
 
     prefix = f"{relpath}::"
     current_funcs = {
@@ -363,7 +385,15 @@ def ratchet_grandfather(
         if v.kind == "function_ccn" and v.blocking
     }
     for key in [k for k in functions if k.startswith(prefix)]:
-        recorded = int(functions[key])
+        try:
+            recorded = int(functions[key])
+        except (TypeError, ValueError):
+            print(
+                "[line-complexity] WARN: skipping malformed function grandfather "
+                "entry (non-integer cap).",
+                file=sys.stderr,
+            )
+            continue
         if key not in current_funcs:
             del functions[key]
             changes.append(f"{key}: removed function cap (was {recorded})")
@@ -443,7 +473,7 @@ def _partition_violations(
     for v in all_violations:
         if v.regressed or (v.blocking and not v.grandfathered):
             blocking.append(v)
-        elif not v.blocking or v.grandfathered:
+        else:
             warning.append(v)
     return blocking, warning
 
@@ -479,11 +509,18 @@ def _persist_ratchet(
     if not notes:
         return
     save_grandfather(data, path=gf_path)
+    staged_ok = True
     if from_index:
-        stage_grandfather_file(root, gf_path)
+        staged_ok = stage_grandfather_file(root, gf_path)
     print("[line-complexity] Ratcheted grandfather caps downward:")
     for note in notes:
         print(f"  - {note}")
+    if from_index and not staged_ok:
+        print(
+            "[line-complexity] WARN: grandfather caps were updated on disk but "
+            "not staged into this commit.",
+            file=sys.stderr,
+        )
 
 
 def check_files(

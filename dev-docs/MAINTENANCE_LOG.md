@@ -6,10 +6,11 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-07
 
-- **CodeRabbit follow-ups (PR #49):** skip grandfather ratchet when lizard parse
-  fails; skip Gitleaks push ranges for ref deletions; surface ``git`` failures in
-  the line-complexity hook; run line-complexity before privacy/Gitleaks so
-  ratcheted JSON is scanned; Sonar README backup perms + stop-before-volume-copy.
+- **CodeRabbit / LongCat follow-ups (PR #49):** skip grandfather ratchet when
+  ``ast.parse`` fails (real lizard does not raise on syntax errors); defensive
+  ``int()`` on malformed grandfather caps; surface failed ``git add`` of
+  ratcheted JSON; fix DEVELOPER_SETUP hook-order docs; extract shared high-CCN
+  test fixture.
 
 - Restored **full-history Gitleaks on local pre-push** (same as CI; ~1s on this
   repo). Push-scoped `--from-pre-push-stdin` remains for optional ad-hoc use.

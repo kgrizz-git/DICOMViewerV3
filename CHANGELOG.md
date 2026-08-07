@@ -17,10 +17,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   ``scripts/git_hook_line_complexity.py`` type-checks and its tests run.
   **Semantic versioning note: patch** (CI).
 - **Line-complexity parse-failure safety:** grandfather ratchet skips a file when
-  lizard cannot analyze it (avoids deleting function caps on syntax/parse
-  errors). Gitleaks push-range helper skips ref-deletion updates. Pre-commit runs
-  the line-complexity gate before privacy/Gitleaks so ratcheted grandfather JSON
-  is scanned in the same commit. **Semantic versioning note: patch** (hooks).
+  ``ast.parse`` fails or lizard raises (real lizard returns an empty function
+  list on syntax errors without raising — do not treat that as an improvement).
+  Gitleaks push-range helper skips ref-deletion updates. Pre-commit runs the
+  line-complexity gate before privacy/Gitleaks so ratcheted grandfather JSON is
+  scanned in the same commit. **Semantic versioning note: patch** (hooks).
 - **Line-complexity grandfather ratchet:** pre-commit automatically lowers or
   removes caps in `scripts/line_complexity_grandfather.json` when staged files
   improve, and stages the JSON into the same commit. **Semantic versioning

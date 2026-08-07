@@ -13,56 +13,11 @@ pytest.importorskip("lizard")
 from scripts import git_hook_line_complexity as ghlc
 
 
-def _analyze(relpath: str, body: str) -> list[ghlc.Violation]:
-    violations, ok = ghlc.analyze_content(relpath, textwrap.dedent(body))
-    assert ok
-    return violations
-
-
-def test_small_clean_file_has_no_violations() -> None:
-    violations = _analyze(
-        "small.py",
-        """\
-        '''A small module.'''
-
-        def add(a, b):
-            return a + b
-
-        def sub(a, b):
-            return a - b
-        """,
-    )
-    assert violations == []
-
-
-def test_file_at_warn_threshold_is_not_blocking() -> None:
-    body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(620))
-    violations, ok = ghlc.analyze_content("warn_only.py", body)
-    assert ok
-    assert len(violations) == 1
-    v = violations[0]
-    assert v.kind == "file_lines"
-    assert v.blocking is False
-    assert v.grandfathered is False
-    assert v.value == 621
-    assert v.threshold == ghlc.WARN_LINES
-
-
-def test_file_at_block_threshold_is_blocking() -> None:
-    body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
-    violations, ok = ghlc.analyze_content("big.py", body)
-    assert ok
-    assert len(violations) == 1
-    v = violations[0]
-    assert v.kind == "file_lines"
-    assert v.blocking is True
-    assert v.threshold == ghlc.BLOCK_LINES
-
-
-def test_function_over_ccn_threshold_is_blocking() -> None:
-    body = textwrap.dedent(
-        """\
-        def complex_fn(a, b, c, d, e, f, g):
+def _high_ccn_source(fn_name: str = "complex_fn") -> str:
+    """Return synthetic source whose lizard CCN exceeds the block threshold."""
+    return textwrap.dedent(
+        f"""\
+        def {fn_name}(a, b, c, d, e, f, g):
             r = 0
             if a > 0:
                 if b > 0:
@@ -117,6 +72,56 @@ def test_function_over_ccn_threshold_is_blocking() -> None:
             return r
         """
     )
+
+
+def _analyze(relpath: str, body: str) -> list[ghlc.Violation]:
+    violations, ok = ghlc.analyze_content(relpath, textwrap.dedent(body))
+    assert ok
+    return violations
+
+
+def test_small_clean_file_has_no_violations() -> None:
+    violations = _analyze(
+        "small.py",
+        """\
+        '''A small module.'''
+
+        def add(a, b):
+            return a + b
+
+        def sub(a, b):
+            return a - b
+        """,
+    )
+    assert violations == []
+
+
+def test_file_at_warn_threshold_is_not_blocking() -> None:
+    body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(620))
+    violations, ok = ghlc.analyze_content("warn_only.py", body)
+    assert ok
+    assert len(violations) == 1
+    v = violations[0]
+    assert v.kind == "file_lines"
+    assert v.blocking is False
+    assert v.grandfathered is False
+    assert v.value == 621
+    assert v.threshold == ghlc.WARN_LINES
+
+
+def test_file_at_block_threshold_is_blocking() -> None:
+    body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
+    assert len(violations) == 1
+    v = violations[0]
+    assert v.kind == "file_lines"
+    assert v.blocking is True
+    assert v.threshold == ghlc.BLOCK_LINES
+
+
+def test_function_over_ccn_threshold_is_blocking() -> None:
+    body = _high_ccn_source()
     violations, ok = ghlc.analyze_content("ccn.py", body)
     assert ok
     func_violations = [v for v in violations if v.kind == "function_ccn"]
@@ -170,63 +175,7 @@ def test_grandfather_increase_is_regression() -> None:
 
 
 def test_grandfather_ccn_increase_is_regression() -> None:
-    body = textwrap.dedent(
-        """\
-        def complex_fn(a, b, c, d, e, f, g):
-            r = 0
-            if a > 0:
-                if b > 0:
-                    if c > 0:
-                        if d > 0:
-                            r = 1
-                        elif e > 0:
-                            r = 2
-                        elif f > 0:
-                            r = 3
-                        else:
-                            r = 4
-                    elif c < 0:
-                        if d > 0:
-                            r = 5
-                        elif e > 0:
-                            r = 6
-                        else:
-                            r = 7
-                    else:
-                        r = 8
-                elif b < 0:
-                    if c > 0:
-                        r = 9
-                    elif d > 0:
-                        r = 10
-                    else:
-                        r = 11
-                else:
-                    r = 12
-            elif a < 0:
-                if b > 0:
-                    if c > 0:
-                        r = 13
-                    elif d > 0:
-                        r = 14
-                    else:
-                        r = 15
-                elif b < 0:
-                    if c > 0:
-                        r = 16
-                    elif d > 0:
-                        r = 17
-                    else:
-                        r = 18
-                else:
-                    r = 19
-            else:
-                r = 20
-            if f > 0:
-                r += 100
-            return r
-        """
-    )
+    body = _high_ccn_source()
     violations, ok = ghlc.analyze_content("ccn.py", body)
     assert ok
     func = next(v for v in violations if v.kind == "function_ccn")
@@ -270,63 +219,7 @@ def test_mark_grandfathered_captures_blocking_file() -> None:
 
 
 def test_mark_grandfathered_captures_high_ccn_function() -> None:
-    body = textwrap.dedent(
-        """\
-        def big(a, b, c, d, e, f, g):
-            r = 0
-            if a > 0:
-                if b > 0:
-                    if c > 0:
-                        if d > 0:
-                            r = 1
-                        elif e > 0:
-                            r = 2
-                        elif f > 0:
-                            r = 3
-                        else:
-                            r = 4
-                    elif c < 0:
-                        if d > 0:
-                            r = 5
-                        elif e > 0:
-                            r = 6
-                        else:
-                            r = 7
-                    else:
-                        r = 8
-                elif b < 0:
-                    if c > 0:
-                        r = 9
-                    elif d > 0:
-                        r = 10
-                    else:
-                        r = 11
-                else:
-                    r = 12
-            elif a < 0:
-                if b > 0:
-                    if c > 0:
-                        r = 13
-                    elif d > 0:
-                        r = 14
-                    else:
-                        r = 15
-                elif b < 0:
-                    if c > 0:
-                        r = 16
-                    elif d > 0:
-                        r = 17
-                    else:
-                        r = 18
-                else:
-                    r = 19
-            else:
-                r = 20
-            if f > 0:
-                r += 100
-            return r
-        """
-    )
+    body = _high_ccn_source(fn_name="big")
     violations, ok = ghlc.analyze_content("mod.py", body)
     assert ok
     data: dict = {"files": {}, "functions": {}}
@@ -505,7 +398,11 @@ def test_ratchet_removes_stale_function_cap() -> None:
 def test_analyze_content_parse_failure_skips_ratchet_in_check_files(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Lizard parse failure must not drop function grandfather caps."""
+    """Syntax errors must not drop function grandfather caps (real lizard).
+
+    Real lizard returns an empty ``function_list`` without raising on bad
+    syntax; the gate must still skip ratchet via ``ast.parse``.
+    """
 
     tmp_gf = tmp_path / "grandfather.json"
     tmp_gf.write_text(
@@ -518,13 +415,10 @@ def test_analyze_content_parse_failure_skips_ratchet_in_check_files(
         encoding="utf-8",
     )
     broken = tmp_path / "broken.py"
-    broken.write_text("def hot(:\n    pass\n", encoding="utf-8")
-
-    class FakeLizard:
-        class analyze_file:  # noqa: N801 — mirror lizard API shape
-            @staticmethod
-            def analyze_source_code(_name: str, _content: str):
-                raise RuntimeError("parse failed")
+    broken.write_text(
+        "def hot(a, b:\n    if a == 0:\n        return 1\n",
+        encoding="utf-8",
+    )
 
     monkeypatch.setattr(ghlc, "repo_root", lambda: tmp_path)
     result = ghlc.check_files(
@@ -532,12 +426,25 @@ def test_analyze_content_parse_failure_skips_ratchet_in_check_files(
         ["broken.py"],
         from_index=False,
         grandfather_path=tmp_gf,
-        lizard_module=FakeLizard,
+        lizard_module=ghlc.require_lizard(),
         ratchet=True,
     )
     assert result == 0
     saved = json.loads(tmp_gf.read_text(encoding="utf-8"))
     assert saved["functions"]["broken.py::hot"] == 30
+
+
+def test_ratchet_skips_malformed_non_integer_caps() -> None:
+    data: dict = {
+        "files": {"big.py": "not-an-int"},
+        "functions": {"mod.py::gone": "also-bad"},
+    }
+    notes = ghlc.ratchet_grandfather(data, "big.py", [])
+    assert data["files"]["big.py"] == "not-an-int"
+    assert notes == []
+    notes = ghlc.ratchet_grandfather(data, "mod.py", [])
+    assert data["functions"]["mod.py::gone"] == "also-bad"
+    assert notes == []
 
 
 def test_check_files_ratchet_persists_lower_cap(

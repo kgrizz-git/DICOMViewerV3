@@ -70,7 +70,9 @@ version-controlled directory. No file copying — edits to `.githooks/` take eff
 immediately without re-running the installer.
 
 **Line-count / complexity gate:** `pre-commit` runs
-`scripts/git_hook_line_complexity.py --staged` after ruff. Thresholds: warn above
+`scripts/git_hook_line_complexity.py --staged` before the PHI / privacy /
+Gitleaks gates (so a ratcheted grandfather JSON is scanned in the same commit)
+and before ruff. Thresholds: warn above
 **600** lines, block above **750** lines, and block lizard cyclomatic complexity
 (**CCN**) above **20**. Paths already over threshold are listed in
 `scripts/line_complexity_grandfather.json` with their measured size/CCN: staying
