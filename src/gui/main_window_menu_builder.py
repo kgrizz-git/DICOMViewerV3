@@ -124,6 +124,11 @@ def build_menu_bar(main_window) -> None:
     save_mpr_dicom_action.triggered.connect(main_window.save_mpr_dicom_requested.emit)
     file_menu.addAction(save_mpr_dicom_action)
 
+    tag_export_action = QAction("Export DICOM &Tags...", main_window)
+    tag_export_action.setShortcut(QKeySequence("Shift+Ctrl+T"))
+    tag_export_action.triggered.connect(main_window.tag_export_requested.emit)
+    file_menu.addAction(tag_export_action)
+
     file_menu.addSeparator()
 
     export_customizations_action = QAction("Export Customizations...", main_window)
@@ -607,11 +612,6 @@ def build_menu_bar(main_window) -> None:
     tag_viewer_action.setShortcut(QKeySequence("Ctrl+T"))
     tag_viewer_action.triggered.connect(main_window.tag_viewer_requested.emit)
     tools_menu.addAction(tag_viewer_action)
-
-    tag_export_action = QAction("Export DICOM &Tags...", main_window)
-    tag_export_action.setShortcut(QKeySequence("Shift+Ctrl+T"))
-    tag_export_action.triggered.connect(main_window.tag_export_requested.emit)
-    tools_menu.addAction(tag_export_action)
 
     create_mpr_action = QAction("Create MPR &View…", main_window)
     create_mpr_action.setStatusTip(

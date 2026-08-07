@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-08-07
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -66,8 +66,17 @@ These are separate from the main Export Images dialog:
 | Rendered **screenshots** of panes / whole window | **File → Export Screenshots…** | [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
 | **Cine** loop (GIF / AVI / MP4 / MPG) | **File → Export Cine As…** | [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
 | **De-identified** DICOM (dedicated dialog) | **File → De-identify & Export DICOM (PS3.15)…** | [De-identified export](USER_GUIDE_ANONYMIZATION.md) |
-| **DICOM tags** (CSV / TXT / XLSX) | **Tools → Export DICOM Tags…** (**Ctrl+Shift+T**) | [Hub → DICOM tags](USER_GUIDE.md) |
+| **DICOM tags** (CSV / TXT / XLSX) | **File → Export DICOM Tags…** (**Ctrl+Shift+T**) | [Hub → DICOM tags](USER_GUIDE.md) · [Tag export dialog](#dicom-tag-export-dialog) |
 | **ROI statistics** & measurements | **Tools → Export ROI Statistics…** | [Measurements & annotations](USER_GUIDE_ANNOTATIONS.md) |
+
+## DICOM tag export dialog
+
+**File → Export DICOM Tags…** (**Ctrl+Shift+T**) opens a two-pane dialog: studies/series on the left, tags on the right.
+
+- **Studies** start **collapsed** so large loads stay compact; expand what you need.
+- **Select All** / **Deselect All** buttons and the **Select All** checkbox above the tag tree apply only to **visible** leaf tags (the search filter is respected). Sequence/Item parent rows stay independently checkable when you want a summary column.
+- The bottom label shows how many tags are selected (`No tags selected` / `1 tag selected` / `N tags selected`).
+- **Presets:** choosing a preset in the dropdown **loads it immediately**. **Save** overwrites the selected preset; **Save As…** creates a new named preset. Saving always keeps every checked tag, including ones hidden by the current filter.
 
 ---
 

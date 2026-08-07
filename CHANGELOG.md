@@ -7,6 +7,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Tag export dialog UX:** **File → Export DICOM Tags…** (moved from Tools);
+  studies/series start collapsed; top **Select All** checkbox and push buttons
+  toggle **visible leaf tags** only (SQ/Item parents stay independently
+  checkable); selected-tag count label; **Save** overwrites the current preset
+  (**Save As…** still creates new); dropdown selection **auto-loads** presets
+  (no longer browse-only — use Load to re-apply the current item). Preset save
+  still includes checked tags hidden by the filter. **Semantic versioning note:
+  minor** (user-visible workflow UX).
 - **Pre-push / CI Gitleaks:** both run full reachable history via
   `scripts/check_gitleaks_history.py` (~1s locally). CI privacy gate installs
   pinned Gitleaks **8.30.1** and uses the same redacted wrapper; TruffleHog

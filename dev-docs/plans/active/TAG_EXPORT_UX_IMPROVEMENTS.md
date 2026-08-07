@@ -1,8 +1,8 @@
 # Tag Export UX Improvements
 
 **Last updated:** 2026-08-07
-**Status:** Ready to implement — not yet executed
-**TO_DO tracking:** Remove the Tag Export dialog UX item in `dev-docs/TO_DO.md` (under UX / Workflow) when this plan is fully implemented and merged. The separate broader item about moving export actions (including **Export ROI Statistics…**) from Tools to File remains open — this plan only moves **Export DICOM Tags…**.
+**Status:** Implemented — pending review/merge
+**TO_DO tracking:** Tag Export dialog UX TO_DO item removed. The separate broader item about moving remaining export actions (including **Export ROI Statistics…**) from Tools to File remains open.
 
 ## Goal
 
