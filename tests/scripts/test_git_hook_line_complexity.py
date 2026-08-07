@@ -118,7 +118,13 @@ def test_function_over_ccn_threshold_is_blocking() -> None:
     assert v.blocking is True
 
 
-def test_grandfather_downgrades_blocking_to_warning() -> None:
+def test_grandfather_marks_item_without_clearing_blocking_flag() -> None:
+    """``apply_grandfather`` sets ``grandfathered``; callers exclude those from FAIL.
+
+    The ``blocking`` flag stays True so the finding remains a threshold hit; only
+    ``check_files`` (``blocking and not grandfathered``) treats it as warn-only.
+    """
+
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
     violations = ghlc.analyze_content("big.py", body)
     data = {"files": {"big.py": 801}, "functions": {}}

@@ -34,7 +34,7 @@ echo "[phi] Scanning the complete tracked tree..."
 echo "[privacy] Scanning all covered output and logging sinks..."
 "$PY_BIN" "$REPO_ROOT/scripts/git_hook_privacy_checks.py" --all --critical || exit 1
 
-echo "[secrets] Scanning reachable history with mandatory Gitleaks..."
+echo "[secrets] Scanning full reachable history with Gitleaks..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_gitleaks_history.py" --root "$REPO_ROOT" || exit 1
 
 # Static type gate: fail on basedpyright errors, matching CI. Warnings are
@@ -42,27 +42,15 @@ echo "[secrets] Scanning reachable history with mandatory Gitleaks..."
 echo "[pyright] Running basedpyright error gate..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_basedpyright_errors.py" || exit 1
 
-# Coverage gate (blocks pushes below the required project-wide coverage).
-# Threshold: 60 %. Run pytest-cov locally and parse TOTAL %.
-echo "[coverage] Running pytest --cov=src..."
-COV_OUTPUT="$("$PY_BIN" -m pytest tests --cov=src --cov-report=term -q --no-header 2>&1)" || true
-TOTAL_PCT=$(echo "$COV_OUTPUT" | awk '/^TOTAL/{gsub(/%/,""); print $NF}')
-if [[ -n "$TOTAL_PCT" ]]; then
-  echo "[coverage] Total coverage: ${TOTAL_PCT}%"
-  if (( $(echo "$TOTAL_PCT < 60" | bc -l 2>/dev/null || echo 0) )); then
-    echo "[coverage] FAIL: Coverage ${TOTAL_PCT}% is below the 60 % threshold." >&2
-    exit 1
-  else
-    echo "[coverage] Coverage meets the 60 % threshold."
-  fi
-else
-  echo "[coverage] FAIL: Could not determine coverage percentage." >&2
-  exit 1
-fi
+# Full pytest + coverage live in CI (see .github/workflows/ci.yml), not here.
+# The suite is large (~thousands of tests); running it on every push made local
+# pushes too slow. Pre-commit already runs agent smoke + ruff + line/CCN gates.
+# Run locally when you want: PYTHONPATH=src pytest tests --cov=src --cov-fail-under=65
+echo "[tests] Skipping full pytest on pre-push (CI owns suite + 65% coverage)."
 
 # Complexity gate (warn only — does not block push).
-# Mirrors CI lizard.yml. Flags functions with CCN >= 15 or NLOC >= 200.
-echo "[complexity] Running lizard..."
+# Mirrors CI lizard. Flags functions with CCN >= 15 or NLOC >= 200.
+echo "[complexity] Running lizard (advisory)..."
 LIZARD_OUT="$("$PY_BIN" -m lizard src/ --CCN 15 --length 200 -w 2>&1)" || true
 WARN_COUNT=$(grep -c "warning:" <<<"$LIZARD_OUT" 2>/dev/null || true)
 WARN_COUNT=${WARN_COUNT:-0}

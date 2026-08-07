@@ -62,4 +62,10 @@ Most tests **do not require DICOM files** on disk; they use synthetic data or mo
 
 ## CI
 
-GitHub Actions workflows under `.github/workflows/` run the test and quality checks configured for this repository. **`user-docs-links`** runs `scripts/check_user_docs_links.py` (same assertion as `tests/test_user_docs_links.py`).
+GitHub Actions workflows under `.github/workflows/` run the test and quality checks configured for this repository. The **`pytest`** job runs the full suite with coverage and **`--cov-fail-under=65`**. Local `pre-push` does **not** re-run the full suite (too slow); use the command below before a risky merge if you want the same check locally:
+
+```bash
+PYTHONPATH=src pytest tests --cov=src --cov-fail-under=65
+```
+
+**`user-docs-links`** runs `scripts/check_user_docs_links.py` (same assertion as `tests/test_user_docs_links.py`).

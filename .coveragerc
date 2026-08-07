@@ -1,8 +1,9 @@
 # Coverage configuration for DICOM Viewer V3.
-# CI: PYTHONPATH=src python -m pytest tests --cov=src --cov-report=term
-# Local: python -m pytest tests --cov=src --cov-report=html --cov-report=term
+# CI: PYTHONPATH=src python -m pytest tests --cov=src --cov-report=term --cov-fail-under=65
+# Local: python -m pytest tests --cov=src --cov-report=html --cov-report=term --cov-fail-under=65
 # Coverage reports stay local to the developer machine or CI job log and are
-# not uploaded to third-party analysis services.
+# not uploaded to third-party analysis services. The 65% floor is enforced in
+# CI (not on local pre-push).
 
 [run]
 source = src

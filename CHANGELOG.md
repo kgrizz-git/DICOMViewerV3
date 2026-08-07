@@ -7,6 +7,16 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Pre-push / CI Gitleaks:** both run full reachable history via
+  `scripts/check_gitleaks_history.py` (~1s locally). CI privacy gate installs
+  pinned Gitleaks **8.30.1** and uses the same redacted wrapper; TruffleHog
+  range/tree scans remain. Push-scoped (`--from-pre-push-stdin`) and
+  `--since-main` options stay available for ad-hoc use. **Semantic versioning
+  note: patch** (CI / hooks).
+- **Coverage floor 65%:** CI `pytest` uses `--cov-fail-under=65` (was 60). Local
+  measured TOTAL coverage is about **67%**. **Semantic versioning note: patch**.
+- **Pre-push speed:** removed the full `pytest --cov` run from
+  `.githooks/pre-push` (CI owns the suite). **Semantic versioning note: patch**.
 - **Pre-commit line/complexity gate:** `.githooks/pre-commit` now runs
   `scripts/git_hook_line_complexity.py --staged` (warn at 600 lines, block at
   750 lines or lizard CCN > 20). Existing hotspots are allowlisted in

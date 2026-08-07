@@ -261,6 +261,18 @@ The separate local settings file is passed only by this runner.
 
 **Static typing gate:** the `pre-push` hook runs `scripts/check_basedpyright_errors.py`, matching the GitHub **Pyright** workflow: **0 basedpyright errors** are required across `src/` and `scripts/`, while the existing warning baseline is reported but does not block pushes.
 
+**Full test suite / coverage:** not run on `pre-push` (too slow for every push).
+CI’s `pytest` job runs the full suite with `--cov-fail-under=65` and uploads
+`coverage.xml` for the approved Sonar path. Locally, when you want the same
+check: `PYTHONPATH=src pytest tests --cov=src --cov-fail-under=65`. Pre-commit
+still runs the fast agent smoke harness.
+
+**Gitleaks:** `pre-commit` scans the **staged index**. `pre-push` and CI privacy
+gate both run **full reachable history** via `scripts/check_gitleaks_history.py`
+(~1s on this repo). Narrowed push-only scanning remains available with
+`--from-pre-push-stdin` / `--since-main` for ad-hoc use. CI also runs TruffleHog
+range/tree scans.
+
 The `pre-commit` hook also prunes **`backups/`** when the current branch is
 **`main`** or **`WIP`**. **Intent age** is **not** plain filesystem mtime for
 **tracked** files (checkouts refresh mtime). **Tracked:** a file is removed if

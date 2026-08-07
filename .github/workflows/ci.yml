@@ -116,10 +116,12 @@ jobs:
           PYTHONPATH: src
           QT_QPA_PLATFORM: offscreen
         run: |
+          # Project-wide coverage floor. Local measured TOTAL is ~67%; floor is 65%.
           python -m pytest tests \
             --cov=src \
             --cov-report=term \
             --cov-report=xml:coverage.xml \
+            --cov-fail-under=65 \
             -v --tb=short
 
       - name: Upload coverage report for SonarQube scan

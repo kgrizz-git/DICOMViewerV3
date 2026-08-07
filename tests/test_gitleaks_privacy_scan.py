@@ -1,4 +1,4 @@
-"""Tests for content-bound Gitleaks false-positive review."""
+"""Tests for content-bound Gitleaks false-positive review and history scoping."""
 
 from __future__ import annotations
 
@@ -70,3 +70,59 @@ def test_loads_reviewed_blob_manifest(tmp_path: Path) -> None:
     assert approvals.blobs == frozenset(
         {("a" * 40, "synthetic.txt", "synthetic-rule", 2)}
     )
+
+
+def test_history_log_opts_since_main_uses_main_branch(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@users.noreply.github.com")
+    (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(tmp_path, "add", "a.txt")
+    _git(tmp_path, "commit", "-q", "-m", "main tip")
+    _git(tmp_path, "checkout", "-q", "-b", "feature")
+    (tmp_path / "b.txt").write_text("b\n", encoding="utf-8")
+    _git(tmp_path, "add", "b.txt")
+    _git(tmp_path, "commit", "-q", "-m", "feature tip")
+
+    opts = scan.history_log_opts_since_main(tmp_path)
+    assert opts.endswith("..HEAD")
+    assert "main" in opts
+
+
+def test_history_log_opts_for_pre_push_existing_remote_tip(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@users.noreply.github.com")
+    (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(tmp_path, "add", "a.txt")
+    _git(tmp_path, "commit", "-q", "-m", "one")
+    old = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "b.txt").write_text("b\n", encoding="utf-8")
+    _git(tmp_path, "add", "b.txt")
+    _git(tmp_path, "commit", "-q", "-m", "two")
+    new = _git(tmp_path, "rev-parse", "HEAD")
+
+    stdin = f"refs/heads/main {new} refs/heads/main {old}\n"
+    assert scan.history_log_opts_for_pre_push(tmp_path, stdin) == f"{old}..{new}"
+
+
+def test_history_log_opts_for_pre_push_new_branch_uses_mainline(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@users.noreply.github.com")
+    (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(tmp_path, "add", "a.txt")
+    _git(tmp_path, "commit", "-q", "-m", "main tip")
+    _git(tmp_path, "checkout", "-q", "-b", "feature")
+    (tmp_path / "b.txt").write_text("b\n", encoding="utf-8")
+    _git(tmp_path, "add", "b.txt")
+    _git(tmp_path, "commit", "-q", "-m", "feature tip")
+    new = _git(tmp_path, "rev-parse", "HEAD")
+    zero = "0" * 40
+
+    stdin = f"refs/heads/feature {new} refs/heads/feature {zero}\n"
+    opts = scan.history_log_opts_for_pre_push(tmp_path, stdin)
+    assert opts.endswith(f"..{new}")
+    assert "main" in opts

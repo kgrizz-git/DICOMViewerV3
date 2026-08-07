@@ -93,7 +93,11 @@ def repo_root() -> Path:
 
 
 def staged_python_files(root: Path) -> list[str]:
-    """Return staged ``*.py`` paths (Added/Copied/Modified), repo-relative."""
+    """Return staged ``*.py`` paths (Added/Copied/Modified/Renamed), repo-relative.
+
+    Includes ``R`` so a pure rename of an over-threshold file is still checked
+    under its new path (``--name-only`` reports the destination).
+    """
 
     result = subprocess.run(
         [
@@ -103,7 +107,7 @@ def staged_python_files(root: Path) -> list[str]:
             "diff",
             "--cached",
             "--name-only",
-            "--diff-filter=ACM",
+            "--diff-filter=ACMR",
             "--",
             "*.py",
         ],

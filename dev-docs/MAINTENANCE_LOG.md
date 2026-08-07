@@ -6,6 +6,17 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-07
 
+- Restored **full-history Gitleaks on local pre-push** (same as CI; ~1s on this
+  repo). Push-scoped `--from-pre-push-stdin` remains for optional ad-hoc use.
+
+- Added **CI full-history Gitleaks** to `privacy-gates.yml` Detect Secrets
+  (pinned 8.30.1 binary + redacted wrapper). Raised CI coverage
+  floor from 60% to **65%** (measured TOTAL ~67%).
+
+- Moved the **full pytest** gate off local `pre-push` (too slow)
+  onto CI `pytest` via `--cov-fail-under` (now 65%). Pre-push still runs privacy,
+  PHI, Gitleaks (full history), basedpyright, and advisory lizard/Sonar checks.
+
 - Added a pre-commit **line-count / lizard CCN** gate
   (`scripts/git_hook_line_complexity.py`, wired from `.githooks/pre-commit`) with
   thresholds warn@600 / block@750 lines and block CCN>20. Existing hotspots are

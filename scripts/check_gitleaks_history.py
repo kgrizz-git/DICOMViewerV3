@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Blocking redacted Gitleaks scan of commits reachable from HEAD."""
+"""Blocking redacted Gitleaks scan of git history.
+
+Default (no extra flags): all commits reachable from ``HEAD`` — used by
+pre-push and CI. Optional ``--from-pre-push-stdin`` / ``--since-main`` narrow
+the range for ad-hoc faster scans.
+"""
 
 from __future__ import annotations
 

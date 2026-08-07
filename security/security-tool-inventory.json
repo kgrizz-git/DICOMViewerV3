@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-07-25",
+  "last_verified": "2026-08-07",
   "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
   "policy": {
     "default_data_handling": "local-only",
@@ -14,12 +14,12 @@
       "id": "gitleaks",
       "category": "secret-scanning",
       "purpose": "Blocking staged-tree and Git-history secret scan with content-bound reviewed exceptions.",
-      "install_scope": "system executable",
+      "install_scope": "system executable and pinned CI binary",
       "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
       "tested_version": "8.30.1",
-      "enforcement": ["pre-commit blocking", "pre-push blocking", "repository recreation blocking"],
+      "enforcement": ["pre-commit blocking", "pre-push blocking", "CI blocking", "repository recreation blocking"],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/check_gitleaks_staged.py", "scripts/check_gitleaks_history.py"],
+      "entrypoints": ["scripts/check_gitleaks_staged.py", "scripts/check_gitleaks_history.py", ".github/workflows/privacy-gates.yml"],
       "tracked_configuration": ["security/approved-gitleaks-fingerprints.json"]
     },
     {
