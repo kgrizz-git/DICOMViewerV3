@@ -6,6 +6,15 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-07
 
+- Added a pre-commit **line-count / lizard CCN** gate
+  (`scripts/git_hook_line_complexity.py`, wired from `.githooks/pre-commit`) with
+  thresholds warn@600 / block@750 lines and block CCN>20. Existing hotspots are
+  grandfathered in `scripts/line_complexity_grandfather.json` (40 files, 67
+  functions at initial baseline) at their recorded size/CCN: unchanged or
+  smaller → warn only; **increase above baseline → block**. `--all` reads the
+  worktree; `--staged` reads the index. Documented in `DEVELOPER_SETUP.md` /
+  `CONTRIBUTING.md`.
+
 - Documented local SonarQube Community Build persistence (container vs volume,
   generic shared-server naming, restore-first migration, backups) in
   [`tools/sonarqube/README.md`](../tools/sonarqube/README.md) and linked it from

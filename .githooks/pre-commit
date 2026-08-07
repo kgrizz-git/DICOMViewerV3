@@ -72,6 +72,11 @@ else
   echo "[ruff] No staged Python files to lint."
 fi
 
+# Line-count and complexity gate: warn at 600 lines, block at 750; block CCN>20.
+# Grandfathered files/functions (scripts/line_complexity_grandfather.json) warn only.
+echo "[line-complexity] Checking staged files for line count and complexity..."
+"$PY_BIN" "$REPO_ROOT/scripts/git_hook_line_complexity.py" --staged || exit 1
+
 # Dependency license gate: fail on a new strong-copyleft (GPL/AGPL) dependency.
 # Policy + docs: dev-docs/info/DEPENDENCY_LICENSE_POLICY.md
 echo "[license] Checking dependency licenses..."

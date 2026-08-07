@@ -14,8 +14,12 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 - See **`.cursor/rules`** and project user rules. **Before major refactors only**, copy files to **`backups/`** with an ISO-like date in the name; do not proceed until the backup exists or the user has waived it. See **`scripts/git-hook-prune-backups.py`** for how **`backups/`** is pruned.
 - **Local Git hooks** (details in **`DEVELOPER_SETUP.md`**): the repo-managed
-  pre-commit path blocks the staged artifact gate and
-  `scripts/git_hook_privacy_checks.py --staged`; findings report only path,
+  pre-commit path blocks the staged artifact gate,
+  `scripts/git_hook_privacy_checks.py --staged`, and the line/complexity gate
+  (`scripts/git_hook_line_complexity.py --staged`: warn @600 lines, block @750
+  lines or CCN>20; grandfathered hotspots in
+  `scripts/line_complexity_grandfather.json` warn only when at/below their
+  recorded baseline and **block on growth**); privacy findings report only path,
   line, and rule category. The `commit-msg` hook blocks sensitive metadata
   without echoing matched values. Pre-push runs the full-tree privacy and
   security lanes for `main`. Optional scanner wrappers remain local and are

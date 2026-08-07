@@ -7,6 +7,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Pre-commit line/complexity gate:** `.githooks/pre-commit` now runs
+  `scripts/git_hook_line_complexity.py --staged` (warn at 600 lines, block at
+  750 lines or lizard CCN > 20). Existing hotspots are allowlisted in
+  `scripts/line_complexity_grandfather.json` at their recorded size/CCN
+  (warn only if unchanged or smaller; **block if they grow**). **Semantic
+  versioning note: patch** (developer tooling / hooks only).
 - **Local SonarQube docs:** added [`tools/sonarqube/README.md`](tools/sonarqube/README.md)
   for shared Community Build persistence (container vs volume, restore-first
   recovery of admin/tokens, generic container naming) and linked it from

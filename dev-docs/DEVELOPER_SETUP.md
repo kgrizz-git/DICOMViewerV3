@@ -69,6 +69,17 @@ This sets `core.hooksPath` to `.githooks/`, so Git runs the `pre-commit`, `commi
 version-controlled directory. No file copying — edits to `.githooks/` take effect
 immediately without re-running the installer.
 
+**Line-count / complexity gate:** `pre-commit` runs
+`scripts/git_hook_line_complexity.py --staged` after ruff. Thresholds: warn above
+**600** lines, block above **750** lines, and block lizard cyclomatic complexity
+(**CCN**) above **20**. Paths already over threshold are listed in
+`scripts/line_complexity_grandfather.json` with their measured size/CCN: staying
+at or below that baseline warns only; **growing past the recorded baseline
+blocks** (regression). Refresh the baseline with
+`python scripts/git_hook_line_complexity.py --all --generate-grandfather`
+(requires `lizard` from `requirements-dev.txt`). Use `--all` (worktree) for
+visibility; `--staged` reads the Git index (correct for the hook).
+
 ### Optional direnv setup
 
 The tracked `.envrc` loads an ignored `.env` file and activates an existing
