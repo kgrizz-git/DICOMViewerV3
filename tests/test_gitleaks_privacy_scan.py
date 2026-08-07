@@ -126,3 +126,26 @@ def test_history_log_opts_for_pre_push_new_branch_uses_mainline(
     opts = scan.history_log_opts_for_pre_push(tmp_path, stdin)
     assert opts.endswith(f"..{new}")
     assert "main" in opts
+
+
+def test_history_log_opts_for_pre_push_skips_ref_deletion(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Synthetic")
+    _git(tmp_path, "config", "user.email", "synthetic@users.noreply.github.com")
+    (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(tmp_path, "add", "a.txt")
+    _git(tmp_path, "commit", "-q", "-m", "one")
+    old = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "b.txt").write_text("b\n", encoding="utf-8")
+    _git(tmp_path, "add", "b.txt")
+    _git(tmp_path, "commit", "-q", "-m", "two")
+    new = _git(tmp_path, "rev-parse", "HEAD")
+    zero = "0" * 40
+
+    stdin = (
+        f"refs/heads/feature {zero} refs/heads/feature {old}\n"
+        f"refs/heads/main {new} refs/heads/main {old}\n"
+    )
+    opts = scan.history_log_opts_for_pre_push(tmp_path, stdin)
+    assert opts == f"{old}..{new}"
+    assert zero not in opts

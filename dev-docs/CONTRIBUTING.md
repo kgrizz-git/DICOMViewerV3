@@ -19,10 +19,11 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
   (`scripts/git_hook_line_complexity.py --staged`: warn @600 lines, block @750
   lines or CCN>20; grandfathered hotspots in
   `scripts/line_complexity_grandfather.json` warn only when at/below their
-  recorded baseline and **block on growth**); privacy findings report only path,
-  line, and rule category. The `commit-msg` hook blocks sensitive metadata
-  without echoing matched values. Pre-push runs the full-tree privacy and
-  security lanes for `main`. Optional scanner wrappers remain local and are
+  recorded baseline and **block on growth**; improvements **auto-ratchet** caps
+  downward and `git add` the JSON into the same commit); privacy findings report
+  only path, line, and rule category. The `commit-msg` hook blocks sensitive
+  metadata without echoing matched values. Pre-push runs the full-tree privacy
+  and security lanes for `main`. Optional scanner wrappers remain local and are
   documented in the PHI/PII guardrails; `SKIP` is not a successful scan.
   The static privacy hook is a blocking syntactic guard, not a complete Python
   data-flow proof; fail-closed runtime output/storage boundaries are the

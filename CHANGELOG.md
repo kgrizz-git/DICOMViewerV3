@@ -13,9 +13,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   range/tree scans remain. Push-scoped (`--from-pre-push-stdin`) and
   `--since-main` options stay available for ad-hoc use. **Semantic versioning
   note: patch** (CI / hooks).
-- **CI basedpyright + lizard:** pyright job installs ``lizard`` so
-  ``scripts/git_hook_line_complexity.py`` type-checks cleanly. **Semantic
-  versioning note: patch** (CI).
+- **CI basedpyright + lizard:** pyright and pytest jobs install ``lizard`` so
+  ``scripts/git_hook_line_complexity.py`` type-checks and its tests run.
+  **Semantic versioning note: patch** (CI).
+- **Line-complexity parse-failure safety:** grandfather ratchet skips a file when
+  lizard cannot analyze it (avoids deleting function caps on syntax/parse
+  errors). Gitleaks push-range helper skips ref-deletion updates. Pre-commit runs
+  the line-complexity gate before privacy/Gitleaks so ratcheted grandfather JSON
+  is scanned in the same commit. **Semantic versioning note: patch** (hooks).
 - **Line-complexity grandfather ratchet:** pre-commit automatically lowers or
   removes caps in `scripts/line_complexity_grandfather.json` when staged files
   improve, and stages the JSON into the same commit. **Semantic versioning

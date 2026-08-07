@@ -36,8 +36,15 @@ if [[ "$PRUNE_DAYS" -gt 0 ]]; then
   fi
 fi
 
+# Line-count and complexity gate: warn at 600 lines, block at 750; block CCN>20.
+# Grandfathered files/functions (scripts/line_complexity_grandfather.json) warn
+# only at/below their cap; growth blocks. Improved caps auto-ratchet downward
+# and stage the JSON — run before privacy/Gitleaks so the same commit scans it.
+echo "[line-complexity] Checking staged files for line count and complexity..."
+"$PY_BIN" "$REPO_ROOT/scripts/git_hook_line_complexity.py" --staged || exit 1
+
 # PHI / runtime-artifact gate: never commit captured app config, pytest temp dirs,
-# or data files carrying patient tags or local user paths. Runs first and hard-fails:
+# or data files carrying patient tags or local user paths. Hard-fails:
 # this is the one class of mistake that must not reach a public repo.
 echo "[phi] Checking staged files for PHI and runtime artifacts..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_no_phi_artifacts.py" --staged --root "$REPO_ROOT" || exit 1
@@ -71,12 +78,6 @@ if [[ -n "$STAGED_PY" ]]; then
 else
   echo "[ruff] No staged Python files to lint."
 fi
-
-# Line-count and complexity gate: warn at 600 lines, block at 750; block CCN>20.
-# Grandfathered files/functions (scripts/line_complexity_grandfather.json) warn
-# only at/below their cap; growth blocks. Improved caps auto-ratchet downward.
-echo "[line-complexity] Checking staged files for line count and complexity..."
-"$PY_BIN" "$REPO_ROOT/scripts/git_hook_line_complexity.py" --staged || exit 1
 
 # Dependency license gate: fail on a new strong-copyleft (GPL/AGPL) dependency.
 # Policy + docs: dev-docs/info/DEPENDENCY_LICENSE_POLICY.md

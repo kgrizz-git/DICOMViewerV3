@@ -45,7 +45,7 @@ echo "[pyright] Running basedpyright error gate..."
 # Full pytest + coverage live in CI (see .github/workflows/ci.yml), not here.
 # The suite is large (~thousands of tests); running it on every push made local
 # pushes too slow. Pre-commit already runs agent smoke + ruff + line/CCN gates.
-# Run locally when you want: PYTHONPATH=src pytest tests --cov=src --cov-fail-under=65
+# Run locally (venv on): PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65
 echo "[tests] Skipping full pytest on pre-push (CI owns suite + 65% coverage)."
 
 # Complexity gate (warn only — does not block push).

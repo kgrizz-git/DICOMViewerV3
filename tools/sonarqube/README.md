@@ -112,8 +112,12 @@ Anonymous volumes work but are easy to prune by mistake. After restore succeeds,
 OLD_DATA=$(docker inspect sonarqube --format '{{range .Mounts}}{{if eq .Destination "/opt/sonarqube/data"}}{{.Name}}{{end}}{{end}}')
 OLD_EXT=$(docker inspect sonarqube --format '{{range .Mounts}}{{if eq .Destination "/opt/sonarqube/extensions"}}{{.Name}}{{end}}{{end}}')
 
+# Stop the live container before copying so the H2 DB is not written mid-copy.
+docker stop sonarqube
+
 docker volume create sonarqube-data
 docker volume create sonarqube-extensions
+docker volume create sonarqube-logs
 
 docker run --rm \
   -v "${OLD_DATA}:/from:ro" \
@@ -125,7 +129,6 @@ docker run --rm \
   -v sonarqube-extensions:/to \
   alpine sh -c 'cd /from && cp -a . /to/'
 
-docker stop sonarqube
 docker rm sonarqube
 
 docker run -d \
@@ -134,6 +137,7 @@ docker run -d \
   -p 127.0.0.1:9000:9000 \
   -v sonarqube-data:/opt/sonarqube/data \
   -v sonarqube-extensions:/opt/sonarqube/extensions \
+  -v sonarqube-logs:/opt/sonarqube/logs \
   sonarqube:community
 ```
 
@@ -166,10 +170,13 @@ python scripts/check_local_sonarqube_updates.py
 
 ## Backup
 
-Prefer a backup directory outside any project checkout:
+Prefer a backup directory outside any project checkout. Restrict directory
+permissions before writing archives (for example `umask 077` or
+`chmod 700 ~/sonarqube/backups`):
 
 ```bash
 mkdir -p ~/sonarqube/backups
+chmod 700 ~/sonarqube/backups
 docker run --rm \
   -v sonarqube-data:/data:ro \
   -v "$HOME/sonarqube/backups":/backup \

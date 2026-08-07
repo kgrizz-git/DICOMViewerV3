@@ -122,6 +122,9 @@ def staged_python_files(root: Path) -> list[str]:
         text=True,
         encoding="utf-8",
     )
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip() or f"exit {result.returncode}"
+        raise RuntimeError(f"git diff --cached failed: {detail}")
     return sorted(
         line.strip()
         for line in result.stdout.splitlines()
@@ -188,21 +191,27 @@ def save_grandfather(data: GrandfatherData, path: Path | None = None) -> None:
 
 
 def require_lizard():
-    """Import lizard or exit with an actionable install message."""
+    """Import lizard or raise ``ImportError`` with an actionable install message.
+
+    Callers that are process entry points should catch this and exit non-zero;
+    library/test callers see a normal import failure instead of ``SystemExit``.
+    """
 
     try:
-        import lizard  # type: ignore  # pyright: ignore[reportMissingImports]  # requirements-dev / CI pyright job
-    except ImportError:
-        print(
-            "[line-complexity] FAIL: the 'lizard' package is required. "
-            "Install developer deps: pip install -r requirements-dev.txt",
-            file=sys.stderr,
-        )
-        raise SystemExit(1) from None
+        # requirements-dev / CI installs lizard; keep pyright ignore for editors
+        # that resolve against requirements.txt alone.
+        import lizard  # type: ignore  # pyright: ignore[reportMissingImports]
+    except ImportError as exc:
+        raise ImportError(
+            "the 'lizard' package is required. "
+            "Install developer deps: pip install -r requirements-dev.txt"
+        ) from exc
     return lizard
 
 
-def analyze_content(relpath: str, content: str, *, lizard_module=None) -> list[Violation]:
+def analyze_content(
+    relpath: str, content: str, *, lizard_module=None
+) -> tuple[list[Violation], bool]:
     """Analyze one file's text for line-count and CCN violations.
 
     Args:
@@ -212,7 +221,10 @@ def analyze_content(relpath: str, content: str, *, lizard_module=None) -> list[V
             already called :func:`require_lizard`).
 
     Returns:
-        Zero or more :class:`Violation` rows (grandfather flags unset).
+        ``(violations, lizard_ok)`` where ``lizard_ok`` is False when lizard
+        could not parse the file. Callers must not ratchet grandfather caps
+        when ``lizard_ok`` is False (missing function findings would look like
+        improvements and delete allowlist entries).
     """
 
     lizard = lizard_module or require_lizard()
@@ -243,7 +255,7 @@ def analyze_content(relpath: str, content: str, *, lizard_module=None) -> list[V
             "(syntax error or parse failure)",
             file=sys.stderr,
         )
-        return violations
+        return violations, False
 
     for func in analysis.function_list:
         if func.cyclomatic_complexity > BLOCK_CCN:
@@ -258,7 +270,7 @@ def analyze_content(relpath: str, content: str, *, lizard_module=None) -> list[V
                     grandfathered=False,
                 )
             )
-    return violations
+    return violations, True
 
 
 def mark_grandfathered(violations: list[Violation], data: GrandfatherData) -> None:
@@ -364,20 +376,32 @@ def ratchet_grandfather(
     return changes
 
 
-def stage_grandfather_file(root: Path, grandfather_path: Path) -> None:
-    """``git add`` the grandfather JSON so a ratchet lands in the same commit."""
+def stage_grandfather_file(root: Path, grandfather_path: Path) -> bool:
+    """``git add`` the grandfather JSON so a ratchet lands in the same commit.
+
+    Returns:
+        True when ``git add`` succeeds; False (with a stderr warning) otherwise.
+    """
 
     try:
         rel = grandfather_path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         rel = str(grandfather_path)
-    subprocess.run(
+    result = subprocess.run(
         ["git", "-C", str(root), "add", "--", rel],
         capture_output=True,
         text=True,
         check=False,
         encoding="utf-8",
     )
+    if result.returncode != 0:
+        print(
+            "[line-complexity] WARN: git add failed for grandfather JSON "
+            "(ratchet may not be staged into this commit).",
+            file=sys.stderr,
+        )
+        return False
+    return True
 
 
 def generate_grandfather(
@@ -395,7 +419,11 @@ def generate_grandfather(
         content = worktree_file_content(root, relpath)
         if content is None:
             continue
-        violations = analyze_content(relpath, content, lizard_module=lizard)
+        violations, lizard_ok = analyze_content(
+            relpath, content, lizard_module=lizard
+        )
+        if not lizard_ok:
+            continue
         mark_grandfathered(violations, data)
     save_grandfather(data, path=grandfather_path)
     print(
@@ -410,16 +438,13 @@ def _partition_violations(
 ) -> tuple[list[Violation], list[Violation]]:
     """Split findings into blocking vs warn-only lists."""
 
-    blocking = [
-        v
-        for v in all_violations
-        if v.regressed or (v.blocking and not v.grandfathered)
-    ]
-    warning = [
-        v
-        for v in all_violations
-        if v not in blocking and (not v.blocking or v.grandfathered)
-    ]
+    blocking: list[Violation] = []
+    warning: list[Violation] = []
+    for v in all_violations:
+        if v.regressed or (v.blocking and not v.grandfathered):
+            blocking.append(v)
+        elif not v.blocking or v.grandfathered:
+            warning.append(v)
     return blocking, warning
 
 
@@ -497,8 +522,12 @@ def check_files(
         content = reader(root, relpath)
         if content is None:
             continue
-        violations = analyze_content(relpath, content, lizard_module=lizard)
-        if ratchet:
+        violations, lizard_ok = analyze_content(
+            relpath, content, lizard_module=lizard
+        )
+        if ratchet and lizard_ok:
+            # Skip ratchet when lizard failed — empty function findings would
+            # incorrectly look like CCN improvements and drop grandfather caps.
             ratchet_notes.extend(ratchet_grandfather(data, relpath, violations))
         all_violations.extend(apply_grandfather(violations, data))
 
@@ -547,9 +576,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    lizard = require_lizard()
+    try:
+        lizard = require_lizard()
+    except ImportError:
+        print(
+            "[line-complexity] FAIL: the 'lizard' package is required. "
+            "Install developer deps: pip install -r requirements-dev.txt",
+            file=sys.stderr,
+        )
+        return 1
+
     root = repo_root()
-    files = staged_python_files(root) if args.staged else all_python_files(root)
+    try:
+        files = staged_python_files(root) if args.staged else all_python_files(root)
+    except RuntimeError:
+        print(
+            "[line-complexity] FAIL: could not list staged Python files "
+            "(git diff --cached failed).",
+            file=sys.stderr,
+        )
+        return 1
 
     if not files:
         print("[line-complexity] No Python files to check.")

@@ -211,6 +211,9 @@ def history_log_opts_for_pre_push(root: Path, stdin_text: str) -> str:
         _local_ref, local_oid, _remote_ref, remote_oid = fields
         if not OBJECT_ID.fullmatch(local_oid) or not OBJECT_ID.fullmatch(remote_oid):
             continue
+        if ZERO_OID.fullmatch(local_oid):
+            # Ref deletion — no new commits to scan for the deleted tip.
+            continue
         if ZERO_OID.fullmatch(remote_oid):
             if mainline is not None:
                 ranges.append(f"{mainline}..{local_oid}")

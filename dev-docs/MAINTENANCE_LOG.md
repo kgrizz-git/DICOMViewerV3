@@ -6,11 +6,16 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-07
 
+- **CodeRabbit follow-ups (PR #49):** skip grandfather ratchet when lizard parse
+  fails; skip Gitleaks push ranges for ref deletions; surface ``git`` failures in
+  the line-complexity hook; run line-complexity before privacy/Gitleaks so
+  ratcheted JSON is scanned; Sonar README backup perms + stop-before-volume-copy.
+
 - Restored **full-history Gitleaks on local pre-push** (same as CI; ~1s on this
   repo). Push-scoped `--from-pre-push-stdin` remains for optional ad-hoc use.
 
-- **CI basedpyright:** install ``lizard`` in the pyright job so the line-complexity
-  hook script resolves under ``scripts/`` type-checking.
+- **CI basedpyright / pytest:** install ``lizard`` in the pyright and pytest jobs
+  so the line-complexity hook script and its tests resolve under CI.
 
 - **Grandfather ratchet:** staged line/CCN improvements automatically lower or
   drop caps in `line_complexity_grandfather.json` and `git add` the file into

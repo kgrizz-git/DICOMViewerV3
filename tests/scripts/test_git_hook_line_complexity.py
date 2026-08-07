@@ -6,11 +6,17 @@ import json
 import textwrap
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("lizard")
+
 from scripts import git_hook_line_complexity as ghlc
 
 
 def _analyze(relpath: str, body: str) -> list[ghlc.Violation]:
-    return ghlc.analyze_content(relpath, textwrap.dedent(body))
+    violations, ok = ghlc.analyze_content(relpath, textwrap.dedent(body))
+    assert ok
+    return violations
 
 
 def test_small_clean_file_has_no_violations() -> None:
@@ -31,7 +37,8 @@ def test_small_clean_file_has_no_violations() -> None:
 
 def test_file_at_warn_threshold_is_not_blocking() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(620))
-    violations = ghlc.analyze_content("warn_only.py", body)
+    violations, ok = ghlc.analyze_content("warn_only.py", body)
+    assert ok
     assert len(violations) == 1
     v = violations[0]
     assert v.kind == "file_lines"
@@ -43,7 +50,8 @@ def test_file_at_warn_threshold_is_not_blocking() -> None:
 
 def test_file_at_block_threshold_is_blocking() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     assert len(violations) == 1
     v = violations[0]
     assert v.kind == "file_lines"
@@ -109,7 +117,8 @@ def test_function_over_ccn_threshold_is_blocking() -> None:
             return r
         """
     )
-    violations = ghlc.analyze_content("ccn.py", body)
+    violations, ok = ghlc.analyze_content("ccn.py", body)
+    assert ok
     func_violations = [v for v in violations if v.kind == "function_ccn"]
     assert len(func_violations) == 1
     v = func_violations[0]
@@ -126,7 +135,8 @@ def test_grandfather_marks_item_without_clearing_blocking_flag() -> None:
     """
 
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     data = {"files": {"big.py": 801}, "functions": {}}
     violations = ghlc.apply_grandfather(violations, data)
     assert violations[0].value == 801
@@ -137,7 +147,8 @@ def test_grandfather_marks_item_without_clearing_blocking_flag() -> None:
 
 def test_grandfather_equal_baseline_is_not_regression() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     data = {"files": {"big.py": 801}, "functions": {}}
     violations = ghlc.apply_grandfather(violations, data)
     assert violations[0].regressed is False
@@ -146,7 +157,8 @@ def test_grandfather_equal_baseline_is_not_regression() -> None:
 
 def test_grandfather_increase_is_regression() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(850))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     data = {"files": {"big.py": 801}, "functions": {}}
     violations = ghlc.apply_grandfather(violations, data)
     assert violations[0].value == 851
@@ -215,7 +227,8 @@ def test_grandfather_ccn_increase_is_regression() -> None:
             return r
         """
     )
-    violations = ghlc.analyze_content("ccn.py", body)
+    violations, ok = ghlc.analyze_content("ccn.py", body)
+    assert ok
     func = next(v for v in violations if v.kind == "function_ccn")
     data = {
         "files": {},
@@ -229,7 +242,8 @@ def test_grandfather_ccn_increase_is_regression() -> None:
 
 def test_grandfather_does_not_apply_to_unknown_file() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
-    violations = ghlc.analyze_content("new_file.py", body)
+    violations, ok = ghlc.analyze_content("new_file.py", body)
+    assert ok
     data = {"files": {}, "functions": {}}
     violations = ghlc.apply_grandfather(violations, data)
     assert violations[0].grandfathered is False
@@ -239,7 +253,8 @@ def test_grandfather_does_not_apply_to_unknown_file() -> None:
 
 def test_mark_grandfathered_skips_warning_tier() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(620))
-    violations = ghlc.analyze_content("warn_only.py", body)
+    violations, ok = ghlc.analyze_content("warn_only.py", body)
+    assert ok
     data: dict = {"files": {}, "functions": {}}
     ghlc.mark_grandfathered(violations, data)
     assert "warn_only.py" not in data["files"]
@@ -247,7 +262,8 @@ def test_mark_grandfathered_skips_warning_tier() -> None:
 
 def test_mark_grandfathered_captures_blocking_file() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(800))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     data: dict = {"files": {}, "functions": {}}
     ghlc.mark_grandfathered(violations, data)
     assert data["files"]["big.py"] == 801
@@ -311,7 +327,8 @@ def test_mark_grandfathered_captures_high_ccn_function() -> None:
             return r
         """
     )
-    violations = ghlc.analyze_content("mod.py", body)
+    violations, ok = ghlc.analyze_content("mod.py", body)
+    assert ok
     data: dict = {"files": {}, "functions": {}}
     ghlc.mark_grandfathered(violations, data)
     assert "mod.py::big" in data["functions"]
@@ -454,7 +471,8 @@ def test_check_files_all_mode_uses_worktree_not_index(
 
 def test_ratchet_lowers_file_cap_on_improvement() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(780))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     data: dict = {"files": {"big.py": 900}, "functions": {}}
     notes = ghlc.ratchet_grandfather(data, "big.py", violations)
     assert data["files"]["big.py"] == 781
@@ -463,7 +481,8 @@ def test_ratchet_lowers_file_cap_on_improvement() -> None:
 
 def test_ratchet_removes_file_cap_when_under_block_threshold() -> None:
     body = '"""Module."""\n' + "\n".join(f"# line {i}" for i in range(700))
-    violations = ghlc.analyze_content("big.py", body)
+    violations, ok = ghlc.analyze_content("big.py", body)
+    assert ok
     data: dict = {"files": {"big.py": 900}, "functions": {}}
     notes = ghlc.ratchet_grandfather(data, "big.py", violations)
     assert "big.py" not in data["files"]
@@ -472,7 +491,8 @@ def test_ratchet_removes_file_cap_when_under_block_threshold() -> None:
 
 def test_ratchet_removes_stale_function_cap() -> None:
     body = '"""Module."""\n\ndef small():\n    return 1\n'
-    violations = ghlc.analyze_content("mod.py", body)
+    violations, ok = ghlc.analyze_content("mod.py", body)
+    assert ok
     data: dict = {
         "files": {},
         "functions": {"mod.py::gone": 25},
@@ -480,6 +500,44 @@ def test_ratchet_removes_stale_function_cap() -> None:
     notes = ghlc.ratchet_grandfather(data, "mod.py", violations)
     assert "mod.py::gone" not in data["functions"]
     assert any("removed function cap" in note for note in notes)
+
+
+def test_analyze_content_parse_failure_skips_ratchet_in_check_files(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Lizard parse failure must not drop function grandfather caps."""
+
+    tmp_gf = tmp_path / "grandfather.json"
+    tmp_gf.write_text(
+        json.dumps(
+            {
+                "files": {},
+                "functions": {"broken.py::hot": 30},
+            }
+        ),
+        encoding="utf-8",
+    )
+    broken = tmp_path / "broken.py"
+    broken.write_text("def hot(:\n    pass\n", encoding="utf-8")
+
+    class FakeLizard:
+        class analyze_file:  # noqa: N801 — mirror lizard API shape
+            @staticmethod
+            def analyze_source_code(_name: str, _content: str):
+                raise RuntimeError("parse failed")
+
+    monkeypatch.setattr(ghlc, "repo_root", lambda: tmp_path)
+    result = ghlc.check_files(
+        tmp_path,
+        ["broken.py"],
+        from_index=False,
+        grandfather_path=tmp_gf,
+        lizard_module=FakeLizard,
+        ratchet=True,
+    )
+    assert result == 0
+    saved = json.loads(tmp_gf.read_text(encoding="utf-8"))
+    assert saved["functions"]["broken.py::hot"] == 30
 
 
 def test_check_files_ratchet_persists_lower_cap(

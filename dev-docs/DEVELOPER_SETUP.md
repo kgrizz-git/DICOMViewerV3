@@ -267,7 +267,7 @@ The separate local settings file is passed only by this runner.
 **Full test suite / coverage:** not run on `pre-push` (too slow for every push).
 CI’s `pytest` job runs the full suite with `--cov-fail-under=65` and uploads
 `coverage.xml` for the approved Sonar path. Locally, when you want the same
-check: `PYTHONPATH=src pytest tests --cov=src --cov-fail-under=65`. Pre-commit
+check: `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65`. Pre-commit
 still runs the fast agent smoke harness.
 
 **Gitleaks:** `pre-commit` scans the **staged index**. `pre-push` and CI privacy
