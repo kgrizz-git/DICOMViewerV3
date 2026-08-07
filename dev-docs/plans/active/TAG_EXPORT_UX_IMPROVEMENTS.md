@@ -2,6 +2,7 @@
 
 **Last updated:** 2026-08-07
 **Status:** Draft plan — not yet executed
+**TO_DO tracking:** Remove the corresponding item in `dev-docs/TO_DO.md` (under UX / Workflow) when this plan is fully implemented and merged.
 
 ## Goal
 

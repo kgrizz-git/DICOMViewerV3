@@ -14,11 +14,16 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 - See **`.cursor/rules`** and project user rules. **Before major refactors only**, copy files to **`backups/`** with an ISO-like date in the name; do not proceed until the backup exists or the user has waived it. See **`scripts/git-hook-prune-backups.py`** for how **`backups/`** is pruned.
 - **Local Git hooks** (details in **`DEVELOPER_SETUP.md`**): the repo-managed
-  pre-commit path blocks the staged artifact gate and
-  `scripts/git_hook_privacy_checks.py --staged`; findings report only path,
-  line, and rule category. The `commit-msg` hook blocks sensitive metadata
-  without echoing matched values. Pre-push runs the full-tree privacy and
-  security lanes for `main`. Optional scanner wrappers remain local and are
+  pre-commit path blocks the staged artifact gate,
+  `scripts/git_hook_privacy_checks.py --staged`, and the line/complexity gate
+  (`scripts/git_hook_line_complexity.py --staged`: warn @600 lines, block @750
+  lines or CCN>20; grandfathered hotspots in
+  `scripts/line_complexity_grandfather.json` warn only when at/below their
+  recorded baseline and **block on growth**; improvements **auto-ratchet** caps
+  downward and `git add` the JSON into the same commit); privacy findings report
+  only path, line, and rule category. The `commit-msg` hook blocks sensitive
+  metadata without echoing matched values. Pre-push runs the full-tree privacy
+  and security lanes for `main`. Optional scanner wrappers remain local and are
   documented in the PHI/PII guardrails; `SKIP` is not a successful scan.
   The static privacy hook is a blocking syntactic guard, not a complete Python
   data-flow proof; fail-closed runtime output/storage boundaries are the
@@ -75,7 +80,7 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
   DeepSource, Sentry, and similar repository integrations should remain
   uninstalled or disabled. Use the opt-in local SonarQube runner and local
   security tools when deeper analysis is needed.
-- **Local SonarQube Community Build** is an opt-in developer tool, not a hook or CI gate. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py) supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties) file explicitly, can use Docker for the scanner, and writes the last successful submission timestamp to ignored `.sonar-local/last-analysis.json`. See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for token, server, coverage, and Docker-network guidance. After analysis, [`scripts/report_local_sonarqube_issues.py`](../scripts/report_local_sonarqube_issues.py) reports BLOCKER, CRITICAL BUG/VULNERABILITY, and MAJOR findings scoped to the `dicom-viewer-v3` component key.
+- **Local SonarQube Community Build** is an opt-in developer tool, not a hook or CI gate. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py) supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties) file explicitly, can use Docker for the scanner, and writes the last successful submission timestamp to ignored `.sonar-local/last-analysis.json`. See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for token, server, coverage, and Docker-network guidance, and [`tools/sonarqube/README.md`](../tools/sonarqube/README.md) for shared-server persistence / restore-first recovery. After analysis, [`scripts/report_local_sonarqube_issues.py`](../scripts/report_local_sonarqube_issues.py) reports BLOCKER, CRITICAL BUG/VULNERABILITY, and MAJOR findings scoped to the `dicom-viewer-v3` component key.
   Run it with coverage at least every 14 days, before releases, and after large
   dependency or security-sensitive changes. Main-push hooks provide a
   non-blocking stale/missing reminder and weekly Docker Hub/SonarSource update

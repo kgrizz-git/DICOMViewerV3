@@ -108,18 +108,20 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
+          # requirements-dev.txt includes requirements.txt plus lizard, pytest-cov, etc.
+          pip install -r requirements-dev.txt
 
       - name: Run tests with coverage
         env:
           PYTHONPATH: src
           QT_QPA_PLATFORM: offscreen
         run: |
+          # Project-wide coverage floor. Local measured TOTAL is ~67%; floor is 65%.
           python -m pytest tests \
             --cov=src \
             --cov-report=term \
             --cov-report=xml:coverage.xml \
+            --cov-fail-under=65 \
             -v --tb=short
 
       - name: Upload coverage report for SonarQube scan
@@ -168,14 +170,16 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Create virtual environment and install dependencies
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/pip install -r requirements.txt
-          .venv/bin/pip install "basedpyright>=1.39.3"
+          # requirements-dev.txt supplies lizard + basedpyright (and app deps).
+          .venv/bin/pip install -r requirements-dev.txt
 
       - name: Run basedpyright (errors must be 0)
         run: .venv/bin/python scripts/check_basedpyright_errors.py

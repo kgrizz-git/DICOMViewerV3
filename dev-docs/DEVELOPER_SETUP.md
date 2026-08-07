@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-02
+**Last updated:** 2026-08-07
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -69,6 +69,22 @@ This sets `core.hooksPath` to `.githooks/`, so Git runs the `pre-commit`, `commi
 version-controlled directory. No file copying — edits to `.githooks/` take effect
 immediately without re-running the installer.
 
+**Line-count / complexity gate:** `pre-commit` runs
+`scripts/git_hook_line_complexity.py --staged` before the PHI / privacy /
+Gitleaks gates (so a ratcheted grandfather JSON is scanned in the same commit)
+and before ruff. Thresholds: warn above
+**600** lines, block above **750** lines, and block lizard cyclomatic complexity
+(**CCN**) above **20**. Paths already over threshold are listed in
+`scripts/line_complexity_grandfather.json` with their measured size/CCN: staying
+at or below that baseline warns only; **growing past the recorded baseline
+blocks** (regression). When a staged change **improves** a grandfathered
+file/function, the hook **ratchets the cap down** (or removes the entry if it
+falls under the block threshold) and `git add`s the JSON into the same commit
+so the ceiling cannot climb back up later. Refresh the full baseline with
+`python scripts/git_hook_line_complexity.py --all --generate-grandfather`
+(requires `lizard` from `requirements-dev.txt`). Use `--all` (worktree) for
+visibility; `--staged` reads the Git index (correct for the hook).
+
 ### Optional direnv setup
 
 The tracked `.envrc` loads an ignored `.env` file and activates an existing
@@ -113,12 +129,18 @@ service other than the approved scan.
 The local scan is intentionally **not** a Git hook: it can take time, and
 `--with-coverage` runs the full pytest suite first.
 
-1. Start the existing local SonarQube Community Build service and confirm its UI
-   is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
+1. Start the local SonarQube Community Build **server** (Docker) and confirm its
+   UI is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
    loopback URL such as `http://127.0.0.1:9000`). Remote hosts are rejected so
-   the local analysis token cannot be sent off-machine.
+   the local analysis token cannot be sent off-machine. Use one shared server for
+   all local projects: generic container name (`sonarqube`), durable **named**
+   data volumes, and `--restart unless-stopped`. Prefer restoring an existing
+   data volume (so admin password and tokens keep working) over creating a fresh
+   empty database. Full container-vs-volume explanation, restore steps, and
+   backup notes: [`tools/sonarqube/README.md`](../tools/sonarqube/README.md).
 2. In its UI, create a user or project analysis token at **User → My Account →
-   Security**. Do not put the token in a tracked file. Copy `.env.example` to
+   Security** (skip this if you restored a volume that already has a working
+   token). Do not put the token in a tracked file. Copy `.env.example` to
    ignored `.env` and populate `SONAR_TOKEN`. Both the runner and reporter load
    simple `KEY=VALUE` entries from that file automatically; an explicitly
    exported variable takes precedence. With direnv, also run `direnv allow`.
@@ -243,6 +265,18 @@ The separate local settings file is passed only by this runner.
 **Privacy / logging gate:** `scripts/git-hook-security-gate.py` invokes **`scripts/git_hook_privacy_checks.py`** on every **pre-commit** and **pre-push** invocation (before branch-gated scans). It reads the **staged** index for **`src/*.py`**: forbids real **`traceback.print_exc(`** calls (matches inside **`tokenize`** **STRING**/**COMMENT** tokens—e.g. docstrings—are skipped); on **git-added** lines only, applies heuristics for patient tag names in logs, path-like literals in **`logger.*`** calls, raw-exception patterns in **`QMessageBox`**-style calls, and **`logger.*`** with non-literal messages without **`sanitize_message`** / **`sanitize_exception`**. Set **`DICOMVIEWER_PRIVACY_HOOK=warn`** to print findings without blocking. From repo root: `.venv\Scripts\python.exe scripts\git_hook_privacy_checks.py`.
 
 **Static typing gate:** the `pre-push` hook runs `scripts/check_basedpyright_errors.py`, matching the GitHub **Pyright** workflow: **0 basedpyright errors** are required across `src/` and `scripts/`, while the existing warning baseline is reported but does not block pushes.
+
+**Full test suite / coverage:** not run on `pre-push` (too slow for every push).
+CI’s `pytest` job runs the full suite with `--cov-fail-under=65` and uploads
+`coverage.xml` for the approved Sonar path. Locally, when you want the same
+check: `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65`. Pre-commit
+still runs the fast agent smoke harness.
+
+**Gitleaks:** `pre-commit` scans the **staged index**. `pre-push` and CI privacy
+gate both run **full reachable history** via `scripts/check_gitleaks_history.py`
+(~1s on this repo). Narrowed push-only scanning remains available with
+`--from-pre-push-stdin` / `--since-main` for ad-hoc use. CI also runs TruffleHog
+range/tree scans.
 
 The `pre-commit` hook also prunes **`backups/`** when the current branch is
 **`main`** or **`WIP`**. **Intent age** is **not** plain filesystem mtime for

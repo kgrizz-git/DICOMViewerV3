@@ -6,6 +6,45 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **Pre-push / CI Gitleaks:** both run full reachable history via
+  `scripts/check_gitleaks_history.py` (~1s locally). CI privacy gate installs
+  pinned Gitleaks **8.30.1** and uses the same redacted wrapper; TruffleHog
+  range/tree scans remain. Push-scoped (`--from-pre-push-stdin`) and
+  `--since-main` options stay available for ad-hoc use. **Semantic versioning
+  note: patch** (CI / hooks).
+- **CI basedpyright + lizard:** pytest and pyright jobs install
+  ``requirements-dev.txt`` (shared lizard / basedpyright pins) so
+  ``scripts/git_hook_line_complexity.py`` type-checks and its tests run.
+  **Semantic versioning note: patch** (CI).
+- **Line-complexity parse-failure safety:** grandfather ratchet skips a file when
+  ``ast.parse`` fails or lizard raises (real lizard returns an empty function
+  list on syntax errors without raising — do not treat that as an improvement).
+  Duplicate lizard function names in one file are labeled as
+  ``<function>@<lineno>`` so ratchet and allowlist recording cannot collapse
+  caps onto one survivor. Gitleaks push-range helper
+  skips ref-deletion updates. Pre-commit runs the line-complexity gate before
+  privacy/Gitleaks so ratcheted grandfather JSON is scanned in the same commit.
+  **Semantic versioning note: patch** (hooks).
+- **Line-complexity grandfather ratchet:** pre-commit automatically lowers or
+  removes caps in `scripts/line_complexity_grandfather.json` when staged files
+  improve, and stages the JSON into the same commit. **Semantic versioning
+  note: patch** (developer tooling).
+- **Coverage floor 65%:** CI `pytest` uses `--cov-fail-under=65` (was 60). Local
+  measured TOTAL coverage is about **67%**. **Semantic versioning note: patch**.
+- **Pre-push speed:** removed the full `pytest --cov` run from
+  `.githooks/pre-push` (CI owns the suite). **Semantic versioning note: patch**.
+- **Pre-commit line/complexity gate:** `.githooks/pre-commit` now runs
+  `scripts/git_hook_line_complexity.py --staged` (warn at 600 lines, block at
+  750 lines or lizard CCN > 20). Existing hotspots are allowlisted in
+  `scripts/line_complexity_grandfather.json` at their recorded size/CCN
+  (warn only if unchanged or smaller; **block if they grow**). **Semantic
+  versioning note: patch** (developer tooling / hooks only).
+- **Local SonarQube docs:** added [`tools/sonarqube/README.md`](tools/sonarqube/README.md)
+  for shared Community Build persistence (container vs volume, restore-first
+  recovery of admin/tokens, generic container naming) and linked it from
+  developer setup. **Semantic versioning note: patch** (developer docs only).
+
 ---
 
 ## [0.4.0] - (not yet released)

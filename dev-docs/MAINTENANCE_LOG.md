@@ -1,8 +1,51 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-07
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-07
+
+- **CodeRabbit / LongCat follow-ups (PR #49):** skip grandfather ratchet when
+  ``ast.parse`` fails (real lizard does not raise on syntax errors); defensive
+  ``int()`` on malformed grandfather caps; surface failed ``git add`` of
+  ratcheted JSON; fix DEVELOPER_SETUP hook-order docs; extract shared high-CCN
+  test fixture; disambiguate duplicate lizard function names with
+  ``<function>@<lineno>`` labels.
+
+- Restored **full-history Gitleaks on local pre-push** (same as CI; ~1s on this
+  repo). Push-scoped `--from-pre-push-stdin` remains for optional ad-hoc use.
+
+- **CI basedpyright / pytest:** install ``lizard`` in the pyright and pytest jobs
+  so the line-complexity hook script and its tests resolve under CI.
+
+- **Grandfather ratchet:** staged line/CCN improvements automatically lower or
+  drop caps in `line_complexity_grandfather.json` and `git add` the file into
+  the same commit so ceilings cannot climb back up.
+
+- Added **CI full-history Gitleaks** to `privacy-gates.yml` Detect Secrets
+  (pinned 8.30.1 binary + redacted wrapper). Raised CI coverage
+  floor from 60% to **65%** (measured TOTAL ~67%).
+
+- Moved the **full pytest** gate off local `pre-push` (too slow)
+  onto CI `pytest` via `--cov-fail-under` (now 65%). Pre-push still runs privacy,
+  PHI, Gitleaks (full history), basedpyright, and advisory lizard/Sonar checks.
+
+- Added a pre-commit **line-count / lizard CCN** gate
+  (`scripts/git_hook_line_complexity.py`, wired from `.githooks/pre-commit`) with
+  thresholds warn@600 / block@750 lines and block CCN>20. Existing hotspots are
+  grandfathered in `scripts/line_complexity_grandfather.json` (40 files, 67
+  functions at initial baseline) at their recorded size/CCN: unchanged or
+  smaller → warn only; **increase above baseline → block**. `--all` reads the
+  worktree; `--staged` reads the index. Documented in `DEVELOPER_SETUP.md` /
+  `CONTRIBUTING.md`.
+
+- Documented local SonarQube Community Build persistence (container vs volume,
+  generic shared-server naming, restore-first migration, backups) in
+  [`tools/sonarqube/README.md`](../tools/sonarqube/README.md) and linked it from
+  [`DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md). Branch
+  `chore/local-devtools-hooks-and-docs` is the landing place for related local
+  hook/docs follow-ups.
 
 Use this log for CI, static analysis, harness changes, dependency-verification passes, repo hygiene, doc-garden cleanup, and other maintainer workflow notes. Use [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible product/release changes. Use [`TO_DO.md`](TO_DO.md) only for active backlog items and near-term follow-ups.
 
