@@ -2,11 +2,11 @@
 
 **Created:** 2026-08-07  
 **Status:** Draft  
-**Target:** `src/main.py` (2494 lines → 4 files ≤750 lines each)
+**Target:** `src/main.py` (2494 lines → 6 files: `main.py` + 5 mixin modules, each ≤750 lines)
 
 ## Summary
 
-The `src/main.py` file is currently the largest in the codebase at 2494 lines and is grandfathered in the line complexity hook. This plan outlines a phased approach to split it into 4 files each under the 750-line threshold while maintaining functionality, test coverage, and docstring quality.
+The `src/main.py` file is currently the largest in the codebase at 2494 lines and is grandfathered in the line complexity hook. This plan outlines a phased approach to split it into `main.py` plus 5 mixin modules (6 files total), each under the 750-line threshold, while maintaining functionality, test coverage, and docstring quality.
 
 ## Current State Analysis
 
@@ -19,7 +19,7 @@ The `src/main.py` file is currently the largest in the codebase at 2494 lines an
   - Module-level functions: `exception_hook` (2431), `install_application_privacy_boundaries` (2454), `main` (2472)
 
 ### Method Groupings in DICOMViewerApp
-The class contains methods that fall into logical categories. The counts below are **approximate/illustrative**; the authoritative, complete method→file mapping is generated in Phase 1 (see Phase 1, Task 5 / Appendix A) and replaces the `etc.` placeholders in later phases.
+The class contains methods that fall into logical categories. The counts below are **approximate/illustrative**; the authoritative, complete method→file mapping is generated in Phase 2 (see Phase 2, Task 5 / Appendix A) and replaces the `etc.` placeholders in later phases.
 
 1. **Initialization (4 `_init_*`-prefixed + 2 setup methods):** `__init__`, `_init_core_managers`, `_init_main_window_and_layout`, `_init_view_widgets`, `_post_init_subwindows_and_handlers`, `_init_controllers_and_tools`, `_initialize_handlers`, `_setup_ui`, `_connect_signals` (note: only 4 methods carry the `_init_` prefix; the rest are setup/orchestration methods).
 2. **Subwindow Management (25 methods):** `_build_managers_for_subwindow`, `_initialize_subwindow_managers`, `_get_subwindow_dataset`, `_get_subwindow_slice_index`, etc.
@@ -56,10 +56,10 @@ python scripts/git_hook_line_complexity.py --all   # repo-wide line + CCN check
 
 ### Grandfather model (important for this refactor)
 The allowlist `scripts/line_complexity_grandfather.json` has two maps:
-- `files`: `path -> line_count` (currently `src/main.py: 2494`). Removing `src/main.py` here in Phase 5 means its new length is subject to `BLOCK_LINES = 750` — but the file is being *shrunk*, so this is fine.
+- `files`: `path -> line_count` (currently `src/main.py: 2494`). Removing `src/main.py` here in Phase 6 means its new length is subject to `BLOCK_LINES = 750` — but the file is being *shrunk*, so this is fine.
 - `functions`: `path::name -> CCN` (67 entries today; **zero** for `src/main.py`). A function is allowed only while its CCN is at or below the recorded cap; the hook **auto-ratchets the cap down** when a function improves, and **blocks** any growth past the recorded cap.
 
-**Critical implication:** `src/main.py` currently has **no** grandfathered high-CCN functions. When methods are moved into the new mixin files, their CCN travels with them. Any moved method whose CCN exceeds 20 will **immediately block the commit** in the new file. Therefore complexity reduction cannot be deferred to a separate later effort — it must be done **as each method is extracted** (see Phase 6). This is why Phase 6 is part of this plan rather than a separate plan.
+**Critical implication:** `src/main.py` currently has **no** grandfathered high-CCN functions. When methods are moved into the new mixin files, their CCN travels with them. Any moved method whose CCN exceeds 20 will **immediately block the commit** in the new file. Therefore complexity reduction cannot be deferred to a separate later effort — it must be done **as each method is extracted** (see Phase 7). This is why Phase 7 is part of this plan rather than a separate plan.
 
 Current grandfather status: `src/main.py` file entry = 2494; `functions` entries for `src/main.py` = 0.
 
@@ -73,10 +73,11 @@ Composition model:
 
 1. Keep `DICOMViewerApp` in `src/main.py` as the main class, with `QObject` as its **sole** Qt base.
 2. Extract method groups into **plain mixin classes** (no `QObject` base) in separate files.
-3. Compose via multiple inheritance: `class DICOMViewerApp(QObject, InitializationMixin, SubwindowManagementMixin, MPRNavigationMixin, UIHandlersMixin, FileOperationsMixin, DisplayProjectionMixin, SettingsLayoutMixin, TagEditingMixin, ROIWorkflowMixin):`. Python C3 linearization resolves bases **left-to-right, so earlier-listed bases take precedence** — i.e. a method defined in `InitializationMixin` overrides the same method in a later-listed mixin. Document this override precedence explicitly (Appendix A lists which mixin owns each method, so collisions are intentional/known).
-4. Each mixin file stays under 750 lines. Because 4 files × 750 = 3000 leaves no margin for duplicated structure (imports, module docstrings, class declarations) and the mandated docstrings, target **5 mixin files + `main.py`** (see Target File Structure). If any single mixin still exceeds 750 after extraction, split it further (e.g. separate `TagEditingMixin` / `ROIWorkflowMixin`).
-5. **`Signal` declarations cannot move to plain mixins.** PySide6 requires `Signal` instances to be class attributes on a `QObject` subclass. `src/main.py` declares exactly one (`tag_export_union_ready = Signal(int, object)` at line 269); it must remain on `DICOMViewerApp` in `src/main.py`. Mixins connect to / emit it via `self.tag_export_union_ready` but never declare it.
-6. **Typing across mixins:** mixin methods reference `self.layout`, `self.study_cache`, etc. To satisfy Pyright without a runtime circular import, each mixin file uses `if TYPE_CHECKING:` to import `DICOMViewerApp` and annotates `self: "DICOMViewerApp"` on methods that touch shared state. Add `pyright src/` to the verification commands.
+ 3. Compose via multiple inheritance: `class DICOMViewerApp(QObject, InitializationMixin, SubwindowManagementMixin, MPRNavigationMixin, UIHandlersMixin, FileOperationsMixin, DisplayProjectionMixin, SettingsLayoutMixin, TagEditingMixin, ROIWorkflowMixin):`. Python C3 linearization resolves bases **left-to-right, so earlier-listed bases take precedence** — i.e. a method defined in `InitializationMixin` overrides the same method in a later-listed mixin. Relying on implicit shadowing is a maintenance hazard, so **method-name collisions across mixins are prohibited** (enforced by a Phase 2 test, see below). Each method must have exactly one owning mixin; Appendix A is the authoritative ownership map.
+ 4. Each mixin file stays under 750 lines. Because 4 files × 750 = 3000 leaves no margin for duplicated structure (imports, module docstrings, class declarations) and the mandated docstrings, target **5 mixin files + `main.py`** (see Target File Structure). If any single mixin still exceeds 750 after extraction, split it further (e.g. separate `TagEditingMixin` / `ROIWorkflowMixin` into their own files → 6 mixins + `main.py` = 7 files). Plan for up to 7 files if docstrings push a heavy mixin over budget.
+ 5. **`Signal` declarations cannot move to plain mixins.** PySide6 requires `Signal` instances to be class attributes on a `QObject` subclass. `src/main.py` declares exactly one (`tag_export_union_ready = Signal(int, object)` at line 269); it must remain on `DICOMViewerApp` in `src/main.py`. Mixins connect to / emit it via `self.tag_export_union_ready` but never declare it.
+ 6. **Mixins MUST NOT define `__init__`.** PySide6's `QObject` does not cooperatively call `super().__init__()`; a mixin `__init__` would be skipped or break the chain. All initialization happens in `DICOMViewerApp.__init__` via the explicit named setup methods (`_init_*`, `_setup_*`, `_connect_*`, `_initialize_*`), which call directly into the mixin methods. No mixin owns object construction.
+ 7. **Typing across mixins:** each new mixin file starts with `from __future__ import annotations` (so `self: DICOMViewerApp` needs no quotes) and uses `if TYPE_CHECKING:` to import `DICOMViewerApp`. Annotate shared-state access on methods that touch `self.<app-attr>`. Type-check via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`).
 7. Shared/cross-mixin state is accessed through explicit accessor helpers (following `DisplayConfigMixin._config()`/`_save_config()`) where it reduces risk, but a full rewrite of every `self.attribute` into `self._get_attribute()` across all 239 methods is **out of scope** (see Risk Assessment, State/Cross-Mixin Dependencies). Methods may read `self.<attr>` directly as long as init ordering guarantees the attribute exists; accessor helpers are used only for the highest-churn shared state.
 
 ### Target File Structure (5 mixin files + main.py)
@@ -111,7 +112,29 @@ Composition model:
 
 ## Phased Implementation Plan
 
-### Phase 1: Preparation and Infrastructure
+### Phase 0: Test Safety Net (prerequisite — do before any extraction)
+**Goal:** Establish automated confidence that the refactor does not break `DICOMViewerApp` orchestration, because the existing `tests/test_main_*.py` suite covers only ~initialization + 2 signal slots (per `test_coverage_assessment_20260808_004301.md`, `src/main.py` is omitted from `.coveragerc` and achieves only ~53% line coverage when measured, almost entirely init paths). Passing the current suite gives near-zero confidence that signal wiring, delegation signatures, or subwindow focus sync survive the move.
+
+**Context / harness:** `DICOMViewerApp()` is already instantiable in tests via `@pytest.mark.qt` + the `qapp` fixture (`tests/conftest.py`); `tests/test_main_signals_view.py` already verifies two slots (`privacy_view_toggled`, `smooth_when_zoomed_toggled`). New tests follow that pattern — instantiate `main_module.DICOMViewerApp()`, emit signals, assert delegated state/method calls. No GUI launch required for most; use a fixture that builds the app with lightweight/mock managers where a full real manager tree is heavy.
+
+**Tasks (add these suites; each pins current behavior so the refactor is observable):**
+1. **Signal-to-slot wiring tests** — extend `tests/test_main_signals_view.py` (or add `tests/test_main_signal_wiring.py`) to cover the main window/toolbar/menu signals wired in `_connect_signals()` / `_connect_view_signals()`: emit each UI signal and assert the target `DICOMViewerApp` slot is invoked with the correct signature and updates the expected state. This catches silent `connect()` breakage during the move.
+2. **Subwindow focus & multi-pane lifecycle tests** — test `_on_focused_subwindow_changed()` and assert `DICOMViewerApp` active pointers (`image_viewer`, `view_state_manager`, `slice_display_manager`, etc.) update correctly; cover `_update_focused_subwindow_references()`, `_redisplay_subwindow_slice()`, `_clear_subwindow()`, `_close_series()`, `_close_study()`.
+3. **Facade / action delegation tests** — unit-test `DICOMViewerApp` facade delegation methods, asserting parameters are forwarded with correct types/names to `_export_app_facade`, `_qa_app_facade`, `_mpr_controller` (use mocks for the underlying objects).
+4. **Event filter / shortcut dispatch tests** — test `DICOMViewerApp.eventFilter` with synthetic `QKeyEvent`s for ROI deletion and layout hotkeys.
+5. **Tag export union background-thread tests** — test `get_tag_export_union_snapshot` / `_drain_tag_export_union_worker` with a fixture to ensure no deadlock/thread leak.
+6. **Coverage gate:** temporarily remove `src/main.py` from the `.coveragerc` omit list and capture a baseline coverage number for `src/main.py`; restore the omit after (do not change the committed omit policy in this phase — it is out of scope). The baseline informs how much the new suites improve confidence.
+7. Record the pre-refactor `interrogate` docstring baseline (B) and the `src/main.py` coverage baseline from Task 6.
+
+**Acceptance:** New suites pass against the **current** (un-refactored) `src/main.py`. They are the regression oracle for Phases 1-7 — if any later phase breaks wiring/delegation, these fail.
+
+**Tests to Run:**
+```bash
+python -m pytest tests/test_main_signals_view.py tests/test_main_privacy_lifecycle.py tests/test_main_signal_wiring.py -v
+python -m pytest tests/ -k "main or subwindow or signal or facade or eventfilter or tag_export" -v
+```
+
+### Phase 2: Preparation and Infrastructure
 **Goal:** Set up infrastructure and validate approach
 
 **Tasks:**
@@ -120,13 +143,18 @@ Composition model:
  3. Run existing test suite to establish baseline
  4. Document the mixin composition pattern in ARCHITECTURE.md
  5. **Generate Appendix A**: run an `ast`/`grep` scan of `src/main.py` to produce the **complete, enumerated** method→file mapping (every one of the 239 methods, no `etc.`). This appendix supersedes the illustrative category lists and is the authoritative work item for Phases 2-4.
- 6. **Update `scripts/check_architecture_boundaries.py`** to map `src/main_app_*.py` to the `"main"` domain (mirror the `src/main.py` branch in `importing_domain()` at line 76), so the new files are not flagged as unknown-domain. Re-run `python scripts/check_architecture_boundaries.py` to confirm clean.
- 7. Add a `pyright src/` type-check pass to the verification set (mixin `self` typing via `TYPE_CHECKING`).
+  6. **Update `scripts/check_architecture_boundaries.py`** so `src/main_app_*.py` is treated as the `"main"` domain. The script resolves domain in **two** places that must both be updated:
+     - `importing_domain()` (line 76): add a branch normalizing `main_app_*.py` → `"main"` (same as `main.py`).
+     - `top_level_package()` (line 55): for `src.main_app_X` imports, return `"main"` instead of `"main_app_X"`, so that `violation_reason()` still blocks illegal imports *into* the main domain (e.g. a `gui` module importing `src.main_app_initialization` must be flagged, the same as importing `src.main`).
+     Re-run `python scripts/check_architecture_boundaries.py` to confirm clean.
+  7. Add a type-check pass via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`) to the verification set (mixin `self` typing via `TYPE_CHECKING`).
 
-**Phase 1 temporary test must assert:**
+**Phase 2 temporary test must assert:**
 - `DICOMViewerApp` is a subclass of `QObject` and of every mixin class.
 - A representative method from each mixin resolves via `DICOMViewerApp`'s MRO (i.e., `hasattr(DICOMViewerApp, "<method>")`).
 - `DICOMViewerApp.__init__` chains `super().__init__()` exactly once and reaches `QObject.__init__` (guards against a second `QObject` base or a broken MRO).
+- **No mixin defines `__init__`** (each mixin class has no `__init__` attribute).
+- **Zero method-name collisions across mixins:** collect `dir()` of every mixin class (excluding `object`/`QObject` dunder methods) and assert the intersection of user-defined method names is empty. This enforces Composition model item 3 (no implicit shadowing).
 
 **Tests to Run:**
 ```bash
@@ -140,19 +168,21 @@ python -m pytest tests/ -k "main" -v
 - A second `QObject` base (if a mixin wrongly subclasses `QObject`) raises `TypeError` at class definition time.
 - `Signal` declarations placed on a plain mixin fail at class-definition time (PySide6 requires them on the `QObject` subclass).
 - Fragile base class: methods reach across mixins via `self`, so init ordering and shared-attribute contracts matter.
-- Pyright will flag `self.<app-attr>` as unbound in mixin files unless typed via `TYPE_CHECKING` + `self: "DICOMViewerApp"`.
-- `scripts/check_architecture_boundaries.py` maps only `src/main.py` to domain `"main"`; new `src/main_app_*.py` files resolve to domain `""` and will be reported as unknown-domain violations.
+ - basedpyright will flag `self.<app-attr>` as unbound in mixin files unless typed via `TYPE_CHECKING` + `self: DICOMViewerApp` (with `from __future__ import annotations`).
+ - `scripts/check_architecture_boundaries.py` maps only `src/main.py` to domain `"main"`; new `src/main_app_*.py` files resolve to domain `""` and will be reported as unknown-domain violations unless updated in both `importing_domain()` and `top_level_package()` (see Task 6).
 
 **Mitigation:**
 - Mixins are **plain classes** (no `QObject` base); only `DICOMViewerApp(QObject, ...)` names `QObject`. Document the exact base list and override precedence (earlier base wins).
 - Keep `Signal` declarations on `DICOMViewerApp` in `src/main.py` (see Composition model item 5).
+- Mixins MUST NOT define `__init__`; all init goes through `DICOMViewerApp.__init__` calling named setup methods (Composition model item 6).
+- Prohibit method-name collisions across mixins; enforce with the Phase 2 collision test (Composition model item 3).
 - Shared state goes through explicit accessor helpers (mirror `DisplayConfigMixin._config()`) where it reduces risk; otherwise rely on documented init ordering.
-- Add the MRO/initialization test above; add a `super()`-chained `__init__` test that exercises all mixins.
-- Add `if TYPE_CHECKING:` import of `DICOMViewerApp` and annotate `self: "DICOMViewerApp"` in mixin methods touching shared state; include `pyright src/` in verification.
-- **Phase 1 must update `scripts/check_architecture_boundaries.py`** so `src/main_app_*.py` maps to the `"main"` domain (treat them like `main.py`), otherwise the architecture-boundary check fails on every new file.
+- Add the MRO/initialization/collision tests above.
+- Add `from __future__ import annotations` + `if TYPE_CHECKING:` import of `DICOMViewerApp`; annotate `self: DICOMViewerApp` in mixin methods touching shared state; include `python scripts/check_basedpyright_errors.py` in verification.
+- Phase 2 Task 6 updates `scripts/check_architecture_boundaries.py` in both `importing_domain()` and `top_level_package()` so `main_app_*` is the `"main"` domain.
 
 
-### Phase 2: Extract Initialization Methods
+### Phase 3: Extract Initialization Methods
 **Goal:** Move all `_init_*` methods to InitializationMixin
 
 **Tasks:**
@@ -189,7 +219,7 @@ python -m pytest tests/test_main_window_theme.py -v
 - Shared state via explicit accessor helpers, not scattered `getattr`.
 - Add assertions for required attributes at the start of init methods.
 
-### Phase 3: Extract Subwindow Management Methods
+### Phase 4: Extract Subwindow Management Methods
 **Goal:** Move subwindow and MPR methods to SubwindowManagementMixin + MPRNavigationMixin
 
 **Tasks:**
@@ -218,7 +248,7 @@ python -m pytest tests/test_main_signals_view.py -v
 - Use explicit accessor helpers for shared state.
 - Add integration tests that exercise subwindow + MPR together.
 
-### Phase 4: Extract UI Handler Methods
+### Phase 5: Extract UI Handler Methods
 **Goal:** Move UI signal handlers, file operations, display, and settings to their mixins
 
 **Tasks:**
@@ -251,18 +281,19 @@ python -m pytest tests/test_main_window_toast.py -v
 - Add signal wiring verification tests
 - Use explicit connection in initialization
 
-### Phase 5: Final Cleanup and Validation
+### Phase 6: Final Cleanup and Validation
 **Goal:** Complete refactoring and ensure all requirements met
 
 **Tasks:**
-1. Verify all files are under 750 lines
+1. Verify all files are under 750 lines (plan for 7 files if any mixin overflows).
 2. Refresh the grandfather baseline with `python scripts/git_hook_line_complexity.py --all --generate-grandfather` (this **regenerates** the JSON from the current worktree, so do **not** hand-edit/remove the `src/main.py` entry first — the regenerated list will reflect the now-smaller `main.py` and the new mixin files automatically).
-3. Confirm no new `functions` grandfather entries were needed for the mixin files (any CCN>20 function must have been reduced in Phase 6, not grandfathered)
+3. **Validate the grandfather diff:** run `git diff scripts/line_complexity_grandfather.json` and confirm **NO new entries appear under the `functions` map** for the mixin files. `--generate-grandfather` silently records any remaining CCN>20 function; if such an entry appears, return to Phase 7 and reduce it rather than shipping the grandfather entry.
 4. Run full test suite
 5. Update documentation
-6. Verify docstring coverage against the baseline
+6. Verify docstring coverage (see Success Criterion 4 heuristic below)
 7. Run privacy gate: `python scripts/git_hook_privacy_checks.py --staged` (moving 200+ methods touches many dialog/debug/logging paths)
 8. Run debug-flags check (any `DEBUG_*` left `True` fails CI; gate new tracing behind `src/utils/debug_flags.py`)
+9. Run the agent smoke harness (mandated by AGENTS.md before claiming done): `python scripts/agent_smoke_harness.py` — splitting the app root risks breaking startup/signal wiring, so this is a hard gate.
 
 **Tests to Run:**
 ```bash
@@ -270,7 +301,9 @@ python -m pytest tests/ -v
 python scripts/git_hook_line_complexity.py --all
 python scripts/check_repo_harness.py
 python scripts/check_architecture_boundaries.py
+python scripts/check_basedpyright_errors.py
 python scripts/git_hook_privacy_checks.py --staged
+python scripts/agent_smoke_harness.py
 python scripts/check_user_docs_links.py
 ```
 
@@ -280,23 +313,23 @@ python scripts/check_user_docs_links.py
 - Add refactoring notes to `CHANGELOG.md`
 - Update `dev-docs/MAINTENANCE_LOG.md`
 
-### Phase 6: Reduce Cyclomatic Complexity of Extracted Functions (Lizard CCN)
+### Phase 7: Reduce Cyclomatic Complexity of Extracted Functions (Lizard CCN)
 
 **Goal:** Bring every function in the new mixin files to `CCN <= 20` (and ideally lower), so the refactor lands **without** adding any `functions` grandfather entries.
 
-**Why this is necessary (clarifying the "zero grandfathered functions" premise):** `src/main.py` currently has **zero** entries in the `functions` grandfather map, yet `lizard` shows many of its methods already exceed CCN 20 (e.g. `_post_init_subwindows_and_handlers` CCN≈76, `__init__`≈59, `_init_view_widgets`≈52, `_sync_navigation_slider_for_subwindow`≈50, `_init_core_managers`≈28). They are not blocking today only because the pre-commit hook checks **staged** files and `src/main.py` is already committed and rarely re-staged — so its function CCN is effectively never re-evaluated. When these methods move into newly created (and thus newly staged) `src/main_app_*.py` files, the hook evaluates them for the first time and **blocks any function > 20**. So the work goes from *un-checked* to *checked*, and Phase 6 is required — not redundant. (Verified via `lizard --CCN 20 src/main.py`.)
+**Why this is necessary (clarifying the "zero grandfathered functions" premise):** `src/main.py` currently has **zero** entries in the `functions` grandfather map, yet `lizard` shows many of its methods already exceed CCN 20 (e.g. `_post_init_subwindows_and_handlers` CCN≈76, `__init__`≈59, `_init_view_widgets`≈52, `_sync_navigation_slider_for_subwindow`≈50, `_init_core_managers`≈28). They are not blocking today only because the pre-commit hook checks **staged** files and `src/main.py` is already committed and rarely re-staged — so its function CCN is effectively never re-evaluated. When these methods move into newly created (and thus newly staged) `src/main_app_*.py` files, the hook evaluates them for the first time and **blocks any function > 20**. So the work goes from *un-checked* to *checked*, and Phase 7 is required — not redundant. (Verified via `lizard --CCN 20 src/main.py`.)
 
 **Why not a separate plan:** Folding it in keeps the PR self-contained and prevents "extract now, reduce later" drift where high-CCN functions get quietly grandfathered. If the team prefers a dedicated follow-up, the output of Step 1 below (the CCN inventory) is the ready-made backlog for that plan.
 
 **Tasks:**
-1. **Inventory (do this right after Phase 1):** run `lizard --CCN 20 src/main.py` to list every method already at/above CCN 20. Record each (`path::name`, current CCN) in Appendix B. This is the reduction backlog.
+1. **Inventory (do this right after Phase 2):** run `lizard --CCN 20 src/main.py` to list every method already at/above CCN 20. Record each (`path::name`, current CCN) in Appendix B. This is the reduction backlog.
 2. **During Phases 2-4:** as each method is moved, re-measure it in its new file (`lizard --CCN 20 src/main_app_*.py`). If `CCN > 20`, reduce it *before* committing that phase:
    - Extract private helpers (nested `if`/`for` bodies → small methods).
    - Replace nested conditionals with early `return`/guard clauses.
    - Replace long `if/elif` chains with dispatch dicts or polymorphism.
    - Move validation/parsing into dedicated helpers.
    - Avoid introducing `print` tracing; gate any new debug output behind `src/utils/debug_flags.py`.
-3. **Verify no new grandfather entries were required:** after Phase 5's `--generate-grandfather`, confirm the `functions` map contains no `src/main_app_*.py` entries. If any remain, that indicates an unreduced function — fix it rather than ship the grandfather entry.
+3. **Verify no new grandfather entries were required:** after Phase 6's `--generate-grandfather`, confirm the `functions` map contains no `src/main_app_*.py` entries. If any remain, that indicates an unreduced function — fix it rather than ship the grandfather entry.
 4. **Add/extend tests** for any extracted helper so behavior is pinned (ties to Coverage Targets baseline).
 
 **Measurement commands:**
@@ -311,8 +344,10 @@ python scripts/git_hook_line_complexity.py --all   # full repo gate (line + CCN)
 **Risks:**
 - Over-refactoring changes behavior — mitigate with the per-phase test runs and targeted new tests on extracted helpers.
 - Some methods may need structural redesign (not just mechanical extraction) — flag these in Appendix B with a note and tackle in a focused sub-PR if they block.
+- Rewriting very high-CCN methods (e.g. CCN≈76) down to ≤20 *while also moving them* compounds regression risk.
 
 **Mitigation:**
+- **Micro-commits:** reduce CCN in the smallest safe steps — extract one helper, add/run its dedicated regression test, commit, then move to the next method. Never batch a large CCN rewrite with the file move.
 - Keep CCN reduction mechanical and test-backed; run the test suite after each reduction.
 - Use `lizard` diffs (before/after) to confirm CCN dropped and no logic was lost.
 
@@ -326,8 +361,12 @@ python scripts/git_hook_line_complexity.py --all   # full repo gate (line + CCN)
 
 ### Coverage Targets
 - The vast majority of `DICOMViewerApp` methods are private (`_`-prefixed), so "100% public-method coverage" is nearly meaningless. Frame targets around the **existing** `tests/test_main_*.py` baseline instead.
-- **Establish the current coverage number before starting** (run `python -m pytest tests/ -v` with coverage, or `scripts/new_code_coverage.py`; the Sonar baseline `sonar-main-measures.json` / `coverage.xml` can be referenced). Success Criterion 4 ("maintained or improved") is only measurable against this baseline.
-- **Docstring coverage baseline:** there is no dedicated docstring-coverage tool in the repo; measure against the existing `src/main.py` docstring density (manual review + the existing test/docstring conventions). Track "docstrings added per extracted method" rather than a percentage.
+- **Establish the current test-coverage number before starting** (run `python -m pytest tests/ -v` with coverage, or `scripts/new_code_coverage.py`; the Sonar baseline `sonar-main-measures.json` / `coverage.xml` can be referenced). Success Criterion 2 is measurable against this baseline.
+- **Docstring coverage — now measured automatically with `interrogate`:** A docstring-coverage tool *does* exist and is useful here. Add `interrogate>=1.7.0` to `requirements-dev.txt` and use it to produce a real percentage (smoke-tested on `src/main.py`: **98.8%** coverage). This replaces the earlier manual heuristic with a CI-able metric.
+   - **Baseline (Phase 2):** capture `python -m interrogate src/main.py --fail-under 0` before refactoring and record the percentage as the baseline `B`.
+  - **Per-phase gate:** run `python -m interrogate src/main_app_*.py src/main.py -f <B>` after each phase; the command fails if coverage drops below `B`, so regressions are caught immediately.
+  - **Recommended flags:** `--ignore-init-method` (the `DICOMViewerApp.__init__` docstring is not the point) and `-e <other-paths>` to scope to the refactored files. Magic/`__` methods are not counted by default for coverage of the bodies, but public mixin methods should all carry docstrings.
+  - **Success Criterion 4** becomes: post-refactor `interrogate` percentage `>= B` (no regression). Track the number in Appendix A if desired, but the tool output is authoritative.
 - Document composition pattern in class docstrings
 - Document MRO implications
 
@@ -366,7 +405,7 @@ def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
 1. **Mixin Composition Order / Second QObject Base**
    - Risk: Wrong MRO (e.g. assuming later-listed mixins win when Python C3 gives **earlier-listed bases precedence**), or a mixin wrongly subclassing `QObject`, causes `TypeError` at class-definition time or incorrect method resolution
    - Impact: Import failure or incorrect behavior
-   - Mitigation: Mixins are plain classes (no `QObject`); `QObject` is the terminal base of `DICOMViewerApp(QObject, ...)`; document the exact base list and that earlier base wins; add the MRO/initialization test from Phase 1
+   - Mitigation: Mixins are plain classes (no `QObject`); `QObject` is the terminal base of `DICOMViewerApp(QObject, ...)`; document the exact base list and that earlier base wins; add the MRO/initialization test from Phase 2
 
 2. **Circular Dependencies**
    - Risk: Mixins depend on each other
@@ -381,7 +420,7 @@ def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
 4. **High-CCN Functions Block the Commit After Extraction**
    - Risk: `src/main.py` has many methods already > CCN 20, but they are not blocked today because the pre-commit hook only checks **staged** files and `main.py` is already committed. Moving them into newly staged `main_app_*.py` files makes them checked for the first time; any function > CCN 20 then blocks the commit (Lizard, `BLOCK_CCN=20`)
    - Impact: CI/hook blocks the PR; stalled refactor
-   - Mitigation: Reduce CCN during extraction (Phase 6); never grandfather a function just to pass the hook. Measure with `lizard --CCN 20 src/main_app_*.py` after each phase.
+   - Mitigation: Reduce CCN during extraction (Phase 7); never grandfather a function just to pass the hook. Measure with `lizard --CCN 20 src/main_app_*.py` after each phase.
 
 5. **State / Cross-Mixin Dependencies at Scale**
    - Risk: The plan references `DisplayConfigMixin`'s accessor-helper pattern. Refactoring every `self.<attr>` across 239 methods into `self._get_<attr>()` helpers is large, undocumented scope creep and risks behavior change.
@@ -417,22 +456,22 @@ def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
 
 ## Rollback Plan
 
-All refactoring happens on a **dedicated feature branch**; `main` stays untouched until Phase 5 validation passes. If critical issues arise:
+All refactoring happens on a **dedicated feature branch**; `main` stays untouched until Phase 6 validation passes. If critical issues arise:
 
 1. **Phase Rollback:** Revert individual phases using git (each phase is its own commit/PR)
 2. **Complete Rollback:** Delete branch and return to main
 3. **Data Safety:** No data migration involved, code-only change
-4. **Branch Protection:** Keep main branch clean until validation complete (including Phase 6 CCN reduction)
+4. **Branch Protection:** Keep main branch clean until validation complete (including Phase 7 CCN reduction)
 
 ## Success Criteria
 
-1. All files under 750 lines
+1. All files under 750 lines (up to 7 files if needed)
 2. All tests passing (existing `tests/test_main_*.py` suite + new helper tests)
-3. **No new `functions` grandfather entries for the mixin files** — every function `CCN <= 20` (Phase 6 complete)
-4. Docstring coverage maintained or improved against the measured baseline
+3. **No new `functions` grandfather entries for the mixin files** — every function `CCN <= 20` (Phase 7 complete, verified via `git diff` on the grandfather JSON)
+4. Docstring coverage maintained or improved — measured automatically with `interrogate` (percentage `>=` the Phase 2 baseline `B`); the gate fails if coverage drops below `B`
 5. No performance regression
 6. Documentation updated (ARCHITECTURE.md, SOURCE_LAYOUT.md, CHANGELOG.md, MAINTENANCE_LOG.md)
-7. CI checks passing (line complexity, function CCN, architecture boundaries, privacy gate, user-docs links)
+7. CI checks passing (line complexity, function CCN, architecture boundaries, basedpyright, privacy gate, agent smoke harness, user-docs links)
 
 ## Verification Commands
 
@@ -445,11 +484,14 @@ python -m pytest tests/test_main_signals_view.py -v
 # Verify line counts + function CCN
 python scripts/git_hook_line_complexity.py --all
 
-# Verify architecture (after Phase 1 boundary update)
+# Verify architecture (after Phase 2 boundary update)
 python scripts/check_architecture_boundaries.py
 
-# Verify mixin typing (TYPE_CHECKING self: DICOMViewerApp)
-pyright src/
+# Verify mixin typing (basedpyright, TYPE_CHECKING self: DICOMViewerApp)
+python scripts/check_basedpyright_errors.py
+
+# Verify docstring coverage (must stay >= baseline B)
+python -m interrogate src/main_app_*.py src/main.py --ignore-init-method -f <B>
 ```
 
 ### Final Verification
@@ -461,7 +503,16 @@ python -m pytest tests/ -v
 python scripts/git_hook_line_complexity.py --all
 python scripts/check_repo_harness.py
 python scripts/check_architecture_boundaries.py
-pyright src/
+python scripts/check_basedpyright_errors.py
+
+# Docstring coverage (must stay >= baseline B)
+python -m interrogate src/main_app_*.py src/main.py --ignore-init-method -f <B>
+
+# Privacy gate (mandated before commit)
+python scripts/git_hook_privacy_checks.py --staged
+
+# Agent smoke harness (mandated before claiming done — guards app startup/signal wiring)
+python scripts/agent_smoke_harness.py
 
 # Documentation links
 python scripts/check_user_docs_links.py
@@ -470,7 +521,7 @@ python scripts/check_user_docs_links.py
 ## Next Steps
 
 1. Review and approve this plan
-2. Begin Phase 1 implementation
+2. Begin Phase 2 implementation
 3. Create tracking issue in project backlog
 4. Update AGENTS.md with refactoring progress
 
@@ -483,11 +534,15 @@ python scripts/check_user_docs_links.py
 - `ARCHITECTURE.md` - Architecture boundaries and conventions
 - `dev-docs/SOURCE_LAYOUT.md` - Source code layout documentation
 - `tests/test_main_*.py` - Existing test coverage
+- `tests/test_main_signals_view.py` - Signal-wiring test pattern (extend in Phase 0)
+- `tests/conftest.py` - `qapp` fixture + `qt` marker for instantiating `DICOMViewerApp()`
+- `tmp/test_coverage_assessment_20260808_004301.md` - Coverage analysis driving Phase 0 (the safety net)
 - `src/utils/debug_flags.py` - Gate for any new debug tracing
+- `requirements-dev.txt` (`interrogate>=1.7.0`) - Docstring coverage measurement
 
-## Appendix A — Complete Method→File Mapping (generated in Phase 1)
+## Appendix A — Complete Method→File Mapping (generated in Phase 2)
 
-To be populated by an `ast`/`grep` scan of `src/main.py` listing **all 239 methods** with: method name, current line range, target mixin file, and target mixin class. This is the authoritative work item for Phases 2-4 and replaces every `etc.` placeholder above. Suggested generation:
+To be populated by an `ast`/`grep` scan of `src/main.py` listing **all 239 methods** with: method name, current line range, target mixin file, and target mixin class. This is the authoritative work item for Phases 3-5 (extraction) and replaces every `etc.` placeholder above. Suggested generation:
 
 ```bash
 # enumerate methods with line numbers
@@ -503,8 +558,8 @@ for node in ast.walk(tree):
 EOF
 ```
 
-## Appendix B — High-CCN Function Inventory (Lizard, populated in Phase 6 Step 1)
+## Appendix B — High-CCN Function Inventory (Lizard, populated in Phase 7 Step 1)
 
-Run `lizard --CCN 20 src/main.py` and record each method that already exceeds the block threshold, with its current CCN. This is the reduction backlog for Phase 6. Example row format: `src/main.py::<method>  CCN=<n>  -> target CCN<=20`.
+Run `lizard --CCN 20 src/main.py` and record each method that already exceeds the block threshold, with its current CCN. This is the reduction backlog for Phase 7. Example row format: `src/main.py::<method>  CCN=<n>  -> target CCN<=20`.
 
 (No entries yet — generated during implementation.)
