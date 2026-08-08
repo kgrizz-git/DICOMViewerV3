@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-08
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -9,7 +9,12 @@
 
 ```
 src/
-├── main.py                        # Application entry point and DICOMViewerApp orchestrator
+├── main.py                        # Application entry point; DICOMViewerApp skeleton (QObject + Signal + __init__/run/eventFilter)
+├── main_app_initialization.py     # InitializationMixin — _init_core_managers through _post_init_subwindows_and_handlers
+├── main_app_subwindow_management.py  # SubwindowManagementMixin + MPRNavigationMixin — layout, panes, MPR thumbnails
+├── main_app_ui_and_files.py       # UIHandlersMixin + FileOperationsMixin — menus, dialogs, file/series load
+├── main_app_display_settings.py   # DisplayProjectionMixin + SettingsLayoutMixin — overlays, projection, settings
+├── main_app_tag_roi.py            # TagEditingMixin + ROIWorkflowMixin — tag edit/export, ROI workflows
 ├── metadata/                      # Metadata feature controllers
 │   └── metadata_controller.py     # Owns MetadataPanel, TagEditHistoryManager, undo/redo, privacy for metadata
 ├── roi/                           # ROI / measurement feature controllers
@@ -102,7 +107,7 @@ src/
 
 | Controller | File | Owns / coordinates |
 |---|---|---|
-| `DICOMViewerApp` | `src/main.py` | Top-level orchestrator; delegates to all controllers below |
+| `DICOMViewerApp` | `src/main.py` + `src/main_app_*.py` mixins | Top-level orchestrator (plain mixin composition); delegates to all controllers below |
 | `MetadataController` | `src/metadata/metadata_controller.py` | `MetadataPanel`, `TagEditHistoryManager`, undo/redo callbacks, privacy mode for metadata |
 | `ROIMeasurementController` | `src/roi/roi_measurement_controller.py` | `ROIManager`, `MeasurementTool`, `AnnotationManager`, `ROIStatisticsPanel`, `ROIListPanel`; tracks active (focused-subwindow) managers via `update_focused_managers()` |
 | `SubwindowLifecycleController` | `src/core/subwindow_lifecycle_controller.py` | Per-subwindow manager creation, focus changes, display updates |

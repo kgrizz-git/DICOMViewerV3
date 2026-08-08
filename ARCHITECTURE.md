@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-07-18  
+**Last updated:** 2026-08-08  
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -15,7 +15,7 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 
 | Domain | Primary location | Responsibility |
 |--------|------------------|----------------|
-| **App shell** | `src/main.py`, `src/core/app_handler_bootstrap.py`, `src/core/app_signal_wiring.py` | Lifecycle, handler wiring, global signals |
+| **App shell** | `src/main.py`, `src/main_app_*.py`, `src/gui/app_handler_bootstrap.py`, `src/gui/app_signal_wiring.py` | Lifecycle, handler wiring, global signals |
 | **GUI / chrome** | `src/gui/` | Main window, menus, toolbar, dialogs, themes (`DESIGN.md`) |
 | **View / display** | `src/core/slice_display_*.py`, `src/gui/image_viewer*.py`, `src/core/subwindow_*` | Pixels, W/L, overlays, multi-window layout |
 | **Window / level** | `dicom_window_level.py`, `slice_display_lut.py`, `wl_preset_catalog.py`, `window_level_preset_handler.py` | Raw vs rescaled W/L alignment, preset catalog, context-menu apply |
@@ -54,6 +54,12 @@ main.py         →  all domains; thin delegation preferred (facades)
 | **Config via `ConfigManager` mixins** | One persistence path per feature domain |
 
 Custom structural linting has an incremental guard: **`scripts/check_architecture_boundaries.py`** blocks new high-risk import edges while allowing the current legacy baseline in **`dev-docs/architecture_boundary_baseline.txt`**. Remove baseline entries as modules are refactored toward this map.
+
+### `DICOMViewerApp` mixin composition
+
+`DICOMViewerApp` in **`src/main.py`** composes **plain mixin classes** from **`src/main_app_*.py`** (no `QObject` base, no mixin `__init__`). `QObject` remains the sole Qt base; PySide6 `Signal` declarations (e.g. `tag_export_union_ready`) stay on `DICOMViewerApp` in `main.py`. Mixins access shared app state via `self` after `DICOMViewerApp.__init__` runs the explicit `_init_*` / `_setup_*` orchestration. Method ownership per mixin is tracked in **`dev-docs/plans/supporting/MAIN_PY_REFACTOR_PLAN.md`** Appendix A.
+
+**Typing note:** basedpyright rejects annotating mixin methods as `self: DICOMViewerApp` (`self` must be a *supertype* of the mixin class). The repo therefore uses the same file-level pragma pattern as `ImageViewer` mixins (`reportAttributeAccessIssue` / `reportArgumentType` / `reportUninitializedInstanceVariable`), with **no** `TYPE_CHECKING` import of `main` from `main_app_*.py`. Combined with `reportUnknown*=none` in `pyrightconfig.json`, mixin `self.<app-attr>` access is **not** type-checked for typos (accepted tradeoff vs 364 basedpyright errors). Rely on the Phase 0 behavioral suite and careful moves. Shared study-map typing lives in **`gui.tag_export_union_host.StudiesNestedDict`**.
 
 ---
 

@@ -1,8 +1,26 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-08
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-08
+
+- **`main.py` mixin split — gate remediation:** Fixed `DICOM_PERF_LOG=1`
+  startup `NameError` by moving emit to `DICOMViewerApp._log_startup_perf`.
+  Cleared basedpyright (0 errors) using ImageViewer-style mixin pragmas
+  (plan’s `self: DICOMViewerApp` is invalid under basedpyright). Ruff clean.
+  Consolidated `StudiesNestedDict` on `gui.tag_export_union_host`. Restored
+  `main_app_ui_and_files.py` after accidental truncation during re-review
+  probes (re-extracted from phase-4 `main.py` backup). Backlog: lift
+  `.coveragerc` omit for `main_app_*.py` (`TO_DO.md`).
+
+- **`main.py` mixin split (Phases 6–7):** Removed 114 stale imports from
+  `src/main.py` (506 → 334 lines). Regenerated
+  `scripts/line_complexity_grandfather.json` for the new file sizes (no new
+  `functions` entries for `main_app_*.py`). Updated `SOURCE_LAYOUT.md`,
+  `ARCHITECTURE.md` mixin section (verified), `CHANGELOG.md` [Unreleased], and
+  plan progress ledger. Branch: `refactor/main-split`.
 
 ## 2026-08-07
 

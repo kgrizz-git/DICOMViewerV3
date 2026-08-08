@@ -7,6 +7,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Internal (`main.py` mixin split):** `DICOMViewerApp` orchestration split into
+  plain mixin modules under `src/main_app_*.py` (`InitializationMixin`,
+  subwindow/MPR, UI/files, display/settings, tag/ROI); `src/main.py` retains
+  entry point, `QObject` base, `tag_export_union_ready`, and lifecycle shell.
+  **Semantic versioning note: patch** (no user-facing behavior change).
 - **Tag export dialog UX:** **File → Export DICOM Tags…** (moved from Tools);
   studies/series start collapsed; top **Select All** checkbox and push buttons
   toggle **visible leaf tags** only (SQ/Item parents stay independently
