@@ -95,9 +95,9 @@ class TestOnCrosshairMoved:
 @pytest.mark.qt
 class TestFinalizeCrosshairMove:
     def test_updates_pixel_values_at_new_position(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_item = MagicMock()
         crosshair_item.pos.return_value = QPointF(15, 25)
         crosshair_coordinator._crosshair_move_tracking[crosshair_item] = {
@@ -108,13 +108,13 @@ class TestFinalizeCrosshairMove:
         crosshair_coordinator._finalize_crosshair_move(crosshair_item)
 
         # Verify pixel value was updated
-        crosshair_item.set_pixel_value_str.assert_called_once()
+        crosshair_item.update_pixel_values.assert_called_once()
 
     @pytest.mark.qt
     def test_creates_undo_command_when_position_changed(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         undo_redo_manager = MagicMock()
         update_callback = MagicMock()
         crosshair_coordinator.undo_redo_manager = undo_redo_manager
@@ -133,9 +133,9 @@ class TestFinalizeCrosshairMove:
 
     @pytest.mark.qt
     def test_does_not_create_command_when_position_unchanged(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         undo_redo_manager = MagicMock()
         crosshair_coordinator.undo_redo_manager = undo_redo_manager
         crosshair_item = MagicMock()

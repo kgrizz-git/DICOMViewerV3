@@ -13,9 +13,9 @@ from gui.crosshair_coordinator import CrosshairCoordinator
 @pytest.mark.qt
 class TestHandleCrosshairDeleteRequested:
     def test_deletes_crosshair_with_undo_redo(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         undo_redo_manager = MagicMock()
         update_callback = MagicMock()
         crosshair_coordinator.undo_redo_manager = undo_redo_manager
@@ -29,9 +29,9 @@ class TestHandleCrosshairDeleteRequested:
 
     @pytest.mark.qt
     def test_deletes_crosshair_without_undo_redo(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_item = MagicMock()
 
         crosshair_coordinator.handle_crosshair_delete_requested(crosshair_item)
@@ -52,9 +52,9 @@ class TestHandleCrosshairDeleteRequested:
 
     @pytest.mark.qt
     def test_extracts_dicom_identifiers_before_deletion(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         undo_redo_manager = MagicMock()
         crosshair_coordinator.undo_redo_manager = undo_redo_manager
         crosshair_item = MagicMock()

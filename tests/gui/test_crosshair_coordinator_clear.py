@@ -13,9 +13,9 @@ from gui.crosshair_coordinator import CrosshairCoordinator
 @pytest.mark.qt
 class TestHandleClearCrosshairs:
     def test_clears_all_crosshairs_on_current_slice(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         # This test verifies the method runs without error when crosshairs exist
@@ -24,9 +24,9 @@ class TestHandleClearCrosshairs:
 
     @pytest.mark.qt
     def test_creates_composite_command_for_multiple_crosshairs(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         # Set up undo/redo
@@ -37,11 +37,11 @@ class TestHandleClearCrosshairs:
 
         # Add mock crosshairs to manager after setting up series context
         from utils.dicom_utils import get_composite_series_key
-        series_uid = get_composite_series_key(crosshair_crosshair_sample_dataset)
+        series_uid = get_composite_series_key(crosshair_sample_dataset)
         crosshair_coordinator.crosshair_manager.current_series_uid = series_uid
         mock_crosshair1 = MagicMock()
         mock_crosshair2 = MagicMock()
-        key = (crosshair_crosshair_sample_dataset.StudyInstanceUID, series_uid, 0)
+        key = (crosshair_sample_dataset.StudyInstanceUID, series_uid, 0)
         crosshair_coordinator.crosshair_manager.crosshairs[key] = [mock_crosshair1, mock_crosshair2]
 
         crosshair_coordinator.handle_clear_crosshairs()
@@ -86,9 +86,9 @@ class TestHandleClearCrosshairs:
 
     @pytest.mark.qt
     def test_returns_early_when_no_crosshairs_to_delete(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         # No crosshairs created
@@ -100,17 +100,17 @@ class TestHandleClearCrosshairs:
 
     @pytest.mark.qt
     def test_uses_direct_deletion_without_undo_redo(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         # Add mock crosshair to manager after setting up series context
         from utils.dicom_utils import get_composite_series_key
-        series_uid = get_composite_series_key(crosshair_crosshair_sample_dataset)
+        series_uid = get_composite_series_key(crosshair_sample_dataset)
         crosshair_coordinator.crosshair_manager.current_series_uid = series_uid
         mock_crosshair = MagicMock()
-        key = (crosshair_crosshair_sample_dataset.StudyInstanceUID, series_uid, 0)
+        key = (crosshair_sample_dataset.StudyInstanceUID, series_uid, 0)
         crosshair_coordinator.crosshair_manager.crosshairs[key] = [mock_crosshair]
 
         crosshair_coordinator.handle_clear_crosshairs()

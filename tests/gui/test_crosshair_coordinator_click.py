@@ -42,24 +42,24 @@ class TestHandleCrosshairClicked:
 
     @pytest.mark.qt
     def test_sets_current_slice_context_with_dataset(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 5
 
         crosshair_coordinator.handle_crosshair_clicked(
             QPointF(10, 20), "42", 10, 20, 5
         )
 
-        assert crosshair_coordinator.crosshair_manager.current_study_uid == crosshair_crosshair_sample_dataset.StudyInstanceUID
+        assert crosshair_coordinator.crosshair_manager.current_study_uid == crosshair_sample_dataset.StudyInstanceUID
         assert crosshair_coordinator.crosshair_manager.current_series_uid is not None
         assert crosshair_coordinator.crosshair_manager.current_instance_identifier == 5
 
     @pytest.mark.qt
     def test_appends_patient_coordinates_when_available(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         with patch('utils.dicom_utils.pixel_to_patient_coordinates') as mock_pixel_to_patient:
@@ -79,14 +79,14 @@ class TestHandleCrosshairClicked:
 
     @pytest.mark.qt
     def test_creates_undo_command_when_undo_redo_available(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
         undo_redo_manager = MagicMock()
         update_callback = MagicMock()
         coordinator = CrosshairCoordinator(
             crosshair_manager=crosshair_coordinator.crosshair_manager,
             image_viewer=crosshair_coordinator.image_viewer,
-            get_current_dataset=lambda: crosshair_crosshair_sample_dataset,
+            get_current_dataset=lambda: crosshair_sample_dataset,
             get_current_slice_index=lambda: 0,
             undo_redo_manager=undo_redo_manager,
             update_undo_redo_state_callback=update_callback,

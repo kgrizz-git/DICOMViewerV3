@@ -14,9 +14,9 @@ from gui.crosshair_coordinator import CrosshairCoordinator
 @pytest.mark.qt
 class TestUpdateCrosshairPixelValues:
     def test_updates_pixel_values_with_rescaled_callback(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
         crosshair_coordinator.get_use_rescaled_values = lambda: True
 
@@ -33,9 +33,9 @@ class TestUpdateCrosshairPixelValues:
 
     @pytest.mark.qt
     def test_updates_pixel_values_without_rescaled_callback(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
         crosshair_coordinator.get_use_rescaled_values = None
 
@@ -61,9 +61,9 @@ class TestUpdateCrosshairPixelValues:
 
     @pytest.mark.qt
     def test_appends_patient_coordinates_when_available(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         with patch('utils.dicom_utils.pixel_to_patient_coordinates') as mock_pixel_to_patient:

@@ -11,22 +11,22 @@ from gui.crosshair_coordinator import CrosshairCoordinator
 @pytest.mark.qt
 class TestUpdateCrosshairsForSlice:
     def test_updates_current_slice_context(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 3
 
         crosshair_coordinator.update_crosshairs_for_slice()
 
-        assert crosshair_coordinator.crosshair_manager.current_study_uid == crosshair_crosshair_sample_dataset.StudyInstanceUID
+        assert crosshair_coordinator.crosshair_manager.current_study_uid == crosshair_sample_dataset.StudyInstanceUID
         assert crosshair_coordinator.crosshair_manager.current_series_uid is not None
         assert crosshair_coordinator.crosshair_manager.current_instance_identifier == 3
 
     @pytest.mark.qt
     def test_displays_crosshairs_for_current_slice(
-        self, crosshair_coordinator: CrosshairCoordinator, crosshair_crosshair_sample_dataset: Dataset
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
     ):
-        crosshair_coordinator.get_current_dataset = lambda: crosshair_crosshair_sample_dataset
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
 
         crosshair_coordinator.update_crosshairs_for_slice()
