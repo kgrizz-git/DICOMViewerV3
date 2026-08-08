@@ -6,6 +6,11 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-07
 
+- **Tag export UX:** extracted preset persistence and Select All / count helpers
+  from `tag_export_dialog.py` into `tag_export_dialog_presets.py`,
+  `tag_export_dialog_selection.py`, and `tag_export_dialog_helpers.py` so the
+  dialog stays within its existing line-count grandfather (1415).
+
 - **CodeRabbit / LongCat follow-ups (PR #49):** skip grandfather ratchet when
   ``ast.parse`` fails (real lizard does not raise on syntax errors); defensive
   ``int()`` on malformed grandfather caps; surface failed ``git add`` of

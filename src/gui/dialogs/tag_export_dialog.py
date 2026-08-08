@@ -18,7 +18,6 @@ Requirements:
     - DICOMParser for tag extraction
 """
 
-import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -42,26 +41,29 @@ from PySide6.QtWidgets import (
 )
 
 from core.dicom_parser import DICOMParser
-from core.tag_export_catalog import synthetic_tag_export_tree_entry
 from core.tag_export_controller import TagExportController, resolve_export_format
 from core.tag_export_union import union_tags_across_datasets
+from gui.dialogs import tag_export_dialog_helpers as _tag_export_helpers
+from gui.dialogs.tag_export_dialog_presets import TagExportDialogPresetsMixin
+from gui.dialogs.tag_export_dialog_selection import TagExportDialogSelectionMixin
 from gui.metadata_table_model import (
     index_metadata_tag_children,
     metadata_row_depth,
     metadata_row_kind,
 )
-from utils.dicom_utils import canonical_dicom_tag_string
 from utils.log_sanitizer import sanitize_message
+
+# Re-export helpers/constants for existing tests and callers.
+_ITEM_NO_PRESET = _tag_export_helpers._ITEM_NO_PRESET
+_TITLE_NO_CONFIG_MANAGER = _tag_export_helpers._TITLE_NO_CONFIG_MANAGER
+_merged_dict_with_preset_tags = _tag_export_helpers._merged_dict_with_preset_tags
+_tag_export_preset_match_keys = _tag_export_helpers._tag_export_preset_match_keys
 
 # Phase 5 (sequence tag viewer plan) large-sequence / large-selection guards.
 # Starting values — tune against a real enhanced study if these prove wrong.
 LARGE_SEQUENCE_LEAF_THRESHOLD = 200
 LARGE_EXPORT_SELECTION_THRESHOLD = 1000
 
-
-
-_ITEM_NO_PRESET = "(No preset)"
-_TITLE_NO_CONFIG_MANAGER = "No Config Manager"
 
 def _leaf_descendant_counts(
     tags: dict[str, Any],
@@ -91,46 +93,12 @@ def _leaf_descendant_counts(
     return counts
 
 
-def _tag_export_preset_match_keys(preset_tags: list[str]) -> set[str]:
-    """
-    Build a set of strings that should match tree UserRole tag keys when loading
-    a preset (exact + canonical pydicom str(Tag) forms).
-    """
-    keys: set[str] = set()
-    for t in preset_tags:
-        if not isinstance(t, str):
-            continue
-        keys.add(t)
-        canonical = canonical_dicom_tag_string(t)
-        if canonical:
-            keys.add(canonical)
-    return keys
 
-
-def _merged_dict_with_preset_tags(
-    base: dict[str, Any] | None,
-    preset_tags: list[str],
-) -> tuple[dict[str, Any], bool]:
-    """
-    Return a shallow copy of *base* (or {}) with synthetic rows for any preset
-    tag not already present. The second value is True when the dict changed.
-    """
-    merged: dict[str, Any] = dict(base or {})
-    changed = False
-    for raw in preset_tags:
-        if not isinstance(raw, str):
-            continue
-        entry = synthetic_tag_export_tree_entry(raw)
-        if entry is None:
-            continue
-        key, meta = entry
-        if key not in merged:
-            merged[key] = meta
-            changed = True
-    return merged, changed
-
-
-class TagExportDialog(QDialog):
+class TagExportDialog(
+    TagExportDialogSelectionMixin,
+    TagExportDialogPresetsMixin,
+    QDialog,
+):
     """
     Dialog for exporting DICOM tags to Excel or CSV with series and tag selection.
     
@@ -195,6 +163,10 @@ class TagExportDialog(QDialog):
         self.include_sequences_checkbox = QCheckBox("Include sequences", self)
         self.include_sequences_checkbox.setChecked(False)
         self.preset_combo: QComboBox | None = None
+        # Top "Select All" checkbox for visible exportable leaf tags (not SQ/Item parents).
+        self.select_all_tags_checkbox = QCheckBox("Select All", self)
+        self.select_all_tags_checkbox.setTristate(False)
+        self.tag_count_label = QLabel("No tags selected", self)
 
         self._create_ui()
         self._populate_series()
@@ -227,8 +199,9 @@ class TagExportDialog(QDialog):
 
         layout.addWidget(splitter)
 
-        # Bottom buttons
+        # Bottom buttons (tag count lives here — export is dialog-level, not tag-panel)
         button_layout = QHBoxLayout()
+        button_layout.addWidget(self.tag_count_label)
         button_layout.addStretch()
 
         export_button = QPushButton("Export Tags...")
@@ -281,15 +254,32 @@ class TagExportDialog(QDialog):
             preset_label = QLabel("Preset:")
             self.preset_combo = QComboBox()
             self.preset_combo.setEditable(False)
-            self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
+            # textActivated fires only on user selection (not setCurrentIndex).
+            self.preset_combo.textActivated.connect(self._on_preset_selected)
             preset_layout.addWidget(preset_label)
             preset_layout.addWidget(self.preset_combo)
 
+            save_current_btn = QPushButton("Save")
+            save_current_btn.setToolTip(
+                "Overwrite the currently selected preset with the current tag selection"
+            )
+            save_current_btn.setStatusTip(
+                "Overwrite the currently selected preset with the current tag selection"
+            )
+            save_current_btn.clicked.connect(self._save_current_preset)
+            preset_layout.addWidget(save_current_btn)
+
             save_preset_btn = QPushButton("Save As...")
+            save_preset_btn.setToolTip(
+                "Create a new preset with the current tag selection"
+            )
+            save_preset_btn.setStatusTip(
+                "Create a new preset with the current tag selection"
+            )
             save_preset_btn.clicked.connect(self._save_preset)
             preset_layout.addWidget(save_preset_btn)
 
-            load_preset_btn = QPushButton("Load")
+            load_preset_btn = QPushButton("Reload")
             load_preset_btn.clicked.connect(self._load_preset)
             preset_layout.addWidget(load_preset_btn)
 
@@ -341,6 +331,12 @@ class TagExportDialog(QDialog):
 
         layout.addLayout(button_layout)
 
+        # Aggregate Select All checkbox (visible exportable leaves only).
+        self.select_all_tags_checkbox.checkStateChanged.connect(
+            self._on_select_all_tag_checkbox
+        )
+        layout.addWidget(self.select_all_tags_checkbox)
+
         # Tags tree
         self.tags_tree.setHeaderLabels(["Tag", "Name"])
         self.tags_tree.setColumnWidth(0, 120)
@@ -373,7 +369,7 @@ class TagExportDialog(QDialog):
             study_item.setData(0, Qt.ItemDataRole.UserRole, study_uid)
             study_item.setFlags(study_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             study_item.setCheckState(0, Qt.CheckState.Unchecked)
-            study_item.setExpanded(True)
+            study_item.setExpanded(False)
 
             # Add series items
             for series_uid, datasets in series_dict.items():
@@ -389,7 +385,7 @@ class TagExportDialog(QDialog):
                 series_item.setData(0, Qt.ItemDataRole.UserRole + 1, study_uid)
                 series_item.setFlags(series_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 series_item.setCheckState(0, Qt.CheckState.Unchecked)
-                series_item.setExpanded(True)
+                series_item.setExpanded(False)
 
                 # Add instance/slice items
                 for idx, dataset in enumerate(datasets):
@@ -540,6 +536,8 @@ class TagExportDialog(QDialog):
             self.tags_tree.blockSignals(False)
             self.tags_tree.setEnabled(True)
             self.tag_union_status_label.setText("")
+            self._update_selected_tags()
+            self._refresh_select_all_checkbox_state()
             return
         include_private = self.private_tags_checkbox.isChecked()
         filtered: dict[str, Any] = {}
@@ -551,6 +549,8 @@ class TagExportDialog(QDialog):
         self.tags_tree.blockSignals(False)
         self.tags_tree.setEnabled(True)
         self.tag_union_status_label.setText("")
+        self._update_selected_tags()
+        self._refresh_select_all_checkbox_state()
 
     def _build_tag_tree_from_items(self, tags: dict[str, Any]) -> None:
         """
@@ -677,17 +677,22 @@ class TagExportDialog(QDialog):
         self._update_selected_series()
 
     def _toggle_all_tags(self, checked: bool) -> None:
-        """Toggle all tag selection, recursively (every depth, not just group -> tag)."""
+        """
+        Toggle all **visible exportable leaf** tags (``row_kind == "element"``).
+
+        Hidden leaves are left untouched so a filtered Select All cannot rewrite
+        off-screen selections. Sequence/Item parents are not forced on or off —
+        they remain independently checkable summary-column export targets. Does
+        **not** call ``_update_ancestors_check_state`` (that would overwrite
+        independently checked SQ/Item parents from visible children).
+        """
         self.tags_tree.blockSignals(True)
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
-        root = self.tags_tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            group_item = root.child(i)
-            if not group_item.isHidden():
-                group_item.setCheckState(0, state)
-                self._set_descendants_check_state(group_item, state)
+        for item in self._iter_visible_exportable_leaves():
+            item.setCheckState(0, state)
         self.tags_tree.blockSignals(False)
         self._update_selected_tags()
+        self._refresh_select_all_checkbox_state()
 
     def _iter_all_tag_items(self, item: QTreeWidgetItem):
         """
@@ -759,6 +764,9 @@ class TagExportDialog(QDialog):
         for i in range(root.childCount()):
             group_item = root.child(i)
             self._apply_tag_filter_recursive(group_item, search_lower, search_text)
+        # Aggregate top Select All from the newly visible leaf set only; do not
+        # rewrite Sequence/Item parent checks via _update_ancestors_check_state.
+        self._refresh_select_all_checkbox_state()
 
     def _apply_tag_filter_recursive(
         self, item: QTreeWidgetItem, search_lower: str, search_text: str
@@ -877,6 +885,7 @@ class TagExportDialog(QDialog):
         self._update_ancestors_check_state(item.parent())
         self.tags_tree.blockSignals(False)
         self._update_selected_tags()
+        self._refresh_select_all_checkbox_state()
 
     def _update_selected_series(self) -> None:
         """Update the list of selected series and instances."""
@@ -917,12 +926,15 @@ class TagExportDialog(QDialog):
         root = self.tags_tree.invisibleRootItem()
 
         # Include all checked tags regardless of visibility (filter state).
+        # A preset / export must capture every explicitly checked tag, including
+        # those hidden by the search filter — not only the currently visible subset.
         for tag_item in self._iter_all_tag_items(root):
             tag_str = tag_item.data(0, Qt.ItemDataRole.UserRole)
             if tag_str is None:
                 continue
             if tag_item.checkState(0) == Qt.CheckState.Checked:
                 self.selected_tags.append(tag_str)
+        self._refresh_tag_count_label()
 
     def _export_to_excel(self) -> None:
         """Export selected tags to Excel, CSV, or UTF-8 text (tab-separated)."""
@@ -1134,282 +1146,4 @@ class TagExportDialog(QDialog):
         layout.addLayout(button_layout)
 
         return dialog.exec() == QDialog.DialogCode.Accepted
-
-    def _load_presets_list(self) -> None:
-        """Load list of presets into combo box."""
-        if not self.config_manager or self.preset_combo is None:
-            return
-
-        self.preset_combo.clear()
-        presets = self.config_manager.get_tag_export_presets()
-        if presets:
-            self.preset_combo.addItems(sorted(presets.keys()))
-        self.preset_combo.addItem(_ITEM_NO_PRESET)
-        self.preset_combo.setCurrentIndex(self.preset_combo.count() - 1)
-
-    def _on_preset_selected(self, _preset_name: str) -> None:
-        """Handle preset selection (for future use, e.g., auto-load on selection)."""
-        pass
-
-    def _save_preset(self) -> None:
-        """Save current tag selections as a preset."""
-        if not self.config_manager:
-            QMessageBox.warning(self, _TITLE_NO_CONFIG_MANAGER,
-                              "Preset saving is not available.")
-            return
-
-        # Update selected tags first
-        self._update_selected_tags()
-
-        if not self.selected_tags:
-            QMessageBox.warning(self, "No Tags Selected",
-                              "Please select at least one tag to save as a preset.")
-            return
-
-        # Get preset name from user
-        from PySide6.QtWidgets import QInputDialog
-        preset_name, ok = QInputDialog.getText(
-            self,
-            "Save Preset",
-            "Enter preset name:",
-            text=""
-        )
-
-        if not ok or not preset_name.strip():
-            return
-
-        preset_name = preset_name.strip()
-
-        # Save preset
-        self.config_manager.save_tag_export_preset(preset_name, self.selected_tags)
-        self._load_presets_list()
-
-        # Select the newly saved preset
-        if self.preset_combo is None:
-            return
-        index = self.preset_combo.findText(preset_name)
-        if index >= 0:
-            self.preset_combo.setCurrentIndex(index)
-
-        QMessageBox.information(self, "Preset Saved",
-                               f"Preset '{preset_name}' saved successfully.")
-
-    def _load_preset(self) -> None:
-        """Load a preset and apply tag selections."""
-        if not self.config_manager:
-            QMessageBox.warning(self, _TITLE_NO_CONFIG_MANAGER,
-                              "Preset loading is not available.")
-            return
-        if self.preset_combo is None:
-            return
-
-        preset_name = self.preset_combo.currentText()
-        if not preset_name or preset_name == _ITEM_NO_PRESET:
-            QMessageBox.warning(self, "No Preset Selected",
-                              "Please select a preset to load.")
-            return
-
-        # Get preset tags
-        presets = self.config_manager.get_tag_export_presets()
-        if preset_name not in presets:
-            QMessageBox.warning(self, "Preset Not Found",
-                              f"Preset '{preset_name}' not found.")
-            return
-
-        preset_tags = presets[preset_name]
-        # Add the preset's missing tags to whichever union is on screen. Always merging
-        # into the flat one would drop a preset tag from view while Include sequences is
-        # ticked, since that renders from the nested union instead.
-        sequences_on = self.include_sequences_checkbox.isChecked()
-        active_union = (
-            self._ensure_sequences_union() if sequences_on else self._tag_union_merged_full
-        )
-        merged, preset_added = _merged_dict_with_preset_tags(active_union, preset_tags)
-        if preset_added:
-            if sequences_on:
-                self._tag_union_merged_sequences = merged
-            else:
-                self._tag_union_merged_full = merged
-            self._refresh_tag_tree()
-        match_keys = _tag_export_preset_match_keys(preset_tags)
-
-        # Apply preset to tag tree (tree is fresh if we rebuilt above; otherwise
-        # uncheck everything first, at any depth).
-        self.tags_tree.blockSignals(True)
-        root = self.tags_tree.invisibleRootItem()
-
-        if not preset_added:
-            for item in self._iter_all_tag_items(root):
-                item.setCheckState(0, Qt.CheckState.Unchecked)
-
-        # Check tags that are in the preset (may be a nested path key if
-        # the preset was saved with "Include sequences" on), then recompute
-        # every ancestor's tri-state up to the root.
-        checked_items: list[QTreeWidgetItem] = []
-        for tag_item in self._iter_all_tag_items(root):
-            tag_str = tag_item.data(0, Qt.ItemDataRole.UserRole)
-            if tag_str is not None and tag_str in match_keys:
-                tag_item.setCheckState(0, Qt.CheckState.Checked)
-                checked_items.append(tag_item)
-
-        for tag_item in checked_items:
-            self._update_ancestors_check_state(tag_item.parent())
-
-        self.tags_tree.blockSignals(False)
-        self._filter_tags(self.tag_search.text())
-        self._update_selected_tags()
-
-        QMessageBox.information(self, "Preset Loaded",
-                               f"Preset '{preset_name}' loaded successfully.")
-
-    def _delete_preset(self) -> None:
-        """Delete the selected preset."""
-        if not self.config_manager:
-            QMessageBox.warning(self, _TITLE_NO_CONFIG_MANAGER,
-                              "Preset deletion is not available.")
-            return
-        if self.preset_combo is None:
-            return
-
-        preset_name = self.preset_combo.currentText()
-        if not preset_name or preset_name == _ITEM_NO_PRESET:
-            QMessageBox.warning(self, "No Preset Selected",
-                              "Please select a preset to delete.")
-            return
-
-        # Confirm deletion
-        reply = QMessageBox.question(
-            self,
-            "Delete Preset",
-            f"Are you sure you want to delete preset '{preset_name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            self.config_manager.delete_tag_export_preset(preset_name)
-            self._load_presets_list()
-            QMessageBox.information(self, "Preset Deleted",
-                                   f"Preset '{preset_name}' deleted successfully.")
-
-    def _export_presets(self) -> None:
-        """Export all tag export presets to a JSON file."""
-        if not self.config_manager:
-            QMessageBox.warning(
-                self,
-                _TITLE_NO_CONFIG_MANAGER,
-                "Preset export is not available."
-            )
-            return
-
-        presets = self.config_manager.get_tag_export_presets()
-        if not presets:
-            QMessageBox.information(
-                self,
-                "No Tag Presets",
-                "There are no tag export presets to export."
-            )
-            return
-
-        # Determine initial directory (reuse last export path behaviour)
-        last_export_path = self.config_manager.get_last_export_path()
-        if not last_export_path or not os.path.exists(last_export_path):
-            last_export_path = os.getcwd()
-
-        if os.path.isfile(last_export_path):
-            last_export_path = os.path.dirname(last_export_path)
-
-        default_filename = str(Path(last_export_path) / "tag_export_presets.json")
-
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Tag Presets",
-            default_filename,
-            "JSON Files (*.json);;All Files (*)"
-        )
-
-        if not file_path:
-            return
-
-        if not file_path.endswith(".json"):
-            file_path += ".json"
-
-        if self.config_manager.export_tag_export_presets(file_path):
-            # Remember export directory
-            self.config_manager.set_last_export_path(str(Path(file_path).parent))
-            QMessageBox.information(
-                self,
-                "Export Successful",
-                f"Tag export presets exported successfully to:\n{file_path}"
-            )
-        else:
-            QMessageBox.warning(
-                self,
-                "Export Failed",
-                f"Failed to export tag export presets to:\n{file_path}\n\n"
-                "Please check file permissions and try again."
-            )
-
-    def _import_presets(self) -> None:
-        """Import tag export presets from a JSON file."""
-        if not self.config_manager:
-            QMessageBox.warning(
-                self,
-                _TITLE_NO_CONFIG_MANAGER,
-                "Preset import is not available."
-            )
-            return
-
-        # Use last path if available for initial directory
-        last_path = self.config_manager.get_last_path()
-        if not last_path or not os.path.exists(last_path):
-            last_path = os.getcwd()
-
-        if os.path.isfile(last_path):
-            last_path = os.path.dirname(last_path)
-
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Import Tag Presets",
-            last_path,
-            "JSON Files (*.json);;All Files (*)"
-        )
-
-        if not file_path:
-            return
-
-        result = self.config_manager.import_tag_export_presets(file_path)
-        if result is None:
-            QMessageBox.critical(
-                self,
-                "Import Failed",
-                "Failed to import tag export presets.\n\n"
-                "Please verify that the file is a valid DICOM Viewer V3 tag presets file."
-            )
-            return
-
-        imported = result.get("imported", 0)
-        skipped = result.get("skipped_conflicts", 0)
-
-        # Refresh presets list in combo box
-        self._load_presets_list()
-
-        if imported == 0 and skipped == 0:
-            QMessageBox.information(
-                self,
-                "No Presets Imported",
-                "The selected file did not contain any tag export presets."
-            )
-        else:
-            details_lines = [f"Presets imported: {imported}"]
-            if skipped > 0:
-                details_lines.append(
-                    f"Presets skipped (already exist and were not overwritten): {skipped}"
-                )
-            details = "\n".join(details_lines)
-            QMessageBox.information(
-                self,
-                "Import Complete",
-                f"Tag export presets import completed.\n\n{details}"
-            )
 

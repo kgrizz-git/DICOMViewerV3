@@ -156,7 +156,7 @@ def test_loading_a_preset_keeps_the_nested_rows_when_sequences_are_on(qapp, monk
         def get_tag_export_presets(self) -> dict[str, list[str]]:
             return {"p": [preset_key]}
 
-    # _load_preset ends with a modal "Preset loaded" box; left alone it blocks the run.
+    # _load_preset ends with a modal "Preset Reloaded" box; left alone it blocks the run.
     monkeypatch.setattr(tag_export_dialog.QMessageBox, "information", lambda *a, **k: None)
 
     ds = _dataset_with_deid_sequence()
