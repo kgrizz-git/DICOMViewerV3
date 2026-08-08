@@ -38,6 +38,8 @@
     "src/tools/roi_manager.py": 1048,
     "src/utils/undo_redo.py": 976,
     "tests/fusion_audit_quantitative_verification.py": 778,
+    "tests/gui/test_crosshair_coordinator.py": 797,
+    "tests/gui/test_overlay_coordinator.py": 996,
     "tests/gui/test_volume_viewer_widget.py": 760
   },
   "functions": {
