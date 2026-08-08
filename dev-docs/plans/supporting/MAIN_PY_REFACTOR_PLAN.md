@@ -59,9 +59,18 @@ The allowlist `scripts/line_complexity_grandfather.json` has two maps:
 - `files`: `path -> line_count` (currently `src/main.py: 2494`). Removing `src/main.py` here in Phase 6 means its new length is subject to `BLOCK_LINES = 750` — but the file is being *shrunk*, so this is fine.
 - `functions`: `path::name -> CCN` (67 entries today; **zero** for `src/main.py`). A function is allowed only while its CCN is at or below the recorded cap; the hook **auto-ratchets the cap down** when a function improves, and **blocks** any growth past the recorded cap.
 
-**Critical implication:** `src/main.py` currently has **no** grandfathered high-CCN functions. When methods are moved into the new mixin files, their CCN travels with them. Any moved method whose CCN exceeds 20 will **immediately block the commit** in the new file. Therefore complexity reduction cannot be deferred to a separate later effort — it must be done **as each method is extracted** (see Phase 7). This is why Phase 7 is part of this plan rather than a separate plan.
+**Critical implication:** `src/main.py` currently has **no** grandfathered high-CCN functions. When methods are moved into the new mixin files, their CCN travels with them. Any moved method whose CCN exceeds 20 will **immediately block the commit** in the new file. Therefore complexity reduction cannot be deferred — it is done **inline as each method is extracted** (mandatory CCN gate in Phases 3-5), with Phase 7 as the final consolidated validation. This is why CCN reduction is part of this plan rather than a separate plan.
 
 Current grandfather status: `src/main.py` file entry = 2494; `functions` entries for `src/main.py` = 0.
+
+### Coverage Strategy (CI `--cov-fail-under=65` trap)
+`src/main.py` is excluded from coverage via `omit = src/main.py` in `.coveragerc`, and CI enforces `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65` (`.github/workflows/ci.yml:124`). Today `src/main.py`'s business logic is only ~53% covered (mostly init paths). Extracting ~2,200 uncovered lines into `src/main_app_*.py` removes them from the omit rule, so they enter the coverage denominator and will very likely pull the repo average below 65%, **failing CI**.
+
+The plan adopts a **hybrid** (do both):
+- **Option A — keep the debt quarantined:** extend the `.coveragerc` `omit` list with `src/main_app_*.py` so the extracted files are not counted until deliberately opted in. This prevents a CI regression on day one and is the safe default.
+- **Option B — pay it down:** Phase 0's safety-net tests (signal wiring, focus/lifecycle, facade delegation, event filter, tag-export thread) must be built out enough that, once `src/main_app_*.py` is un-omitted (after the refactor lands), the repo average stays ≥ 65%. Phase 0 acceptance therefore includes a coverage check: temporarily un-omit and confirm `--cov-fail-under=65` still passes; if not, expand Phase 0 tests before proceeding.
+
+**Decision recorded:** Apply Option A at Phase 2 (add the omit) so CI stays green during the incremental extraction, and pursue Option B progressively in Phase 0 so the omit can be lifted later without a coverage cliff. Do **not** leave the new files uncounted permanently — lifting the omit is a follow-up backlog item tracked in Appendix A notes.
 
 ## Refactoring Strategy
 
@@ -148,6 +157,9 @@ python -m pytest tests/ -k "main or subwindow or signal or facade or eventfilter
      - `top_level_package()` (line 55): for `src.main_app_X` imports, return `"main"` instead of `"main_app_X"`, so that `violation_reason()` still blocks illegal imports *into* the main domain (e.g. a `gui` module importing `src.main_app_initialization` must be flagged, the same as importing `src.main`).
      Re-run `python scripts/check_architecture_boundaries.py` to confirm clean.
   7. Add a type-check pass via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`) to the verification set (mixin `self` typing via `TYPE_CHECKING`).
+  8. **Register `interrogate` in the security tool inventory** (required by `AGENTS.md` + `scripts/check_security_tool_inventory.py` CI check): add an `interrogate` entry to `security/security-tool-inventory.json` with the same fields as the `lizard` entry (`category: "docstring-coverage"`, `install_reference: "requirements-dev.txt"`, `tested_version` matching the pin, `enforcement: ["pre-push blocking"]`, `network_policy: "offline-runtime"`, `entrypoints: ["scripts/check_repo_harness.py"]`, `tracked_configuration: []`). **Do not** add `interrogate` to `requirements-dev.txt` without this step, or the inventory CI check fails.
+  9. **Decide and apply the coverage strategy** (see *Coverage Strategy* below) so the new mixin files do not drop the repo below `--cov-fail-under=65`.
+  10. **Apply Option A (quarantine):** add `src/main_app_*.py` to the `omit` list in `.coveragerc` (alongside `src/main.py`) so the extracted files are not counted in coverage until deliberately opted in. This keeps CI green during the incremental extraction. Re-run `python -m pytest tests --cov=src --cov-fail-under=65` to confirm it still passes.
 
 **Phase 2 temporary test must assert:**
 - `DICOMViewerApp` is a subclass of `QObject` and of every mixin class.
@@ -164,7 +176,7 @@ python -m pytest tests/ -k "main" -v
 ```
 
 **Risks:**
-- Mixin composition order matters for MRO: **earlier-listed bases take precedence** (C3 left-to-right); `QObject` must remain the terminal base of `DICOMViewerApp`.
+- Mixin composition order matters for MRO: **earlier-listed bases take precedence** (C3 left-to-right); `QObject` must remain the **primary/first base** of `DICOMViewerApp` (PySide6 requires the `QObject` subclass to be listed first — it is the *first* base, not the last/terminal one).
 - A second `QObject` base (if a mixin wrongly subclasses `QObject`) raises `TypeError` at class definition time.
 - `Signal` declarations placed on a plain mixin fail at class-definition time (PySide6 requires them on the `QObject` subclass).
 - Fragile base class: methods reach across mixins via `self`, so init ordering and shared-attribute contracts matter.
@@ -191,6 +203,7 @@ python -m pytest tests/ -k "main" -v
 3. Update imports in `src/main.py`
 4. Add docstrings to all extracted methods
 5. Run tests to verify functionality
+6. **CCN gate (mandatory, blocking — do NOT defer to Phase 7):** after moving each method, run `lizard --CCN 20 src/main_app_initialization.py`. Any method with CCN > 20 (e.g. `_post_init_subwindows_and_handlers` ≈76, `_init_view_widgets` ≈52, `_init_core_managers` ≈28) **must be reduced in this phase** via micro-commits with a dedicated regression test per extracted helper, before the phase commit. The `git_hook_line_complexity.py` pre-commit hook will hard-block the commit otherwise.
 
 **Methods to Move (authoritative list — cross-check against Appendix A):**
 - `_init_core_managers`
@@ -228,6 +241,7 @@ python -m pytest tests/test_main_window_theme.py -v
 3. Update `DICOMViewerApp` inheritance
 4. Add comprehensive docstrings
 5. Update grandfather list if needed (`--generate-grandfather` after moving)
+6. **CCN gate (mandatory, blocking):** after moving each method, run `lizard --CCN 20 src/main_app_subwindow_management.py`. Reduce any method with CCN > 20 in this phase (micro-commits + dedicated regression test) before committing — the pre-commit hook will block otherwise.
 
 **Methods to Move (authoritative list — see Appendix A; replace the `etc.` below):**
 - Subwindow: `_build_managers_for_subwindow`, `_initialize_subwindow_managers`, `_get_subwindow_dataset`, `_get_subwindow_slice_index`, … (full set in Appendix A)
@@ -257,6 +271,7 @@ python -m pytest tests/test_main_signals_view.py -v
 3. Update `DICOMViewerApp` inheritance
 4. Add docstrings following project conventions
 5. Verify all signal connections still work
+6. **CCN gate (mandatory, blocking):** after moving each method, run `lizard --CCN 20 src/main_app_ui_and_files.py src/main_app_display_settings.py src/main_app_tag_roi.py`. Reduce any method with CCN > 20 in this phase (micro-commits + dedicated regression test) before committing — the pre-commit hook will block otherwise.
 
 **Methods to Move (authoritative list — see Appendix A; replace the `etc.` below):**
 - UI Handlers: `_on_focused_subwindow_changed`, `_on_layout_changed`, … (full set in Appendix A)
@@ -313,41 +328,32 @@ python scripts/check_user_docs_links.py
 - Add refactoring notes to `CHANGELOG.md`
 - Update `dev-docs/MAINTENANCE_LOG.md`
 
-### Phase 7: Reduce Cyclomatic Complexity of Extracted Functions (Lizard CCN)
+### Phase 7: Final CCN Validation & Baseline (reduction done inline in Phases 3-5)
 
-**Goal:** Bring every function in the new mixin files to `CCN <= 20` (and ideally lower), so the refactor lands **without** adding any `functions` grandfather entries.
+**Goal:** Confirm every function in the new mixin files is `CCN <= 20` and that no `functions` grandfather entries were needed. CCN **reduction is performed inline during each extraction phase** (see the mandatory CCN gate added to Phases 3, 4, and 5) — it is NOT deferred here. A developer who skipped the inline gate would be hard-blocked by the `git_hook_line_complexity.py` pre-commit hook at the Phase 3/4/5 commit, so this phase is the consolidated verification, not the place reduction first happens.
 
-**Why this is necessary (clarifying the "zero grandfathered functions" premise):** `src/main.py` currently has **zero** entries in the `functions` grandfather map, yet `lizard` shows many of its methods already exceed CCN 20 (e.g. `_post_init_subwindows_and_handlers` CCN≈76, `__init__`≈59, `_init_view_widgets`≈52, `_sync_navigation_slider_for_subwindow`≈50, `_init_core_managers`≈28). They are not blocking today only because the pre-commit hook checks **staged** files and `src/main.py` is already committed and rarely re-staged — so its function CCN is effectively never re-evaluated. When these methods move into newly created (and thus newly staged) `src/main_app_*.py` files, the hook evaluates them for the first time and **blocks any function > 20**. So the work goes from *un-checked* to *checked*, and Phase 7 is required — not redundant. (Verified via `lizard --CCN 20 src/main.py`.)
-
-**Why not a separate plan:** Folding it in keeps the PR self-contained and prevents "extract now, reduce later" drift where high-CCN functions get quietly grandfathered. If the team prefers a dedicated follow-up, the output of Step 1 below (the CCN inventory) is the ready-made backlog for that plan.
+**Why this is necessary (clarifying the "zero grandfathered functions" premise):** `src/main.py` currently has **zero** entries in the `functions` grandfather map, yet `lizard` shows many of its methods already exceed CCN 20 (e.g. `_post_init_subwindows_and_handlers` CCN≈76, `__init__`≈59, `_init_view_widgets`≈52, `_sync_navigation_slider_for_subwindow`≈50, `_init_core_managers`≈28). They are not blocking today only because the pre-commit hook checks **staged** files and `src/main.py` is already committed and rarely re-staged — so its function CCN is effectively never re-evaluated. When these methods move into newly created (and thus newly staged) `src/main_app_*.py` files, the hook evaluates them for the first time and **blocks any function > 20**. So the work goes from *un-checked* to *checked*. (Verified via `lizard --CCN 20 src/main.py`.)
 
 **Tasks:**
-1. **Inventory (do this right after Phase 2):** run `lizard --CCN 20 src/main.py` to list every method already at/above CCN 20. Record each (`path::name`, current CCN) in Appendix B. This is the reduction backlog.
-2. **During Phases 2-4:** as each method is moved, re-measure it in its new file (`lizard --CCN 20 src/main_app_*.py`). If `CCN > 20`, reduce it *before* committing that phase:
-   - Extract private helpers (nested `if`/`for` bodies → small methods).
-   - Replace nested conditionals with early `return`/guard clauses.
-   - Replace long `if/elif` chains with dispatch dicts or polymorphism.
-   - Move validation/parsing into dedicated helpers.
-   - Avoid introducing `print` tracing; gate any new debug output behind `src/utils/debug_flags.py`.
+1. **Inventory (done in Phase 2):** `lizard --CCN 20 src/main.py` listed every method at/above CCN 20, recorded in Appendix B. This was the reduction backlog worked through during Phases 3-5.
+2. **Final CCN sweep:** run `lizard --CCN 20 src/main_app_*.py src/main.py`. Any function still > 20 means an inline-gate step was missed — return to that phase and reduce it (micro-commits + dedicated regression test) rather than grandfathering it.
 3. **Verify no new grandfather entries were required:** after Phase 6's `--generate-grandfather`, confirm the `functions` map contains no `src/main_app_*.py` entries. If any remain, that indicates an unreduced function — fix it rather than ship the grandfather entry.
 4. **Add/extend tests** for any extracted helper so behavior is pinned (ties to Coverage Targets baseline).
 
 **Measurement commands:**
 ```bash
-lizard --CCN 20 src/main.py                 # baseline inventory of high-CCN methods
-lizard --CCN 20 src/main_app_*.py           # per-phase check on the new files
+lizard --CCN 20 src/main_app_*.py src/main.py   # final sweep of all new + remaining files
 python scripts/git_hook_line_complexity.py --all   # full repo gate (line + CCN)
 ```
 
-**Acceptance:** Every function in `src/main_app_*.py` and `src/main.py` has `CCN <= 20` (no `functions` grandfather entries for the new files). Functions that were already > 20 in `main.py` are reduced, not grandfathered.
+**Acceptance:** Every function in `src/main_app_*.py` and `src/main.py` has `CCN <= 20` (no `functions` grandfather entries for the new files). Functions that were already > 20 in `main.py` were reduced inline (not grandfathered) during Phases 3-5.
 
 **Risks:**
-- Over-refactoring changes behavior — mitigate with the per-phase test runs and targeted new tests on extracted helpers.
-- Some methods may need structural redesign (not just mechanical extraction) — flag these in Appendix B with a note and tackle in a focused sub-PR if they block.
-- Rewriting very high-CCN methods (e.g. CCN≈76) down to ≤20 *while also moving them* compounds regression risk.
+- A missed inline-gate step leaves a >20 function for this phase to catch — mitigate with the per-phase `lizard` gate already embedded in Phases 3-5.
+- Some methods may need structural redesign — flag these in Appendix B with a note and tackle in a focused sub-PR if they block.
 
 **Mitigation:**
-- **Micro-commits:** reduce CCN in the smallest safe steps — extract one helper, add/run its dedicated regression test, commit, then move to the next method. Never batch a large CCN rewrite with the file move.
+- **Micro-commits (recap of the per-phase rule):** reduce CCN in the smallest safe steps — extract one helper, add/run its dedicated regression test, commit, then move to the next method. Never batch a large CCN rewrite with the file move.
 - Keep CCN reduction mechanical and test-backed; run the test suite after each reduction.
 - Use `lizard` diffs (before/after) to confirm CCN dropped and no logic was lost.
 
@@ -405,7 +411,7 @@ def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
 1. **Mixin Composition Order / Second QObject Base**
    - Risk: Wrong MRO (e.g. assuming later-listed mixins win when Python C3 gives **earlier-listed bases precedence**), or a mixin wrongly subclassing `QObject`, causes `TypeError` at class-definition time or incorrect method resolution
    - Impact: Import failure or incorrect behavior
-   - Mitigation: Mixins are plain classes (no `QObject`); `QObject` is the terminal base of `DICOMViewerApp(QObject, ...)`; document the exact base list and that earlier base wins; add the MRO/initialization test from Phase 2
+   - Mitigation: Mixins are plain classes (no `QObject`); `QObject` is the **primary/first base** of `DICOMViewerApp(QObject, ...)` — PySide6 requires it listed first; document the exact base list and that earlier base wins; add the MRO/initialization test from Phase 2
 
 2. **Circular Dependencies**
    - Risk: Mixins depend on each other
@@ -420,7 +426,7 @@ def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
 4. **High-CCN Functions Block the Commit After Extraction**
    - Risk: `src/main.py` has many methods already > CCN 20, but they are not blocked today because the pre-commit hook only checks **staged** files and `main.py` is already committed. Moving them into newly staged `main_app_*.py` files makes them checked for the first time; any function > CCN 20 then blocks the commit (Lizard, `BLOCK_CCN=20`)
    - Impact: CI/hook blocks the PR; stalled refactor
-   - Mitigation: Reduce CCN during extraction (Phase 7); never grandfather a function just to pass the hook. Measure with `lizard --CCN 20 src/main_app_*.py` after each phase.
+   - Mitigation: Reduce CCN **inline during each extraction phase** (the mandatory CCN gate embedded in Phases 3, 4, 5) — never defer to Phase 7; never grandfather a function just to pass the hook. Measure with `lizard --CCN 20 src/main_app_*.py` after each moved method.
 
 5. **State / Cross-Mixin Dependencies at Scale**
    - Risk: The plan references `DisplayConfigMixin`'s accessor-helper pattern. Refactoring every `self.<attr>` across 239 methods into `self._get_<attr>()` helpers is large, undocumented scope creep and risks behavior change.
@@ -461,7 +467,7 @@ All refactoring happens on a **dedicated feature branch**; `main` stays untouche
 1. **Phase Rollback:** Revert individual phases using git (each phase is its own commit/PR)
 2. **Complete Rollback:** Delete branch and return to main
 3. **Data Safety:** No data migration involved, code-only change
-4. **Branch Protection:** Keep main branch clean until validation complete (including Phase 7 CCN reduction)
+4. **Branch Protection:** Keep main branch clean until validation complete (including the inline CCN reduction across Phases 3-5 and the Phase 7 final validation)
 
 ## Success Criteria
 
@@ -539,6 +545,10 @@ python scripts/check_user_docs_links.py
 - `tmp/test_coverage_assessment_20260808_004301.md` - Coverage analysis driving Phase 0 (the safety net)
 - `src/utils/debug_flags.py` - Gate for any new debug tracing
 - `requirements-dev.txt` (`interrogate>=1.7.0`) - Docstring coverage measurement
+- `security/security-tool-inventory.json` - Tool inventory; `interrogate` entry required when added to `requirements-dev.txt` (see Phase 2 Task 8)
+- `.coveragerc` / `.github/workflows/ci.yml:124` (`--cov-fail-under=65`) - Coverage trap addressed by the Coverage Strategy section
+- `scripts/check_security_tool_inventory.py` - CI check that fails if a tool is in `requirements-dev.txt` but missing from the inventory
+- `tmp/refactor_plan_assessment_20260808_010833.md` - Latest plan assessment (CI coverage trap, MRO terminology, security inventory, CCN sequencing)
 
 ## Appendix A — Complete Method→File Mapping (generated in Phase 2)
 
@@ -558,8 +568,8 @@ for node in ast.walk(tree):
 EOF
 ```
 
-## Appendix B — High-CCN Function Inventory (Lizard, populated in Phase 7 Step 1)
+## Appendix B — High-CCN Function Inventory (Lizard, populated in Phase 2)
 
-Run `lizard --CCN 20 src/main.py` and record each method that already exceeds the block threshold, with its current CCN. This is the reduction backlog for Phase 7. Example row format: `src/main.py::<method>  CCN=<n>  -> target CCN<=20`.
+Run `lizard --CCN 20 src/main.py` and record each method that already exceeds the block threshold, with its current CCN. This is the reduction backlog worked through **inline during Phases 3-5**. Example row format: `src/main.py::<method>  CCN=<n>  -> target CCN<=20`.
 
 (No entries yet — generated during implementation.)

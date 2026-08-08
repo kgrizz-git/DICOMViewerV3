@@ -17,10 +17,21 @@
       "install_scope": "system executable and pinned CI binary",
       "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
       "tested_version": "8.30.1",
-      "enforcement": ["pre-commit blocking", "pre-push blocking", "CI blocking", "repository recreation blocking"],
+      "enforcement": [
+        "pre-commit blocking",
+        "pre-push blocking",
+        "CI blocking",
+        "repository recreation blocking"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/check_gitleaks_staged.py", "scripts/check_gitleaks_history.py", ".github/workflows/privacy-gates.yml"],
-      "tracked_configuration": ["security/approved-gitleaks-fingerprints.json"]
+      "entrypoints": [
+        "scripts/check_gitleaks_staged.py",
+        "scripts/check_gitleaks_history.py",
+        ".github/workflows/privacy-gates.yml"
+      ],
+      "tracked_configuration": [
+        "security/approved-gitleaks-fingerprints.json"
+      ]
     },
     {
       "id": "trufflehog",
@@ -29,9 +40,15 @@
       "install_scope": "system executable and pinned GitHub Action",
       "install_reference": "scripts/install-trufflehog-v3.ps1",
       "tested_version": "local 3.95.9; CI 3.95.8",
-      "enforcement": ["pre-push blocking", "CI blocking"],
+      "enforcement": [
+        "pre-push blocking",
+        "CI blocking"
+      ],
       "network_policy": "no-secret-verification",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
+      "entrypoints": [
+        "scripts/run_security_scan.py",
+        ".github/workflows/ci.yml"
+      ],
       "tracked_configuration": []
     },
     {
@@ -41,9 +58,15 @@
       "install_scope": "application development venv",
       "install_reference": "requirements-dev.txt",
       "tested_version": "1.5.0",
-      "enforcement": ["pre-commit blocking on main", "CI advisory"],
+      "enforcement": [
+        "pre-commit blocking on main",
+        "CI advisory"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
+      "entrypoints": [
+        "scripts/run_security_scan.py",
+        ".github/workflows/ci.yml"
+      ],
       "tracked_configuration": []
     },
     {
@@ -53,9 +76,15 @@
       "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
       "tested_version": "1.169.0",
-      "enforcement": ["pre-push blocking", "CI blocking"],
+      "enforcement": [
+        "pre-push blocking",
+        "CI blocking"
+      ],
       "network_policy": "rules-download-only-no-source-upload",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
+      "entrypoints": [
+        "scripts/run_security_scan.py",
+        ".github/workflows/ci.yml"
+      ],
       "tracked_configuration": []
     },
     {
@@ -65,10 +94,18 @@
       "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
       "tested_version": "2.10.1",
-      "enforcement": ["pre-push blocking except reviewed advisories", "scheduled CI blocking except reviewed advisories"],
+      "enforcement": [
+        "pre-push blocking except reviewed advisories",
+        "scheduled CI blocking except reviewed advisories"
+      ],
       "network_policy": "advisory-database-access-only",
-      "entrypoints": ["scripts/run_security_scan.py", ".github/workflows/ci.yml"],
-      "tracked_configuration": ["security/pip-audit-exceptions.md"]
+      "entrypoints": [
+        "scripts/run_security_scan.py",
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": [
+        "security/pip-audit-exceptions.md"
+      ]
     },
     {
       "id": "grype",
@@ -77,9 +114,13 @@
       "install_scope": "pinned GitHub Action",
       "install_reference": ".github/workflows/ci.yml",
       "tested_version": "anchore/scan-action v7 commit-pinned",
-      "enforcement": ["scheduled and branch CI advisory"],
+      "enforcement": [
+        "scheduled and branch CI advisory"
+      ],
       "network_policy": "github-actions-only",
-      "entrypoints": [".github/workflows/ci.yml"],
+      "entrypoints": [
+        ".github/workflows/ci.yml"
+      ],
       "tracked_configuration": []
     },
     {
@@ -89,10 +130,18 @@
       "install_scope": "user-local executable",
       "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
       "tested_version": "3.3.0",
-      "enforcement": ["manual advisory", "main pre-push advisory"],
+      "enforcement": [
+        "manual advisory",
+        "main pre-push advisory"
+      ],
       "network_policy": "offline-runtime-no-account-no-scm",
-      "entrypoints": ["scripts/privacy_tool_review.py", "scripts/run_conditional_privacy_reviews.py"],
-      "tracked_configuration": ["security/hounddog-project.json"]
+      "entrypoints": [
+        "scripts/privacy_tool_review.py",
+        "scripts/run_conditional_privacy_reviews.py"
+      ],
+      "tracked_configuration": [
+        "security/hounddog-project.json"
+      ]
     },
     {
       "id": "phi-scan",
@@ -101,9 +150,15 @@
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
       "tested_version": "0.7.0",
-      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "enforcement": [
+        "conditional staged advisory",
+        "manual advisory"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tool_review.py", "scripts/run_conditional_privacy_reviews.py"],
+      "entrypoints": [
+        "scripts/privacy_tool_review.py",
+        "scripts/run_conditional_privacy_reviews.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -113,9 +168,14 @@
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
       "tested_version": "2.2.363",
-      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "enforcement": [
+        "conditional staged advisory",
+        "manual advisory"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "entrypoints": [
+        "scripts/privacy_tool_review.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -125,9 +185,13 @@
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
       "tested_version": "0.0.59",
-      "enforcement": ["manual advisory support"],
+      "enforcement": [
+        "manual advisory support"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "entrypoints": [
+        "scripts/privacy_tool_review.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -137,9 +201,14 @@
       "install_scope": "system executable",
       "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
       "tested_version": "5.5.2",
-      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "enforcement": [
+        "conditional staged advisory",
+        "manual advisory"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "entrypoints": [
+        "scripts/privacy_tool_review.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -149,9 +218,14 @@
       "install_scope": "system executable",
       "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
       "tested_version": "13.55",
-      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "enforcement": [
+        "conditional staged advisory",
+        "manual advisory"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tool_review.py"],
+      "entrypoints": [
+        "scripts/privacy_tool_review.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -161,9 +235,15 @@
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
       "tested_version": "0.1.0 at e558a5232f405b4065d6079605a853f3e7c10152",
-      "enforcement": ["conditional staged advisory", "manual advisory"],
+      "enforcement": [
+        "conditional staged advisory",
+        "manual advisory"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tool_review.py", "scripts/run_conditional_privacy_reviews.py"],
+      "entrypoints": [
+        "scripts/privacy_tool_review.py",
+        "scripts/run_conditional_privacy_reviews.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -173,9 +253,13 @@
       "install_scope": "isolated PHI tools venv with ignored model cache",
       "install_reference": "requirements-phi-tools.txt",
       "tested_version": "1.7.2",
-      "enforcement": ["DICOM advisory dependency"],
+      "enforcement": [
+        "DICOM advisory dependency"
+      ],
       "network_policy": "installation-only",
-      "entrypoints": ["scripts/privacy_tools/dicom.py"],
+      "entrypoints": [
+        "scripts/privacy_tools/dicom.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -185,9 +269,13 @@
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
       "tested_version": "3.8.13",
-      "enforcement": ["Presidio advisory dependency"],
+      "enforcement": [
+        "Presidio advisory dependency"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/privacy_tools/media.py"],
+      "entrypoints": [
+        "scripts/privacy_tools/media.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -197,14 +285,19 @@
       "install_scope": "local service",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "locally managed Community Build",
-      "enforcement": ["manual advisory", "14-day or five-commit-behind main pre-push freshness reminder"],
+      "enforcement": [
+        "manual advisory",
+        "14-day or five-commit-behind main pre-push freshness reminder"
+      ],
       "network_policy": "local-loopback analysis; Docker Hub image-manifest and SonarSource GitHub release metadata only for weekly advisory update checks",
       "entrypoints": [
         "scripts/run_local_sonarqube.py",
         "scripts/report_local_sonarqube_issues.py",
         "scripts/check_local_sonarqube_updates.py"
       ],
-      "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
+      "tracked_configuration": [
+        "tools/sonarqube/sonar-project.properties"
+      ]
     },
     {
       "id": "sonar-scanner-cli",
@@ -213,10 +306,16 @@
       "install_scope": "system executable or Docker image",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "8.1.0.6389",
-      "enforcement": ["manual advisory"],
+      "enforcement": [
+        "manual advisory"
+      ],
       "network_policy": "local-sonarqube-only",
-      "entrypoints": ["scripts/run_local_sonarqube.py"],
-      "tracked_configuration": ["tools/sonarqube/sonar-project.properties"]
+      "entrypoints": [
+        "scripts/run_local_sonarqube.py"
+      ],
+      "tracked_configuration": [
+        "tools/sonarqube/sonar-project.properties"
+      ]
     },
     {
       "id": "sonarqube-cloud-ci",
@@ -225,10 +324,16 @@
       "install_scope": "pinned GitHub Action",
       "install_reference": "dev-docs/CONTRIBUTING.md",
       "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
-      "enforcement": ["privacy-gated CI blocking"],
+      "enforcement": [
+        "privacy-gated CI blocking"
+      ],
       "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; Automatic Analysis disabled; no PR, test, coverage, artifact, or local-data upload",
-      "entrypoints": [".github/workflows/ci.yml"],
-      "tracked_configuration": ["sonar-project.properties"]
+      "entrypoints": [
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": [
+        "sonar-project.properties"
+      ]
     },
     {
       "id": "basedpyright",
@@ -237,10 +342,18 @@
       "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
       "tested_version": "1.39.9",
-      "enforcement": ["pre-push blocking", "CI blocking"],
+      "enforcement": [
+        "pre-push blocking",
+        "CI blocking"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/check_basedpyright_errors.py", ".github/workflows/ci.yml"],
-      "tracked_configuration": ["pyrightconfig.json"]
+      "entrypoints": [
+        "scripts/check_basedpyright_errors.py",
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": [
+        "pyrightconfig.json"
+      ]
     },
     {
       "id": "ruff",
@@ -249,9 +362,15 @@
       "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
       "tested_version": "0.15.21",
-      "enforcement": ["pre-commit blocking", "CI blocking"],
+      "enforcement": [
+        "pre-commit blocking",
+        "CI blocking"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": [".githooks/pre-commit", ".github/workflows/ci.yml"],
+      "entrypoints": [
+        ".githooks/pre-commit",
+        ".github/workflows/ci.yml"
+      ],
       "tracked_configuration": []
     },
     {
@@ -261,9 +380,30 @@
       "install_scope": "application development venv",
       "install_reference": "requirements-dev.txt",
       "tested_version": "1.23.0",
-      "enforcement": ["pre-push blocking"],
+      "enforcement": [
+        "pre-push blocking"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": [".githooks/pre-push", ".github/workflows/ci.yml"],
+      "entrypoints": [
+        ".githooks/pre-push",
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": []
+    },
+    {
+      "id": "interrogate",
+      "category": "docstring-coverage",
+      "purpose": "Docstring coverage percentage for the main.py split safety net and ongoing docstring-regression gating.",
+      "install_scope": "application development venv and CI",
+      "install_reference": "requirements-dev.txt",
+      "tested_version": "1.7.0",
+      "enforcement": [
+        "pre-push blocking"
+      ],
+      "network_policy": "offline-runtime",
+      "entrypoints": [
+        "scripts/check_repo_harness.py"
+      ],
       "tracked_configuration": []
     },
     {
@@ -273,9 +413,15 @@
       "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
       "tested_version": "7.1.0",
-      "enforcement": ["pre-push blocking", "CI blocking"],
+      "enforcement": [
+        "pre-push blocking",
+        "CI blocking"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/run_local_sonarqube.py", ".github/workflows/ci.yml"],
+      "entrypoints": [
+        "scripts/run_local_sonarqube.py",
+        ".github/workflows/ci.yml"
+      ],
       "tracked_configuration": []
     },
     {
@@ -285,10 +431,16 @@
       "install_scope": "application development venv",
       "install_reference": "requirements-dev.txt",
       "tested_version": "5.5.5",
-      "enforcement": ["manual release maintenance"],
+      "enforcement": [
+        "manual release maintenance"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": ["scripts/generate_third_party_licenses.py"],
-      "tracked_configuration": ["dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md"]
+      "entrypoints": [
+        "scripts/generate_third_party_licenses.py"
+      ],
+      "tracked_configuration": [
+        "dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md"
+      ]
     },
     {
       "id": "direnv",
@@ -297,10 +449,19 @@
       "install_scope": "system executable",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "2.37.1",
-      "enforcement": ["optional local convenience"],
+      "enforcement": [
+        "optional local convenience"
+      ],
       "network_policy": "offline-runtime",
-      "entrypoints": [".envrc", "scripts/sync_dev_environment.py"],
-      "tracked_configuration": [".env.example", ".envrc", "requirements-dev.txt"]
+      "entrypoints": [
+        ".envrc",
+        "scripts/sync_dev_environment.py"
+      ],
+      "tracked_configuration": [
+        ".env.example",
+        ".envrc",
+        "requirements-dev.txt"
+      ]
     },
     {
       "id": "docker",
@@ -309,9 +470,13 @@
       "install_scope": "system application",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "29.6.1",
-      "enforcement": ["optional local support"],
+      "enforcement": [
+        "optional local support"
+      ],
       "network_policy": "local-sonarqube-and-image-installation",
-      "entrypoints": ["scripts/run_local_sonarqube.py"],
+      "entrypoints": [
+        "scripts/run_local_sonarqube.py"
+      ],
       "tracked_configuration": []
     }
   ],
