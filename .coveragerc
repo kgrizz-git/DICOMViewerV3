@@ -16,6 +16,8 @@ omit =
     src/_vendor/*
     # Side-effect-only entry point; exercising it needs a full GUI launch.
     src/main.py
+    # main.py mixin extraction shells (omitted until coverage debt paid down; see MAIN_PY_REFACTOR_PLAN).
+    src/main_app_*.py
 
 [report]
 # Regex exclude — skip __debug__/unreachable branches and typing-only blocks

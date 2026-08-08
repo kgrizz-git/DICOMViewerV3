@@ -30,3 +30,8 @@ pytest-cov>=7.1.0
 ruff>=0.15.21
 # Complexity analysis (cyclomatic complexity, NLOC, etc.)
 lizard>=1.23.0
+# Docstring coverage measurement (percentage of documented functions/classes).
+# Used by MAIN_PY_REFACTOR_PLAN.md to gate docstring regressions during the
+# main.py split; run from repo root:
+#   python -m interrogate src/main_app_*.py src/main.py --ignore-init-method -f <baseline>
+interrogate>=1.7.0
