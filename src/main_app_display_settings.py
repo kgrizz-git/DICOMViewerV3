@@ -160,11 +160,11 @@ class SettingsLayoutMixin:
         refresh_series_navigator_state(self)
 
     def _on_layout_changed(self, layout_mode: str) -> None:
-        """Handle layout mode change from multi-window layout. Body in ``core.layout_window_slot_controller``."""
+        """Handle layout mode change from multi-window layout. Body in ``gui.layout_window_slot_controller``."""
         layout_on_layout_changed(self, layout_mode)
 
     def _on_main_window_layout_changed(self, layout_mode: str) -> None:
-        """Handle layout mode change from main window menu. Body in ``core.layout_window_slot_controller``."""
+        """Handle layout mode change from main window menu. Body in ``gui.layout_window_slot_controller``."""
         layout_on_main_window_layout_changed(self, layout_mode)
 
     def _on_layout_change_requested(self, layout_mode: str) -> None:

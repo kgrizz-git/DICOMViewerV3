@@ -386,7 +386,7 @@ class InitializationMixin:
         self._connect_all_subwindow_transform_signals()
 
     def _initialize_handlers(self) -> None:
-        """Initialize all handler classes. Body in ``core.app_handler_bootstrap``."""
+        """Initialize all handler classes. Body in ``gui.app_handler_bootstrap``."""
         bootstrap_initialize_handlers(self)
 
     def _setup_ui(self) -> None:
@@ -414,7 +414,7 @@ class InitializationMixin:
         )
 
     def _connect_signals(self) -> None:
-        """Connect all application-level Qt signals. Implemented in core.app_signal_wiring."""
+        """Connect all application-level Qt signals. Implemented in gui.app_signal_wiring."""
         wire_all_signals(self)
         # Provide a callback so the W/L toolbar dropdown can read the active viewer's presets.
         def _get_active_wl_presets():

@@ -7,7 +7,7 @@
 
 > **Readiness (2026-08-08):** Strategy approved. Start with **Phase 0** (test safety net), then Phase 2 scaffolding, then extraction (Phases 3–5). Appendix A/B are populated. CCN reduction is a regression check only (zero methods currently ≥ 20). Phase numbering is 0, then 2–7 (Phase 1 unused).
 
-### Progress ledger (2026-08-08 resume)
+## Progress ledger (2026-08-08 resume)
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -193,7 +193,7 @@ There is **no Phase 1**. Historical numbering proceeds **0 → 2 → 3 → 4 →
      - `importing_domain()` (line 76): add a branch normalizing `main_app_*.py` → `"main"` (same as `main.py`).
      - `top_level_package()` (line 55): for `src.main_app_X` imports, return `"main"` instead of `"main_app_X"`, so that `violation_reason()` still blocks illegal imports *into* the main domain (e.g. a `gui` module importing `src.main_app_initialization` must be flagged, the same as importing `src.main`).
      Re-run `python scripts/check_architecture_boundaries.py` to confirm clean.
-  7. Add a type-check pass via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`) to the verification set (mixin `self` typing via `TYPE_CHECKING`).
+  7. Add a type-check pass via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`) to the verification set (mixin files use ImageViewer-style file pragmas per Typing deviation — not `TYPE_CHECKING` / `self: DICOMViewerApp`).
   8. **`interrogate` inventory — DONE:** `interrogate>=1.7.0` is already in `requirements-dev.txt` and registered in `security/security-tool-inventory.json`. Skip re-adding; only verify `python scripts/check_security_tool_inventory.py` still passes if those files are touched.
   9. **Decide and apply the coverage strategy** (see *Coverage Strategy* below) so the new mixin files do not drop the repo below `--cov-fail-under=65`.
   10. **Confirm Appendix B:** already populated — zero methods CCN ≥ 20. Re-measure only if `src/main.py` changed.
@@ -218,7 +218,7 @@ python -m pytest tests/ -k "main" -v
 - A second `QObject` base (if a mixin wrongly subclasses `QObject`) raises `TypeError` at class definition time.
 - `Signal` declarations placed on a plain mixin fail at class-definition time (PySide6 requires them on the `QObject` subclass).
 - Fragile base class: methods reach across mixins via `self`, so init ordering and shared-attribute contracts matter.
- - basedpyright will flag `self.<app-attr>` as unbound in mixin files unless typed via `TYPE_CHECKING` + `self: DICOMViewerApp` (with `from __future__ import annotations`).
+ - basedpyright may report `self.<app-attr>` typos less strictly on mixin files when using ImageViewer-style file pragmas (see Typing deviation); mitigation is Phase 0 behavioral tests + move-only discipline, not `TYPE_CHECKING` or `self: DICOMViewerApp`.
  - `scripts/check_architecture_boundaries.py` maps only `src/main.py` to domain `"main"`; new `src/main_app_*.py` files resolve to domain `""` and will be reported as unknown-domain violations unless updated in both `importing_domain()` and `top_level_package()` (see Task 6).
 
 **Mitigation:**
@@ -228,7 +228,7 @@ python -m pytest tests/ -k "main" -v
 - Prohibit method-name collisions across mixins; enforce with the Phase 2 collision test (Composition model item 3).
 - Shared state goes through explicit accessor helpers (mirror `DisplayConfigMixin._config()`) where it reduces risk; otherwise rely on documented init ordering.
 - Add the MRO/initialization/collision tests above.
-- Add `from __future__ import annotations` + `if TYPE_CHECKING:` import of `DICOMViewerApp`; annotate `self: DICOMViewerApp` in mixin methods touching shared state; include `python scripts/check_basedpyright_errors.py` in verification.
+- Each mixin file uses `from __future__ import annotations` + ImageViewer-style file pragma (`reportAttributeAccessIssue` / `reportArgumentType` / `reportUninitializedInstanceVariable`); include `python scripts/check_basedpyright_errors.py` in verification (see Typing deviation).
 - Phase 2 Task 6 updates `scripts/check_architecture_boundaries.py` in both `importing_domain()` and `top_level_package()` so `main_app_*` is the `"main"` domain.
 
 
@@ -516,7 +516,7 @@ python scripts/git_hook_line_complexity.py --all
 # Verify architecture (after Phase 2 boundary update)
 python scripts/check_architecture_boundaries.py
 
-# Verify mixin typing (basedpyright, TYPE_CHECKING self: DICOMViewerApp)
+# Verify mixin typing (basedpyright; ImageViewer-style pragmas per Typing deviation)
 python scripts/check_basedpyright_errors.py
 
 # Verify docstring coverage (must stay >= baseline B)
@@ -551,10 +551,11 @@ python scripts/check_user_docs_links.py
 
 1. ~~Review and approve this plan~~ (ready for Phase 0 as of 2026-08-08)
 2. ~~**Complete Phase 0** (test safety net)~~ — **Done** 2026-08-08
-3. After Phase 0 acceptance: Phase 2 scaffolding (empty mixins, coverage omit, architecture boundaries)
-4. Then extraction Phases 3–5 using Appendix A; Phase 6 cleanup; Phase 7 CCN regression sweep
-5. Create/update tracking note in `dev-docs/TO_DO.md` if desired
-6. Update `ARCHITECTURE.md` / `SOURCE_LAYOUT.md` during Phase 6 (not before Phase 0)
+3. ~~Phase 2 scaffolding (empty mixins, coverage omit, architecture boundaries)~~ — **Done** 2026-08-08
+4. ~~Extraction Phases 3–5 using Appendix A; Phase 6 cleanup; Phase 7 CCN regression sweep~~ — **Done** 2026-08-08
+5. Human commit on `refactor/main-split` when ready (see Progress ledger resume point)
+6. ~~Update `ARCHITECTURE.md` / `SOURCE_LAYOUT.md` during Phase 6~~ — **Done** 2026-08-08 (Phase 6)
+7. Create/update tracking note in `dev-docs/TO_DO.md` if desired (optional post-merge)
 
 ### Recorded baselines (fill during Phase 0)
 
@@ -590,7 +591,7 @@ Authoritative map of all **236** `DICOMViewerApp` methods (AST class-body count;
 
 | File | Methods | Method lines | Est. total | Under 750? |
 |------|--------:|-------------:|-----------:|:----------:|
-| `src/main.py` | 7 | 121 | ~381 | yes |
+| `src/main.py` | 8 | 135 | ~395 | yes |
 | `src/main_app_initialization.py` | 12 | 413 | ~493 | yes |
 | `src/main_app_subwindow_management.py` | 53 | 493 | ~573 | yes |
 | `src/main_app_ui_and_files.py` | 91 | 473 | ~553 | yes |
@@ -599,7 +600,7 @@ Authoritative map of all **236** `DICOMViewerApp` methods (AST class-body count;
 
 ### Ownership notes
 
-- `__init__`, `run`, `eventFilter`, keyboard-focus / privacy-warn helpers, quit handler, and the single-shot timer helper stay on `DICOMViewerApp` in `src/main.py`.
+- `__init__`, `_log_startup_perf`, `run`, `eventFilter`, keyboard-focus / privacy-warn helpers, quit handler, and the single-shot timer helper stay on `DICOMViewerApp` in `src/main.py`.
 - `tag_export_union_ready = Signal(...)` stays as a class attribute on `DICOMViewerApp`.
 - Module-level `exception_hook`, `install_application_privacy_boundaries`, `main` stay in `src/main.py`.
 - QA / MRI-compare facade methods are assigned to `UIHandlersMixin` (no separate QA mixin).
@@ -608,17 +609,18 @@ Authoritative map of all **236** `DICOMViewerApp` methods (AST class-body count;
 - Refresh this appendix if `src/main.py` gains/loses methods before extraction starts.
 
 
-### `src/main.py` — `DICOMViewerApp` (7 methods)
+### `src/main.py` — `DICOMViewerApp` (8 methods)
 
 | Lines | Method | CCN |
 |------:|--------|----:|
-| 299–357 | `__init__` | 1 |
-| 1027–1029 | `_on_app_about_to_quit` | 1 |
-| 2187–2202 | `_restart_single_shot_timer` | 2 |
-| 2383–2388 | `eventFilter` | 2 |
-| 2390–2414 | `run` | 2 |
-| 2416–2419 | `_set_initial_keyboard_focus` | 2 |
-| 2421–2428 | `_warn_if_privacy_off` | 2 |
+| 139–197 | `__init__` | 1 |
+| 199–212 | `_log_startup_perf` | 2 |
+| 214–216 | `_on_app_about_to_quit` | 1 |
+| 218–233 | `_restart_single_shot_timer` | 2 |
+| 235–240 | `eventFilter` | 2 |
+| 242–266 | `run` | 2 |
+| 268–271 | `_set_initial_keyboard_focus` | 2 |
+| 273–280 | `_warn_if_privacy_off` | 2 |
 
 ### `src/main_app_initialization.py` — `InitializationMixin` (12 methods)
 

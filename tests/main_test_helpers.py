@@ -17,9 +17,10 @@ from utils.config_manager import ConfigManager as RealConfigManager
 
 def make_test_config_manager(tmp_path: Path) -> RealConfigManager:
     """ConfigManager that writes under ``tmp_path`` instead of the user config dir."""
-    cm = RealConfigManager()
-    cm.config_path = tmp_path / "dicom_viewer_config_test_main.json"
-    return cm
+    return RealConfigManager(
+        config_dir=tmp_path,
+        config_filename="dicom_viewer_config_test_main.json",
+    )
 
 
 def with_test_config_manager(tmp_path: Path) -> tuple[Callable[[], RealConfigManager], Any]:

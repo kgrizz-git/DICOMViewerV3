@@ -11,6 +11,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   plain mixin modules under `src/main_app_*.py` (`InitializationMixin`,
   subwindow/MPR, UI/files, display/settings, tag/ROI); `src/main.py` retains
   entry point, `QObject` base, `tag_export_union_ready`, and lifecycle shell.
+  Follow-up (PR #51 review): corrected stale `core.*` facade docstring paths to
+  `gui.*`, isolated Phase 0 test config via `ConfigManager(config_dir=...)`, and
+  aligned architecture/coverage/plan docs with basedpyright + Appendix A.
   **Semantic versioning note: patch** (no user-facing behavior change).
 - **Tag export dialog UX:** **File → Export DICOM Tags…** (moved from Tools);
   studies/series start collapsed; top **Select All** checkbox and push buttons

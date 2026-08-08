@@ -110,5 +110,5 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | Repo harness | `python scripts/check_repo_harness.py` |
 | Architecture boundaries | `python scripts/check_architecture_boundaries.py` |
 | Agent smoke (imports + fixture) | `python scripts/agent_smoke_harness.py` |
-| Type check | `pyright src/` (see `dev-docs/TO_DO.md` maintenance notes) |
+| Type check | `.venv/bin/python scripts/check_basedpyright_errors.py` (CI / pre-push; basedpyright) |
 | Security (local/CI) | Semgrep, Grype workflows; see `CONTRIBUTING.md` |

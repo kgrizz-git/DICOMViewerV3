@@ -82,7 +82,7 @@ class SubwindowManagementMixin:
     def _build_managers_for_subwindow(self, idx: int, subwindow: SubWindowContainer) -> dict[str, Any]:
         """
         Build the full set of per-subwindow managers for the given subwindow.
-        Delegates to ``core.subwindow_manager_factory.build_managers_for_subwindow``.
+        Delegates to ``gui.subwindow_manager_factory.build_managers_for_subwindow``.
         """
         return build_managers_for_subwindow(self, idx, subwindow)
 

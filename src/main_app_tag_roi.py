@@ -38,7 +38,7 @@ class TagEditingMixin:
         """
         Stop and join the tag-export union QThread before replacing it.
 
-        Body in ``core.tag_export_union_host.TagExportUnionHost.drain_worker``.
+        Body in ``gui.tag_export_union_host.TagExportUnionHost.drain_worker``.
         """
         self.tag_export_union_host.drain_worker(timeout_sec)
 
