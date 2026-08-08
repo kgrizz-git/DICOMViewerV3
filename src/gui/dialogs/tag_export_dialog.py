@@ -279,7 +279,7 @@ class TagExportDialog(
             save_preset_btn.clicked.connect(self._save_preset)
             preset_layout.addWidget(save_preset_btn)
 
-            load_preset_btn = QPushButton("Load")
+            load_preset_btn = QPushButton("Reload")
             load_preset_btn.clicked.connect(self._load_preset)
             preset_layout.addWidget(load_preset_btn)
 

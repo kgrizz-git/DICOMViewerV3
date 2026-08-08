@@ -5,13 +5,17 @@ Inputs:
     - ConfigManager tag-export presets and the live tag tree selection
 
 Outputs:
-    - Combo list refresh, Save / Save As / Load / Delete / Import / Export flows
+    - Combo list refresh, Save / Save As / Reload / Delete / Import / Export flows
 
 Requirements:
     - PySide6 dialog widgets on the owning TagExportDialog
     - gui.dialogs.tag_export_dialog_helpers preset merge helpers
 """
-
+# Pyright: methods run only on ``TagExportDialog`` (combined Qt type); mixin bases
+# cannot express cross-mixin ``self`` without a duplicate protocol surface.
+# ``reportArgumentType`` is also off so ``self`` can be passed as a ``QWidget``
+# parent to ``QMessageBox`` / ``QFileDialog`` without a Protocol cast surface.
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false, reportArgumentType=false
 from __future__ import annotations
 
 import os
@@ -151,7 +155,7 @@ class TagExportDialogPresetsMixin:
         )
 
     def _load_preset(self) -> None:
-        """Load the preset currently shown in the combo (manual Load button)."""
+        """Re-apply the preset currently shown in the combo (Reload button)."""
         if not self.config_manager:
             QMessageBox.warning(
                 self,
@@ -167,7 +171,7 @@ class TagExportDialogPresetsMixin:
             QMessageBox.warning(
                 self,
                 "No Preset Selected",
-                "Please select a preset to load.",
+                "Please select a preset to reload.",
             )
             return
 
@@ -187,7 +191,7 @@ class TagExportDialogPresetsMixin:
         preset_name:
             Name of a stored tag-export preset.
         show_feedback:
-            When True (manual Load), show a success modal. Auto-load from the
+            When True (Reload button), show a success modal. Auto-load from the
             dropdown passes False so selecting presets is not modal-noisy.
         """
         if not self.config_manager:
@@ -249,8 +253,8 @@ class TagExportDialogPresetsMixin:
         if show_feedback:
             QMessageBox.information(
                 self,
-                "Preset Loaded",
-                f"Preset '{preset_name}' loaded successfully.",
+                "Preset Reloaded",
+                f"Preset '{preset_name}' reloaded successfully.",
             )
 
     def _delete_preset(self) -> None:

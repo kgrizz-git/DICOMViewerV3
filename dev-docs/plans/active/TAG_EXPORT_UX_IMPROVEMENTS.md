@@ -141,7 +141,7 @@ Refactor `_load_preset` (line 1197) to extract the core logic into `_load_preset
 
 **Important — no modal on auto-load:** `_load_preset()` currently shows `QMessageBox.information("Preset Loaded", ...)` (line 1262). Auto-load on dropdown selection must NOT show a modal on every pick. Solution: add a `show_feedback: bool = True` parameter to `_load_preset_by_name`. `_load_preset` (manual Load button) calls `_load_preset_by_name(name, show_feedback=True)`. `_on_preset_selected` (auto-load) calls `_load_preset_by_name(name, show_feedback=False)`.
 
-**Load button remains:** The explicit "Load" button is still wired to `_load_preset` and remains useful — e.g., when a user browses the dropdown without wanting to auto-load (they can re-select the current item or use the button for explicit action). The auto-load behavior is a UX shift worth calling out in the changelog: users who previously used the dropdown to browse preset names without loading will now trigger loads on selection.
+**Reload button:** The explicit button is labeled **Reload** (not Load) and re-applies the currently selected preset — useful after the user changes tag checks and wants to discard those edits without saving. Auto-load on dropdown selection remains the primary load path. Call out both behaviors in the changelog.
 
 ## Files to modify
 

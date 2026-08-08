@@ -11,7 +11,9 @@ Requirements:
     - PySide6 Qt widgets already constructed on the owning dialog
     - gui.metadata_table_model.metadata_row_kind
 """
-
+# Pyright: methods run only on ``TagExportDialog`` (combined Qt type); mixin bases
+# cannot express cross-mixin ``self`` without a duplicate protocol surface.
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
 from __future__ import annotations
 
 from collections.abc import Iterator
