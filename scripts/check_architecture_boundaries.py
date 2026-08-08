@@ -58,8 +58,12 @@ def top_level_package(module_name: str) -> str:
     if not parts:
         return ""
     if parts[0] == SRC_DIRNAME and len(parts) > 1:
-        return parts[1]
-    return parts[0]
+        top = parts[1]
+    else:
+        top = parts[0]
+    if top.startswith("main_app_"):
+        return "main"
+    return top
 
 
 def module_for_file(path: Path, src_root: Path) -> str:
@@ -74,7 +78,10 @@ def importing_domain(path: Path, src_root: Path) -> str:
     """Return the source domain for a file: ``core``, ``gui``, etc."""
     rel = path.relative_to(src_root)
     if len(rel.parts) == 1:
-        return "main" if rel.parts[0] == "main.py" else ""
+        stem = rel.parts[0]
+        if stem == "main.py" or stem.startswith("main_app_"):
+            return "main"
+        return ""
     return rel.parts[0]
 
 

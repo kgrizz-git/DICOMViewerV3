@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-08
 
 ---
 
@@ -39,6 +39,7 @@ This file tracks active and near-term tasks.
 
 ## Static analysis
 
+- [ ] **[P2]** **Lift `.coveragerc` omit for `src/main_app_*.py` after coverage paydown.** The main.py mixin split quarantines extracted facade modules (Option A) so CI `--cov-fail-under=65` stays green. Do not leave them omitted permanently — expand safety-net / facade tests until un-omitting does not drop below 65%. See [MAIN_PY_REFACTOR_PLAN](plans/supporting/MAIN_PY_REFACTOR_PLAN.md) Coverage Strategy.
 - [ ] **[P2]** **Refactor high-complexity functions identified by local
   SonarQube or Lizard.** Prioritize bounded, characterized slices in
   safety-sensitive or heavily changed code; use Sonar `S3776` cognitive
