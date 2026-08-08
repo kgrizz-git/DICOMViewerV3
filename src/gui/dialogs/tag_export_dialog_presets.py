@@ -34,6 +34,7 @@ from gui.dialogs.tag_export_dialog_helpers import (
     merged_dict_with_preset_tags,
     tag_export_preset_match_keys,
 )
+from gui.metadata_table_model import metadata_row_kind
 
 
 class TagExportDialogPresetsMixin:
@@ -138,6 +139,20 @@ class TagExportDialogPresetsMixin:
             return
 
         preset_name = preset_name.strip()
+
+        # Save As creates a distinct preset. If the name already exists, require
+        # explicit confirmation before overwriting (use "Save" to overwrite the
+        # current preset deliberately).
+        if self.config_manager.get_tag_export_presets().get(preset_name) is not None:
+            reply = QMessageBox.question(
+                self,
+                "Preset Already Exists",
+                f"A preset named '{preset_name}' already exists. Overwrite it?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
 
         self.config_manager.save_tag_export_preset(preset_name, self.selected_tags)
         self._load_presets_list()
@@ -244,6 +259,22 @@ class TagExportDialogPresetsMixin:
 
         for tag_item in checked_items:
             self._update_ancestors_check_state(tag_item.parent())
+
+        # Re-assert explicitly checked Sequence/Item parents. _update_ancestors_check_state
+        # above recomputes a parent from its visible children, which can demote a parent
+        # whose tag string is in the preset (an independent summary-column export) from
+        # Checked to PartiallyChecked when a sibling descendant is absent. Force those
+        # preset parents back to Checked so they survive reload in selected_tags.
+        merged = self._active_merged_tags_for_kind_lookup()
+        for tag_item in self._iter_all_tag_items(root):
+            tag_str = tag_item.data(0, Qt.ItemDataRole.UserRole)
+            if tag_str is None or tag_str not in match_keys:
+                continue
+            tag_data = merged.get(tag_str)
+            if tag_data is None:
+                continue
+            if metadata_row_kind(tag_data) in ("sequence", "item"):
+                tag_item.setCheckState(0, Qt.CheckState.Checked)
 
         self.tags_tree.blockSignals(False)
         self._filter_tags(self.tag_search.text())

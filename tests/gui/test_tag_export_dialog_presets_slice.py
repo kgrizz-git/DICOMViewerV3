@@ -416,4 +416,10 @@ def test_filter_preserves_independently_checked_sequence_parents(qapp, tmp_path)
     cm.save_tag_export_preset("seq-parent", list(dlg.selected_tags))
     reloaded = cm.get_tag_export_presets()["seq-parent"]
     assert seq_tag in reloaded
+
+    # Reload must preserve the explicitly checked sequence parent (summary column)
+    # rather than demoting it via _update_ancestors_check_state.
+    dlg._load_preset_by_name("seq-parent", show_feedback=False)
+    assert seq_item.checkState(0) == Qt.CheckState.Checked
+    assert seq_tag in dlg.selected_tags
     dlg.close()
