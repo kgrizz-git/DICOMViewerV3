@@ -80,7 +80,16 @@ def test_about_disclaimer_link_calls_show_disclaimer_with_force_show(qapp, tmp_p
         spy_show_disclaimer,
     )
 
-    w._on_about_disclaimer_clicked(QUrl("disclaimer://show"))
+    def click_disclaimer_and_accept() -> None:
+        dialog = _find_about_dialog()
+        assert dialog is not None, "About dialog not found among top-level widgets"
+        browser = dialog.findChild(QTextBrowser)
+        assert browser is not None
+        browser.anchorClicked.emit(QUrl("disclaimer://show"))
+        dialog.accept()
+
+    QTimer.singleShot(0, click_disclaimer_and_accept)
+    w._show_about()
 
     assert len(calls) == 1
     assert calls[0]["force_show"] is True

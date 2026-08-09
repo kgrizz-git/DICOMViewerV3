@@ -20,7 +20,7 @@
     "src/gui/image_viewer_context_menu.py": 820,
     "src/gui/image_viewer_input.py": 1204,
     "src/gui/image_viewer_view.py": 1350,
-    "src/gui/main_window.py": 1777,
+    "src/gui/main_window.py": 1640,
     "src/gui/metadata_panel.py": 946,
     "src/gui/mpr_controller.py": 1921,
     "src/gui/multi_window_layout.py": 898,
