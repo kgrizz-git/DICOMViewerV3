@@ -126,7 +126,11 @@ class StudyIndexConfigMixin:
         if not isinstance(raw, list):
             raw = []
         known = set(STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT)
-        out = [str(x) for x in raw if isinstance(x, str) and x in known]
+        out = list(
+            dict.fromkeys(
+                str(x) for x in raw if isinstance(x, str) and x in known
+            )
+        )
         for cid in STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT:
             if cid not in out:
                 out.append(cid)
@@ -135,7 +139,7 @@ class StudyIndexConfigMixin:
     def set_study_index_browser_column_order(self, column_ids: list[str]) -> None:
         """Persist reorderable header order (list of stable column id strings)."""
         known = set(STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT)
-        cleaned = [str(x) for x in column_ids if x in known]
+        cleaned = list(dict.fromkeys(str(x) for x in column_ids if x in known))
         if len(cleaned) != len(known):
             for cid in STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT:
                 if cid not in cleaned:

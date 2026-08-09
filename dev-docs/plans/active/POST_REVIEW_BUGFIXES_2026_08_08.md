@@ -7,6 +7,21 @@
 ## Overview
 This plan tracks bugs, edge-case flaws, and architectural improvements identified by subagent code reviews during the test coverage expansion effort. Per project policy, these findings were isolated rather than fixed in-flight during the test-writing phase.
 
+## Implementation notes (2026-08-09)
+
+- Execute only the **[PR]** items below in this branch; leave deferred items alone.
+- Prefer TDD against existing strict `@pytest.mark.xfail` tests; remove the
+  marker once the fix lands (do not leave green xfails).
+- When a current test encodes buggy behavior (e.g. crosshair
+  `_move_batch_timer` identity replacement for **17B**, tag-export drain
+  patching `time.time` for **3**), update the test to the intended contract
+  in the same commit as the fix.
+- For **18B**, prefer removing or documenting the unused
+  `handle_settings_applied` stub rather than double-invoking settings
+  callbacks (see review table).
+- Land this PR before MainWindow extractions; Phase 0 characterization for
+  `MAIN_WINDOW_REFACTOR_PLAN.md` remains a separate required gate.
+
 ## PR scope (planned)
 
 The following items are selected for a single bug-fix + cleanup PR.

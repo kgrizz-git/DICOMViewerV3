@@ -6,6 +6,16 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Fixed
+- **Post-review bugfixes (PR scope):** Slice-location single-view refresh now
+  initializes managers and drains pending full refreshes; text-annotation
+  deletion clears stale move-tracking; cine controls format integral speeds
+  correctly and clear loop-bound tooltips when frames drop to zero; single
+  multi-frame DICOM files are accepted for cine playback; main-window slot-map
+  wiring failures are logged instead of swallowed; study-index browser column
+  order deduplicates known ids on read and write. **Semantic versioning note:
+  patch.**
+
 ### Changed
 - **Internal (`main.py` mixin split):** `DICOMViewerApp` orchestration split into
   plain mixin modules under `src/main_app_*.py` (`InitializationMixin`,

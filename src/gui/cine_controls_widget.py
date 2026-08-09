@@ -246,7 +246,7 @@ class CineControlsWidget(QWidget):
         Args:
             speed_multiplier: Speed multiplier (0.25, 0.5, 1.0, 2.0, 4.0)
         """
-        speed_text = f"{speed_multiplier}x"
+        speed_text = f"{speed_multiplier:g}x"
         if speed_text in ["0.25x", "0.5x", "1x", "2x", "4x"]:
             self.speed_combo.setCurrentText(speed_text)
 
@@ -271,6 +271,7 @@ class CineControlsWidget(QWidget):
             self.frame_slider.setMaximum(0)
             self.frame_slider.setValue(0)
             self.frame_position_label.setText("0 / 0")
+            self._update_loop_bounds_display()
             return
 
         # Block signals to prevent emitting when we programmatically update the slider

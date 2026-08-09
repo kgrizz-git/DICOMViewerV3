@@ -116,9 +116,17 @@ class SliceLocationLineCoordinator:
         self._refreshing = True
         try:
             only_same_group = self._get_same_group_only()
+            scene = None
+            sub = self._get_subwindow_container(target_idx)
+            if sub and hasattr(sub, "image_viewer") and sub.image_viewer:
+                scene = getattr(sub.image_viewer, "scene", None)
+            self.ensure_manager(target_idx, scene)
             self._refresh_for_subwindow(target_idx, only_same_group)
         finally:
             self._refreshing = False
+            if self._pending_refresh_all:
+                self._pending_refresh_all = False
+                self.refresh_all()
 
     def _refresh_for_subwindow(self, target_idx: int, only_same_group: bool) -> None:
         """Internal: refresh one target subwindow."""

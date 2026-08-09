@@ -11,8 +11,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import pytest
-
 from utils.config.study_index_config import (
     STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT,
     StudyIndexConfigMixin,
@@ -212,10 +210,6 @@ class TestBrowserColumnOrder:
         assert set(stored) == set(STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT)
         assert stored[0] == "patient_id"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Known defect #21A: duplicate ids are not deduplicated before persistence.",
-    )
     def test_set_duplicate_ids_are_deduplicated(self, tmp_path):
         # KNOWN DEFECT (POST_REVIEW_BUGFIXES_2026_08_08.md #21A): duplicate known
         # ids make len(cleaned) == len(known), so the append-missing branch is
@@ -229,10 +223,6 @@ class TestBrowserColumnOrder:
         stored = host.config["study_index_browser_column_order"]
         assert stored == list(STUDY_INDEX_BROWSER_COLUMN_IDS_DEFAULT)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Known defect #21A: persisted duplicate ids are not normalized on read.",
-    )
     def test_get_duplicate_ids_are_deduplicated(self, tmp_path):
         host = _make_host(tmp_path)
         host.config["study_index_browser_column_order"] = [

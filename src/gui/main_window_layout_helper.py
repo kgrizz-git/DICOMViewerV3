@@ -21,9 +21,14 @@ Requirements:
     - PySide6 (QVBoxLayout, QTabWidget, QWidget)
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+from utils.log_sanitizer import sanitized_format_exc
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -163,7 +168,7 @@ def setup_main_window_content(
                 get_thumbnail_for_view=slot_map.get_thumbnail_for_view,
             )
         except Exception:
-            pass
+            _logger.debug("%s", sanitized_format_exc())
         # Apply initial visibility from the View menu toggle if available
         if hasattr(main_window, "show_window_slot_map_action"):
             main_window.set_window_slot_map_visible(
