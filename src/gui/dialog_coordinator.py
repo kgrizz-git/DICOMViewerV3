@@ -56,7 +56,6 @@ class DialogCoordinator:
     - Open quick start guide dialog
     - Open tag export dialog
     - Open export dialog
-    - Handle settings applied
     """
 
     def __init__(
@@ -321,11 +320,6 @@ class DialogCoordinator:
         )
         dialog.exec()
 
-    def handle_settings_applied(self) -> None:
-        """Handle settings being applied."""
-        # This will be handled by the callback if provided
-        pass
-
     def update_tag_viewer(self, dataset) -> None:
         """
         Update tag viewer with new dataset.
@@ -378,8 +372,6 @@ class DialogCoordinator:
                 **callbacks
             )
         dialog = self.histogram_dialogs[idx]
-        if dialog is None:
-            return
         dialog.update_histogram()
         dialog.show()
         dialog.raise_()

@@ -109,8 +109,8 @@ def test_host_drain_worker_running_no_app_inst(mock_qapp):
 
 
 @patch("gui.tag_export_union_host.QApplication")
-@patch("gui.tag_export_union_host.time.time")
-def test_host_drain_worker_timeout(mock_time, mock_qapp, capsys):
+@patch("gui.tag_export_union_host.time.monotonic")
+def test_host_drain_worker_timeout(mock_monotonic, mock_qapp, capsys):
     mock_app = MagicMock()
     host = TagExportUnionHost(mock_app)
 
@@ -119,7 +119,7 @@ def test_host_drain_worker_timeout(mock_time, mock_qapp, capsys):
     host._worker = mock_worker
 
     # 0.0 for setup, 10.0 for loop condition check, 200.0 for next loop condition check
-    mock_time.side_effect = [0.0, 10.0, 200.0]
+    mock_monotonic.side_effect = [0.0, 10.0, 200.0]
 
     host.drain_worker(timeout_sec=180.0)
 

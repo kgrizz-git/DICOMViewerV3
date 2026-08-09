@@ -88,8 +88,8 @@ class TestOnCrosshairMoved:
         crosshair_item.pos.return_value = QPointF(15, 25)
         crosshair_coordinator._on_crosshair_moved(crosshair_item)
 
-        # Timer should be replaced
-        assert crosshair_coordinator._move_batch_timer is not first_timer
+        # Timer should be reused (same instance)
+        assert crosshair_coordinator._move_batch_timer is first_timer
 
 
 @pytest.mark.qt

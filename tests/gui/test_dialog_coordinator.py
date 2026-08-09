@@ -172,7 +172,7 @@ def test_open_overlay_config_and_annotation_options(mock_coordinator_setup) -> N
 
 
 def test_simple_dialog_triggers(mock_coordinator_setup) -> None:
-    """Test open_quick_start_guide, open_user_documentation_in_browser, open_fusion_technical_doc, handle_settings_applied."""
+    """Test open_quick_start_guide, open_user_documentation_in_browser, open_fusion_technical_doc."""
     coord = mock_coordinator_setup
 
     with patch("gui.dialog_coordinator.QuickStartGuideDialog") as mock_dlg:
@@ -186,8 +186,6 @@ def test_simple_dialog_triggers(mock_coordinator_setup) -> None:
     with patch("gui.dialog_coordinator.FusionTechnicalDocDialog") as mock_dlg:
         coord.open_fusion_technical_doc()
         mock_dlg.return_value.exec.assert_called_once()
-
-    coord.handle_settings_applied()
 
 
 def test_open_tag_export_and_export_and_deep_anonymizer(mock_coordinator_setup) -> None:

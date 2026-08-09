@@ -63,7 +63,7 @@ def test_init_and_attributes(mock_coordinator_setup) -> None:
     assert coordinator.update_undo_redo_state_callback == undo_cb
     assert coordinator.get_use_rescaled_values == resc_cb
     assert coordinator._crosshair_move_tracking == {}
-    assert coordinator._move_batch_timer is None
+    assert coordinator._move_batch_timer is not None
 
 
 def test_handle_crosshair_clicked(mock_coordinator_setup) -> None:
@@ -375,10 +375,10 @@ def test_handle_clear_crosshairs_executes_command_for_nonempty_crosshair_set(
         undo_mgr.execute_command.assert_called_once()
 
 
-def test_move_batch_timer_is_replaced_between_sequential_moves(
+def test_move_batch_timer_is_reused_between_sequential_moves(
     mock_coordinator_setup,
 ) -> None:
-    """Python-owned timers are replaced between sequential crosshair moves."""
+    """The debounce timer is reused across sequential crosshair moves."""
     s = mock_coordinator_setup
     coordinator, iv = s.coordinator, s.iv
     iv.scene = MagicMock()
@@ -393,6 +393,5 @@ def test_move_batch_timer_is_replaced_between_sequential_moves(
     coordinator._on_crosshair_moved(item)
     timer2 = coordinator._move_batch_timer
 
-    assert timer1 is not timer2
+    assert timer1 is timer2
     assert timer1 is not None
-    assert timer2 is not None

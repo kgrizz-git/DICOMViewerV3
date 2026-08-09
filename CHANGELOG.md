@@ -13,8 +13,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   correctly and clear loop-bound tooltips when frames drop to zero; single
   multi-frame DICOM files are accepted for cine playback; main-window slot-map
   wiring failures are logged instead of swallowed; study-index browser column
-  order deduplicates known ids on read and write. **Semantic versioning note:
-  patch.**
+  order deduplicates known ids on read and write; tag-export union drain uses
+  monotonic timeouts; layout slot swap guards use a named max-slot constant and
+  popup accent reads from ``app.config_manager``; crosshair clear/move paths
+  drop dead branches and reuse a single debounce timer; histogram dialog open
+  removes unreachable null checks and the unused settings-applied stub.
+  **Semantic versioning note: patch.**
 
 ### Changed
 - **Internal (`main.py` mixin split):** `DICOMViewerApp` orchestration split into

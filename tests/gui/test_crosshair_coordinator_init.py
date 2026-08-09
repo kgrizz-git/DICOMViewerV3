@@ -80,4 +80,4 @@ class TestCrosshairCoordinatorInitialization:
         )
 
         assert coordinator._crosshair_move_tracking == {}
-        assert coordinator._move_batch_timer is None
+        assert coordinator._move_batch_timer is not None
