@@ -40,7 +40,7 @@ def test_toast_bottom_center_default_alpha(qapp):
     w.show()
     qapp.processEvents()
     w.show_toast_message("hello", timeout_ms=999_999, position="bottom-center")
-    label = w._toast_label
+    label = w._toast.label
     assert label is not None
     x = (w.width() - label.width()) // 2
     y = w.height() - 100
@@ -58,7 +58,7 @@ def test_toast_center_placement_and_alpha(qapp):
     w.show()
     qapp.processEvents()
     w.show_toast_message("hello", timeout_ms=999_999, position="center", bg_alpha=0.85)
-    label = w._toast_label
+    label = w._toast.label
     assert label is not None
     x = (w.width() - label.width()) // 2
     y = (w.height() - label.height()) // 2
@@ -76,7 +76,7 @@ def test_toast_bg_alpha_clamped_high(qapp):
     w.show()
     qapp.processEvents()
     w.show_toast_message("x", timeout_ms=999_999, bg_alpha=99.0)
-    label = w._toast_label
+    label = w._toast.label
     assert label is not None
     ss = label.styleSheet()
     assert re.search(r"rgba\s*\(\s*0\s*,\s*0\s*,\s*0\s*,\s*1(?:\.0)?\s*\)", ss, re.I)
@@ -90,7 +90,7 @@ def test_toast_bg_alpha_clamped_low(qapp):
     w.show()
     qapp.processEvents()
     w.show_toast_message("x", timeout_ms=999_999, bg_alpha=-5.0)
-    label = w._toast_label
+    label = w._toast.label
     assert label is not None
     ss = label.styleSheet()
     assert re.search(r"rgba\s*\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0(?:\.0)?\s*\)", ss, re.I)

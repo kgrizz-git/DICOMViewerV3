@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 from PySide6.QtCore import (
     QDir,
     QEvent,
-    QPropertyAnimation,
     Qt,
     QTimer,
     Signal,
@@ -44,9 +43,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QMenu,
     QScrollArea,
@@ -68,6 +65,7 @@ from pathlib import Path
 from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 from gui.main_window_menu_builder import build_menu_bar
 from gui.main_window_status_controller import MainWindowStatusController
+from gui.main_window_toast_controller import MainWindowToastController
 from gui.main_window_toolbar_builder import build_main_toolbar
 from gui.window_slot_map_widget import WindowSlotMapWidget
 from utils.config_manager import ConfigManager
@@ -283,12 +281,6 @@ class MainWindow(QMainWindow):
     # Callable stamped on by main.py to supply active W/L presets.
     _get_active_wl_presets: Any | None = None
 
-    # Toast overlay (ephemeral QLabel + effects; cleared after fade).
-    _toast_label: QLabel | None = None
-    _toast_effect: QGraphicsOpacityEffect | None = None
-    _toast_timer: QTimer | None = None
-    _toast_animation: QPropertyAnimation | None = None
-
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
 
@@ -337,6 +329,7 @@ class MainWindow(QMainWindow):
         self._create_toolbar()
         self._create_status_bar()
         self._create_central_widget()
+        self._toast = MainWindowToastController(self)
 
         # Enable drag-and-drop on main window
         self.setAcceptDrops(True)
@@ -384,61 +377,13 @@ class MainWindow(QMainWindow):
             severity: ``info`` (default), ``warning``, ``error``, or ``success``.
                 Controls the left-border color and icon prefix.
         """
-        _severity_map = {
-            "info":    ("#4285da", "ℹ"),
-            "warning": ("#d68910", "⚠"),
-            "error":   ("#c0392b", "✕"),
-            "success": ("#27ae60", "✓"),
-        }
-        border_color, icon = _severity_map.get(severity, _severity_map["info"])
-        display_message = f"{icon}  {message}"
-
-        if self._toast_timer is not None and self._toast_timer.isActive():
-            self._toast_timer.stop()
-        if self._toast_label is not None:
-            self._toast_label.deleteLater()
-        alpha = max(0.0, min(1.0, float(bg_alpha)))
-        label = QLabel(display_message, self)
-        label.setStyleSheet(
-            f"background-color: rgba(0, 0, 0, {alpha}); color: white; padding: 12px 22px; "
-            f"border-radius: 8px; border-left: 5px solid {border_color}; "
-            f"font-size: 14px; font-weight: 500;"
+        self._toast.show(
+            message,
+            timeout_ms,
+            position=position,
+            bg_alpha=bg_alpha,
+            severity=severity,
         )
-        label.setWordWrap(True)
-        label.setMinimumWidth(360)
-        label.setMaximumWidth(640)
-        label.adjustSize()
-        effect = QGraphicsOpacityEffect(label)
-        label.setGraphicsEffect(effect)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        x = (self.width() - label.width()) // 2
-        if position == "center":
-            y = (self.height() - label.height()) // 2
-        elif position == "top-center":
-            cw = self.centralWidget()
-            y = (cw.y() + 12) if cw is not None else 80
-        else:
-            y = self.height() - 100
-        label.setGeometry(max(0, x), max(0, y), label.width(), label.height())
-        label.show()
-        label.raise_()
-        self._toast_label = label
-        self._toast_effect = effect
-
-        def start_fade():
-            self._toast_timer = None  # single-shot fired; allow new toasts to schedule again
-            anim = QPropertyAnimation(effect, b"opacity")
-            anim.setDuration(300)
-            anim.setStartValue(1.0)
-            anim.setEndValue(0.0)
-            anim.finished.connect(lambda: (label.deleteLater(), setattr(self, "_toast_label", None)))
-            anim.start()
-            self._toast_animation = anim
-
-        self._toast_timer = QTimer(self)
-        self._toast_timer.setSingleShot(True)
-        self._toast_timer.timeout.connect(start_fade)
-        self._toast_timer.start(timeout_ms)
 
     def _create_central_widget(self) -> None:
         """Create the central widget area."""
