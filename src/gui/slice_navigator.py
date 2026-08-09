@@ -48,10 +48,10 @@ class SliceNavigator(QObject):
         Args:
             total: Total number of slices
         """
-        self.total_slices = total
+        self.total_slices = max(0, total)
         # Ensure current index is valid
-        if self.current_slice_index >= total:
-            self.current_slice_index = max(0, total - 1)
+        if self.current_slice_index >= self.total_slices:
+            self.current_slice_index = max(0, self.total_slices - 1)
 
     def set_scroll_wheel_mode(self, mode: str) -> None:
         """
@@ -80,32 +80,25 @@ class SliceNavigator(QObject):
             index: Slice index to set
         """
         if 0 <= index < self.total_slices:
-            self.current_slice_index = index
-            self.slice_changed.emit(self.current_slice_index)
+            if self.current_slice_index != index:
+                self.current_slice_index = index
+                self.slice_changed.emit(self.current_slice_index)
 
     def next_slice(self) -> None:
         """Navigate to next slice."""
-        if self.current_slice_index < self.total_slices - 1:
-            self.current_slice_index += 1
-            self.slice_changed.emit(self.current_slice_index)
+        self.set_current_slice(self.current_slice_index + 1)
 
     def previous_slice(self) -> None:
         """Navigate to previous slice."""
-        if self.current_slice_index > 0:
-            self.current_slice_index -= 1
-            self.slice_changed.emit(self.current_slice_index)
+        self.set_current_slice(self.current_slice_index - 1)
 
     def first_slice(self) -> None:
         """Navigate to first slice."""
-        if self.total_slices > 0:
-            self.current_slice_index = 0
-            self.slice_changed.emit(self.current_slice_index)
+        self.set_current_slice(0)
 
     def last_slice(self) -> None:
         """Navigate to last slice."""
-        if self.total_slices > 0:
-            self.current_slice_index = self.total_slices - 1
-            self.slice_changed.emit(self.current_slice_index)
+        self.set_current_slice(self.total_slices - 1)
 
     def handle_key_event(self, key: int) -> bool:
         """
@@ -117,10 +110,10 @@ class SliceNavigator(QObject):
         Returns:
             True if event was handled, False otherwise
         """
-        if key == Qt.Key.Key_Up or key == Qt.Key.Key_Right:
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Right, Qt.Key.Key_PageDown):
             self.next_slice()
             return True
-        elif key == Qt.Key.Key_Down or key == Qt.Key.Key_Left:
+        elif key in (Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_PageUp):
             self.previous_slice()
             return True
         elif key == Qt.Key.Key_Home:
@@ -142,7 +135,7 @@ class SliceNavigator(QObject):
         Returns:
             True if event was handled, False otherwise
         """
-        if self.scroll_wheel_mode != "slice":
+        if self.scroll_wheel_mode != "slice" or delta == 0:
             return False
 
         if delta > 0:
@@ -173,7 +166,7 @@ class SliceNavigator(QObject):
             # Clamp to valid range
             index = max(0, min(index, self.total_slices - 1))
 
-        if 0 <= index < self.total_slices:
+        if self.current_slice_index != index:
             self.current_slice_index = index
             self.slice_changed.emit(self.current_slice_index)
 

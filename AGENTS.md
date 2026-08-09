@@ -82,6 +82,7 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
   [`SECURITY_TOOLS_CLI_GUIDE.md`](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md).
 - **Debug flags:** Before adding `print` tracing, read [`src/utils/debug_flags.py`](src/utils/debug_flags.py) and gate behind an existing or new `DEBUG_*` constant (default **`False`**). Each flag documents which modules it affects. Revert flags to **`False`** before commit — CI **debug-flags-check** fails on any `True`. Do not use `DEBUG_AGENT_LOG` in release builds (writes `debug-088dbc.log`).
 - **Long-running commands:** use ~10 minute timeouts for full `pytest` or `pyright src/`.
+- **Git hooks:** Never use `git commit --no-verify` without explicit user permission. Git hooks (line complexity, PHI checks, ruff linting, etc.) are important quality gates. If hooks fail, fix the underlying issues rather than bypassing them.
 
 ## Optional delegation
 
