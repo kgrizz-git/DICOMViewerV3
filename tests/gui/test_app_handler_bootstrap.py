@@ -206,10 +206,10 @@ def test_initialize_handlers_raises_when_keyboard_managers_missing(
         initialize_handlers(mock_app)
 
 
-def test_flaw_undo_callback_raises_attribute_error_when_method_missing(
+def test_undo_callback_requires_initialized_app_handler(
     mock_app: SimpleNamespace,
 ) -> None:
-    """Document flaw: dialog_coordinator undo callback raises AttributeError if app._on_undo_requested is missing."""
+    """Undo callbacks are only valid after complete application initialization."""
     delattr(mock_app, "_on_undo_requested")
 
     with patch("gui.app_handler_bootstrap.LocalStudyIndexService"):
@@ -222,10 +222,10 @@ def test_flaw_undo_callback_raises_attribute_error_when_method_missing(
             undo_cb()
 
 
-def test_flaw_fallback_overwrites_existing_image_viewer_with_none(
+def test_fallback_rejects_missing_required_image_viewer(
     mock_app: SimpleNamespace,
 ) -> None:
-    """Document flaw: fallback manager setup overwrites pre-existing app.image_viewer if subwindow[0].image_viewer is None."""
+    """Fallback setup rejects an incomplete subwindow rather than continuing."""
     delattr(mock_app, "roi_coordinator")
     existing_viewer = MagicMock()
     mock_app.image_viewer = existing_viewer

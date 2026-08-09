@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-02
+**Last updated:** 2026-08-09
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -57,6 +57,7 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 | Plans (active / supporting / completed) | [`dev-docs/plans/`](dev-docs/plans/) |
 | Developer doc index | [`dev-docs/README.md`](dev-docs/README.md) |
 | UI design spec | [`DESIGN.md`](DESIGN.md) |
+| Test-writing tiers (unit, Qt/PySide6, pylinac) | [`dev-docs/info/TESTING_GUIDANCE.md`](dev-docs/info/TESTING_GUIDANCE.md) |
 | Manual agent smoke steps | [`dev-docs/orchestration/AGENT_SMOKE.md`](dev-docs/orchestration/AGENT_SMOKE.md) |
 | **Debug / diagnostic prints** | [`src/utils/debug_flags.py`](src/utils/debug_flags.py) — all `DEBUG_*` toggles (default `False`) |
 
@@ -72,6 +73,7 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 - **PHI / PII guardrails:** Before adding studies, DICOM, spreadsheets, screenshots, archives, document packages, or binary assets, read [`PHI_PII_REPOSITORY_GUARDRAILS.md`](dev-docs/PHI_PII_REPOSITORY_GUARDRAILS.md). The blocking artifact gate is `scripts/check_no_phi_artifacts.py`; its reviewed-asset manifest is `security/approved-media-sha256.json`. **Hounddog is local-only, non-blocking, and disconnected from accounts, repository integrations, uploads, and CI until the user explicitly changes that policy.**
 - **Tool inventory:** Before adding, replacing, or upgrading a privacy/security/analysis tool or model, update [`security/security-tool-inventory.json`](security/security-tool-inventory.json) and run `python scripts/check_security_tool_inventory.py`.
 - **Protected local data roots:** Never stage files under `data/` (except `.gitkeep`), `test-DICOM-data/`, `sample-DICOM-gitignored/`, `decoder-spike-artifacts/`, `resources/screenshots-ignored/`, `logs/`, `.sonar-local/`, `.phi-tools/`, `tmp/`, or `backups/`. Do not remove their privacy-critical `.gitignore` rules. The staged artifact gate blocks both actions even when `git add -f` is used. Relevant staged fixture/data, raster-media, and DICOM changes automatically invoke the available local advisory PhiScan/OCR/Presidio/DICOM wrappers; a `main` push invokes local-only Hounddog after blocking gates pass. Never treat an advisory clean result as permission to update the reviewed-asset manifest without the required human review.
+- **Scratch output:** Write throwaway agent scratch (debug dumps, temp captures, intermediate logs, generated fixtures meant to be discarded) under the repo `tmp/` folder, **not** the OS `/tmp`. `tmp/` is gitignored and exempt from the PHI/artifact gate, so it stays inside the repo checkout and is cleaned with normal housekeeping. Never stage anything from `tmp/`.
 - **Privacy checks:** run `scripts/git_hook_privacy_checks.py --staged` before
   committing output/logging/dialog/debug changes, `--all` for the complete
   advisory debt inventory, and `--all --critical` before push. Before

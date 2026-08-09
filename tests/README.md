@@ -10,6 +10,9 @@ python tests/run_tests.py
 
 This sets `PYTHONPATH` to `src`, runs **pytest** if installed, otherwise **unittest**.
 
+For how to select and write unit, Qt/PySide6, and pylinac tests, see
+[test-writing guidance](../dev-docs/info/TESTING_GUIDANCE.md).
+
 ### Pytest (optional)
 
 ```bash

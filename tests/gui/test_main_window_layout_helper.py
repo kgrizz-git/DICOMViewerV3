@@ -148,10 +148,10 @@ def test_setup_main_window_content_slot_map_no_action(
     assert not hasattr(main_window, "set_window_slot_map_visible")
 
 
-def test_flaw_setup_content_raises_attribute_error_when_rescale_signal_missing(
+def test_setup_content_requires_rescale_signal_on_main_window(
     qapp, mock_panels: MainWindowPanels, mock_slot_map: WindowSlotMapCallbacks
 ) -> None:
-    """Document flaw: setup_main_window_content raises AttributeError if main_window lacks rescale_toggle_changed."""
+    """Main-window construction supplies the required rescale signal."""
     main_window = QWidget()  # Standard QWidget lacking rescale_toggle_changed signal
     main_window.center_panel = QWidget()
     main_window.left_panel = QWidget()
@@ -162,15 +162,19 @@ def test_flaw_setup_content_raises_attribute_error_when_rescale_signal_missing(
         setup_main_window_content(main_window, mock_panels, slot_map=mock_slot_map)
 
 
-def test_flaw_setup_content_silently_swallows_slot_map_wiring_exceptions(
-    qapp, mock_panels: MainWindowPanels, mock_slot_map: WindowSlotMapCallbacks
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #12A: slot-map callback wiring errors are silently swallowed.",
+)
+def test_setup_content_reports_slot_map_wiring_exceptions(
+    qapp, caplog, mock_panels: MainWindowPanels, mock_slot_map: WindowSlotMapCallbacks
 ) -> None:
-    """Document flaw: exceptions in set_window_slot_map_callbacks are silently swallowed with bare except Exception: pass."""
+    """Slot-map wiring failures must be observable through sanitized logging."""
     main_window = MockMainWindow()
     main_window.set_window_slot_map_callbacks = MagicMock(
         side_effect=RuntimeError("Thumbnail wiring failure")
     )
 
-    # Bare except Exception: pass swallows the error silently without raising
     setup_main_window_content(main_window, mock_panels, slot_map=mock_slot_map)
     main_window.set_window_slot_map_callbacks.assert_called_once()
+    assert "Thumbnail wiring failure" in caplog.text

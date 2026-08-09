@@ -1,9 +1,11 @@
 """
-Optional integration smoke for the pylinac.nuclear PlanarUniformity runner.
+Integration smoke for the pylinac.nuclear runner.
 
-Skips unless DICOMVIEWER_NMQC_SAMPLE_PATH points at a local copy of the IAEA
-NMQC simulated images (not redistributed; see plan + local PROVENANCE note).
-CI without the data simply skips — no download is performed here (plan T14).
+The locally installed IAEA NMQC simulated images are preferred when
+``DICOMVIEWER_NMQC_SAMPLE_PATH`` is configured. CI never downloads them; it
+instead runs the PlanarUniformity and FourBar cases against reviewed synthetic
+fixtures. Analyses needing multi-frame or SPECT acquisition geometry remain
+IAEA-only and skip when the local archive is unavailable.
 
 Set, e.g.:
     $env:DICOMVIEWER_NMQC_SAMPLE_PATH = "<repo>/sample-DICOM-gitignored/nmqc/extracted/test images"
@@ -41,11 +43,7 @@ from qa.pylinac_nuclear import (
 )
 
 _SAMPLE_ROOT = os.environ.get("DICOMVIEWER_NMQC_SAMPLE_PATH")
-
-pytestmark = pytest.mark.skipif(
-    not _SAMPLE_ROOT or not Path(_SAMPLE_ROOT).exists(),
-    reason="DICOMVIEWER_NMQC_SAMPLE_PATH not set to an existing NMQC sample folder",
-)
+_SYNTHETIC_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "dicom_nuclear"
 
 # Relative paths within the IAEA Simulated_images set.
 _SINGLE_FRAME = "Uniformity/UNIFORMIDAD_1_Ok.dcm"
@@ -59,15 +57,29 @@ _JASZACK = "Jaszack.dcm"
 _SENS_PHANTOM = "sensitivity/PetriDish"
 _SENS_BACKGROUND = "sensitivity/Background"
 
+_SYNTHETIC_FALLBACKS = {
+    _SINGLE_FRAME: _SYNTHETIC_FIXTURE_DIR / "synthetic_nm_planar_uniformity.dcm",
+    _FOURBAR: _SYNTHETIC_FIXTURE_DIR / "synthetic_nm_four_bar_resolution.dcm",
+}
+
 
 def _sample(rel: str) -> str:
-    return str(Path(_SAMPLE_ROOT) / rel)
+    """Prefer local IAEA data, with narrow committed-fixture CI fallbacks."""
+    if _SAMPLE_ROOT:
+        candidate = Path(_SAMPLE_ROOT) / rel
+        if candidate.exists():
+            return str(candidate)
+    fallback = _SYNTHETIC_FALLBACKS.get(rel)
+    if fallback is not None and fallback.exists():
+        return str(fallback)
+    pytest.skip(
+        "requires DICOMVIEWER_NMQC_SAMPLE_PATH with the local IAEA NMQC archive "
+        f"(sample unavailable: {rel})"
+    )
 
 
 def _run(rel: str):
     path = _sample(rel)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {rel}")
     req = QARequest(
         analysis_type="nuclear_planar_uniformity",
         dicom_paths=[path],
@@ -77,7 +89,7 @@ def _run(rel: str):
     return run_planar_uniformity_analysis(req)
 
 
-def test_planar_uniformity_single_frame_real_data() -> None:
+def test_planar_uniformity_single_frame_preferred_iaea_or_synthetic() -> None:
     result = _run(_SINGLE_FRAME)
     assert result.success is True, result.errors
     assert result.metrics["frame_count"] >= 1
@@ -105,8 +117,6 @@ def test_render_single_frame_figure_real_data(tmp_path) -> None:
     from qa.pylinac_nuclear_plots import render_nuclear_figures
 
     path = _sample(_SINGLE_FRAME)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_SINGLE_FRAME}")
     out = str(tmp_path / "fig.png")
     saved = render_nuclear_figures(
         path, analysis_class="PlanarUniformity", analyze_kwargs={}, out_path=out
@@ -119,8 +129,6 @@ def test_render_multi_frame_figures_real_data(tmp_path) -> None:
     from qa.pylinac_nuclear_plots import render_nuclear_figures
 
     path = _sample(_MULTI_FRAME)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_MULTI_FRAME}")
     out = str(tmp_path / "fig.png")
     saved = render_nuclear_figures(
         path, analysis_class="PlanarUniformity", analyze_kwargs={}, out_path=out
@@ -130,10 +138,8 @@ def test_render_multi_frame_figures_real_data(tmp_path) -> None:
     assert all("_Frame_" in p and Path(p).exists() for p in saved)
 
 
-def test_four_bar_resolution_real_data() -> None:
+def test_four_bar_resolution_preferred_iaea_or_synthetic() -> None:
     path = _sample(_FOURBAR)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_FOURBAR}")
     req = QARequest(
         analysis_type="nuclear_four_bar_resolution",
         dicom_paths=[path],
@@ -174,8 +180,6 @@ def test_render_four_bar_figure_real_data(tmp_path) -> None:
 
 def test_quadrant_resolution_real_data() -> None:
     path = _sample(_QUADRANT)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_QUADRANT}")
     req = QARequest(
         analysis_type="nuclear_quadrant_resolution",
         dicom_paths=[path],
@@ -192,8 +196,6 @@ def test_quadrant_resolution_real_data() -> None:
 
 def test_center_of_rotation_real_data() -> None:
     path = _sample(_COR)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_COR}")
     req = QARequest(
         analysis_type="nuclear_center_of_rotation",
         dicom_paths=[path],
@@ -207,8 +209,6 @@ def test_center_of_rotation_real_data() -> None:
 
 def test_tomographic_resolution_real_data() -> None:
     path = _sample(_TOMORES)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_TOMORES}")
     req = QARequest(
         analysis_type="nuclear_tomographic_resolution",
         dicom_paths=[path],
@@ -224,8 +224,6 @@ def test_tomographic_resolution_real_data() -> None:
 
 def test_max_count_rate_real_data() -> None:
     path = _sample(_MAXCOUNT)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_MAXCOUNT}")
     req = QARequest(
         analysis_type="nuclear_max_count_rate",
         dicom_paths=[path],
@@ -241,8 +239,6 @@ def test_max_count_rate_real_data() -> None:
 
 def test_tomographic_uniformity_real_data() -> None:
     path = _sample(_JASZACK)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_JASZACK}")
     req = QARequest(
         analysis_type="nuclear_tomographic_uniformity",
         dicom_paths=[path],
@@ -257,8 +253,6 @@ def test_tomographic_uniformity_real_data() -> None:
 
 def test_tomographic_contrast_real_data() -> None:
     path = _sample(_JASZACK)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_JASZACK}")
     req = QARequest(
         analysis_type="nuclear_tomographic_contrast",
         dicom_paths=[path],
@@ -276,8 +270,6 @@ def test_tomographic_contrast_real_data() -> None:
 def test_simple_sensitivity_with_background_real_data() -> None:
     phantom = _sample(_SENS_PHANTOM)
     background = _sample(_SENS_BACKGROUND)
-    if not Path(phantom).exists() or not Path(background).exists():
-        pytest.skip("sensitivity sample files not present")
     req = QARequest(
         analysis_type="nuclear_simple_sensitivity",
         dicom_paths=[phantom],
@@ -296,8 +288,6 @@ def test_simple_sensitivity_with_background_real_data() -> None:
 
 def test_simple_sensitivity_no_background_real_data() -> None:
     phantom = _sample(_SENS_PHANTOM)
-    if not Path(phantom).exists():
-        pytest.skip(f"sample file not present: {_SENS_PHANTOM}")
     req = QARequest(
         analysis_type="nuclear_simple_sensitivity",
         dicom_paths=[phantom],
@@ -314,8 +304,6 @@ def test_render_tomographic_contrast_figure_real_data(tmp_path) -> None:
     from qa.pylinac_nuclear_plots import render_nuclear_figures
 
     path = _sample(_JASZACK)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_JASZACK}")
     out = str(tmp_path / "tc.png")
     saved = render_nuclear_figures(
         path, analysis_class="TomographicContrast", analyze_kwargs={}, out_path=out
@@ -328,8 +316,6 @@ def test_render_quadrant_figure_real_data(tmp_path) -> None:
     from qa.pylinac_nuclear_plots import render_nuclear_figures
 
     path = _sample(_QUADRANT)
-    if not Path(path).exists():
-        pytest.skip(f"sample file not present: {_QUADRANT}")
     out = str(tmp_path / "quad.png")
     saved = render_nuclear_figures(
         path,

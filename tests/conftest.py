@@ -13,6 +13,10 @@ import sys
 
 import pytest
 
+# Match the CI configuration and permit QWidget visibility tests on headless
+# developer/agent hosts. Set this before any test module creates QApplication.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 # Add src to path so that "from core.xxx" and "from utils.xxx" work
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _src_dir = os.path.join(_project_root, "src")

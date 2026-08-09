@@ -320,33 +320,31 @@ def test_on_window_slot_map_popup_requested_existing_hidden_dialog_no_saved_pos(
     mock_dlg.raise_.assert_called_once()
 
 
-def test_flaw_on_swap_view_requested_rejects_index_ge_4_even_in_large_layout(mock_app: SimpleNamespace) -> None:
-    """Document flaw: on_swap_view_requested rejects index >= 4 even if layout has 9 subwindows."""
+def test_on_swap_view_requested_rejects_index_outside_current_four_slot_contract(mock_app: SimpleNamespace) -> None:
+    """The current application supports exactly four view slots."""
     viewer = MagicMock(spec=ImageViewer)
     viewer.subwindow_index = 0
     mock_app.sender.return_value = viewer
     mock_app.multi_window_layout.get_all_subwindows.return_value = [MagicMock() for _ in range(9)]
 
-    # Swap with index 5 fails due to hardcoded 'other_index >= 4' check
     on_swap_view_requested(mock_app, 5)
     mock_app.multi_window_layout.swap_views.assert_not_called()
 
 
 @patch("gui.layout_window_slot_controller.WindowSlotMapPopupDialog")
-def test_flaw_config_manager_accessed_via_main_window(
+def test_popup_uses_main_window_config_manager_contract(
     mock_dlg_cls: MagicMock, mock_app: SimpleNamespace
 ) -> None:
-    """Document flaw: popup setup relies on main_window.config_manager instead of app.config_manager."""
+    """The current main-window popup wiring owns its config manager."""
     mock_dlg = MagicMock()
     mock_widget = MagicMock()
     mock_dlg.get_map_widget.return_value = mock_widget
     mock_dlg_cls.return_value = mock_dlg
 
-    # Remove config_manager from main_window (app.config_manager remains)
+    # Removing the required main-window config manager prevents popup callbacks.
     del mock_app.main_window.config_manager
 
     mock_app.config_manager.get_layout_map_popup_position.return_value = None
     on_window_slot_map_popup_requested(mock_app)
 
-    # AttributeError on line 207 is swallowed, so set_callbacks is never called
     mock_widget.set_callbacks.assert_not_called()

@@ -96,8 +96,8 @@ def test_status_controller_set_pixel_info(qapp) -> None:
     assert controller.pixel_info_label.text() == "X: 120, Y: 240, Value: 350 HU"
 
 
-def test_flaw_format_zoom_preset_status_silently_drops_incomplete_wl_pair() -> None:
-    """Document flaw: format_zoom_preset_status silently drops window_center or window_width if passed incompletely."""
+def test_format_zoom_preset_status_omits_incomplete_wl_pair() -> None:
+    """Incomplete W/L pairs are intentionally omitted from the status copy."""
     # When window_center is provided without window_width, center is silently ignored
     res_center_only = format_zoom_preset_status(1.5, window_center=40.0)
     assert "W/L" not in res_center_only

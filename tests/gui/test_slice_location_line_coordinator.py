@@ -248,12 +248,15 @@ def test_refresh_for_subwindow_not_visible(mock_app: SimpleNamespace) -> None:
         mock_clear.assert_called_once()
 
 
-def test_refresh_for_subwindow_missing_manager(mock_app: SimpleNamespace) -> None:
-    """Test refresh_for_subwindow when target_idx has no manager registered."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #4A: public refresh does not initialize a missing manager.",
+)
+def test_refresh_for_subwindow_initializes_missing_manager(mock_app: SimpleNamespace) -> None:
+    """A public refresh must create the target manager when it is absent."""
     coord = SliceLocationLineCoordinator(mock_app)
-    # 0 is not in _managers
     coord.refresh_for_subwindow(0)
-    assert 0 not in coord._managers
+    assert 0 in coord._managers
 
 
 def test_refresh_for_subwindow_attaches_scene_from_container(
@@ -324,19 +327,23 @@ def test_refresh_for_subwindow_focused_only_filter(
         mock_update.assert_called_once_with([], 1)
 
 
-def test_refresh_for_subwindow_reentrant_handling(mock_app: SimpleNamespace) -> None:
-    """Test re-entrant call behavior during refresh_for_subwindow."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #4B: a re-entrant public refresh strands pending work.",
+)
+def test_refresh_for_subwindow_drains_reentrant_pending_work(mock_app: SimpleNamespace) -> None:
+    """A re-entrant public refresh must schedule the pending full refresh."""
     coord = SliceLocationLineCoordinator(mock_app)
     mock_app.config_manager.get_slice_location_lines_visible.return_value = True
 
-    # Simulate re-entrancy by calling refresh_for_subwindow when _refreshing is True
-    coord._refreshing = True
-    coord.refresh_for_subwindow(0)
-    # Re-entrant call should set _pending_refresh_all to True and return early
-    assert coord._pending_refresh_all is True
-    # Reset state
-    coord._refreshing = False
-    coord._pending_refresh_all = False
+    with (
+        patch.object(coord, "_refresh_for_subwindow", side_effect=lambda *_: coord.refresh_for_subwindow(0)),
+        patch.object(coord, "refresh_all") as refresh_all,
+    ):
+        coord.refresh_for_subwindow(0)
+
+    refresh_all.assert_called_once()
+    assert coord._pending_refresh_all is False
 
 
 @patch(

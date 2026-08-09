@@ -130,8 +130,8 @@ def test_context_menu_scroll_wheel_no_combo() -> None:
     h.main_window.scroll_wheel_mode_changed.emit.assert_called_once_with("slice")
 
 
-def test_flaw_select_mode_sets_explicit_cursor_instead_of_unsetCursor() -> None:
-    """Document flaw: switching to 'select' mode calls setCursor on layout instead of unsetCursor."""
+def test_select_mode_sets_layout_cursor_from_visible_viewer() -> None:
+    """Select mode applies the visible viewer's cursor to the layout."""
     sub = MagicMock()
     sub.isVisible.return_value = True
     sub.image_viewer.cursor.return_value = "arrow_cursor"
@@ -142,13 +142,12 @@ def test_flaw_select_mode_sets_explicit_cursor_instead_of_unsetCursor() -> None:
     h = _handler(layout=layout)
     h.handle_mouse_mode_changed("select")
 
-    # Documents flaw: setCursor is called on layout instead of unsetCursor
     layout.setCursor.assert_called_once_with("arrow_cursor")
     layout.unsetCursor.assert_not_called()
 
 
-def test_flaw_visible_subwindow_with_null_image_viewer_skipped() -> None:
-    """Document flaw: visible subwindow with image_viewer=None is skipped, leaving stale cursor."""
+def test_null_image_viewer_is_skipped_during_cursor_application() -> None:
+    """Empty slots have no viewer cursor to apply."""
     empty_sub = MagicMock()
     empty_sub.isVisible.return_value = True
     empty_sub.image_viewer = None  # Empty grid slot
@@ -159,5 +158,4 @@ def test_flaw_visible_subwindow_with_null_image_viewer_skipped() -> None:
     h = _handler(layout=layout)
     h.handle_mouse_mode_changed("pan")
 
-    # Documents flaw: empty_sub.setCursor is never called to update/reset container cursor
     empty_sub.setCursor.assert_not_called()

@@ -111,8 +111,8 @@ def test_get_theme_viewer_background_color() -> None:
     assert light_bg == dark_bg
 
 
-def test_flaw_blend_hex_colors_raises_value_error_on_invalid_hex() -> None:
-    """Document flaw: _blend_hex_colors raises ValueError on malformed/invalid hex strings."""
+def test_blend_hex_colors_rejects_invalid_trusted_color_inputs() -> None:
+    """Theme helpers reject malformed colors outside their trusted-input contract."""
     import pytest
     with pytest.raises(ValueError):
         _blend_hex_colors("invalid", "#ffffff", 0.5)
@@ -121,15 +121,15 @@ def test_flaw_blend_hex_colors_raises_value_error_on_invalid_hex() -> None:
         _blend_hex_colors("#000000", "#ZZZZZZ", 0.5)
 
 
-def test_flaw_boost_hex_saturation_raises_value_error_on_invalid_hex() -> None:
-    """Document flaw: _boost_hex_saturation raises ValueError on malformed/invalid hex strings."""
+def test_boost_hex_saturation_rejects_invalid_trusted_color_inputs() -> None:
+    """Theme helpers reject malformed colors outside their trusted-input contract."""
     import pytest
     with pytest.raises(ValueError):
         _boost_hex_saturation("not_a_hex_color", 1.2)
 
 
-def test_flaw_themes_dir_frozen_without_meipass_falls_back_to_dev_path(monkeypatch) -> None:
-    """Document flaw: when sys.frozen is True but _MEIPASS is None, _themes_dir falls through to dev relative path."""
+def test_themes_dir_frozen_without_meipass_uses_current_fallback(monkeypatch) -> None:
+    """Record the current fallback pending frozen-build reproduction."""
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", None, raising=False)
     resolved_dir = _themes_dir()

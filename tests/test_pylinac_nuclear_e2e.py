@@ -3,11 +3,12 @@ Gate B end-to-end smoke for the nuclear QC flow (plan Gate B).
 
 Drives the REAL QAAppFacade.open_nuclear_qc_analysis path: real options ->
 real QAAnalysisWorker thread -> real pylinac.nuclear -> real JSON export, on a
-real IAEA NMQC image. Only the modal prompts are auto-answered (the options
+local IAEA NMQC image when available, otherwise a reviewed synthetic planar
+fixture in CI. Only the modal prompts are auto-answered (the options
 dialog is stubbed; the result message box is recorded instead of shown), which
 is exactly what a manual tester would click through.
 
-Gated on DICOMVIEWER_NMQC_SAMPLE_PATH (skips in CI; no data committed).
+The IAEA archive is never downloaded in CI.
 """
 
 from __future__ import annotations
@@ -26,12 +27,19 @@ pytestmark = pytest.mark.qt
 
 _SAMPLE_ROOT = os.environ.get("DICOMVIEWER_NMQC_SAMPLE_PATH")
 
-_skip = pytest.mark.skipif(
-    not _SAMPLE_ROOT or not Path(_SAMPLE_ROOT).exists(),
-    reason="DICOMVIEWER_NMQC_SAMPLE_PATH not set to an existing NMQC sample folder",
+_UNIFORMITY = "Uniformity/UNIFORMIDAD_1_Ok.dcm"
+_SYNTHETIC_PLANAR = (
+    Path(__file__).parent / "fixtures" / "dicom_nuclear" / "synthetic_nm_planar_uniformity.dcm"
 )
 
-_UNIFORMITY = "Uniformity/UNIFORMIDAD_1_Ok.dcm"
+
+def _preferred_planar_sample() -> Path:
+    """Use the configured IAEA sample locally; CI uses the synthetic fixture."""
+    if _SAMPLE_ROOT:
+        candidate = Path(_SAMPLE_ROOT) / _UNIFORMITY
+        if candidate.exists():
+            return candidate
+    return _SYNTHETIC_PLANAR
 
 
 def _make_main_window():
@@ -72,15 +80,13 @@ class _FakeApp:
         return self._json_out
 
 
-@_skip
-def test_nuclear_qc_end_to_end_real_app_path(qapp, tmp_path, monkeypatch) -> None:
+def test_nuclear_qc_end_to_end_preferred_iaea_or_synthetic(qapp, tmp_path, monkeypatch) -> None:
     import time
 
     from PySide6.QtWidgets import QApplication
 
-    sample = Path(_SAMPLE_ROOT) / _UNIFORMITY
-    if not sample.exists():
-        pytest.skip(f"sample not present: {_UNIFORMITY}")
+    sample = _preferred_planar_sample()
+    assert sample.exists(), f"missing nuclear fixture: {sample.name}"
 
     json_out = str(tmp_path / "nuclear_e2e.json")
     app = _FakeApp(str(sample), json_out)

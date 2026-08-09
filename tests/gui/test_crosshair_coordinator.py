@@ -327,10 +327,10 @@ def test_update_crosshair_pixel_values(mock_coordinator_setup) -> None:
         coordinator._update_crosshair_pixel_values(item, pos)
 
 
-def test_flaw_handle_clear_crosshairs_if_commands_branch_is_unreachable(
+def test_handle_clear_crosshairs_executes_command_for_nonempty_crosshair_set(
     mock_coordinator_setup,
 ) -> None:
-    """Document flaw: line 235 'if commands:' is dead code because line 216 filters out empty crosshairs_to_delete."""
+    """A nonempty crosshair set produces an undo command."""
     coordinator, cm, iv, get_ds, _, undo_mgr, _, _ = mock_coordinator_setup
     iv.scene = MagicMock()
 
@@ -339,35 +339,30 @@ def test_flaw_handle_clear_crosshairs_if_commands_branch_is_unreachable(
     get_ds.return_value = ds
 
     with patch("gui.crosshair_coordinator.get_composite_series_key", return_value="1.2.3.4.5"):
-        # When crosshairs_to_delete is populated, commands list is guaranteed non-empty
         key = ("1.2.3.4", "1.2.3.4.5", 0)
         cm.crosshairs = {key: [MagicMock()]}
 
         coordinator.handle_clear_crosshairs()
-        # Line 235 evaluates True unconditionally; branch 235->exit is unreachable dead code
         undo_mgr.execute_command.assert_called_once()
 
 
-def test_flaw_move_batch_timer_instantiates_new_qtimer_on_each_move(
+def test_move_batch_timer_is_replaced_between_sequential_moves(
     mock_coordinator_setup,
 ) -> None:
-    """Document flaw: _on_crosshair_moved creates a new QTimer instance on every mouse move without reusing or deleting the old timer."""
+    """Python-owned timers are replaced between sequential crosshair moves."""
     coordinator, _, iv, _, _, _, _, _ = mock_coordinator_setup
     iv.scene = MagicMock()
 
     item = MagicMock()
     item.pos.return_value = QPointF(10, 20)
 
-    # First move: instantiates first QTimer
     coordinator._on_crosshair_moved(item)
     timer1 = coordinator._move_batch_timer
 
-    # Second move: instantiates second QTimer rather than reusing timer1
     item.pos.return_value = QPointF(15, 25)
     coordinator._on_crosshair_moved(item)
     timer2 = coordinator._move_batch_timer
 
-    # Documents flaw: timer1 was abandoned (not deleted or reused) and replaced with timer2
     assert timer1 is not timer2
     assert timer1 is not None
     assert timer2 is not None

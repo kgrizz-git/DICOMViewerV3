@@ -342,16 +342,15 @@ def test_describe_focused_cine_export_blocker() -> None:
     assert describe_focused_cine_export_blocker(app) is None
 
 
-def test_flaw_inverted_loop_bounds_silently_swapped_to_forward() -> None:
-    """Document flaw: build_cine_export_frame_indices silently swaps inverted bounds (3, 1) to forward (1, 3)."""
-    # Reverse loop bounds 3 -> 1 are silently converted to forward range [1, 2, 3]
+def test_inverted_loop_bounds_are_normalized_to_forward_order() -> None:
+    """Cine export is forward-only and normalizes inverted bounds."""
     result = build_cine_export_frame_indices(5, 3, 1, True)
     assert result == [1, 2, 3]
     assert result != [3, 2, 1]
 
 
-def test_flaw_encode_cine_video_passes_4channel_rgba_without_flattening() -> None:
-    """Document flaw: encode_cine_video_from_png_paths passes 4-channel RGBA arrays (H, W, 4) directly to writer without alpha flattening."""
+def test_encode_cine_video_forwards_rgba_writer_input() -> None:
+    """The internal encoder forwards RGBA input; rasterization owns flattening."""
     tmp = Path(tempfile.mkdtemp())
     try:
         p1 = tmp / "rgba.png"
@@ -366,7 +365,6 @@ def test_flaw_encode_cine_video_passes_4channel_rgba_without_flattening() -> Non
         ):
             encode_cine_video_from_png_paths([p1], "out.mp4", "MP4", 10.0)
 
-            # Documents flaw: writer receives 4-channel array (H, W, 4) instead of 3-channel RGB (H, W, 3)
             passed_arr = mock_writer.append_data.call_args[0][0]
             assert passed_arr.shape == (10, 10, 4)
     finally:

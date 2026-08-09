@@ -149,6 +149,48 @@ current defect.
 *   **Issue 19B:** Orphaned `_hide_timer` State on Animation Completion. When `_start_fade_out` finishes, it sets `_fading_out = False` and `setVisible(False)`, but `_hide_timer` remains active until its timeout fires, triggering a redundant `_start_fade_out` call on an already hidden widget.
 *   **Proposed Fix:** Stop `_hide_timer` when fade-out starts or completes.
 
+## Coverage-Effort Findings (2026-08-09)
+
+### 21. `set_study_index_browser_column_order` (`src/utils/config/study_index_config.py`)
+*   **Issue 21A (genuine bug):** Non-deduplicating column-order normalization.
+    In `set_study_index_browser_column_order`, `cleaned` is built by keeping only
+    known ids (`[str(x) for x in column_ids if x in known]`), then if
+    `len(cleaned) != len(known)` the loop appends every missing default id. If
+    `column_ids` contains duplicate known ids (e.g. 12 copies of `"patient_name"`),
+    `cleaned` already has `len == len(known)` so the "append missing" branch is
+    skipped and the duplicates are stored verbatim, while all other columns are
+    dropped from the saved order. `get_study_index_browser_column_order` has the
+    same normalization gap for already-persisted duplicate ids. The intent is a
+    deduplicated permutation of the known ids.
+*   **Tests:** `tests/test_study_index_config.py::TestBrowserColumnOrder::test_set_duplicate_ids_are_deduplicated`
+    and `test_get_duplicate_ids_are_deduplicated` specify the intended behavior
+    as strict expected failures until the separate fix branch implements it.
+*   **Proposed Fix:** Deduplicate both setter input and persisted values on read
+    (e.g. preserving first occurrence with `dict.fromkeys(...)`) before appending
+    missing default ids.
+
+
+
+Coverage investigations are isolated from in-flight fixes. Tests for validated,
+deferred defects specify the intended contract as strict expected failures;
+tests for dismissed reports describe the current supported contract without
+labelling it a defect.
+
+### 20. `dispatch_app_key_event` delegation contract (`src/gui/main_app_key_event_filter.py`)
+*   **Investigation (no defect):** The module docstring promises `None` only when
+    the event is *not* a `QKeyEvent`. For any real `QKeyEvent`, the helper
+    intentionally delegates to `keyboard_event_handler` and returns its result
+    (the final line returns `app.keyboard_event_handler.handle_key_event(event)`).
+    This is by-design: the real `KeyboardEventHandler` returns `False` for a
+    `KeyRelease`, so Qt continues event propagation. A review flagged that
+    non-handled key events are "consumed" (the helper returns `True`), but that
+    only happens if the handler returns `True`; the default handler returns `False`.
+    No fix required.
+*   **Test:** `tests/test_main_app_key_event_filter.py::TestEscapeFullscreen::test_escape_keyrelease_delegated_to_handler`
+    pins the delegation contract (handler result is mocked to verify delegation,
+    not the handler's own logic). The prior "latent bug" framing was incorrect and
+    has been removed.
+
 ## Already Fixed Issues (Pre-Review)
 
 ### `SliceNavigator` (`src/gui/slice_navigator.py`)

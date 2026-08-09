@@ -6,6 +6,7 @@ Achieves 100% statement and branch coverage for CineControlsWidget.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from PySide6.QtCore import QPoint, Qt
 
 from gui.cine_controls_widget import CineControlsWidget
@@ -89,8 +90,8 @@ def test_speed_combo_and_signal(qapp) -> None:
     widget._on_speed_changed("invalid_speed")  # Should be silently caught by try/except
 
 
-def test_set_speed_flaw(qapp) -> None:
-    """Test set_speed method and document float formatting behavior."""
+def test_set_speed_accepts_existing_fractional_and_integral_labels(qapp) -> None:
+    """Test supported fractional and integral speed labels."""
     widget = CineControlsWidget()
 
     widget.set_speed(0.25)
@@ -99,9 +100,6 @@ def test_set_speed_flaw(qapp) -> None:
     widget.set_speed(1)
     assert widget.speed_combo.currentText() == "1x"
 
-    # Flaw: set_speed(2.0) formats to "2.0x" which is not in ["0.25x", "0.5x", "1x", "2x", "4x"]
-    widget.set_speed(2.0)
-    assert widget.speed_combo.currentText() != "2.0x"
 
 
 def test_loop_button_and_set_loop(qapp) -> None:
@@ -241,21 +239,28 @@ def test_frame_slider_context_menu(qapp) -> None:
         mock_menu_inst.exec.assert_called_once()
 
 
-def test_flaw_set_speed_float_ignored(qapp) -> None:
-    """Document flaw: set_speed(2.0) fails to match '2x' and silently leaves combo box unchanged."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #14A: integral float speed is formatted as an unsupported combo label.",
+)
+def test_set_speed_selects_integral_float_label(qapp) -> None:
+    """Integral float speeds must select their matching combo-box label."""
     widget = CineControlsWidget()
     widget.speed_combo.setCurrentText("1x")
 
     widget.set_speed(2.0)
 
-    # Documents flaw: 2.0 formatted to "2.0x", failed string lookup, and left combo box unchanged at "1x"
-    assert widget.speed_combo.currentText() == "1x"
+    assert widget.speed_combo.currentText() == "2x"
 
 
-def test_flaw_update_frame_position_zero_frames_leaves_stale_bounds_tooltip(
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #14B: clearing frames leaves the prior cine-bounds tooltip visible.",
+)
+def test_update_frame_position_zero_frames_clears_stale_bounds_tooltip(
     qapp,
 ) -> None:
-    """Document flaw: update_frame_position(0, 0) returns early without updating tooltip, leaving stale bounds text."""
+    """Closing a cine series must remove its previous bounds tooltip."""
     widget = CineControlsWidget()
     widget.set_controls_enabled(True)
 
@@ -264,8 +269,6 @@ def test_flaw_update_frame_position_zero_frames_leaves_stale_bounds_tooltip(
     widget.set_loop_bounds(2, 8)
     assert "Cine bounds: 3 - 9" in widget.frame_slider.toolTip()
 
-    # 2. Close series -> update_frame_position(0, 0) returns early at line 274
     widget.update_frame_position(0, 0)
 
-    # Documents flaw: tooltip retains stale "Cine bounds: 3 - 9" text despite total_frames being 0
-    assert "Cine bounds: 3 - 9" in widget.frame_slider.toolTip()
+    assert "Cine bounds: 3 - 9" not in widget.frame_slider.toolTip()

@@ -87,7 +87,7 @@ def test_set_datasets_and_linear_navigation(mock_nav) -> None:
 
 
 def test_is_cine_capable(mock_nav) -> None:
-    """Test is_cine_capable with various series dataset shapes and document single-file multi-frame flaw."""
+    """Test is_cine_capable with standard series dataset shapes."""
     nav, total_cb, current_cb = mock_nav
     player = CinePlayer(nav, total_cb, current_cb)
 
@@ -105,13 +105,8 @@ def test_is_cine_capable(mock_nav) -> None:
     studies["s1"]["se1"] = [Dataset(), Dataset()]
     assert player.is_cine_capable(studies, "s1", "se1") is True
 
-    # 5. Flaw: Single multi-frame file (NumberOfFrames = 10, len(datasets) == 1)
-    # Line 187 checks `len(datasets) < 2` and returns False before checking is_multiframe
     mf_ds = Dataset()
     mf_ds.NumberOfFrames = 10
-    studies["s1"]["se1"] = [mf_ds]
-    assert player.is_cine_capable(studies, "s1", "se1") is False  # Documents flaw
-
     # Multi-frame file when datasets array has >= 2 elements
     studies["s1"]["se1"] = [mf_ds, Dataset()]
     assert player.is_cine_capable(studies, "s1", "se1") is True
@@ -317,8 +312,12 @@ def test_advance_frame_loop_bounds(mock_nav) -> None:
     assert player.loop_end_frame is None
 
 
-def test_flaw_is_cine_capable_rejects_single_multiframe_file(mock_nav) -> None:
-    """Document flaw: is_cine_capable returns False for a single multi-frame DICOM file because of len(datasets) < 2 check."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #15A: a single multi-frame DICOM is rejected before frame inspection.",
+)
+def test_is_cine_capable_accepts_single_multiframe_file(mock_nav) -> None:
+    """A single DICOM with multiple frames is cine-capable."""
     nav, total_cb, current_cb = mock_nav
     player = CinePlayer(nav, total_cb, current_cb)
 
@@ -326,6 +325,4 @@ def test_flaw_is_cine_capable_rejects_single_multiframe_file(mock_nav) -> None:
     mf_ds.NumberOfFrames = 50  # Single multi-frame file with 50 frames
     studies = {"study1": {"series1": [mf_ds]}}
 
-    # Documents the flaw: even though mf_ds is a multi-frame file with 50 frames,
-    # is_cine_capable returns False because len(datasets) == 1 < 2.
-    assert player.is_cine_capable(studies, "study1", "series1") is False
+    assert player.is_cine_capable(studies, "study1", "series1") is True

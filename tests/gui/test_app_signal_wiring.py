@@ -300,18 +300,18 @@ def test_wire_all_signals_connects_all(mock_app: SimpleNamespace) -> None:
         assert mock_app.cine_app_facade.update_cine_player_context.call_count == 3
 
 
-def test_flaw_wire_signals_raises_attribute_error_on_incomplete_app() -> None:
-    """Document flaw: wire_all_signals raises AttributeError when app lacks required signal definitions."""
+def test_wire_signals_requires_complete_application_graph() -> None:
+    """Signal wiring runs only after complete application construction."""
     incomplete_app = SimpleNamespace()
 
     with pytest.raises(AttributeError, match="has no attribute 'multi_window_layout'"):
         wire_all_signals(incomplete_app)
 
 
-def test_flaw_wire_signals_raises_attribute_error_when_single_signal_missing(
+def test_wire_signals_requires_declared_main_window_signals(
     mock_app: SimpleNamespace,
 ) -> None:
-    """Document flaw: wire_all_signals raises AttributeError and aborts remaining connections if a single signal is missing."""
+    """A missing required signal rejects an incomplete main-window fixture."""
     # Delete a single signal from main_window
     delattr(mock_app.main_window, "open_file_requested")
 
@@ -321,5 +321,4 @@ def test_flaw_wire_signals_raises_attribute_error_when_single_signal_missing(
     ):
         wire_all_signals(mock_app)
 
-    # Verifies flaw impact: subsequent wiring passes (like subwindow signal connections) were aborted
     mock_app._subwindow_lifecycle_controller.connect_subwindow_signals.assert_not_called()

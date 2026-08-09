@@ -189,19 +189,20 @@ def test_set_slice_slider_options_all(mock_app: SimpleNamespace) -> None:
     v0.set_slice_slider_options.assert_called_once_with("right", "inverted")
 
 
-def test_flaw_iter_image_viewers_raises_attribute_error_when_layout_is_none() -> None:
-    """Document flaw: _iter_image_viewers raises AttributeError when multi_window_layout is None."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known defect #8A: viewer iteration does not tolerate startup/teardown without a layout.",
+)
+def test_iter_image_viewers_handles_absent_layout() -> None:
+    """Viewer iteration must be empty when no multi-window layout exists."""
     app = SimpleNamespace(multi_window_layout=None)
-    with pytest.raises(
-        AttributeError, match="'NoneType' object has no attribute 'get_all_subwindows'"
-    ):
-        list(_iter_image_viewers(app))
+    assert list(_iter_image_viewers(app)) == []
 
 
-def test_flaw_apply_initial_display_state_raises_attribute_error_when_privacy_view_missing(
+def test_apply_initial_display_state_requires_privacy_view_contract(
     mock_app: SimpleNamespace,
 ) -> None:
-    """Document flaw: apply_initial_image_viewer_display_state raises AttributeError if privacy_view_enabled is missing from app."""
+    """Initialization requires the application privacy-view state."""
     del mock_app.privacy_view_enabled
     v0 = MagicMock()
     mock_app.multi_window_layout.get_all_subwindows.return_value = [
