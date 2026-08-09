@@ -1,8 +1,8 @@
 # Post-Review Bugfixes and Architectural Improvements
 
 **Date:** 2026-08-08
-**Status:** Active
-**Last reviewed:** 2026-08-09 (PR scope tagged)
+**Status:** Implemented on `bugfix/post-review-cleanup` (ready for PR)
+**Last reviewed:** 2026-08-09 (PR scope tagged; implementation landed)
 
 ## Overview
 This plan tracks bugs, edge-case flaws, and architectural improvements identified by subagent code reviews during the test coverage expansion effort. Per project policy, these findings were isolated rather than fixed in-flight during the test-writing phase.
