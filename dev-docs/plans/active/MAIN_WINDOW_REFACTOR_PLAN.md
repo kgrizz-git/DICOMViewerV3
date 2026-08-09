@@ -139,7 +139,8 @@ events so `MainWindow.changeEvent` can fall through to `super().changeEvent(even
 - Check-state sync: `set_smooth_when_zoomed_checked`, `set_scale_markers_checked`,
   `set_direction_labels_checked`, `set_slice_slider_checked`,
   `set_slice_slider_placement_checked`, `set_slice_slider_direction_checked`,
-  `set_show_instances_separately_checked`, `set_show_instances_separately_enabled`
+  `set_show_instances_separately_checked`, `set_show_instances_separately_enabled`,
+  `set_3d_view_actions_enabled`
 - Slice location lines: `set_slice_location_lines_*` (4 methods)
 - Privacy UI: `_update_privacy_action`, `_update_privacy_mode_button` (alias)
 - Font/color pickers: `_on_font_size_decrease`, `_on_font_size_increase`,
@@ -220,7 +221,8 @@ For each of the 6 toggles + slice_location_lines_*:
 - `set_*_checked(b)` flips the action's checked state
 - Signal `*_toggled` is emitted with new value
 - `blockSignals(True)` path does NOT emit
-Font: `adjust_overlay_font_size(+1)` then `(-1)` returns to original.
+ Font: `adjust_overlay_font_size(+1)` then `(-1)` returns to original.
+Also test `set_3d_view_actions_enabled(enabled, tooltip)`: assert it enables/disables the action and sets the tooltip.
 
 ### 6. (Optional) `tests/test_main_window_overlay_options_contract.py`
 Non-Qt contract test: `hasattr(MainWindow, "privacy_view_toggled")` and all
