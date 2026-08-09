@@ -115,7 +115,9 @@ def test_worker_run_with_supplement(mock_supplement, mock_parser_class):
 
     mock_supplement.assert_called_once_with({"tag1": "data1"})
     assert len(ok_emitted) == 1
-    assert ok_emitted[0][1] == mock_supplement.return_value
+    # supplement_export_tags_dict mutates merged in place and returns None, so
+    # the worker emits the supplemented merged dict, not the supplement's result.
+    assert ok_emitted[0][1] == {"tag1": "data1"}
     assert len(failed_emitted) == 0
 
 
