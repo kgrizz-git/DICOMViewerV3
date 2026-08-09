@@ -1,8 +1,17 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-09
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-09
+
+- **MainWindow refactor Phase 0 (characterization):** Added required regression
+  nets before extractions — about dialog, recent-files menu/context menu,
+  mouse-mode map, overlay option sync/emit contract, contract `hasattr` suite,
+  and fullscreen close/exit cases. Full suite green (4596 passed). Gate
+  checklist marked complete in `MAIN_WINDOW_REFACTOR_PLAN.md`. Branch:
+  `bugfix/post-review-cleanup`.
 
 ## 2026-08-08
 

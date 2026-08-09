@@ -1,7 +1,7 @@
 # MainWindow Refactoring Plan
 
 **Date:** 2026-08-09
-**Status:** Blocked on Phase 0 (required) — do not extract until Phase 0 is green
+**Status:** Phase 0 complete (gate green) — extractions #1–#6 not started
 **Last updated:** 2026-08-09
 **Target:** `src/gui/main_window.py` (1,777 lines, 75 methods)
 
@@ -213,12 +213,14 @@ the same commit as the move.
 
 ### Go / no-go checklist (all required)
 
-- [ ] Phase 0 tests listed below exist and pass
-- [ ] Full suite green: `python -m pytest tests/ -v`
-- [ ] Architecture boundaries green: `python scripts/check_architecture_boundaries.py`
-- [ ] Agent smoke green: `python scripts/agent_smoke_harness.py`
-- [ ] Post-review bugfix PR already landed (or its fixes are already on the
+- [x] Phase 0 tests listed below exist and pass
+- [x] Full suite green: `python -m pytest tests/ -v`
+      (2026-08-09: 4596 passed, 14 skipped, 1 unrelated xfailed)
+- [x] Architecture boundaries green: `python scripts/check_architecture_boundaries.py`
+- [x] Agent smoke green: `python scripts/agent_smoke_harness.py`
+- [x] Post-review bugfix PR already landed (or its fixes are already on the
       branch) so xfails for in-scope defects are not masking MainWindow work
+      (fixes on `bugfix/post-review-cleanup`)
 
 Only after every box is checked may extraction #1 begin.
 

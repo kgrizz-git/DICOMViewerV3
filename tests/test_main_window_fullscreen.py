@@ -20,7 +20,7 @@ if _src not in sys.path:
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
+from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QLineEdit, QToolButton
 
 from gui.main_app_key_event_filter import (
@@ -231,3 +231,81 @@ def test_splitter_moved_skips_save_config_in_fullscreen(qapp, monkeypatch):
     monkeypatch.setattr(w, "isFullScreen", lambda: True)
     w._on_splitter_moved(0, 0)
     assert calls == []
+
+
+@pytest.mark.qt
+def test_close_event_clears_fullscreen_snapshot(qapp, monkeypatch):
+    """Closing while fullscreen restores chrome and clears the in-memory snapshot."""
+    w = MainWindow(ConfigManager())
+    w.resize(900, 700)
+    w.splitter.setSizes([120, 400, 80])
+
+    fullscreen_state = {"active": False}
+
+    def _enter_fullscreen() -> None:
+        fullscreen_state["active"] = True
+
+    def _exit_fullscreen() -> None:
+        fullscreen_state["active"] = False
+
+    monkeypatch.setattr(w, "isFullScreen", lambda: fullscreen_state["active"])
+    monkeypatch.setattr(w, "showFullScreen", _enter_fullscreen)
+    monkeypatch.setattr(w, "showNormal", _exit_fullscreen)
+    monkeypatch.setattr(w, "showMaximized", lambda: None)
+
+    w.set_fullscreen(True)
+    assert w._fullscreen_snapshot is not None
+
+    w.closeEvent(QCloseEvent())
+    assert w._fullscreen_snapshot is None
+
+
+@pytest.mark.qt
+def test_set_fullscreen_exit_restores_splitter_toolbar_and_navigator(qapp, monkeypatch):
+    """Public set_fullscreen(False) restores splitter sizes and chrome visibility."""
+    w = MainWindow(ConfigManager())
+    w.resize(900, 700)
+    w.show()
+    qapp.processEvents()
+    w.splitter.setSizes([120, 400, 80])
+    expected_sizes = list(w.splitter.sizes())
+
+    container = getattr(w, "series_navigator_container", None)
+    if container is not None:
+        container.setVisible(True)
+        w.series_navigator_visible = True
+    w.main_toolbar.show()
+    qapp.processEvents()
+    assert w.main_toolbar.isVisible() is True
+
+    fullscreen_state = {"active": False}
+
+    monkeypatch.setattr(w, "isFullScreen", lambda: fullscreen_state["active"])
+    monkeypatch.setattr(
+        w,
+        "showFullScreen",
+        lambda: fullscreen_state.update(active=True),
+    )
+    monkeypatch.setattr(
+        w,
+        "showNormal",
+        lambda: fullscreen_state.update(active=False),
+    )
+    monkeypatch.setattr(w, "showMaximized", lambda: None)
+
+    w.set_fullscreen(True)
+    hidden_sizes = w.splitter.sizes()
+    assert hidden_sizes[0] == 0
+    assert hidden_sizes[2] == 0
+    assert hidden_sizes[1] == sum(expected_sizes)
+    if container is not None:
+        assert container.isVisible() is False
+    assert w.main_toolbar.isVisible() is False
+
+    w.set_fullscreen(False)
+    assert w.splitter.sizes() == expected_sizes
+    if container is not None:
+        assert container.isVisible() is True
+    assert w.main_toolbar.isVisible() is True
+    assert w._fullscreen_snapshot is None
+    w.close()
