@@ -388,9 +388,8 @@ class TestArrayToPil:
         # Should map to middle of range
         assert all(p == 127 for p in pixels)
 
-    def test_invalid_array_shape(self) -> None:
-        """Branch: invalid array shape triggers exception."""
-        # 1D array should still work
+    def test_one_dimensional_array_converts(self) -> None:
+        """Branch: a 1-D array is still converted successfully."""
         arr = np.array([0.0, 127.5, 255.0])
         img = array_to_pil(arr, 127.5, 255.0)
         assert img is not None

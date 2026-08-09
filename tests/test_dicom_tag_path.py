@@ -45,7 +45,7 @@ class TestResolveTagPath:
         assert container is ds
         assert str(tag) == "(0010, 0010)"
 
-    def test_simple_leaf_tag_lowercase_hex(self):
+    def test_simple_leaf_tag_allows_space_after_comma(self):
         ds = Dataset()
         ds.PatientName = "X"
         container, tag = resolve_tag_path(ds, "(0010, 0010)")  # type: ignore[misc]

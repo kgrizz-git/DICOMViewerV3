@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 from pydicom.dataset import Dataset
 
+from core import dicom_palette
 from core.dicom_palette import (
     _apply_one_lut,
     apply_palette_luts,
@@ -218,10 +219,30 @@ class TestConvertPaletteColorToRgb:
         assert did_convert is False
         np.testing.assert_array_equal(out, pixel_array)
 
-    def test_exception_in_lut_returns_original_and_false(self):
-        """Corrupt descriptor should be handled gracefully."""
+    def test_exception_in_lut_returns_original_and_false(self, monkeypatch):
+        """A failure inside LUT application falls back to the original array."""
+        ds = _palette_dataset(
+            red=list(range(256)),
+            green=[0] * 256,
+            blue=[255] * 256,
+        )
+
+        def _raise(*args, **kwargs):
+            raise ValueError("corrupt LUT")
+
+        # Patch the name as resolved inside the module under test so the
+        # try/except fallback in convert_palette_color_to_rgb is exercised.
+        monkeypatch.setattr(dicom_palette, "apply_palette_luts", _raise)
+
+        pixel_array = np.zeros((2, 2), dtype=np.uint8)
+        out, did_convert = convert_palette_color_to_rgb(pixel_array, ds)
+        assert did_convert is False
+        np.testing.assert_array_equal(out, pixel_array)
+
+    def test_missing_descriptor_returns_original_and_false(self):
+        """A non-sequence descriptor yields no LUT and the grayscale fallback."""
         ds = Dataset()
-        ds.RedPaletteColorLookupTableDescriptor = None  # will cause AttributeError
+        ds.RedPaletteColorLookupTableDescriptor = None
         pixel_array = np.zeros((2, 2), dtype=np.uint8)
         out, did_convert = convert_palette_color_to_rgb(pixel_array, ds)
         assert did_convert is False

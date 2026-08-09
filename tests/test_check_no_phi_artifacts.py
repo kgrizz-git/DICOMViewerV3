@@ -369,6 +369,34 @@ def test_recursively_blocks_dicom_identifier(repo):
     assert _run(repo) == 1
 
 
+def test_synthetic_nuclear_fixture_identifiers_are_carved_out():
+    from pydicom.dataset import Dataset
+
+    dataset = Dataset()
+    dataset.PatientName = "Synthetic^NuclearFixture"
+    dataset.PatientID = "SYNTHETIC-NM-001"
+    path = "tests/fixtures/dicom_nuclear/synthetic_nm_planar_uniformity.dcm"
+    assert phi._check_dicom_dataset(path, dataset) == []
+
+
+def test_carveout_rejects_unlisted_identifier_value():
+    from pydicom.dataset import Dataset
+
+    dataset = Dataset()
+    dataset.PatientName = "Doe^Jane"
+    path = "tests/fixtures/dicom_nuclear/synthetic_nm_planar_uniformity.dcm"
+    assert phi._check_dicom_dataset(path, dataset)
+
+
+def test_carveout_is_scoped_to_its_directory():
+    from pydicom.dataset import Dataset
+
+    dataset = Dataset()
+    dataset.PatientName = "Synthetic^NuclearFixture"
+    # The nuclear value must not be honored outside the nuclear fixture tree.
+    assert phi._check_dicom_dataset("tests/fixtures/dicom_rdsr/x.dcm", dataset)
+
+
 def test_blocks_private_dicom_tag(repo):
     import pydicom
     from pydicom.dataset import Dataset, FileMetaDataset

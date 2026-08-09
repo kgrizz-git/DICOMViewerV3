@@ -1,6 +1,6 @@
 {
   "files": {
-    "scripts/check_no_phi_artifacts.py": 1208,
+    "scripts/check_no_phi_artifacts.py": 1219,
     "scripts/privacy_checks/ast_rules.py": 822,
     "src/core/dicom_organizer.py": 878,
     "src/core/fusion_handler.py": 863,

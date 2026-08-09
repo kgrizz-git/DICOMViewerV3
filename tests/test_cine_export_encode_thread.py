@@ -33,8 +33,18 @@ def _make_thread(cancel_set: bool = False, paths=("a.png", "b.png")):
 def _run_and_wait(thread: CineVideoEncodeThread, qapp) -> tuple[bool, list[str]]:
     succeeded: list[bool] = []
     failed: list[str] = []
-    thread.succeeded.connect(lambda: succeeded.append(True))
-    thread.failed.connect(lambda m: failed.append(m))
+
+    def _on_ok() -> None:
+        succeeded.append(True)
+
+    def _on_fail(message: str) -> None:
+        failed.append(message)
+
+    thread.succeeded.connect(_on_ok)
+    thread.failed.connect(_on_fail)
+    # Leave the event loop as soon as the thread ends so the deadline below is
+    # only a failure timeout rather than a fixed five-second wait.
+    thread.finished.connect(qapp.exit)
     thread.start()
     # Bounded wait for either terminal signal.
     deadline = QTimer()

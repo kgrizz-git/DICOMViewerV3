@@ -292,9 +292,9 @@ def test_encode_cine_video_from_png_paths() -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_safe_remove_partial_output_and_cleanup() -> None:
+def test_safe_remove_partial_output_and_cleanup(tmp_path: Path) -> None:
     """Test safe_remove_partial_output and cleanup_temp_frame_dir."""
-    tmp_file = tempfile.mktemp()
+    tmp_file = str(tmp_path / "partial.out")
     Path(tmp_file).write_bytes(b"temp")
 
     safe_remove_partial_output(tmp_file)
@@ -310,7 +310,8 @@ def test_safe_remove_partial_output_and_cleanup() -> None:
         safe_remove_partial_output("error.file")
 
     # Cleanup temp dir
-    tmp_dir = tempfile.mkdtemp()
+    tmp_dir = str(tmp_path / "frames")
+    os.makedirs(tmp_dir)
     cleanup_temp_frame_dir(tmp_dir)
     assert not os.path.exists(tmp_dir)
     cleanup_temp_frame_dir(None)

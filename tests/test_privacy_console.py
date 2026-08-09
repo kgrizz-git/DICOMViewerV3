@@ -17,12 +17,14 @@ from utils.privacy.console import (
 class _Capture:
     def __init__(self) -> None:
         self.buffer = ""
+        self.flush_calls = 0
 
     def write(self, s: str) -> int:
         self.buffer += s
         return len(s)
 
     def flush(self) -> None:
+        self.flush_calls += 1
         return None
 
     def getvalue(self) -> str:
@@ -72,8 +74,9 @@ class TestPrintRedacted:
     def test_flush_called(self):
         cap = _Capture()
         print_redacted(1, file=cap, flush=True)
-        # No error; flush is a no-op on the capture. Default end is newline.
+        # Default end is newline; flush=True must reach the stream exactly once.
         assert cap.getvalue() == "1\n"
+        assert cap.flush_calls == 1
 
     def test_mapping_joined_redacts_keys(self):
         cap = _Capture()
@@ -113,3 +116,4 @@ class TestPrintStructuralEvent:
         cap = _Capture()
         print_structural_event("op", file=cap, flush=True)
         assert "operation=" in cap.getvalue()
+        assert cap.flush_calls == 1

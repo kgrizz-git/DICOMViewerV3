@@ -6,6 +6,7 @@ import pytest
 from pydicom.dataset import Dataset
 
 from gui.crosshair_coordinator import CrosshairCoordinator
+from utils.dicom_utils import get_composite_series_key
 
 
 @pytest.mark.qt
@@ -19,7 +20,9 @@ class TestUpdateCrosshairsForSlice:
         crosshair_coordinator.update_crosshairs_for_slice()
 
         assert crosshair_coordinator.crosshair_manager.current_study_uid == crosshair_sample_dataset.StudyInstanceUID
-        assert crosshair_coordinator.crosshair_manager.current_series_uid is not None
+        assert crosshair_coordinator.crosshair_manager.current_series_uid == get_composite_series_key(
+            crosshair_sample_dataset
+        )
         assert crosshair_coordinator.crosshair_manager.current_instance_identifier == 3
 
     @pytest.mark.qt

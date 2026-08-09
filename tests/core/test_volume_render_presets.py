@@ -371,19 +371,6 @@ def test_preset_steepness_with_very_small_scalar_difference() -> None:
     assert steepness > 0.0
 
 
-def test_transfer_function_preset_immutability() -> None:
-    """Test that TransferFunctionPreset dataclass is immutable."""
-    preset = TransferFunctionPreset(
-        name="Test Preset",
-        scalar_opacity=[(0.0, 0.0), (100.0, 0.5)],
-        color=[(0.0, 0.0, 0.0, 0.0), (100.0, 1.0, 1.0, 1.0)],
-    )
-    # Dataclass fields should be accessible
-    assert preset.name == "Test Preset"
-    assert preset.scalar_opacity == [(0.0, 0.0), (100.0, 0.5)]
-    assert preset.color == [(0.0, 0.0, 0.0, 0.0), (100.0, 1.0, 1.0, 1.0)]
-
-
 def test_transfer_function_preset_equality() -> None:
     """Test that TransferFunctionPreset instances with same values are equal."""
     preset1 = TransferFunctionPreset(

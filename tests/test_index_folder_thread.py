@@ -7,6 +7,7 @@ success, cancel, and failure signal paths without touching disk or SQLCipher.
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -73,7 +74,7 @@ class TestStudyIndexFolderThread:
         # Delegation: each file is converted via dataset_to_index_row with the
         # file_path fallback and the configured study root.
         assert to_row.call_count == 2
-        assert captured_rows[0]["study_root_path"] == "/data/studies"
+        assert captured_rows[0]["study_root_path"] == os.path.abspath("/data/studies")
         store.init_schema.assert_called_once()
         store.upsert_rows.assert_called_once()
         rows = store.upsert_rows.call_args.args[0]

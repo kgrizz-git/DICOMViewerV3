@@ -50,6 +50,9 @@ def _run_worker(worker, timeout_ms=5000):
     timer.start(timeout_ms)
     worker.start()
     loop.exec()
+    # Ensure run() has returned before the caller drops its reference,
+    # otherwise Qt aborts on destroying a still-running QThread.
+    worker.wait(timeout_ms)
 
 
 # ---------------------------------------------------------------------------

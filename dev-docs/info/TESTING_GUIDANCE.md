@@ -93,7 +93,8 @@ a validated, deferred defect—not for a speculative concern, an unsupported
 partial fixture, or an intentional production contract. Those cases need an
 ordinary contract test or no test.
 
-Run the new test file directly first, then the closest package tests. For GUI
+After activating the project virtual environment, run the new test file directly
+first, then the closest package tests. For GUI
 or integration changes, also run the automated smoke harness; use the full
 suite before a risky merge:
 
