@@ -247,6 +247,17 @@ DICOM_IDENTIFIER_KEYWORDS = {
     "StudyID",
 }
 
+# Synthetic test fixtures that intentionally carry recognizable, non-identifying
+# placeholder identifiers. Each directory prefix maps to the exact literal values
+# permitted for it; any other populated identifier still fails the gate.
+SYNTHETIC_FIXTURE_IDENTIFIERS: dict[str, frozenset[str]] = {
+    "tests/fixtures/dicom_rdsr/": frozenset({"Synthetic^RDSR", "SYN-RDSR-001"}),
+    "tests/fixtures/dicom_nuclear/": frozenset(
+        {"Synthetic^NuclearFixture", "SYNTHETIC-NM-001"}
+    ),
+}
+
+
 class _Searcher(Protocol):
     def search(self, string: str, /) -> re.Match[str] | None: ...
 
@@ -845,10 +856,10 @@ def _check_dicom_dataset(path: str, dataset: Any) -> list[str]:
             problems.append(f"{path}: populated private DICOM tag {element.tag}")
         if element.keyword not in DICOM_IDENTIFIER_KEYWORDS:
             continue
-        synthetic_fixture = path.startswith("tests/fixtures/dicom_rdsr/") and value in {
-            "Synthetic^RDSR",
-            "SYN-RDSR-001",
-        }
+        synthetic_fixture = any(
+            path.startswith(prefix) and value in allowed
+            for prefix, allowed in SYNTHETIC_FIXTURE_IDENTIFIERS.items()
+        )
         if value and not synthetic_fixture:
             problems.append(
                 f"{path}: populated nested DICOM identifier {element.keyword}"

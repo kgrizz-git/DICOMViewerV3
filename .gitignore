@@ -45,6 +45,8 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage_*.xml
+coverage_*.txt
 *.cover
 *.py.cover
 .hypothesis/
@@ -252,13 +254,28 @@ logs/
 .subtree/
 
 # DICOM data (if sensitive)
-# Never add clinical image data by accident. The checked-in RDSR fixtures are
-# synthetic and explicitly retained for automated tests.
+# Never add clinical image data by accident. The checked-in RDSR, decoder, and
+# nuclear-medicine fixtures are synthetic and explicitly retained for automated
+# tests.
 *.dcm
 *.dicom
 *.ima
-!tests/fixtures/dicom_rdsr/*.dcm
-!tests/fixtures/dicom_decoder/*.dcm
+# Allowlist each synthetic fixture by exact name (no directory globs) so a new
+# .dcm can never slip in unreviewed.
+!tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm
+!tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm
+!tests/fixtures/dicom_rdsr/synthetic_enhanced_xray_rdsr.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_jpeg2000_lossless_16_bit.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_jpeg_extended_12_bit.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_jpeg_lossless_p14.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_jpeg_lossless_sv1.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_jpegls_lossless.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_rle_lossless.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_uncompressed_12_bit.dcm
+!tests/fixtures/dicom_decoder/synthetic_monochrome_uncompressed_16_bit.dcm
+!tests/fixtures/dicom_decoder/synthetic_rgb_no_color_markers_jpeg_baseline.dcm
+!tests/fixtures/dicom_nuclear/synthetic_nm_four_bar_resolution.dcm
+!tests/fixtures/dicom_nuclear/synthetic_nm_planar_uniformity.dcm
 
 # Local study indexes and SQLite sidecars may contain patient metadata.
 *.db

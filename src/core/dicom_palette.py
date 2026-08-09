@@ -14,6 +14,7 @@ Outputs:
 Requirements:
     - numpy, pydicom
 """
+
 import logging
 from collections.abc import Sequence
 from typing import Any, cast
@@ -27,7 +28,9 @@ from utils.privacy.console import print_redacted
 _logger = logging.getLogger(__name__)
 
 
-def read_palette_lut(dataset: Dataset, prefix: str) -> tuple[np.ndarray | None, int | None]:
+def read_palette_lut(
+    dataset: Dataset, prefix: str
+) -> tuple[np.ndarray | None, int | None]:
     """
     Read one color's palette LUT and first_value from ``dataset``.
 
@@ -47,7 +50,11 @@ def read_palette_lut(dataset: Dataset, prefix: str) -> tuple[np.ndarray | None, 
     # list/tuple -- so this must duck-type on Sequence rather than isinstance
     # against list/tuple (a prior version of this guard did that and always
     # missed real datasets; see dev-docs/TO_DO.md).
-    if isinstance(desc, Sequence) and not isinstance(desc, (str, bytes)) and len(desc) >= 3:
+    if (
+        isinstance(desc, Sequence)
+        and not isinstance(desc, (str, bytes))
+        and len(desc) >= 3
+    ):
         descriptor_items = cast(Sequence[Any], desc)
         first_value = int(descriptor_items[1])
         bits_allocated = int(descriptor_items[2])
@@ -59,9 +66,13 @@ def read_palette_lut(dataset: Dataset, prefix: str) -> tuple[np.ndarray | None, 
     if hasattr(dataset, data_attr):
         lut_data = getattr(dataset, data_attr)
         if isinstance(lut_data, bytes):
-            lut = np.frombuffer(lut_data, dtype=np.uint8 if bits_allocated == 8 else np.uint16)
-        elif isinstance(lut_data, (list, tuple)):
-            lut = np.array(lut_data, dtype=np.uint16 if bits_allocated > 8 else np.uint8)
+            lut = np.frombuffer(
+                lut_data, dtype=np.uint8 if bits_allocated == 8 else np.uint16
+            )
+        elif isinstance(lut_data, Sequence) and not isinstance(lut_data, (str, bytes)):
+            lut = np.array(
+                lut_data, dtype=np.uint16 if bits_allocated > 8 else np.uint8
+            )
 
     return lut, first_value
 
@@ -76,11 +87,17 @@ def extract_indexed_array(pixel_array: np.ndarray) -> np.ndarray:
         return pixel_array
     if len(pixel_array.shape) == 4:
         # Multi-frame: take first frame
-        return pixel_array[0, :, :, 0] if pixel_array.shape[3] == 1 else pixel_array[0, :, :]
+        return (
+            pixel_array[0, :, :, 0]
+            if pixel_array.shape[3] == 1
+            else pixel_array[0, :, :]
+        )
     return pixel_array
 
 
-def _apply_one_lut(indexed_array: np.ndarray, lut: np.ndarray, first_value: int, clamp_max: int) -> np.ndarray:
+def _apply_one_lut(
+    indexed_array: np.ndarray, lut: np.ndarray, first_value: int, clamp_max: int
+) -> np.ndarray:
     """Map indices through a single channel's LUT, using that channel's own
     first_value (per DICOM PS3.3 C.7.6.3.1.5, each of Red/Green/Blue has its own).
     Indices are computed in a signed dtype so a negative first_value (or an index
@@ -105,16 +122,24 @@ def apply_palette_luts(
 ) -> np.ndarray:
     """Clamp indices per channel against that LUT's length, normalize 16-bit LUTs
     to 8-bit, look up (each channel using its own first_value), and stack to RGB."""
-    red_channel = _apply_one_lut(indexed_array, red_lut, red_first_value, len(red_lut) - 1)
-    green_channel = _apply_one_lut(indexed_array, green_lut, green_first_value, len(green_lut) - 1)
-    blue_channel = _apply_one_lut(indexed_array, blue_lut, blue_first_value, len(blue_lut) - 1)
+    red_channel = _apply_one_lut(
+        indexed_array, red_lut, red_first_value, len(red_lut) - 1
+    )
+    green_channel = _apply_one_lut(
+        indexed_array, green_lut, green_first_value, len(green_lut) - 1
+    )
+    blue_channel = _apply_one_lut(
+        indexed_array, blue_lut, blue_first_value, len(blue_lut) - 1
+    )
 
     if len(indexed_array.shape) == 2:
         return np.stack([red_channel, green_channel, blue_channel], axis=2)
     return np.stack([red_channel, green_channel, blue_channel], axis=-1)
 
 
-def convert_palette_color_to_rgb(pixel_array: np.ndarray, dataset: Dataset) -> tuple[np.ndarray, bool]:
+def convert_palette_color_to_rgb(
+    pixel_array: np.ndarray, dataset: Dataset
+) -> tuple[np.ndarray, bool]:
     """
     Convert PALETTE COLOR indexed pixel data to RGB using the dataset's LUTs.
 
@@ -132,8 +157,13 @@ def convert_palette_color_to_rgb(pixel_array: np.ndarray, dataset: Dataset) -> t
 
         indexed_array = extract_indexed_array(pixel_array)
         rgb_array = apply_palette_luts(
-            indexed_array, red_lut, green_lut, blue_lut,
-            red_first or 0, green_first or 0, blue_first or 0,
+            indexed_array,
+            red_lut,
+            green_lut,
+            blue_lut,
+            red_first or 0,
+            green_first or 0,
+            blue_first or 0,
         )
         return rgb_array, True
     except Exception as e:
