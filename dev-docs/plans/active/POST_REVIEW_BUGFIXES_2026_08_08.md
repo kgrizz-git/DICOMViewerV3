@@ -40,6 +40,7 @@ The following items are selected for a single bug-fix + cleanup PR.
 - 6A — `LayoutWindowSlotController`: extract hardcoded max slot constant
 - 6B — `LayoutWindowSlotController`: `app.config_manager` consistency
 - 12A — `MainWindowLayoutHelper`: log instead of silently swallowing exceptions
+- 8A — `SubwindowImageViewerSync`: guard missing `multi_window_layout`
 - 17A — `CrosshairCoordinator`: remove dead `if commands:` branch
 - 18A — `DialogCoordinator`: remove unreachable dead code in `open_histogram`
 - 18B — `DialogCoordinator`: wire or remove unused `handle_settings_applied` stub
@@ -62,7 +63,7 @@ current defect.
 | 6A | The application currently supports exactly four slots. | **[PR]** Extract hardcoded constant; future layout-expansion work deferred. |
 | 6B | Consistency improvement only; production main window owns the config manager. | **[PR]** Align to `app.config_manager`. |
 | 7A–7B | Possible cursor-state hardening, but no user-visible stale-cursor reproduction. | Defer until reproduced; test against real cursor objects rather than mocks. |
-| 8A | A harmless startup/teardown guard would improve resilience. | Add the layout guard if lifecycle work touches this module. |
+| 8A | A harmless startup/teardown guard would improve resilience. | **[PR]** Added (`multi_window_layout is None` → empty iteration). |
 | 8B | `privacy_view_enabled` is an application initialization contract. | Do not add a fallback solely for partial mocks. |
 | 9 | Omitting incomplete W/L is explicitly documented behavior. | Do not change. |
 | 10A | Helpers receive trusted preset colors only. | Do not add validation without an untrusted color input path. |

@@ -17,8 +17,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   monotonic timeouts; layout slot swap guards use a named max-slot constant and
   popup accent reads from ``app.config_manager``; crosshair clear/move paths
   drop dead branches and reuse a single debounce timer; histogram dialog open
-  removes unreachable null checks and the unused settings-applied stub.
-  **Semantic versioning note: patch.**
+  removes unreachable null checks and the unused settings-applied stub;
+  subwindow viewer iteration tolerates a missing multi-window layout during
+  startup/teardown. **Semantic versioning note: patch.**
 
 ### Changed
 - **Internal (`main.py` mixin split):** `DICOMViewerApp` orchestration split into

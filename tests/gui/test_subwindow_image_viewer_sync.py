@@ -189,10 +189,6 @@ def test_set_slice_slider_options_all(mock_app: SimpleNamespace) -> None:
     v0.set_slice_slider_options.assert_called_once_with("right", "inverted")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #8A: viewer iteration does not tolerate startup/teardown without a layout.",
-)
 def test_iter_image_viewers_handles_absent_layout() -> None:
     """Viewer iteration must be empty when no multi-window layout exists."""
     app = SimpleNamespace(multi_window_layout=None)
