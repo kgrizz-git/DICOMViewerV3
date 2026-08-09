@@ -8,6 +8,8 @@ import pytest
 from pydicom.dataset import Dataset
 
 from gui.crosshair_coordinator import CrosshairCoordinator
+from utils.dicom_utils import get_composite_series_key
+from utils.undo_redo import CompositeCommand
 
 
 @pytest.mark.qt
@@ -17,10 +19,20 @@ class TestHandleClearCrosshairs:
     ):
         crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
         crosshair_coordinator.get_current_slice_index = lambda: 0
+        undo_redo_manager = MagicMock()
+        crosshair_coordinator.undo_redo_manager = undo_redo_manager
 
-        # This test verifies the method runs without error when crosshairs exist
-        # The actual clearing logic is tested by the composite command test
+        # Populate a crosshair on the current slice so the clear path has work.
+        series_uid = get_composite_series_key(crosshair_sample_dataset)
+        key = (crosshair_sample_dataset.StudyInstanceUID, series_uid, 0)
+        crosshair_coordinator.crosshair_manager.crosshairs[key] = [MagicMock()]
+
         crosshair_coordinator.handle_clear_crosshairs()
+
+        # The clear dispatches a single composite command for the slice.
+        undo_redo_manager.execute_command.assert_called_once()
+        command = undo_redo_manager.execute_command.call_args[0][0]
+        assert isinstance(command, CompositeCommand)
 
     @pytest.mark.qt
     def test_creates_composite_command_for_multiple_crosshairs(

@@ -16,12 +16,6 @@ from tools.text_annotation_tool import TextAnnotationTool
 
 
 @pytest.fixture
-def scene(qapp) -> QGraphicsScene:
-    """Fixture providing a QGraphicsScene."""
-    return QGraphicsScene()
-
-
-@pytest.fixture
 def mock_image_viewer() -> MagicMock:
     """Fixture providing a mocked ImageViewer."""
     viewer = MagicMock()

@@ -10,6 +10,15 @@ from PySide6.QtWidgets import QWidget
 from gui.magnifier_widget import MagnifierWidget
 
 
+@pytest.fixture(autouse=True)
+def _close_top_level_widgets(qapp):
+    """Close any widgets a test shows so they cannot outlive it and skew later
+    window-activation assertions against the session-scoped QApplication."""
+    yield
+    for widget in list(qapp.topLevelWidgets()):
+        widget.close()
+
+
 @pytest.mark.qt
 def test_widget_initialization(qapp) -> None:
     """Test that MagnifierWidget initializes with correct properties."""
@@ -136,43 +145,34 @@ def test_show_at_position_centered(qapp) -> None:
 
 
 @pytest.mark.qt
-def test_show_at_position_with_screen_boundaries(qapp) -> None:
-    """Test show_at_position adjusts for screen boundaries."""
+def test_show_at_position_clamps_to_screen_boundaries(qapp) -> None:
+    """A position past the screen edge is clamped so the widget stays on-screen."""
     widget = MagnifierWidget()
-    
-    # Test that the widget becomes visible
-    pos = QPoint(500, 500)
-    widget.show_at_position(pos)
+
+    screen = qapp.primaryScreen().geometry()
+    # Request a position well beyond the bottom-right corner.
+    widget.show_at_position(QPoint(screen.right() + 1000, screen.bottom() + 1000))
+
     assert widget.isVisible() is True
-    
-    # Test that position is set (exact position depends on screen geometry)
-    assert widget.x() is not None
-    assert widget.y() is not None
+    assert widget.x() + widget.magnifier_size <= screen.right() + 1
+    assert widget.y() + widget.magnifier_size <= screen.bottom() + 1
 
 
 @pytest.mark.qt
-def test_show_at_position_with_primary_screen_fallback(qapp) -> None:
-    """Test show_at_position works with real QApplication."""
+def test_show_at_position_uses_primary_screen_when_no_screen_at_point(
+    qapp, monkeypatch
+) -> None:
+    """When no screen contains the point, positioning falls back to the primary
+    screen geometry rather than crashing."""
     widget = MagnifierWidget()
-    
-    pos = QPoint(500, 500)
-    widget.show_at_position(pos)
-    
-    assert widget.isVisible() is True
-    # Position should be set (exact value depends on screen)
-    assert widget.x() is not None
-    assert widget.y() is not None
+    monkeypatch.setattr(qapp, "screenAt", lambda _pos: None)
 
+    primary = qapp.primaryScreen().geometry()
+    widget.show_at_position(QPoint(500, 500))
 
-@pytest.mark.qt
-def test_show_at_position_with_widget_screen_fallback(qapp) -> None:
-    """Test show_at_position works with widget screen."""
-    widget = MagnifierWidget()
-    
-    pos = QPoint(500, 500)
-    widget.show_at_position(pos)
-    
     assert widget.isVisible() is True
+    assert primary.left() <= widget.x() <= primary.right()
+    assert primary.top() <= widget.y() <= primary.bottom()
 
 
 @pytest.mark.qt

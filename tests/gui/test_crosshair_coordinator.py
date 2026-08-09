@@ -4,6 +4,7 @@ Comprehensive unit tests for src/gui/crosshair_coordinator.py.
 Achieves 100% statement and branch coverage for CrosshairCoordinator.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,12 +34,26 @@ def mock_coordinator_setup(qapp):
         update_undo_redo_state_callback=undo_state_cb,
         get_use_rescaled_values=rescaled_cb,
     )
-    return coordinator, cm, iv, get_dataset_cb, get_slice_cb, undo_mgr, undo_state_cb, rescaled_cb
+    # A namespace keeps call sites stable and self-describing when a dependency
+    # is added or reordered.
+    return SimpleNamespace(
+        coordinator=coordinator,
+        cm=cm,
+        iv=iv,
+        get_ds=get_dataset_cb,
+        get_slice=get_slice_cb,
+        undo_mgr=undo_mgr,
+        undo_cb=undo_state_cb,
+        rescaled_cb=rescaled_cb,
+    )
 
 
 def test_init_and_attributes(mock_coordinator_setup) -> None:
     """Test initialization of CrosshairCoordinator."""
-    coordinator, cm, iv, get_ds, get_slice, undo_mgr, undo_cb, resc_cb = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, cm, iv = s.coordinator, s.cm, s.iv
+    get_ds, get_slice = s.get_ds, s.get_slice
+    undo_mgr, undo_cb, resc_cb = s.undo_mgr, s.undo_cb, s.rescaled_cb
 
     assert coordinator.crosshair_manager == cm
     assert coordinator.image_viewer == iv
@@ -53,7 +68,9 @@ def test_init_and_attributes(mock_coordinator_setup) -> None:
 
 def test_handle_crosshair_clicked(mock_coordinator_setup) -> None:
     """Test handle_crosshair_clicked under various scene, dataset, and patient coordinate conditions."""
-    coordinator, cm, iv, get_ds, get_slice, undo_mgr, undo_cb, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, cm, iv = s.coordinator, s.cm, s.iv
+    get_ds, undo_mgr, undo_cb = s.get_ds, s.undo_mgr, s.undo_cb
 
     # 1. scene is None
     iv.scene = None
@@ -109,7 +126,9 @@ def test_handle_crosshair_clicked(mock_coordinator_setup) -> None:
 
 def test_handle_crosshair_delete_requested(mock_coordinator_setup) -> None:
     """Test handle_crosshair_delete_requested with and without undo_redo_manager."""
-    coordinator, cm, iv, get_ds, get_slice, undo_mgr, undo_cb, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, cm, iv = s.coordinator, s.cm, s.iv
+    get_ds, undo_mgr, undo_cb = s.get_ds, s.undo_mgr, s.undo_cb
 
     item = MagicMock()
 
@@ -144,7 +163,9 @@ def test_handle_crosshair_delete_requested(mock_coordinator_setup) -> None:
 
 def test_handle_clear_crosshairs(mock_coordinator_setup) -> None:
     """Test handle_clear_crosshairs under various empty/valid slice conditions."""
-    coordinator, cm, iv, get_ds, get_slice, undo_mgr, undo_cb, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, cm, iv = s.coordinator, s.cm, s.iv
+    get_ds, undo_mgr, undo_cb = s.get_ds, s.undo_mgr, s.undo_cb
 
     # 1. scene is None
     iv.scene = None
@@ -192,7 +213,9 @@ def test_handle_clear_crosshairs(mock_coordinator_setup) -> None:
 
 def test_update_crosshairs_for_slice_and_privacy_mode(mock_coordinator_setup) -> None:
     """Test update_crosshairs_for_slice and update_privacy_mode."""
-    coordinator, cm, iv, get_ds, get_slice, _, _, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, cm, iv = s.coordinator, s.cm, s.iv
+    get_ds = s.get_ds
 
     # 1. scene is None
     iv.scene = None
@@ -223,7 +246,9 @@ def test_update_crosshairs_for_slice_and_privacy_mode(mock_coordinator_setup) ->
 
 def test_on_crosshair_moved_and_finalize(mock_coordinator_setup) -> None:
     """Test _on_crosshair_moved, batch timer reset, exception handling, and _finalize_crosshair_move."""
-    coordinator, cm, iv, get_ds, get_slice, undo_mgr, undo_cb, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, iv = s.coordinator, s.iv
+    undo_mgr, undo_cb = s.undo_mgr, s.undo_cb
     iv.scene = MagicMock()
 
     # 1. Invalid item (None or no pos attribute)
@@ -292,7 +317,9 @@ def test_on_crosshair_moved_and_finalize(mock_coordinator_setup) -> None:
 
 def test_update_crosshair_pixel_values(mock_coordinator_setup) -> None:
     """Test _update_crosshair_pixel_values with rescaled values, patient coordinates, and exceptions."""
-    coordinator, cm, iv, get_ds, get_slice, _, _, rescaled_cb = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, iv = s.coordinator, s.iv
+    get_ds = s.get_ds
 
     item = MagicMock()
     pos = QPointF(15.4, 25.8)
@@ -331,7 +358,9 @@ def test_handle_clear_crosshairs_executes_command_for_nonempty_crosshair_set(
     mock_coordinator_setup,
 ) -> None:
     """A nonempty crosshair set produces an undo command."""
-    coordinator, cm, iv, get_ds, _, undo_mgr, _, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, cm, iv = s.coordinator, s.cm, s.iv
+    get_ds, undo_mgr = s.get_ds, s.undo_mgr
     iv.scene = MagicMock()
 
     ds = Dataset()
@@ -350,7 +379,8 @@ def test_move_batch_timer_is_replaced_between_sequential_moves(
     mock_coordinator_setup,
 ) -> None:
     """Python-owned timers are replaced between sequential crosshair moves."""
-    coordinator, _, iv, _, _, _, _, _ = mock_coordinator_setup
+    s = mock_coordinator_setup
+    coordinator, iv = s.coordinator, s.iv
     iv.scene = MagicMock()
 
     item = MagicMock()

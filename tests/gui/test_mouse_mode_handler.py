@@ -159,3 +159,5 @@ def test_null_image_viewer_is_skipped_during_cursor_application() -> None:
     h.handle_mouse_mode_changed("pan")
 
     empty_sub.setCursor.assert_not_called()
+    # With no viewer to source a tool cursor, the layout cursor stays untouched.
+    layout.setCursor.assert_not_called()

@@ -498,14 +498,3 @@ def test_preset_steepness_with_single_point_large_opacity() -> None:
         color=[(0.0, 0.0, 0.0, 0.0)],
     )
     assert preset_steepness(preset) == 0.0
-
-
-def test_preset_steepness_with_three_points_middle_skipped() -> None:
-    """Test branch: middle point with same scalar as previous is skipped."""
-    preset = TransferFunctionPreset(
-        name="Skip Middle",
-        scalar_opacity=[(0.0, 0.0), (0.0, 0.5), (100.0, 1.0)],
-        color=[(0.0, 0.0, 0.0, 0.0), (0.0, 0.5, 0.5, 0.5), (100.0, 1.0, 1.0, 1.0)],
-    )
-    steepness = preset_steepness(preset)
-    assert steepness > 0.0

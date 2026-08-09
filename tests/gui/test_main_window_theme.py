@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from PySide6.QtGui import QColor
 
 from gui.main_window_theme import (
@@ -113,7 +114,6 @@ def test_get_theme_viewer_background_color() -> None:
 
 def test_blend_hex_colors_rejects_invalid_trusted_color_inputs() -> None:
     """Theme helpers reject malformed colors outside their trusted-input contract."""
-    import pytest
     with pytest.raises(ValueError):
         _blend_hex_colors("invalid", "#ffffff", 0.5)
 
@@ -123,7 +123,6 @@ def test_blend_hex_colors_rejects_invalid_trusted_color_inputs() -> None:
 
 def test_boost_hex_saturation_rejects_invalid_trusted_color_inputs() -> None:
     """Theme helpers reject malformed colors outside their trusted-input contract."""
-    import pytest
     with pytest.raises(ValueError):
         _boost_hex_saturation("not_a_hex_color", 1.2)
 
@@ -170,7 +169,6 @@ def test_metadata_bands_derived_from_selected_accent() -> None:
 
 def test_missing_dark_qss_falls_back_to_light_metadata_band(tmp_path: Path) -> None:
     """Regression: when dark.qss is absent, metadata band must use light-theme tint, not dark-theme tint."""
-    import gui.main_window_theme as mw_theme
     white_p, black_p = "/dummy/white.png", "/dummy/black.png"
     themes = tmp_path / "themes"
     themes.mkdir()
@@ -180,12 +178,8 @@ def test_missing_dark_qss_falls_back_to_light_metadata_band(tmp_path: Path) -> N
         "}\n",
         encoding="utf-8",
     )
-    original = mw_theme._themes_dir
-    mw_theme._themes_dir = lambda: themes
-    try:
+    with patch("gui.main_window_theme._themes_dir", return_value=themes):
         result = get_theme_stylesheet("dark", white_p, black_p, accent_id="garnet")
-    finally:
-        mw_theme._themes_dir = original
     expected_light_band = metadata_tag_band_color("light", "#a0303f")
     expected_dark_band = metadata_tag_band_color("dark", "#a0303f")
     assert expected_light_band in result

@@ -167,9 +167,17 @@ def test_initialize_handlers_fallback_subwindows_first_element_falsy(
     """Test fallback branch when subwindows list contains None as first element (hits 69->75 branch)."""
     delattr(mock_app, "roi_coordinator")
     mock_app.multi_window_layout.get_all_subwindows.return_value = [None]
+    original_image_viewer = mock_app.image_viewer
 
     with patch("gui.app_handler_bootstrap.LocalStudyIndexService"):
         initialize_handlers(mock_app)
+
+    # Managers are recovered from subwindow_managers[0], but the falsy first
+    # subwindow must not overwrite the existing image_viewer, and setup still
+    # completes through keyboard-handler wiring.
+    assert mock_app.roi_coordinator is not None
+    assert mock_app.image_viewer is original_image_viewer
+    assert mock_app.keyboard_event_handler is not None
 
 
 def test_initialize_handlers_raises_when_no_subwindow_managers(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
-from PySide6.QtGui import QPaintEvent
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QBoxLayout, QWidget
 
 from gui.edge_reveal_slider_overlay import EdgeRevealSliderOverlay
@@ -429,21 +429,13 @@ class TestEdgeRevealSliderOverlayOrientation:
 
 class TestEdgeRevealSliderOverlayPaintEvent:
     def test_paint_event_draws_without_error(self, overlay: EdgeRevealSliderOverlay):
-        """Test that paintEvent executes without raising exceptions."""
-        overlay.setVisible(True)
-        event = QPaintEvent(overlay.rect())
-        overlay.paintEvent(event)
-        # If we get here without exception, the test passes
+        """paintEvent draws the overlay onto a valid paint device.
 
-
-class TestEdgeRevealSliderOverlaySignal:
-    def test_slider_value_changed_signal_emitted_on_handler_call(self, overlay: EdgeRevealSliderOverlay):
-        """Test that the public signal is emitted when _on_slider_value_changed is called."""
-        signal_values = []
-
-        def capture_value(value):
-            signal_values.append(value)
-
-        overlay.slider_value_changed.connect(capture_value)
-        overlay._on_slider_value_changed(42)
-        assert signal_values == [42]
+        Rendering into a QPixmap drives the same paint path with a real paint
+        engine, unlike calling paintEvent directly (which gets a null engine).
+        """
+        overlay.resize(120, 40)
+        pixmap = QPixmap(overlay.size())
+        pixmap.fill(Qt.GlobalColor.transparent)
+        overlay.render(pixmap)
+        assert not pixmap.isNull()

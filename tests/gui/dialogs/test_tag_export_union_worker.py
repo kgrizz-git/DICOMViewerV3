@@ -115,6 +115,7 @@ def test_worker_run_with_supplement(mock_supplement, mock_parser_class):
 
     mock_supplement.assert_called_once_with({"tag1": "data1"})
     assert len(ok_emitted) == 1
+    assert ok_emitted[0][1] == mock_supplement.return_value
     assert len(failed_emitted) == 0
 
 
@@ -148,7 +149,11 @@ def test_worker_run_interrupted_during_merge(mock_parser_class):
 
     worker.isInterruptionRequested = MagicMock(side_effect=interrupt_checker)
 
-    large_dict = {f"tag{i}": i for i in range(4001)}
+    # TagExportUnionWorker.run checks isInterruptionRequested every
+    # _MERGE_INTERRUPT_CHECK_INTERVAL merged tags (n % 4000 == 0); size the
+    # dict one past a full interval so more than one check fires.
+    _MERGE_INTERRUPT_CHECK_INTERVAL = 4000
+    large_dict = {f"tag{i}": i for i in range(_MERGE_INTERRUPT_CHECK_INTERVAL + 1)}
     mock_parser.get_all_tags.return_value = large_dict
 
     ok_emitted, failed_emitted = [], []

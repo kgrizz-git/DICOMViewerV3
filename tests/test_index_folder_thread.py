@@ -42,19 +42,19 @@ def _run(thread: StudyIndexFolderThread, qapp) -> str:
     return outcome["signal"]
 
 
-def _make_thread(walk_paths, cancel_predicate=lambda: False):
+def _make_thread(cancel_predicate=lambda: False):
     return StudyIndexFolderThread(
         root_dir="/data/studies",
         db_path="/data/idx.sqlite",
         passphrase="secret",
         should_cancel=cancel_predicate,
-    ), walk_paths
+    )
 
 
 class TestStudyIndexFolderThread:
     def test_indexes_files_and_emits_finished(self, qapp):
         walk_paths = [("/data/studies", [], ["a.dcm", "b.dcm"])]
-        thread, _ = _make_thread(walk_paths)
+        thread = _make_thread()
         fake_ds = MagicMock()
         fake_ds.filename = "/data/studies/a.dcm"
         captured_rows: list[dict] = []
@@ -83,7 +83,7 @@ class TestStudyIndexFolderThread:
     def test_cancel_early_emits_failed(self, qapp):
         walk_paths = [("/data/studies", [], ["a.dcm"])]
         cancel = {"flag": True}
-        thread, _ = _make_thread(walk_paths, cancel_predicate=lambda: cancel["flag"])
+        thread = _make_thread(cancel_predicate=lambda: cancel["flag"])
         with patch("core.study_index.index_folder_thread.os.walk", return_value=walk_paths), patch(
             "core.study_index.index_folder_thread.pydicom.dcmread"
         ) as dcmread, patch(
@@ -105,7 +105,7 @@ class TestStudyIndexFolderThread:
             calls["n"] += 1
             return calls["n"] >= 2
 
-        thread, _ = _make_thread(walk_paths, cancel_predicate=cancel_predicate)
+        thread = _make_thread(cancel_predicate=cancel_predicate)
         fake_ds = MagicMock()
         with patch("core.study_index.index_folder_thread.os.walk", return_value=walk_paths), patch(
             "core.study_index.index_folder_thread.pydicom.dcmread",
@@ -118,7 +118,7 @@ class TestStudyIndexFolderThread:
 
     def test_read_errors_skipped(self, qapp):
         walk_paths = [("/data/studies", [], ["good.dcm", "bad.dcm"])]
-        thread, _ = _make_thread(walk_paths)
+        thread = _make_thread()
         good = MagicMock()
         good.filename = "/data/studies/good.dcm"
 
@@ -138,7 +138,7 @@ class TestStudyIndexFolderThread:
 
     def test_store_constructor_receives_db_and_passphrase(self, qapp):
         walk_paths = [("/data/studies", [], ["a.dcm"])]
-        thread, _ = _make_thread(walk_paths)
+        thread = _make_thread()
         fake_ds = MagicMock()
         with patch("core.study_index.index_folder_thread.os.walk", return_value=walk_paths), patch(
             "core.study_index.index_folder_thread.pydicom.dcmread",
@@ -150,7 +150,7 @@ class TestStudyIndexFolderThread:
 
     def test_unexpected_store_error_emits_failed(self, qapp):
         walk_paths = [("/data/studies", [], ["a.dcm"])]
-        thread, _ = _make_thread(walk_paths)
+        thread = _make_thread()
         fake_ds = MagicMock()
         with patch("core.study_index.index_folder_thread.os.walk", return_value=walk_paths), patch(
             "core.study_index.index_folder_thread.pydicom.dcmread",

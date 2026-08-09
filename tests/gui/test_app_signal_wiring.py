@@ -4,6 +4,7 @@ Comprehensive unit tests for src/gui/app_signal_wiring.py.
 Achieves 100% statement and branch coverage for wire_all_signals.
 """
 
+import inspect
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -23,11 +24,15 @@ class DummySignal:
 
     def emit(self, *args, **kwargs) -> None:
         for slot in self.connected_slots:
+            # Select the arity from the slot signature rather than catching a
+            # TypeError, which could mask a real error inside the slot and call
+            # it twice.
             try:
-                slot(*args, **kwargs)
+                inspect.signature(slot).bind(*args, **kwargs)
             except TypeError:
-                # Slot might take 0 arguments
                 slot()
+            else:
+                slot(*args, **kwargs)
 
 
 @pytest.fixture

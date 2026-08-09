@@ -6,8 +6,9 @@ The fixtures exercise only two simple planar workflows:
 * ``synthetic_nm_four_bar_resolution.dcm``: perpendicular two-peak profiles
   with a known 100 mm separation.
 
-They contain no patient, institution, acquisition, or private metadata.  The
-fixed UIDs and pixel arrays make the committed binary fixtures reproducible.
+They contain no real patient, institution, acquisition, or private metadata;
+the patient identifiers are fixed synthetic placeholders.  The fixed UIDs and
+pixel arrays make the committed binary fixtures reproducible.
 Run from the repository root with the project virtual environment activated::
 
     python tests/scripts/generate_nuclear_nm_fixtures.py

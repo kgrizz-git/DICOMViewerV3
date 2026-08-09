@@ -349,7 +349,7 @@ class TestGraphicsViewUniformZoomTypeHandling:
     """Tests for type handling of current_zoom attribute."""
 
     def test_current_zoom_bool_true(self, mock_view, mock_transform):
-        """Should treat bool True as int (1), but reject because not > 0? No, bool is instance of int."""
+        """Should treat bool True as int 1 and return 1.0 without reading the transform."""
         mock_view.current_zoom = True
         mock_view.transform.return_value = mock_transform
         mock_transform.m11.return_value = 2.0

@@ -351,44 +351,37 @@ class TestHandleAdditiveLoad:
             added_file_count=1,
         )
 
-        with patch(
-            "gui.file_series_loading_coordinator.maybe_evict_after_additive_load",
-            return_value=True,
+        with (
+            patch(
+                "gui.file_series_loading_coordinator.maybe_evict_after_additive_load",
+                return_value=True,
+            ),
+            patch("gui.file_series_loading_coordinator.load_ps_ko_for_new_studies"),
+            patch(
+                "gui.file_series_loading_coordinator.refresh_appended_series_subwindows"
+            ) as mock_refresh,
+            patch(
+                "gui.file_series_loading_coordinator.find_first_empty_subwindow_index",
+                return_value=None,
+            ),
+            patch(
+                "gui.file_series_loading_coordinator.refresh_navigator_after_additive"
+            ),
+            patch(
+                "gui.file_series_loading_coordinator.maybe_show_navigator_for_new_series"
+            ),
+            patch(
+                "gui.file_series_loading_coordinator.refresh_focused_fusion_series_list"
+            ),
+            patch("gui.file_series_loading_coordinator.show_additive_load_status"),
+            patch(
+                "gui.file_series_loading_coordinator.finish_additive_load_side_effects"
+            ),
         ):
-            with patch(
-                "gui.file_series_loading_coordinator.load_ps_ko_for_new_studies"
-            ):
-                with patch(
-                    "gui.file_series_loading_coordinator.refresh_appended_series_subwindows"
-                ) as mock_refresh:
-                    with patch(
-                        "gui.file_series_loading_coordinator.find_first_empty_subwindow_index",
-                        return_value=None,
-                    ):
-                        with patch(
-                            "gui.file_series_loading_coordinator.refresh_navigator_after_additive"
-                        ):
-                            with patch(
-                                "gui.file_series_loading_coordinator.maybe_show_navigator_for_new_series"
-                            ):
-                                with patch(
-                                    "gui.file_series_loading_coordinator.refresh_focused_fusion_series_list"
-                                ):
-                                    with patch(
-                                        "gui.file_series_loading_coordinator.show_additive_load_status"
-                                    ):
-                                        with patch(
-                                            "gui.file_series_loading_coordinator.finish_additive_load_side_effects"
-                                        ):
-                                            coordinator.handle_additive_load(
-                                                merge_result
-                                            )
-                                            # Verify refresh_appended_series_subwindows was called
-                                            assert mock_refresh.called
-                                            assert (
-                                                mock_refresh.call_args.args[1]
-                                                == merge_result.appended_series
-                                            )
+            coordinator.handle_additive_load(merge_result)
+            # Verify refresh_appended_series_subwindows was called
+            assert mock_refresh.called
+            assert mock_refresh.call_args.args[1] == merge_result.appended_series
 
     def test_auto_assigns_first_new_series_when_empty_subwindow(
         self, coordinator, mock_app
@@ -596,12 +589,17 @@ class TestOnLoadComplete:
         mock_app._schedule_tag_export_union_rebuild.assert_called_once()
 
     def test_handles_none_datasets_gracefully(self, coordinator, mock_app):
+        sentinel = [Dataset()]
+        mock_app.current_datasets = sentinel
         coordinator._on_load_complete(None, {"study1": {}})
-        assert not mock_app.current_datasets
+        # None input must leave existing state untouched, not blank it.
+        assert mock_app.current_datasets is sentinel
 
     def test_handles_none_studies_gracefully(self, coordinator, mock_app):
+        sentinel = {"existing": {}}
+        mock_app.current_studies = sentinel
         coordinator._on_load_complete([Dataset()], None)
-        assert not mock_app.current_studies
+        assert mock_app.current_studies is sentinel
 
     def test_handles_missing_study_cache(self, coordinator, mock_app):
         mock_app.study_cache = None

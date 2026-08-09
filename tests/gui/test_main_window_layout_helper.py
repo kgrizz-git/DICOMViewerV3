@@ -5,6 +5,7 @@ Achieves 100% statement and branch coverage for setup_main_window_content,
 MainWindowPanels, and WindowSlotMapCallbacks.
 """
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -175,6 +176,7 @@ def test_setup_content_reports_slot_map_wiring_exceptions(
         side_effect=RuntimeError("Thumbnail wiring failure")
     )
 
-    setup_main_window_content(main_window, mock_panels, slot_map=mock_slot_map)
+    with caplog.at_level(logging.DEBUG):
+        setup_main_window_content(main_window, mock_panels, slot_map=mock_slot_map)
     main_window.set_window_slot_map_callbacks.assert_called_once()
     assert "Thumbnail wiring failure" in caplog.text

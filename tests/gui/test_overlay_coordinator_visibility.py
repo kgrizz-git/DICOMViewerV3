@@ -4,9 +4,26 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
 from pydicom.dataset import Dataset
 
 from gui.overlay_coordinator import OverlayCoordinator
+
+
+def _wire_dataset_and_hide_callbacks(coordinator, dataset) -> None:
+    """Give the coordinator a dataset/series so the toggle reaches the
+    measurement/ROI visibility branch, with all hide callbacks mocked."""
+    coordinator.get_current_dataset = MagicMock(return_value=dataset)
+    coordinator.get_current_studies = MagicMock(
+        return_value={"study_1": {"series_1": [dataset]}}
+    )
+    coordinator.get_current_study_uid = MagicMock(return_value="study_1")
+    coordinator.get_current_series_uid = MagicMock(return_value="series_1")
+    coordinator.get_current_slice_index = MagicMock(return_value=0)
+    coordinator.hide_measurement_labels = MagicMock()
+    coordinator.hide_measurement_graphics = MagicMock()
+    coordinator._hide_roi_graphics_callback = MagicMock()
+    coordinator.hide_roi_statistics_overlays = MagicMock()
 
 
 class TestRestoreMeasurementAndRoiVisibility:
@@ -109,40 +126,37 @@ class TestHandleToggleOverlay:
         overlay_coordinator.overlay_manager.create_overlay_items.assert_not_called()
 
     def test_hides_measurements_and_roi_when_state_is_2(
-        self, overlay_coordinator: OverlayCoordinator
+        self, overlay_coordinator: OverlayCoordinator, sample_dataset: Dataset
     ):
+        _wire_dataset_and_hide_callbacks(overlay_coordinator, sample_dataset)
         overlay_coordinator.overlay_manager.toggle_overlay_visibility = MagicMock(
             return_value=2
         )
-        # The state 2 doesn't call the callbacks in the current implementation
-        # So we'll just verify the toggle was called
+
         overlay_coordinator.handle_toggle_overlay()
 
-        overlay_coordinator.overlay_manager.toggle_overlay_visibility.assert_called_once()
+        # State 2 hides measurements and ROI labels/graphics.
+        overlay_coordinator.hide_measurement_labels.assert_called_once_with(True)
+        overlay_coordinator.hide_measurement_graphics.assert_called_once_with(True)
+        overlay_coordinator._hide_roi_graphics_callback.assert_called_once_with(True)
+        overlay_coordinator.hide_roi_statistics_overlays.assert_called_once_with(True)
 
-    def test_shows_measurements_and_roi_when_state_is_0(
-        self, overlay_coordinator: OverlayCoordinator
+    @pytest.mark.parametrize("state", [0, 1])
+    def test_shows_measurements_and_roi_when_state_is_0_or_1(
+        self, overlay_coordinator: OverlayCoordinator, sample_dataset: Dataset, state: int
     ):
+        _wire_dataset_and_hide_callbacks(overlay_coordinator, sample_dataset)
         overlay_coordinator.overlay_manager.toggle_overlay_visibility = MagicMock(
-            return_value=0
+            return_value=state
         )
-        # The state 0 doesn't call the callbacks in the current implementation
-        # So we'll just verify the toggle was called
+
         overlay_coordinator.handle_toggle_overlay()
 
-        overlay_coordinator.overlay_manager.toggle_overlay_visibility.assert_called_once()
-
-    def test_shows_measurements_and_roi_when_state_is_1(
-        self, overlay_coordinator: OverlayCoordinator
-    ):
-        overlay_coordinator.overlay_manager.toggle_overlay_visibility = MagicMock(
-            return_value=1
-        )
-        # The state 1 doesn't call the callbacks in the current implementation
-        # So we'll just verify the toggle was called
-        overlay_coordinator.handle_toggle_overlay()
-
-        overlay_coordinator.overlay_manager.toggle_overlay_visibility.assert_called_once()
+        # States 0 and 1 both restore measurement and ROI visibility.
+        overlay_coordinator.hide_measurement_labels.assert_called_once_with(False)
+        overlay_coordinator.hide_measurement_graphics.assert_called_once_with(False)
+        overlay_coordinator._hide_roi_graphics_callback.assert_called_once_with(False)
+        overlay_coordinator.hide_roi_statistics_overlays.assert_called_once_with(False)
 
     def test_updates_scene_after_toggle(
         self, overlay_coordinator: OverlayCoordinator

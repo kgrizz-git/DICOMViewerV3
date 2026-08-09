@@ -81,12 +81,21 @@ class TestUpdateCrosshairPixelValues:
 
     @pytest.mark.qt
     def test_handles_exceptions_gracefully(
-        self, crosshair_coordinator: CrosshairCoordinator
+        self,
+        crosshair_coordinator: CrosshairCoordinator,
+        crosshair_sample_dataset: Dataset,
     ):
-        crosshair_coordinator.get_current_dataset = lambda: None
+        # A valid dataset gets past the early return; a failure in the pixel
+        # lookup must be swallowed rather than propagated to the caller.
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
+        crosshair_coordinator.image_viewer._get_pixel_value_at_coords = MagicMock(
+            side_effect=RuntimeError("pixel lookup failed")
+        )
 
         crosshair_item = MagicMock()
         new_pos = QPointF(15, 25)
 
-        # Should not raise an exception
+        # Should not raise despite the dependency error.
         crosshair_coordinator._update_crosshair_pixel_values(crosshair_item, new_pos)
+
+        crosshair_item.update_pixel_values.assert_not_called()

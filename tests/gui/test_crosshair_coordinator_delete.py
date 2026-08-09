@@ -8,6 +8,7 @@ import pytest
 from pydicom.dataset import Dataset
 
 from gui.crosshair_coordinator import CrosshairCoordinator
+from utils.dicom_utils import get_composite_series_key
 
 
 @pytest.mark.qt
@@ -61,5 +62,14 @@ class TestHandleCrosshairDeleteRequested:
 
         crosshair_coordinator.handle_crosshair_delete_requested(crosshair_item)
 
-        # Check that undo command was executed
+        # The queued command must carry the identifiers extracted from the dataset.
         undo_redo_manager.execute_command.assert_called_once()
+        command = undo_redo_manager.execute_command.call_args[0][0]
+        expected_key = (
+            crosshair_sample_dataset.StudyInstanceUID,
+            get_composite_series_key(crosshair_sample_dataset),
+            crosshair_coordinator.get_current_slice_index(),
+        )
+        assert command.key == expected_key
+        assert command.action == "remove"
+        assert command.crosshair_item is crosshair_item
