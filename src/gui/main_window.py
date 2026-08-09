@@ -26,7 +26,6 @@ from PySide6.QtCore import (
     QDir,
     QEvent,
     Qt,
-    QTimer,
     Signal,
 )
 from PySide6.QtGui import (
@@ -62,6 +61,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from gui.main_window_fullscreen_manager import MainWindowFullscreenManager
 from gui.main_window_menu_builder import build_menu_bar
 from gui.main_window_recent_files_manager import MainWindowRecentFilesManager
 from gui.main_window_status_controller import MainWindowStatusController
@@ -303,9 +303,9 @@ class MainWindow(QMainWindow):
         # Reference to image viewer (set by main.py after creation)
         self.image_viewer: ImageViewer | None = None
 
-        # View → Fullscreen: in-memory snapshot only (never write fullscreen layout to config defaults)
-        self._fullscreen_snapshot: dict[str, Any] | None = None
-        self._fullscreen_transitioning = False
+        # View → Fullscreen: owns in-memory chrome snapshot + re-entrancy guard
+        # (never write fullscreen layout to config defaults).
+        self._fullscreen = MainWindowFullscreenManager(self)
 
         # Window properties
         self.setWindowTitle("DICOM Viewer V3")
@@ -1121,56 +1121,30 @@ class MainWindow(QMainWindow):
             self.show_series_navigator_action.setChecked(self.series_navigator_visible)
         self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
 
+    @property
+    def _fullscreen_snapshot(self) -> dict[str, Any] | None:
+        """Backward-compat accessor for the manager's in-memory chrome snapshot.
+
+        Kept for ``tests/test_main_window_fullscreen.py`` and any external
+        callers; the snapshot itself now lives on ``MainWindowFullscreenManager``.
+        """
+        return self._fullscreen.snapshot
+
+    @_fullscreen_snapshot.setter
+    def _fullscreen_snapshot(self, value: dict[str, Any] | None) -> None:
+        self._fullscreen.snapshot = value
+
     def _take_fullscreen_snapshot(self) -> dict[str, Any]:
-        """Capture splitter sizes, navigator bar, and toolbar visibility before entering fullscreen."""
-        container = getattr(self, "series_navigator_container", None)
-        bar_visible = bool(container.isVisible()) if container is not None else False
-        toolbar_vis = self.main_toolbar.isVisible() if hasattr(self, "main_toolbar") else True
-        return {
-            "splitter_sizes": list(self.splitter.sizes()),
-            "series_navigator_bar_visible": bar_visible,
-            "toolbar_visible": toolbar_vis,
-            "was_maximized": self.isMaximized(),
-        }
+        """Thin wrapper — see ``MainWindowFullscreenManager.take_snapshot``."""
+        return self._fullscreen.take_snapshot()
 
     def _apply_fullscreen_chrome_hidden(self) -> None:
-        """Collapse side panes, hide bottom navigator bar and main toolbar (no config persist)."""
-        sizes = self.splitter.sizes()
-        total = max(sizes[0] + sizes[1] + sizes[2], 1)
-        self.viewport_resizing.emit()
-        self.splitter.setSizes([0, total, 0])
-        if self.show_left_pane_action is not None:
-            self.show_left_pane_action.setChecked(False)
-        if self.show_right_pane_action is not None:
-            self.show_right_pane_action.setChecked(False)
-        container = getattr(self, "series_navigator_container", None)
-        if container is not None:
-            container.setVisible(False)
-        if hasattr(self, "main_toolbar"):
-            self.main_toolbar.hide()
-        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+        """Thin wrapper — see ``MainWindowFullscreenManager.apply_chrome_hidden``."""
+        self._fullscreen.apply_chrome_hidden()
 
     def _restore_fullscreen_chrome(self, snap: dict[str, Any]) -> None:
-        """Restore splitter, navigator bar, toolbar, and View menu checks from *snap*."""
-        self.viewport_resizing.emit()
-        restored: list[int] = list(snap["splitter_sizes"])
-        if len(restored) == 3:
-            self.splitter.setSizes(restored)
-            if self.show_left_pane_action is not None:
-                self.show_left_pane_action.setChecked(restored[0] > 0)
-            if self.show_right_pane_action is not None:
-                self.show_right_pane_action.setChecked(restored[2] > 0)
-        bar_vis = bool(snap.get("series_navigator_bar_visible", False))
-        self.series_navigator_visible = bar_vis
-        container = getattr(self, "series_navigator_container", None)
-        if container is not None:
-            container.setVisible(bar_vis)
-        if self.show_series_navigator_action is not None:
-            self.show_series_navigator_action.setChecked(bar_vis)
-        tb_vis = bool(snap.get("toolbar_visible", True))
-        if hasattr(self, "main_toolbar"):
-            self.main_toolbar.setVisible(tb_vis)
-        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+        """Thin wrapper — see ``MainWindowFullscreenManager.restore_chrome``."""
+        self._fullscreen.restore_chrome(snap)
 
     def set_fullscreen(self, enable: bool) -> None:
         """
@@ -1178,57 +1152,14 @@ class MainWindow(QMainWindow):
 
         Entering hides left/right panes, the series navigator bar, and the main toolbar
         using a snapshot so leaving restores prior layout without persisting fullscreen
-        as user defaults.
+        as user defaults. Thin wrapper — see ``MainWindowFullscreenManager.set_fullscreen``.
         """
-        if enable:
-            if self.isFullScreen():
-                if self.fullscreen_action is not None:
-                    self.fullscreen_action.setChecked(True)
-                return
-            self._fullscreen_transitioning = True
-            try:
-                self._fullscreen_snapshot = self._take_fullscreen_snapshot()
-                self._apply_fullscreen_chrome_hidden()
-                self.showFullScreen()
-                if self.fullscreen_action is not None:
-                    self.fullscreen_action.setChecked(True)
-            finally:
-                self._fullscreen_transitioning = False
-            return
-
-        # --- exit ---
-        self._fullscreen_transitioning = True
-        try:
-            snap = self._fullscreen_snapshot
-            self._fullscreen_snapshot = None
-            self.showNormal()
-            if snap is not None and snap.get("was_maximized"):
-                self.showMaximized()
-            if snap is not None:
-                self._restore_fullscreen_chrome(snap)
-            if self.fullscreen_action is not None:
-                self.fullscreen_action.setChecked(False)
-        finally:
-            self._fullscreen_transitioning = False
+        self._fullscreen.set_fullscreen(enable)
 
     def changeEvent(self, event: QEvent) -> None:
         """If the user leaves fullscreen via the OS, restore chrome from the snapshot."""
         super().changeEvent(event)
-        if event.type() != QEvent.Type.WindowStateChange:
-            return
-        if self._fullscreen_transitioning:
-            return
-        if not self.isFullScreen() and self._fullscreen_snapshot is not None:
-            self._fullscreen_transitioning = True
-            try:
-                snap = self._fullscreen_snapshot
-                self._fullscreen_snapshot = None
-                if snap is not None:
-                    self._restore_fullscreen_chrome(snap)
-                if self.fullscreen_action is not None:
-                    self.fullscreen_action.setChecked(False)
-            finally:
-                self._fullscreen_transitioning = False
+        self._fullscreen.handle_change_event(event)
 
     def set_window_slot_map_visible(self, visible: bool) -> None:
         """
@@ -1371,20 +1302,7 @@ class MainWindow(QMainWindow):
             event: Close event
         """
         # Avoid persisting fullscreen geometry / forced splitter; restore chrome first
-        if self.isFullScreen():
-            snap = self._fullscreen_snapshot
-            self._fullscreen_snapshot = None
-            self.showNormal()
-            if snap is not None:
-                self._restore_fullscreen_chrome(snap)
-                if snap.get("was_maximized"):
-                    self.showMaximized()
-            if self.fullscreen_action is not None:
-                self.fullscreen_action.setChecked(False)
-        elif self._fullscreen_snapshot is not None:
-            snap = self._fullscreen_snapshot
-            self._fullscreen_snapshot = None
-            self._restore_fullscreen_chrome(snap)
+        self._fullscreen.restore_on_close()
 
         # Close any open 3D volume render dialogs before the main window closes.
         # These are parentless top-level widgets that would otherwise survive the
