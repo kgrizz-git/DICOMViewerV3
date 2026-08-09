@@ -65,3 +65,14 @@ def test_set_mouse_mode_checked_exactly_one_action_and_get_current(qapp, tmp_pat
     assert len(checked_actions) == 1
     assert w.get_current_mouse_mode() == mode
     w.close()
+
+
+@pytest.mark.qt
+def test_mouse_mode_action_maps_round_trip(qapp, tmp_path):
+    """Forward and reverse mouse-mode maps are consistent for all 12 modes."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+    for mode in MOUSE_MODES:
+        action = w._mouse_mode_action_map[mode]
+        assert w._mouse_mode_action_reverse[action] == mode
+        assert w._mouse_mode_action_map[w._mouse_mode_action_reverse[action]] == action
+    w.close()

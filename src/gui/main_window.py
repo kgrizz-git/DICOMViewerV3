@@ -258,6 +258,8 @@ class MainWindow(QMainWindow):
     mouse_mode_select_action: QAction | None = None
     mouse_mode_auto_window_level_action: QAction | None = None
     mouse_mode_group: QActionGroup | None = None
+    _mouse_mode_action_map: dict[str, QAction]
+    _mouse_mode_action_reverse: dict[QAction, str]
     use_rescaled_values_checkbox: QCheckBox | None = None
     series_navigator_action: QAction | None = None
     prev_series_action: QAction | None = None
@@ -327,6 +329,7 @@ class MainWindow(QMainWindow):
         # Create UI components
         self._create_menu_bar()
         self._create_toolbar()
+        self._init_mouse_mode_action_maps()
         self._create_status_bar()
         self._create_central_widget()
         self._toast = MainWindowToastController(self)
@@ -344,6 +347,26 @@ class MainWindow(QMainWindow):
     def _create_toolbar(self) -> None:
         """Create the application toolbar via the toolbar builder."""
         build_main_toolbar(self)
+
+    def _init_mouse_mode_action_maps(self) -> None:
+        """Build mode-string ↔ QAction maps after toolbar actions exist."""
+        self._mouse_mode_action_map = {
+            "select": self.mouse_mode_select_action,
+            "roi_ellipse": self.mouse_mode_ellipse_roi_action,
+            "roi_rectangle": self.mouse_mode_rectangle_roi_action,
+            "measure": self.mouse_mode_measure_action,
+            "measure_angle": self.mouse_mode_measure_angle_action,
+            "text_annotation": self.mouse_mode_text_annotation_action,
+            "arrow_annotation": self.mouse_mode_arrow_annotation_action,
+            "crosshair": self.mouse_mode_crosshair_action,
+            "zoom": self.mouse_mode_zoom_action,
+            "magnifier": self.mouse_mode_magnifier_action,
+            "pan": self.mouse_mode_pan_action,
+            "auto_window_level": self.mouse_mode_auto_window_level_action,
+        }
+        self._mouse_mode_action_reverse = {
+            action: mode for mode, action in self._mouse_mode_action_map.items()
+        }
 
     def _create_status_bar(self) -> None:
         """Create the status bar (delegated to MainWindowStatusController)."""
@@ -740,58 +763,20 @@ class MainWindow(QMainWindow):
         Args:
             mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
-        # Uncheck all actions first
-        all_actions = [
-            self.mouse_mode_select_action,
-            self.mouse_mode_ellipse_roi_action,
-            self.mouse_mode_rectangle_roi_action,
-            self.mouse_mode_measure_action,
-            self.mouse_mode_measure_angle_action,
-            self.mouse_mode_text_annotation_action,
-            self.mouse_mode_arrow_annotation_action,
-            self.mouse_mode_crosshair_action,
-            self.mouse_mode_zoom_action,
-            self.mouse_mode_magnifier_action,
-            self.mouse_mode_pan_action,
-            self.mouse_mode_auto_window_level_action
-        ]
+        all_actions = list(self._mouse_mode_action_map.values())
 
         # Block signals when updating toolbar buttons to prevent recursive loops
         # This prevents setChecked() from triggering the action's triggered signal
         for action in all_actions:
             action.blockSignals(True)
 
-        # Uncheck all actions
         for action in all_actions:
             action.setChecked(False)
 
-        # Check the action corresponding to the selected mode
-        if mode == "select":
-            self.mouse_mode_select_action.setChecked(True)
-        elif mode == "roi_ellipse":
-            self.mouse_mode_ellipse_roi_action.setChecked(True)
-        elif mode == "roi_rectangle":
-            self.mouse_mode_rectangle_roi_action.setChecked(True)
-        elif mode == "measure":
-            self.mouse_mode_measure_action.setChecked(True)
-        elif mode == "measure_angle":
-            self.mouse_mode_measure_angle_action.setChecked(True)
-        elif mode == "text_annotation":
-            self.mouse_mode_text_annotation_action.setChecked(True)
-        elif mode == "arrow_annotation":
-            self.mouse_mode_arrow_annotation_action.setChecked(True)
-        elif mode == "crosshair":
-            self.mouse_mode_crosshair_action.setChecked(True)
-        elif mode == "zoom":
-            self.mouse_mode_zoom_action.setChecked(True)
-        elif mode == "magnifier":
-            self.mouse_mode_magnifier_action.setChecked(True)
-        elif mode == "pan":
-            self.mouse_mode_pan_action.setChecked(True)
-        elif mode == "auto_window_level":
-            self.mouse_mode_auto_window_level_action.setChecked(True)
+        selected_action = self._mouse_mode_action_map.get(mode)
+        if selected_action is not None:
+            selected_action.setChecked(True)
 
-        # Unblock signals after updating toolbar buttons
         for action in all_actions:
             action.blockSignals(False)
 
@@ -805,30 +790,10 @@ class MainWindow(QMainWindow):
         Returns:
             Current mouse mode string ("select", "roi_ellipse", "roi_rectangle", "measure", "text_annotation", "arrow_annotation", "zoom", "pan", "auto_window_level")
         """
-        if self.mouse_mode_select_action.isChecked():
-            return "select"
-        elif self.mouse_mode_ellipse_roi_action.isChecked():
-            return "roi_ellipse"
-        elif self.mouse_mode_rectangle_roi_action.isChecked():
-            return "roi_rectangle"
-        elif self.mouse_mode_measure_action.isChecked():
-            return "measure"
-        elif self.mouse_mode_measure_angle_action.isChecked():
-            return "measure_angle"
-        elif self.mouse_mode_text_annotation_action.isChecked():
-            return "text_annotation"
-        elif self.mouse_mode_arrow_annotation_action.isChecked():
-            return "arrow_annotation"
-        elif self.mouse_mode_crosshair_action.isChecked():
-            return "crosshair"
-        elif self.mouse_mode_zoom_action.isChecked():
-            return "zoom"
-        elif self.mouse_mode_magnifier_action.isChecked():
-            return "magnifier"
-        elif self.mouse_mode_auto_window_level_action.isChecked():
-            return "auto_window_level"
-        else:  # pan is default
-            return "pan"
+        for action in self._mouse_mode_action_map.values():
+            if action.isChecked():
+                return self._mouse_mode_action_reverse[action]
+        return "pan"  # default when nothing is checked
 
     def set_mouse_mode_checked(self, mode: str) -> None:
         """
@@ -840,57 +805,18 @@ class MainWindow(QMainWindow):
         Args:
             mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
-        # All mouse mode actions
-        all_actions = [
-            self.mouse_mode_select_action,
-            self.mouse_mode_ellipse_roi_action,
-            self.mouse_mode_rectangle_roi_action,
-            self.mouse_mode_measure_action,
-            self.mouse_mode_measure_angle_action,
-            self.mouse_mode_text_annotation_action,
-            self.mouse_mode_arrow_annotation_action,
-            self.mouse_mode_crosshair_action,
-            self.mouse_mode_zoom_action,
-            self.mouse_mode_magnifier_action,
-            self.mouse_mode_pan_action,
-            self.mouse_mode_auto_window_level_action
-        ]
+        all_actions = list(self._mouse_mode_action_map.values())
 
-        # Block signals when updating toolbar buttons
         for action in all_actions:
             action.blockSignals(True)
 
-        # Uncheck all actions
         for action in all_actions:
             action.setChecked(False)
 
-        # Check the action corresponding to the selected mode
-        if mode == "select":
-            self.mouse_mode_select_action.setChecked(True)
-        elif mode == "roi_ellipse":
-            self.mouse_mode_ellipse_roi_action.setChecked(True)
-        elif mode == "roi_rectangle":
-            self.mouse_mode_rectangle_roi_action.setChecked(True)
-        elif mode == "measure":
-            self.mouse_mode_measure_action.setChecked(True)
-        elif mode == "measure_angle":
-            self.mouse_mode_measure_angle_action.setChecked(True)
-        elif mode == "text_annotation":
-            self.mouse_mode_text_annotation_action.setChecked(True)
-        elif mode == "arrow_annotation":
-            self.mouse_mode_arrow_annotation_action.setChecked(True)
-        elif mode == "crosshair":
-            self.mouse_mode_crosshair_action.setChecked(True)
-        elif mode == "zoom":
-            self.mouse_mode_zoom_action.setChecked(True)
-        elif mode == "magnifier":
-            self.mouse_mode_magnifier_action.setChecked(True)
-        elif mode == "pan":
-            self.mouse_mode_pan_action.setChecked(True)
-        elif mode == "auto_window_level":
-            self.mouse_mode_auto_window_level_action.setChecked(True)
+        selected_action = self._mouse_mode_action_map.get(mode)
+        if selected_action is not None:
+            selected_action.setChecked(True)
 
-        # Unblock signals after updating toolbar buttons
         for action in all_actions:
             action.blockSignals(False)
 
