@@ -7,11 +7,11 @@
 
 ## Interaction with POST_REVIEW_BUGFIXES_2026_08_08
 
-No direct file overlap. The bugfix plan touches 10 coordinator/controller files;
+No direct file overlap. The bugfix plan touches coordinator/controller files;
 this refactor touches `main_window.py` and creates new files. **Required order:**
-1. Land the post-review bugfix PR first (surgical, independent).
-2. Land **Phase 0 characterization tests** on this (or a follow-on) branch and
-   keep them green.
+1. ~~Land the post-review bugfix PR first~~ — **done** on
+   `bugfix/post-review-cleanup` (including #8A).
+2. ~~Land **Phase 0 characterization tests**~~ — **done** (gate checklist green).
 3. Only then begin extractions #1–#6, one commit each.
 
 If done in another order, the bugfix's `MainWindowLayoutHelper` log fix still
