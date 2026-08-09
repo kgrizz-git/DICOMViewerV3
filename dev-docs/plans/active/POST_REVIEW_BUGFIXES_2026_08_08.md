@@ -2,10 +2,32 @@
 
 **Date:** 2026-08-08
 **Status:** Active
-**Last reviewed:** 2026-08-09
+**Last reviewed:** 2026-08-09 (PR scope tagged)
 
 ## Overview
 This plan tracks bugs, edge-case flaws, and architectural improvements identified by subagent code reviews during the test coverage expansion effort. Per project policy, these findings were isolated rather than fixed in-flight during the test-writing phase.
+
+## PR scope (planned)
+
+The following items are selected for a single bug-fix + cleanup PR.
+
+**Bug fixes:**
+- 3 — `TagExportUnionHost`: `time.time()` → `time.monotonic()`
+- 4A/4B — `SliceLocationLineCoordinator`: manager init guard + pending refresh drain
+- 5A — `TextAnnotationCoordinator`: pop stale move-tracking on deletion
+- 14A — `CineControlsWidget`: `set_speed` float formatting mismatch
+- 14B — `CineControlsWidget`: refresh tooltip on zero frames
+- 15A — `CinePlayer`: allow single multi-frame DICOM into cine path
+- 17B — `CrosshairCoordinator`: reuse QTimer instead of allocating per-move
+- 21A — `study_index_config`: deduplicate column-order normalization
+
+**Cleanups:**
+- 6A — `LayoutWindowSlotController`: extract hardcoded max slot constant
+- 6B — `LayoutWindowSlotController`: `app.config_manager` consistency
+- 12A — `MainWindowLayoutHelper`: log instead of silently swallowing exceptions
+- 17A — `CrosshairCoordinator`: remove dead `if commands:` branch
+- 18A — `DialogCoordinator`: remove unreachable dead code in `open_histogram`
+- 18B — `DialogCoordinator`: wire or remove unused `handle_settings_applied` stub
 
 ## Review recommendations (2026-08-09)
 
@@ -18,12 +40,12 @@ current defect.
 | --- | --- | --- |
 | 1 | Plausible smooth-scroll UX problem; threshold selection changes normal wheel behavior. | Validate with a physical smooth-scrolling device, then implement an accumulator with focused interaction tests. |
 | 2 | First-seen is a valid tag-catalog policy; value aggregation is a product decision. | Do not change without a tag-export UX requirement. |
-| 3 | Valid timeout robustness issue. | Use `time.monotonic()` and test elapsed-time behavior. |
-| 4A–4B | Valid coordinator invariants; public single-view refresh can lose work. | Fix manager creation and drain the pending refresh in the single-view `finally` path. |
-| 5A | Valid stale-reference issue after annotation deletion. | Remove tracking entries on deletion; cover direct and undo/redo deletion. |
+| 3 | Valid timeout robustness issue. | **[PR]** Use `time.monotonic()` and test elapsed-time behavior. |
+| 4A–4B | Valid coordinator invariants; public single-view refresh can lose work. | **[PR]** Fix manager creation and drain the pending refresh in the single-view `finally` path. |
+| 5A | Valid stale-reference issue after annotation deletion. | **[PR]** Remove tracking entries on deletion; cover direct and undo/redo deletion. |
 | 5B | No concurrent pointer drag exists in the normal Qt interaction model. | Do not add per-item timers unless an actual lost-move reproduction appears. |
-| 6A | The application currently supports exactly four slots. | Treat as future layout-expansion work, not a bug. |
-| 6B | Consistency improvement only; production main window owns the config manager. | Fold into a future cleanup if the popup wiring is touched. |
+| 6A | The application currently supports exactly four slots. | **[PR]** Extract hardcoded constant; future layout-expansion work deferred. |
+| 6B | Consistency improvement only; production main window owns the config manager. | **[PR]** Align to `app.config_manager`. |
 | 7A–7B | Possible cursor-state hardening, but no user-visible stale-cursor reproduction. | Defer until reproduced; test against real cursor objects rather than mocks. |
 | 8A | A harmless startup/teardown guard would improve resilience. | Add the layout guard if lifecycle work touches this module. |
 | 8B | `privacy_view_enabled` is an application initialization contract. | Do not add a fallback solely for partial mocks. |
@@ -31,17 +53,17 @@ current defect.
 | 10A | Helpers receive trusted preset colors only. | Do not add validation without an untrusted color input path. |
 | 10B | Plausible frozen-build resilience improvement, unverified. | Reproduce in a frozen-build test before changing resource lookup. |
 | 11A–11B | Fallback immediately raises a clear error; undo/redo callbacks require a fully initialized app. | Do not change for artificial partial-app fixtures. |
-| 12A | Silent exception handling is observability debt. | Add sanitized logging in a focused cleanup. |
+| 12A | Silent exception handling is observability debt. | **[PR]** Add sanitized logging in a focused cleanup. |
 | 12B | `rescale_toggle_changed` is a required MainWindow signal. | Do not add a fallback. |
 | 13 | Signal wiring is intentionally called only after complete app construction. | Do not weaken wiring with broad `hasattr` guards. |
-| 14A–14B | Both are reproducible cine-control defects. | Fix `set_speed` formatting and refresh the bounds tooltip on zero frames. |
-| 15A | Single multi-frame DICOM files are incorrectly rejected. | Fix and add a real multi-frame regression test. |
+| 14A–14B | Both are reproducible cine-control defects. | **[PR]** Fix `set_speed` formatting and refresh the bounds tooltip on zero frames. |
+| 15A | Single multi-frame DICOM files are incorrectly rejected. | **[PR]** Fix and add a real multi-frame regression test. |
 | 16A | Cine playback itself is forward-only and normalizes bounds. | Do not introduce reverse export without a full reverse-playback feature. |
 | 16B | Internal rasterization flattens RGBA before PNG output. | Do not change absent an external RGBA-path contract. |
-| 17A | Dead branch only. | Remove during cleanup if desired. |
-| 17B | Replacing the unparented Python-owned timer does not establish a Qt memory leak. | Do not rewrite without a profiler-backed problem. |
-| 18A | Harmless defensive branch. | Optional cleanup only. |
-| 18B | Settings callbacks are wired directly when dialogs are opened; the stub is unused. | Remove or document the stub rather than invoking callbacks twice. |
+| 17A | Dead branch only. | **[PR]** Remove during cleanup. |
+| 17B | Replacing the unparented Python-owned timer does not establish a Qt memory leak. | **[PR]** Reuse timer in `__init__` to avoid per-move allocation. |
+| 18A | Harmless defensive branch. | **[PR]** Remove dead code. |
+| 18B | Settings callbacks are wired directly when dialogs are opened; the stub is unused. | **[PR]** Remove or document the stub rather than invoking callbacks twice. |
 | 19A | Normal hide paths reset opacity before the next reveal. | Do not change unless an external caller reproduces it. |
 | 19B | The single-shot timer is inactive once it fires. | Do not change. |
 
@@ -152,7 +174,7 @@ current defect.
 ## Coverage-Effort Findings (2026-08-09)
 
 ### 21. `set_study_index_browser_column_order` (`src/utils/config/study_index_config.py`)
-*   **Issue 21A (genuine bug):** Non-deduplicating column-order normalization.
+*   **Issue 21A (genuine bug): [PR]** Non-deduplicating column-order normalization.
     In `set_study_index_browser_column_order`, `cleaned` is built by keeping only
     known ids (`[str(x) for x in column_ids if x in known]`), then if
     `len(cleaned) != len(known)` the loop appends every missing default id. If
