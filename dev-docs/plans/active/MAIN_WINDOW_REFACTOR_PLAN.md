@@ -1,17 +1,22 @@
 # MainWindow Refactoring Plan
 
 **Date:** 2026-08-09
-**Status:** Draft (reviewed x2 + assessment)
+**Status:** Blocked on Phase 0 (required) — do not extract until Phase 0 is green
+**Last updated:** 2026-08-09
 **Target:** `src/gui/main_window.py` (1,777 lines, 75 methods)
 
 ## Interaction with POST_REVIEW_BUGFIXES_2026_08_08
 
 No direct file overlap. The bugfix plan touches 10 coordinator/controller files;
-this refactor touches `main_window.py` and creates new files. **Recommended order:**
-land bugfix PR first (small, surgical, independent), then this refactor on a
-separate branch. If done in the other order, the bugfix's `closeEvent` cleanup
-and `MainWindowLayoutHelper` log fix still apply cleanly because they don't touch
-the extracted paths.
+this refactor touches `main_window.py` and creates new files. **Required order:**
+1. Land the post-review bugfix PR first (surgical, independent).
+2. Land **Phase 0 characterization tests** on this (or a follow-on) branch and
+   keep them green.
+3. Only then begin extractions #1–#6, one commit each.
+
+If done in another order, the bugfix's `MainWindowLayoutHelper` log fix still
+applies cleanly because it does not touch the extracted paths — but skipping
+Phase 0 is not allowed.
 
 Indirect coupling to be aware of:
 - The refactor's overlay mixin restructures the signal-toggle methods that
@@ -79,10 +84,14 @@ stays in MainWindow (it's also called from `main_window_menu_builder.py:700`).
 **File:** `src/gui/main_window_toast_controller.py`
 **Lines removed from MainWindow:** ~80 (L371-448)
 **State moved:** `_toast_label`, `_toast_effect`, `_toast_timer`, `_toast_animation`
-**Methods moved:** `show_toast_message`
-**Interface:** Controller takes `parent QWidget` in constructor. MainWindow calls
-`self._toast.show(message, ...)` instead of `self.show_toast_message(...)`.
-**Risk:** Low — fully self-contained, no signal wiring.
+**Methods moved:** implementation of toast show/place/fade (controller-owned)
+**Interface:** Controller takes `parent QWidget` in constructor. MainWindow **keeps**
+a public `show_toast_message(...)` thin wrapper that delegates to
+`self._toast.show(...)`. Do **not** remove or rename the public method — it is
+on the external contract checklist and covered by `tests/test_main_window_toast.py`.
+**Risk:** Low — fully self-contained, no signal wiring. Update toast tests that
+read private attrs (`w._toast_label`) to go through the controller or a stable
+test helper if ownership moves.
 
 ### 3. Consolidate mouse-mode action mapping (in-place)
 **File:** `src/gui/main_window.py` (in-place refactor)
@@ -182,14 +191,38 @@ Net removals: 125 + 80 + 130 + 145 + 150 + 230 = ~860 lines.
    cut is after this lands; otherwise MAINTENANCE_LOG is sufficient
 4. Move this plan to `dev-docs/plans/completed/` when done
 
-## Phase 0 — characterization tests
+## Phase 0 — characterization tests (**REQUIRED gate**)
 
-Add these **before** extraction #1 on a separate commit. They test current behavior;
-once green, they become the regression net for the whole batch. Use the shared
-`tests/conftest.py` `qapp` fixture (not a local one), `@pytest.mark.qt`,
-`QT_QPA_PLATFORM=offscreen`.
+**Do not start any extraction (#1–#6) until Phase 0 is complete and green.**
 
-### 1. `tests/test_main_window_about_dialog.py`
+Phase 0 is a hard go/no-go gate, not optional scaffolding. Add these on a
+**separate commit (or PR) before extraction #1**. They pin current behavior; once
+green, they are the regression net for the whole batch.
+
+**Existing coverage to reuse (do not duplicate blindly):**
+- `tests/test_main_window_toast.py` — toast placement/alpha (keep `show_toast_message`)
+- `tests/test_main_window_fullscreen.py` — chrome snapshot helpers, F11 shortcuts,
+  overlay font toolbar nudge (extend; do not replace)
+
+Use the shared `tests/conftest.py` `qapp` fixture (not a local one),
+`@pytest.mark.qt`, `QT_QPA_PLATFORM=offscreen`. Prefer asserting public
+`MainWindow` APIs over private attrs so extractions do not churn tests. Where
+today’s tests already touch privates (`_toast_label`, `_take_fullscreen_snapshot`),
+either keep those methods reachable during extraction or migrate the asserts in
+the same commit as the move.
+
+### Go / no-go checklist (all required)
+
+- [ ] Phase 0 tests listed below exist and pass
+- [ ] Full suite green: `python -m pytest tests/ -v`
+- [ ] Architecture boundaries green: `python scripts/check_architecture_boundaries.py`
+- [ ] Agent smoke green: `python scripts/agent_smoke_harness.py`
+- [ ] Post-review bugfix PR already landed (or its fixes are already on the
+      branch) so xfails for in-scope defects are not masking MainWindow work
+
+Only after every box is checked may extraction #1 begin.
+
+### 1. `tests/test_main_window_about_dialog.py` (**required**)
 Open `MainWindow`, call `_show_about()`, assert:
 - Dialog `windowTitle` is `"About DICOM Viewer V3"`
 - Dialog is visible
@@ -197,52 +230,69 @@ Open `MainWindow`, call `_show_about()`, assert:
 - Disclaimer link callback fires with `force_show=True` (monkeypatch
   `DisclaimerDialog.show_disclaimer`)
 
-### 2. `tests/test_main_window_recent_files.py`
+### 2. `tests/test_main_window_recent_files.py` (**required** — highest risk)
 Use a temp `ConfigManager` with 3 recent entries. Assert:
 - `_update_recent_menu()` builds N actions matching config order
 - `update_recent_menu()` (public wrapper) has same effect
 - Right-click context menu offers "Remove" + "Move up/down"
 - Invoking them updates config + re-renders
 - `_open_edit_recent_list_dialog()` opens the dialog (assert visible + cancel)
+- After extraction #4, the manager-owned `eventFilter` still drives the same
+  context-menu behavior (no MainWindow `eventFilter` override)
 
-### 3. `tests/test_main_window_mouse_mode_map.py`
+### 3. `tests/test_main_window_mouse_mode_map.py` (**required**)
 For each of 12 mode strings, assert:
 - `set_mouse_mode_checked(mode)` makes exactly one QAction checked
 - `get_current_mouse_mode()` returns that mode
-- After extraction: `reverse_map[action] == mode ↔ map[mode] == action` for all 12
+- After extraction #3: `reverse_map[action] == mode ↔ map[mode] == action` for all 12
 
-### 4. Extend `tests/test_main_window_fullscreen.py`
-Add two cases:
-- (a) Enter fullscreen, send `closeEvent` while in fullscreen; assert snapshot cleared
-- (b) Fullscreen exit restores chrome (splitter sizes, navigator, toolbar)
+### 4. Extend `tests/test_main_window_fullscreen.py` (**required**)
+Add two cases (in addition to existing chrome-helper coverage):
+- (a) Enter fullscreen via `set_fullscreen(True)`, send `closeEvent` while in
+  fullscreen; assert snapshot cleared / restore-on-close path ran
+- (b) Fullscreen exit via `set_fullscreen(False)` restores chrome (splitter
+  sizes, navigator, toolbar visibility)
 
-### 5. `tests/test_main_window_overlay_options.py`
+Prefer public `set_fullscreen` over calling `_apply_fullscreen_chrome_hidden`
+directly for these new cases.
+
+### 5. `tests/test_main_window_overlay_options.py` (**required**)
 For each of the 6 toggles + slice_location_lines_*:
 - `set_*_checked(b)` flips the action's checked state
 - Signal `*_toggled` is emitted with new value
 - `blockSignals(True)` path does NOT emit
- Font: `adjust_overlay_font_size(+1)` then `(-1)` returns to original.
-Also test `set_3d_view_actions_enabled(enabled, tooltip)`: assert it enables/disables the action and sets the tooltip.
+Font: `adjust_overlay_font_size(+1)` then `(-1)` returns to original.
+Also test `set_3d_view_actions_enabled(enabled, tooltip)`: assert it enables /
+disables the action and sets the tooltip.
 
-### 6. (Optional) `tests/test_main_window_overlay_options_contract.py`
-Non-Qt contract test: `hasattr(MainWindow, "privacy_view_toggled")` and all
-method names from the external contract checklist.
+### 6. `tests/test_main_window_overlay_options_contract.py` (**required**)
+Non-Qt (or light Qt) contract test: `hasattr(MainWindow, name)` for every
+signal and method on the external contract checklist (including
+`show_toast_message`, `update_recent_menu`, `set_fullscreen`, overlay
+`set_*_checked` family, `set_show_instances_separately_enabled`,
+`set_3d_view_actions_enabled`). Cheap safety net against accidental renames
+during mixin/controller moves.
 
 ## Extraction order
 
+**Prerequisite:** Phase 0 go/no-go checklist complete.
+
 1. `_show_about` → about dialog (standalone, disclaimer callback)
-2. Toast controller (self-contained, no signal wiring)
+2. Toast controller (self-contained; keep public `show_toast_message` wrapper)
 3. Mouse-mode action map (in-place; includes `get_current_mouse_mode`)
 4. Recent files manager (manager installs own eventFilter; MainWindow's removed)
 5. Fullscreen manager + `closeEvent` + `changeEvent` (must ship together)
 6. Overlay options mixin (largest, but mechanical; includes font/color pickers)
 
 Each extraction is a separate commit on this branch so each can be reverted independently.
+Do not combine Phase 0 and an extraction in the same commit.
 
 ## Verification
 
-After Phase 0:
+After Phase 0 (gate):
 1. `python -m pytest tests/ -v` — full suite (baseline green)
+2. `python scripts/check_architecture_boundaries.py`
+3. `python scripts/agent_smoke_harness.py`
 
 After each extraction:
 1. `python -m pytest tests/ -v` — full suite (regression signal)
