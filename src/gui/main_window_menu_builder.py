@@ -8,8 +8,8 @@ signals and methods.
 Inputs:
     - MainWindow instance (or any object with the required signals, config_manager,
       and methods: _set_theme, _on_layout_changed, _open_edit_recent_list_dialog,
-      _show_disclaimer, _show_about, _update_recent_menu, menuBar(), and
-      installEventFilter).  privacy_action must already exist on main_window.
+      _show_disclaimer, _show_about, _update_recent_menu, and menuBar()).
+      privacy_action must already exist on main_window.
 
 Outputs:
     - A populated menu bar attached to the main window.
@@ -17,6 +17,12 @@ Outputs:
       copy_annotation_action, layout_1x1_action) for use by MainWindow and callers.
     - ``_menu_icon_registry`` list on main_window for theme-refresh (read by the
       toolbar builder's ``refresh_toolbar_icon_theme`` closure).
+    - ``main_window._recent_files``: a ``MainWindowRecentFilesManager`` constructed
+      here (right after the "Recent" QMenu is created) and stored on the main
+      window — this is the single ownership point for the recent-files manager.
+      It installs its own event filter on ``recent_menu`` for the context menu
+      (Remove / Move Up / Move Down), so ``MainWindow`` no longer needs (or
+      defines) an ``eventFilter`` override for this purpose.
 
 Requirements:
     - PySide6 (QAction, QKeySequence, QMenu)
@@ -26,6 +32,7 @@ Requirements:
 
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
+from gui.main_window_recent_files_manager import MainWindowRecentFilesManager
 from gui.main_window_toolbar_builder import _icon, _icon_color
 
 _TOOLTIP_ASYMMETRIC_3PANE = "Asymmetric 3-pane (key 3)"
@@ -85,7 +92,12 @@ def build_menu_bar(main_window) -> None:
     file_menu.addSeparator()
 
     main_window.recent_menu = file_menu.addMenu("&Recent")
-    main_window.recent_menu.installEventFilter(main_window)
+    # Single ownership point: the manager installs its own event filter on
+    # recent_menu for the context menu (Remove / Move Up / Move Down), so
+    # MainWindow does not need an eventFilter override for this anymore.
+    main_window._recent_files = MainWindowRecentFilesManager(
+        main_window, main_window.recent_menu, main_window.config_manager
+    )
     main_window._update_recent_menu()
 
     edit_recent_list_action = QAction("Edit Recent List...", main_window)

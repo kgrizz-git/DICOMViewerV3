@@ -2,6 +2,17 @@
 Characterization tests for MainWindow recent-files menu and list management.
 
 Uses isolated ConfigManager(config_dir=...) and headless QApplication.
+
+Post-extraction-#4 note: the recent-files menu rebuild, context menu (former
+``MainWindow.eventFilter``), remove/move, and edit-list dialog now live in
+``gui.main_window_recent_files_manager.MainWindowRecentFilesManager``
+(``main_window._recent_files``). MainWindow keeps thin wrapper methods
+(``_update_recent_menu``, ``_remove_recent_file``, ``_move_recent_file``,
+``_open_edit_recent_list_dialog``, ``update_recent_menu``) that delegate to
+the manager, so most of these tests still call them directly on
+``main_window``. The context-menu test now calls the manager's
+``eventFilter`` (``MainWindow.eventFilter`` was removed entirely), and the
+``QMenu`` / ``EditRecentListDialog`` patches target the manager module.
 """
 
 from __future__ import annotations
@@ -78,7 +89,8 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
     """Context-menu path must offer Remove / Move without blocking on QMenu.exec.
 
     PySide6 C++ ``QMenu.exec`` is not reliably monkeypatchable on the class;
-    replace ``gui.main_window.QMenu`` for the popup constructed inside eventFilter.
+    replace ``gui.main_window_recent_files_manager.QMenu`` for the popup
+    constructed inside the manager's ``eventFilter``.
     """
     paths = ["/data/first", "/data/second", "/data/third"]
     _seed_recent_files(config_manager, paths)
@@ -110,7 +122,7 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
             )
             return None
 
-    monkeypatch.setattr("gui.main_window.QMenu", _FakeContextMenu)
+    monkeypatch.setattr("gui.main_window_recent_files_manager.QMenu", _FakeContextMenu)
 
     global_pos = QPoint(300, 300)
     local_pos = main_window.recent_menu.mapFromGlobal(global_pos)
@@ -119,7 +131,7 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
         local_pos,
         global_pos,
     )
-    handled = main_window.eventFilter(main_window.recent_menu, event)
+    handled = main_window._recent_files.eventFilter(main_window.recent_menu, event)
 
     assert handled is True
     assert len(captured_labels) == 1
@@ -175,7 +187,7 @@ def test_open_edit_recent_list_dialog_constructs_and_refreshes_menu(
             return 0
 
     monkeypatch.setattr(
-        "gui.main_window.EditRecentListDialog",
+        "gui.main_window_recent_files_manager.EditRecentListDialog",
         _FakeEditRecentListDialog,
     )
 
@@ -196,3 +208,10 @@ def test_update_recent_menu_shows_disabled_placeholder_when_empty(main_window):
     assert len(actions) == 1
     assert actions[0].text() == "No recent files"
     assert actions[0].isEnabled() is False
+
+
+@pytest.mark.qt
+def test_main_window_no_longer_defines_event_filter(main_window):
+    """MainWindow.eventFilter was removed entirely; the manager owns it now."""
+    assert "eventFilter" not in type(main_window).__dict__
+    assert "eventFilter" in type(main_window._recent_files).__dict__

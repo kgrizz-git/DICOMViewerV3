@@ -62,8 +62,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
 from gui.main_window_menu_builder import build_menu_bar
+from gui.main_window_recent_files_manager import MainWindowRecentFilesManager
 from gui.main_window_status_controller import MainWindowStatusController
 from gui.main_window_toast_controller import MainWindowToastController
 from gui.main_window_toolbar_builder import build_main_toolbar
@@ -198,6 +198,9 @@ class MainWindow(QMainWindow):
 
     # Filled by build_menu_bar in _create_menu_bar (Optional until menu is built).
     recent_menu: QMenu | None = None
+    # Owns Recent-files menu rebuild/context-menu/edit-dialog; constructed by
+    # build_menu_bar immediately after recent_menu (single ownership point).
+    _recent_files: MainWindowRecentFilesManager | None = None
     light_theme_action: QAction | None = None
     dark_theme_action: QAction | None = None
     privacy_action: QAction | None = None  # Shared by View menu and toolbar
@@ -899,150 +902,40 @@ class MainWindow(QMainWindow):
         self.series_navigation_requested.emit(1)
 
     def _update_recent_menu(self) -> None:
-        """Update the Recent Files submenu with current recent files."""
-        if self.recent_menu is None:
-            return
-        # Clear existing actions
-        self.recent_menu.clear()
-
-        # Get recent files from config
-        recent_files = self.config_manager.get_recent_files()
-
-        if not recent_files:
-            # Show "No recent files" if empty
-            no_recent_action = QAction("No recent files", self)
-            no_recent_action.setEnabled(False)
-            self.recent_menu.addAction(no_recent_action)
-        else:
-            # Add action for each recent file using regular QAction for native appearance
-            for file_path in recent_files:
-                # Create display name (truncate if too long)
-                display_name = os.path.basename(file_path)
-
-                # Handle edge case where basename returns empty string
-                # (e.g., root directory, trailing slashes, etc.)
-                if not display_name:
-                    # Use the full path as fallback (truncated if needed)
-                    display_name = file_path
-                    if len(display_name) > 50:
-                        display_name = display_name[:47] + "..."
-
-                    # If path is root directory or still empty, use default label
-                    if not display_name or display_name in (os.path.sep, "/"):
-                        display_name = "Folder" if os.path.isdir(file_path) else "File"
-                else:
-                    # Normal basename case - truncate if too long
-                    if len(display_name) > 50:
-                        display_name = display_name[:47] + "..."
-
-                # Create regular QAction with just the display name (no prefixes)
-                recent_action = QAction(display_name, self)
-                # Store file path in action data for event filter
-                recent_action.setData(file_path)
-                # Connect triggered signal to open the file
-                recent_action.triggered.connect(
-                    lambda checked, path=file_path: self.open_recent_file_requested.emit(path)
-                )
-                self.recent_menu.addAction(recent_action)
-
-    def eventFilter(self, obj, event) -> bool:
-        """
-        Event filter for handling context menu events on recent menu items.
-        
-        Args:
-            obj: Object that received the event
-            event: Event
-            
-        Returns:
-            True if event was handled, False otherwise
-        """
-        from PySide6.QtGui import QContextMenuEvent
-
-        # Only handle events for the recent menu
-        if self.recent_menu is None or obj != self.recent_menu:
-            return super().eventFilter(obj, event)
-
-        # Check if it's a context menu event (right-click)
-        if event.type() == QEvent.Type.ContextMenu:
-            context_event = QContextMenuEvent(event)
-            # Get the action at the mouse position
-            action = self.recent_menu.actionAt(self.recent_menu.mapFromGlobal(context_event.globalPos()))
-
-            # Only show context menu if it's a recent file action (has data)
-            if action is not None and action.data():
-                file_path = action.data()
-                recent_files = self.config_manager.get_recent_files()
-                file_idx = recent_files.index(file_path) if file_path in recent_files else -1
-
-                # Create context menu
-                context_menu = QMenu(self)
-
-                move_up_action = QAction("Move Up", self)
-                move_up_action.setEnabled(file_idx > 0)
-                move_up_action.triggered.connect(
-                    lambda checked=False, fp=file_path: self._move_recent_file(fp, direction="up")
-                )
-                context_menu.addAction(move_up_action)
-
-                move_down_action = QAction("Move Down", self)
-                move_down_action.setEnabled(0 <= file_idx < len(recent_files) - 1)
-                move_down_action.triggered.connect(
-                    lambda checked=False, fp=file_path: self._move_recent_file(fp, direction="down")
-                )
-                context_menu.addAction(move_down_action)
-
-                context_menu.addSeparator()
-
-                remove_action = QAction("Remove", self)
-                remove_action.triggered.connect(
-                    lambda checked=False, fp=file_path: self._remove_recent_file(fp)
-                )
-                context_menu.addAction(remove_action)
-
-                # Show context menu at the cursor position
-                context_menu.exec(context_event.globalPos())
-                return True
-
-        return super().eventFilter(obj, event)
+        """Update the Recent Files submenu with current recent files (delegates to manager)."""
+        self._recent_files.update()
 
     def _remove_recent_file(self, file_path: str) -> None:
         """
-        Remove a file from recent files list.
-        
+        Remove a file from recent files list (delegates to manager).
+
         Args:
             file_path: Path to file or folder to remove
         """
-        self.config_manager.remove_recent_file(file_path)
-        self._update_recent_menu()
+        self._recent_files.remove(file_path)
 
     def _move_recent_file(self, file_path: str, direction: str) -> None:
         """
-        Move a recent file one position up or down in the recent files list.
+        Move a recent file one position up or down in the recent files list
+        (delegates to manager).
 
         Args:
             file_path: Path of the recent file entry to move
             direction: "up" to move toward the top, "down" to move toward the bottom
         """
-        if direction == "up":
-            self.config_manager.move_recent_file_up(file_path)
-        else:
-            self.config_manager.move_recent_file_down(file_path)
-        self._update_recent_menu()
+        self._recent_files.move(file_path, direction)
 
     def update_recent_menu(self) -> None:
         """
-        Public method to update recent menu (called from outside).
+        Public method to update recent menu (called from outside), delegates to manager.
         """
-        self._update_recent_menu()
+        self._recent_files.update()
 
     def _open_edit_recent_list_dialog(self) -> None:
         """
-        Open the Edit Recent List dialog.
+        Open the Edit Recent List dialog (delegates to manager).
         """
-        dialog = EditRecentListDialog(self.config_manager, self)
-        dialog.exec()
-        # Update the recent menu after dialog closes (in case items were removed)
-        self._update_recent_menu()
+        self._recent_files.open_edit_dialog()
 
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         """
