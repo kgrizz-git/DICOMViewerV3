@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-10
 
 ---
 
@@ -177,8 +177,9 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Do we allow cine playback of multiple windows? We should be able to play each window's cine in sync, or independently, or a combination of both, ideally
 - [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
 - [ ] **[P1]** 3D visualization of DICOM datasets — **Partial:** VTK volume render shipped (`volume_renderer.py`, `VolumeRenderDialog`, toolbar **3D View**): presets (CT/MR + threshold), global opacity, W/L sync on preset change, modality-aware default preset, trackball navigation, background volume build. Open plan items below. **Plan:** [3D Volume Rendering](plans/3D_VOLUME_RENDERING_PLAN.md)
+    - [ ] **[P1]** **3D first-paint responsiveness:** **Partial:** implemented Fast preview, byte-size Auto Detail caps, Fast GPU blank-frame fallback, elapsed-time-gated automatic refinement, non-modal feedback, and timer-safe close. Required manual large-volume / integrated-GPU / Parallels timing matrix remains before the plan can be archived. **Plan:** [3D Viewer First-Paint Responsiveness](plans/active/3D_VIEWER_FIRST_PAINT_RESPONSIVENESS_PLAN.md)
     - [ ] **[P1]** **3D viewer appearance, options, and controls polish:** improve visual polish, appearance options, rendering presets, display/transfer-function controls, interaction affordances, quality controls, and general usability. **Plan:** [3D viewer appearance/options/controls](plans/supporting/THREE_D_VIEWER_APPEARANCE_OPTIONS_CONTROLS_PLAN.md) — **Partial:** most of the plan shipped (progressive-disclosure control panel, perceptual opacity, contrast depth, Window/Level + Threshold, modality-grouped presets, quality modes, render method, gradient opacity, crop, 1D TF editor, smoothing, background, lighting, overlay, scalar-domain labels). Remaining open: items tracked as discrete sub-bullets below and the follow-up spikes in the visual/UX plan.
-    - [ ] **[P2]** Memory warning for very large volumes; optional downsampling toggle ([plan §4.2](plans/3D_VOLUME_RENDERING_PLAN.md#42-memory-management)) — **Partial:** Advanced render-status readout shows `~MB` estimate + ⚠ warning for volumes >512 MB (`_update_render_status`); optional **downsampling toggle** not implemented.
+    - [ ] **[P2]** Memory warning for very large volumes; optional downsampling toggle ([plan §4.2](plans/3D_VOLUME_RENDERING_PLAN.md#42-memory-management)) — **Partial:** Advanced render-status readout shows `~MB` estimate + ⚠ warning for volumes >512 MB (`_update_render_status`); Auto Detail now caps large float32 inputs to Normal (≥64 MiB) and huge inputs to Fast (≥512 MiB). Optional **downsampling toggle** not implemented.
     - [ ] **[P2]** HU-range structure coloring — multi-segment TF editor, anatomical presets (CT Abdomen/Chest/Head), save/name custom presets, persist to `QSettings` ([plan Phase 5](plans/3D_VOLUME_RENDERING_PLAN.md#phase-5-p2--future-hu-based-structure-coloring))
     - [ ] **[P1]** Complete plan verification gates (manual QA on Windows 11, completion-criteria checklist, mark plan/TO_DO done when verified) ([plan Completion Criteria](plans/3D_VOLUME_RENDERING_PLAN.md#completion-criteria))
     - [ ] **[P1]** Export current 3D volume render as **image** (PNG/JPG) — capture viewport or off-screen VTK render; optional W/L and anonymize hooks consistent with [Export Screenshots](plans/completed/EXPORT_ANNOTATIONS_AND_SCREENSHOTS_PLAN.md) where applicable ([plan](plans/3D_VOLUME_RENDERING_PLAN.md))
