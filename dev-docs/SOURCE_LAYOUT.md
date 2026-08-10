@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-09
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -66,7 +66,7 @@ src/
 │   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
 │   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
 │   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, overlay_position_updater (viewport-anchored zoom/pan reposition), file_series_additive_load (additive merge UI/eviction helpers), file_series_first_slice_load (full-replace first-slice load helpers), series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
+├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, overlay_position_updater (viewport-anchored zoom/pan reposition), file_series_additive_load (additive merge UI/eviction helpers), file_series_first_slice_load (full-replace first-slice load helpers), series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar), main_window_toast_controller / recent_files_manager / fullscreen_manager / overlay_options mixin / status_controller; **`dialogs/about_dialog.py`** — Help → About (`show_about`); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
 │   ├── slice_location_line_manager.py   # Per-pane QGraphics line items for slice-location reference lines
 │   ├── slice_location_line_coordinator.py  # App-level refresh across panes; reads ``SliceSyncConfigMixin`` visibility flags
 │   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
@@ -114,6 +114,13 @@ src/
 | `PrivacyController` | `src/core/privacy_controller.py` | Privacy-mode propagation (metadata, overlay/crosshair managers, image viewers) and overlay refresh after privacy change; invoked from `core.actions.view_actions.on_privacy_view_toggled` via `DICOMViewerApp._on_privacy_view_toggled` |
 | `SliceSyncCoordinator` | `src/core/slice_sync_coordinator.py` | Linked-group anatomic slice sync; geometry cache keyed by `(study_uid, series_uid)`; off by default |
 | `SliceLocationLineCoordinator` | `src/gui/slice_location_line_coordinator.py` | Cross-pane slice-location reference lines; delegates segment math to `slice_location_line_helper` |
+| `MainWindow` | `src/gui/main_window.py` + helpers below | Shell: signals, layout/splitter, theme, drag/drop; delegates toast/recent/fullscreen/overlay/status |
+| `MainWindowToastController` | `src/gui/main_window_toast_controller.py` | Temporary toast/banner overlay (`show_toast_message` wrapper on `MainWindow`) |
+| `MainWindowRecentFilesManager` | `src/gui/main_window_recent_files_manager.py` | Recent-files menu rebuild, context menu (owns `eventFilter` on `recent_menu`), edit-list dialog |
+| `MainWindowFullscreenManager` | `src/gui/main_window_fullscreen_manager.py` | Fullscreen enter/exit, chrome snapshot/restore, `changeEvent` / `closeEvent` helpers |
+| `MainWindowOverlayOptionsMixin` | `src/gui/main_window_overlay_options.py` | View/overlay toggles, check-state sync, font/color pickers (mixed into `MainWindow`) |
+| `MainWindowStatusController` | `src/gui/main_window_status_controller.py` | Status-bar labels (file/study, zoom+W/L, pixel info) |
+| `show_about` | `src/gui/dialogs/about_dialog.py` | About dialog HTML + `disclaimer://` link callback |
 
 ### Slice sync and location-line flow
 

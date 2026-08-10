@@ -6,11 +6,22 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-09
 
+- **MainWindow refactor extractions #1–#6:** Split `main_window.py` (~1777 →
+  ~1076 lines) into `dialogs/about_dialog.py`, `main_window_toast_controller.py`,
+  in-place mouse-mode action maps, `main_window_recent_files_manager.py` (owns
+  recent-menu `eventFilter`), `main_window_fullscreen_manager.py`, and
+  `main_window_overlay_options.py` mixin. Public contracts retained
+  (`show_toast_message`, `set_fullscreen`, `update_recent_menu`, overlay
+  `set_*_checked`, etc.). Plan moved to
+  `dev-docs/plans/completed/MAIN_WINDOW_REFACTOR_PLAN.md`. Branch:
+  `bugfix/post-review-cleanup`.
+
 - **MainWindow refactor Phase 0 (characterization):** Added required regression
   nets before extractions — about dialog, recent-files menu/context menu,
   mouse-mode map, overlay option sync/emit contract, contract `hasattr` suite,
   and fullscreen close/exit cases. Full suite green (4596 passed). Gate
-  checklist marked complete in `MAIN_WINDOW_REFACTOR_PLAN.md`. Branch:
+  checklist marked complete in
+  `dev-docs/plans/completed/MAIN_WINDOW_REFACTOR_PLAN.md`. Branch:
   `bugfix/post-review-cleanup`.
 
 ## 2026-08-08

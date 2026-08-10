@@ -22,6 +22,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   startup/teardown. **Semantic versioning note: patch.**
 
 ### Changed
+- **Internal (MainWindow split):** `MainWindow` concerns extracted into
+  `dialogs/about_dialog.py`, `main_window_toast_controller.py`, mouse-mode
+  action maps, `main_window_recent_files_manager.py`,
+  `main_window_fullscreen_manager.py`, and `main_window_overlay_options.py`
+  mixin; public APIs and Phase 0 characterization tests retained.
+  **Semantic versioning note: patch** (no user-facing behavior change).
 - **Internal (`main.py` mixin split):** `DICOMViewerApp` orchestration split into
   plain mixin modules under `src/main_app_*.py` (`InitializationMixin`,
   subwindow/MPR, UI/files, display/settings, tag/ROI); `src/main.py` retains

@@ -1,9 +1,9 @@
 # MainWindow Refactoring Plan
 
 **Date:** 2026-08-09
-**Status:** Phase 0 complete (gate green) — extractions #1–#6 not started
+**Status:** Completed on `bugfix/post-review-cleanup` (Phase 0 + extractions #1–#6)
 **Last updated:** 2026-08-09
-**Target:** `src/gui/main_window.py` (1,777 lines, 75 methods)
+**Target:** `src/gui/main_window.py` (~1,076 lines after extractions; was 1,777)
 
 ## Interaction with POST_REVIEW_BUGFIXES_2026_08_08
 
@@ -12,7 +12,8 @@ this refactor touches `main_window.py` and creates new files. **Required order:*
 1. ~~Land the post-review bugfix PR first~~ — **done** on
    `bugfix/post-review-cleanup` (including #8A).
 2. ~~Land **Phase 0 characterization tests**~~ — **done** (gate checklist green).
-3. Only then begin extractions #1–#6, one commit each.
+3. ~~Begin extractions #1–#6, one commit each~~ — **done**
+   (`about_dialog`, toast, mouse-mode maps, recent files, fullscreen, overlay mixin).
 
 If done in another order, the bugfix's `MainWindowLayoutHelper` log fix still
 applies cleanly because it does not touch the extracted paths — but skipping

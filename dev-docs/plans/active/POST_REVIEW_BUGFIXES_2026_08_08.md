@@ -12,9 +12,8 @@ This plan tracks bugs, edge-case flaws, and architectural improvements identifie
 
 - PR-scoped items below are **done** on this branch (commits through `961a70f`).
 - Deferred / “Do not pursue” items remain out of scope.
-- MainWindow Phase 0 characterization is also complete on this branch
-  (`MAIN_WINDOW_REFACTOR_PLAN.md`); extractions are still blocked until you
-  choose to start them.
+- MainWindow Phase 0 characterization and extractions #1–#6 are complete on this
+  branch; see `dev-docs/plans/completed/MAIN_WINDOW_REFACTOR_PLAN.md`.
 
 ## PR scope (completed)
 
