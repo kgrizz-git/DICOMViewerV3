@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QIODevice, Qt, QUrl
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -42,14 +42,17 @@ def _on_disclaimer_link_clicked(
     on_disclaimer: Callable[[], None] | None,
 ) -> None:
     """
-    Handle disclaimer link click in About dialog.
+    Handle anchor link clicks in About dialog.
 
     Args:
         url: QUrl of the clicked link
         on_disclaimer: Callback invoked when disclaimer:// is clicked
     """
-    if url.scheme() == "disclaimer" and on_disclaimer is not None:
+    scheme = url.scheme()
+    if scheme == "disclaimer" and on_disclaimer is not None:
         on_disclaimer()
+    elif scheme in ("http", "https"):
+        QDesktopServices.openUrl(url)
 
 
 def show_about(

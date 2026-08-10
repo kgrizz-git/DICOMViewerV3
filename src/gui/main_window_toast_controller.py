@@ -66,8 +66,12 @@ class MainWindowToastController:
 
         if self._toast_timer is not None and self._toast_timer.isActive():
             self._toast_timer.stop()
+        if self._toast_animation is not None:
+            self._toast_animation.stop()
+            self._toast_animation = None
         if self._toast_label is not None:
             self._toast_label.deleteLater()
+            self._toast_label = None
         alpha = max(0.0, min(1.0, float(bg_alpha)))
         label = QLabel(display_message, self._parent)
         label.setStyleSheet(
@@ -102,9 +106,12 @@ class MainWindowToastController:
             anim.setDuration(300)
             anim.setStartValue(1.0)
             anim.setEndValue(0.0)
-            anim.finished.connect(
-                lambda: (label.deleteLater(), setattr(self, "_toast_label", None))
-            )
+            def on_fade_finished() -> None:
+                label.deleteLater()
+                if self._toast_label is label:
+                    self._toast_label = None
+
+            anim.finished.connect(on_fade_finished)
             anim.start()
             self._toast_animation = anim
 

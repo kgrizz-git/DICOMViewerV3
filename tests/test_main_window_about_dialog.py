@@ -20,6 +20,7 @@ if _src not in sys.path:
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QDialog, QTextBrowser
 
 from gui.main_window import MainWindow
@@ -95,4 +96,34 @@ def test_about_disclaimer_link_calls_show_disclaimer_with_force_show(qapp, tmp_p
     assert calls[0]["force_show"] is True
     assert calls[0]["config_manager"] is w.config_manager
     assert calls[0]["parent"] is w
+    w.close()
+
+
+@pytest.mark.qt
+def test_about_https_link_opens_external_url(qapp, tmp_path, monkeypatch):
+    """GitHub repo anchor in About dialog opens via QDesktopServices."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+    opened: list[QUrl] = []
+
+    def spy_open_url(url: QUrl) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", staticmethod(spy_open_url))
+
+    def click_github_and_accept() -> None:
+        dialog = _find_about_dialog()
+        assert dialog is not None, "About dialog not found among top-level widgets"
+        browser = dialog.findChild(QTextBrowser)
+        assert browser is not None
+        browser.anchorClicked.emit(
+            QUrl("https://github.com/kgrizz-git/DICOMViewerV3")
+        )
+        dialog.accept()
+
+    QTimer.singleShot(0, click_github_and_accept)
+    w._show_about()
+
+    assert len(opened) == 1
+    assert opened[0].toString() == "https://github.com/kgrizz-git/DICOMViewerV3"
     w.close()

@@ -84,7 +84,8 @@ class MainWindowFullscreenManager:
         parent = self._parent
         container = getattr(parent, "series_navigator_container", None)
         bar_visible = bool(container.isVisible()) if container is not None else False
-        toolbar_vis = parent.main_toolbar.isVisible() if hasattr(parent, "main_toolbar") else True
+        toolbar = getattr(parent, "main_toolbar", None)
+        toolbar_vis = toolbar.isVisible() if toolbar is not None else True
         return {
             "splitter_sizes": list(parent.splitter.sizes()),
             "series_navigator_bar_visible": bar_visible,
@@ -96,6 +97,8 @@ class MainWindowFullscreenManager:
         """Collapse side panes, hide bottom navigator bar and main toolbar (no config persist)."""
         parent = self._parent
         sizes = parent.splitter.sizes()
+        if len(sizes) != 3:
+            return
         total = max(sizes[0] + sizes[1] + sizes[2], 1)
         parent.viewport_resizing.emit()
         parent.splitter.setSizes([0, total, 0])
@@ -106,15 +109,16 @@ class MainWindowFullscreenManager:
         container = getattr(parent, "series_navigator_container", None)
         if container is not None:
             container.setVisible(False)
-        if hasattr(parent, "main_toolbar"):
-            parent.main_toolbar.hide()
+        toolbar = getattr(parent, "main_toolbar", None)
+        if toolbar is not None:
+            toolbar.hide()
         QTimer.singleShot(10, lambda: parent.viewport_resized.emit())
 
     def restore_chrome(self, snap: dict[str, Any]) -> None:
         """Restore splitter, navigator bar, toolbar, and View menu checks from *snap*."""
         parent = self._parent
         parent.viewport_resizing.emit()
-        restored: list[int] = list(snap["splitter_sizes"])
+        restored: list[int] = list(snap.get("splitter_sizes", []))
         if len(restored) == 3:
             parent.splitter.setSizes(restored)
             if parent.show_left_pane_action is not None:
@@ -129,8 +133,9 @@ class MainWindowFullscreenManager:
         if parent.show_series_navigator_action is not None:
             parent.show_series_navigator_action.setChecked(bar_vis)
         tb_vis = bool(snap.get("toolbar_visible", True))
-        if hasattr(parent, "main_toolbar"):
-            parent.main_toolbar.setVisible(tb_vis)
+        toolbar = getattr(parent, "main_toolbar", None)
+        if toolbar is not None:
+            toolbar.setVisible(tb_vis)
         QTimer.singleShot(10, lambda: parent.viewport_resized.emit())
 
     def enter_fullscreen(self) -> None:
