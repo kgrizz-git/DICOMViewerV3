@@ -70,6 +70,7 @@ from core.volume_opacity_model import (
     response_to_gamma,
     slider_to_opacity,
 )
+from core.volume_render_quality import estimate_volume_megabytes
 from core.volume_renderer import (
     BACKGROUND_COLORS,
     BLEND_MODES,
@@ -80,9 +81,17 @@ from core.volume_renderer import (
     TransferFunctionPreset,
     VolumeRenderer,
     get_default_preset_for_modality,
-    is_steep_preset,
     scalar_domain_label,
     vtk_mod,
+)
+from gui.volume.detail import apply_auto_detail, apply_detail_index
+from gui.volume.first_paint import (
+    apply_interaction_detail,
+    build_render_feedback_label,
+    cancel_pending_refine,
+    schedule_first_preview,
+    setup_first_paint_state,
+    stop_first_paint_timers,
 )
 from gui.volume.overlay_text import build_overlay_text
 from utils.debug_flags import DEBUG_VOLUME_3D
@@ -134,6 +143,7 @@ class VolumeViewerWidget(QWidget):
         self._render_timer.setSingleShot(True)
         self._render_timer.setInterval(80)
         self._render_timer.timeout.connect(self._render)
+        setup_first_paint_state(self)
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -227,6 +237,9 @@ class VolumeViewerWidget(QWidget):
         )
         layout.addWidget(help_strip)
 
+        self._render_feedback_label = build_render_feedback_label(panel)
+        layout.addWidget(self._render_feedback_label)
+
         # ── QUICK CONTROLS ──────────────────────────────────────────────
 
         # Preset selector.
@@ -255,11 +268,10 @@ class VolumeViewerWidget(QWidget):
         self._scalar_domain_label.setWordWrap(True)
         self._scalar_domain_label.setStyleSheet("color: palette(mid); font-size: 11px;")
         self._scalar_domain_label.setToolTip(
-            "The scalar domain the renderer is operating on.  CT presets use "
-            "HU-like thresholds, but the 3D path currently renders raw stored "
-            "pixel values (rescale slope/intercept is not applied), so values "
-            "are not true calibrated HU.  Non-CT modalities show their own "
-            "domain label."
+            "The scalar domain the renderer is operating on.  When complete "
+            "DICOM rescale metadata is available, CT values are calibrated; "
+            "otherwise the renderer uses raw stored values.  The label shows "
+            "which domain is active."
         )
         preset_layout.addWidget(self._scalar_domain_label)
         layout.addWidget(preset_group)
@@ -520,8 +532,9 @@ class VolumeViewerWidget(QWidget):
             "When on, the Detail level is chosen automatically from the "
             "preset: steep, narrow-band presets (e.g. CT Fat) use finer "
             "sampling to suppress wood-grain / Moiré rings; gentle presets "
-            "use normal sampling for speed.  Moving the slider switches to "
-            "manual."
+            "use normal sampling for speed. Large volumes are capped for "
+            "responsiveness, and the first image is a Fast preview before any "
+            "safe automatic refinement. Moving the slider switches to manual."
         )
         self._detail_auto_cb.stateChanged.connect(self._on_detail_auto_changed)
         detail_header.addStretch()
@@ -813,10 +826,12 @@ class VolumeViewerWidget(QWidget):
             iren.AddObserver("KeyPressEvent", self._on_key_press)
 
         self._renderer.reset_camera()
-        self._vtk_render_window.Render()
-        # Check if GPU rendering produced a blank frame and fall back to CPU.
-        self._renderer.check_gpu_fallback(self._vtk_render_window)
-        # Populate the render status readout now that we have live mapper info.
+        # Do not call Render() in this callback.  Queue an owned preview timer
+        # so the newly visible dialog can paint its feedback before VTK blocks
+        # the GUI thread for even the Fast preview.
+        schedule_first_preview(self)
+        # Populate the static status before the first render; live mapper mode
+        # is refreshed after the queued Fast preview.
         self._update_render_status()
         if DEBUG_VOLUME_3D:
             ren = self._renderer.get_renderer()
@@ -847,7 +862,7 @@ class VolumeViewerWidget(QWidget):
         # First-paint guarantee: set the overlay text now so it is present
         # immediately on open (not only after the first control change).
         self._update_overlay_text()
-        self._render_timer.start()
+        # The queued first-paint helper owns the first Render and refinement.
 
     # ------------------------------------------------------------------
     # Preset catalog (built-in + user-saved)
@@ -995,7 +1010,7 @@ class VolumeViewerWidget(QWidget):
         # is on.  No-op when the user has taken manual control.  For saved user
         # presets the caller overrides this with the stored detail afterward.
         if hasattr(self, "_detail_auto_cb"):
-            self._apply_auto_detail(preset)
+            apply_auto_detail(self, preset)
 
     def _set_opacity_controls(self, resolved: float) -> None:
         """Sync the opacity slider + spinbox to a resolved opacity (no render)."""
@@ -1064,7 +1079,7 @@ class VolumeViewerWidget(QWidget):
                 self._detail_slider.blockSignals(True)
                 self._detail_slider.setValue(i)
                 self._detail_slider.blockSignals(False)
-                self._apply_detail_index(i)
+                apply_detail_index(self, i)
                 break
 
     # ------------------------------------------------------------------
@@ -1482,35 +1497,6 @@ class VolumeViewerWidget(QWidget):
         except Exception:
             pass
 
-    def _detail_caption_text(self, index: int, *, auto: bool) -> str:
-        name = QUALITY_MODES[index][0] if 0 <= index < len(QUALITY_MODES) else ""
-        return f"Detail: {name} (auto)" if auto else f"Detail: {name}"
-
-    def _apply_detail_index(self, index: int) -> None:
-        """Push a detail level to the renderer and update the caption + overlay."""
-        index = max(0, min(len(QUALITY_MODES) - 1, index))
-        name = QUALITY_MODES[index][0]
-        self._renderer.set_quality_mode(name)
-        self._detail_caption.setText(
-            self._detail_caption_text(index, auto=self._detail_auto_cb.isChecked())
-        )
-        self._update_overlay_text()
-
-    def _apply_auto_detail(
-        self, preset: TransferFunctionPreset | None = None
-    ) -> None:
-        """Choose the detail level automatically from a preset's steepness."""
-        if not self._detail_auto_cb.isChecked():
-            return
-        if preset is None:
-            preset = self._current_preset_object()
-        # High (finer) for steep presets, Normal otherwise.
-        target = 2 if (preset is not None and is_steep_preset(preset)) else 1
-        self._detail_slider.blockSignals(True)
-        self._detail_slider.setValue(target)
-        self._detail_slider.blockSignals(False)
-        self._apply_detail_index(target)
-
     def _current_preset_object(self) -> TransferFunctionPreset | None:
         """Return the built-in preset backing the current selection, or None."""
         logical = self._current_logical_index()
@@ -1527,20 +1513,25 @@ class VolumeViewerWidget(QWidget):
 
     def _on_detail_changed(self, index: int) -> None:
         # Manual slider use switches off Auto.
+        cancel_pending_refine(self)
+        self._auto_refine_suppressed = False
+        self._auto_detail_capped = False
         if self._detail_auto_cb.isChecked():
             self._detail_auto_cb.blockSignals(True)
             self._detail_auto_cb.setChecked(False)
             self._detail_auto_cb.blockSignals(False)
-        self._apply_detail_index(index)
+        apply_detail_index(self, index)
         self._render_timer.start()
 
     def _on_detail_auto_changed(self, state: int) -> None:
         if state == Qt.CheckState.Checked.value:
-            self._apply_auto_detail()
+            cancel_pending_refine(self)
+            self._auto_refine_suppressed = False
+            apply_auto_detail(self)
             self._render_timer.start()
         else:
             # Re-stamp the caption without the "(auto)" suffix.
-            self._apply_detail_index(self._detail_slider.value())
+            apply_detail_index(self, self._detail_slider.value())
 
     def _on_render_method_changed(self, index: int) -> None:
         if 0 <= index < len(RENDER_METHODS):
@@ -1581,7 +1572,7 @@ class VolumeViewerWidget(QWidget):
                     parts.append(f"Volume: {dims[0]}×{dims[1]}×{dims[2]}")
                     # T23: memory estimate for the float32 volume.
                     voxels = dims[0] * dims[1] * dims[2]
-                    mb = (voxels * 4) / (1024 * 1024)
+                    mb = estimate_volume_megabytes(dims)
                     parts.append(f"Memory: ~{mb:.0f} MB ({voxels:,} voxels)")
                     if mb > 512:
                         parts.append("⚠ Large volume — consider Fast quality")
@@ -1636,13 +1627,13 @@ class VolumeViewerWidget(QWidget):
 
     def _on_interaction_start(self, _obj: Any = None, _event: str = "") -> None:
         """Switch to coarse sampling during mouse interaction for responsiveness."""
-        self._renderer.set_interactive_quality(True)
+        apply_interaction_detail(self, low=True)
         if self._auto_rotate_btn.isChecked():
             self._auto_rotate_btn.setChecked(False)
 
     def _on_interaction_end(self, _obj: Any = None, _event: str = "") -> None:
         """Restore fine sampling after interaction and re-render."""
-        self._renderer.set_interactive_quality(False)
+        apply_interaction_detail(self, low=False)
         self._render()
 
     # ------------------------------------------------------------------
@@ -1660,6 +1651,11 @@ class VolumeViewerWidget(QWidget):
 
     def cleanup(self) -> None:
         """Release VTK interactor and renderer resources."""
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+        stop_first_paint_timers(self)
+        self._initialized = False
         if DEBUG_VOLUME_3D:
             print("[DEBUG-VOLUME-3D] VolumeViewerWidget.cleanup() called from:")
         if hasattr(self, "_box_widget") and self._box_widget is not None:

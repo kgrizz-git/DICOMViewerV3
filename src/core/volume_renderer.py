@@ -96,6 +96,7 @@ from core.volume_render_presets import (
     is_steep_preset,
     preset_steepness,
 )
+from core.volume_renderer_quality import VolumeRendererQualityMixin
 
 # Mark re-exports as referenced for basedpyright without narrowing ``__all__``.
 _PRESET_REEXPORTS = (
@@ -302,7 +303,7 @@ def get_default_preset_for_modality(modality: str) -> TransferFunctionPreset:
 # Volume renderer
 # ---------------------------------------------------------------------------
 
-class VolumeRenderer:
+class VolumeRenderer(VolumeRendererQualityMixin):
     """
     VTK volume rendering pipeline.
 
@@ -313,6 +314,8 @@ class VolumeRenderer:
     All VTK object creation and manipulation must occur on the main thread.
     Only the data-preparation step (sitk -> numpy) may happen off-thread.
     """
+
+    QUALITY_MODES = QUALITY_MODES
 
     def __init__(self) -> None:
         if not vtk_available:
@@ -695,21 +698,7 @@ class VolumeRenderer:
         direction, view_up = view
         self._set_camera_direction(direction, view_up)
 
-    def set_quality_mode(self, mode_name: str) -> None:
-        """
-        Set the rendering quality mode.
-
-        Updates the static-render sample distance.  See :data:`QUALITY_MODES`.
-
-        Args:
-            mode_name: One of ``"Fast"``, ``"Normal"``, ``"High"``.
-        """
-        for name, dist in QUALITY_MODES:
-            if name == mode_name:
-                self._quality_sample_distance = dist
-                self._mapper.SetSampleDistance(dist)
-                self._mapper.Modified()
-                return
+    def _log_unknown_quality(self, mode_name: str) -> None:
         _log.warning("Unknown quality mode %r; keeping current.", mode_name)
 
     def set_render_method(self, method: str) -> None:
@@ -932,13 +921,16 @@ class VolumeRenderer:
             self._mapper.SetSampleDistance(self._quality_sample_distance)
         self._mapper.Modified()
 
-    def check_gpu_fallback(self, render_window: Any) -> bool:
+    def check_gpu_fallback(
+        self, render_window: Any, *, probe_quality: str | None = None
+    ) -> bool:
         """Check if GPU rendering produced a blank frame and fall back to CPU.
 
         Call once after the first Render(). Reads back pixels from the render
         window; if the image is entirely black (GPU silently failed, common on
         Parallels / virtual GPUs), switches the mapper to CPU ray-cast mode
-        and re-renders.
+        and re-renders.  ``probe_quality`` applies only to that CPU fallback
+        render and does not change the selected target detail.
 
         Returns ``True`` if a fallback was triggered.
         """
@@ -1000,6 +992,8 @@ class VolumeRenderer:
         if DEBUG_VOLUME_3D:
             print(f"[DEBUG-VOLUME-3D] GPU FALLBACK: mode {mode} produced black frame, switching to CPU.")
         self._mapper.SetRequestedRenderModeToRayCast()
+        if probe_quality is not None:
+            self.set_temporary_quality(probe_quality)
         render_window.Render()
         if DEBUG_VOLUME_3D:
             new_mode = self._mapper.GetLastUsedRenderMode()

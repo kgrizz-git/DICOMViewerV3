@@ -7,6 +7,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **3D viewer first paint:** opening a 3D volume now shows a Fast preview before
+  higher detail is considered. Auto Detail caps large float32 volumes and only
+  refines after a responsive preview; a GPU blank-frame CPU fallback also stays
+  Fast and suppresses automatic fine rendering. The viewer shows non-modal
+  progress feedback and cancels queued refinement during cleanup. Manual
+  High/Ultra remains available. **Semantic versioning note: patch.**
 - **About dialog GitHub link:** Clicking the repository URL in **Help → About**
   now opens the page in the system browser (`http`/`https` via
   `QDesktopServices`). **Semantic versioning note: patch.**

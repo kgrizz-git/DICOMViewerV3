@@ -8,7 +8,7 @@
     "src/core/rdsr_irradiation_events.py": 932,
     "src/core/subwindow_lifecycle_controller.py": 862,
     "src/core/subwindow_signal_wiring.py": 755,
-    "src/core/volume_renderer.py": 1156,
+    "src/core/volume_renderer.py": 1150,
     "src/gui/annotation_paste_handler.py": 878,
     "src/gui/dialogs/overlay_config_dialog.py": 781,
     "src/gui/dialogs/study_index_search_dialog.py": 1374,
@@ -30,15 +30,14 @@
     "src/gui/series_navigator.py": 1158,
     "src/gui/slice_display_manager.py": 1628,
     "src/gui/view_state_manager.py": 1215,
-    "src/gui/volume_viewer_widget.py": 1683,
+    "src/gui/volume_viewer_widget.py": 1679,
     "src/qa/pylinac_nuclear.py": 767,
     "src/tools/annotation_manager.py": 997,
     "src/tools/arrow_annotation_tool.py": 799,
     "src/tools/measurement_tool.py": 806,
     "src/tools/roi_manager.py": 1048,
     "src/utils/undo_redo.py": 976,
-    "tests/fusion_audit_quantitative_verification.py": 778,
-    "tests/gui/test_volume_viewer_widget.py": 760
+    "tests/fusion_audit_quantitative_verification.py": 778
   },
   "functions": {
     "scripts/check_no_phi_artifacts.py::check_approval_manifests": 22,

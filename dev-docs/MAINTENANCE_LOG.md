@@ -1,8 +1,17 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-10
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-10
+
+- **3D first-paint responsiveness:** Added a VTK-free Auto Detail policy,
+  cancellable Fast-preview/refinement timers, elapsed-time gating of automatic
+  refinement, Fast GPU→CPU blank-frame fallback, visible non-modal progress,
+  and idempotent timer-safe cleanup. Added focused widget, renderer, and pure
+  policy regressions; manual hardware timing remains required by the active
+  responsiveness plan.
 
 ## 2026-08-09
 

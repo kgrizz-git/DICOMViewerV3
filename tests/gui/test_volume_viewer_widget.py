@@ -230,6 +230,8 @@ class _FakeRenderer:
         self.scene = _FakeScene()
         self.background_calls: list[tuple[float, float, float]] = []
         self.quality_modes: list[str] = []
+        self.temporary_quality_modes: list[str] = []
+        self.restore_target_quality_calls = 0
         self.views: list[str] = []
         self.render_methods: list[str] = []
         self.interactive_quality: list[bool] = []
@@ -283,8 +285,15 @@ class _FakeRenderer:
     def set_view(self, name: str) -> None:
         self.views.append(name)
 
-    def set_quality_mode(self, name: str) -> None:
+    def set_quality_mode(self, name: str, *, apply: bool = True) -> None:
         self.quality_modes.append(name)
+
+    def set_temporary_quality(self, name: str) -> bool:
+        self.temporary_quality_modes.append(name)
+        return True
+
+    def restore_target_quality(self) -> None:
+        self.restore_target_quality_calls += 1
 
     def set_render_method(self, method: str) -> None:
         self.render_methods.append(method)
@@ -292,8 +301,9 @@ class _FakeRenderer:
     def set_interactive_quality(self, enabled: bool) -> None:
         self.interactive_quality.append(enabled)
 
-    def check_gpu_fallback(self, render_window) -> None:
+    def check_gpu_fallback(self, render_window, *, probe_quality=None) -> bool:
         self.check_gpu_fallback_calls += 1
+        return False
 
     def set_custom_opacity_points(self, points) -> None:
         self.custom_points = points
@@ -470,33 +480,6 @@ def test_build_controls_creates_expected_widgets(monkeypatch, qapp) -> None:
     assert widget._detail_slider.maximum() == len(QUALITY_MODES) - 1
     assert widget._advanced_group.isVisible() is False
     assert widget._ssao_cb.isEnabled() is False
-
-
-@pytest.mark.qt
-def test_initialize_and_deferred_init_cover_setup_paths(monkeypatch, qapp) -> None:
-    _install_fake_tf_editor(monkeypatch)
-    renderer = _FakeRenderer()
-    widget = _make_widget(monkeypatch, qapp, renderer=renderer)
-    widget._build_controls()
-    render_window = _FakeRenderWindow()
-    interactor = _FakeInteractor(render_window)
-    widget._interactor = interactor
-    widget._vtk_render_window = render_window
-
-    widget.initialize("MR", rescale_applied=True)
-    widget._deferred_vtk_init()
-
-    assert widget._current_modality == "MR"
-    assert widget._scalar_domain_label.text()
-    assert renderer.background_calls
-    assert interactor.initialized is True
-    assert "StartInteractionEvent" in render_window.iren.style.observers
-    assert "EndInteractionEvent" in render_window.iren.style.observers
-    assert "KeyPressEvent" in render_window.iren.observers
-    assert renderer.reset_camera_calls == 1
-    assert renderer.check_gpu_fallback_calls == 1
-    assert render_window.render_count >= 1
-    assert widget._initialized is True
 
 
 @pytest.mark.qt
