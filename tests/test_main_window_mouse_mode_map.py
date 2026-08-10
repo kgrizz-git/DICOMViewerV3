@@ -2,7 +2,7 @@
 Characterization tests for MainWindow mouse-mode toolbar QAction exclusivity.
 
 Pins set_mouse_mode_checked / get_current_mouse_mode behavior for all 12 modes
-before the action map is extracted.
+after the action map was extracted to ``_init_mouse_mode_action_maps``.
 """
 
 from __future__ import annotations
@@ -75,4 +75,19 @@ def test_mouse_mode_action_maps_round_trip(qapp, tmp_path):
         action = w._mouse_mode_action_map[mode]
         assert w._mouse_mode_action_reverse[action] == mode
         assert w._mouse_mode_action_map[w._mouse_mode_action_reverse[action]] == action
+    w.close()
+
+
+@pytest.mark.qt
+def test_set_mouse_mode_checked_unknown_mode_unchecks_all_defaults_pan(qapp, tmp_path):
+    """Unknown mode strings leave toolbar unchecked; get_current_mouse_mode falls back to pan."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+    w.set_mouse_mode_checked("select")
+    assert w.get_current_mouse_mode() == "select"
+
+    w.set_mouse_mode_checked("not_a_mode")
+
+    actions = [getattr(w, attr) for attr in MOUSE_MODE_ACTION_ATTRS]
+    assert all(not action.isChecked() for action in actions)
+    assert w.get_current_mouse_mode() == "pan"
     w.close()

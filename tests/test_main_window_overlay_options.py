@@ -26,8 +26,8 @@ _DEFAULT_3D_TIP = "Open 3D Volume Render of current series"
 
 
 @pytest.fixture
-def main_window(qapp):
-    return MainWindow(ConfigManager())
+def main_window(qapp, tmp_path):
+    return MainWindow(ConfigManager(config_dir=tmp_path / "config"))
 
 
 def _spy_signal(window, signal_name: str) -> list:

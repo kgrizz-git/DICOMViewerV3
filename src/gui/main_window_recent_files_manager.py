@@ -148,19 +148,16 @@ class MainWindowRecentFilesManager(QObject):
                 recent_files = self._config_manager.get_recent_files()
                 file_idx = recent_files.index(file_path) if file_path in recent_files else -1
 
-                # Parent new actions to recent_menu (a real QMenu/QObject), not
-                # context_menu — tests substitute a plain Python fake for
-                # QMenu here, which cannot serve as a QObject parent.
                 context_menu = QMenu(self._recent_menu)
 
-                move_up_action = QAction("Move Up", self._recent_menu)
+                move_up_action = QAction("Move Up", context_menu)
                 move_up_action.setEnabled(file_idx > 0)
                 move_up_action.triggered.connect(
                     lambda checked=False, fp=file_path: self.move(fp, direction="up")
                 )
                 context_menu.addAction(move_up_action)
 
-                move_down_action = QAction("Move Down", self._recent_menu)
+                move_down_action = QAction("Move Down", context_menu)
                 move_down_action.setEnabled(0 <= file_idx < len(recent_files) - 1)
                 move_down_action.triggered.connect(
                     lambda checked=False, fp=file_path: self.move(fp, direction="down")
@@ -169,13 +166,14 @@ class MainWindowRecentFilesManager(QObject):
 
                 context_menu.addSeparator()
 
-                remove_action = QAction("Remove", self._recent_menu)
+                remove_action = QAction("Remove", context_menu)
                 remove_action.triggered.connect(
                     lambda checked=False, fp=file_path: self.remove(fp)
                 )
                 context_menu.addAction(remove_action)
 
                 context_menu.exec(context_event.globalPos())
+                context_menu.deleteLater()
                 return True
 
         return super().eventFilter(obj, event)

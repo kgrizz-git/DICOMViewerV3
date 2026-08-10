@@ -352,7 +352,7 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
 
     def _init_mouse_mode_action_maps(self) -> None:
         """Build mode-string ↔ QAction maps after toolbar actions exist."""
-        self._mouse_mode_action_map = {  # pyright: ignore[reportAttributeAccessIssue]
+        candidate_map: dict[str, QAction | None] = {
             "select": self.mouse_mode_select_action,
             "roi_ellipse": self.mouse_mode_ellipse_roi_action,
             "roi_rectangle": self.mouse_mode_rectangle_roi_action,
@@ -365,6 +365,9 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
             "magnifier": self.mouse_mode_magnifier_action,
             "pan": self.mouse_mode_pan_action,
             "auto_window_level": self.mouse_mode_auto_window_level_action,
+        }
+        self._mouse_mode_action_map = {
+            mode: action for mode, action in candidate_map.items() if action is not None
         }
         self._mouse_mode_action_reverse = {
             action: mode for mode, action in self._mouse_mode_action_map.items()
@@ -561,6 +564,19 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
 
         show_about(self, self.config_manager, on_disclaimer=self._show_disclaimer)
 
+    def _sync_mouse_mode_toolbar_checked(self, mode: str) -> None:
+        """Update toolbar exclusivity without emitting ``mouse_mode_changed``."""
+        all_actions = list(self._mouse_mode_action_map.values())
+        for action in all_actions:
+            action.blockSignals(True)
+        for action in all_actions:
+            action.setChecked(False)
+        selected_action = self._mouse_mode_action_map.get(mode)
+        if selected_action is not None:
+            selected_action.setChecked(True)
+        for action in all_actions:
+            action.blockSignals(False)
+
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """
         Handle mouse mode change to ensure exclusivity.
@@ -568,24 +584,7 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
         Args:
             mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
-        all_actions = list(self._mouse_mode_action_map.values())
-
-        # Block signals when updating toolbar buttons to prevent recursive loops
-        # This prevents setChecked() from triggering the action's triggered signal
-        for action in all_actions:
-            action.blockSignals(True)
-
-        for action in all_actions:
-            action.setChecked(False)
-
-        selected_action = self._mouse_mode_action_map.get(mode)
-        if selected_action is not None:
-            selected_action.setChecked(True)
-
-        for action in all_actions:
-            action.blockSignals(False)
-
-        # Emit signal AFTER updating toolbar buttons to actually change the mode
+        self._sync_mouse_mode_toolbar_checked(mode)
         self.mouse_mode_changed.emit(mode)
 
     def get_current_mouse_mode(self) -> str:
@@ -610,20 +609,7 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
         Args:
             mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
-        all_actions = list(self._mouse_mode_action_map.values())
-
-        for action in all_actions:
-            action.blockSignals(True)
-
-        for action in all_actions:
-            action.setChecked(False)
-
-        selected_action = self._mouse_mode_action_map.get(mode)
-        if selected_action is not None:
-            selected_action.setChecked(True)
-
-        for action in all_actions:
-            action.blockSignals(False)
+        self._sync_mouse_mode_toolbar_checked(mode)
 
     def _on_scroll_wheel_mode_combo_changed(self, text: str) -> None:
         """

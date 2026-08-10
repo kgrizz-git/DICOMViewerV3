@@ -29,7 +29,7 @@ if _src not in sys.path:
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QObject, QPoint
 from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtWidgets import QMenu
 
@@ -105,9 +105,11 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
 
     captured_labels: list[list[str]] = []
 
-    class _FakeContextMenu:
+    class _FakeContextMenu(QObject):
         def __init__(self, parent=None):
+            super().__init__(parent)
             self._actions = []
+            self.delete_later_called = False
 
         def addAction(self, action):
             self._actions.append(action)
@@ -121,6 +123,9 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
                 [a.text() for a in self._actions if a is not None]
             )
             return None
+
+        def deleteLater(self):
+            self.delete_later_called = True
 
     monkeypatch.setattr("gui.main_window_recent_files_manager.QMenu", _FakeContextMenu)
 
@@ -139,6 +144,67 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
     assert "Remove" in labels
     assert "Move Up" in labels
     assert "Move Down" in labels
+
+
+def _qaction_child_count(menu: QMenu) -> int:
+    """Count QAction children retained on a QMenu (leak detector for context popups)."""
+    from PySide6.QtGui import QAction
+
+    return sum(1 for child in menu.children() if isinstance(child, QAction))
+
+
+@pytest.mark.qt
+def test_recent_menu_context_menu_does_not_leak_actions_on_repeated_open(
+    main_window, config_manager, monkeypatch, qapp
+):
+    """Repeated context-menu opens must not accumulate QAction children on recent_menu."""
+    paths = ["/data/first", "/data/second", "/data/third"]
+    _seed_recent_files(config_manager, paths)
+    main_window._update_recent_menu()
+
+    target_action = _enabled_recent_actions(main_window.recent_menu)[1]
+    monkeypatch.setattr(
+        main_window.recent_menu,
+        "actionAt",
+        lambda _pos: target_action,
+    )
+
+    class _FakeContextMenu(QObject):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._actions = []
+
+        def addAction(self, action):
+            self._actions.append(action)
+            return action
+
+        def addSeparator(self):
+            self._actions.append(None)
+
+        def exec(self, _pos=None):
+            return None
+
+        def deleteLater(self):
+            pass
+
+    monkeypatch.setattr("gui.main_window_recent_files_manager.QMenu", _FakeContextMenu)
+
+    recent_menu = main_window.recent_menu
+    baseline_children = _qaction_child_count(recent_menu)
+
+    global_pos = QPoint(300, 300)
+    local_pos = recent_menu.mapFromGlobal(global_pos)
+    event = QContextMenuEvent(
+        QContextMenuEvent.Reason.Mouse,
+        local_pos,
+        global_pos,
+    )
+
+    for _ in range(5):
+        handled = main_window._recent_files.eventFilter(recent_menu, event)
+        assert handled is True
+
+    assert _qaction_child_count(recent_menu) == baseline_children
 
 
 @pytest.mark.qt
