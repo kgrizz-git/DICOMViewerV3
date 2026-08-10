@@ -88,8 +88,41 @@ class TestOnCrosshairMoved:
         crosshair_item.pos.return_value = QPointF(15, 25)
         crosshair_coordinator._on_crosshair_moved(crosshair_item)
 
-        # Timer should be reused (same instance)
+        # Timer should be reused (same instance) and restarted for debounce
         assert crosshair_coordinator._move_batch_timer is first_timer
+        assert crosshair_coordinator._move_batch_timer.isActive()
+
+    @pytest.mark.qt
+    def test_finalizes_previous_pending_item_when_different_crosshair_moves(
+        self, crosshair_coordinator: CrosshairCoordinator, crosshair_sample_dataset: Dataset
+    ):
+        crosshair_coordinator.get_current_dataset = lambda: crosshair_sample_dataset
+        undo_redo_manager = MagicMock()
+        crosshair_coordinator.undo_redo_manager = undo_redo_manager
+
+        first_item = MagicMock()
+        first_item.pos.return_value = QPointF(10, 20)
+        second_item = MagicMock()
+        second_item.pos.return_value = QPointF(30, 40)
+
+        crosshair_coordinator._on_crosshair_moved(first_item)
+        first_item.pos.return_value = QPointF(12, 22)
+        crosshair_coordinator._on_crosshair_moved(first_item)
+
+        crosshair_coordinator._on_crosshair_moved(second_item)
+
+        assert first_item not in crosshair_coordinator._crosshair_move_tracking
+        assert second_item in crosshair_coordinator._crosshair_move_tracking
+        assert crosshair_coordinator._pending_move_item is second_item
+        undo_redo_manager.execute_command.assert_called_once()
+
+        second_item.pos.return_value = QPointF(35, 45)
+        crosshair_coordinator._on_crosshair_moved(second_item)
+
+        crosshair_coordinator._on_move_batch_timer_timeout()
+
+        assert second_item not in crosshair_coordinator._crosshair_move_tracking
+        assert undo_redo_manager.execute_command.call_count == 2
 
 
 @pytest.mark.qt

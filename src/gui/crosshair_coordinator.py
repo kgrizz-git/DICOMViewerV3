@@ -299,6 +299,12 @@ class CrosshairCoordinator:
                 # Update current position (don't create command yet)
                 self._crosshair_move_tracking[crosshair_item]['current_pos'] = current_pos
 
+            # Finalize a different pending item so its debounced move is not lost
+            pending = self._pending_move_item
+            if pending is not None and pending is not crosshair_item:
+                self._finalize_crosshair_move(pending)
+                self._pending_move_item = None
+
             # Start/restart batch timer (200ms delay)
             self._pending_move_item = crosshair_item
             self._move_batch_timer.stop()
