@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-09
 
 ---
 
@@ -54,7 +54,6 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
-- [ ] **[P2]** **Implement post-review bugfixes:** address missing debounce in `SliceNavigator`, `time.monotonic()` fix in `TagExportUnionHost`, and initialization/re-entrancy bugs in `SliceLocationLineCoordinator` — **Plan:** [Post-review bugfixes](plans/active/POST_REVIEW_BUGFIXES_2026_08_08.md)
 <!-- OverlayConfigDialog findings — corrected 2026-07-10 after reviewer pushback on original #1/#2/#4. See tmp/overlay-config-dialog-test-review-2026-07-10.md -->
 - [ ] **[P3]** **Revisit enhanced-CT multi-frame merge bookkeeping only if it becomes visibly slow again.** The P1 post-Continue stall was fixed by making `FrameDatasetWrapper` a metadata view rather than deep-copying every non-pixel element per frame: 26.4 s -> 1.16 s full merge for the 364-frame / 182 MB enhanced CT benchmark. The remaining `series_multiframe_info` rebuild measured 575.7 ms, but first display after UI handoff was 178.1 ms and navigator work was small. Do not add deferred thumbnail/navigator scheduling complexity without a new measurement or user report — **Archived plan:** [Slow post-load first paint](plans/completed/POST_LOAD_FIRST_PAINT_PERFORMANCE_PLAN.md)
 
