@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import ClassVar
 
 import pytest
 
@@ -146,18 +147,11 @@ def test_recent_menu_context_menu_shows_remove_move_actions(
     assert "Move Down" in labels
 
 
-def _qaction_child_count(menu: QMenu) -> int:
-    """Count QAction children retained on a QMenu (leak detector for context popups)."""
-    from PySide6.QtGui import QAction
-
-    return sum(1 for child in menu.children() if isinstance(child, QAction))
-
-
 @pytest.mark.qt
 def test_recent_menu_context_menu_does_not_leak_actions_on_repeated_open(
     main_window, config_manager, monkeypatch, qapp
 ):
-    """Repeated context-menu opens must not accumulate QAction children on recent_menu."""
+    """Every temporary context popup is scheduled for deletion after use."""
     paths = ["/data/first", "/data/second", "/data/third"]
     _seed_recent_files(config_manager, paths)
     main_window._update_recent_menu()
@@ -170,9 +164,13 @@ def test_recent_menu_context_menu_does_not_leak_actions_on_repeated_open(
     )
 
     class _FakeContextMenu(QObject):
+        instances: ClassVar[list[_FakeContextMenu]] = []
+
         def __init__(self, parent=None):
             super().__init__(parent)
             self._actions = []
+            self.delete_later_calls = 0
+            self.instances.append(self)
 
         def addAction(self, action):
             self._actions.append(action)
@@ -185,13 +183,11 @@ def test_recent_menu_context_menu_does_not_leak_actions_on_repeated_open(
             return None
 
         def deleteLater(self):
-            pass
+            self.delete_later_calls += 1
 
     monkeypatch.setattr("gui.main_window_recent_files_manager.QMenu", _FakeContextMenu)
 
     recent_menu = main_window.recent_menu
-    baseline_children = _qaction_child_count(recent_menu)
-
     global_pos = QPoint(300, 300)
     local_pos = recent_menu.mapFromGlobal(global_pos)
     event = QContextMenuEvent(
@@ -204,7 +200,8 @@ def test_recent_menu_context_menu_does_not_leak_actions_on_repeated_open(
         handled = main_window._recent_files.eventFilter(recent_menu, event)
         assert handled is True
 
-    assert _qaction_child_count(recent_menu) == baseline_children
+    assert len(_FakeContextMenu.instances) == 5
+    assert all(menu.delete_later_calls == 1 for menu in _FakeContextMenu.instances)
 
 
 @pytest.mark.qt

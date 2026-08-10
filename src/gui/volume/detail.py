@@ -45,4 +45,11 @@ def apply_auto_detail(widget: Any, preset: TransferFunctionPreset | None = None)
     widget._detail_slider.blockSignals(True)
     widget._detail_slider.setValue(target)
     widget._detail_slider.blockSignals(False)
-    apply_detail_index(widget, target)
+    # A slow preview or CPU fallback deliberately leaves the mapper at Fast.
+    # Keep the selected Auto target for a later explicit user choice without
+    # accidentally applying it during a subsequent preset change.
+    apply_detail_index(
+        widget,
+        target,
+        apply=not widget._auto_refine_suppressed,
+    )

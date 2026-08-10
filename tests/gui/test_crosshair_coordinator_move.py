@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from pydicom.dataset import Dataset
@@ -79,18 +79,22 @@ class TestOnCrosshairMoved:
     ):
         crosshair_item = MagicMock()
         crosshair_item.pos.return_value = QPointF(10, 20)
+        debounce_timer = MagicMock()
+        crosshair_coordinator._move_batch_timer = debounce_timer
 
         # First move
         crosshair_coordinator._on_crosshair_moved(crosshair_item)
         first_timer = crosshair_coordinator._move_batch_timer
+        debounce_timer.reset_mock()
 
         # Second move
         crosshair_item.pos.return_value = QPointF(15, 25)
         crosshair_coordinator._on_crosshair_moved(crosshair_item)
 
         # Timer should be reused (same instance) and restarted for debounce
-        assert crosshair_coordinator._move_batch_timer is first_timer
-        assert crosshair_coordinator._move_batch_timer.isActive()
+        assert first_timer is debounce_timer
+        assert crosshair_coordinator._move_batch_timer is debounce_timer
+        assert debounce_timer.method_calls == [call.stop(), call.start(200)]
 
     @pytest.mark.qt
     def test_finalizes_previous_pending_item_when_different_crosshair_moves(
@@ -122,7 +126,18 @@ class TestOnCrosshairMoved:
         crosshair_coordinator._on_move_batch_timer_timeout()
 
         assert second_item not in crosshair_coordinator._crosshair_move_tracking
-        assert undo_redo_manager.execute_command.call_count == 2
+        commands = [call_.args[0] for call_ in undo_redo_manager.execute_command.call_args_list]
+        assert len(commands) == 2
+        assert (commands[0].crosshair_item, commands[0].old_position, commands[0].new_position) == (
+            first_item,
+            QPointF(10, 20),
+            QPointF(12, 22),
+        )
+        assert (commands[1].crosshair_item, commands[1].old_position, commands[1].new_position) == (
+            second_item,
+            QPointF(30, 40),
+            QPointF(35, 45),
+        )
 
 
 @pytest.mark.qt
