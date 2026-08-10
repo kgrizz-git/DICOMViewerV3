@@ -344,6 +344,50 @@ class TestGetResampledSlice:
 
         assert call_count["n"] == 4
 
+    def test_stale_volume_cache_after_reference_series_grows(self, resampler):
+        """Cached resampled volumes must not survive in-place slice growth."""
+        reference = _make_series([1, 2, 3])
+        overlay = _make_series([10, 20, 30])
+        assert resampler.get_resampled_slice(
+            overlay,
+            reference,
+            0,
+            overlay_series_uid="ov",
+            reference_series_uid="ref",
+        ) is not None
+
+        grown_reference = [
+            *reference,
+            _make_ct_dataset(z=3, pixel_value=1),
+            _make_ct_dataset(z=4, pixel_value=2),
+        ]
+        grown_overlay = [
+            *overlay,
+            _make_ct_dataset(z=3, pixel_value=40),
+            _make_ct_dataset(z=4, pixel_value=50),
+        ]
+
+        stale = resampler.get_resampled_slice(
+            grown_overlay,
+            grown_reference,
+            4,
+            overlay_series_uid="ov",
+            reference_series_uid="ref",
+        )
+        resampler.clear_cache(series_uid="ref")
+        resampler.clear_cache(series_uid="ov")
+        refreshed = resampler.get_resampled_slice(
+            grown_overlay,
+            grown_reference,
+            4,
+            overlay_series_uid="ov",
+            reference_series_uid="ref",
+        )
+
+        assert stale is None
+        assert refreshed is not None
+        np.testing.assert_allclose(refreshed, np.full((4, 4), 50.0), atol=1e-4)
+
     def test_returns_none_when_overlay_conversion_fails(self, resampler):
         reference = _make_series([1, 2])
         overlay = [Dataset()]  # no spatial metadata -> conversion fails
