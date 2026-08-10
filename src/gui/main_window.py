@@ -352,7 +352,7 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
 
     def _init_mouse_mode_action_maps(self) -> None:
         """Build mode-string ↔ QAction maps after toolbar actions exist."""
-        self._mouse_mode_action_map = {
+        self._mouse_mode_action_map = {  # pyright: ignore[reportAttributeAccessIssue]
             "select": self.mouse_mode_select_action,
             "roi_ellipse": self.mouse_mode_ellipse_roi_action,
             "roi_rectangle": self.mouse_mode_rectangle_roi_action,

@@ -14,13 +14,13 @@ from __future__ import annotations
 from typing import Literal
 
 from PySide6.QtCore import QPropertyAnimation, Qt, QTimer
-from PySide6.QtWidgets import QGraphicsOpacityEffect, QLabel, QWidget
+from PySide6.QtWidgets import QGraphicsOpacityEffect, QLabel, QMainWindow
 
 
 class MainWindowToastController:
     """Owns ephemeral toast/banner overlays on the main window."""
 
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QMainWindow) -> None:
         self._parent = parent
         self._toast_label: QLabel | None = None
         self._toast_effect: QGraphicsOpacityEffect | None = None

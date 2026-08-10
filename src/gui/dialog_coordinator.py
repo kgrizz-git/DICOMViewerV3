@@ -360,18 +360,19 @@ class DialogCoordinator:
         # Guard: only indices 0-3 are valid for histogram dialogs
         if idx < 0 or idx > 3:
             return
-        if self.histogram_dialogs.get(idx) is None:
+        dialog = self.histogram_dialogs.get(idx)
+        if dialog is None:
             callbacks = dict(self.get_histogram_callbacks_for_subwindow(idx)) if self.get_histogram_callbacks_for_subwindow else {}
             if not callbacks:
                 return
             callbacks["get_restore_geometry"] = self.config_manager.get_histogram_window_geometry
             callbacks["save_geometry_callback"] = self.config_manager.set_histogram_window_geometry
-            self.histogram_dialogs[idx] = HistogramDialog(
+            dialog = HistogramDialog(
                 self.main_window,
                 title_suffix=f" (View {idx + 1})",
                 **callbacks
             )
-        dialog = self.histogram_dialogs[idx]
+            self.histogram_dialogs[idx] = dialog
         dialog.update_histogram()
         dialog.show()
         dialog.raise_()
