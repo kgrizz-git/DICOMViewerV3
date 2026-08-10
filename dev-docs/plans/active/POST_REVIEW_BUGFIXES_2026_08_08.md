@@ -194,12 +194,14 @@ current defect.
     dropped from the saved order. `get_study_index_browser_column_order` has the
     same normalization gap for already-persisted duplicate ids. The intent is a
     deduplicated permutation of the known ids.
-*   **Tests:** `tests/test_study_index_config.py::TestBrowserColumnOrder::test_set_duplicate_ids_are_deduplicated`
-    and `test_get_duplicate_ids_are_deduplicated` specify the intended behavior
-    as strict expected failures until the separate fix branch implements it.
-*   **Proposed Fix:** Deduplicate both setter input and persisted values on read
-    (e.g. preserving first occurrence with `dict.fromkeys(...)`) before appending
-    missing default ids.
+*   **Fix:** Both `get_study_index_browser_column_order` and
+    `set_study_index_browser_column_order` now deduplicate known ids with
+    `dict.fromkeys(...)` (first occurrence wins) before appending any missing
+    default ids.
+*   **Tests:** `tests/test_study_index_config.py::TestBrowserColumnOrder::
+    test_set_duplicate_ids_are_deduplicated` and
+    `test_get_duplicate_ids_are_deduplicated` regression-test the setter and
+    getter paths; both pass on `bugfix/post-review-cleanup`.
 
 
 

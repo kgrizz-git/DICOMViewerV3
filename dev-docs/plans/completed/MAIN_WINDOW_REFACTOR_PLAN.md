@@ -215,7 +215,10 @@ the same commit as the move.
 ### Go / no-go checklist (all required)
 
 - [x] Phase 0 tests listed below exist and pass
-- [x] Full suite green: `python -m pytest tests/ -v`
+- [x] Full suite green: activate `.venv` first (`source .venv/bin/activate` on
+      macOS/Linux; `.venv\Scripts\activate` on Windows), then
+      `python -m pytest tests/ -v` (~10 minute timeout per
+      [`AGENTS.md`](../../../AGENTS.md))
       (2026-08-09: 4596 passed, 14 skipped, 1 unrelated xfailed)
 - [x] Architecture boundaries green: `python scripts/check_architecture_boundaries.py`
 - [x] Agent smoke green: `python scripts/agent_smoke_harness.py`
@@ -292,13 +295,14 @@ Do not combine Phase 0 and an extraction in the same commit.
 
 ## Verification
 
-After Phase 0 (gate):
-1. `python -m pytest tests/ -v` — full suite (baseline green)
+After Phase 0 (gate) — run from the project venv (`.venv`; see
+[`AGENTS.md`](../../../AGENTS.md)):
+1. `python -m pytest tests/ -v` — full suite (baseline green; ~10 minute timeout)
 2. `python scripts/check_architecture_boundaries.py`
 3. `python scripts/agent_smoke_harness.py`
 
-After each extraction:
-1. `python -m pytest tests/ -v` — full suite (regression signal)
+After each extraction — same venv activation as above:
+1. `python -m pytest tests/ -v` — full suite (regression signal; ~10 minute timeout)
 2. `python scripts/check_architecture_boundaries.py` — no new violations
 3. `python scripts/agent_smoke_harness.py` — import + fixture check
 4. Manual: open app, verify theme toggle, privacy toggle, mouse mode switching,
