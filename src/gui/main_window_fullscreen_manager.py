@@ -97,15 +97,14 @@ class MainWindowFullscreenManager:
         """Collapse side panes, hide bottom navigator bar and main toolbar (no config persist)."""
         parent = self._parent
         sizes = parent.splitter.sizes()
-        if len(sizes) != 3:
-            return
-        total = max(sizes[0] + sizes[1] + sizes[2], 1)
         parent.viewport_resizing.emit()
-        parent.splitter.setSizes([0, total, 0])
-        if parent.show_left_pane_action is not None:
-            parent.show_left_pane_action.setChecked(False)
-        if parent.show_right_pane_action is not None:
-            parent.show_right_pane_action.setChecked(False)
+        if len(sizes) == 3:
+            total = max(sizes[0] + sizes[1] + sizes[2], 1)
+            parent.splitter.setSizes([0, total, 0])
+            if parent.show_left_pane_action is not None:
+                parent.show_left_pane_action.setChecked(False)
+            if parent.show_right_pane_action is not None:
+                parent.show_right_pane_action.setChecked(False)
         container = getattr(parent, "series_navigator_container", None)
         if container is not None:
             container.setVisible(False)

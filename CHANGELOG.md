@@ -7,6 +7,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Fixed
+- **About dialog GitHub link:** Clicking the repository URL in **Help → About**
+  now opens the page in the system browser (`http`/`https` via
+  `QDesktopServices`). **Semantic versioning note: patch.**
+- **Crosshair move debounce:** Starting a move on a second crosshair while
+  another move is still debouncing finalizes the first move so its undo/redo
+  command is not lost. **Semantic versioning note: patch.**
 - **Post-review bugfixes (PR scope):** Slice-location single-view refresh now
   initializes managers and drains pending full refreshes; text-annotation
   deletion clears stale move-tracking; cine controls format integral speeds
