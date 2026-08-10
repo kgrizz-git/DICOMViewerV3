@@ -30,6 +30,8 @@ from gui.window_slot_map_widget import WindowSlotMapPopupDialog
 if TYPE_CHECKING:
     from main import DICOMViewerApp
 
+_MAX_LAYOUT_SLOTS = 4
+
 
 def on_layout_changed(app: DICOMViewerApp, layout_mode: str) -> None:
     """Handle layout mode change from multi-window layout."""
@@ -94,7 +96,11 @@ def on_swap_view_requested(app: DICOMViewerApp, other_index: int) -> None:
     sender = app.sender()
     if not isinstance(sender, ImageViewer) or sender.subwindow_index is None:
         return
-    if other_index < 0 or other_index >= 4 or other_index == sender.subwindow_index:
+    if (
+        other_index < 0
+        or other_index >= _MAX_LAYOUT_SLOTS
+        or other_index == sender.subwindow_index
+    ):
         return
     app.multi_window_layout.swap_views(sender.subwindow_index, other_index)
     # Resize images in visible panes so any view that was last in a smaller
@@ -204,7 +210,7 @@ def on_window_slot_map_popup_requested(app: DICOMViewerApp) -> None:
             get_layout_mode=app.multi_window_layout.get_layout_mode,
             get_focused_view_index=app.get_focused_subwindow_index,
             get_thumbnail_for_view=app._get_thumbnail_for_view,
-            get_accent_id=app.main_window.config_manager.get_accent,
+            get_accent_id=app.config_manager.get_accent,
         )
     except Exception:
         pass

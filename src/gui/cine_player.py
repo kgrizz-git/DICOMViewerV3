@@ -184,7 +184,7 @@ class CinePlayer(QObject):
                 return False
 
             datasets = studies[study_uid][series_uid]
-            if not datasets or len(datasets) < 2:
+            if not datasets:
                 return False
 
             # Check if it's a multi-frame file or sequential single-frames

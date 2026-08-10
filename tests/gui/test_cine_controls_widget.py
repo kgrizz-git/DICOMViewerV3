@@ -6,7 +6,6 @@ Achieves 100% statement and branch coverage for CineControlsWidget.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from PySide6.QtCore import QPoint, Qt
 
 from gui.cine_controls_widget import CineControlsWidget
@@ -239,10 +238,6 @@ def test_frame_slider_context_menu(qapp) -> None:
         mock_menu_inst.exec.assert_called_once()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #14A: integral float speed is formatted as an unsupported combo label.",
-)
 def test_set_speed_selects_integral_float_label(qapp) -> None:
     """Integral float speeds must select their matching combo-box label."""
     widget = CineControlsWidget()
@@ -253,10 +248,6 @@ def test_set_speed_selects_integral_float_label(qapp) -> None:
     assert widget.speed_combo.currentText() == "2x"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #14B: clearing frames leaves the prior cine-bounds tooltip visible.",
-)
 def test_update_frame_position_zero_frames_clears_stale_bounds_tooltip(
     qapp,
 ) -> None:

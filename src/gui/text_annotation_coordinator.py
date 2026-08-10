@@ -272,8 +272,11 @@ class TextAnnotationCoordinator:
                 self.update_undo_redo_state_callback()
 
         # Remove from tracking
-        if text_item in self._text_move_tracking:
-            del self._text_move_tracking[text_item]
+        self._drop_text_move_tracking(text_item)
+
+    def _drop_text_move_tracking(self, annotation_item) -> None:
+        """Remove transient move-tracking state for a text annotation item."""
+        self._text_move_tracking.pop(annotation_item, None)
 
     def handle_text_annotation_delete_requested(self, annotation_item) -> None:
         """
@@ -313,6 +316,7 @@ class TextAnnotationCoordinator:
         else:
             # Fallback to direct deletion if undo/redo not available
             self.text_annotation_tool.delete_annotation(annotation_item, self.image_viewer.scene)
+        self._drop_text_move_tracking(annotation_item)
 
     def display_annotations_for_slice(self, study_uid: str, series_uid: str, instance_identifier: int) -> None:
         """
@@ -357,6 +361,22 @@ class TextAnnotationCoordinator:
         if self.image_viewer.scene is None:
             return
 
+        from tools.text_annotation_tool import TextAnnotationItem
+
+        current_key = (study_uid, series_uid, instance_identifier)
+        scene = self.image_viewer.scene
+        text_items = [
+            item for item in scene.items()
+            if isinstance(item, TextAnnotationItem)
+        ]
+        if text_items:
+            current_annotations = set(
+                self.text_annotation_tool.annotations.get(current_key, [])
+            )
+            for item in text_items:
+                if item not in current_annotations:
+                    self._drop_text_move_tracking(item)
+
         self.text_annotation_tool.clear_annotations_from_other_slices(
-            study_uid, series_uid, instance_identifier, self.image_viewer.scene
+            study_uid, series_uid, instance_identifier, scene
         )

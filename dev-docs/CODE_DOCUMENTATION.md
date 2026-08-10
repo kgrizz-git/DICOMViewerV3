@@ -65,6 +65,6 @@ Text shown in the running application for **Quick Start Guide** and **About** is
 ### About dialog
 
 - **Menu:** Help → About  
-- **Source:** [src/gui/main_window.py](../src/gui/main_window.py)  
-- **Content:** The About text is built in **`_show_about()`** (approximately lines 1619–1753). The HTML string is in the **`html_content`** variable (around lines 1664–1742).  
-- **Note:** The dialog is created and shown in `_show_about()`; edits to the visible About text should be made in that method’s `html_content`.
+- **Source:** [src/gui/dialogs/about_dialog.py](../src/gui/dialogs/about_dialog.py) (`show_about`); thin wrapper `MainWindow._show_about`  
+- **Content:** The About HTML is built in **`show_about()`** (`html_content`).  
+- **Note:** Edits to the visible About text should be made in that function’s `html_content`.

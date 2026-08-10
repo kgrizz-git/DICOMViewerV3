@@ -23,41 +23,29 @@ Requirements:
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 from PySide6.QtCore import (
-    QBuffer,
     QDir,
     QEvent,
-    QIODevice,
-    QPropertyAnimation,
     Qt,
-    QTimer,
     Signal,
 )
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
-    QColor,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
-    QPixmap,
 )
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QColorDialog,
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QMenu,
     QScrollArea,
     QSizePolicy,
     QSplitter,
-    QTextBrowser,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -71,14 +59,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from gui.dialogs.edit_recent_list_dialog import EditRecentListDialog
+from gui.main_window_fullscreen_manager import MainWindowFullscreenManager
 from gui.main_window_menu_builder import build_menu_bar
+from gui.main_window_overlay_options import MainWindowOverlayOptionsMixin
+from gui.main_window_recent_files_manager import MainWindowRecentFilesManager
 from gui.main_window_status_controller import MainWindowStatusController
+from gui.main_window_toast_controller import MainWindowToastController
 from gui.main_window_toolbar_builder import build_main_toolbar
 from gui.window_slot_map_widget import WindowSlotMapWidget
 from utils.config_manager import ConfigManager
 from utils.debug_flags import DEBUG_LAYOUT
-from version import __version__ as APP_VERSION
 
 
 def _get_resource_path(relative_path: str) -> str:
@@ -110,7 +100,7 @@ def _get_resource_path(relative_path: str) -> str:
     return path_str
 
 
-class MainWindow(QMainWindow):
+class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
     """
     Main application window for the DICOM viewer.
     
@@ -207,6 +197,9 @@ class MainWindow(QMainWindow):
 
     # Filled by build_menu_bar in _create_menu_bar (Optional until menu is built).
     recent_menu: QMenu | None = None
+    # Owns Recent-files menu rebuild/context-menu/edit-dialog; constructed by
+    # build_menu_bar immediately after recent_menu (single ownership point).
+    _recent_files: MainWindowRecentFilesManager | None = None
     light_theme_action: QAction | None = None
     dark_theme_action: QAction | None = None
     privacy_action: QAction | None = None  # Shared by View menu and toolbar
@@ -267,6 +260,8 @@ class MainWindow(QMainWindow):
     mouse_mode_select_action: QAction | None = None
     mouse_mode_auto_window_level_action: QAction | None = None
     mouse_mode_group: QActionGroup | None = None
+    _mouse_mode_action_map: dict[str, QAction]
+    _mouse_mode_action_reverse: dict[QAction, str]
     use_rescaled_values_checkbox: QCheckBox | None = None
     series_navigator_action: QAction | None = None
     prev_series_action: QAction | None = None
@@ -290,12 +285,6 @@ class MainWindow(QMainWindow):
     # Callable stamped on by main.py to supply active W/L presets.
     _get_active_wl_presets: Any | None = None
 
-    # Toast overlay (ephemeral QLabel + effects; cleared after fade).
-    _toast_label: QLabel | None = None
-    _toast_effect: QGraphicsOpacityEffect | None = None
-    _toast_timer: QTimer | None = None
-    _toast_animation: QPropertyAnimation | None = None
-
     # Note: Cine control signals moved to CineControlsWidget
     # Keeping these signals for backward compatibility but they're not used anymore
 
@@ -313,9 +302,9 @@ class MainWindow(QMainWindow):
         # Reference to image viewer (set by main.py after creation)
         self.image_viewer: ImageViewer | None = None
 
-        # View → Fullscreen: in-memory snapshot only (never write fullscreen layout to config defaults)
-        self._fullscreen_snapshot: dict[str, Any] | None = None
-        self._fullscreen_transitioning = False
+        # View → Fullscreen: owns in-memory chrome snapshot + re-entrancy guard
+        # (never write fullscreen layout to config defaults).
+        self._fullscreen = MainWindowFullscreenManager(self)
 
         # Window properties
         self.setWindowTitle("DICOM Viewer V3")
@@ -342,8 +331,10 @@ class MainWindow(QMainWindow):
         # Create UI components
         self._create_menu_bar()
         self._create_toolbar()
+        self._init_mouse_mode_action_maps()
         self._create_status_bar()
         self._create_central_widget()
+        self._toast = MainWindowToastController(self)
 
         # Enable drag-and-drop on main window
         self.setAcceptDrops(True)
@@ -358,6 +349,29 @@ class MainWindow(QMainWindow):
     def _create_toolbar(self) -> None:
         """Create the application toolbar via the toolbar builder."""
         build_main_toolbar(self)
+
+    def _init_mouse_mode_action_maps(self) -> None:
+        """Build mode-string ↔ QAction maps after toolbar actions exist."""
+        candidate_map: dict[str, QAction | None] = {
+            "select": self.mouse_mode_select_action,
+            "roi_ellipse": self.mouse_mode_ellipse_roi_action,
+            "roi_rectangle": self.mouse_mode_rectangle_roi_action,
+            "measure": self.mouse_mode_measure_action,
+            "measure_angle": self.mouse_mode_measure_angle_action,
+            "text_annotation": self.mouse_mode_text_annotation_action,
+            "arrow_annotation": self.mouse_mode_arrow_annotation_action,
+            "crosshair": self.mouse_mode_crosshair_action,
+            "zoom": self.mouse_mode_zoom_action,
+            "magnifier": self.mouse_mode_magnifier_action,
+            "pan": self.mouse_mode_pan_action,
+            "auto_window_level": self.mouse_mode_auto_window_level_action,
+        }
+        self._mouse_mode_action_map = {
+            mode: action for mode, action in candidate_map.items() if action is not None
+        }
+        self._mouse_mode_action_reverse = {
+            action: mode for mode, action in self._mouse_mode_action_map.items()
+        }
 
     def _create_status_bar(self) -> None:
         """Create the status bar (delegated to MainWindowStatusController)."""
@@ -391,61 +405,13 @@ class MainWindow(QMainWindow):
             severity: ``info`` (default), ``warning``, ``error``, or ``success``.
                 Controls the left-border color and icon prefix.
         """
-        _severity_map = {
-            "info":    ("#4285da", "ℹ"),
-            "warning": ("#d68910", "⚠"),
-            "error":   ("#c0392b", "✕"),
-            "success": ("#27ae60", "✓"),
-        }
-        border_color, icon = _severity_map.get(severity, _severity_map["info"])
-        display_message = f"{icon}  {message}"
-
-        if self._toast_timer is not None and self._toast_timer.isActive():
-            self._toast_timer.stop()
-        if self._toast_label is not None:
-            self._toast_label.deleteLater()
-        alpha = max(0.0, min(1.0, float(bg_alpha)))
-        label = QLabel(display_message, self)
-        label.setStyleSheet(
-            f"background-color: rgba(0, 0, 0, {alpha}); color: white; padding: 12px 22px; "
-            f"border-radius: 8px; border-left: 5px solid {border_color}; "
-            f"font-size: 14px; font-weight: 500;"
+        self._toast.show(
+            message,
+            timeout_ms,
+            position=position,
+            bg_alpha=bg_alpha,
+            severity=severity,
         )
-        label.setWordWrap(True)
-        label.setMinimumWidth(360)
-        label.setMaximumWidth(640)
-        label.adjustSize()
-        effect = QGraphicsOpacityEffect(label)
-        label.setGraphicsEffect(effect)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        x = (self.width() - label.width()) // 2
-        if position == "center":
-            y = (self.height() - label.height()) // 2
-        elif position == "top-center":
-            cw = self.centralWidget()
-            y = (cw.y() + 12) if cw is not None else 80
-        else:
-            y = self.height() - 100
-        label.setGeometry(max(0, x), max(0, y), label.width(), label.height())
-        label.show()
-        label.raise_()
-        self._toast_label = label
-        self._toast_effect = effect
-
-        def start_fade():
-            self._toast_timer = None  # single-shot fired; allow new toasts to schedule again
-            anim = QPropertyAnimation(effect, b"opacity")
-            anim.setDuration(300)
-            anim.setStartValue(1.0)
-            anim.setEndValue(0.0)
-            anim.finished.connect(lambda: (label.deleteLater(), setattr(self, "_toast_label", None)))
-            anim.start()
-            self._toast_animation = anim
-
-        self._toast_timer = QTimer(self)
-        self._toast_timer.setSingleShot(True)
-        self._toast_timer.timeout.connect(start_fade)
-        self._toast_timer.start(timeout_ms)
 
     def _create_central_widget(self) -> None:
         """Create the central widget area."""
@@ -587,343 +553,29 @@ class MainWindow(QMainWindow):
         # Emit signal to notify other components
         self.theme_changed.emit(theme)
 
-    def _on_privacy_toggled(self, checked: bool) -> None:
-        """Handle privacy view toggle from the shared privacy_action (menu, toolbar, or shortcut).
-
-        Args:
-            checked: True if privacy view is now enabled, False otherwise.
-        """
-        self.config_manager.set_privacy_view(checked)
-        self.privacy_view_toggled.emit(checked)
-        self._update_privacy_action()
-
-    def _on_privacy_view_toggled(self, checked: bool) -> None:
-        """Backward-compat shim for external callers (e.g. context-menu via viewer signal).
-
-        Syncs the shared action's check state, then delegates to _on_privacy_toggled.
-        """
-        if self.privacy_action is not None:
-            self.privacy_action.blockSignals(True)
-            self.privacy_action.setChecked(checked)
-            self.privacy_action.blockSignals(False)
-        self._on_privacy_toggled(checked)
-
-    def _on_smooth_when_zoomed_toggled(self, checked: bool) -> None:
-        """
-        Handle smooth-when-zoomed toggle from View menu or context menu.
-
-        Args:
-            checked: True if smooth when zoomed is enabled, False otherwise
-        """
-        self.config_manager.set_smooth_image_when_zoomed(checked)
-        self.smooth_when_zoomed_toggled.emit(checked)
-
-    def _on_scale_markers_toggled(self, checked: bool) -> None:
-        """
-        Handle scale markers toggle from View menu or context menu.
-
-        Args:
-            checked: True if scale markers are enabled, False otherwise
-        """
-        self.config_manager.set_show_scale_markers(checked)
-        self.scale_markers_toggled.emit(checked)
-
-    def _on_direction_labels_toggled(self, checked: bool) -> None:
-        """
-        Handle direction labels toggle from View menu or context menu.
-
-        Args:
-            checked: True if direction labels are enabled, False otherwise
-        """
-        self.config_manager.set_show_direction_labels(checked)
-        self.direction_labels_toggled.emit(checked)
-
-    def set_smooth_when_zoomed_checked(self, checked: bool) -> None:
-        """Sync the View menu Image Smoothing action check state without emitting triggered."""
-        if self.smooth_when_zoomed_action is None:
-            return
-        self.smooth_when_zoomed_action.blockSignals(True)
-        self.smooth_when_zoomed_action.setChecked(checked)
-        self.smooth_when_zoomed_action.blockSignals(False)
-
-    def set_scale_markers_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Scale Markers action check state without emitting triggered."""
-        if self.scale_markers_action is None:
-            return
-        self.scale_markers_action.blockSignals(True)
-        self.scale_markers_action.setChecked(checked)
-        self.scale_markers_action.blockSignals(False)
-
-    def set_direction_labels_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Direction Labels action check state without emitting triggered."""
-        if self.direction_labels_action is None:
-            return
-        self.direction_labels_action.blockSignals(True)
-        self.direction_labels_action.setChecked(checked)
-        self.direction_labels_action.blockSignals(False)
-
-    def set_slice_slider_checked(self, checked: bool) -> None:
-        """Sync the View menu Show In-View Slice/Frame Slider action check state without emitting triggered."""
-        if self.slice_slider_action is None:
-            return
-        self.slice_slider_action.blockSignals(True)
-        self.slice_slider_action.setChecked(checked)
-        self.slice_slider_action.blockSignals(False)
-
-    def set_slice_slider_placement_checked(self, placement: str) -> None:
-        """Sync the View menu slider placement action without emitting triggered."""
-        for key, action in self.slice_slider_placement_actions.items():
-            action.blockSignals(True)
-            action.setChecked(key == placement)
-            action.blockSignals(False)
-
-    def set_slice_slider_direction_checked(self, direction: str) -> None:
-        """Sync the View menu slider direction action without emitting triggered."""
-        for key, action in self.slice_slider_direction_actions.items():
-            action.blockSignals(True)
-            action.setChecked(key == direction)
-            action.blockSignals(False)
-
-    def _on_show_instances_separately_toggled(self, checked: bool) -> None:
-        """Handle the View menu toggle for multi-frame instance expansion."""
-        self.config_manager.set_show_instances_separately(checked)
-        self.show_instances_separately_toggled.emit(checked)
-
-    def set_show_instances_separately_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Instances Separately action check state without emitting triggered."""
-        if self.show_instances_separately_action is None:
-            return
-        self.show_instances_separately_action.blockSignals(True)
-        self.show_instances_separately_action.setChecked(checked)
-        self.show_instances_separately_action.blockSignals(False)
-
-    def set_show_instances_separately_enabled(self, enabled: bool) -> None:
-        """Enable or disable the View menu Show Instances Separately action."""
-        if self.show_instances_separately_action is None:
-            return
-        self.show_instances_separately_action.setEnabled(enabled)
-
-    def set_3d_view_actions_enabled(self, enabled: bool, tooltip: str = "") -> None:
-        """Enable or disable toolbar/menu 3D volume render actions."""
-        tip = tooltip or "Open 3D Volume Render of current series"
-        for action in (self.view_3d_action, self.create_3d_action):
-            if action is None:
-                continue
-            action.setEnabled(enabled)
-            action.setToolTip(tip)
-            if action is self.create_3d_action:
-                action.setStatusTip(tip)
-
-    def set_slice_location_lines_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Slice Location Lines → Enable/Disable action check state without emitting triggered."""
-        if self.slice_location_lines_enable_action is None:
-            return
-        self.slice_location_lines_enable_action.blockSignals(True)
-        self.slice_location_lines_enable_action.setChecked(checked)
-        self.slice_location_lines_enable_action.blockSignals(False)
-
-    def set_slice_location_lines_same_group_only_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Slice Location Lines → Only Show For Same Group action check state without emitting triggered."""
-        if self.slice_location_lines_same_group_only_action is None:
-            return
-        self.slice_location_lines_same_group_only_action.blockSignals(True)
-        self.slice_location_lines_same_group_only_action.setChecked(checked)
-        self.slice_location_lines_same_group_only_action.blockSignals(False)
-
-    def set_slice_location_lines_focused_only_checked(self, checked: bool) -> None:
-        """Sync the View menu Show Slice Location Lines → Show Only For Focused Window action check state without emitting triggered."""
-        if self.slice_location_lines_focused_only_action is None:
-            return
-        self.slice_location_lines_focused_only_action.blockSignals(True)
-        self.slice_location_lines_focused_only_action.setChecked(checked)
-        self.slice_location_lines_focused_only_action.blockSignals(False)
-
-    def set_slice_location_lines_slab_bounds_checked(self, mode: str) -> None:
-        """Sync the View menu slab-bounds action check state without emitting triggered.
-
-        Args:
-            mode: "middle" or "begin_end".  Action is checked when mode == "begin_end".
-        """
-        if self.slice_location_lines_show_slab_bounds_action is None:
-            return
-        self.slice_location_lines_show_slab_bounds_action.blockSignals(True)
-        self.slice_location_lines_show_slab_bounds_action.setChecked(mode == "begin_end")
-        self.slice_location_lines_show_slab_bounds_action.blockSignals(False)
-
-    def _update_privacy_action(self) -> None:
-        """Update the shared privacy_action icon, text, tooltip, and toolbar button styling."""
-        if self.privacy_action is None:
-            return
-
-        privacy_enabled = self.privacy_action.isChecked()
-
-        if privacy_enabled:
-            self.privacy_action.setText("Privacy ON")
-            self.privacy_action.setToolTip("Privacy view ON — identifiers masked  (Ctrl+P)")
-            icon = getattr(self, '_privacy_icon_on', None)
-            if icon is not None:
-                self.privacy_action.setIcon(icon)
-            if self.main_toolbar is not None:
-                for tb in self.main_toolbar.findChildren(QToolButton):
-                    if tb.defaultAction() == self.privacy_action:
-                        tb.setStyleSheet("")
-                        break
-        else:
-            self.privacy_action.setText("Privacy OFF")
-            self.privacy_action.setToolTip("Privacy view OFF — identifiers visible  (Ctrl+P)")
-            icon = getattr(self, '_privacy_icon_off', None)
-            if icon is not None:
-                self.privacy_action.setIcon(icon)
-            # Red background when privacy is OFF (data is exposed)
-            if self.main_toolbar is not None:
-                for tb in self.main_toolbar.findChildren(QToolButton):
-                    if tb.defaultAction() == self.privacy_action:
-                        tb.setStyleSheet("QToolButton { background-color: #c0392b; border-radius: 4px; }")
-                        break
-
-    # Backward-compat alias (called by old code paths before refactor)
-    _update_privacy_mode_button = _update_privacy_action
-
     def _show_disclaimer(self) -> None:
         """Show the disclaimer dialog."""
         from gui.dialogs.disclaimer_dialog import DisclaimerDialog
         DisclaimerDialog.show_disclaimer(self.config_manager, self, force_show=True)
 
-    def _on_about_disclaimer_clicked(self, url) -> None:
-        """
-        Handle disclaimer link click in About dialog.
-        
-        Args:
-            url: QUrl of the clicked link
-        """
-        if url.scheme() == "disclaimer":
-            self._show_disclaimer()
-
     def _show_about(self) -> None:
         """Show the about dialog with scrollable content."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("About DICOM Viewer V3")
-        dialog.setMinimumSize(500, 400)
-        dialog.resize(600, 500)
+        from gui.dialogs.about_dialog import show_about
 
-        theme = self.config_manager.get_theme()
-        layout = QVBoxLayout(dialog)
+        show_about(self, self.config_manager, on_disclaimer=self._show_disclaimer)
 
-        # Create scrollable text area - use QTextBrowser for anchor link support
-        text_edit = QTextBrowser()
-        text_edit.setOpenExternalLinks(False)  # Don't open external links in browser
-        text_edit.setReadOnly(True)
-        # Styling inherited from app-level QSS (QDialog → QWidget, QTextBrowser → QTextEdit)
-
-        # Load icon and convert to base64 for HTML embedding
-        icon_html = ""
-        icon_path = Path(__file__).parent.parent.parent / 'resources' / 'icons' / 'dvv6ldvv6ldvv6ld_edit-removebg-preview.png'
-        if icon_path.exists():
-            pixmap = QPixmap(str(icon_path))
-            # Scale icon to reasonable size (96x96 pixels for inline display)
-            scaled_pixmap = pixmap.scaled(96, 96, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            # Convert to base64 for HTML embedding
-            buffer = QBuffer()
-            buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-            scaled_pixmap.save(buffer, "PNG")
-            icon_data = bytes(buffer.data().toBase64().data()).decode("ascii")
-            icon_html = f'<img src="data:image/png;base64,{icon_data}" style="vertical-align: middle; margin-right: 10px;" />'
-
-        # Create HTML content with theme-based link styling
-        if theme == "dark":
-            link_color = "#4a9eff"  # Light blue for dark theme
-        else:
-            link_color = "#2980b9"  # Darker blue for light theme
-
-        html_content = f"""<html>
-<head>
-    <style>
-        a {{ color: {link_color}; }}
-    </style>
-</head>
-<body>
-    <h2>{icon_html}Medical Physics DICOM Viewer</h2>
-    <p><b>Version {APP_VERSION}</b></p>
-    <p><b>Made by Kevin Grizzard</b><br>
-    Available at <a href='https://github.com/kgrizz-git/DICOMViewerV3'>https://github.com/kgrizz-git/DICOMViewerV3</a></p>
-    <hr>
-    <p>A cross-platform DICOM viewer application.</p>
-    <h3>Features:</h3>
-    <h4>File Management:</h4>
-    <ul>
-    <li>Open DICOM files and folders</li>
-    <li>Recursive folder search</li>
-    <li>Multiple file selection</li>
-    <li>Recent files support</li>
-    </ul>
-    <h4>Image Display:</h4>
-    <ul>
-    <li>Zoom and pan functionality</li>
-    <li>Window width and level adjustment</li>
-    <li>Window/Level presets: Multiple presets from DICOM tags with context menu switching</li>
-    <li>Slice navigation (arrow keys, mouse wheel)</li>
-    <li>Series navigation with thumbnail navigator</li>
-    <li>Dark and light themes</li>
-    <li>Reset view to fit viewport</li>
-    <li>Intensity projections: Combine slices (AIP, MIP, MinIP)</li>
-    <li>Image inversion (I key)</li>
-    <li>Cine Playback: Automatic frame-by-frame playback for multi-frame DICOM series with a play/pause toggle, stop, adjustable speed, and loop option</li>
-    <li>Image Fusion: Overlay functional imaging (PET/SPECT) on anatomical imaging (CT/MR) with automatic spatial alignment, adjustable opacity/threshold/colormap, and 2D/3D resampling modes</li>
-    </ul>
-    <h4>Analysis Tools:</h4>
-    <ul>
-    <li>Draw elliptical and rectangular ROIs</li>
-    <li>ROI statistics (mean, std dev, min, max, area)</li>
-    <li>Distance measurements (pixels, mm, cm)</li>
-    <li>Text annotations: Add and edit text labels on images</li>
-    <li>Arrow annotations: Add arrows to point to features</li>
-    <li>Histogram display: View pixel value distribution with window/level overlay (Cmd+Shift+H / Ctrl+Shift+H)</li>
-    <li>Undo/redo functionality</li>
-    </ul>
-    <h4>Metadata and Overlays:</h4>
-    <ul>
-    <li>Customizable DICOM metadata overlays</li>
-    <li>Toggle overlay visibility (3 states)</li>
-    <li>View and edit all DICOM tags</li>
-    <li>Tag filtering/search functionality</li>
-    <li>Expand/collapse tag groups in metadata panel</li>
-    <li>Reorder columns in metadata panel</li>
-    <li>Privacy View: Toggle to mask patient-related tags in display (View menu, context menu, or Cmd+P/Ctrl+P)</li>
-    <li>Anonymization on Export: Option to anonymize patient information when exporting to DICOM</li>
-    <li>Export selected tags to Excel/CSV</li>
-    <li>Annotations support: Presentation States, Key Objects, embedded overlays</li>
-    </ul>
-    <h4>Data Management:</h4>
-    <ul>
-    <li>Clear ROIs from slice or dataset</li>
-    <li>Clear measurements</li>
-    <li>ROI list panel with selection</li>
-    </ul>
-    <h4>Export:</h4>
-    <ul>
-    <li>Export images as PNG, JPEG, or DICOM</li>
-    <li>Hierarchical selection (studies, series, slices)</li>
-    <li>Include overlays, ROIs, and measurements</li>
-    <li>Export at displayed resolution option</li>
-    <li>Export selected DICOM tags to Excel/CSV</li>
-    <li>Export/Import Customizations: Save and share overlay config, annotation options, metadata panel settings, and theme as JSON files</li>
-    </ul>
-    <hr>
-    <p><a href="disclaimer://show">View Disclaimer</a></p>
-</body>
-</html>"""
-
-        text_edit.setHtml(html_content)
-        # Handle disclaimer link click
-        text_edit.anchorClicked.connect(self._on_about_disclaimer_clicked)
-        layout.addWidget(text_edit)
-
-        # Add OK button
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
-        button_box.accepted.connect(dialog.accept)
-        layout.addWidget(button_box)
-
-        dialog.exec()
+    def _sync_mouse_mode_toolbar_checked(self, mode: str) -> None:
+        """Update toolbar exclusivity without emitting ``mouse_mode_changed``."""
+        all_actions = list(self._mouse_mode_action_map.values())
+        for action in all_actions:
+            action.blockSignals(True)
+        for action in all_actions:
+            action.setChecked(False)
+        selected_action = self._mouse_mode_action_map.get(mode)
+        if selected_action is not None:
+            selected_action.setChecked(True)
+        for action in all_actions:
+            action.blockSignals(False)
 
     def _on_mouse_mode_changed(self, mode: str) -> None:
         """
@@ -932,62 +584,7 @@ class MainWindow(QMainWindow):
         Args:
             mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
-        # Uncheck all actions first
-        all_actions = [
-            self.mouse_mode_select_action,
-            self.mouse_mode_ellipse_roi_action,
-            self.mouse_mode_rectangle_roi_action,
-            self.mouse_mode_measure_action,
-            self.mouse_mode_measure_angle_action,
-            self.mouse_mode_text_annotation_action,
-            self.mouse_mode_arrow_annotation_action,
-            self.mouse_mode_crosshair_action,
-            self.mouse_mode_zoom_action,
-            self.mouse_mode_magnifier_action,
-            self.mouse_mode_pan_action,
-            self.mouse_mode_auto_window_level_action
-        ]
-
-        # Block signals when updating toolbar buttons to prevent recursive loops
-        # This prevents setChecked() from triggering the action's triggered signal
-        for action in all_actions:
-            action.blockSignals(True)
-
-        # Uncheck all actions
-        for action in all_actions:
-            action.setChecked(False)
-
-        # Check the action corresponding to the selected mode
-        if mode == "select":
-            self.mouse_mode_select_action.setChecked(True)
-        elif mode == "roi_ellipse":
-            self.mouse_mode_ellipse_roi_action.setChecked(True)
-        elif mode == "roi_rectangle":
-            self.mouse_mode_rectangle_roi_action.setChecked(True)
-        elif mode == "measure":
-            self.mouse_mode_measure_action.setChecked(True)
-        elif mode == "measure_angle":
-            self.mouse_mode_measure_angle_action.setChecked(True)
-        elif mode == "text_annotation":
-            self.mouse_mode_text_annotation_action.setChecked(True)
-        elif mode == "arrow_annotation":
-            self.mouse_mode_arrow_annotation_action.setChecked(True)
-        elif mode == "crosshair":
-            self.mouse_mode_crosshair_action.setChecked(True)
-        elif mode == "zoom":
-            self.mouse_mode_zoom_action.setChecked(True)
-        elif mode == "magnifier":
-            self.mouse_mode_magnifier_action.setChecked(True)
-        elif mode == "pan":
-            self.mouse_mode_pan_action.setChecked(True)
-        elif mode == "auto_window_level":
-            self.mouse_mode_auto_window_level_action.setChecked(True)
-
-        # Unblock signals after updating toolbar buttons
-        for action in all_actions:
-            action.blockSignals(False)
-
-        # Emit signal AFTER updating toolbar buttons to actually change the mode
+        self._sync_mouse_mode_toolbar_checked(mode)
         self.mouse_mode_changed.emit(mode)
 
     def get_current_mouse_mode(self) -> str:
@@ -997,30 +594,10 @@ class MainWindow(QMainWindow):
         Returns:
             Current mouse mode string ("select", "roi_ellipse", "roi_rectangle", "measure", "text_annotation", "arrow_annotation", "zoom", "pan", "auto_window_level")
         """
-        if self.mouse_mode_select_action.isChecked():
-            return "select"
-        elif self.mouse_mode_ellipse_roi_action.isChecked():
-            return "roi_ellipse"
-        elif self.mouse_mode_rectangle_roi_action.isChecked():
-            return "roi_rectangle"
-        elif self.mouse_mode_measure_action.isChecked():
-            return "measure"
-        elif self.mouse_mode_measure_angle_action.isChecked():
-            return "measure_angle"
-        elif self.mouse_mode_text_annotation_action.isChecked():
-            return "text_annotation"
-        elif self.mouse_mode_arrow_annotation_action.isChecked():
-            return "arrow_annotation"
-        elif self.mouse_mode_crosshair_action.isChecked():
-            return "crosshair"
-        elif self.mouse_mode_zoom_action.isChecked():
-            return "zoom"
-        elif self.mouse_mode_magnifier_action.isChecked():
-            return "magnifier"
-        elif self.mouse_mode_auto_window_level_action.isChecked():
-            return "auto_window_level"
-        else:  # pan is default
-            return "pan"
+        for action in self._mouse_mode_action_map.values():
+            if action.isChecked():
+                return self._mouse_mode_action_reverse[action]
+        return "pan"  # default when nothing is checked
 
     def set_mouse_mode_checked(self, mode: str) -> None:
         """
@@ -1032,59 +609,7 @@ class MainWindow(QMainWindow):
         Args:
             mode: Mouse mode ("select", "roi_ellipse", "roi_rectangle", "measure", "zoom", "magnifier", "pan", "auto_window_level")
         """
-        # All mouse mode actions
-        all_actions = [
-            self.mouse_mode_select_action,
-            self.mouse_mode_ellipse_roi_action,
-            self.mouse_mode_rectangle_roi_action,
-            self.mouse_mode_measure_action,
-            self.mouse_mode_measure_angle_action,
-            self.mouse_mode_text_annotation_action,
-            self.mouse_mode_arrow_annotation_action,
-            self.mouse_mode_crosshair_action,
-            self.mouse_mode_zoom_action,
-            self.mouse_mode_magnifier_action,
-            self.mouse_mode_pan_action,
-            self.mouse_mode_auto_window_level_action
-        ]
-
-        # Block signals when updating toolbar buttons
-        for action in all_actions:
-            action.blockSignals(True)
-
-        # Uncheck all actions
-        for action in all_actions:
-            action.setChecked(False)
-
-        # Check the action corresponding to the selected mode
-        if mode == "select":
-            self.mouse_mode_select_action.setChecked(True)
-        elif mode == "roi_ellipse":
-            self.mouse_mode_ellipse_roi_action.setChecked(True)
-        elif mode == "roi_rectangle":
-            self.mouse_mode_rectangle_roi_action.setChecked(True)
-        elif mode == "measure":
-            self.mouse_mode_measure_action.setChecked(True)
-        elif mode == "measure_angle":
-            self.mouse_mode_measure_angle_action.setChecked(True)
-        elif mode == "text_annotation":
-            self.mouse_mode_text_annotation_action.setChecked(True)
-        elif mode == "arrow_annotation":
-            self.mouse_mode_arrow_annotation_action.setChecked(True)
-        elif mode == "crosshair":
-            self.mouse_mode_crosshair_action.setChecked(True)
-        elif mode == "zoom":
-            self.mouse_mode_zoom_action.setChecked(True)
-        elif mode == "magnifier":
-            self.mouse_mode_magnifier_action.setChecked(True)
-        elif mode == "pan":
-            self.mouse_mode_pan_action.setChecked(True)
-        elif mode == "auto_window_level":
-            self.mouse_mode_auto_window_level_action.setChecked(True)
-
-        # Unblock signals after updating toolbar buttons
-        for action in all_actions:
-            action.blockSignals(False)
+        self._sync_mouse_mode_toolbar_checked(mode)
 
     def _on_scroll_wheel_mode_combo_changed(self, text: str) -> None:
         """
@@ -1095,54 +620,6 @@ class MainWindow(QMainWindow):
         """
         mode = "slice" if text == "Slice" else "zoom"
         self.scroll_wheel_mode_changed.emit(mode)
-
-    def _on_font_size_decrease(self) -> None:
-        """Handle font size decrease button click."""
-        self.adjust_overlay_font_size(-1)
-
-    def _on_font_size_increase(self) -> None:
-        """Handle font size increase button click."""
-        self.adjust_overlay_font_size(1)
-
-    def adjust_overlay_font_size(self, delta: int) -> None:
-        """Adjust the shared corner-overlay font size, clamped to its supported range."""
-        current_size = self.config_manager.get_overlay_font_size()
-        new_size = max(1, min(24, current_size + delta))
-        if new_size != current_size:
-            self.config_manager.set_overlay_font_size(new_size)
-            self.overlay_font_size_changed.emit(new_size)
-
-    def _on_font_color_picker(self) -> None:
-        """Handle font color picker button click."""
-        # Get current color from config
-        current_color = self.config_manager.get_overlay_font_color()
-        qcolor = QColor(current_color[0], current_color[1], current_color[2])
-
-        # Open color dialog
-        color = QColorDialog.getColor(qcolor, self, "Select Overlay Font Color")
-
-        if color.isValid():
-            # Save to config and emit signal
-            self.config_manager.set_overlay_font_color(color.red(), color.green(), color.blue())
-            self.overlay_font_color_changed.emit(color.red(), color.green(), color.blue())
-
-    def _on_scale_markers_color_picker(self) -> None:
-        """Handle scale markers color picker menu action."""
-        current_color = self.config_manager.get_scale_markers_color()
-        qcolor = QColor(current_color[0], current_color[1], current_color[2])
-        color = QColorDialog.getColor(qcolor, self, "Select Scale Markers Color")
-        if color.isValid():
-            self.config_manager.set_scale_markers_color(color.red(), color.green(), color.blue())
-            self.scale_markers_color_changed.emit(color.red(), color.green(), color.blue())
-
-    def _on_direction_labels_color_picker(self) -> None:
-        """Handle direction labels color picker menu action."""
-        current_color = self.config_manager.get_direction_labels_color()
-        qcolor = QColor(current_color[0], current_color[1], current_color[2])
-        color = QColorDialog.getColor(qcolor, self, "Select Direction Labels Color")
-        if color.isValid():
-            self.config_manager.set_direction_labels_color(color.red(), color.green(), color.blue())
-            self.direction_labels_color_changed.emit(color.red(), color.green(), color.blue())
 
     def set_rescale_toggle_state(self, checked: bool) -> None:
         """
@@ -1165,150 +642,40 @@ class MainWindow(QMainWindow):
         self.series_navigation_requested.emit(1)
 
     def _update_recent_menu(self) -> None:
-        """Update the Recent Files submenu with current recent files."""
-        if self.recent_menu is None:
-            return
-        # Clear existing actions
-        self.recent_menu.clear()
-
-        # Get recent files from config
-        recent_files = self.config_manager.get_recent_files()
-
-        if not recent_files:
-            # Show "No recent files" if empty
-            no_recent_action = QAction("No recent files", self)
-            no_recent_action.setEnabled(False)
-            self.recent_menu.addAction(no_recent_action)
-        else:
-            # Add action for each recent file using regular QAction for native appearance
-            for file_path in recent_files:
-                # Create display name (truncate if too long)
-                display_name = os.path.basename(file_path)
-
-                # Handle edge case where basename returns empty string
-                # (e.g., root directory, trailing slashes, etc.)
-                if not display_name:
-                    # Use the full path as fallback (truncated if needed)
-                    display_name = file_path
-                    if len(display_name) > 50:
-                        display_name = display_name[:47] + "..."
-
-                    # If path is root directory or still empty, use default label
-                    if not display_name or display_name in (os.path.sep, "/"):
-                        display_name = "Folder" if os.path.isdir(file_path) else "File"
-                else:
-                    # Normal basename case - truncate if too long
-                    if len(display_name) > 50:
-                        display_name = display_name[:47] + "..."
-
-                # Create regular QAction with just the display name (no prefixes)
-                recent_action = QAction(display_name, self)
-                # Store file path in action data for event filter
-                recent_action.setData(file_path)
-                # Connect triggered signal to open the file
-                recent_action.triggered.connect(
-                    lambda checked, path=file_path: self.open_recent_file_requested.emit(path)
-                )
-                self.recent_menu.addAction(recent_action)
-
-    def eventFilter(self, obj, event) -> bool:
-        """
-        Event filter for handling context menu events on recent menu items.
-        
-        Args:
-            obj: Object that received the event
-            event: Event
-            
-        Returns:
-            True if event was handled, False otherwise
-        """
-        from PySide6.QtGui import QContextMenuEvent
-
-        # Only handle events for the recent menu
-        if self.recent_menu is None or obj != self.recent_menu:
-            return super().eventFilter(obj, event)
-
-        # Check if it's a context menu event (right-click)
-        if event.type() == QEvent.Type.ContextMenu:
-            context_event = QContextMenuEvent(event)
-            # Get the action at the mouse position
-            action = self.recent_menu.actionAt(self.recent_menu.mapFromGlobal(context_event.globalPos()))
-
-            # Only show context menu if it's a recent file action (has data)
-            if action is not None and action.data():
-                file_path = action.data()
-                recent_files = self.config_manager.get_recent_files()
-                file_idx = recent_files.index(file_path) if file_path in recent_files else -1
-
-                # Create context menu
-                context_menu = QMenu(self)
-
-                move_up_action = QAction("Move Up", self)
-                move_up_action.setEnabled(file_idx > 0)
-                move_up_action.triggered.connect(
-                    lambda checked=False, fp=file_path: self._move_recent_file(fp, direction="up")
-                )
-                context_menu.addAction(move_up_action)
-
-                move_down_action = QAction("Move Down", self)
-                move_down_action.setEnabled(0 <= file_idx < len(recent_files) - 1)
-                move_down_action.triggered.connect(
-                    lambda checked=False, fp=file_path: self._move_recent_file(fp, direction="down")
-                )
-                context_menu.addAction(move_down_action)
-
-                context_menu.addSeparator()
-
-                remove_action = QAction("Remove", self)
-                remove_action.triggered.connect(
-                    lambda checked=False, fp=file_path: self._remove_recent_file(fp)
-                )
-                context_menu.addAction(remove_action)
-
-                # Show context menu at the cursor position
-                context_menu.exec(context_event.globalPos())
-                return True
-
-        return super().eventFilter(obj, event)
+        """Update the Recent Files submenu with current recent files (delegates to manager)."""
+        self._recent_files.update()
 
     def _remove_recent_file(self, file_path: str) -> None:
         """
-        Remove a file from recent files list.
-        
+        Remove a file from recent files list (delegates to manager).
+
         Args:
             file_path: Path to file or folder to remove
         """
-        self.config_manager.remove_recent_file(file_path)
-        self._update_recent_menu()
+        self._recent_files.remove(file_path)
 
     def _move_recent_file(self, file_path: str, direction: str) -> None:
         """
-        Move a recent file one position up or down in the recent files list.
+        Move a recent file one position up or down in the recent files list
+        (delegates to manager).
 
         Args:
             file_path: Path of the recent file entry to move
             direction: "up" to move toward the top, "down" to move toward the bottom
         """
-        if direction == "up":
-            self.config_manager.move_recent_file_up(file_path)
-        else:
-            self.config_manager.move_recent_file_down(file_path)
-        self._update_recent_menu()
+        self._recent_files.move(file_path, direction)
 
     def update_recent_menu(self) -> None:
         """
-        Public method to update recent menu (called from outside).
+        Public method to update recent menu (called from outside), delegates to manager.
         """
-        self._update_recent_menu()
+        self._recent_files.update()
 
     def _open_edit_recent_list_dialog(self) -> None:
         """
-        Open the Edit Recent List dialog.
+        Open the Edit Recent List dialog (delegates to manager).
         """
-        dialog = EditRecentListDialog(self.config_manager, self)
-        dialog.exec()
-        # Update the recent menu after dialog closes (in case items were removed)
-        self._update_recent_menu()
+        self._recent_files.open_edit_dialog()
 
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         """
@@ -1494,56 +861,30 @@ class MainWindow(QMainWindow):
             self.show_series_navigator_action.setChecked(self.series_navigator_visible)
         self.series_navigator_visibility_changed.emit(self.series_navigator_visible)
 
+    @property
+    def _fullscreen_snapshot(self) -> dict[str, Any] | None:
+        """Backward-compat accessor for the manager's in-memory chrome snapshot.
+
+        Kept for ``tests/test_main_window_fullscreen.py`` and any external
+        callers; the snapshot itself now lives on ``MainWindowFullscreenManager``.
+        """
+        return self._fullscreen.snapshot
+
+    @_fullscreen_snapshot.setter
+    def _fullscreen_snapshot(self, value: dict[str, Any] | None) -> None:
+        self._fullscreen.snapshot = value
+
     def _take_fullscreen_snapshot(self) -> dict[str, Any]:
-        """Capture splitter sizes, navigator bar, and toolbar visibility before entering fullscreen."""
-        container = getattr(self, "series_navigator_container", None)
-        bar_visible = bool(container.isVisible()) if container is not None else False
-        toolbar_vis = self.main_toolbar.isVisible() if hasattr(self, "main_toolbar") else True
-        return {
-            "splitter_sizes": list(self.splitter.sizes()),
-            "series_navigator_bar_visible": bar_visible,
-            "toolbar_visible": toolbar_vis,
-            "was_maximized": self.isMaximized(),
-        }
+        """Thin wrapper — see ``MainWindowFullscreenManager.take_snapshot``."""
+        return self._fullscreen.take_snapshot()
 
     def _apply_fullscreen_chrome_hidden(self) -> None:
-        """Collapse side panes, hide bottom navigator bar and main toolbar (no config persist)."""
-        sizes = self.splitter.sizes()
-        total = max(sizes[0] + sizes[1] + sizes[2], 1)
-        self.viewport_resizing.emit()
-        self.splitter.setSizes([0, total, 0])
-        if self.show_left_pane_action is not None:
-            self.show_left_pane_action.setChecked(False)
-        if self.show_right_pane_action is not None:
-            self.show_right_pane_action.setChecked(False)
-        container = getattr(self, "series_navigator_container", None)
-        if container is not None:
-            container.setVisible(False)
-        if hasattr(self, "main_toolbar"):
-            self.main_toolbar.hide()
-        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+        """Thin wrapper — see ``MainWindowFullscreenManager.apply_chrome_hidden``."""
+        self._fullscreen.apply_chrome_hidden()
 
     def _restore_fullscreen_chrome(self, snap: dict[str, Any]) -> None:
-        """Restore splitter, navigator bar, toolbar, and View menu checks from *snap*."""
-        self.viewport_resizing.emit()
-        restored: list[int] = list(snap["splitter_sizes"])
-        if len(restored) == 3:
-            self.splitter.setSizes(restored)
-            if self.show_left_pane_action is not None:
-                self.show_left_pane_action.setChecked(restored[0] > 0)
-            if self.show_right_pane_action is not None:
-                self.show_right_pane_action.setChecked(restored[2] > 0)
-        bar_vis = bool(snap.get("series_navigator_bar_visible", False))
-        self.series_navigator_visible = bar_vis
-        container = getattr(self, "series_navigator_container", None)
-        if container is not None:
-            container.setVisible(bar_vis)
-        if self.show_series_navigator_action is not None:
-            self.show_series_navigator_action.setChecked(bar_vis)
-        tb_vis = bool(snap.get("toolbar_visible", True))
-        if hasattr(self, "main_toolbar"):
-            self.main_toolbar.setVisible(tb_vis)
-        QTimer.singleShot(10, lambda: self.viewport_resized.emit())
+        """Thin wrapper — see ``MainWindowFullscreenManager.restore_chrome``."""
+        self._fullscreen.restore_chrome(snap)
 
     def set_fullscreen(self, enable: bool) -> None:
         """
@@ -1551,57 +892,14 @@ class MainWindow(QMainWindow):
 
         Entering hides left/right panes, the series navigator bar, and the main toolbar
         using a snapshot so leaving restores prior layout without persisting fullscreen
-        as user defaults.
+        as user defaults. Thin wrapper — see ``MainWindowFullscreenManager.set_fullscreen``.
         """
-        if enable:
-            if self.isFullScreen():
-                if self.fullscreen_action is not None:
-                    self.fullscreen_action.setChecked(True)
-                return
-            self._fullscreen_transitioning = True
-            try:
-                self._fullscreen_snapshot = self._take_fullscreen_snapshot()
-                self._apply_fullscreen_chrome_hidden()
-                self.showFullScreen()
-                if self.fullscreen_action is not None:
-                    self.fullscreen_action.setChecked(True)
-            finally:
-                self._fullscreen_transitioning = False
-            return
-
-        # --- exit ---
-        self._fullscreen_transitioning = True
-        try:
-            snap = self._fullscreen_snapshot
-            self._fullscreen_snapshot = None
-            self.showNormal()
-            if snap is not None and snap.get("was_maximized"):
-                self.showMaximized()
-            if snap is not None:
-                self._restore_fullscreen_chrome(snap)
-            if self.fullscreen_action is not None:
-                self.fullscreen_action.setChecked(False)
-        finally:
-            self._fullscreen_transitioning = False
+        self._fullscreen.set_fullscreen(enable)
 
     def changeEvent(self, event: QEvent) -> None:
         """If the user leaves fullscreen via the OS, restore chrome from the snapshot."""
         super().changeEvent(event)
-        if event.type() != QEvent.Type.WindowStateChange:
-            return
-        if self._fullscreen_transitioning:
-            return
-        if not self.isFullScreen() and self._fullscreen_snapshot is not None:
-            self._fullscreen_transitioning = True
-            try:
-                snap = self._fullscreen_snapshot
-                self._fullscreen_snapshot = None
-                if snap is not None:
-                    self._restore_fullscreen_chrome(snap)
-                if self.fullscreen_action is not None:
-                    self.fullscreen_action.setChecked(False)
-            finally:
-                self._fullscreen_transitioning = False
+        self._fullscreen.handle_change_event(event)
 
     def set_window_slot_map_visible(self, visible: bool) -> None:
         """
@@ -1744,20 +1042,7 @@ class MainWindow(QMainWindow):
             event: Close event
         """
         # Avoid persisting fullscreen geometry / forced splitter; restore chrome first
-        if self.isFullScreen():
-            snap = self._fullscreen_snapshot
-            self._fullscreen_snapshot = None
-            self.showNormal()
-            if snap is not None:
-                self._restore_fullscreen_chrome(snap)
-                if snap.get("was_maximized"):
-                    self.showMaximized()
-            if self.fullscreen_action is not None:
-                self.fullscreen_action.setChecked(False)
-        elif self._fullscreen_snapshot is not None:
-            snap = self._fullscreen_snapshot
-            self._fullscreen_snapshot = None
-            self._restore_fullscreen_chrome(snap)
+        self._fullscreen.restore_on_close()
 
         # Close any open 3D volume render dialogs before the main window closes.
         # These are parentless top-level widgets that would otherwise survive the

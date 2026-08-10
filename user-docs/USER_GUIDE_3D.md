@@ -1,6 +1,6 @@
 # User guide — 3D volume rendering
 
-**Last updated:** 2026-05-31
+**Last updated:** 2026-08-10
 
 The viewer can open a **GPU-accelerated 3D volume render** of the **focused** 2D subwindow’s series. This is a **separate** non-modal dialog; it does not replace the multi-pane 2D layout.
 
@@ -24,9 +24,9 @@ Both use the **currently focused** image subwindow’s series.
 2. The volume is converted for **VTK** and drawn with **volume ray casting** (not surface meshes). What you see is a blend of all voxels along each view ray, controlled by a **transfer function** (opacity and color vs. intensity/HU).
 3. **Built-in presets** define typical opacity ramps (e.g. CT Bone, CT Soft Tissue, MR Default). **Window / Level** and **Threshold** scale and shift where tissue becomes visible without editing the curve by hand.
 4. **Opacity** scales the whole volume up or down, with a **perceptual** slider that puts most of its travel in the low-opacity range where small changes are visible. **Contrast depth** reshapes the opacity curve independently of overall opacity.
-5. Rendering runs in a **background thread** while the dialog shows progress; VTK interaction runs on the main thread after load completes.
+5. Volume construction runs in a **background thread** while the dialog shows progress. VTK interaction and drawing run on the main thread after load completes; the first visible image is a fast preview and may refine automatically on capable hardware.
 
-> **Scalar values are raw, not calibrated.** The 3D path feeds VTK the **raw stored pixel values** from the series (rescale slope/intercept is **not** applied), so CT thresholds are **not** true Hounsfield units. The control panel shows the active scalar domain under the preset (e.g. *“CT — raw pixel values (not calibrated HU)”*) so threshold/window numbers are read honestly.
+> **Scalar values are shown honestly.** When complete, valid DICOM rescale metadata is available, the 3D path uses calibrated values (for example, CT HU). Otherwise it uses raw stored pixel values. The control panel identifies the active scalar domain, so threshold/window values can be interpreted correctly.
 
 You can keep **multiple** 3D dialogs open (one per series key). Opening the same series again **focuses** the existing dialog instead of creating a duplicate.
 
@@ -51,6 +51,7 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 | **Level** | Recenters the transfer function. Shifts which intensities appear brightest. When you change a built-in preset, Window/Level reset to that preset’s natural range. |
 | **Threshold** | Shifts opacity onset along the intensity axis (−500 to +500). **Positive** hides more low-density material; **negative** reveals more. Resets to 0 when you pick a new built-in preset. |
 | **Contrast depth** | Reshapes the opacity curve independently of overall opacity. Center is neutral; lower reveals faint material, higher deepens contrast so dense/internal structures stand out. |
+| **Detail / Auto** | Detail controls ray-sampling quality. Auto selects detail from the preset and limits it for large volumes; the viewer starts with a Fast preview and refines only when the preview is responsive. Select High or Ultra manually when you want more detail and accept a potentially slower render. |
 | **Background** | Viewport background colour: Black, Dark Gray, Light Gray, or White. |
 | **Reset Camera** | Default 3D view orientation and framing. |
 | **Help…** | Opens this guide in your web browser (requires network for GitHub-hosted docs in release builds). |
@@ -61,6 +62,7 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 - **Fusion**, **MPR panes**, and **3D** are independent: 3D always uses the **underlying DICOM series** in the focused 2D pane, not a fused composite or MPR slab.
 - For **PET/CT fusion** or **MPR** workflows, see [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) and [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md).
 - Large volumes may be slow on integrated GPUs; VTK may use a CPU ray-cast path on some systems.
+- If the viewer keeps a Fast preview and says higher detail may be slow, it avoided an automatic render likely to make the window unresponsive. You can still select a higher Detail level manually.
 
 ## Export (not yet available)
 

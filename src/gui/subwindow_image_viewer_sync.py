@@ -23,7 +23,11 @@ from gui.main_window_theme import get_theme_viewer_background_color
 
 
 def _iter_image_viewers(app: Any):
-    for subwindow in app.multi_window_layout.get_all_subwindows():
+    """Yield image viewers from each subwindow, or nothing during startup/teardown."""
+    layout = getattr(app, "multi_window_layout", None)
+    if layout is None:
+        return
+    for subwindow in layout.get_all_subwindows():
         if subwindow and subwindow.image_viewer:
             yield subwindow.image_viewer
 

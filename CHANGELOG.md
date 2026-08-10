@@ -6,7 +6,40 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Fixed
+- **3D viewer first paint:** opening a 3D volume now shows a Fast preview before
+  higher detail is considered. Auto Detail caps large float32 volumes and only
+  refines after a responsive preview; a GPU blank-frame CPU fallback also stays
+  Fast and suppresses automatic fine rendering. The viewer shows non-modal
+  progress feedback and cancels queued refinement during cleanup. Manual
+  High/Ultra remains available. **Semantic versioning note: patch.**
+- **About dialog GitHub link:** Clicking the repository URL in **Help → About**
+  now opens the page in the system browser (`http`/`https` via
+  `QDesktopServices`). **Semantic versioning note: patch.**
+- **Crosshair move debounce:** Starting a move on a second crosshair while
+  another move is still debouncing finalizes the first move so its undo/redo
+  command is not lost. **Semantic versioning note: patch.**
+- **Post-review bugfixes (PR scope):** Slice-location single-view refresh now
+  initializes managers and drains pending full refreshes; text-annotation
+  deletion clears stale move-tracking; cine controls format integral speeds
+  correctly and clear loop-bound tooltips when frames drop to zero; single
+  multi-frame DICOM files are accepted for cine playback; main-window slot-map
+  wiring failures are logged instead of swallowed; study-index browser column
+  order deduplicates known ids on read and write; tag-export union drain uses
+  monotonic timeouts; layout slot swap guards use a named max-slot constant and
+  popup accent reads from ``app.config_manager``; crosshair clear/move paths
+  drop dead branches and reuse a single debounce timer; histogram dialog open
+  removes unreachable null checks and the unused settings-applied stub;
+  subwindow viewer iteration tolerates a missing multi-window layout during
+  startup/teardown. **Semantic versioning note: patch.**
+
 ### Changed
+- **Internal (MainWindow split):** `MainWindow` concerns extracted into
+  `dialogs/about_dialog.py`, `main_window_toast_controller.py`, mouse-mode
+  action maps, `main_window_recent_files_manager.py`,
+  `main_window_fullscreen_manager.py`, and `main_window_overlay_options.py`
+  mixin; public APIs and Phase 0 characterization tests retained.
+  **Semantic versioning note: patch** (no user-facing behavior change).
 - **Internal (`main.py` mixin split):** `DICOMViewerApp` orchestration split into
   plain mixin modules under `src/main_app_*.py` (`InitializationMixin`,
   subwindow/MPR, UI/files, display/settings, tag/ROI); `src/main.py` retains

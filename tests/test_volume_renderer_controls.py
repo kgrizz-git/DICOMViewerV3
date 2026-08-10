@@ -285,6 +285,24 @@ def test_quality_mode_sets_sample_distance() -> None:
         assert actual == pytest.approx(expected_dist), f"{name}: {actual} != {expected_dist}"
 
 
+def test_temporary_quality_preserves_selected_target() -> None:
+    r = _make_renderer()
+    r.set_quality_mode("High")
+    r.set_temporary_quality("Fast")
+    assert r._mapper.GetSampleDistance() == pytest.approx(3.0)
+    r.restore_target_quality()
+    assert r._mapper.GetSampleDistance() == pytest.approx(0.5)
+
+
+def test_setting_target_without_apply_preserves_temporary_distance() -> None:
+    r = _make_renderer()
+    r.set_temporary_quality("Fast")
+    r.set_quality_mode("High", apply=False)
+    assert r._mapper.GetSampleDistance() == pytest.approx(3.0)
+    r.restore_target_quality()
+    assert r._mapper.GetSampleDistance() == pytest.approx(0.5)
+
+
 def test_render_method_auto_is_default() -> None:
     r = _make_renderer()
     r.set_render_method("Auto")

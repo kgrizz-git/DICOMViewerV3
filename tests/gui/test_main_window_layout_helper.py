@@ -163,10 +163,6 @@ def test_setup_content_requires_rescale_signal_on_main_window(
         setup_main_window_content(main_window, mock_panels, slot_map=mock_slot_map)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #12A: slot-map callback wiring errors are silently swallowed.",
-)
 def test_setup_content_reports_slot_map_wiring_exceptions(
     qapp, caplog, mock_panels: MainWindowPanels, mock_slot_map: WindowSlotMapCallbacks
 ) -> None:
@@ -179,4 +175,6 @@ def test_setup_content_reports_slot_map_wiring_exceptions(
     with caplog.at_level(logging.DEBUG):
         setup_main_window_content(main_window, mock_panels, slot_map=mock_slot_map)
     main_window.set_window_slot_map_callbacks.assert_called_once()
-    assert "Thumbnail wiring failure" in caplog.text
+    assert "gui.main_window_layout_helper" in caplog.text
+    assert "Traceback (redacted)" in caplog.text
+    assert "[REDACTED EXCEPTION DETAIL]" in caplog.text

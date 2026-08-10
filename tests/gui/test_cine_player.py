@@ -312,10 +312,6 @@ def test_advance_frame_loop_bounds(mock_nav) -> None:
     assert player.loop_end_frame is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #15A: a single multi-frame DICOM is rejected before frame inspection.",
-)
 def test_is_cine_capable_accepts_single_multiframe_file(mock_nav) -> None:
     """A single DICOM with multiple frames is cine-capable."""
     nav, total_cb, current_cb = mock_nav

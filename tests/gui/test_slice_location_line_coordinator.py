@@ -248,10 +248,6 @@ def test_refresh_for_subwindow_not_visible(mock_app: SimpleNamespace) -> None:
         mock_clear.assert_called_once()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #4A: public refresh does not initialize a missing manager.",
-)
 def test_refresh_for_subwindow_initializes_missing_manager(mock_app: SimpleNamespace) -> None:
     """A public refresh must create the target manager when it is absent."""
     coord = SliceLocationLineCoordinator(mock_app)
@@ -327,10 +323,6 @@ def test_refresh_for_subwindow_focused_only_filter(
         mock_update.assert_called_once_with([], 1)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #4B: a re-entrant public refresh strands pending work.",
-)
 def test_refresh_for_subwindow_drains_reentrant_pending_work(mock_app: SimpleNamespace) -> None:
     """A re-entrant public refresh must schedule the pending full refresh."""
     coord = SliceLocationLineCoordinator(mock_app)

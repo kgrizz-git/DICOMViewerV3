@@ -332,19 +332,19 @@ def test_on_swap_view_requested_rejects_index_outside_current_four_slot_contract
 
 
 @patch("gui.layout_window_slot_controller.WindowSlotMapPopupDialog")
-def test_popup_uses_main_window_config_manager_contract(
+def test_popup_uses_app_config_manager_for_accent(
     mock_dlg_cls: MagicMock, mock_app: SimpleNamespace
 ) -> None:
-    """The current main-window popup wiring owns its config manager."""
+    """Popup set_callbacks wires get_accent_id from app.config_manager."""
     mock_dlg = MagicMock()
     mock_widget = MagicMock()
     mock_dlg.get_map_widget.return_value = mock_widget
     mock_dlg_cls.return_value = mock_dlg
 
-    # Removing the required main-window config manager prevents popup callbacks.
-    del mock_app.main_window.config_manager
-
     mock_app.config_manager.get_layout_map_popup_position.return_value = None
+
     on_window_slot_map_popup_requested(mock_app)
 
-    mock_widget.set_callbacks.assert_not_called()
+    mock_widget.set_callbacks.assert_called_once()
+    kwargs = mock_widget.set_callbacks.call_args.kwargs
+    assert kwargs["get_accent_id"] is mock_app.config_manager.get_accent

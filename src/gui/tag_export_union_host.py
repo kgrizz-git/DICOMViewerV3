@@ -83,8 +83,8 @@ class TagExportUnionHost:
         if w.isRunning():
             w.requestInterruption()
             app_inst = QApplication.instance()
-            deadline = time.time() + timeout_sec
-            while w.isRunning() and time.time() < deadline:
+            deadline = time.monotonic() + timeout_sec
+            while w.isRunning() and time.monotonic() < deadline:
                 w.wait(50)
                 if app_inst is not None:
                     app_inst.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)

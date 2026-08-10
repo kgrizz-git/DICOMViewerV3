@@ -74,7 +74,10 @@ class CrosshairCoordinator:
 
         # Crosshair move tracking with batching
         self._crosshair_move_tracking: dict[object, dict[str, Any]] = {}  # Tracks ongoing moves
-        self._move_batch_timer: QTimer | None = None  # Timer for debouncing
+        self._pending_move_item: object | None = None
+        self._move_batch_timer = QTimer()
+        self._move_batch_timer.setSingleShot(True)
+        self._move_batch_timer.timeout.connect(self._on_move_batch_timer_timeout)
 
     def handle_crosshair_clicked(self, pos: QPointF, pixel_value_str: str, x: int, y: int, z: int) -> None:
         """
@@ -232,11 +235,10 @@ class CrosshairCoordinator:
                 )
                 commands.append(command)
 
-            if commands:
-                composite_command = CompositeCommand(commands)
-                self.undo_redo_manager.execute_command(composite_command)
-                if self.update_undo_redo_state_callback:
-                    self.update_undo_redo_state_callback()
+            composite_command = CompositeCommand(commands)
+            self.undo_redo_manager.execute_command(composite_command)
+            if self.update_undo_redo_state_callback:
+                self.update_undo_redo_state_callback()
         else:
             # Fallback to direct deletion
             self.crosshair_manager.clear_crosshairs_for_slice(self.image_viewer.scene)
@@ -297,16 +299,25 @@ class CrosshairCoordinator:
                 # Update current position (don't create command yet)
                 self._crosshair_move_tracking[crosshair_item]['current_pos'] = current_pos
 
-            # Start/restart batch timer (200ms delay)
-            if self._move_batch_timer is not None:
-                self._move_batch_timer.stop()
+            # Finalize a different pending item so its debounced move is not lost
+            pending = self._pending_move_item
+            if pending is not None and pending is not crosshair_item:
+                self._finalize_crosshair_move(pending)
+                self._pending_move_item = None
 
-            self._move_batch_timer = QTimer()
-            self._move_batch_timer.setSingleShot(True)
-            self._move_batch_timer.timeout.connect(lambda: self._finalize_crosshair_move(crosshair_item))
-            self._move_batch_timer.start(200)  # 200ms delay
+            # Start/restart batch timer (200ms delay)
+            self._pending_move_item = crosshair_item
+            self._move_batch_timer.stop()
+            self._move_batch_timer.start(200)
         except Exception:
             _logger.debug("%s", sanitized_format_exc())
+
+    def _on_move_batch_timer_timeout(self) -> None:
+        """Finalize the most recently moved crosshair after the debounce window."""
+        item = self._pending_move_item
+        if item is not None:
+            self._finalize_crosshair_move(item)
+            self._pending_move_item = None
 
     def _finalize_crosshair_move(self, crosshair_item) -> None:
         """

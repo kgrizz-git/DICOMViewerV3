@@ -1,11 +1,42 @@
 # Post-Review Bugfixes and Architectural Improvements
 
 **Date:** 2026-08-08
-**Status:** Active
-**Last reviewed:** 2026-08-09
+**Status:** Implemented on `bugfix/post-review-cleanup` (ready for PR)
+**Last reviewed:** 2026-08-09 (PR scope tagged; implementation landed, including #8A)
+**Last updated:** 2026-08-09
 
 ## Overview
 This plan tracks bugs, edge-case flaws, and architectural improvements identified by subagent code reviews during the test coverage expansion effort. Per project policy, these findings were isolated rather than fixed in-flight during the test-writing phase.
+
+## Implementation notes (2026-08-09)
+
+- PR-scoped items below are **done** on this branch (commits through `961a70f`).
+- Deferred / “Do not pursue” items remain out of scope.
+- MainWindow Phase 0 characterization and extractions #1–#6 are complete on this
+  branch; see `dev-docs/plans/completed/MAIN_WINDOW_REFACTOR_PLAN.md`.
+
+## PR scope (completed)
+
+All of the following landed on `bugfix/post-review-cleanup`.
+
+**Bug fixes:**
+- [x] 3 — `TagExportUnionHost`: `time.time()` → `time.monotonic()`
+- [x] 4A/4B — `SliceLocationLineCoordinator`: manager init guard + pending refresh drain
+- [x] 5A — `TextAnnotationCoordinator`: pop stale move-tracking on deletion
+- [x] 8A — `SubwindowImageViewerSync`: guard missing `multi_window_layout`
+- [x] 14A — `CineControlsWidget`: `set_speed` float formatting mismatch
+- [x] 14B — `CineControlsWidget`: refresh tooltip on zero frames
+- [x] 15A — `CinePlayer`: allow single multi-frame DICOM into cine path
+- [x] 17B — `CrosshairCoordinator`: reuse QTimer instead of allocating per-move
+- [x] 21A — `study_index_config`: deduplicate column-order normalization
+
+**Cleanups:**
+- [x] 6A — `LayoutWindowSlotController`: extract hardcoded max slot constant
+- [x] 6B — `LayoutWindowSlotController`: `app.config_manager` consistency
+- [x] 12A — `MainWindowLayoutHelper`: log instead of silently swallowing exceptions
+- [x] 17A — `CrosshairCoordinator`: remove dead `if commands:` branch
+- [x] 18A — `DialogCoordinator`: remove unreachable dead code in `open_histogram`
+- [x] 18B — `DialogCoordinator`: removed unused `handle_settings_applied` stub
 
 ## Review recommendations (2026-08-09)
 
@@ -18,32 +49,33 @@ current defect.
 | --- | --- | --- |
 | 1 | Plausible smooth-scroll UX problem; threshold selection changes normal wheel behavior. | Validate with a physical smooth-scrolling device, then implement an accumulator with focused interaction tests. |
 | 2 | First-seen is a valid tag-catalog policy; value aggregation is a product decision. | Do not change without a tag-export UX requirement. |
-| 3 | Valid timeout robustness issue. | Use `time.monotonic()` and test elapsed-time behavior. |
-| 4A–4B | Valid coordinator invariants; public single-view refresh can lose work. | Fix manager creation and drain the pending refresh in the single-view `finally` path. |
-| 5A | Valid stale-reference issue after annotation deletion. | Remove tracking entries on deletion; cover direct and undo/redo deletion. |
+| 3 | Valid timeout robustness issue. | **[Done]** `time.monotonic()` + elapsed-time test. |
+| 4A–4B | Valid coordinator invariants; public single-view refresh can lose work. | **[Done]** Manager creation + pending refresh drain in single-view `finally`. |
+| 5A | Valid stale-reference issue after annotation deletion. | **[Done]** Tracking cleared on deletion paths. |
 | 5B | No concurrent pointer drag exists in the normal Qt interaction model. | Do not add per-item timers unless an actual lost-move reproduction appears. |
-| 6A | The application currently supports exactly four slots. | Treat as future layout-expansion work, not a bug. |
-| 6B | Consistency improvement only; production main window owns the config manager. | Fold into a future cleanup if the popup wiring is touched. |
+| 6A | The application currently supports exactly four slots. | **[Done]** Named `_MAX_LAYOUT_SLOTS` constant; expansion still deferred. |
+| 6B | Consistency improvement only; production main window owns the config manager. | **[Done]** `app.config_manager.get_accent`. |
 | 7A–7B | Possible cursor-state hardening, but no user-visible stale-cursor reproduction. | Defer until reproduced; test against real cursor objects rather than mocks. |
-| 8A | A harmless startup/teardown guard would improve resilience. | Add the layout guard if lifecycle work touches this module. |
+| 8A | A harmless startup/teardown guard would improve resilience. | **[Done]** `multi_window_layout is None` → empty iteration. |
 | 8B | `privacy_view_enabled` is an application initialization contract. | Do not add a fallback solely for partial mocks. |
 | 9 | Omitting incomplete W/L is explicitly documented behavior. | Do not change. |
 | 10A | Helpers receive trusted preset colors only. | Do not add validation without an untrusted color input path. |
 | 10B | Plausible frozen-build resilience improvement, unverified. | Reproduce in a frozen-build test before changing resource lookup. |
 | 11A–11B | Fallback immediately raises a clear error; undo/redo callbacks require a fully initialized app. | Do not change for artificial partial-app fixtures. |
-| 12A | Silent exception handling is observability debt. | Add sanitized logging in a focused cleanup. |
+| 12A | Silent exception handling is observability debt. | **[Done]** Sanitized logging. |
 | 12B | `rescale_toggle_changed` is a required MainWindow signal. | Do not add a fallback. |
 | 13 | Signal wiring is intentionally called only after complete app construction. | Do not weaken wiring with broad `hasattr` guards. |
-| 14A–14B | Both are reproducible cine-control defects. | Fix `set_speed` formatting and refresh the bounds tooltip on zero frames. |
-| 15A | Single multi-frame DICOM files are incorrectly rejected. | Fix and add a real multi-frame regression test. |
+| 14A–14B | Both are reproducible cine-control defects. | **[Done]** Speed label formatting + zero-frame tooltip refresh. |
+| 15A | Single multi-frame DICOM files are incorrectly rejected. | **[Done]** Single multi-frame accepted + regression test. |
 | 16A | Cine playback itself is forward-only and normalizes bounds. | Do not introduce reverse export without a full reverse-playback feature. |
 | 16B | Internal rasterization flattens RGBA before PNG output. | Do not change absent an external RGBA-path contract. |
-| 17A | Dead branch only. | Remove during cleanup if desired. |
-| 17B | Replacing the unparented Python-owned timer does not establish a Qt memory leak. | Do not rewrite without a profiler-backed problem. |
-| 18A | Harmless defensive branch. | Optional cleanup only. |
-| 18B | Settings callbacks are wired directly when dialogs are opened; the stub is unused. | Remove or document the stub rather than invoking callbacks twice. |
+| 17A | Dead branch only. | **[Done]** Removed. |
+| 17B | Replacing the unparented Python-owned timer does not establish a Qt memory leak. | **[Done]** Reused timer in `__init__`. |
+| 18A | Harmless defensive branch. | **[Done]** Removed dead null check. |
+| 18B | Settings callbacks are wired directly when dialogs are opened; the stub is unused. | **[Done]** Removed unused stub. |
 | 19A | Normal hide paths reset opacity before the next reveal. | Do not change unless an external caller reproduces it. |
 | 19B | The single-shot timer is inactive once it fires. | Do not change. |
+| 21A | Non-deduplicating column-order normalization. | **[Done]** Dedup on get/set. |
 
 ## Identified Issues
 
@@ -152,7 +184,7 @@ current defect.
 ## Coverage-Effort Findings (2026-08-09)
 
 ### 21. `set_study_index_browser_column_order` (`src/utils/config/study_index_config.py`)
-*   **Issue 21A (genuine bug):** Non-deduplicating column-order normalization.
+*   **Issue 21A (genuine bug): [Done]** Non-deduplicating column-order normalization.
     In `set_study_index_browser_column_order`, `cleaned` is built by keeping only
     known ids (`[str(x) for x in column_ids if x in known]`), then if
     `len(cleaned) != len(known)` the loop appends every missing default id. If
@@ -162,12 +194,14 @@ current defect.
     dropped from the saved order. `get_study_index_browser_column_order` has the
     same normalization gap for already-persisted duplicate ids. The intent is a
     deduplicated permutation of the known ids.
-*   **Tests:** `tests/test_study_index_config.py::TestBrowserColumnOrder::test_set_duplicate_ids_are_deduplicated`
-    and `test_get_duplicate_ids_are_deduplicated` specify the intended behavior
-    as strict expected failures until the separate fix branch implements it.
-*   **Proposed Fix:** Deduplicate both setter input and persisted values on read
-    (e.g. preserving first occurrence with `dict.fromkeys(...)`) before appending
-    missing default ids.
+*   **Fix:** Both `get_study_index_browser_column_order` and
+    `set_study_index_browser_column_order` now deduplicate known ids with
+    `dict.fromkeys(...)` (first occurrence wins) before appending any missing
+    default ids.
+*   **Tests:** `tests/test_study_index_config.py::TestBrowserColumnOrder::
+    test_set_duplicate_ids_are_deduplicated` and
+    `test_get_duplicate_ids_are_deduplicated` regression-test the setter and
+    getter paths; both pass on `bugfix/post-review-cleanup`.
 
 
 

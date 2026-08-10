@@ -598,10 +598,6 @@ def test_clear_annotations_from_other_slices(
     mock_text_tool.clear_annotations_from_other_slices.assert_called_once_with("st", "se", 0, mock_image_viewer.scene)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect #5A: deletion leaves a stale move-tracking reference.",
-)
 def test_deletion_removes_item_from_text_move_tracking(
     mock_text_tool: MagicMock, mock_image_viewer: MagicMock
 ) -> None:
