@@ -93,9 +93,7 @@ class SliceLocationLineCoordinator:
             for idx, subwindow in enumerate(subwindows):
                 if subwindow is None:
                     continue
-                scene = None
-                if hasattr(subwindow, "image_viewer") and subwindow.image_viewer:
-                    scene = getattr(subwindow.image_viewer, "scene", None)
+                scene = self._get_scene_for_subwindow(subwindow)
                 self.ensure_manager(idx, scene)
                 self._refresh_for_subwindow(idx, only_same_group)
         finally:
@@ -116,10 +114,8 @@ class SliceLocationLineCoordinator:
         self._refreshing = True
         try:
             only_same_group = self._get_same_group_only()
-            scene = None
             sub = self._get_subwindow_container(target_idx)
-            if sub and hasattr(sub, "image_viewer") and sub.image_viewer:
-                scene = getattr(sub.image_viewer, "scene", None)
+            scene = self._get_scene_for_subwindow(sub)
             self.ensure_manager(target_idx, scene)
             self._refresh_for_subwindow(target_idx, only_same_group)
         finally:
@@ -137,10 +133,9 @@ class SliceLocationLineCoordinator:
         # Ensure manager has a scene (from subwindow's image_viewer).
         if not manager.has_scene():
             sub = self._get_subwindow_container(target_idx)
-            if sub and hasattr(sub, "image_viewer") and sub.image_viewer:
-                scene = getattr(sub.image_viewer, "scene", None)
-                if scene:
-                    manager.set_scene(scene)
+            scene = self._get_scene_for_subwindow(sub)
+            if scene:
+                manager.set_scene(scene)
 
         if not manager.has_scene():
             return
@@ -206,6 +201,14 @@ class SliceLocationLineCoordinator:
         if cm is None:
             return 1
         return cm.get_slice_location_line_width_px()
+
+    def _get_scene_for_subwindow(self, subwindow: Any | None) -> Any | None:
+        """Return QGraphicsScene for subwindow, or None if unavailable."""
+        if subwindow is None:
+            return None
+        if hasattr(subwindow, "image_viewer") and subwindow.image_viewer:
+            return getattr(subwindow.image_viewer, "scene", None)
+        return None
 
     def _get_subwindow_container(self, idx: int) -> Any | None:
         """Return the SubWindowContainer for subwindow idx."""

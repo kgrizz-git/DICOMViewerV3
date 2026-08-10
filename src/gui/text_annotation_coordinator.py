@@ -365,16 +365,17 @@ class TextAnnotationCoordinator:
 
         current_key = (study_uid, series_uid, instance_identifier)
         scene = self.image_viewer.scene
-        for item in list(scene.items()):
-            if not isinstance(item, TextAnnotationItem):
-                continue
-            belongs_to_current = False
-            for key, annotation_list in self.text_annotation_tool.annotations.items():
-                if item in annotation_list:
-                    belongs_to_current = key == current_key
-                    break
-            if not belongs_to_current:
-                self._drop_text_move_tracking(item)
+        text_items = [
+            item for item in scene.items()
+            if isinstance(item, TextAnnotationItem)
+        ]
+        if text_items:
+            current_annotations = set(
+                self.text_annotation_tool.annotations.get(current_key, [])
+            )
+            for item in text_items:
+                if item not in current_annotations:
+                    self._drop_text_move_tracking(item)
 
         self.text_annotation_tool.clear_annotations_from_other_slices(
             study_uid, series_uid, instance_identifier, scene
