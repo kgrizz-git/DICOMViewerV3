@@ -47,4 +47,4 @@ These files live in the repository under `user-docs/` and track the **main** bra
 
 ## Further reading (developers / deep dives)
 
-Implementation notes, research, and plans live in the project's developer documentation (the `dev-docs/` tree), maintained separately from these user guides.
+Implementation notes, research, and plans live in the project's developer documentation (the `dev-docs/` tree), maintained separately from these user guides. For an example, see [PYLINAC_INTEGRATION_OVERVIEW.md](../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).

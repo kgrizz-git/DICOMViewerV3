@@ -81,3 +81,5 @@ Planned 3D render export (to image or DICOM Secondary Capture) and a transfer-fu
 curve editor are tracked as roadmap items above. See the in-repo user documentation set
 for the current feature list; implementation-plan and design notes are maintained
 separately from these user docs.
+
+Secondary Capture background (for planned DICOM export): [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).

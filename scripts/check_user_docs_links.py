@@ -50,8 +50,9 @@ def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> lis
     """Return list of error messages for broken links in one file.
 
     When ``is_user_doc`` is True (the file lives under ``user-docs/``), links
-    that resolve into ``dev-docs/`` are rejected: user-facing docs must not reach
-    into internal planning/implementation records.
+    that resolve into ``dev-docs/plans/`` or ``dev-docs/TO_DO.md`` are rejected.
+    Links into ``dev-docs/info/`` and other ``dev-docs/`` root-level files are
+    allowed (they contain useful reference material for advanced users).
     """
     errors: list[str] = []
     text = md_path.read_text(encoding="utf-8")
@@ -72,10 +73,13 @@ def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> lis
             errors.append(f"{md_path.relative_to(repo_root)}: link escapes repo: {raw_url!r}")
             continue
         if is_user_doc and target.is_relative_to(dev_docs_root.resolve()):
-            errors.append(
-                f"{md_path.relative_to(repo_root)}: user-docs must not link into dev-docs/: {raw_url!r}"
-            )
-            continue
+            rel = target.relative_to(dev_docs_root.resolve())
+            if (rel.parts and rel.parts[0] == "plans") or target.name == "TO_DO.md":
+                label = rel.parts[0] if rel.parts else target.name
+                errors.append(
+                    f"{md_path.relative_to(repo_root)}: user-docs must not link into dev-docs/{label}: {raw_url!r}"
+                )
+                continue
         if not target.exists():
             errors.append(
                 f"{md_path.relative_to(repo_root)}: broken link {raw_url!r} -> {target.relative_to(repo_root)}"
