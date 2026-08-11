@@ -31,3 +31,19 @@ def test_convert_unknown_vr_returns_value():
     marker = object()
 
     assert convert_dicom_value(marker, "OB") is marker
+
+
+def test_convert_integer_vr_truncates_floats():
+    assert convert_dicom_value(3.14, "US") == 3
+
+
+def test_convert_vr_case_insensitive():
+    assert convert_dicom_value("3.14", "fl") == 3.14
+    assert convert_dicom_value("42", "sl") == 42
+    assert convert_dicom_value(42, "lo") == "42"
+
+
+def test_convert_string_vr_none_returns_empty():
+    assert convert_dicom_value(None, "DS") == ""
+    assert convert_dicom_value(None, "IS") == ""
+    assert convert_dicom_value(None, "UT") == ""
