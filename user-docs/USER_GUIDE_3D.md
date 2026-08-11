@@ -66,7 +66,7 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 
 ## Export (not yet available)
 
-Saving the current 3D view as a **PNG/JPG image** or as a **Secondary Capture (SC) DICOM** series is planned; see [dev-docs/TO_DO.md](../dev-docs/TO_DO.md) under **3D visualization**. Until then, use your OS screenshot tools for a quick capture of the viewport.
+Saving the current 3D view as a **PNG/JPG image** or as a **Secondary Capture (SC) DICOM** series is planned (tracked as a roadmap item). Until then, use your OS screenshot tools for a quick capture of the viewport.
 
 ## Roadmap / limitations
 

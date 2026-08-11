@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -30,6 +31,68 @@ class TestUserDocsRelativeLinks(unittest.TestCase):
                 "check_user_docs_links.py failed:\n"
                 + (proc.stderr or proc.stdout or "(no output)")
             )
+
+
+class TestUserDocsDevDocsBoundary(unittest.TestCase):
+    """user-docs/ must not link into dev-docs/ (broad rule: any dev-docs path)."""
+
+    def _run_on_tree(self, tree_root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(tree_root)],
+            cwd=str(tree_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _make_repo(self, tmp: Path) -> tuple[Path, Path]:
+        (tmp / "user-docs").mkdir()
+        (tmp / "dev-docs" / "plans").mkdir(parents=True)
+        (tmp / "dev-docs" / "info").mkdir(parents=True)
+        (tmp / "dev-docs" / "plans" / "SOME_PLAN.md").write_text("# plan\n")
+        (tmp / "dev-docs" / "info" / "SOME_INFO.md").write_text("# info\n")
+        return tmp / "user-docs", tmp / "dev-docs"
+
+    def test_user_doc_link_into_dev_docs_plans_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs, _ = self._make_repo(tmp)
+            (user_docs / "guide.md").write_text(
+                "See [plan](../dev-docs/plans/SOME_PLAN.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("user-docs must not link into dev-docs/", proc.stderr)
+
+    def test_user_doc_link_into_dev_docs_info_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs, _ = self._make_repo(tmp)
+            (user_docs / "guide.md").write_text(
+                "See [info](../dev-docs/info/SOME_INFO.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("user-docs must not link into dev-docs/", proc.stderr)
+
+    def test_user_doc_link_to_another_user_doc_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs, _ = self._make_repo(tmp)
+            (user_docs / "other.md").write_text("# other\n")
+            (user_docs / "guide.md").write_text("See [other](other.md).\n")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_dev_docs_readme_link_into_dev_docs_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs, dev_docs = self._make_repo(tmp)
+            (dev_docs / "README.md").write_text(
+                "Plan index: [plan](plans/SOME_PLAN.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
 if __name__ == "__main__":
