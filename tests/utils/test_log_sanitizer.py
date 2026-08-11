@@ -158,6 +158,7 @@ class TestSafeExceptionLogger:
             safe_logger.log_exception(exc, context="load /Users/john/Desktop/study.dcm")
         error_message = logger.error.call_args[0][0]
         assert "ABC12345" not in error_message
+        assert "john" not in error_message.lower()
         assert "[REDACTED]" in error_message
         logger.debug.assert_not_called()
 
@@ -170,4 +171,5 @@ class TestSafeExceptionLogger:
             safe_logger.log_exception(exc, context="sync")
         debug_message = logger.debug.call_args[0][0]
         assert "PatientName=John" not in debug_message
+        assert "john" not in debug_message.lower()
         assert "Debug traceback:" in debug_message

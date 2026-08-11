@@ -174,12 +174,12 @@ def test_dataset_to_image_color():
     assert isinstance(result, Image.Image)
     assert result.mode == "RGB"
     assert result.size == (4, 4)
-    # The two non-zero source pixels must map to distinct, non-black output
-    # pixels; a blank/incorrect render would collapse these to black or grey.
     rendered = np.array(result)
-    assert tuple(rendered[0, 0]) != (0, 0, 0)
-    assert tuple(rendered[2, 2]) != (0, 0, 0)
-    assert tuple(rendered[0, 0]) != tuple(rendered[2, 2])
+    # Golden values from the actual per-channel-normalized + windowed render
+    # pipeline; a blank/incorrect render would collapse these or lose channel
+    # distinctness (e.g. R != G != B within a pixel).
+    assert tuple(rendered[0, 0]) == (231, 115, 57)
+    assert tuple(rendered[2, 2]) == (11, 254, 34)
     assert tuple(rendered[1, 1]) == (0, 0, 0)
 
 

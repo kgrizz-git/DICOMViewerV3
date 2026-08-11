@@ -84,7 +84,7 @@ def test_accumulate_pixels_empty_array():
 def test_accumulate_pixels_single_frame():
     pixels = np.array([1.0, 1.0, 2.0, 3.0], dtype=np.float32)
     max_f, min_v, max_v = accumulate_pixels_histogram_stats(pixels, 0.0, None, None)
-    assert max_f >= 2.0
+    assert max_f == 2.0
     assert min_v == 1.0
     assert max_v == 3.0
 
@@ -125,7 +125,7 @@ def test_compute_series_global_frequency_stats_single_dataset(mock_is_mf, mock_g
     mock_get_pa.return_value = np.array([0, 255], dtype=np.uint16)
     ds = MagicMock()
     max_f, x_min, x_max = compute_series_global_frequency_stats([ds], False, 1.0, 0.0)
-    assert max_f is not None
+    assert max_f == 1.0
     assert x_min == 0.0
     assert x_max == 255.0
 
@@ -137,6 +137,6 @@ def test_compute_series_global_frequency_stats_equal_values(mock_is_mf, mock_get
     mock_get_pa.return_value = np.array([100, 100], dtype=np.uint16)
     ds = MagicMock()
     max_f, x_min, x_max = compute_series_global_frequency_stats([ds], False, 1.0, 0.0)
-    assert max_f is not None
+    assert max_f == 2.0
     assert x_min is None
     assert x_max is None

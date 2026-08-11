@@ -1,6 +1,6 @@
 # Test Coverage Improvement Plan
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-11
 **Purpose:** Prioritized, phased plan to close the highest-value test coverage gaps in `src/`. Analysis based on `coverage run` over `tests/core/`, `tests/roi/`, `tests/utils/` (801 tests, all passing) plus manual cross-reference of all 328 source modules against 390 test files.
 
 ---
@@ -113,13 +113,13 @@ Each phase is self-contained and can be implemented independently. Phases are or
   - `test_leaf_tag_from_key_none` — `None` → `None`
   - `test_leaf_tag_from_key_wrong_group_length` — `"(001,0010)"` → `None`
 
-**Proposed test file: `tests/utils/test_dicom_vr_helpers.py` (ALREADY EXISTS — SKIP)**
-- The existing `tests/utils/test_dicom_vr_helpers.py` already covers `is_text_vr` (true/false/case-sensitivity) and `is_date_vr` (true/false) comprehensively. **Do not create or modify this file — Phase 1 drops to 4 files.**
+**Proposed test file: `tests/utils/test_dicom_vr_helpers.py` (ALREADY EXISTS — EXTENDED)**
+- The existing `tests/utils/test_dicom_vr_helpers.py` already covers `is_text_vr` (true/false/case-sensitivity) and `is_date_vr` (true/false) comprehensively. During a later parametrize refactor the case-sensitivity test was accidentally dropped and was subsequently restored as `test_vr_helpers_case_sensitive`.
 
 **Proposed test file: `tests/utils/test_dicom_value_conversion.py` (MERGED INTO EXISTING)**
 - Tier: unit
 - Targets: `utils/dicom_value_conversion.py` — single function `convert_dicom_value(value: Any, vr: str | None = None) -> Any`
-- **An existing `tests/test_dicom_value_conversion.py` already covers this module.** Extend that file (added 3 tests): `test_convert_integer_vr_truncates_floats`, `test_convert_vr_case_insensitive`, `test_convert_string_vr_none_returns_empty`. Reduced to 9 tests total in that file (6 existing + 3 new).
+- **An existing `tests/utils/test_dicom_value_conversion.py` already covers this module.** Extend that file (added 3 tests): `test_convert_integer_vr_truncates_floats`, `test_convert_vr_case_insensitive`, `test_convert_string_vr_none_returns_empty`. Reduced to 9 tests total in that file (6 existing + 3 new).
 
 **Proposed test file: `tests/core/test_decoder_fixture_contract.py`**
 - Tier: unit
@@ -325,6 +325,6 @@ All proposed test files follow existing patterns:
 | 5 | Facade integration coverage | 1 | 14 | unit |
 | **Total** | | **10 new + 1 extended** | **150** | |
 
-**Final results:** All 150 new tests pass. Full suite: **4754 passed, 14 skipped** (was 4624 before this work). Repo harness and architecture boundary checks pass. No source bugs found — no `xfail` markers or `TO_DO.md` entries needed.
+**Final results:** All 150 new tests pass. Full suite: **4875 passed, 14 skipped** (was 4624 before this work; grew further during a post-review test-quality pass). Repo harness and architecture boundary checks pass. No source bugs found — no `xfail` markers or `TO_DO.md` entries needed.
 
 **Estimated coverage impact:** Phase 1 + Phase 2 alone bring ~520 lines of currently-0%-tested pure-logic code to near-full coverage. Phase 3 closes the most impactful remaining branches in partially-tested modules. The plan deliberately avoids low-value targets (re-exports, 1-liners, large Qt facades) in favor of modules where unit tests are cheap and high-confidence.

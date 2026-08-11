@@ -136,6 +136,7 @@ def test_convert_color_pixel_array_ybr():
     assert out.shape == (4, 4, 3)
     assert out.dtype == np.uint8
     assert not np.array_equal(out, arr)
+    assert np.array_equal(out[0, 0], [255, 161, 132])
 
 
 def test_convert_color_pixel_array_ybr_full_422():
@@ -150,6 +151,7 @@ def test_convert_color_pixel_array_ybr_full_422():
     assert out.shape == (4, 4, 3)
     assert out.dtype == np.uint8
     assert not np.array_equal(out, arr)
+    assert np.array_equal(out[0, 0], [255, 161, 132])
 
 
 def test_convert_color_pixel_array_ybr_ict():
@@ -164,6 +166,7 @@ def test_convert_color_pixel_array_ybr_ict():
     assert out.shape == (4, 4, 3)
     assert out.dtype == np.uint8
     assert not np.array_equal(out, arr)
+    assert np.array_equal(out[0, 0], [255, 161, 132])
 
 
 def test_convert_color_pixel_array_ybr_rct():
@@ -178,6 +181,7 @@ def test_convert_color_pixel_array_ybr_rct():
     assert out.shape == (4, 4, 3)
     assert out.dtype == np.uint8
     assert not np.array_equal(out, arr)
+    assert np.array_equal(out[0, 0], [255, 128, 218])
 
 
 def test_convert_color_pixel_array_rgb():

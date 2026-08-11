@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 from pydicom.dataset import Dataset
 
 from core.dicom_color import (
@@ -88,11 +89,16 @@ def test_convert_ybr_to_rgb():
     out = convert_ybr_to_rgb(ybr, photometric_interpretation=None)
     assert np.array_equal(out, ybr)
 
-    ybr_rct = np.ones((10, 10, 3), dtype=np.uint8) * 128
+    ybr_rct = np.zeros((10, 10, 3), dtype=np.uint8)
+    ybr_rct[:, :, 0] = 200  # Y
+    ybr_rct[:, :, 1] = 90   # Cb
+    ybr_rct[:, :, 2] = 220  # Cr
     with patch('core.dicom_color._convert_via_pydicom', return_value=None):
         out_rct = convert_ybr_to_rgb(ybr_rct, photometric_interpretation="YBR_RCT")
     assert out_rct.shape == ybr_rct.shape
     assert out_rct.dtype == np.uint8
+    # RCT: G = Y - floor((Cr+Cb)/4) = 200-77 = 123; R = Cr+G = 343 -> clipped 255; B = Cb+G = 213
+    assert np.array_equal(out_rct[0, 0], [255, 123, 213])
 
     ybr_grey = np.ones((10, 10, 3), dtype=np.uint8) * 128
     out_grey = convert_ybr_to_rgb(ybr_grey, photometric_interpretation="YBR_FULL")
@@ -103,7 +109,11 @@ def test_convert_ybr_to_rgb():
 
 
 def test_detect_and_fix_rgb_channel_order():
+    # Distinct per-channel values so an accidental channel swap would be caught.
     arr = np.zeros((2, 2, 3), dtype=np.uint8)
+    arr[:, :, 0] = 10
+    arr[:, :, 1] = 20
+    arr[:, :, 2] = 30
     out = detect_and_fix_rgb_channel_order(arr)
     assert np.array_equal(out, arr)
 
@@ -123,8 +133,16 @@ def test_is_already_rgb():
 
 
 def test_chroma_variance_ratios():
-    arr = np.random.randint(0, 255, (10, 10, 3), dtype=np.uint8)
+    arr = np.zeros((1, 2, 3), dtype=np.uint8)
+    arr[0, 0] = [10, 20, 50]
+    arr[0, 1] = [30, 20, 150]
     res = _chroma_variance_ratios(arr)
     assert len(res) == 4
     for val in res:
         assert isinstance(val, float)
+    # Y: mean=20, std=10; Cb: constant at 20 (std=0); Cr: mean=100, std=50.
+    cb_mean, cr_mean, cb_var_ratio, cr_var_ratio = res
+    assert cb_mean == 20.0
+    assert cr_mean == 100.0
+    assert cb_var_ratio == 0.0
+    assert cr_var_ratio == pytest.approx(5.0)

@@ -59,3 +59,7 @@ def test_clear_cached_pixel_array():
 
     s_ds = SlotDataset()
     clear_cached_pixel_array(s_ds)
+    # clear_cached_pixel_array is deliberately __dict__-only (see its docstring:
+    # delattr() on a real pydicom.Dataset was a prior production regression), so
+    # __slots__-only objects -- which no real caller passes -- are left untouched.
+    assert s_ds._cached_pixel_array == 1

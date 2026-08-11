@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from pydicom.uid import UID
 
 from core.decoder_fixture_contract import (
     DECODER_FIXTURE_EXPECTATIONS,
@@ -13,7 +14,6 @@ from core.decoder_fixture_contract import (
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_UID_RE = re.compile(r"^\d+(\.\d+)*$")
 
 
 def test_expectation_dataclass_frozen():
@@ -43,7 +43,7 @@ def test_expectations_valid_sha256():
 
 def test_expectations_valid_uids():
     for exp in DECODER_FIXTURE_EXPECTATIONS:
-        assert _UID_RE.match(exp.transfer_syntax_uid), exp.filename
+        assert UID(exp.transfer_syntax_uid).is_valid, exp.filename
 
 
 def test_expectations_have_required_fields():
