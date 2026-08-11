@@ -16,7 +16,7 @@
 | [`security-checks.yml`](../../../.github/workflows/security-checks.yml) | PR + push to `main` / `develop` | 3 jobs (`ubuntu-latest` each): debug flags, TruffleHog (+ range logic), PII grep heuristics. Modest; `fetch-depth: 0` on one job increases checkout size/time slightly. |
 | [`semgrep.yml`](../../../.github/workflows/semgrep.yml) | PR + push to `main` / `develop` / `feature/**`, weekly cron | `pip install semgrep`, multiple rulesets, SARIF upload, optional PR comment. |
 | [`grype.yml`](../../../.github/workflows/grype.yml) | PR + push to `main` / `develop`, weekly cron | `anchore/scan-action`, SARIF upload, optional PR comment. |
-| [`user-docs-links.yml`](../../../.github/workflows/user-docs-links.yml) | PR + push to `main` / `develop` | Lightweight Python link check. |
+| `user-docs-links` (job in [`ci.yml`](../../../.github/workflows/ci.yml)) | PR + push to `main` / `develop` | Lightweight Python link check. |
 | [`actions-cache-prune.yml`](../../../.github/workflows/actions-cache-prune.yml) | Weekly cron + `workflow_dispatch` | Low cost; **reduces** cache storage churn via scripted prune. |
 | **Dependabot** ([`dependabot.yml`](../../../.github/dependabot.yml)) | Scheduled weekly | Creates PRs; each PR triggers the same CI gates as human PRs. |
 
