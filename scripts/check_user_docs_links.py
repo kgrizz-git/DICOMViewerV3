@@ -74,8 +74,8 @@ def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> lis
             continue
         if is_user_doc and target.is_relative_to(dev_docs_root.resolve()):
             rel = target.relative_to(dev_docs_root.resolve())
-            if (rel.parts and rel.parts[0] == "plans") or target.name == "TO_DO.md":
-                label = rel.parts[0] if rel.parts else target.name
+            if (rel.parts and rel.parts[0] == "plans") or rel == Path("TO_DO.md"):
+                label = rel.parts[0] if rel.parts else "TO_DO.md"
                 errors.append(
                     f"{md_path.relative_to(repo_root)}: user-docs must not link into dev-docs/{label}: {raw_url!r}"
                 )

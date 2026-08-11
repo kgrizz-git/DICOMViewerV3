@@ -52,6 +52,7 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
         (tmp / "dev-docs" / "info").mkdir(parents=True)
         (tmp / "dev-docs" / "plans" / "SOME_PLAN.md").write_text("# plan\n")
         (tmp / "dev-docs" / "info" / "SOME_INFO.md").write_text("# info\n")
+        (tmp / "dev-docs" / "info" / "TO_DO.md").write_text("# nested todo\n")
         (tmp / "dev-docs" / "TO_DO.md").write_text("# to-do\n")
         (tmp / "dev-docs" / "RELEASING.md").write_text("# releasing\n")
         return tmp / "user-docs", tmp / "dev-docs"
@@ -87,6 +88,16 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1)
             self.assertIn("user-docs must not link into dev-docs/TO_DO.md", proc.stderr)
+
+    def test_user_doc_link_into_nested_todo_in_info_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs, _ = self._make_repo(tmp)
+            (user_docs / "guide.md").write_text(
+                "See [nested](../dev-docs/info/TO_DO.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_user_doc_link_into_dev_docs_root_other_than_todo_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as d:
