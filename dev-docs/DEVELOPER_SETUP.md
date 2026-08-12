@@ -299,6 +299,16 @@ CI’s `pytest` job runs the full suite with `--cov-fail-under=65` and uploads
 check: `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65`. Pre-commit
 still runs the fast agent smoke harness.
 
+**Parallel execution:** `pytest.ini` sets `-n auto` (pytest-xdist), so local
+runs match CI and sharding-order bugs surface before a PR rather than after.
+The full suite is ~40s on an 18-core host, ~3m30s on CI’s 4 cores, and ~8m40s
+serial. For quick single-test iteration, `-n 0` disables parallelism and runs
+in-process: `PYTHONPATH=src python -m pytest -n 0 tests/path/test_x.py`.
+Tests must not assume execution order or a shared process — in particular,
+never construct a `QCoreApplication` in a test; depend on the session `qapp`
+fixture, or every later widget test in that worker will abort. See
+[`plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md`](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md).
+
 **Gitleaks:** `pre-commit` scans the **staged index**. `pre-push` and CI privacy
 gate both run **full reachable history** via `scripts/check_gitleaks_history.py`
 (~1s on this repo). Narrowed push-only scanning remains available with

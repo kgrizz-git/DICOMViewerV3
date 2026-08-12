@@ -227,9 +227,15 @@ def _make_viewer(**overrides):
 
 
 def _install_fake_menu_patches(monkeypatch) -> None:
+    # Patch QMenu only on the module under test. Never patch
+    # "PySide6.QtWidgets.QMenu" globally: any module first imported while that
+    # patch is live captures _FakeMenu in its own namespace via
+    # `from PySide6.QtWidgets import QMenu`, and monkeypatch cannot undo that
+    # copy. gui.wl_preset_menu is imported lazily and used to be caught this
+    # way, poisoning later tests with
+    # "'_FakeMenu' object has no attribute 'aboutToShow'".
     _FakeMenu.instances.clear()
     monkeypatch.setattr(image_viewer_context_menu, "QMenu", _FakeMenu)
-    monkeypatch.setattr("PySide6.QtWidgets.QMenu", _FakeMenu)
     monkeypatch.setattr("PySide6.QtGui.QActionGroup", _FakeActionGroup)
     monkeypatch.setattr(
         "gui.wl_preset_menu.populate_wl_preset_menu",

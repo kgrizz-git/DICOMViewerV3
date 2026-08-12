@@ -16,8 +16,13 @@ For how to select and write unit, Qt/PySide6, and pylinac tests, see
 ### Pytest (optional)
 
 ```bash
-pip install pytest
+pip install -r requirements-dev.txt
 ```
+
+`pytest.ini` sets `-n auto`, so **pytest-xdist is required** — `pip install
+pytest` alone will fail with `unrecognized arguments: -n`. Installing
+`requirements-dev.txt` is the supported path. Add `-n 0` to any command below
+to disable parallelism for single-test iteration.
 
 **Windows (PowerShell):**
 
