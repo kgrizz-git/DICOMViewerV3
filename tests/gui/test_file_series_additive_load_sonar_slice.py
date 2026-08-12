@@ -115,13 +115,28 @@ def test_refresh_appended_series_updates_all_matching_subwindows() -> None:
     app.slice_navigator.set_total_slices.assert_called_once_with(3)
 
 
+@patch("gui.file_series_additive_load.invalidate_fusion_resampler_caches_for_series")
+def test_refresh_appended_series_calls_invalidation(mock_invalidate) -> None:
+    app = MagicMock()
+    app.current_studies = {"st": {"ser": []}}
+    app.subwindow_data = {}
+    refresh_appended_series_subwindows(app, [("st", "ser")])
+    mock_invalidate.assert_called_once_with(app, {"ser"})
+
+
 def test_invalidate_fusion_resampler_caches_for_series() -> None:
     app = MagicMock()
     resampler_a = MagicMock()
     resampler_b = MagicMock()
+    handler_a = MagicMock(image_resampler=resampler_a)
+    handler_a._slice_location_cache = {"ser-a": [1], "ser-b": [2], "other": [3]}
+    handler_b = MagicMock(image_resampler=resampler_b)
+    # handler_b doesn't have _slice_location_cache to test hasattr safety
+    if hasattr(handler_b, "_slice_location_cache"):
+        del handler_b._slice_location_cache
     app.subwindow_managers = {
-        0: {"fusion_handler": MagicMock(image_resampler=resampler_a)},
-        1: {"fusion_handler": MagicMock(image_resampler=resampler_b)},
+        0: {"fusion_handler": handler_a},
+        1: {"fusion_handler": handler_b},
         2: {"fusion_handler": MagicMock(image_resampler=None)},
         3: {},
     }
@@ -130,6 +145,9 @@ def test_invalidate_fusion_resampler_caches_for_series() -> None:
     resampler_a.clear_cache.assert_any_call(series_uid="ser-b")
     resampler_b.clear_cache.assert_any_call(series_uid="ser-a")
     resampler_b.clear_cache.assert_any_call(series_uid="ser-b")
+    assert "ser-a" not in handler_a._slice_location_cache
+    assert "ser-b" not in handler_a._slice_location_cache
+    assert "other" in handler_a._slice_location_cache
 
 
 def test_find_first_empty_subwindow_index() -> None:

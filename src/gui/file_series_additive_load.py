@@ -180,6 +180,8 @@ def invalidate_fusion_resampler_caches_for_series(
         if not resampler:
             continue
         for series_uid in series_uids:
+            if hasattr(fusion_handler, "_slice_location_cache"):
+                fusion_handler._slice_location_cache.pop(series_uid, None)
             resampler.clear_cache(series_uid=series_uid)
 
 
