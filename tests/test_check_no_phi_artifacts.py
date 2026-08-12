@@ -12,6 +12,7 @@ import gzip
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import tarfile
@@ -671,8 +672,13 @@ def test_gitmodules_is_blocked(repo):
 # --- the live repository -----------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason="Redundant with privacy-gates CI job (scripts/check_no_phi_artifacts.py); ~91s runtime"
+@pytest.mark.skipif(
+    not os.environ.get("PHI_LIVE_SCAN"),
+    reason=(
+        "Redundant with the required privacy-gates CI job and the pre-push hook, "
+        "which both run scripts/check_no_phi_artifacts.py over the same tracked "
+        "files; ~65s runtime. Set PHI_LIVE_SCAN=1 to run the live-tree scan."
+    ),
 )
 def test_this_repository_is_clean():
     """The real tree must stay clean, or the CI gate is already failing."""
