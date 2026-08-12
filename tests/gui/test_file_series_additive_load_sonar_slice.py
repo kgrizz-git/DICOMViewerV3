@@ -15,6 +15,7 @@ from gui.file_series_additive_load import (
     find_first_empty_subwindow_index,
     finish_additive_load_side_effects,
     handle_additive_noop_refresh,
+    invalidate_fusion_resampler_caches_for_series,
     load_ps_ko_for_new_studies,
     maybe_show_navigator_for_new_series,
     refresh_appended_series_subwindows,
@@ -77,9 +78,80 @@ def test_refresh_appended_series_updates_focused_slice_count() -> None:
     app.subwindow_data = {
         1: {"current_study_uid": "st", "current_series_uid": "ser", "current_datasets": []},
     }
+    app.subwindow_managers = {}
     refresh_appended_series_subwindows(app, [("st", "ser")])
     assert app.subwindow_data[1]["current_datasets"] is datasets
     app.slice_navigator.set_total_slices.assert_called_once_with(2)
+
+
+def test_refresh_appended_series_updates_all_matching_subwindows() -> None:
+    """Every pane showing an appended series must receive the grown dataset list."""
+    app = MagicMock()
+    datasets = [MagicMock(), MagicMock(), MagicMock()]
+    app.current_studies = {"st": {"ser": datasets}}
+    app.focused_subwindow_index = 2
+    app.subwindow_data = {
+        0: {
+            "current_study_uid": "st",
+            "current_series_uid": "ser",
+            "current_datasets": [],
+        },
+        1: {
+            "current_study_uid": "st",
+            "current_series_uid": "other",
+            "current_datasets": [],
+        },
+        2: {
+            "current_study_uid": "st",
+            "current_series_uid": "ser",
+            "current_datasets": [],
+        },
+    }
+    app.subwindow_managers = {}
+    refresh_appended_series_subwindows(app, [("st", "ser")])
+    assert app.subwindow_data[0]["current_datasets"] is datasets
+    assert app.subwindow_data[2]["current_datasets"] is datasets
+    assert app.subwindow_data[1]["current_datasets"] == []
+    app.slice_navigator.set_total_slices.assert_called_once_with(3)
+
+
+@patch("gui.file_series_additive_load.invalidate_fusion_resampler_caches_for_series")
+def test_refresh_appended_series_calls_invalidation(mock_invalidate) -> None:
+    app = MagicMock()
+    app.current_studies = {"st": {"ser": []}}
+    app.subwindow_data = {}
+    refresh_appended_series_subwindows(app, [("st", "ser")])
+    mock_invalidate.assert_called_once_with(app, {"ser"})
+
+
+def test_invalidate_fusion_resampler_caches_for_series() -> None:
+    app = MagicMock()
+    resampler_a = MagicMock()
+    resampler_b = MagicMock()
+    handler_a = MagicMock(image_resampler=resampler_a)
+    handler_a._slice_location_cache = {"ser-a": [1], "ser-b": [2], "other": [3]}
+    handler_b = MagicMock(image_resampler=resampler_b)
+    # handler_b doesn't have _slice_location_cache to test hasattr safety
+    if hasattr(handler_b, "_slice_location_cache"):
+        del handler_b._slice_location_cache
+    handler_c = MagicMock(image_resampler=None)
+    handler_c._slice_location_cache = {"ser-a": [4], "ser-b": [5]}
+    app.subwindow_managers = {
+        0: {"fusion_handler": handler_a},
+        1: {"fusion_handler": handler_b},
+        2: {"fusion_handler": handler_c},
+        3: {},
+    }
+    invalidate_fusion_resampler_caches_for_series(app, {"ser-a", "ser-b"})
+    resampler_a.clear_cache.assert_any_call(series_uid="ser-a")
+    resampler_a.clear_cache.assert_any_call(series_uid="ser-b")
+    resampler_b.clear_cache.assert_any_call(series_uid="ser-a")
+    resampler_b.clear_cache.assert_any_call(series_uid="ser-b")
+    assert "ser-a" not in handler_a._slice_location_cache
+    assert "ser-b" not in handler_a._slice_location_cache
+    assert "other" in handler_a._slice_location_cache
+    assert "ser-a" not in handler_c._slice_location_cache
+    assert "ser-b" not in handler_c._slice_location_cache
 
 
 def test_find_first_empty_subwindow_index() -> None:

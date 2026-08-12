@@ -160,10 +160,36 @@ def load_ps_ko_for_new_studies(app: Any, new_study_uids: set[str]) -> None:
         app.annotation_manager.load_key_objects(new_ko)
 
 
+def invalidate_fusion_resampler_caches_for_series(
+    app: Any,
+    series_uids: set[str],
+) -> None:
+    """Clear fusion resampler caches that reference any of the given series UIDs.
+
+    Additive loads grow series in-place; cached resampled volumes and sorted
+    reference grids are keyed by series UID and become stale when slice count
+    changes without invalidation.
+    """
+    if not series_uids:
+        return
+    for managers in app.subwindow_managers.values():
+        fusion_handler = managers.get("fusion_handler")
+        if not fusion_handler:
+            continue
+        resampler = getattr(fusion_handler, "image_resampler", None)
+        for series_uid in series_uids:
+            if hasattr(fusion_handler, "_slice_location_cache"):
+                fusion_handler._slice_location_cache.pop(series_uid, None)
+            if resampler:
+                resampler.clear_cache(series_uid=series_uid)
+
+
 def refresh_appended_series_subwindows(app: Any, appended_series: list[tuple[str, str]]) -> None:
     """Update ``subwindow_data`` datasets when slices were appended to open series."""
+    appended_series_uids: set[str] = set()
     for study_uid, series_key in appended_series:
         updated_datasets = app.current_studies.get(study_uid, {}).get(series_key, [])
+        appended_series_uids.add(series_key)
         for idx, data in app.subwindow_data.items():
             if (
                 data.get("current_study_uid") == study_uid
@@ -172,7 +198,7 @@ def refresh_appended_series_subwindows(app: Any, appended_series: list[tuple[str
                 data["current_datasets"] = updated_datasets
                 if idx == app.focused_subwindow_index:
                     app.slice_navigator.set_total_slices(len(updated_datasets))
-                break
+    invalidate_fusion_resampler_caches_for_series(app, appended_series_uids)
 
 
 def find_first_empty_subwindow_index(app: Any) -> int | None:

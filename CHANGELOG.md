@@ -32,6 +32,13 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   removes unreachable null checks and the unused settings-applied stub;
   subwindow viewer iteration tolerates a missing multi-window layout during
   startup/teardown. **Semantic versioning note: patch.**
+- **Additive load (multi-pane):** When slices are appended to a series shown in
+  more than one subwindow, every matching pane now receives the updated dataset
+  list (previously only the first match was refreshed). **Semantic versioning note: patch.**
+- **Fusion after additive load:** Invalidate per-subwindow fusion resampler
+  caches when slices are appended so 3D overlay resampling does not return
+  ``None`` or stale data for newly added slices. **Semantic versioning note:
+  patch** (correctness fix).
 
 ### Changed
 - **Internal (MainWindow split):** `MainWindow` concerns extracted into
