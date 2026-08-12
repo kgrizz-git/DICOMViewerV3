@@ -26,6 +26,8 @@ pip-licenses>=5.5.5
 basedpyright>=1.39.9
 # Coverage for local + CI summaries; reports are not uploaded to third parties.
 pytest-cov>=7.1.0
+# Parallel test execution (pytest-xdist): splits tests across workers.
+pytest-xdist>=3.8.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
 ruff>=0.15.21
 # Complexity analysis (cyclomatic complexity, NLOC, etc.)

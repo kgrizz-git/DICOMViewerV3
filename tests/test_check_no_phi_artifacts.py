@@ -671,6 +671,9 @@ def test_gitmodules_is_blocked(repo):
 # --- the live repository -----------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="Redundant with privacy-gates CI job (scripts/check_no_phi_artifacts.py); ~91s runtime"
+)
 def test_this_repository_is_clean():
     """The real tree must stay clean, or the CI gate is already failing."""
     root = Path(__file__).resolve().parent.parent
