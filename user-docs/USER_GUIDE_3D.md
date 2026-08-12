@@ -66,7 +66,7 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 
 ## Export (not yet available)
 
-Saving the current 3D view as a **PNG/JPG image** or as a **Secondary Capture (SC) DICOM** series is planned; see [dev-docs/TO_DO.md](../dev-docs/TO_DO.md) under **3D visualization**. Until then, use your OS screenshot tools for a quick capture of the viewport.
+Saving the current 3D view as a **PNG/JPG image** or as a **Secondary Capture (SC) DICOM** series is planned (tracked as a roadmap item). Until then, use your OS screenshot tools for a quick capture of the viewport.
 
 ## Roadmap / limitations
 
@@ -77,6 +77,9 @@ Saving the current 3D view as a **PNG/JPG image** or as a **Secondary Capture (S
 
 ## Technical detail
 
-Implementation plan and checklist: [3D_VOLUME_RENDERING_PLAN.md](../dev-docs/plans/3D_VOLUME_RENDERING_PLAN.md).
+Planned 3D render export (to image or DICOM Secondary Capture) and a transfer-function
+curve editor are tracked as roadmap items above. See the in-repo user documentation set
+for the current feature list; implementation-plan and design notes are maintained
+separately from these user docs.
 
 Secondary Capture background (for planned DICOM export): [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).

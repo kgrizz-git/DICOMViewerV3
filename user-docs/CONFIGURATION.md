@@ -24,7 +24,7 @@ The **Local study index (encrypted)** group stores metadata about studies you op
 
 **Privacy:** Indexed metadata reflects what was read from DICOM files; use **Privacy mode** when presenting the UI to others, and treat the database file as **sensitive**—protect backups accordingly.
 
-**Advanced (design / roadmap):** [Local study database and indexing plan](../dev-docs/plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md) — developer-oriented background; not required for day-to-day use.
+**Advanced (design / roadmap):** A local study database and indexing plan exists in the developer documentation; it is developer-oriented background and not required for day-to-day use.
 
 ## Where settings are saved on disk
 
@@ -91,4 +91,4 @@ The in-window slice/frame slider is controlled from **View → In-Window Slice/F
 
 ## In-app documentation URLs (forks and releases)
 
-**Help → Documentation** and links inside **Help → Quick Start Guide** use the GitHub base URL in `src/utils/doc_urls.py` (`USER_DOCS_GITHUB_PREFIX`). Forks or private builds should point that constant at the correct branch or tree. Release-matched doc policy is described in **[RELEASING.md](../dev-docs/RELEASING.md#in-app-user-documentation-urls)**.
+**Help → Documentation** and links inside **Help → Quick Start Guide** use the GitHub base URL in `src/utils/doc_urls.py` (`USER_DOCS_GITHUB_PREFIX`). Forks or private builds should point that constant at the correct branch or tree. Release-matched documentation policy is described in the developer release documentation.

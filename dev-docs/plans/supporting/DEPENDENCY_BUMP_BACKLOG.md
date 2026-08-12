@@ -12,7 +12,7 @@ change) and do not belong here.
 These are `pylinac`-coupled and can change automated ACR phantom analysis
 output, so they must not be merged without re-running the clinical QA
 regression. Follow
-[`dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`](completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md)
+[`dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`](../completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md)
 and re-verify **ACR CT + ACR MRI Large** before merging.
 
 | Package | Current | Target | Notes |

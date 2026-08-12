@@ -46,11 +46,18 @@ def split_anchor(url: str) -> tuple[str, str]:
     return url, ""
 
 
-def check_file(md_path: Path, repo_root: Path) -> list[str]:
-    """Return list of error messages for broken links in one file."""
+def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> list[str]:
+    """Return list of error messages for broken links in one file.
+
+    When ``is_user_doc`` is True (the file lives under ``user-docs/``), links
+    that resolve into ``dev-docs/plans/`` or ``dev-docs/TO_DO.md`` are rejected.
+    Links into ``dev-docs/info/`` and other ``dev-docs/`` root-level files are
+    allowed (they contain useful reference material for advanced users).
+    """
     errors: list[str] = []
     text = md_path.read_text(encoding="utf-8")
     base_dir = md_path.parent
+    dev_docs_root = repo_root / "dev-docs"
 
     for _label, raw_url in LINK_PATTERN.findall(text):
         url = raw_url.strip()
@@ -65,6 +72,14 @@ def check_file(md_path: Path, repo_root: Path) -> list[str]:
         except ValueError:
             errors.append(f"{md_path.relative_to(repo_root)}: link escapes repo: {raw_url!r}")
             continue
+        if is_user_doc and target.is_relative_to(dev_docs_root.resolve()):
+            rel = target.relative_to(dev_docs_root.resolve())
+            if (rel.parts and rel.parts[0] == "plans") or rel == Path("TO_DO.md"):
+                label = rel.parts[0] if rel.parts else "TO_DO.md"
+                errors.append(
+                    f"{md_path.relative_to(repo_root)}: user-docs must not link into dev-docs/{label}: {raw_url!r}"
+                )
+                continue
         if not target.exists():
             errors.append(
                 f"{md_path.relative_to(repo_root)}: broken link {raw_url!r} -> {target.relative_to(repo_root)}"
@@ -87,9 +102,11 @@ def main() -> int:
         print("error: user-docs/ was not found under the repository root", file=sys.stderr)
         return 1
 
+    user_docs_root = repo_root / "user-docs"
     all_errors: list[str] = []
     for md in iter_markdown_files(repo_root):
-        all_errors.extend(check_file(md, repo_root))
+        is_user_doc = md.is_relative_to(user_docs_root)
+        all_errors.extend(check_file(md, repo_root, is_user_doc=is_user_doc))
 
     if all_errors:
         print("Broken relative Markdown links:", file=sys.stderr)

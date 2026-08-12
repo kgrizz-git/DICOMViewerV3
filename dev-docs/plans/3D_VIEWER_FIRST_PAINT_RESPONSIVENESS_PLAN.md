@@ -5,7 +5,7 @@
 **Last updated:** 2026-08-10
 **Priority:** P1 (user-visible hang on open / first interaction)
 **Branch suggestion:** `fix/3d-first-paint-responsiveness` (or continue from current WIP)
-**Related:** [`3D_VOLUME_RENDERING_PLAN.md`](../3D_VOLUME_RENDERING_PLAN.md), [`THREE_D_VIEWER_APPEARANCE_OPTIONS_CONTROLS_PLAN.md`](../supporting/THREE_D_VIEWER_APPEARANCE_OPTIONS_CONTROLS_PLAN.md), [`VOLUME_RENDER_DIALOG_LIFECYCLE_PLAN.md`](../supporting/VOLUME_RENDER_DIALOG_LIFECYCLE_PLAN.md)
+**Related:** [`3D_VOLUME_RENDERING_PLAN.md`](3D_VOLUME_RENDERING_PLAN.md), [`THREE_D_VIEWER_APPEARANCE_OPTIONS_CONTROLS_PLAN.md`](../supporting/THREE_D_VIEWER_APPEARANCE_OPTIONS_CONTROLS_PLAN.md), [`VOLUME_RENDER_DIALOG_LIFECYCLE_PLAN.md`](../supporting/VOLUME_RENDER_DIALOG_LIFECYCLE_PLAN.md)
 
 > **For agentic workers:** Prefer `superpowers:subagent-driven-development` or execute task-by-task. Use checkboxes below. Activate `.venv` before pytest; allow ~10 minutes for full suite.
 

@@ -27,4 +27,4 @@ The pane switches to the MPR for that configuration. Afterward you can change co
 
 ## Technical and roadmap detail
 
-For implementation notes and planned enhancements, see [SLICE_SYNC_AND_MPR_PLAN.md](../dev-docs/plans/completed/SLICE_SYNC_AND_MPR_PLAN.md) and related plans under `dev-docs/plans/`.
+Implementation notes and planned enhancements for slice sync and MPR are tracked in the project's developer documentation, maintained separately from these user guides.

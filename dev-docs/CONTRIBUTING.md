@@ -100,7 +100,7 @@ or:
 python -m pytest tests/test_user_docs_links.py -q
 ```
 
-CI runs **`.github/workflows/user-docs-links.yml`** on **`main`** / **`develop`**.
+CI runs the **`user-docs-links`** job in **`.github/workflows/ci.yml`** on **`main`** / **`develop`**.
 
 ## Module layout and optional delegation
 
