@@ -177,12 +177,11 @@ def invalidate_fusion_resampler_caches_for_series(
         if not fusion_handler:
             continue
         resampler = getattr(fusion_handler, "image_resampler", None)
-        if not resampler:
-            continue
         for series_uid in series_uids:
             if hasattr(fusion_handler, "_slice_location_cache"):
                 fusion_handler._slice_location_cache.pop(series_uid, None)
-            resampler.clear_cache(series_uid=series_uid)
+            if resampler:
+                resampler.clear_cache(series_uid=series_uid)
 
 
 def refresh_appended_series_subwindows(app: Any, appended_series: list[tuple[str, str]]) -> None:

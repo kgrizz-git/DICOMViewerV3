@@ -134,10 +134,12 @@ def test_invalidate_fusion_resampler_caches_for_series() -> None:
     # handler_b doesn't have _slice_location_cache to test hasattr safety
     if hasattr(handler_b, "_slice_location_cache"):
         del handler_b._slice_location_cache
+    handler_c = MagicMock(image_resampler=None)
+    handler_c._slice_location_cache = {"ser-a": [4], "ser-b": [5]}
     app.subwindow_managers = {
         0: {"fusion_handler": handler_a},
         1: {"fusion_handler": handler_b},
-        2: {"fusion_handler": MagicMock(image_resampler=None)},
+        2: {"fusion_handler": handler_c},
         3: {},
     }
     invalidate_fusion_resampler_caches_for_series(app, {"ser-a", "ser-b"})
@@ -148,6 +150,8 @@ def test_invalidate_fusion_resampler_caches_for_series() -> None:
     assert "ser-a" not in handler_a._slice_location_cache
     assert "ser-b" not in handler_a._slice_location_cache
     assert "other" in handler_a._slice_location_cache
+    assert "ser-a" not in handler_c._slice_location_cache
+    assert "ser-b" not in handler_c._slice_location_cache
 
 
 def test_find_first_empty_subwindow_index() -> None:
