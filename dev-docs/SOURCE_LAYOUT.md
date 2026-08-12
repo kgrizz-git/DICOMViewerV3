@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-11
 **Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
 
 ---
@@ -45,6 +45,9 @@ src/
 │   ├── slice_window_level_resolver.py # Resolve effective W/L for a slice (dataset tags + user overrides)
 │   ├── dicom_window_level.py          # DICOM window/level tag parsing and display-range math
 │   ├── dicom_loader_file.py           # Pure single-file DICOM load helpers (compression labels, defer messages, multi-frame pre-load; S3776 slice)
+│   ├── decoder_capabilities.py        # Transfer-syntax labels, installed pydicom handler detection, safe compressed-decode error messages (no paths/PHI)
+│   ├── decoder_fixture_contract.py    # Privacy-safe SHA-256 expectations for reviewed synthetic decoder fixtures
+│   ├── decoder_fixture_smoke.py       # `--decoder-fixture-smoke` / `--decoder-fixture-child` frozen-build decoder validation runner
 │   ├── wl_preset_catalog.py           # Built-in and user W/L preset catalog (modality-aware labels)
 │   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
 │   ├── slice_geometry.py              # Pure 3-D slice-plane/stack math (patient mm); shared by sync and location lines
