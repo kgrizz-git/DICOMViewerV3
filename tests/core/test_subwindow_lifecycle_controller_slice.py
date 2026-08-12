@@ -334,12 +334,11 @@ def test_on_layout_changed() -> None:
     assert container.image_viewer.set_mouse_mode.call_count == 1
 
 
-def test_on_main_window_layout_changed() -> None:
-
-    # Initialize QCoreApplication if not exists to support QTimer.singleShot
-    if not QCoreApplication.instance():
-        QCoreApplication([])
-
+def test_on_main_window_layout_changed(qapp) -> None:
+    # Depends on the session qapp fixture for QTimer.singleShot support. Do not
+    # construct a QCoreApplication here: it is non-GUI, and owning the process
+    # would make every later widget test in this worker abort. See
+    # dev-docs/plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md.
     app = MagicMock()
     ctrl = SubwindowLifecycleController(app)
     ctrl.on_main_window_layout_changed("1x2")

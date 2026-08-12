@@ -1,8 +1,46 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-11
+**Last updated:** 2026-08-12
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-12
+
+- **Parallel test execution (pytest-xdist) and the Qt worker abort:** Added
+  `pytest-xdist>=3.8.0` to `requirements-dev.txt` and `-n auto` to the CI
+  `pytest` job. Enabling it exposed a nondeterministic worker abort that only
+  appeared under sharding.
+
+  **Root cause:** `tests/core/test_subwindow_lifecycle_controller_slice.py`
+  constructed a bare `QCoreApplication` when no instance existed, and
+  `tests/conftest.py` guarded the session `qapp` fixture on *existence*
+  (`instance() is None`) rather than *type*. A worker that received that test
+  first ended up owned by a non-GUI application, so the next widget
+  construction died with `QWidget: Cannot create a QWidget without
+  QApplication` (SIGABRT inside `QWidgetPrivate::init`, not a segfault).
+  Serial ordering hid the bug because a GUI test almost always ran first.
+
+  **Fix:** `tests/conftest.py` now creates the `QApplication` in
+  `pytest_configure` and holds it in a module-level reference; the `qapp`
+  fixture checks `isinstance(app, QApplication)` and raises a diagnostic
+  `RuntimeError` if a non-GUI application owns the process; the offending test
+  depends on `qapp` instead of building its own. No other bare
+  `QCoreApplication` construction remains in `tests/`, `src/`, or `scripts/`.
+
+  **Measured:** serial 8m42s → `-n auto` 37.95s on an 18-core host and ~3m30s
+  on CI's 4 cores (~2.5x). Coverage combining across workers verified intact
+  (TOTAL 71.01%, above the 65% floor). Note the `ci.yml` comment claiming
+  "~67%" is stale.
+
+- **PHI live-repository test made opt-in:** `test_this_repository_is_clean` is
+  redundant with the required `privacy-gates / No PHI artifacts tracked` job
+  and the `pre-push` hook, which run the same `scripts/check_no_phi_artifacts.py`
+  scan over the same tracked files. It now uses `skipif` on `PHI_LIVE_SCAN`
+  rather than an unconditional `skip`, so it stays runnable on demand. Measured
+  cost ~65s (`check_contents` over 1411 tracked files), ~12% of serial suite
+  runtime. No security coverage was removed.
+
+  **Plan:** [Parallelize the CI test suite](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md).
 
 ## 2026-08-10
 
