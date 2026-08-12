@@ -105,7 +105,7 @@ def main() -> int:
     user_docs_root = repo_root / "user-docs"
     all_errors: list[str] = []
     for md in iter_markdown_files(repo_root):
-        is_user_doc = md.resolve().is_relative_to(user_docs_root.resolve())
+        is_user_doc = md.is_relative_to(user_docs_root)
         all_errors.extend(check_file(md, repo_root, is_user_doc=is_user_doc))
 
     if all_errors:

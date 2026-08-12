@@ -121,6 +121,27 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             self.assertNotIn("IndexError", proc.stderr)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_symlink_in_user_docs_to_dev_docs_plan_is_classified_as_user_doc(self) -> None:
+        """A symlink inside user-docs/ pointing to dev-docs/plans/ must still
+        be classified as a user-doc so boundary checks apply to its links."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs, dev_docs = self._make_repo(tmp)
+            plan = dev_docs / "plans" / "REAL_PLAN.md"
+            plan.write_text("# plan\n")
+            link = user_docs / "guide.md"
+            link.symlink_to(Path("..") / "dev-docs" / "plans" / "REAL_PLAN.md")
+            # Content with a link that resolves into dev-docs/ from user-docs/.
+            plan.write_text("See [todo](../dev-docs/TO_DO.md).\n")
+            # Without the fix, is_user_doc=False (resolved path is in
+            # dev-docs/plans/) and the boundary check is skipped, so the
+            # script exits 0 despite the forbidden link content.
+            # With the fix, is_user_doc=True (apparent path in user-docs/)
+            # and the boundary check rejects the TO_DO.md link.
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("user-docs must not link into dev-docs/TO_DO.md", proc.stderr)
+
     def test_user_doc_link_to_another_user_doc_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
