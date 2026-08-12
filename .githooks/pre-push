@@ -72,13 +72,16 @@ if [[ "$PUSH_UPDATES" == *" refs/heads/main "* ]]; then
 fi
 
 # Every local push, including the branches that back pull requests, receives
-# advisory checks. The ignored local SonarQube record may be missing, older
-# than 14 days, or more than five commits behind. The update metadata check is
-# throttled to once every seven days. Neither check pulls, installs, or blocks.
-echo "[sonarqube] Checking local Community Build analysis freshness..."
+# advisory checks. These are two independent checks with separate state files
+# and timers; the [analysis] leg tracks code drift since the last scan, while
+# the [image-update] leg throttles upstream version polling to once every seven
+# days. Neither checks nor the other's "due" status; neither pulls, installs, or
+# blocks. The ignored local SonarQube record may be missing, older than 14 days,
+# or more than five commits behind.
+echo "[sonarqube][analysis] Checking local Community Build analysis freshness..."
 "$PY_BIN" "$REPO_ROOT/scripts/run_local_sonarqube.py" \
   --check-freshness-days 14 || true
-echo "[sonarqube] Checking for local server/scanner updates (weekly)..."
+echo "[sonarqube][image-update] Checking for local server/scanner updates (weekly)..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_local_sonarqube_updates.py" || true
 
 exit 0
