@@ -1,6 +1,6 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-11
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
@@ -151,6 +151,10 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
     hook treats `US` as a display-none placeholder). The PR-scoped docstring
     coverage pre-merge warning was left standing: test suites intentionally
     use module-level docstrings only.
+
+## 2026-08-02
+
+- **Engineering documentation sync:** aligned top-level developer docs with the GDCM decoder productionization and launcher incomplete-venv fix. Updated `README.md` technology stack, `ARCHITECTURE.md` decoder domain, `SOURCE_LAYOUT.md` decoder modules, `DEVELOPER_SETUP.md` troubleshooting (venv + compressed DICOM), `HARNESS.md` decoder fixture smoke command, `BUILDING_EXECUTABLES.md` frozen-build decoder validation, and `CODE_DOCUMENTATION.md` / `dev-docs/README.md` index entries.
 
 ## 2026-07-30
 

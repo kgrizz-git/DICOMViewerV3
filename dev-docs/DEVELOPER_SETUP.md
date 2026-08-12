@@ -1,10 +1,37 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-11
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
 ## Common issues
+
+### Incomplete virtual environment (Windows launcher)
+
+`launch.bat` and `launch.command` install and run through the venv interpreter directly (`…/python.exe -m pip` / `…/bin/python -m pip`) instead of relying on `activate` plus bare `pip`/`python`. On Windows setups with multiple Python installs (for example pyenv), the old pattern could leave an empty `venv` folder that looks valid but has no packages.
+
+- **Symptom:** `launch.bat` → **Run** fails with missing `pydicom`, `PySide6`, `numpy`, or `PIL`, or the venv folder exists but `Scripts\python.exe` cannot import the app stack.
+- **Fix:** Choose **Reinstall / update requirements** in the launcher menu, or delete the broken env folder and recreate it (`python -m venv .venv`, then `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`).
+- **Prevention:** Always use the venv interpreter for installs (`python -m pip install -r requirements.txt` after activation, or let the launcher handle it).
+
+### Compressed DICOM will not decode
+
+The runtime decoder stack is defined in `requirements.txt`:
+
+| Handler | Package | Transfer syntaxes |
+|---------|---------|-------------------|
+| GDCM | `python-gdcm==3.2.6` | JPEG Baseline (`.50`), Extended (`.51`), Lossless (`.57`/`.70`) |
+| pylibjpeg + openjpeg | `pylibjpeg`, `pylibjpeg-openjpeg` | JPEG 2000 (`.90`/`.91`) |
+| pylibjpeg RLE | `pylibjpeg-rle` | RLE Lossless (`.5`) |
+| JPEG-LS | `pyjpegls` | JPEG-LS (`.80`/`.81`) |
+
+`pylibjpeg-libjpeg` (GPL) is **not** part of the supported runtime. Do not install it to work around decode failures.
+
+- **Symptom:** A file loads but shows no image, or appears in the failed-files list with a transfer-syntax message.
+- **Check installed handlers:** from the project venv, `python -c "from core.decoder_capabilities import available_decoder_backends; print(available_decoder_backends('1.2.840.10008.1.2.4.50'))"` should list `GDCM` when classic JPEG support is present.
+- **Regression tests:** `python -m pytest tests/test_synthetic_decoder_fixture.py tests/core/test_decoder_capabilities.py -v`
+- **Frozen-build smoke:** after PyInstaller, run the executable against the committed synthetic fixtures (see [BUILDING_EXECUTABLES.md](info/BUILDING_EXECUTABLES.md) § Decoder fixture smoke).
+- **Deeper context:** [DICOM_SUPPORT_ANALYSIS.md](info/DICOM_SUPPORT_ANALYSIS.md) §3 and [PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md).
 
 ### "Module not found" when running the app or tests
 
