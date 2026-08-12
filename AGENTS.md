@@ -37,7 +37,7 @@ On a typical Windows checkout (if search ignores hidden folders):
 From project root, after activation:
 
 - Run the app: `python src/main.py`
-- Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v` (**`tests/README.md`**)
+- Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v` (**`tests/README.md`**). `pytest.ini` sets `-n auto`, so runs are parallel; add `-n 0` for serial/single-test iteration. Never construct a `QCoreApplication` in a test — depend on the session `qapp` fixture.
 - Agent smoke: `python scripts/agent_smoke_harness.py`
 - Harness docs check: `python scripts/check_repo_harness.py`
 - Architecture boundaries: `python scripts/check_architecture_boundaries.py`

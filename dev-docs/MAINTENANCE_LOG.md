@@ -40,6 +40,28 @@ This file records development and repository-maintenance history that is useful 
   cost ~65s (`check_contents` over 1411 tracked files), ~12% of serial suite
   runtime. No security coverage was removed.
 
+- **`_FakeMenu` monkeypatch leak fixed (pre-existing, found while profiling):**
+  `tests/gui/test_image_viewer_context_menu.py` patched the *global*
+  `PySide6.QtWidgets.QMenu`, then patched an attribute on `gui.wl_preset_menu`
+  while that patch was live — triggering that module's first import so its
+  module-level `from PySide6.QtWidgets import QMenu` captured `_FakeMenu`
+  permanently. `monkeypatch` cannot undo a copy another module already took, so
+  `wl_preset_menu.py:127` built a `_FakeMenu` for every subsequent test,
+  failing with `'_FakeMenu' object has no attribute 'aboutToShow'`. Any subset
+  run pairing those files broke (5 failed / 1942 passed); the full suite passed
+  only because its ordering avoided the pair. Fixed by dropping the global
+  patch — the module-local patch suffices — with a comment at the patch site.
+  Reproduced identically at `4558a53`, confirming it predated the xdist work.
+
+- **Test-suite profiling correction:** the five `test_main_tag_export_union.py`
+  tests were believed to cost ~9s each constructing `DICOMViewerApp()`.
+  Measured, construction is ~0.23s; the ~9s only appears after thousands of
+  tests have run in the same process, because `QApplication.setStyleSheet()`
+  in `main_window._apply_theme` restyles every live widget and widgets
+  accumulate across the session. Parallel execution caps that accumulation. The
+  planned module-scoped app fixture was therefore dropped as both ineffective
+  and a shared-state hazard.
+
   **Plan:** [Parallelize the CI test suite](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md).
 
 ## 2026-08-10

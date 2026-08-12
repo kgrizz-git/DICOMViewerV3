@@ -316,21 +316,42 @@ it rather than adding it.
 
 ---
 
-## Phase 4 — Opportunistic serial speedup (run in parallel with Phase 2)
+## Phase 4 — Reassessed: premise was wrong, mostly already solved
 
-Independent of parallelism and worth doing regardless.
+**Do not implement the module-scoped app fixture.** Profiling disproved the
+assumption behind it.
 
-The five slowest tests are **all** in
+The five slowest tests in
 [`tests/test_main_tag_export_union.py`](../../../tests/test_main_tag_export_union.py)
-at 8.95–9.43s each — ~46s, roughly **9% of serial runtime from five tests**.
-There are no sleeps; the cost is constructing a full
-`main_module.DICOMViewerApp()` five times. A module-scoped app fixture should
-recover most of it.
+measured 8.95–9.43s each in the serial full-suite run, and this plan attributed
+that to constructing `main_module.DICOMViewerApp()`. Direct measurement:
 
-This also has a good chance of shrinking the `-n 4` critical path, since one
-worker currently absorbs that whole file under `--dist load`.
+| Context | Cost |
+|---|---|
+| `DICOMViewerApp()` in isolation | **0.23s** (0.89s first, warm 0.23s) |
+| whole file run alone | **3.19s total**, slowest test 0.92s |
+| same file after ~1,940 other tests | 4.62–4.75s per test |
+| same file after ~4,800 other tests (serial suite) | 8.95–9.43s per test |
 
-Re-run `--durations=20` afterwards to find the next tier.
+The cost is **not** construction — it scales with how many tests already ran in
+the process. `cProfile` shows the dominant frame is
+`QApplication.setStyleSheet()` inside `main_window._apply_theme` (0.21s of a
+0.34s construction), and `setStyleSheet` restyles *every* live widget in the
+process. Widgets leak across the session, so each successive
+`DICOMViewerApp()` gets more expensive.
+
+Consequences:
+
+- A module-scoped fixture would have delivered far less than the projected ~46s
+  while introducing shared mutable state across five tests that monkeypatch the
+  app's internals — the exact coupling that produced the Phase 2 crash.
+- **Parallelism already fixes most of it.** Spreading tests across workers caps
+  per-worker accumulation, which is part of why `-n auto` beats a linear
+  speedup prediction.
+- The residual lever is widget cleanup between tests (an autouse fixture
+  disposing top-level widgets), which would speed up the serial path and reduce
+  memory pressure. Worth doing on its own merits; not required for
+  parallelization. Measure before committing to it.
 
 ---
 
@@ -345,3 +366,35 @@ Re-run `--durations=20` afterwards to find the next tier.
 - **Risk:** the unexplained pre-fix/post-fix `-n 4` timing gap could mean the
   fix makes some tests genuinely slower. Even at 212s the change is a 2.5x CI
   win, so this is a follow-up, not a blocker.
+
+- **A second, pre-existing ordering bug — found and FIXED 2026-08-12.**
+  Running `tests/gui/test_image_viewer_context_menu.py` before
+  `tests/test_main_tag_export_union.py` made all five of the latter fail with
+  `AttributeError: '_FakeMenu' object has no attribute 'aboutToShow'` at
+  [`src/gui/wl_preset_menu.py:111`](../../../src/gui/wl_preset_menu.py).
+
+  **Root cause.** `_install_fake_menu_patches` patched the *global*
+  `PySide6.QtWidgets.QMenu` with a `_FakeMenu` stand-in, and then — while that
+  patch was live — patched an attribute on `gui.wl_preset_menu`, triggering
+  that module's **first** import. Its module-level
+  `from PySide6.QtWidgets import QMenu` therefore bound `_FakeMenu`
+  permanently: `monkeypatch` restores the attribute on the PySide6 module but
+  cannot undo a copy another module already took. `wl_preset_menu.py:127` then
+  built a `_FakeMenu` for every later test in the process. The module is
+  imported lazily (`main_app_initialization.py:459`,
+  `main_window_toolbar_builder.py:437`), which is why the patch window could
+  win the race.
+
+  Confirmed by a probe scanning `sys.modules` for non-real `QMenu` bindings:
+  `gui.wl_preset_menu.QMenu -> _FakeMenu`.
+
+  **Fix.** Dropped the global `PySide6.QtWidgets.QMenu` patch; the module-local
+  patch on `image_viewer_context_menu` is sufficient. Verified: the
+  context-menu tests still pass (5 passed), the two-file repro passes
+  (10 passed), the 1,947-test subset that previously failed passes, and the
+  probe reports no leaked bindings. A comment at the patch site explains why
+  the global patch must not come back.
+
+  Verified pre-existing rather than a Phase 2 regression: reverting
+  `tests/conftest.py` and the lifecycle test to `4558a53` reproduced it
+  identically (5 failed / 1942 passed both ways).

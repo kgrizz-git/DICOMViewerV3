@@ -72,7 +72,9 @@ For UI or integration validation after changes:
 3. Optional Qt import smoke: `python scripts/agent_smoke_harness.py --qt-smoke`
 4. Launch app: `python src/main.py` or `launch.bat` → option 1.
 5. Manual checklist: [`orchestration/AGENT_SMOKE.md`](orchestration/AGENT_SMOKE.md)
-6. Full regression: `python -m pytest tests/ -v` (allow several minutes).
+6. Full regression: `python -m pytest tests/ -v` (~40s on a many-core host;
+   `pytest.ini` sets `-n auto`, so this parallelizes automatically. Add `-n 0`
+   to force a serial run, which takes ~8m40s).
 
 **Decoder fixture smoke** (after decoder or PyInstaller changes):
 
