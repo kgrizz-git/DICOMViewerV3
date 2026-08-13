@@ -480,11 +480,16 @@ def test_panel_population_perf_gate_enhanced_multiframe(qapp) -> None:
         f"\n[perf] metadata_panel widget population: {cpu_ms:.1f} ms CPU "
         f"({wall_ms:.1f} ms wall) for {len(panel._cached_tags)} rows"
     )
-    # Assert on CPU time, not wall clock: the suite runs under pytest-xdist
-    # (-n auto), so on a 4-core CI runner wall time inflates with worker
-    # contention while the work done is unchanged. Budget unchanged at 2000 ms.
-    # This guards the O(n^2) rescan regression that put this step at ~19s.
-    assert cpu_ms < 2000
+    # Measured as CPU time so scheduler wait cannot inflate it, though on CI the
+    # two track closely (2112 ms CPU vs 2118 ms wall).
+    #
+    # Budget raised 2000 -> 5000 ms on evidence: ~2.1 s CPU on a 4-vCPU GitHub
+    # runner with coverage, versus ~277 ms locally under coverage. It passed
+    # serially before the suite moved to pytest-xdist; four workers saturating
+    # four SMT vCPUs cut per-thread throughput, inflating CPU time too. The code
+    # under test did not change. Still catches the ~19 s O(n^2) rescan
+    # regression this guards, with ~4x margin.
+    assert cpu_ms < 5000
 
 
 def test_group_headers_span_full_width_and_are_visually_distinct(qapp) -> None:
