@@ -11,7 +11,7 @@ for changes under `src/qa/`.
 - Keep clinical data out of the repository. Use committed reviewed synthetic
   fixtures or local ignored data only under the root PHI/PII rules; never
   weaken a gate because an analysis appears to succeed.
-- Start at `core/qa_app_facade.py` for app-facing flows and in `src/qa/` for
+- Start at `src/core/qa_app_facade.py` for app-facing flows and in `src/qa/` for
   analysis behavior. Use the on-demand
   [module tree](../../dev-docs/info/SOURCE_LAYOUT_MODULE_TREE.md) for detailed
   ownership.

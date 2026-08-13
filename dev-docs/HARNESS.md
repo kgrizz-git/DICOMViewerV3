@@ -18,7 +18,7 @@ This project uses a **human-led, agent-assisted** workflow—not a fully agent-g
 | File | Role |
 |------|------|
 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) | Domains, dependency rules, “where to change what” |
-| [`SOURCE_LAYOUT.md`](SOURCE_LAYOUT.md) | Full `src/` tree, controllers, init order, signal wiring |
+| [`SOURCE_LAYOUT.md`](SOURCE_LAYOUT.md) | Compact controller/bootstrap/signal-wiring index; on-demand file-level navigation in [`info/SOURCE_LAYOUT_MODULE_TREE.md`](info/SOURCE_LAYOUT_MODULE_TREE.md) |
 | [`DESIGN.md`](../DESIGN.md) | UI tokens and interaction spec |
 | [`dev-docs/README.md`](README.md) | Index of developer documentation |
 | [`dev-docs/plans/`](plans/) | Active, supporting, and completed implementation plans |
@@ -60,12 +60,16 @@ for full regression after cross-cutting changes.
 
 ### Agent-tool trial protocol
 
-Before adopting an MCP server or output-compression hook, run a small,
-non-gating trial on three to five representative tasks. Establish a no-tool
-baseline, then enable one tool at a time. Record task completion, focused-test
-result, elapsed time, and any lost traceback or source detail. Retain a tool
-only when it preserves correctness and makes this repository's workflow
-materially better. Keep a raw-output path for every output filter.
+Before adopting an MCP server or output-compression hook, review its source,
+license, telemetry, and external data-handling behavior. Do not let a trial
+process clinical DICOM, real study data, unredacted logs, or other
+identity-bearing local artifacts: use wholly synthetic, non-clinical
+representative tasks until that review is complete and an explicit policy
+decision expands the scope. Establish a no-tool baseline, then enable one tool
+at a time. Record task completion, focused-test result, elapsed time, and any
+lost traceback or source detail. Retain a tool only when it preserves
+correctness and makes this repository's workflow materially better. Keep a
+raw-output path for every output filter.
 
 ---
 
