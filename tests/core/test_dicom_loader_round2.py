@@ -178,4 +178,7 @@ def test_load_directory_cancellation_stops_before_next_candidate(monkeypatch, tm
     monkeypatch.setattr(loader, "load_file", cancel_after_first)
 
     assert len(loader.load_directory(str(tmp_path), recursive=False)) == 1
-    assert seen == [str(first)]
+    # Filesystem iteration order is not stable across platforms.  Cancellation
+    # guarantees that exactly one candidate is loaded, not which name is first.
+    assert len(seen) == 1
+    assert seen[0] in {str(first), str(second)}
