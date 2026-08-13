@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-13
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -51,7 +51,7 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 | Topic | Location |
 |-------|----------|
 | Domains, dependency rules, where to edit | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
-| Full `src/` tree, controllers, signal wiring | [`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md) |
+| Source navigation, controllers, signal wiring | [`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md) |
 | Backlog | [`dev-docs/TO_DO.md`](dev-docs/TO_DO.md) |
 | Maintenance / developer history | [`dev-docs/MAINTENANCE_LOG.md`](dev-docs/MAINTENANCE_LOG.md) |
 | Plans (active / supporting / completed) | [`dev-docs/plans/`](dev-docs/plans/) |
@@ -60,6 +60,14 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 | Test-writing tiers (unit, Qt/PySide6, pylinac) | [`dev-docs/info/TESTING_GUIDANCE.md`](dev-docs/info/TESTING_GUIDANCE.md) |
 | Manual agent smoke steps | [`dev-docs/orchestration/AGENT_SMOKE.md`](dev-docs/orchestration/AGENT_SMOKE.md) |
 | **Debug / diagnostic prints** | [`src/utils/debug_flags.py`](src/utils/debug_flags.py) — all `DEBUG_*` toggles (default `False`) |
+
+## Repository navigation
+
+Use `rg` for scoped text and file searches (for example, `rg --files src` or
+`rg "symbol_name" src tests`). It is a workstation tool, not an application
+dependency; never add it to this project's Python environment. If unavailable,
+use `find` and the platform's available text-search tool rather than assuming
+`rg` exists.
 
 ## Conventions (short)
 

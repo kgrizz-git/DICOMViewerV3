@@ -1,108 +1,18 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-08-11
-**Purpose:** Detailed module tree, controller ownership, app bootstrap order, and Qt signal-wiring rules. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules; use this file when you need file-level navigation.
+**Last updated:** 2026-08-13
+**Purpose:** Compact controller, bootstrap, and signal-wiring index. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules, then open the on-demand [detailed module tree](info/SOURCE_LAYOUT_MODULE_TREE.md) only when file-level navigation is needed.
 
 ---
 
-## Module tree
+## Module navigation
 
-```
-src/
-├── main.py                        # Application entry point; DICOMViewerApp skeleton (QObject + Signal + __init__/run/eventFilter)
-├── main_app_initialization.py     # InitializationMixin — _init_core_managers through _post_init_subwindows_and_handlers
-├── main_app_subwindow_management.py  # SubwindowManagementMixin + MPRNavigationMixin — layout, panes, MPR thumbnails
-├── main_app_ui_and_files.py       # UIHandlersMixin + FileOperationsMixin — menus, dialogs, file/series load
-├── main_app_display_settings.py   # DisplayProjectionMixin + SettingsLayoutMixin — overlays, projection, settings
-├── main_app_tag_roi.py            # TagEditingMixin + ROIWorkflowMixin — tag edit/export, ROI workflows
-├── metadata/                      # Metadata feature controllers
-│   └── metadata_controller.py     # Owns MetadataPanel, TagEditHistoryManager, undo/redo, privacy for metadata
-├── roi/                           # ROI / measurement feature controllers
-│   └── roi_measurement_controller.py  # Owns ROIManager, MeasurementTool, AnnotationManager, panels
-├── core/                          # Core processing, loading, and coordination logic
-│   ├── actions/                     # Menu/dialog/view/customization actions: ``dialog_actions``, ``view_actions``, ``customization_actions``; ``dialog_action_handlers`` re-exports for façades/tests
-│   ├── app_handler_bootstrap.py     # After subwindow managers exist: builds coordinators, ``FileOperationsHandler``, ``DialogCoordinator``, cine, keyboard, etc.; ``DICOMViewerApp._initialize_handlers`` delegates
-│   ├── session_reset_controller.py  # Close-all / ROI clear / fusion reset / tag-union schedule / quit drain; ``main`` delegates ``_close_files``, ``_clear_data``, ``_on_app_about_to_quit``
-│   ├── mpr_navigator_thumbnail.py   # MPR pixel-array helpers and series-navigator MPR thumbnail set/clear/floating (attached vs key ``-1`` detached); ``main`` keeps one-line slots for ``app_signal_wiring``
-│   ├── layout_window_slot_controller.py  # Layout changed handlers, capture/restore, swap/expand 1×1, window-slot map refresh/popup; ``main`` delegates
-│   ├── tag_export_union_host.py     # Tag-export union ``QThread`` worker, generation, merged map; ``tag_export_union_ready`` remains on ``DICOMViewerApp``
-│   ├── study_index/                 # Local encrypted study DB (SQLCipher MVP): store, service, port, study_date_format (UI DA↔US), background threads
-│   ├── loading_progress_manager.py    # Animated loading dots, QProgressDialog, cancellation (used by FileOperationsHandler)
-│   ├── privacy_controller.py          # Privacy-mode propagation and overlay refresh (called from main on privacy toggle)
-│   ├── export_manager.py              # Export orchestration (paths, progress, slice/selection export)
-│   ├── export_rendering.py            # Pillow projection, photometric handling, overlay/ROI rasterization for export
-│   ├── fusion_handler_io.py           # Pure DICOM spatial reads + NumPy fusion helpers (no Qt); used by fusion_handler (Phase 5A)
-│   ├── mpr_geometry.py                # Pure MPR output-grid math, standard LPS planes, stack positions; used by mpr_builder (Phase 5C)
-│   ├── projection_app_facade.py       # Intensity projection / MPR combine UI handlers; DICOMViewerApp delegates slots here (Phase 4a)
-│   ├── qa_app_facade.py               # ACR CT/MRI pylinac QA flows, workers, compare dialog, QA JSON export; DICOMViewerApp delegates (Phase 4b)
-│   ├── export_app_facade.py           # Focused-series paths, save-as prompt, export/ROI-stats/screenshot entrypoints; DICOMViewerApp delegates (Phase 4c)
-│   ├── subwindow_image_viewer_sync.py # Propagate privacy, slice sync, smoothing, scale/direction markers to all pane ImageViewers (used by main.py)
-│   ├── subwindow_manager_factory.py # build_managers_for_subwindow(app, idx, subwindow) — per-pane ROI/measurement/overlay/slice/fusion graph (used by main.py)
-│   ├── cine_app_facade.py             # Cine player, frame slider, loop bounds; MPR-focused panes enable linear cine over ``n_slices``; ``app_signal_wiring`` connects slots to this facade (post-assessment Phase 8)
-│   ├── main_app_key_event_filter.py   # Layout digit focus gating + key dispatch to ``KeyboardEventHandler`` (post-assessment Phase 9)
-│   ├── slice_display_lut.py           # Window/level raw vs rescaled alignment helpers (used by SliceDisplayManager)
-│   ├── slice_display_pixels.py        # Intensity projection → PIL pipeline (used by SliceDisplayManager)
-│   ├── slice_window_level_resolver.py # Resolve effective W/L for a slice (dataset tags + user overrides)
-│   ├── dicom_window_level.py          # DICOM window/level tag parsing and display-range math
-│   ├── dicom_loader_file.py           # Pure single-file DICOM load helpers (compression labels, defer messages, multi-frame pre-load; S3776 slice)
-│   ├── decoder_capabilities.py        # Transfer-syntax labels, installed pydicom handler detection, safe compressed-decode error messages (no paths/PHI)
-│   ├── decoder_fixture_contract.py    # Privacy-safe SHA-256 expectations for reviewed synthetic decoder fixtures
-│   ├── decoder_fixture_smoke.py       # `--decoder-fixture-smoke` / `--decoder-fixture-child` frozen-build decoder validation runner
-│   ├── wl_preset_catalog.py           # Built-in and user W/L preset catalog (modality-aware labels)
-│   ├── window_level_preset_handler.py # Context-menu W/L preset apply with raw/rescaled alignment (post-assessment Phase 7)
-│   ├── slice_geometry.py              # Pure 3-D slice-plane/stack math (patient mm); shared by sync and location lines
-│   ├── slice_sync_coordinator.py      # Linked-group anatomic slice sync across panes (off by default)
-│   ├── slice_location_line_helper.py  # Pure geometry: plane intersections → 2-D line segments per target pane
-│   ├── roi_export_service.py          # ROI/crosshair/measurement aggregation + TXT/CSV/XLSX writers (formula-safe cells)
-│   ├── roi_export_txt.py              # TXT report helpers for write_txt (S3776 slice)
-│   ├── roi_export_csv.py              # CSV row builders for write_csv (S3776 slice)
-│   ├── roi_export_xlsx.py             # XLSX worksheet helpers for write_xlsx (S3776 slice)
-│   ├── spreadsheet_safety.py          # Neutralize formula-like spreadsheet cell prefixes on export
-│   ├── study_navigation_handlers.py   # Study/series navigation menu slots (delegated from main)
-│   ├── direction_labels.py            # Patient LPS direction strings from ImageOrientationPatient (viewer edge labels; tests in tests/core/test_direction_labels.py)
-│   ├── dicom_parser.py                # Dataset metadata: get_all_tags (iterall + optional export catalog merge)
-│   ├── sr_sop_classes.py              # SR storage SOP class registry; ``is_structured_report_dataset``
-│   ├── sr_document_tree.py            # Generic SR ``ContentSequence`` tree builder + JSON export helper
-│   ├── sr_concept_identity.py         # SR coded-concept normalization (designator fold, LongCodeValue) for dose-event matching
-│   ├── rdsr_dose_sr.py                # Radiation dose SR detection + CT summary walk; uses ``sr_concept_identity`` for concept codes
-│   ├── rdsr_irradiation_events.py     # RDSR irradiation event rows (PS3.16 **113706** / **113819**); **DAP**/**Dose (RP)** + parallel **DAP units**/**Dose (RP) units** from ``MeasurementUnitsCodeSequence``; capped notes if units missing
-│   ├── tag_export_catalog.py          # Curated standard tags for Export DICOM Tags picker; synthetic_tag_export_tree_entry for preset-only rows missing from the file union
-│   ├── tag_export_union.py            # union_tags_across_datasets (merged tag map); separate from catalog to avoid a dicom_parser ↔ catalog import cycle for static analysis
-│   └── tag_export_writer.py           # Tag export file writers: Excel, CSV, UTF-8 tab-separated text (shared row builder)
-├── gui/                           # All Qt widgets, dialogs, layout; e.g. overlay_items_factory, overlay_position_updater (viewport-anchored zoom/pan reposition), file_series_additive_load (additive merge UI/eviction helpers), file_series_first_slice_load (full-replace first-slice load helpers), series_navigator_view (thumbnails), series_navigator_model (labels/instance entries), main_window_*_builder (menus/toolbar), main_window_toast_controller / recent_files_manager / fullscreen_manager / overlay_options mixin / status_controller; **`dialogs/about_dialog.py`** — Help → About (`show_about`); **`dialogs/tag_export_union_worker.py`** — tag-union merge thread (orchestrated by **`core/tag_export_union_host.py`** via **`DICOMViewerApp._schedule_tag_export_union_rebuild`** ); **`dialogs/structured_report_browser_dialog.py`** — modeless SR tree + dose events (optional **Hide empty columns**, on by default; CSV/XLSX still export all columns) + exports (**Tools → Structured Report…**)
-│   ├── slice_location_line_manager.py   # Per-pane QGraphics line items for slice-location reference lines
-│   ├── slice_location_line_coordinator.py  # App-level refresh across panes; reads ``SliceSyncConfigMixin`` visibility flags
-│   ├── metadata_table_model.py    # Metadata panel tree delegate + tag filter/group/value helpers (Phase 5D; `metadata_panel.py` wires UI)
-│   └── dialogs/
-│       ├── histogram_frequency.py     # Series-wide histogram frequency/pixel-range helpers (S3776 slice)
-│       ├── slice_sync_dialog.py       # Manage linked sync groups (**View → Manage Sync Groups…**)
-│       ├── export_roi_statistics_dialog.py  # **Tools → Export ROI Statistics** series picker + format options
-│       └── mri_compare_result_dialog.py  # ACR MRI compare-results table + JSON/PDF actions; `qa_app_facade` wires callbacks (Phase 5E)
-├── tools/                         # Interactive tools (ROI, measurement, annotation, crosshair); measurement_item_change (itemChange helpers); annotation_overlay_bitmap (overlay bitmap helpers)
-│   └── roi_persistence.py         # Clipboard-oriented ROI dict serialization (Phase 5B; copy/paste schema)
-└── utils/                         # Utilities (config, undo/redo, DICOM helpers, etc.)
-    ├── undo_redo_tag_commands.py  # `TagEditCommand` for DICOM tag edits; imported at end of `undo_redo.py` for re-export (Phase 5E)
-    ├── config_manager.py          # Thin facade: inherits all config mixins; owns __init__, _load_config, save_config, get, set
-    ├── doc_urls.py                # GitHub base URL for in-app user-docs links (Help → Documentation, Quick Start); edit USER_DOCS_GITHUB_PREFIX for forks
-    ├── debug_flags.py             # **Agent-relevant:** all DEBUG_* toggles for console tracing (default False); see AGENTS.md + HARNESS.md § Debugging
-    └── config/                    # Feature-domain config mixin package
-        ├── __init__.py
-        ├── paths_config.py        # last_path, last_export_path, last_pylinac_output_path, recent_files, normalize_path
-        ├── display_config.py      # theme, smooth_image_when_zoomed, privacy_view, scroll_wheel_mode
-        ├── overlay_config.py      # overlay mode/visibility/font/tags + overlay_tags_detailed_extra (Detailed-only corner tags), get_all_modalities
-        ├── layout_config.py       # multi_window_layout, view_slot_order
-        ├── slice_sync_config.py   # slice_sync_enabled, linked groups, slice-location line visibility/width/mode
-        ├── roi_config.py          # ROI font/line/default_visible_statistics
-        ├── measurement_config.py  # measurement font/line
-        ├── annotation_config.py   # text/arrow annotation appearance
-        ├── cine_config.py         # cine speed/loop defaults
-        ├── metadata_ui_config.py  # metadata panel column widths/order
-        ├── tag_export_config.py   # tag export presets (CRUD + file I/O)
-        ├── customizations_config.py  # bulk export/import of all visual settings
-        ├── app_config.py          # disclaimer_accepted
-        ├── qa_pylinac_config.py   # persisted pylinac QA options (e.g. MRI LC method/threshold/sanity)
-        └── study_index_config.py  # local study index DB path, auto-add on open, browser column order
-```
+| Need | Start with |
+|---|---|
+| App bootstrap, mixins, or signal ordering | This file’s [bootstrap](#dicomviewerapp__init__-order) and [signal-wiring](#signal-wiring-_connect_signals) sections |
+| File-level ownership within a domain | [Detailed module tree](info/SOURCE_LAYOUT_MODULE_TREE.md) |
+| Domain boundaries or a change-area entry point | [`ARCHITECTURE.md`](../ARCHITECTURE.md#where-to-change-what) |
+| Local subtree invariants and focused tests | `src/core/AGENTS.md`, `src/gui/AGENTS.md`, or `src/qa/AGENTS.md` when working in that subtree |
 
 ---
 

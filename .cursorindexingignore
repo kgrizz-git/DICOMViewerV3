@@ -24,6 +24,9 @@ reports/
 dicom_viewer_config*.json
 .pytest-tmp*/
 .pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
 tmp/
 backups/
 *gitleaks-report*.json
@@ -36,4 +39,7 @@ scanner-reports/
 venv/
 env/
 .git/
+.codex/
+.claude/worktrees/
 .cursor/debug*
+.DS_Store
