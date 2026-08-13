@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from types import SimpleNamespace
 
 import numpy as np
@@ -50,8 +51,15 @@ def test_process_image_normalizes_palette_and_unknown_modes(
     photometric: str, expected: str
 ) -> None:
     image = Image.new("RGBA", (2, 2), (1, 2, 3, 4))
+    dataset = _dataset()
+    if photometric == "unknown":
+        # Exercise the defensive fallback without making synthetic fixture data
+        # itself trigger pydicom's VR validation warning.
+        object.__setattr__(dataset, "PhotometricInterpretation", photometric)
+    else:
+        dataset.PhotometricInterpretation = photometric
     result = rendering.process_image_by_photometric_interpretation(
-        image, _dataset(photometric)
+        image, dataset
     )
     assert result.mode == expected
 
@@ -207,9 +215,13 @@ def test_create_projection_dataset_updates_pixels_and_metadata(monkeypatch) -> N
         "get_pixel_array",
         lambda _dataset: np.zeros((2, 2), dtype=np.uint8),
     )
-    result = rendering.create_projection_dataset(
-        dataset, _series(dataset, 3), "1.2.3", "1.2.3.4", 1, "mip", 2, False
-    )
+    # The strict xfail below owns the conformance warning regression. Suppress
+    # this duplicate warning while checking the independent metadata behavior.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="The value length.*")
+        result = rendering.create_projection_dataset(
+            dataset, _series(dataset, 3), "1.2.3", "1.2.3.4", 1, "mip", 2, False
+        )
     assert result is not None
     assert result.Rows == 2 and result.Columns == 2
     assert np.array_equal(np.frombuffer(result.PixelData, dtype=np.uint8), [0, 255, 2, 3])
@@ -220,11 +232,38 @@ def test_create_projection_dataset_updates_pixels_and_metadata(monkeypatch) -> N
     assert result.SOPInstanceUID != getattr(dataset, "SOPInstanceUID", None)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="Projection ImageType value exceeds DICOM CS's 16-character limit; see investigation.",
+)
+def test_projection_dataset_image_type_values_are_dicom_cs_valid(monkeypatch) -> None:
+    dataset = _dataset()
+    monkeypatch.setattr(
+        rendering.DICOMProcessor,
+        "maximum_intensity_projection",
+        lambda _slices: np.array([[1]], dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        rendering.DICOMProcessor,
+        "get_pixel_array",
+        lambda _dataset: np.zeros((1, 1), dtype=np.uint8),
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = rendering.create_projection_dataset(
+            dataset, _series(dataset), "1.2.3", "1.2.3.4", 0, "mip", 2, False
+        )
+    assert result is not None
+    assert not any("maximum length of 16" in str(warning.message) for warning in caught)
+
+
 def test_create_projection_dataset_keeps_single_slice_and_guards_missing_data() -> None:
     dataset = _dataset()
-    result = rendering.create_projection_dataset(
-        dataset, _series(dataset, 1), "1.2.3", "1.2.3.4", 0, "aip", 4, False
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="The value length.*")
+        result = rendering.create_projection_dataset(
+            dataset, _series(dataset, 1), "1.2.3", "1.2.3.4", 0, "aip", 4, False
+        )
     assert result is not None
     assert result.PixelData == dataset.PixelData
     assert "Derived from instance 1" in result.ImageComments
