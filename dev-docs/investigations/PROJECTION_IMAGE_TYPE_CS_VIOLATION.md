@@ -1,6 +1,6 @@
 # Derived projection `ImageType` CS violation
 
-**Status:** Open — regression covered by a strict xfail  
+**Status:** Open — regression covered by a strict xfail
 **Discovered:** 2026-08-13
 
 ## Summary
