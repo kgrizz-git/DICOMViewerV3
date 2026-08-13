@@ -70,9 +70,9 @@ def test_validate_dicom_file_uses_tmp_path_and_handles_numeric_metadata(
     file_path.write_bytes(b"synthetic")
     dataset = Dataset()
     dataset.NumberOfFrames = "2"
-    dataset.Rows = "2"
-    dataset.Columns = "2"
-    dataset.BitsAllocated = "16"
+    dataset.Rows = 2
+    dataset.Columns = 2
+    dataset.BitsAllocated = 16
     dataset.PixelData = b"x" * 16
     monkeypatch.setattr(loader_module.os.path, "getsize", lambda _path: 2_000_000)
     dcmread = MagicMock(return_value=dataset)
