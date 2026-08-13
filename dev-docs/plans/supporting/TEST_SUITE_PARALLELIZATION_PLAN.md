@@ -1,7 +1,8 @@
 # Plan: Parallelize the CI test suite (pytest-xdist)
 
 **Last updated:** 2026-08-12
-**Status:** Supporting — **Phases 1 and 2 complete, 20/20 gate passed**; Phase 3 docs/config remain
+**Status:** Supporting — **Phases 1–3 complete** (20/20 local gate, PR #58 CI green);
+Phase 4 dropped after measurement. Remaining: post-merge CI observation only.
 **Area:** CI / test harness
 
 ---
@@ -62,7 +63,7 @@ diagnosed and a fix is validated.
 Native backtrace from the crash report
 (`~/Library/Logs/DiagnosticReports/python3.12-2026-08-12-145017.ips`):
 
-```
+```text
 libsystem_c.dylib        abort
 QtCore                   QMessageLogger::fatal(char const*, ...) const
 QtWidgets                QWidgetPrivate::init(QWidget*, QFlags<Qt::WindowType>)
@@ -277,7 +278,7 @@ it rather than adding it.
 1. **Coverage under xdist — verified, no action needed.** A green `-n auto`
    run with `--cov=src --cov-fail-under=65` reports:
 
-   ```
+   ```text
    TOTAL   50705  12473  16472  2770   71%
    Required test coverage of 65% reached. Total coverage: 71.01%
    4887 passed, 15 skipped in 48.14s

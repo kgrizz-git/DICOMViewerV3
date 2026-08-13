@@ -117,9 +117,10 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           # Project-wide coverage floor. Local measured TOTAL is ~71%; floor is 65%.
-          # -n auto parallelizes across available CPU cores via pytest-xdist.
-          # ubuntu-latest has 4 cores, so expect ~3m30s here versus ~8m40s serial.
-          python -m pytest tests -n auto \
+          # Parallelism comes from pytest.ini (addopts = ... -n auto), which is the
+          # single source of truth so local runs match CI. ubuntu-latest has 4
+          # cores, so expect ~3m30s here versus ~8m40s serial.
+          python -m pytest tests \
             --cov=src \
             --cov-report=term \
             --cov-report=xml:coverage.xml \
