@@ -7,18 +7,19 @@ Phase 4 dropped after measurement. Remaining: post-merge CI observation only.
 
 ---
 
-## Current state: push blocker cleared
+## Current state: shipped on PR #58
 
-Commit `4558a53` put `-n auto` into
-[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) on branch
-`perf/parallelize-tests` while the suite still crashed 3 of 3 at `-n 4`. That
-was a red-CI hazard.
+*Historical note.* Commit `4558a53` put `-n auto` into
+[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) while the suite
+still crashed 3 of 3 at `-n 4`, which was briefly a red-CI hazard. The Phase 2
+fix landed on the same branch in `b8c11ea` before anything was pushed, so that
+hazard never reached CI.
 
-**Resolved 2026-08-12.** The Phase 2 fix is implemented and passed the full
-gate: **20 consecutive `-n 4` runs, 4887 passed / 15 skipped every time, zero
-failures or worker crashes** (205.5–233.7s, mean ~211s). The Phase 2 changes are
-uncommitted in the working tree and must be committed **on the same branch,
-before pushing**, or CI will still see the pre-fix state.
+**Current:** all phases are committed and pushed on `perf/parallelize-tests`
+(`4558a53`, `b8c11ea`, `9a4451d`, `54431e5`) and open as PR #58. The Phase 2 fix
+passed its full gate — **20 consecutive `-n 4` runs, 4887 passed / 15 skipped
+every time, zero failures or worker crashes** (205.5–233.7s, mean ~211s) — and
+the PR's CI `pytest` job has run green on GitHub's 4-core runners.
 
 ---
 
@@ -353,6 +354,55 @@ Consequences:
   disposing top-level widgets), which would speed up the serial path and reduce
   memory pressure. Worth doing on its own merits; not required for
   parallelization. Measure before committing to it.
+
+---
+
+## Wall-clock perf budgets under parallelism (found and fixed 2026-08-13)
+
+The first CI run after `54431e5` failed on
+`tests/test_tag_export_sequence_picker.py::...::test_picker_populates_24k_leaf_tree_without_hanging`:
+
+```text
+assert 2261.096834 < 2000
+```
+
+A **flake, not a deterministic failure** — the previous CI run passed with the
+same parallelism, and 2261 ms is only 13% over budget.
+
+**Cause.** The test measured **wall clock**. Under `-n auto` on a 4-core runner,
+four workers contend for four cores, so wall time inflates while the work done
+is unchanged.
+
+Measured: ~150 ms local unloaded, ~315 ms local under coverage instrumentation
+(a 2.1x multiplier), against CI's 2261 ms — a 7.2x gap over the local
+coverage figure. **How that 7.2x splits between slower CI cores and worker
+contention was not measured**; an 18-core dev host cannot reproduce 4-workers-
+on-4-cores saturation. Attributing it mostly to contention is inference from
+the mechanism, not from data. The first green CI run will print the actual CPU
+figure and settle it.
+
+**Fix.** Assert on `time.process_time()` (CPU time) instead. The workload is
+purely CPU-bound with no waiting — confirmed by CPU and wall agreeing to within
+1 ms locally, loaded and unloaded — so CPU time measures exactly the algorithmic
+cost the guard exists to protect, and is immune to worker contention.
+
+**Budgets left at their original values** (2000 ms). Removing the contention
+term *is* the fix; loosening the threshold on top of it would only mask
+whether the fix worked, and would blunt detection — a genuine 3x regression to
+~2.4 s is caught at 2000 ms and missed at 5000 ms. If CPU time still exceeds
+2000 ms on CI, that is real information and the printed figure gives an
+evidence-based number, rather than a guess made in advance.
+
+Both wall and CPU are printed for diagnostics.
+
+**Applied to all three wall-clock budget tests, not just the one that flaked** —
+`test_metadata_panel.py` had an identical 24k-row workload and the same 2000 ms
+wall budget, so it was the next failure waiting to happen;
+`test_tag_viewer_dialog.py` already had a 5000 ms budget but the same structural
+exposure.
+
+**Rule for new tests:** never assert on wall clock in this suite. Parallel
+workers make it a measure of machine load, not of the code under test.
 
 ---
 
