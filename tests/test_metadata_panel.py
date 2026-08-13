@@ -470,15 +470,21 @@ def test_panel_population_perf_gate_enhanced_multiframe(qapp) -> None:
     assert panel._cached_tags is not None
     assert len(panel._cached_tags) > 20000
 
-    start = time.perf_counter()
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
     panel._populate_tags("")
-    elapsed_ms = (time.perf_counter() - start) * 1000
+    cpu_ms = (time.process_time() - start_cpu) * 1000
+    wall_ms = (time.perf_counter() - start_wall) * 1000
 
     print(
-        f"\n[perf] metadata_panel widget population: {elapsed_ms:.1f} ms "
-        f"for {len(panel._cached_tags)} rows"
+        f"\n[perf] metadata_panel widget population: {cpu_ms:.1f} ms CPU "
+        f"({wall_ms:.1f} ms wall) for {len(panel._cached_tags)} rows"
     )
-    assert elapsed_ms < 2000
+    # Assert on CPU time, not wall clock: the suite runs under pytest-xdist
+    # (-n auto), so on a 4-core CI runner wall time inflates with worker
+    # contention while the work done is unchanged. Budget unchanged at 2000 ms.
+    # This guards the O(n^2) rescan regression that put this step at ~19s.
+    assert cpu_ms < 2000
 
 
 def test_group_headers_span_full_width_and_are_visually_distinct(qapp) -> None:

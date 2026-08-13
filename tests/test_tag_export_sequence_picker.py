@@ -278,18 +278,28 @@ class TestLargeSequenceWarningAndPerf:
         assert len(merged) > 20000
 
         dialog = TagExportDialog(studies={}, config_manager=None)
-        start = time.perf_counter()
+        start_wall = time.perf_counter()
+        start_cpu = time.process_time()
         dialog._render_tag_tree(merged)
-        elapsed_ms = (time.perf_counter() - start) * 1000
+        cpu_ms = (time.process_time() - start_cpu) * 1000
+        wall_ms = (time.perf_counter() - start_wall) * 1000
         print(
-            f"\n[perf] tag_export_dialog picker population: {elapsed_ms:.1f} ms "
-            f"for {len(merged)} rows"
+            f"\n[perf] tag_export_dialog picker population: {cpu_ms:.1f} ms CPU "
+            f"({wall_ms:.1f} ms wall) for {len(merged)} rows"
         )
 
         assert dialog.tags_tree.topLevelItemCount() > 0
         # Plan's budget: this must not be the ~19s O(n^2) per-parent rescan.
-        # Allow headroom above 1s so CI runner jitter does not flake near the edge.
-        assert elapsed_ms < 2000
+        #
+        # Assert on CPU time, not wall clock. This work is purely CPU-bound, and
+        # the suite runs under pytest-xdist (-n auto), so on a 4-core CI runner
+        # four workers contend for four cores and wall time inflates with load
+        # while the work done is unchanged. A wall-clock budget flaked here at
+        # 2261 ms. CPU time measures the algorithmic cost the guard cares about.
+        # Budget unchanged at 2000 ms: removing the contention term is the fix,
+        # so the original threshold still holds (~150 ms local, ~315 ms local
+        # under coverage). The O(n^2) regression guarded against was ~19 s.
+        assert cpu_ms < 2000
 
         dialog.deleteLater()
 

@@ -233,21 +233,24 @@ def test_widget_population_perf_gate_enhanced_multiframe(qapp) -> None:
     assert dialog._cached_tags is not None
     assert len(dialog._cached_tags) > 20000
 
-    start = time.perf_counter()
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
     dialog._populate_tags("")
-    elapsed_ms = (time.perf_counter() - start) * 1000
+    cpu_ms = (time.process_time() - start_cpu) * 1000
+    wall_ms = (time.perf_counter() - start_wall) * 1000
 
     print(
-        f"\n[perf] tag_viewer_dialog widget population: {elapsed_ms:.1f} ms "
-        f"for {len(dialog._cached_tags)} rows"
+        f"\n[perf] tag_viewer_dialog widget population: {cpu_ms:.1f} ms CPU "
+        f"({wall_ms:.1f} ms wall) for {len(dialog._cached_tags)} rows"
     )
 
     assert dialog.tree_widget.topLevelItemCount() > 0
     # What this gate is for is the O(n²) rescan, which put this step at ~19s. The budget
     # is set to catch that class of regression on any machine rather than to pin the
     # wall-clock of a fast one: a shared CI runner takes ~1s here where a dev laptop
-    # takes ~250ms, so a 1s budget fails on load alone.
-    assert elapsed_ms < 5000
+    # takes ~250ms, so a 1s budget fails on load alone. Measured as CPU time so
+    # pytest-xdist worker contention cannot inflate it.
+    assert cpu_ms < 5000
 
 
 def test_sequences_off_hides_contents_without_orphaning_them_into_other_groups(qapp) -> None:
