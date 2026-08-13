@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-13
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -24,6 +24,48 @@ This project uses a **human-led, agent-assisted** workflow—not a fully agent-g
 | [`dev-docs/plans/`](plans/) | Active, supporting, and completed implementation plans |
 | [`dev-docs/TO_DO.md`](TO_DO.md) | Active product/engineering backlog |
 | [`dev-docs/MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md) | Developer-maintenance history for CI, harness, repo hygiene, and similar work |
+
+### Change routing and focused verification
+
+Use [`ARCHITECTURE.md`](../ARCHITECTURE.md#where-to-change-what) to identify
+the owning code first, then run the smallest relevant verification slice from
+the canonical commands in [`tests/README.md`](../tests/README.md#focused-test-selection)
+before the full suite. The table below is a navigation aid, not a replacement
+for full regression after cross-cutting changes.
+
+| Change area | Start with | Focused verification |
+|---|---|---|
+| Main-window actions, shortcuts, or signal wiring | `src/main.py`, `src/main_app_*.py`, `src/gui/main_window_menu_builder.py` | `tests/test_main_signal_wiring.py`, `tests/test_main_signals_view.py`, then the relevant manual smoke step |
+| Loading, parsing, or decoder behavior | `FileOperationsHandler`, loading pipeline, `dicom_loader.py`, `dicom_pixel_array.py` | `tests/test_dicom_loader.py`, `tests/test_dicom_parser.py`; run decoder fixture smoke after decoder or frozen-build changes |
+| Navigator, overlays, or keyboard handling | `src/gui/series_navigator_*`, `overlay_config`, `KeyboardEventHandler` | `tests/test_series_navigator_tooltips.py`, `tests/test_keyboard_overlay_shortcuts.py`; smoke Space on normal and MPR panes |
+| MPR, geometry, or export | `src/core/mpr_controller.py`, `mpr_*` modules | `tests/test_mpr_core.py`, `tests/test_mpr_geometry.py`, `tests/test_mpr_overlay_and_rescale.py`, plus MPR manual smoke when UI-visible |
+| Privacy display, storage, or output | `privacy_controller.py`, `src/utils/privacy/` | targeted `tests/test_privacy_*.py`, `tests/test_main_privacy_lifecycle.py`, and the required privacy hook lane |
+| Study index, SR/RDSR, or QA/pylinac | `src/core/study_index/`, `rdsr_dose_sr.py`, `src/qa/` | corresponding `tests/test_study_index_*.py`, `tests/test_rdsr_*.py`, or `tests/test_pylinac_*.py`; use optional deep smoke when behavior is UI-visible |
+
+### Search and indexing hygiene
+
+- Use **ripgrep** (`rg`) for scoped repository search. It is a developer/agent
+  workstation tool, not an application dependency; install it through platform
+  package management (for example, `brew install ripgrep`), never this
+  project's Python environment. If it is unavailable, use `find` plus the
+  platform's available text-search tool.
+- `.cursorindexingignore` excludes local data, runtime state, generated Python
+  bytecode, local Codex state, and other non-source artifacts from Cursor
+  indexing. Keep it aligned with `.cursorignore` when adding a new local-only
+  root. These exclusions do not change application behavior or replace the
+  repository's privacy gates.
+- Add nested `AGENTS.md` guidance only where a subtree has durable rules that
+  differ from the root guidance. Keep it narrowly scoped to invariants,
+  entry points, and verification; do not duplicate the root architecture map.
+
+### Agent-tool trial protocol
+
+Before adopting an MCP server or output-compression hook, run a small,
+non-gating trial on three to five representative tasks. Establish a no-tool
+baseline, then enable one tool at a time. Record task completion, focused-test
+result, elapsed time, and any lost traceback or source detail. Retain a tool
+only when it preserves correctness and makes this repository's workflow
+materially better. Keep a raw-output path for every output filter.
 
 ---
 

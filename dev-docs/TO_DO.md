@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-11
+**Last updated:** 2026-08-13
 
 ---
 
@@ -72,6 +72,8 @@ This file tracks active and near-term tasks.
 
 ## Maintenance
 
+
+- [ ] **[P3] Deferred:** **Trial agent navigation / output-efficiency tools without adopting a stack.** Start with a user-level Serena semantic-navigation trial and, separately, an RTK CLI-output trial; use the non-gating protocol in [`HARNESS.md`](HARNESS.md#agent-tool-trial-protocol). Compare against a no-tool baseline on representative Python/PySide6 tasks and record task completion, focused-test results, elapsed time, and lost diagnostics/source detail. Do not install tools into the application `.venv`, commit shared MCP/hook configuration, or add a project dependency unless a trial demonstrates a durable benefit and its source, license, data handling, and maintenance cost have been reviewed. Consider Graphify/other graph tools only if Serena does not adequately support a demonstrated navigation need.
 
 - [ ] **[P1]** **Confirm pytest-xdist parallelization holds on CI.** Implementation is complete and merged via PR #58 (`-n auto` in `pytest.ini`, QApplication fix in `tests/conftest.py`, `_FakeMenu` monkeypatch leak fixed); local gate was 20/20 clean at `-n 4` and the PR's CI `pytest` job passed. Remaining: watch the next several `main` runs for worker crashes or coverage-combining anomalies, then close this item. Open follow-ups: the unexplained pre-fix/post-fix `-n 4` timing gap, and optional widget-cleanup hygiene for the serial path. **Plan:** [Parallelize the CI test suite](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md). Surfaced 2026-08-12.
 - [ ] **[P2]** **If DeepSource is enabled, require the same privacy controls as external CI scanners.** Do not enable the repository integration until it is configured to run only after the blocking privacy gate and excludes protected data/runtime roots plus DICOM, imaging, spreadsheet, document, and media patterns. Update `security/security-tool-inventory.json`, document the exact trigger/exclusion configuration, and verify that no source is sent before the gate passes.
