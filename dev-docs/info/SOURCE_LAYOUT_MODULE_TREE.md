@@ -1,7 +1,7 @@
 # Detailed source module tree
 
 **Last updated:** 2026-08-13
-**Purpose:** On-demand file-level navigation. Read [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md) first for bootstrap and signal-wiring rules, then read only the relevant domain below.
+**Purpose:** On-demand file-level navigation. Paths in this document are repository-relative. Read [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md) first for bootstrap and signal-wiring rules, then read only the relevant domain below.
 
 ## Application shell
 
@@ -18,36 +18,36 @@
 
 | Area | Key paths |
 |---|---|
-| Action/signal infrastructure | `core/actions/`, `core/app_handler_bootstrap.py`, `core/app_signal_wiring.py`, `core/session_reset_controller.py` |
-| Loading/decoding | `dicom_loader_file.py`, `dicom_loader.py`, `dicom_pixel_array.py`, `decoder_capabilities.py`, `decoder_fixture_*.py`, `loading_progress_manager.py` |
-| Display/window level | `slice_display_*.py`, `slice_window_level_resolver.py`, `dicom_window_level.py`, `wl_preset_catalog.py`, `window_level_preset_handler.py` |
-| MPR/slice coordination | `mpr_controller.py`, `mpr_geometry.py`, `mpr_navigator_thumbnail.py`, `slice_geometry.py`, `slice_sync_coordinator.py`, `slice_location_line_helper.py` |
-| Per-pane lifecycle | `subwindow_lifecycle_controller.py`, `subwindow_manager_factory.py`, `subwindow_image_viewer_sync.py`, `layout_window_slot_controller.py` |
-| Export/tags | `export_manager.py`, `export_rendering.py`, `export_app_facade.py`, `tag_export_*.py`, `roi_export_*.py`, `spreadsheet_safety.py` |
-| Privacy | `privacy_controller.py`; shared privacy helpers remain in `utils/privacy/` |
-| Study index/SR | `study_index/`, `study_navigation_handlers.py`, `sr_*.py`, `rdsr_*.py` |
-| QA/cine/projection | `qa_app_facade.py`, `cine_app_facade.py`, `projection_app_facade.py` |
+| Action/signal infrastructure | `src/core/actions/`, `src/core/app_handler_bootstrap.py`, `src/core/app_signal_wiring.py`, `src/core/session_reset_controller.py` |
+| Loading/decoding | `src/core/dicom_loader_file.py`, `src/core/dicom_loader.py`, `src/core/dicom_pixel_array.py`, `src/core/decoder_capabilities.py`, `src/core/decoder_fixture_*.py`, `src/core/loading_progress_manager.py` |
+| Display/window level | `src/core/slice_display_*.py`, `src/core/slice_window_level_resolver.py`, `src/core/dicom_window_level.py`, `src/core/wl_preset_catalog.py`, `src/core/window_level_preset_handler.py` |
+| MPR/slice coordination | `src/core/mpr_controller.py`, `src/core/mpr_geometry.py`, `src/core/mpr_navigator_thumbnail.py`, `src/core/slice_geometry.py`, `src/core/slice_sync_coordinator.py`, `src/core/slice_location_line_helper.py` |
+| Per-pane lifecycle | `src/core/subwindow_lifecycle_controller.py`, `src/core/subwindow_manager_factory.py`, `src/core/subwindow_image_viewer_sync.py`, `src/core/layout_window_slot_controller.py` |
+| Export/tags | `src/core/export_manager.py`, `src/core/export_rendering.py`, `src/core/export_app_facade.py`, `src/core/tag_export_*.py`, `src/core/roi_export_*.py`, `src/core/spreadsheet_safety.py` |
+| Privacy | `src/core/privacy_controller.py`; shared privacy helpers remain in `src/utils/privacy/` |
+| Study index/SR | `src/core/study_index/`, `src/core/study_navigation_handlers.py`, `src/core/sr_*.py`, `src/core/rdsr_*.py` |
+| QA/cine/projection | `src/core/qa_app_facade.py`, `src/core/cine_app_facade.py`, `src/core/projection_app_facade.py` |
 
 ## Qt interface and feature controllers
 
 | Area | Key paths |
 |---|---|
-| Main window | `gui/main_window.py`, `main_window_*_builder.py`, `main_window_*_controller.py` |
-| Loading/navigator | `file_series_*`, `series_navigator_*`, `slice_navigator.py` |
-| Overlay/crosshair | `overlay_*`, `crosshair_*`, `slice_location_line_manager.py`, `slice_location_line_coordinator.py` |
-| Dialogs | `gui/dialogs/`; inspect the named dialog before changing its action/controller path |
-| Metadata and ROI controllers | `metadata/metadata_controller.py`, `roi/roi_measurement_controller.py` |
-| Tools | `tools/` for ROI, measurement, annotation, crosshair, and clipboard persistence |
+| Main window | `src/gui/main_window.py`, `src/gui/main_window_*_builder.py`, `src/gui/main_window_*_controller.py` |
+| Loading/navigator | `src/gui/file_series_*`, `src/gui/series_navigator_*`, `src/gui/slice_navigator.py` |
+| Overlay/crosshair | `src/gui/overlay_*`, `src/gui/crosshair_*`, `src/gui/slice_location_line_manager.py`, `src/gui/slice_location_line_coordinator.py` |
+| Dialogs | `src/gui/dialogs/`; inspect the named dialog before changing its action/controller path |
+| Metadata and ROI controllers | `src/metadata/metadata_controller.py`, `src/roi/roi_measurement_controller.py` |
+| Tools | `src/tools/` for ROI, measurement, annotation, crosshair, and clipboard persistence |
 
 ## QA and shared utilities
 
 | Area | Key paths |
 |---|---|
-| Pylinac/medical physics | `src/qa/`; app entry points in `core/qa_app_facade.py` |
-| Config persistence | `utils/config_manager.py`, `utils/config/` feature mixins |
-| Diagnostics | `utils/debug_flags.py` (all flags default to `False`) |
-| User-doc links | `utils/doc_urls.py` |
-| Undo/redo | `utils/undo_redo.py`, `utils/undo_redo_tag_commands.py` |
+| Pylinac/medical physics | `src/qa/`; app entry points in `src/core/qa_app_facade.py` |
+| Config persistence | `src/utils/config_manager.py`, `src/utils/config/` feature mixins |
+| Diagnostics | `src/utils/debug_flags.py` (all flags default to `False`) |
+| User-doc links | `src/utils/doc_urls.py` |
+| Undo/redo | `src/utils/undo_redo.py`, `src/utils/undo_redo_tag_commands.py` |
 
 ## Search examples
 

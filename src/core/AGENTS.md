@@ -21,10 +21,8 @@ for changes under `src/core/`.
 ## Focused verification
 
 - Core changes: `python -m pytest tests/core -q`
-- Loading/decoder changes: add `tests/test_dicom_loader.py`
-  `tests/test_dicom_parser.py`; run decoder fixture smoke when relevant.
-- MPR changes: add `tests/test_mpr_*.py tests/core/test_mpr_*.py -q` and the
-  manual MPR smoke for UI-visible behavior.
+- Loading/decoder changes: `python -m pytest tests/test_dicom_loader.py tests/test_dicom_parser.py tests/core/test_dicom_loader_*.py -q`; run decoder fixture smoke when relevant.
+- MPR changes: `python -m pytest tests/test_mpr_*.py tests/core/test_mpr_*.py tests/gui/test_mpr_*.py -q`; run the manual MPR smoke for UI-visible behavior.
 - Privacy/output changes: run the relevant `tests/test_privacy_*.py` and the
   root-required privacy hook lane.
 
