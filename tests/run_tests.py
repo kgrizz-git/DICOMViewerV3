@@ -41,8 +41,21 @@ def main():
         )
     try:
         import pytest  # noqa: F401 - availability probe
+
+        # pytest.ini sets "-n auto", which only parses when pytest-xdist is
+        # installed. Without it pytest exits on "unrecognized arguments: -n"
+        # instead of running, so neutralise the ini addopts for this run.
+        serial_override: list[str] = []
+        try:
+            import xdist  # noqa: F401 - availability probe
+        except ImportError:
+            print("pytest-xdist not installed; running serially.")
+            print("For the parallel suite: pip install -r requirements-dev.txt")
+            serial_override = ["-o", "addopts="]
+
         return subprocess.call(  # NOSONAR - list-form subprocess.call with no shell=True; sys.argv is forwarded as discrete argv entries, not interpolated into a shell string
-            [sys.executable, "-m", "pytest", "tests", "-v", "--tb=short"] + [a for a in sys.argv[1:] if a != "--unittest"],
+            [sys.executable, "-m", "pytest", *serial_override, "tests", "-v", "--tb=short"]
+            + [a for a in sys.argv[1:] if a != "--unittest"],
             env=env,
             cwd=project_root,
         )

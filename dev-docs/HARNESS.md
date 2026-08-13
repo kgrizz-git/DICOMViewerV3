@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-08-11
+**Last updated:** 2026-08-12
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
