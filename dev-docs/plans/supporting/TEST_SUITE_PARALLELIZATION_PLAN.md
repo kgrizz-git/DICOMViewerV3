@@ -1,8 +1,9 @@
 # Plan: Parallelize the CI test suite (pytest-xdist)
 
-**Last updated:** 2026-08-12
-**Status:** Supporting — **Phases 1–3 complete** (20/20 local gate, PR #58 CI green);
-Phase 4 dropped after measurement. Remaining: post-merge CI observation only.
+**Last updated:** 2026-08-13
+**Status:** Supporting — **Phases 1–3 complete** (20/20 local gate). Phase 4 dropped
+after measurement. Two CI perf gates needed rebudgeting for parallel execution
+(see *Perf budgets under parallelism*); PR #58 awaiting a green run to confirm.
 **Area:** CI / test harness
 
 ---
@@ -15,11 +16,16 @@ still crashed 3 of 3 at `-n 4`, which was briefly a red-CI hazard. The Phase 2
 fix landed on the same branch in `b8c11ea` before anything was pushed, so that
 hazard never reached CI.
 
-**Current:** all phases are committed and pushed on `perf/parallelize-tests`
-(`4558a53`, `b8c11ea`, `9a4451d`, `54431e5`) and open as PR #58. The Phase 2 fix
-passed its full gate — **20 consecutive `-n 4` runs, 4887 passed / 15 skipped
-every time, zero failures or worker crashes** (205.5–233.7s, mean ~211s) — and
-the PR's CI `pytest` job has run green on GitHub's 4-core runners.
+**Current:** all phases are committed and pushed on `perf/parallelize-tests` and
+open as PR #58. The Phase 2 fix passed its full gate — **20 consecutive `-n 4`
+runs, 4887 passed / 15 skipped every time, zero failures or worker crashes**
+(205.5–233.7s, mean ~211s) — and the PR's CI `pytest` job ran green on GitHub's
+4-core runners at `9a4451d`.
+
+Two later CI runs then failed on **perf-budget gates**, not on parallelism
+correctness: no worker crashes, no lost tests. Those budgets were sized from
+dev-host timings and had to be rebudgeted for parallel CI — see
+*Perf budgets under parallelism* below.
 
 ---
 
