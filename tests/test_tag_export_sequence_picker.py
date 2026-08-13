@@ -291,15 +291,19 @@ class TestLargeSequenceWarningAndPerf:
         assert dialog.tags_tree.topLevelItemCount() > 0
         # Plan's budget: this must not be the ~19s O(n^2) per-parent rescan.
         #
-        # Assert on CPU time, not wall clock. This work is purely CPU-bound, and
-        # the suite runs under pytest-xdist (-n auto), so on a 4-core CI runner
-        # four workers contend for four cores and wall time inflates with load
-        # while the work done is unchanged. A wall-clock budget flaked here at
-        # 2261 ms. CPU time measures the algorithmic cost the guard cares about.
-        # Budget unchanged at 2000 ms: removing the contention term is the fix,
-        # so the original threshold still holds (~150 ms local, ~315 ms local
-        # under coverage). The O(n^2) regression guarded against was ~19 s.
-        assert cpu_ms < 2000
+        # Measured as CPU time so scheduler wait cannot inflate it, though on CI
+        # the two track closely (2143 ms CPU vs 2193 ms wall).
+        #
+        # Budget raised 2000 -> 5000 ms on evidence. This step costs ~2.1 s CPU
+        # on a 4-vCPU GitHub runner with coverage instrumentation, versus ~315 ms
+        # locally under coverage. It passed serially before the suite moved to
+        # pytest-xdist: with four workers saturating four SMT vCPUs, per-thread
+        # throughput drops, which inflates CPU time as well as wall time. The
+        # code under test did not change. 5000 ms matches the budget the
+        # equivalent gate in test_tag_viewer_dialog.py already uses for this same
+        # 24k-row workload, and still catches the ~19 s O(n^2) regression this
+        # exists to guard, with ~4x margin.
+        assert cpu_ms < 5000
 
         dialog.deleteLater()
 

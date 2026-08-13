@@ -357,7 +357,7 @@ Consequences:
 
 ---
 
-## Wall-clock perf budgets under parallelism (found and fixed 2026-08-13)
+## Perf budgets under parallelism (found and fixed 2026-08-13)
 
 The first CI run after `54431e5` failed on
 `tests/test_tag_export_sequence_picker.py::...::test_picker_populates_24k_leaf_tree_without_hanging`:
@@ -366,43 +366,69 @@ The first CI run after `54431e5` failed on
 assert 2261.096834 < 2000
 ```
 
-A **flake, not a deterministic failure** — the previous CI run passed with the
-same parallelism, and 2261 ms is only 13% over budget.
+It first looked like a pure flake: the previous CI run passed under the same
+parallelism, and 2261 ms is only 13% over budget. It is better described as a
+budget set too close to the real cost — under parallelism the gate lands right
+at its 2000 ms threshold, so it passes or fails on ordinary run-to-run variance.
+On the next run *both* this gate and `test_metadata_panel.py` failed.
 
-**Cause.** The test measured **wall clock**. Under `-n auto` on a 4-core runner,
-four workers contend for four cores, so wall time inflates while the work done
-is unchanged.
+### First hypothesis — wrong
 
-Measured: ~150 ms local unloaded, ~315 ms local under coverage instrumentation
-(a 2.1x multiplier), against CI's 2261 ms — a 7.2x gap over the local
-coverage figure. **How that 7.2x splits between slower CI cores and worker
-contention was not measured**; an 18-core dev host cannot reproduce 4-workers-
-on-4-cores saturation. Attributing it mostly to contention is inference from
-the mechanism, not from data. The first green CI run will print the actual CPU
-figure and settle it.
+The initial diagnosis was that wall clock inflated because workers wait for a
+core, and that `time.process_time()` would be immune. The tests were converted
+to assert on CPU time with budgets left at 2000 ms.
 
-**Fix.** Assert on `time.process_time()` (CPU time) instead. The workload is
-purely CPU-bound with no waiting — confirmed by CPU and wall agreeing to within
-1 ms locally, loaded and unloaded — so CPU time measures exactly the algorithmic
-cost the guard exists to protect, and is immune to worker contention.
+**CI disproved it.** Both gates failed again, and CPU tracked wall almost
+exactly:
 
-**Budgets left at their original values** (2000 ms). Removing the contention
-term *is* the fix; loosening the threshold on top of it would only mask
-whether the fix worked, and would blunt detection — a genuine 3x regression to
-~2.4 s is caught at 2000 ms and missed at 5000 ms. If CPU time still exceeds
-2000 ms on CI, that is real information and the printed figure gives an
-evidence-based number, rather than a guess made in advance.
+```text
+metadata_panel:     2111.9 ms CPU (2117.5 ms wall)
+tag_export_dialog:  2143.1 ms CPU (2192.7 ms wall)
+```
 
-Both wall and CPU are printed for diagnostics.
+Near-equal CPU and wall means the threads were **not** waiting for a core — they
+were running, slowly. `process_time` removes scheduler *wait*; it does not
+remove throughput loss.
 
-**Applied to all three wall-clock budget tests, not just the one that flaked** —
+### Actual cause
+
+GitHub's 4-vCPU runners present SMT siblings on roughly two physical cores. With
+four xdist workers saturating all four vCPUs, each thread keeps running and
+keeps accruing CPU time while its *effective* throughput drops. That inflates
+CPU time and wall time together, which is exactly the observed signature.
+
+Supporting evidence: **CI on `main` was green before parallelization**
+(`0399cbb`, `41e1231`, `44ae259` all passed), and the code under test has not
+changed. Serially these gates fit inside 2000 ms on the same hardware; under
+four-way saturation they cost ~2.1 s.
+
+### Resolution
+
+Budgets raised **2000 → 5000 ms** on measured evidence, not preemptively. This
+matches what the equivalent gate in `test_tag_viewer_dialog.py` already used for
+the same 24k-row workload, and still catches the ~19 s O(n²) regression the
+gates exist to guard, with ~4x margin.
+
+CPU-time measurement is **kept** — it costs nothing, still removes scheduler
+wait, and printing CPU alongside wall is what made the second diagnosis
+possible. But it should not be oversold: it was not what fixed this.
+
+**Lesson:** wall-clock *and* CPU-time budgets are both sensitive to parallel
+load on SMT hardware. A perf budget in this suite must be set from measurements
+taken under the parallel configuration CI actually runs, not from a dev host.
+
+**Applied to all three perf-budget tests, not just the ones that failed** —
 `test_metadata_panel.py` had an identical 24k-row workload and the same 2000 ms
-wall budget, so it was the next failure waiting to happen;
-`test_tag_viewer_dialog.py` already had a 5000 ms budget but the same structural
-exposure.
+budget (and did fail on the second run, as predicted);
+`test_tag_viewer_dialog.py` was already at 5000 ms and stayed green throughout,
+which is corroborating evidence that 5000 ms is the right number for this
+workload class on CI.
 
-**Rule for new tests:** never assert on wall clock in this suite. Parallel
-workers make it a measure of machine load, not of the code under test.
+**Rule for new tests:** do not set a timing budget from dev-host measurements.
+This suite runs 4-way parallel on SMT vCPUs in CI, where the same work costs
+roughly 7x a local coverage-instrumented run in both wall *and* CPU time. Size
+budgets against the regression class being guarded (here ~19 s), not against
+observed fast-path timings.
 
 ---
 
