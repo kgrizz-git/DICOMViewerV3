@@ -215,15 +215,16 @@ def test_export_exception_reports_sanitized_failure_and_restores_focus_borders(
     )
     dlg = _dialog(tmp_path)
     dlg.output_path = str(tmp_path)
+    sensitive_path = "/home/synthetic-patient/secret.png"
     dlg._export_separate = MagicMock(  # type: ignore[method-assign]
-        side_effect=RuntimeError(f"could not write {tmp_path / 'secret.png'}")
+        side_effect=RuntimeError(f"could not write {sensitive_path}")
     )
 
     dlg._on_export()
 
     assert failures[0][0] == "Export failed"
     assert "[REDACTED]" in failures[0][1]
-    assert str(tmp_path) not in failures[0][1]
+    assert sensitive_path not in failures[0][1]
     assert all(sw.focus_border_calls == [True, False] for sw in dlg.subwindows)
     assert dlg.result() == int(dlg.DialogCode.Rejected)
 
