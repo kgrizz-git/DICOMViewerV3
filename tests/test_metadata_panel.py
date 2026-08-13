@@ -441,9 +441,10 @@ def test_panel_population_perf_gate_enhanced_multiframe(qapp) -> None:
 
     Resolving each parent's children by rescanning the tag dict cost ~19s on this
     dataset in the tag viewer; the shared child index makes it ~0.2s. The panel
-    reuses those helpers and must not regress. Allow 2s for 24k QTreeWidgetItem
-    allocations on slower CI Qt backends; the known O(n^2) regression is still
-    nearly an order of magnitude above this gate.
+    reuses those helpers and must not regress. The gate allows 5s of CPU time for
+    24k QTreeWidgetItem allocations: measured ~0.28s locally under coverage and
+    ~2.1s on a 4-vCPU CI runner where four xdist workers saturate the available
+    SMT threads. The ~19s O(n^2) regression stays ~4x above this budget.
     """
     frames = []
     for frame_index in range(2000):

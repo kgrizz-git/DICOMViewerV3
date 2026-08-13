@@ -248,8 +248,13 @@ def test_widget_population_perf_gate_enhanced_multiframe(qapp) -> None:
     # What this gate is for is the O(n²) rescan, which put this step at ~19s. The budget
     # is set to catch that class of regression on any machine rather than to pin the
     # wall-clock of a fast one: a shared CI runner takes ~1s here where a dev laptop
-    # takes ~250ms, so a 1s budget fails on load alone. Measured as CPU time so
-    # pytest-xdist worker contention cannot inflate it.
+    # takes ~250ms, so a 1s budget fails on load alone.
+    #
+    # Measured as CPU time, which excludes time spent waiting for a core. Note that
+    # CPU time is *not* immune to xdist contention: with four workers saturating
+    # four SMT vCPUs on CI, per-thread throughput drops, so CPU time rises along
+    # with wall time. Sibling gates measured ~2.1s CPU vs ~2.1s wall there. Size
+    # this budget against the ~19s regression class, not against fast-path timings.
     assert cpu_ms < 5000
 
 
