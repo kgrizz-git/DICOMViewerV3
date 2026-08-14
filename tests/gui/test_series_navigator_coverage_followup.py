@@ -10,6 +10,7 @@ from PIL import Image
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
+from PySide6.QtTest import QSignalSpy
 
 from core.dicom_organizer import MultiFrameSeriesInfo
 from gui.series_navigator import SeriesNavigator
@@ -164,18 +165,28 @@ def test_regenerate_updates_existing_widget_and_clear_preserves_mpr(qapp) -> Non
     processor.dataset_to_image.return_value = Image.new("L", (80, 40))
     navigator = SeriesNavigator(processor)
     dataset = _dataset()
-    navigator.thumbnails["study:series"] = MagicMock()
+    thumbnail = MagicMock()
+    navigator.thumbnails["study:series"] = thumbnail
     navigator.thumbnail_cache[("study", "series")] = Image.new("L", (2, 2))
+    navigator._mpr_thumbnail_specs[0] = {"study_uid": "study", "source_series_uid": "series"}
     navigator.regenerate_series_thumbnail("study", "series", dataset, 1, 2, True)
-    assert navigator.thumbnail_cache[("study", "series")].size == (57, 29)
+    image = navigator.thumbnail_cache[("study", "series")]
+    assert image.size == (57, 29)
+    assert thumbnail.thumbnail_image is image
+    thumbnail.update.assert_called_once()
     navigator.clear()
     assert navigator.thumbnails == {}
     assert navigator.thumbnail_cache == {}
+    assert navigator._mpr_thumbnail_specs == {
+        0: {"study_uid": "study", "source_series_uid": "series"}
+    }
 
 
 @pytest.mark.qt
 def test_key_press_ignores_auto_repeat_and_passes_unknown_keys_to_base(qapp) -> None:
     navigator = SeriesNavigator(MagicMock())
+    navigator.set_current_series("series", "study")
+    navigation_requests = QSignalSpy(navigator.series_navigation_requested)
     event = QKeyEvent(
         QKeyEvent.Type.KeyPress,
         Qt.Key.Key_Left,
@@ -186,6 +197,9 @@ def test_key_press_ignores_auto_repeat_and_passes_unknown_keys_to_base(qapp) -> 
     )
     navigator.keyPressEvent(event)
     assert event.isAccepted()
+    assert navigator.current_series_uid == "series"
+    assert navigator.current_study_uid == "study"
+    assert navigation_requests.count() == 0
 
     unknown = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_A, Qt.KeyboardModifier.NoModifier)
     navigator.keyPressEvent(unknown)

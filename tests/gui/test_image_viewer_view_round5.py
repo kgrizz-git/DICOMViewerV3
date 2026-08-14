@@ -2,28 +2,10 @@
 
 from __future__ import annotations
 
+from image_viewer_view_round5_helpers import create_image as _img
+from image_viewer_view_round5_helpers import create_viewer as _viewer
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-
-from gui.image_viewer import ImageViewer
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _viewer(qapp, *, w: int = 400, h: int = 300) -> ImageViewer:
-    v = ImageViewer()
-    v.resize(w, h)
-    v.show()
-    return v
-
-
-def _img(mode: str = "L", size: tuple[int, int] = (64, 64), fill: int = 128):
-    from PIL import Image
-    if mode == "L":
-        return Image.new("L", size, fill)
-    return Image.new("RGB", size, (fill, fill, fill))
-
 
 # ---------------------------------------------------------------------------
 # Simple state setters

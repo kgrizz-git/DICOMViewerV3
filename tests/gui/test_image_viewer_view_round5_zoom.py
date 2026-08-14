@@ -3,29 +3,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
+from image_viewer_view_round5_helpers import create_image as _img
+from image_viewer_view_round5_helpers import create_viewer as _viewer
 from PIL import Image
 from PySide6.QtGui import QTransform
-
-from gui.image_viewer import ImageViewer
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _viewer(qapp, *, w: int = 400, h: int = 300) -> ImageViewer:
-    v = ImageViewer()
-    v.resize(w, h)
-    v.show()
-    return v
-
-
-def _img(mode: str = "L", size: tuple[int, int] = (64, 64), fill: int = 128) -> Image.Image:
-    if mode == "L":
-        return Image.new("L", size, fill)
-    return Image.new("RGB", size, (fill, fill, fill))
-
+from PySide6.QtTest import QSignalSpy
 
 # ---------------------------------------------------------------------------
 # zoom_in / zoom_out / reset_zoom / set_zoom
@@ -328,19 +313,14 @@ def test_apply_inversion_other_mode(qapp) -> None:
     assert inv.mode == "RGB"
 
 
-def test_apply_inversion_exception_returns_original(qapp) -> None:
+def test_apply_inversion_exception_returns_original(qapp, monkeypatch) -> None:
     v = _viewer(qapp)
     img = Image.new("L", (10, 10), 50)
-    original_array = np.array
-
     def bad_array(*a, **kw):
         raise RuntimeError("injected error")
 
-    np.array = bad_array
-    try:
-        result = v._apply_inversion(img)
-    finally:
-        np.array = original_array
+    monkeypatch.setattr(np, "array", bad_array)
+    result = v._apply_inversion(img)
     assert result is img
 
 
@@ -515,13 +495,10 @@ def test_check_transform_changed_emits_signal(qapp) -> None:
     v.set_image(_img(), preserve_view=False)
     v.current_zoom = 2.0
     v.last_transform = QTransform()
-    emissions: list = []
-    v.transform_changed.connect(lambda: emissions.append(True))
+    emissions = QSignalSpy(v.transform_changed)
     v._check_transform_changed()
-    from PySide6.QtCore import QTimer
-    QTimer.singleShot(50, qapp.quit)
-    qapp.exec()
-    assert len(emissions) >= 1
+    assert emissions.wait(100)
+    assert emissions.count() >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -532,7 +509,10 @@ def test_on_scrollbar_changed_noop_when_same(qapp) -> None:
     v = _viewer(qapp)
     v.last_horizontal_scroll = 0
     v.last_vertical_scroll = 0
+    emissions = QSignalSpy(v.transform_changed)
     v._on_scrollbar_changed()
+    assert (v.last_horizontal_scroll, v.last_vertical_scroll) == (0, 0)
+    assert emissions.count() == 0
 
 
 def test_on_scrollbar_changed_detects_change(qapp) -> None:
@@ -540,28 +520,43 @@ def test_on_scrollbar_changed_detects_change(qapp) -> None:
     v.set_image(_img(), preserve_view=False)
     v.last_horizontal_scroll = 0
     v.last_vertical_scroll = 0
-    emissions: list = []
-    v.transform_changed.connect(lambda: emissions.append(True))
+    emissions = QSignalSpy(v.transform_changed)
     v.horizontalScrollBar().setValue(10)
     v._on_scrollbar_changed()
     assert v.last_horizontal_scroll == 10
+    assert v.last_vertical_scroll == 0
+    assert emissions.count() == 1
 
 
 # ---------------------------------------------------------------------------
 # scrollContentsBy
 # ---------------------------------------------------------------------------
 
-def test_scrollContentsBy_repositions_slider(qapp) -> None:
+def test_scrollContentsBy_repositions_slider(qapp, monkeypatch) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
+    reposition = MagicMock()
+    v._slider_overlay = MagicMock()
+    monkeypatch.setattr(v, "_reposition_slider_overlay", reposition)
     v.scrollContentsBy(5, 5)
+    reposition.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
 # resizeEvent
 # ---------------------------------------------------------------------------
 
-def test_resizeEvent(qapp) -> None:
+def test_resizeEvent(qapp, monkeypatch) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
+    reposition_slider = MagicMock()
+    reposition_placeholder = MagicMock()
+    v._slider_overlay = MagicMock()
+    v._no_pixel_placeholder_overlay = MagicMock()
+    monkeypatch.setattr(v, "_reposition_slider_overlay", reposition_slider)
+    monkeypatch.setattr(v, "_reposition_no_pixel_placeholder_overlay", reposition_placeholder)
+    emissions = QSignalSpy(v.transform_changed)
     v.resize(500, 400)
+    assert emissions.wait(100)
+    assert reposition_slider.call_count >= 1
+    assert reposition_placeholder.call_count >= 1

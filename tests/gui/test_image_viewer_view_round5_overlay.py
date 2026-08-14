@@ -6,26 +6,21 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
-from PIL import Image
+from image_viewer_view_round5_helpers import create_image as _img
+from image_viewer_view_round5_helpers import create_viewer as _viewer
 from PySide6.QtCore import QPointF, QRectF, Qt
-
-from gui.image_viewer import ImageViewer
+from PySide6.QtGui import QPainter, QPixmap
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Overlay painting helper
 # ---------------------------------------------------------------------------
 
-def _viewer(qapp, *, w: int = 400, h: int = 300) -> ImageViewer:
-    v = ImageViewer()
-    v.resize(w, h)
-    v.show()
-    return v
 
-
-def _img(mode: str = "L", size: tuple[int, int] = (64, 64), fill: int = 128) -> Image.Image:
-    if mode == "L":
-        return Image.new("L", size, fill)
-    return Image.new("RGB", size, (fill, fill, fill))
+def _overlay_painter() -> tuple[QPainter, QPixmap]:
+    """Return an active painter backed by an offscreen paint device."""
+    target = QPixmap(512, 512)
+    target.fill(Qt.GlobalColor.transparent)
+    return QPainter(target), target
 
 
 # ---------------------------------------------------------------------------
@@ -35,9 +30,7 @@ def _img(mode: str = "L", size: tuple[int, int] = (64, 64), fill: int = 128) -> 
 def test_drawForeground_no_image_returns_early(qapp) -> None:
     v = _viewer(qapp)
     v.image_item = None
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v.drawForeground(p, QRectF(0, 0, 100, 100))
     p.end()
 
@@ -46,9 +39,7 @@ def test_drawForeground_no_dataset_returns_early(qapp) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
     v.get_current_dataset_callback = None
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v.drawForeground(p, QRectF(0, 0, 100, 100))
     p.end()
 
@@ -57,9 +48,7 @@ def test_drawForeground_dataset_none_returns_early(qapp) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
     v.get_current_dataset_callback = lambda: None
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v.drawForeground(p, QRectF(0, 0, 100, 100))
     p.end()
 
@@ -74,9 +63,7 @@ def test_drawForeground_with_scale_markers_and_direction_labels(qapp) -> None:
         ImageOrientationPatient=[1, 0, 0, 0, 1, 0],
     )
     v.get_current_dataset_callback = lambda: ds
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v.drawForeground(p, QRectF(0, 0, 100, 100))
     p.end()
 
@@ -89,9 +76,7 @@ def test_draw_scale_markers_no_spacing(qapp) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
     ds = SimpleNamespace()
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_scale_markers(p, ds)
     p.end()
 
@@ -100,9 +85,7 @@ def test_draw_scale_markers_zero_spacing(qapp) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
     ds = SimpleNamespace(PixelSpacing=[0.0, 0.0])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_scale_markers(p, ds)
     p.end()
 
@@ -110,9 +93,7 @@ def test_draw_scale_markers_zero_spacing(qapp) -> None:
 def test_draw_scale_markers_no_image_item(qapp) -> None:
     v = _viewer(qapp)
     ds = SimpleNamespace(PixelSpacing=[0.5, 0.5])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_scale_markers(p, ds)
     p.end()
 
@@ -122,9 +103,7 @@ def test_draw_scale_markers_visible_area(qapp) -> None:
     v.set_image(_img("L", (200, 200)), preserve_view=False)
     v.fit_to_view()
     ds = SimpleNamespace(PixelSpacing=[0.5, 0.5])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_scale_markers(p, ds)
     p.end()
 
@@ -136,9 +115,7 @@ def test_draw_scale_markers_visible_area(qapp) -> None:
 def test_draw_direction_labels_no_image(qapp) -> None:
     v = _viewer(qapp)
     ds = SimpleNamespace(ImageOrientationPatient=[1, 0, 0, 0, 1, 0])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_direction_labels(p, ds)
     p.end()
 
@@ -147,9 +124,7 @@ def test_draw_direction_labels_no_labels(qapp) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
     ds = SimpleNamespace()  # no ImageOrientationPatient
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_direction_labels(p, ds)
     p.end()
 
@@ -158,9 +133,7 @@ def test_draw_direction_labels_with_labels(qapp) -> None:
     v = _viewer(qapp)
     v.set_image(_img(), preserve_view=False)
     ds = SimpleNamespace(ImageOrientationPatient=[1, 0, 0, 0, 1, 0])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_direction_labels(p, ds)
     p.end()
 
@@ -173,9 +146,7 @@ def test_draw_direction_labels_with_config_manager(qapp) -> None:
     mock_cm.get_overlay_font_variant.return_value = "Bold"
     v.config_manager = mock_cm
     ds = SimpleNamespace(ImageOrientationPatient=[1, 0, 0, 0, 1, 0])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_direction_labels(p, ds)
     p.end()
 
@@ -187,9 +158,7 @@ def test_draw_direction_labels_config_exception_falls_back(qapp) -> None:
     mock_cm.get_overlay_font_family.side_effect = RuntimeError("fail")
     v.config_manager = mock_cm
     ds = SimpleNamespace(ImageOrientationPatient=[1, 0, 0, 0, 1, 0])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_direction_labels(p, ds)
     p.end()
 
@@ -253,40 +222,33 @@ def test_update_pixel_info_inside_image(qapp) -> None:
     assert len(emissions) == 1
 
 
-def test_update_pixel_info_with_dataset_and_callbacks(qapp) -> None:
+def test_update_pixel_info_with_dataset_and_callbacks(qapp, monkeypatch) -> None:
     v = _viewer(qapp)
     v.resize(200, 200)
     v.set_image(_img("L", (50, 50)), preserve_view=False)
     v.fit_to_view()
-    arr = np.full((50, 50), 42, dtype=np.float32)
-    monkeypatch_obj = MagicMock()
-    monkeypatch_obj.get_pixel_array = staticmethod(lambda ds: arr)
-    # We'll mock DICOMProcessor at module level
-    import gui.image_viewer_view as view_mod
-    original_import = view_mod._get_rescale_parameters
-    view_mod._get_rescale_parameters = lambda ds: (1.0, 0.0, None)
-    try:
-        ds = SimpleNamespace(SamplesPerPixel=1)
-        v.get_current_dataset_callback = lambda: ds
-        v.get_current_slice_index_callback = lambda: 5
-        v.get_use_rescaled_values_callback = lambda: True
-        v.set_pixel_info_callbacks(lambda: ds, lambda: 5, lambda: True)
+    monkeypatch.setattr(
+        "gui.image_viewer_view._get_rescale_parameters", lambda ds: (1.0, 0.0, None)
+    )
+    ds = SimpleNamespace(SamplesPerPixel=1)
+    v.get_current_dataset_callback = lambda: ds
+    v.get_current_slice_index_callback = lambda: 5
+    v.get_use_rescaled_values_callback = lambda: True
+    v.set_pixel_info_callbacks(lambda: ds, lambda: 5, lambda: True)
 
-        emissions: list = []
-        v.pixel_info_changed.connect(lambda s, x, y, z: emissions.append((s, x, y, z)))
-        from PySide6.QtGui import QMouseEvent
-        ev = QMouseEvent(
-            QMouseEvent.Type.MouseMove,
-            QPointF(100, 100),
-            Qt.MouseButton.NoButton,
-            Qt.MouseButton.NoButton,
-            Qt.KeyboardModifier.NoModifier,
-        )
-        v._update_pixel_info(ev)
-        assert len(emissions) == 1
-        assert emissions[0][3] == 5  # z from callback
-    finally:
-        view_mod._get_rescale_parameters = original_import
+    emissions: list = []
+    v.pixel_info_changed.connect(lambda s, x, y, z: emissions.append((s, x, y, z)))
+    from PySide6.QtGui import QMouseEvent
+    ev = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPointF(100, 100),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    v._update_pixel_info(ev)
+    assert len(emissions) == 1
+    assert emissions[0][3] == 5
 
 
 # ---------------------------------------------------------------------------
@@ -407,15 +369,12 @@ def test_pixel_value_grayscale_rescaled(qapp, monkeypatch) -> None:
         "core.dicom_processor.DICOMProcessor.get_pixel_array",
         staticmethod(lambda ds: arr),
     )
-    import gui.image_viewer_view as view_mod
-    original = view_mod._get_rescale_parameters
-    view_mod._get_rescale_parameters = lambda ds: (2.0, 10.0, None)
-    try:
-        ds = SimpleNamespace(SamplesPerPixel=1)
-        out = v._get_pixel_value_at_coords(ds, x=0, y=0, z=0, use_rescaled=True)
-        assert "210" in out
-    finally:
-        view_mod._get_rescale_parameters = original
+    monkeypatch.setattr(
+        "gui.image_viewer_view._get_rescale_parameters", lambda ds: (2.0, 10.0, None)
+    )
+    ds = SimpleNamespace(SamplesPerPixel=1)
+    out = v._get_pixel_value_at_coords(ds, x=0, y=0, z=0, use_rescaled=True)
+    assert "210" in out
 
 
 def test_pixel_value_color_rescaled(qapp, monkeypatch) -> None:
@@ -425,15 +384,12 @@ def test_pixel_value_color_rescaled(qapp, monkeypatch) -> None:
         "core.dicom_processor.DICOMProcessor.get_pixel_array",
         staticmethod(lambda ds: arr),
     )
-    import gui.image_viewer_view as view_mod
-    original = view_mod._get_rescale_parameters
-    view_mod._get_rescale_parameters = lambda ds: (1.0, 100.0, None)
-    try:
-        ds = SimpleNamespace(SamplesPerPixel=3)
-        out = v._get_pixel_value_at_coords(ds, x=0, y=0, z=0, use_rescaled=True)
-        assert "R=" in out
-    finally:
-        view_mod._get_rescale_parameters = original
+    monkeypatch.setattr(
+        "gui.image_viewer_view._get_rescale_parameters", lambda ds: (1.0, 100.0, None)
+    )
+    ds = SimpleNamespace(SamplesPerPixel=3)
+    out = v._get_pixel_value_at_coords(ds, x=0, y=0, z=0, use_rescaled=True)
+    assert "R=" in out
 
 
 def test_pixel_value_multi_frame_grayscale_out_of_bounds(qapp, monkeypatch) -> None:
@@ -552,14 +508,15 @@ def test_show_handle_drag_magnifier_creates_widget(qapp) -> None:
     assert v.handle_drag_magnifier_active is True
 
 
-def test_show_handle_drag_magnifier_already_active_delegates_update(qapp) -> None:
+def test_show_handle_drag_magnifier_already_active_delegates_update(qapp, monkeypatch) -> None:
     v = _viewer(qapp)
     v.set_image(_img("L", (100, 100)), preserve_view=False)
-    mock_widget = MagicMock()
-    v.handle_drag_magnifier_widget = mock_widget
+    update = MagicMock()
+    monkeypatch.setattr(v, "update_handle_drag_magnifier", update)
     v.handle_drag_magnifier_active = True
-    v.show_handle_drag_magnifier(QPointF(50, 50))
-    # Should call update_magnified_region on existing widget
+    point = QPointF(50, 50)
+    v.show_handle_drag_magnifier(point)
+    update.assert_called_once_with(point)
 
 
 def test_show_handle_drag_magnifier_zero_zoom(qapp) -> None:
@@ -582,9 +539,7 @@ def test_drawForeground_no_overlays(qapp) -> None:
     v._show_scale_markers = False
     v._show_direction_labels = False
     v.get_current_dataset_callback = lambda: SimpleNamespace()
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v.drawForeground(p, QRectF(0, 0, 100, 100))
     p.end()
 
@@ -600,9 +555,7 @@ def test_draw_scale_markers_empty_visible_rect(qapp) -> None:
     v.current_zoom = 0.01
     v._apply_view_transform()
     ds = SimpleNamespace(PixelSpacing=[0.5, 0.5])
-    from PySide6.QtGui import QPainter as QPaint
-    p = QPaint(v.viewport())
-    p.begin(v.viewport())
+    p, _target = _overlay_painter()
     v._draw_scale_markers(p, ds)
     p.end()
 
@@ -611,11 +564,10 @@ def test_draw_scale_markers_empty_visible_rect(qapp) -> None:
 # compute_fit_zoom — viewport zero-size edge case
 # ---------------------------------------------------------------------------
 
-def test_compute_fit_zoom_zero_viewport(qapp) -> None:
+def test_compute_fit_zoom_zero_viewport(qapp, monkeypatch) -> None:
     v = _viewer(qapp)
     v.set_image(_img("L", (50, 50)), preserve_view=False)
-    # Force viewport size to 0 by mocking
-    v.viewport = lambda: SimpleNamespace(width=lambda: 0, height=lambda: 0)
+    monkeypatch.setattr(v, "viewport", lambda: SimpleNamespace(width=lambda: 0, height=lambda: 0))
     fz = v.compute_fit_zoom()
     assert fz is None
 

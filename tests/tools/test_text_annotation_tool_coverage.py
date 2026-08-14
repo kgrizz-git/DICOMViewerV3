@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QGraphicsScene,
+    QGraphicsSceneMouseEvent,
     QGraphicsTextItem,
 )
 
@@ -228,22 +229,14 @@ class TestKeyPressEvent:
         ev_undo = self._key_event(Qt.Key.Key_Z, Qt.KeyboardModifier.MetaModifier)
         item.keyPressEvent(ev_undo)
         assert item.toPlainText() == ""
-        # Redo with Meta+Shift - may not work on all platforms, just check no crash
+        # Redo availability is platform-dependent for Meta-modified Qt key events.
         ev_redo = self._key_event(
             Qt.Key.Key_Z,
             Qt.KeyboardModifier.MetaModifier | Qt.KeyboardModifier.ShiftModifier,
         )
         item.keyPressEvent(ev_redo)
-        # Redo availability depends on platform; just verify no exception
-
-    def test_other_key_passes_through(self, qapp):
-        item = TextAnnotationItem("")
-        scene = QGraphicsScene()
-        scene.addItem(item)
-        item.start_editing()
-        ev = self._key_event(Qt.Key.Key_A)
-        item.keyPressEvent(ev)
-
+        assert item._editing is True
+        assert item.toPlainText() in {"", "abc"}
 
 # ---------------------------------------------------------------------------
 # inputMethodEvent / insertFromMimeData
@@ -483,12 +476,16 @@ class TestItemChange:
 # ---------------------------------------------------------------------------
 
 class TestDoubleClick:
-    def test_starts_editing_direct(self, qapp):
+    def test_mouse_double_click_starts_editing(self, qapp):
         item = TextAnnotationItem("dbl")
         scene = QGraphicsScene()
         scene.addItem(item)
         assert item._editing is False
-        item.start_editing()
+        event = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseDoubleClick)
+        event.setButton(Qt.MouseButton.LeftButton)
+        event.setButtons(Qt.MouseButton.LeftButton)
+        event.setScenePos(QPointF(4, 5))
+        item.mouseDoubleClickEvent(event)
         assert item._editing is True
 
     def test_already_editing_no_restart(self, qapp):
@@ -569,9 +566,14 @@ class TestTextAnnotationTool:
 
     def test_finish_double_call_guard(self, qapp):
         tool = TextAnnotationTool()
+        tool.set_current_slice("st", "se", 0)
         scene = QGraphicsScene()
-        result = tool.finish_annotation(scene)
-        assert result is None
+        tool.start_annotation(QPointF(0, 0))
+        tool.current_item.setPlainText("note")
+        item = tool.finish_annotation(scene)
+        assert item is not None
+        assert tool.finish_annotation(scene) is None
+        assert tool.get_annotations_for_slice("st", "se", 0) == [item]
 
     def test_cancel(self, qapp):
         tool = TextAnnotationTool()
@@ -617,6 +619,8 @@ class TestTextAnnotationTool:
         item = tool.finish_annotation(scene)
         scene2 = QGraphicsScene()
         tool.delete_annotation(item, scene2)
+        assert item.scene() is scene
+        assert tool.get_annotations_for_slice("st", "se", 0) == []
 
     def test_get_annotations_for_unknown_slice(self, qapp):
         tool = TextAnnotationTool()
