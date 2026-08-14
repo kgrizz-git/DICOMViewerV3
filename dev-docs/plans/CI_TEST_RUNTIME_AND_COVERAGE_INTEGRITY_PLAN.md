@@ -13,9 +13,11 @@ input.
 
 - `pytest.ini` uses `-n auto`, so local and CI test execution already uses
   `pytest-xdist` parallel workers.
-- The PR #62 Ubuntu test job passed 6,040 tests in 17m36s with 80.48% total
-  coverage. Its slowest groups repeatedly construct `DICOMViewerApp`; 33 such
-  constructions occur across the known slow `test_main_*.py` modules.
+- The PR #62 Ubuntu test job passed 6,040 tests in 17m36s with an 80.48%
+  coverage.py combined line-and-branch total. This is the recorded CI baseline;
+  no separate 80.49% metric is retained. Its slowest groups repeatedly construct
+  `DICOMViewerApp`; 33 such constructions occur across the known slow
+  `test_main_*.py` modules.
 - The same PR passed locally with parallel coverage. `pytest-cov` combines
   xdist worker coverage, so parallel execution is the supported default, not a
   coverage workaround.
@@ -37,9 +39,12 @@ input.
 1. On a representative PR, record the full CI test count, skipped/xfailed
    count, coverage percentage and executable-line totals, `coverage.xml`, and
    elapsed time.
-2. Run the full local parallel command with coverage and record the same data.
-   Use `--durations=50` in an investigation-only run to maintain a ranked
-   performance baseline.
+2. Activate the project virtual environment, then use that environment's
+   interpreter for the full local parallel coverage command:
+   `source .venv/bin/activate && python -m pytest tests --cov=src
+   --cov-report=term --cov-report=xml:coverage.xml --cov-fail-under=65
+   --durations=50`. Record the same data and retain the ranked duration output
+   as the performance baseline.
 3. Confirm the baseline CI log identifies the repeated-full-app test modules
    and their setup/teardown cost before changing their fixtures.
 
@@ -89,12 +94,14 @@ xdist.
    each test node assigned to exactly one shard and distribute the slow
    `test_main_*.py` modules across shards.
 3. Each shard must run its complete assigned selection with `pytest-cov` and a
-   unique raw coverage data path (for example, `COVERAGE_FILE=.coverage.shardN`).
-   A test failure fails its shard immediately.
-4. Upload the raw coverage data as short-retention internal CI artifacts. In a
-   dependent merge job, run `coverage combine`, `coverage xml`, and
-   `coverage report --fail-under=65`; upload the resulting single
-   `coverage.xml` under the existing artifact name for SonarQube.
+   unique non-hidden raw coverage data path (for example,
+   `COVERAGE_FILE=coverage.shardN`). A test failure fails its shard immediately.
+4. Upload every expected raw coverage file as a short-retention internal CI
+   artifact with `if-no-files-found: error`. In the dependent merge job,
+   download every expected shard explicitly and fail if any is absent, then run
+   `coverage combine`, `coverage xml`, and `coverage report --fail-under=65`.
+   Upload the resulting single `coverage.xml` under the existing artifact name
+   for SonarQube.
 5. Do not concatenate XML files or use `--cov-append` to mix unrelated job
    runs. Coverage must be combined from raw coverage data so the global floor
    and XML report represent the union of all shards.
@@ -110,10 +117,13 @@ For each phase, verify all of the following before keeping the change:
 | Check | Required result |
 | --- | --- |
 | Focused affected tests | Pass with default `-n auto` |
-| Full local suite | Same pass/skip/xfail counts; coverage at or above baseline |
+| Full local suite | Same pass/skip/xfail counts; executable line and branch totals unchanged, with each percentage no lower than the single-job baseline |
+| Coverage XML | The merged/single XML has the same measured source set and executable line/branch totals as the baseline; it is not accepted merely because an aggregate percentage is higher |
 | CI pytest job | Same test selection, coverage floor, and XML artifact |
 | SonarQube job | Receives and accepts the merged/single coverage XML |
-| Privacy, lint, harness, architecture, and security jobs | Unchanged and passing |
+| Privacy, lint, repo harness, architecture, and security jobs | Unchanged and passing |
+| User-document links | `python scripts/check_user_docs_links.py` passes |
+| Agent smoke harness | `python scripts/agent_smoke_harness.py` passes |
 | Repeat CI run | No new order-, timing-, or Qt-worker-dependent failure |
 
 ## Rollback

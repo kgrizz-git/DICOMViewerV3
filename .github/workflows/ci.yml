@@ -117,15 +117,14 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           # Project-wide coverage floor. Local measured TOTAL is ~71%; floor is 65%.
-          # Parallelism comes from pytest.ini (addopts = ... -n auto), which is the
-          # single source of truth so local runs match CI. ubuntu-latest has 4
-          # cores, so expect ~3m30s here versus ~8m40s serial.
+          # pytest.ini is the single source of truth for parallelism, verbosity,
+          # and traceback format, so local runs match CI. Measure runtime before
+          # changing worker counts or test partitioning.
           python -m pytest tests \
             --cov=src \
             --cov-report=term \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=65 \
-            -v --tb=short
+            --cov-fail-under=65
 
       - name: Upload coverage report for SonarQube scan
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
