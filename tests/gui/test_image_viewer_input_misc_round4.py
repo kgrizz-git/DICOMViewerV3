@@ -533,14 +533,20 @@ class TestSliderVisibility:
     def test_slice_slider_disabled_skips(self, qapp):
         v = _InputHarness()
         v._slice_slider_enabled = False
-        # _update_slider_visibility_from_mouse is called from mouseMoveEvent
-        # but only when _slice_slider_enabled is True; test the guard directly
         overlay = self._make_overlay()
         v._slider_overlay = overlay
-        # We call the internal method directly; the guard is in mouseMoveEvent
-        # Not in _update_slider_visibility_from_mouse itself, so this just
-        # verifies the method still works when called directly
-        v._update_slider_visibility_from_mouse(QPoint(100, 195))
+        v._update_slider_visibility_from_mouse = MagicMock()
+        event = QMouseEvent(
+            QMouseEvent.Type.MouseMove,
+            QPointF(100, 195),
+            QPoint(100, 195),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        v.mouseMoveEvent(event)
+        v._update_slider_visibility_from_mouse.assert_not_called()
+        assert overlay.mock_calls == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -593,10 +599,16 @@ class TestEmitCrosshair:
         v.get_current_dataset_callback = lambda: "dataset"
         v.get_current_slice_index_callback = None
         v.get_use_rescaled_values_callback = None
+        seen: list[bool] = []
+        v._get_pixel_value_at_coords = (
+            lambda dataset, x, y, z, use_rescaled: seen.append(use_rescaled)
+            or f"pixel({x},{y},{z})"
+        )
         crosshair: list = []
         v.crosshair_clicked.connect(lambda *args: crosshair.append(args))
         ImageViewerInputMixin._emit_crosshair(v, QPointF(10, 20))
         assert crosshair[0][1] == "pixel(10,20,0)"
+        assert seen == [False]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

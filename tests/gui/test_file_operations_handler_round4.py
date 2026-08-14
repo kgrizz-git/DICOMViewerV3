@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gui.file_operations_handler import (
+    LARGE_FILE_WARNING_THRESHOLD_MB,
     FileOperationsHandler,
 )
 
@@ -267,8 +268,8 @@ class TestOpenFolder:
     def test_folder_rglob_exception_continues(self, mock_pipeline, qapp, tmp_path):
         handler, _, dialog, _, _ = _make_handler()
         dialog.open_folder.return_value = str(tmp_path)
-        # Folder exists but rglob will just find nothing; pipeline fires
-        handler.open_folder()
+        with patch.object(Path, "rglob", side_effect=OSError("simulated")):
+            handler.open_folder()
         mock_pipeline.assert_called_once()
 
     @patch("gui.file_operations_handler.run_load_pipeline_async")
@@ -606,7 +607,12 @@ class TestCheckLargeFilesPerfMarks:
         handler, *_ = _make_handler()
         f = _tiny_file(tmp_path)
         handler._check_large_files([str(f)])
-        assert mock_perf.call_count >= 1
+        mock_perf.assert_called_once_with(
+            "first_paint.prehandoff.large_file_check_complete",
+            checked_files=1,
+            large_files=0,
+            threshold_mb=LARGE_FILE_WARNING_THRESHOLD_MB,
+        )
 
 
 # ---------------------------------------------------------------------------

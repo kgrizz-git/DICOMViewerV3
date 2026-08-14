@@ -327,8 +327,11 @@ class TestMouseMoveEventBranches:
     def test_select_mode_delegates(self, qapp):
         v = _InputHarness()
         v.set_mouse_mode("select")
+        wl_deltas: list[tuple] = []
+        v.window_level_drag_changed.connect(lambda c, w: wl_deltas.append((c, w)))
         e = _make_real_mouse_move_event(buttons=Qt.MouseButton.LeftButton)
         v.mouseMoveEvent(e)
+        assert wl_deltas == []
 
     def test_zoom_drag_adjusts(self, qapp):
         v = _InputHarness()
@@ -402,8 +405,11 @@ class TestMouseMoveEventBranches:
         v = _InputHarness()
         v.set_mouse_mode("magnifier")
         v.magnifier_active = False
+        wl_deltas: list[tuple] = []
+        v.window_level_drag_changed.connect(lambda c, w: wl_deltas.append((c, w)))
         e = _make_real_mouse_move_event(buttons=Qt.MouseButton.LeftButton, pos=QPoint(50, 50))
         v.mouseMoveEvent(e)
+        assert wl_deltas == []
 
     def test_pan_restores_scrolldrag(self, qapp):
         v = _InputHarness()
@@ -440,8 +446,11 @@ class TestMouseMoveEventBranches:
     def test_right_drag_no_start_pos_no_wl(self, qapp):
         v = _InputHarness()
         v.right_mouse_drag_start_pos = None
+        wl_deltas: list[tuple] = []
+        v.window_level_drag_changed.connect(lambda c, w: wl_deltas.append((c, w)))
         e = _make_real_mouse_move_event(buttons=Qt.MouseButton.RightButton, pos=QPoint(80, 30))
         v.mouseMoveEvent(e)
+        assert wl_deltas == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -453,14 +462,20 @@ class TestMouseReleaseEventBranches:
     def test_select_left_delegates(self, qapp):
         v = _InputHarness()
         v.set_mouse_mode("select")
+        wl_deltas: list[tuple] = []
+        v.window_level_drag_changed.connect(lambda c, w: wl_deltas.append((c, w)))
         e = _make_real_mouse_release_event(button=Qt.MouseButton.LeftButton)
         v.mouseReleaseEvent(e)
+        assert wl_deltas == []
 
     def test_select_right_falls_through(self, qapp):
         v = _InputHarness()
         v.set_mouse_mode("select")
+        wl_deltas: list[tuple] = []
+        v.window_level_drag_changed.connect(lambda c, w: wl_deltas.append((c, w)))
         e = _make_real_mouse_release_event(button=Qt.MouseButton.RightButton)
         v.mouseReleaseEvent(e)
+        assert wl_deltas == []
 
     def test_zoom_release_clears_state(self, qapp):
         v = _InputHarness()

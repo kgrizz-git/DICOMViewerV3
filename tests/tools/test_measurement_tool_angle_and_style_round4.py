@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PySide6.QtCore import QPointF
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QGraphicsScene,
 )
@@ -35,6 +36,20 @@ def _place_angle(tool: MeasurementTool, scene: QGraphicsScene, p1: QPointF, p2: 
     item = tool.handle_angle_click(p3, scene)
     assert item is not None
     return item
+
+
+def _assert_configured_line_style(line_item) -> None:
+    pen = line_item.pen()
+    assert pen.width() == 3
+    assert pen.color() == QColor(255, 128, 0)
+
+
+def _assert_configured_text_style(text_item) -> None:
+    font = text_item.font()
+    assert text_item.defaultTextColor() == QColor(0, 128, 255)
+    assert font.family() == "IBM Plex Sans"
+    assert font.pointSize() == 12
+    assert font.weight() == QFont.Weight.Bold
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +323,9 @@ class TestUpdateAllMeasurementStyles:
         scene = _make_scene()
         angle = _place_angle(tool, scene, QPointF(0, 0), QPointF(0, 50), QPointF(50, 50))
         angle.hide_handles()
+        angle.h0 = None
+        angle.h1 = None
+        angle.h2 = None
         config = MagicMock()
         config.get_measurement_line_thickness.return_value = 2
         config.get_measurement_line_color.return_value = (0, 255, 0)
@@ -315,7 +333,7 @@ class TestUpdateAllMeasurementStyles:
         config.get_measurement_font_color.return_value = (0, 255, 0)
         config.get_measurement_font_family.return_value = "Arial"
         config.get_measurement_font_variant.return_value = "Regular"
-        # Should not crash even with handles removed
+        # Should not crash when the optional handles have been removed.
         tool.update_all_measurement_styles(config)
 
 
@@ -423,8 +441,7 @@ class TestAngleMeasurementLifecycle:
         _finish_distance(tool, scene, QPointF(10, 10), QPointF(15, 10))
         tool.clear_measurements(scene)
         assert len(tool.measurements) == 0
-        measurement_items = [i for i in scene.items() if isinstance(i, (MeasurementItem, AngleMeasurementItem))]
-        assert len(measurement_items) == 0
+        assert scene.items() == []
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +456,7 @@ class TestConfigDrivenStyling:
         config.get_measurement_line_color.return_value = (255, 128, 0)
         config.get_measurement_font_size.return_value = 12
         config.get_measurement_font_color.return_value = (0, 128, 255)
-        config.get_measurement_font_family.return_value = "Courier"
+        config.get_measurement_font_family.return_value = "IBM Plex Sans"
         config.get_measurement_font_variant.return_value = "Bold"
         return config
 
@@ -452,6 +469,8 @@ class TestConfigDrivenStyling:
         item = _finish_distance(tool, scene, QPointF(0, 0), QPointF(5, 0))
         assert item is not None
         assert "mm" in item.text_item.toPlainText()
+        _assert_configured_line_style(item.line_item)
+        _assert_configured_text_style(item.text_item)
 
     def test_update_with_config(self, qapp) -> None:
         config = self._make_config()
@@ -464,6 +483,8 @@ class TestConfigDrivenStyling:
         assert tool.current_line_item is not None
         assert tool.current_text_item is not None
         assert tool.current_text_item.toPlainText() != ""
+        _assert_configured_line_style(tool.current_line_item)
+        _assert_configured_text_style(tool.current_text_item)
         tool.cancel_measurement(scene)
 
     def test_angle_preview_with_config(self, qapp) -> None:
@@ -473,8 +494,13 @@ class TestConfigDrivenStyling:
         tool.handle_angle_click(QPointF(0, 0), scene)
         tool.handle_angle_click(QPointF(0, 50), scene)
         tool.update_angle_preview(QPointF(50, 50), scene)
+        assert tool.angle_preview_line1 is not None
+        assert tool.angle_preview_line2 is not None
         assert tool.angle_preview_text is not None
         assert tool.angle_preview_text.toPlainText() != ""
+        _assert_configured_line_style(tool.angle_preview_line1)
+        _assert_configured_line_style(tool.angle_preview_line2)
+        _assert_configured_text_style(tool.angle_preview_text)
 
     def test_angle_commit_with_config(self, qapp) -> None:
         config = self._make_config()
@@ -484,6 +510,9 @@ class TestConfigDrivenStyling:
         item = _place_angle(tool, scene, QPointF(0, 0), QPointF(0, 50), QPointF(50, 50))
         assert item is not None
         assert item.text_item.toPlainText() != ""
+        _assert_configured_line_style(item.line1_item)
+        _assert_configured_line_style(item.line2_item)
+        _assert_configured_text_style(item.text_item)
 
 
 # ---------------------------------------------------------------------------

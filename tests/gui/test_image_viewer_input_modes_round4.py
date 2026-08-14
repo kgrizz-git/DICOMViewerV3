@@ -302,7 +302,7 @@ class _InputHarness(ImageViewerInputMixin, QGraphicsView):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestNormalizeScenePickItemForRoi:
-    """Tests for _normalize_scene_pick_item_for_roi (pure helper, no Qt needed)."""
+    """Tests for _normalize_scene_pick_item_for_roi using the process-wide QApplication."""
 
     def test_non_handle_passthrough(self):
         obj = object()

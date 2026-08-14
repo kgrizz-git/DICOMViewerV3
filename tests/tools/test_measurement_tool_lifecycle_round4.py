@@ -277,9 +277,7 @@ class TestClearAllMeasurements:
         assert len(tool.measurements) == 2
         tool.clear_measurements(scene)
         assert len(tool.measurements) == 0
-        # Only measurement items remain in scene if any; no text/handles
-        measurement_items = [i for i in scene.items() if isinstance(i, (MeasurementItem, AngleMeasurementItem))]
-        assert len(measurement_items) == 0
+        assert scene.items() == []
 
     def test_clear_empty_dict(self, qapp) -> None:
         tool = MeasurementTool()
@@ -369,6 +367,7 @@ class TestDisplayMeasurementsForSlice:
         assert item.scene() is None
         tool.display_measurements_for_slice("S", "SE", 0, scene)
         assert item.scene() is scene
+        assert item.text_item.scene() is scene
 
     def test_already_in_scene(self, qapp) -> None:
         tool = MeasurementTool()

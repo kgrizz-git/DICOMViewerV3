@@ -278,25 +278,6 @@ class TestSetDotColor:
 
 class TestContextMenu:
     @pytest.mark.qt
-    def test_clear_mpr_requested_signal_emits(self, qapp) -> None:
-        w = _make_widget(3)
-        received: list[int] = []
-        w.clear_mpr_requested.connect(received.append)
-
-        # Simulate the lambda that the context-menu action would trigger.
-        # We cannot open a real QMenu in tests, so invoke the connected
-        # slot directly through the action's triggered signal.
-        from PySide6.QtWidgets import QMenu
-
-        menu = QMenu(w)
-        action = menu.addAction("Clear MPR")
-        action.triggered.connect(
-            lambda: w.clear_mpr_requested.emit(w._subwindow_index)
-        )
-        action.triggered.emit()
-        assert received == [3]
-
-    @pytest.mark.qt
     def test_custom_context_menu_policy_set(self, qapp) -> None:
         w = _make_widget()
         assert w.contextMenuPolicy() == Qt.ContextMenuPolicy.CustomContextMenu
@@ -572,3 +553,6 @@ class TestShowContextMenu:
             # Verify the action was connected to emit clear_mpr_requested
             instance.addAction.assert_called_once_with("Clear MPR")
             instance.exec.assert_called_once()
+            slot = action.triggered.connect.call_args.args[0]
+            slot()
+        assert received == [2]
