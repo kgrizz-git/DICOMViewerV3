@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -402,9 +403,19 @@ def run_coverage(repo_root: Path) -> int:
     """Generate the optional coverage report with the project's active Python.
 
     Requires the project venv to be active (source .venv/bin/activate) so that
-    pytest-cov is available. Passes ``--override-ini="addopts="`` to disable
-    pytest-xdist parallelism, which is incompatible with ``--cov``.
+    pytest-cov is importable by ``sys.executable``; otherwise pytest rejects
+    ``--cov`` as an unrecognized argument. pytest.ini's ``-n auto`` (xdist)
+    runs alongside coverage collection here, matching CI.
     """
+    if importlib.util.find_spec("pytest_cov") is None:
+        print(
+            "pytest-cov is not importable by this interpreter "
+            f"({sys.executable}). Activate the project venv "
+            "(source .venv/bin/activate) and retry.",
+            file=sys.stderr,
+        )
+        return 1
+
     coverage_path = repo_root / STATE_DIRECTORY / "coverage.xml"
     coverage_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
@@ -414,17 +425,9 @@ def run_coverage(repo_root: Path) -> int:
         "tests/",
         "--cov=src",
         f"--cov-report=xml:{coverage_path}",
-        "--override-ini=addopts=",
     ]
     print("Running pytest with coverage before SonarQube analysis...")
-    result = subprocess.run(command, cwd=repo_root)
-    if result.returncode != 0:
-        print(
-            "Hint: ensure the project venv is active "
-            "(source .venv/bin/activate) and pytest-cov is installed.",
-            file=sys.stderr,
-        )
-    return result.returncode
+    return subprocess.run(command, cwd=repo_root).returncode
 
 
 def parse_args() -> argparse.Namespace:
