@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from image_viewer_view_round5_helpers import create_image as _img
 from image_viewer_view_round5_helpers import create_viewer as _viewer
 from PySide6.QtCore import Qt
@@ -10,6 +11,12 @@ from PySide6.QtGui import QColor
 # ---------------------------------------------------------------------------
 # Simple state setters
 # ---------------------------------------------------------------------------
+
+
+def test_create_image_rejects_unsupported_mode() -> None:
+    with pytest.raises(ValueError, match="unsupported image mode"):
+        _img("RGBA")
+
 
 def test_set_background_color(qapp) -> None:
     v = _viewer(qapp)

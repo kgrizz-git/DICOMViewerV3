@@ -229,14 +229,14 @@ class TestKeyPressEvent:
         ev_undo = self._key_event(Qt.Key.Key_Z, Qt.KeyboardModifier.MetaModifier)
         item.keyPressEvent(ev_undo)
         assert item.toPlainText() == ""
-        # Redo availability is platform-dependent for Meta-modified Qt key events.
+        # Meta+Shift+Z redo
         ev_redo = self._key_event(
             Qt.Key.Key_Z,
             Qt.KeyboardModifier.MetaModifier | Qt.KeyboardModifier.ShiftModifier,
         )
         item.keyPressEvent(ev_redo)
         assert item._editing is True
-        assert item.toPlainText() in {"", "abc"}
+        assert item.toPlainText() == "abc"
 
 # ---------------------------------------------------------------------------
 # inputMethodEvent / insertFromMimeData
