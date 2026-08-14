@@ -6,7 +6,7 @@
 ## Goal
 
 Reduce local and GitHub Actions test wall time without omitting tests, weakening
-assertions, lowering the 65% coverage floor, or changing the SonarQube coverage
+assertions, lowering the 80% coverage floor, or changing the SonarQube coverage
 input.
 
 ## Evidence and constraints
@@ -42,7 +42,7 @@ input.
 2. Activate the project virtual environment, then use that environment's
    interpreter for the full local parallel coverage command:
    `source .venv/bin/activate && python -m pytest tests --cov=src
-   --cov-report=term --cov-report=xml:coverage.xml --cov-fail-under=65
+   --cov-report=term --cov-report=xml:coverage.xml --cov-fail-under=80
    --durations=50`. Record the same data and retain the ranked duration output
    as the performance baseline.
 3. Confirm the baseline CI log identifies the repeated-full-app test modules
@@ -51,12 +51,33 @@ input.
 **Exit criterion:** a committed measurement record identifies the baseline and
 the top slow modules, with no unexplained test-count or coverage difference.
 
+## Recorded Phase 2 baseline — 2026-08-14
+
+- The full local parallel coverage command completed successfully with 6,056
+  collected test items and the 80% floor enabled. Its coverage.py total was
+  50,705 statements, 7,986 missed statements, 16,472 branches, and 2,911
+  partial branches: **80.52%** combined coverage. This is 0.04 percentage
+  points above the 80.48% PR #62 Ubuntu CI baseline; retain both separately and
+  treat the lower CI measurement as the enforcement reference.
+- The same test selection under `-n auto --durations=50` completed in about
+  66 seconds on the local 18-worker environment. This is a local profiling
+  result, not a substitute for the PR #62 Ubuntu CI duration.
+- The slowest individual calls were decoder-fixture smoke checks (2.12s and
+  1.98s). Among repeated-`DICOMViewerApp` façade groups, the visible top-50
+  calls were led by `test_main_signal_wiring.py` (six calls totaling about
+  9.02s), followed by `test_main_tag_export_union.py` (about 8.04s),
+  `test_main_subwindow_lifecycle.py` (about 6.16s), and
+  `test_main_facade_delegation.py` (about 5.22s).
+- **First bounded Phase 2 candidate:** inspect
+  `tests/test_main_signal_wiring.py` and retain a real-app smoke test while
+  replacing only demonstrably redundant façade setup.
+
 ## Phase 1 — remove redundant reporting configuration
 
 1. Make `pytest.ini` the single source of truth for verbosity and traceback
    settings; remove the duplicate `-v --tb=short` flags from the CI command.
 2. Retain `-n auto`, `--cov=src`, both terminal and XML coverage reports, and
-   `--cov-fail-under=65`.
+   `--cov-fail-under=80`.
 3. Run a full parallel local suite and one CI PR run to compare the test count,
    coverage totals, artifact presence, and elapsed time.
 

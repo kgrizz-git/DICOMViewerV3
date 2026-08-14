@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-14
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -294,9 +294,9 @@ The separate local settings file is passed only by this runner.
 **Static typing gate:** the `pre-push` hook runs `scripts/check_basedpyright_errors.py`, matching the GitHub **Pyright** workflow: **0 basedpyright errors** are required across `src/` and `scripts/`, while the existing warning baseline is reported but does not block pushes.
 
 **Full test suite / coverage:** not run on `pre-push` (too slow for every push).
-CI’s `pytest` job runs the full suite with `--cov-fail-under=65` and uploads
+CI’s `pytest` job runs the full suite with `--cov-fail-under=80` and uploads
 `coverage.xml` for the approved Sonar path. Locally, when you want the same
-check: `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65`. Pre-commit
+check: `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=80`. Pre-commit
 still runs the fast agent smoke harness.
 
 **Parallel execution:** `pytest.ini` sets `-n auto` (pytest-xdist), so local

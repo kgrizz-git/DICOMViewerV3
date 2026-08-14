@@ -1,6 +1,6 @@
 # Plan: Parallelize the CI test suite (pytest-xdist)
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-14
 **Status:** Supporting — **Phases 1–3 complete** (20/20 local gate). Phase 4 dropped
 after measurement. Two CI perf gates needed rebudgeting for parallel execution
 (see *Perf budgets under parallelism*); PR #58 awaiting a green run to confirm.
@@ -40,7 +40,7 @@ diagnosed and a fix is validated.
 - The CI `pytest` job runs with `-n auto` and is green across **20 consecutive
   runs** at the worker count CI actually uses (`ubuntu-latest` = 4 cores).
 - No test is marked `xfail`, skipped, or serialized to achieve that.
-- `--cov-fail-under=65` still gates, and `coverage.xml` is still complete.
+- `--cov-fail-under=80` still gates, and `coverage.xml` is still complete.
 - Local and CI invocations stay documented in sync.
 
 ---
@@ -283,7 +283,7 @@ no tests were silently lost.
 it rather than adding it.
 
 1. **Coverage under xdist — verified, no action needed.** A green `-n auto`
-   run with `--cov=src --cov-fail-under=65` reports:
+   run with `--cov=src --cov-fail-under=80` reports:
 
    ```text
    TOTAL   50705  12473  16472  2770   71%

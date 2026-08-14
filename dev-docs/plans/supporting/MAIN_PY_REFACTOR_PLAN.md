@@ -1,7 +1,7 @@
 # Refactor Plan: Split main.py into Multiple Files
 
 **Created:** 2026-08-07  
-**Last updated:** 2026-08-08  
+**Last updated:** 2026-08-14
 **Status:** Complete pending human commit (gate remediation done 2026-08-08)  
 **Target:** `src/main.py` (~334 lines) + 5 mixin modules under `src/main_app_*.py` (each ≤750 lines; largest ~642)
 
@@ -92,14 +92,14 @@ The allowlist `scripts/line_complexity_grandfather.json` has two maps:
 
 Current grandfather status: `src/main.py` file entry = 2494; `functions` entries for `src/main.py` = 0.
 
-### Coverage Strategy (CI `--cov-fail-under=65` trap)
-`src/main.py` is excluded from coverage via `omit = src/main.py` in `.coveragerc`, and CI enforces `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=65` (`.github/workflows/ci.yml:124`). Today `src/main.py`'s business logic is only ~53% covered (mostly init paths). Extracting ~2,200 uncovered lines into `src/main_app_*.py` removes them from the omit rule, so they enter the coverage denominator and will very likely pull the repo average below 65%, **failing CI**.
+### Coverage Strategy (CI `--cov-fail-under=80` trap)
+`src/main.py` is excluded from coverage via `omit = src/main.py` in `.coveragerc`, and CI enforces `PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=80` (`.github/workflows/ci.yml`). Today `src/main.py`'s business logic is only ~53% covered (mostly init paths). Extracting ~2,200 uncovered lines into `src/main_app_*.py` removes them from the omit rule, so they enter the coverage denominator and will very likely pull the repo average below 80%, **failing CI**.
 
 The plan adopts a **hybrid** (do both):
 - **Option A — keep the debt quarantined:** extend the `.coveragerc` `omit` list with `src/main_app_*.py` so the extracted files are not counted until deliberately opted in. This prevents a CI regression on day one and is the safe default.
-- **Option B — pay it down later:** expand safety-net tests over time so `src/main_app_*.py` can eventually be removed from `omit` without dropping below 65%. This is **not** a Phase 0 hard gate (un-omitting ~2.4k lines of mostly-uncovered facade code today would make Phase 0 unbounded).
+- **Option B — pay it down later:** expand safety-net tests over time so `src/main_app_*.py` can eventually be removed from `omit` without dropping below 80%. This is **not** a Phase 0 hard gate (un-omitting ~2.4k lines of mostly-uncovered facade code today would make Phase 0 unbounded).
 
-**Decision recorded:** Apply Option A at Phase 2 (add the omit) so CI stays green during incremental extraction. Phase 0 records a coverage *baseline* (temporary un-omit for measurement only, then restore the omit — do not require `--cov-fail-under=65` to pass while un-omitted). Lifting the omit is a **follow-up backlog item** after the refactor lands; do not leave the new files uncounted permanently.
+**Decision recorded:** Apply Option A at Phase 2 (add the omit) so CI stays green during incremental extraction. Phase 0 records a coverage *baseline* (temporary un-omit for measurement only, then restore the omit — do not require `--cov-fail-under=80` to pass while un-omitted). Lifting the omit is a **follow-up backlog item** after the refactor lands; do not leave the new files uncounted permanently.
 
 ## Refactoring Strategy
 
@@ -166,7 +166,7 @@ Composition model:
 3. **Facade / action delegation tests** — unit-test `DICOMViewerApp` facade delegation methods, asserting parameters are forwarded with correct types/names to `_export_app_facade`, `_qa_app_facade`, `_mpr_controller` (use mocks for the underlying objects).
 4. **Event filter / shortcut dispatch tests** — test `DICOMViewerApp.eventFilter` with synthetic `QKeyEvent`s for ROI deletion and layout hotkeys.
 5. **Tag export union background-thread tests** — test `get_tag_export_union_snapshot` / `_drain_tag_export_union_worker` with a fixture to ensure no deadlock/thread leak.
-6. **Coverage baseline (measurement only):** temporarily remove `src/main.py` from the `.coveragerc` omit list, capture the coverage number, then **restore the omit**. Do **not** require `--cov-fail-under=65` to pass while un-omitted (Option A remains the CI strategy through extraction).
+6. **Coverage baseline (measurement only):** temporarily remove `src/main.py` from the `.coveragerc` omit list, capture the coverage number, then **restore the omit**. Do **not** require `--cov-fail-under=80` to pass while un-omitted (Option A remains the CI strategy through extraction).
 7. Record the pre-refactor `interrogate` docstring baseline (B) (`interrogate` is already pinned in `requirements-dev.txt` and registered in `security/security-tool-inventory.json`) and the `src/main.py` coverage baseline from Task 6.
 
 **Acceptance:** New suites pass against the **current** (un-refactored) `src/main.py`. They are the regression oracle for Phases 1-7 — if any later phase breaks wiring/delegation, these fail.
@@ -195,9 +195,9 @@ There is **no Phase 1**. Historical numbering proceeds **0 → 2 → 3 → 4 →
      Re-run `python scripts/check_architecture_boundaries.py` to confirm clean.
   7. Add a type-check pass via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`) to the verification set (mixin files use ImageViewer-style file pragmas per Typing deviation — not `TYPE_CHECKING` / `self: DICOMViewerApp`).
   8. **`interrogate` inventory — DONE:** `interrogate>=1.7.0` is already in `requirements-dev.txt` and registered in `security/security-tool-inventory.json`. Skip re-adding; only verify `python scripts/check_security_tool_inventory.py` still passes if those files are touched.
-  9. **Decide and apply the coverage strategy** (see *Coverage Strategy* below) so the new mixin files do not drop the repo below `--cov-fail-under=65`.
+  9. **Decide and apply the coverage strategy** (see *Coverage Strategy* below) so the new mixin files do not drop the repo below `--cov-fail-under=80`.
   10. **Confirm Appendix B:** already populated — zero methods CCN ≥ 20. Re-measure only if `src/main.py` changed.
-  11. **Apply Option A (quarantine):** add `src/main_app_*.py` to the `omit` list in `.coveragerc` (alongside `src/main.py`) so the extracted files are not counted in coverage until deliberately opted in. This keeps CI green during the incremental extraction. Re-run `python -m pytest tests --cov=src --cov-fail-under=65` to confirm it still passes.
+  11. **Apply Option A (quarantine):** add `src/main_app_*.py` to the `omit` list in `.coveragerc` (alongside `src/main.py`) so the extracted files are not counted in coverage until deliberately opted in. This keeps CI green during the incremental extraction. Re-run `python -m pytest tests --cov=src --cov-fail-under=80` to confirm it still passes.
 
 **Phase 2 temporary test must assert:**
 - `DICOMViewerApp` is a subclass of `QObject` and of every mixin class.
@@ -579,7 +579,7 @@ python scripts/check_user_docs_links.py
 - `src/utils/debug_flags.py` - Gate for any new debug tracing
 - `requirements-dev.txt` (`interrogate>=1.7.0`) - Docstring coverage measurement
 - `security/security-tool-inventory.json` - Tool inventory; `interrogate` entry required when added to `requirements-dev.txt` (see Phase 2 Task 8)
-- `.coveragerc` / `.github/workflows/ci.yml:124` (`--cov-fail-under=65`) - Coverage trap addressed by the Coverage Strategy section
+- `.coveragerc` / `.github/workflows/ci.yml` (`--cov-fail-under=80`) - Coverage trap addressed by the Coverage Strategy section
 - `scripts/check_security_tool_inventory.py` - CI check that fails if a tool is in `requirements-dev.txt` but missing from the inventory
 - `tmp/refactor_plan_assessment_20260808_010833.md` - Latest plan assessment (CI coverage trap, MRO terminology, security inventory, CCN sequencing)
 
