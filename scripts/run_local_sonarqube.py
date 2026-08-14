@@ -399,7 +399,12 @@ def build_scanner_command(
 
 
 def run_coverage(repo_root: Path) -> int:
-    """Generate the optional coverage report with the project's active Python."""
+    """Generate the optional coverage report with the project's active Python.
+
+    Requires the project venv to be active (source .venv/bin/activate) so that
+    pytest-cov is available. Passes ``--override-ini="addopts="`` to disable
+    pytest-xdist parallelism, which is incompatible with ``--cov``.
+    """
     coverage_path = repo_root / STATE_DIRECTORY / "coverage.xml"
     coverage_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
@@ -409,9 +414,17 @@ def run_coverage(repo_root: Path) -> int:
         "tests/",
         "--cov=src",
         f"--cov-report=xml:{coverage_path}",
+        "--override-ini=addopts=",
     ]
     print("Running pytest with coverage before SonarQube analysis...")
-    return subprocess.run(command, cwd=repo_root).returncode
+    result = subprocess.run(command, cwd=repo_root)
+    if result.returncode != 0:
+        print(
+            "Hint: ensure the project venv is active "
+            "(source .venv/bin/activate) and pytest-cov is installed.",
+            file=sys.stderr,
+        )
+    return result.returncode
 
 
 def parse_args() -> argparse.Namespace:
