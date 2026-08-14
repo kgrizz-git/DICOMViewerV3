@@ -183,7 +183,8 @@ class TextAnnotationItem(QGraphicsTextItem):
             # Handle Cmd+Z / Ctrl+Z for text editing undo
             if (event.key() == Qt.Key.Key_Z and
                 (event.modifiers() & Qt.KeyboardModifier.ControlModifier or
-                 event.modifiers() & Qt.KeyboardModifier.MetaModifier)):
+                 event.modifiers() & Qt.KeyboardModifier.MetaModifier) and
+                not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier)):
                 if self.document().isUndoAvailable():
                     self.document().undo()
                     event.accept()

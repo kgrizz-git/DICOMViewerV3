@@ -21,4 +21,6 @@ def create_image(
     """Create a small in-memory image in the requested grayscale or RGB mode."""
     if mode == "L":
         return Image.new("L", size, fill)
-    return Image.new("RGB", size, (fill, fill, fill))
+    if mode == "RGB":
+        return Image.new("RGB", size, (fill, fill, fill))
+    raise ValueError(f"unsupported image mode {mode!r}; expected 'L' or 'RGB'")
