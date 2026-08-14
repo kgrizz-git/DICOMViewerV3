@@ -140,6 +140,22 @@ def test_update_statistics_no_rescale_type_empty_unit(qapp) -> None:
         assert _cell_text(panel.stats_table, i, 2) == ""
 
 
+@pytest.mark.qt
+def test_update_statistics_preserves_column_order_and_units(qapp) -> None:
+    panel = ROIStatisticsPanel()
+    panel.update_statistics(_make_stats(), rescale_type="HU")
+    table = panel.stats_table
+    for row in range(table.rowCount()):
+        label = _cell_text(table, row, 0)
+        value = _cell_text(table, row, 1)
+        unit = _cell_text(table, row, 2)
+        assert label and value
+        if label in (_STAT_MEAN, _STAT_STD_DEV, _STAT_MIN, _STAT_MAX):
+            assert unit == "HU"
+        elif label == _STAT_PIXELS:
+            assert unit == ""
+
+
 # ---------------------------------------------------------------------------
 # update_statistics – area branches
 # ---------------------------------------------------------------------------
@@ -441,23 +457,6 @@ def test_copy_no_selection_empty_values_still_copies(qapp) -> None:
         lines = written.split("\n")
         assert lines[0] == _TITLE_ROI_STATISTICS
         assert len(lines) == 7
-
-
-@pytest.mark.qt
-def test_copy_preserves_column_order(qapp) -> None:
-    panel = ROIStatisticsPanel()
-    panel.update_statistics(_make_stats(), rescale_type="HU")
-    table = panel.stats_table
-    row_count = table.rowCount()
-    for row in range(row_count):
-        label = _cell_text(table, row, 0)
-        value = _cell_text(table, row, 1)
-        unit = _cell_text(table, row, 2)
-        assert label and value
-        if label in (_STAT_MEAN, _STAT_STD_DEV, _STAT_MIN, _STAT_MAX):
-            assert unit == "HU"
-        elif label == _STAT_PIXELS:
-            assert unit == ""
 
 
 # ---------------------------------------------------------------------------

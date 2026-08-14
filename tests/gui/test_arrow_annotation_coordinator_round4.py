@@ -43,19 +43,12 @@ def _make_coord(
     scene=None,
     undo_redo_manager=None,
     update_undo_redo_callback=None,
-    has_transform_signal=True,
-    has_zoom_signal=True,
 ):
     """Build a coordinator wired to lightweight fakes."""
     tool = MagicMock()
     tool.arrows = {}
     viewer = MagicMock()
     viewer.scene = scene
-
-    if not has_transform_signal:
-        del viewer.transform_changed
-    if not has_zoom_signal:
-        del viewer.zoom_changed
 
     coord = ArrowAnnotationCoordinator(
         arrow_annotation_tool=tool,
@@ -78,6 +71,12 @@ class TestInitSignalConnections:
     def test_connections_when_viewer_has_signals(self, qapp):
         coord, _, viewer = _make_coord()
         assert coord.image_viewer is viewer
+        viewer.transform_changed.connect.assert_called_once_with(
+            coord._update_arrow_lines_for_view_scale
+        )
+        viewer.zoom_changed.connect.assert_called_once_with(
+            coord._on_zoom_changed_for_arrows
+        )
 
     def test_no_connection_when_viewer_lacks_signals(self, qapp):
         tool = MagicMock()
@@ -89,6 +88,7 @@ class TestInitSignalConnections:
             get_current_slice_index=lambda: 0,
         )
         assert coord.image_viewer is viewer
+        assert viewer.mock_calls == []
 
 
 # -----------------------------------------------------------------------
@@ -100,8 +100,10 @@ class TestInitSignalConnections:
 class TestUpdateArrowLinesForViewScale:
     def test_noop_when_scene_none(self, qapp):
         coord, tool, _ = _make_coord(scene=None)
+        arrow = FakeArrow()
+        tool.arrows = {("study", "series", 0): [arrow]}
         coord._update_arrow_lines_for_view_scale()
-        # Early return — tool.arrows.values() never called
+        assert arrow._line_update_calls == []
 
     def test_skips_arrow_on_different_scene(self, qapp):
         scene_a = QGraphicsScene()
@@ -444,6 +446,7 @@ class TestOnArrowMoved:
         coord, _, _ = _make_coord()
         # _pre_move_start_point access triggers RuntimeError inside try/except
         coord._on_arrow_moved(arrow)
+        assert arrow not in coord._arrow_move_tracking
 
 
 # -----------------------------------------------------------------------
@@ -454,9 +457,12 @@ class TestOnArrowMoved:
 @pytest.mark.qt
 class TestFinalizeArrowMove:
     def test_noop_when_not_tracked(self, qapp):
-        coord, _, _ = _make_coord()
+        undo_redo_manager = MagicMock()
+        coord, _, _ = _make_coord(undo_redo_manager=undo_redo_manager)
         untracked = MagicMock()
         coord._finalize_arrow_move(untracked)
+        undo_redo_manager.execute_command.assert_not_called()
+        assert untracked not in coord._arrow_move_tracking
 
     def test_returns_early_for_invalid_arrow(self, qapp):
         """Arrow in tracking but invalid (no start_point) → removes from tracking."""

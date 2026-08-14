@@ -408,7 +408,7 @@ class TestKeyPressBranches:
         v.keyPressEvent(e)
         assert dirs == []
 
-    def test_left_arrow_no_focus_skips(self, qapp):
+    def test_left_arrow_no_focus_navigates_series(self, qapp):
         v = _InputHarness()
         series: list[int] = []
         v.series_navigation_requested.connect(series.append)
