@@ -155,6 +155,11 @@ def test_resize_and_basic_move_commands_restore_scene_state(qapp) -> None:
     TextAnnotationEditCommand(None, "old", "new").execute()
     TextAnnotationMoveCommand(None, QPointF(), QPointF(1, 1), scene).execute()
     TextAnnotationMoveCommand(text_item, QPointF(), QPointF(1, 1), other_scene).execute()
+    assert applied == [new_rect, old_rect, new_rect]
+    assert graphics_item.rect() == new_rect
+    assert graphics_item.pos() == QPointF(1, 2)
+    assert text_item.toPlainText() == "old"
+    assert text_item.pos() == QPointF(2, 3)
 
 
 class _ArrowMoveStub:
@@ -273,6 +278,12 @@ def test_arrow_measurement_and_angle_moves_preserve_geometry_and_callbacks(qapp)
         QPointF(1, 1), QPointF(2, 2), QPointF(3, 3),
         other_scene,
     ).execute()
+    assert arrow.points == (old_start, old_end)
+    assert arrow.on_moved_callback.call_count == 0
+    assert (measurement.start_point, measurement.end_point) == (old_start, old_end)
+    assert measurement.update_distance.call_count == 2
+    assert (angle.p1, angle.p2, angle.p3) == (QPointF(1, 1), QPointF(2, 2), QPointF(3, 3))
+    assert angle.update_angle_geometry.call_count == 2
 
 
 @pytest.mark.qt
@@ -309,6 +320,13 @@ def test_command_collection_guards_and_composite_order(qapp) -> None:
     CrosshairCommand(crosshair_manager, "remove", crosshair, scene, *key).execute()
     CrosshairCommand(crosshair_manager, "unknown", crosshair, scene, *key).execute()
     CrosshairCommand(crosshair_manager, "add", crosshair, None, *key).execute()
+
+    assert roi_manager.rois == {}
+    assert measurement_tool.measurements == {}
+    assert annotation_tool.annotations == {}
+    assert arrow_tool.arrows == {}
+    assert crosshair_manager.crosshairs == {}
+    assert scene.items() == []
 
     events: list[str] = []
     first = _RecordingCommand("first", events)

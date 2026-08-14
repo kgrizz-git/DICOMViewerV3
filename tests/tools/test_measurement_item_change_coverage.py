@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+import tools.measurement_item_change as measurement_item_change
 from tools.measurement_item_change import (
     _fmt_point,
     _invalidate_measurement_line_scene,
@@ -68,51 +69,36 @@ class TestDebugLogHandleDrag:
         )
         return m
 
-    def test_before_phase(self):
-        from utils import debug_flags
-        old = debug_flags.DEBUG_MEASUREMENT_DRAG
-        try:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = True
-            m = self._make_measurement()
-            handle = SimpleNamespace(is_start=True, pos=lambda: QPointF(0, 0))
-            debug_log_handle_drag(handle, m, phase="before")
-        finally:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = old
+    def test_before_phase(self, monkeypatch, capsys):
+        monkeypatch.setattr(measurement_item_change, "DEBUG_MEASUREMENT_DRAG", True)
+        m = self._make_measurement()
+        handle = SimpleNamespace(is_start=True, pos=lambda: QPointF(0, 0))
+        debug_log_handle_drag(handle, m, phase="before")
+        assert "[DRAG] START handle moved" in capsys.readouterr().out
 
-    def test_after_phase(self):
-        from utils import debug_flags
-        old = debug_flags.DEBUG_MEASUREMENT_DRAG
-        try:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = True
-            m = self._make_measurement()
-            handle = SimpleNamespace(is_start=False, pos=lambda: QPointF(10, 10))
-            debug_log_handle_drag(handle, m, phase="after")
-        finally:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = old
+    def test_after_phase(self, monkeypatch, capsys):
+        monkeypatch.setattr(measurement_item_change, "DEBUG_MEASUREMENT_DRAG", True)
+        m = self._make_measurement()
+        handle = SimpleNamespace(is_start=False, pos=lambda: QPointF(10, 10))
+        debug_log_handle_drag(handle, m, phase="after")
+        assert "[DRAG] END AFTER update" in capsys.readouterr().out
 
-    def test_disabled_no_output(self):
-        from utils import debug_flags
-        old = debug_flags.DEBUG_MEASUREMENT_DRAG
-        try:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = False
-            m = self._make_measurement()
-            handle = SimpleNamespace(is_start=True, pos=lambda: QPointF(0, 0))
-            # Should not print anything
-            debug_log_handle_drag(handle, m, phase="before")
-        finally:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = old
+    def test_disabled_no_output(self, monkeypatch, capsys):
+        monkeypatch.setattr(measurement_item_change, "DEBUG_MEASUREMENT_DRAG", False)
+        m = self._make_measurement()
+        handle = SimpleNamespace(is_start=True, pos=lambda: QPointF(0, 0))
+        debug_log_handle_drag(handle, m, phase="before")
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
 
-    def test_no_start_handle(self):
-        from utils import debug_flags
-        old = debug_flags.DEBUG_MEASUREMENT_DRAG
-        try:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = True
-            m = self._make_measurement()
-            m.start_handle = None
-            handle = SimpleNamespace(is_start=True, pos=lambda: QPointF(0, 0))
-            debug_log_handle_drag(handle, m, phase="before")
-        finally:
-            debug_flags.DEBUG_MEASUREMENT_DRAG = old
+    def test_no_start_handle(self, monkeypatch, capsys):
+        monkeypatch.setattr(measurement_item_change, "DEBUG_MEASUREMENT_DRAG", True)
+        m = self._make_measurement()
+        m.start_handle = None
+        handle = SimpleNamespace(is_start=True, pos=lambda: QPointF(0, 0))
+        debug_log_handle_drag(handle, m, phase="before")
+        assert "start_handle.pos=None" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

@@ -6,11 +6,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
 from PySide6.QtGui import QPen
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsScene,
+    QGraphicsSceneMouseEvent,
     QGraphicsView,
 )
 
@@ -70,6 +71,8 @@ class TestROIGraphicsEllipseItem:
     def test_shape_returns_stroked_outline(self):
         path = self.item.shape()
         assert not path.isEmpty()
+        assert path.contains(QPointF(50.0, 0.0))
+        assert not path.contains(self.item.rect().center())
 
     def test_shape_with_thick_pen(self):
         pen = QPen(Qt.PenStyle.SolidLine)
@@ -77,38 +80,36 @@ class TestROIGraphicsEllipseItem:
         self.item.setPen(pen)
         path = self.item.shape()
         assert not path.isEmpty()
+        assert path.contains(QPointF(50.0, 0.0))
+        assert not path.contains(self.item.rect().center())
 
     def test_mouse_move_left_button(self):
         cb = MagicMock()
         self.item.on_moved_callback = cb
         self.item.setPos(0.0, 0.0)
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         self.item.mouseMoveEvent(ev)
         cb.assert_called()
 
     def test_mouse_move_no_callback(self):
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         # Should not raise
         self.item.mouseMoveEvent(ev)
 
     def test_mouse_move_right_button_no_trigger(self):
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
         cb = MagicMock()
         self.item.on_moved_callback = cb
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.RightButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.RightButton)
         self.item.mouseMoveEvent(ev)
         cb.assert_not_called()
 
     def test_mouse_move_callback_raises(self):
         self.item.on_moved_callback = MagicMock(side_effect=RuntimeError("boom"))
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         # Should not raise
         self.item.mouseMoveEvent(ev)
 
@@ -116,9 +117,8 @@ class TestROIGraphicsEllipseItem:
         cb = MagicMock()
         self.item.on_moved_callback = cb
         self.item.setPos(0.0, 0.0)
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         # First call sets _last_callback_pos
         self.item.mouseMoveEvent(ev)
         assert cb.call_count == 1
@@ -157,6 +157,8 @@ class TestROIGraphicsRectItem:
     def test_shape(self):
         path = self.item.shape()
         assert not path.isEmpty()
+        assert path.contains(QPointF(40.0, 0.0))
+        assert not path.contains(self.item.rect().center())
 
     def test_shape_thick_pen(self):
         pen = QPen(Qt.PenStyle.SolidLine)
@@ -164,46 +166,43 @@ class TestROIGraphicsRectItem:
         self.item.setPen(pen)
         path = self.item.shape()
         assert not path.isEmpty()
+        assert path.contains(QPointF(40.0, 0.0))
+        assert not path.contains(self.item.rect().center())
 
     def test_mouse_move_left_button(self):
         cb = MagicMock()
         self.item.on_moved_callback = cb
         self.item.setPos(0.0, 0.0)
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         self.item.mouseMoveEvent(ev)
         cb.assert_called()
 
     def test_mouse_move_no_callback(self):
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         self.item.mouseMoveEvent(ev)
 
     def test_mouse_move_right_button(self):
         cb = MagicMock()
         self.item.on_moved_callback = cb
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.RightButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.RightButton)
         self.item.mouseMoveEvent(ev)
         cb.assert_not_called()
 
     def test_mouse_move_callback_raises(self):
         self.item.on_moved_callback = MagicMock(side_effect=RuntimeError("boom"))
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         self.item.mouseMoveEvent(ev)
 
     def test_mouse_move_throttling(self):
         cb = MagicMock()
         self.item.on_moved_callback = cb
         self.item.setPos(0.0, 0.0)
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.buttons = lambda: Qt.MouseButton.LeftButton
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButtons(Qt.MouseButton.LeftButton)
         self.item.mouseMoveEvent(ev)
         assert cb.call_count == 1
         self.item.mouseMoveEvent(ev)
@@ -398,19 +397,17 @@ class TestROIResizeHandleItem:
             assert h.handle_id() == hid
 
     def _make_event(self, button=Qt.MouseButton.LeftButton, scene_pos=QPointF(5.0, 5.0)):
-        from PySide6.QtWidgets import QGraphicsSceneMouseEvent
-        ev = QGraphicsSceneMouseEvent()
-        ev.button = lambda: button
-        ev.buttons = lambda: button
-        ev.scenePos = lambda: scene_pos
-        ev.accept = MagicMock()
+        ev = QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseMove)
+        ev.setButton(button)
+        ev.setButtons(button)
+        ev.setScenePos(scene_pos)
         return ev
 
     def test_mouse_press_left_button(self):
         ev = self._make_event(Qt.MouseButton.LeftButton, QPointF(5.0, 5.0))
         self.handle.mousePressEvent(ev)
         self.roi_proto.begin_resize_handle_drag.assert_called_once_with("tl", QPointF(5.0, 5.0))
-        ev.accept.assert_called_once()
+        assert ev.isAccepted()
 
     def test_mouse_press_right_button_falls_through(self):
         ev = self._make_event(Qt.MouseButton.RightButton)
@@ -422,7 +419,7 @@ class TestROIResizeHandleItem:
         ev = self._make_event(Qt.MouseButton.LeftButton, QPointF(15.0, 15.0))
         self.handle.mouseMoveEvent(ev)
         self.roi_proto.continue_resize_handle_drag.assert_called_once_with(QPointF(15.0, 15.0))
-        ev.accept.assert_called_once()
+        assert ev.isAccepted()
 
     def test_mouse_move_not_dragging(self):
         self.handle._dragging = False
@@ -436,7 +433,7 @@ class TestROIResizeHandleItem:
         self.handle.mouseReleaseEvent(ev)
         assert self.handle._dragging is False
         self.roi_proto.finish_resize_handle_drag.assert_called_once()
-        ev.accept.assert_called_once()
+        assert ev.isAccepted()
 
     def test_mouse_release_right_button_falls_through(self):
         self.handle._dragging = True
