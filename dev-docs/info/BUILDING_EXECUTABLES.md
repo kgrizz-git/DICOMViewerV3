@@ -12,7 +12,7 @@ The recommended approach is to use **PyInstaller**, which works well with PySide
 
 ## Prerequisites
 
-- Python 3.9 or higher installed
+- Python 3.12 or higher installed
 - All project dependencies installed (see `requirements.txt`)
 - Build requirements installed (see Step 1 below)
 
@@ -573,7 +573,7 @@ The included workflow (`.github/workflows/build.yml`) creates both:
 The workflow file (`.github/workflows/build.yml`) is configured to:
 
 - **Build on**: Windows, macOS, and Linux
-- **Python version**: 3.11
+- **Python version**: 3.12
 - **Trigger on**: Version tags (`v*`) and manual dispatch
 - **Install**: All dependencies from `requirements.txt` and `requirements-build.txt`
 - **Build**: Using `DICOMViewerV3.spec`
@@ -939,4 +939,3 @@ The following build-related files and directories should be in `.gitignore`:
 Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. **Help → Documentation** and links inside the Quick Start guide open **GitHub** (`user-docs/` on `main`) in the default browser and require network access.
 
 For a future **offline** doc pack (e.g. generated HTML under `resources/help/docs/` and `file://` URLs), record the packaging choice here and gate URL schemes in `QuickStartGuideDialog` / `DialogCoordinator` accordingly.
-
