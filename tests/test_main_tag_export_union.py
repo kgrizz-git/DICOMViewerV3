@@ -88,7 +88,7 @@ def test_schedule_rebuild_emits_ready_when_no_studies():
 def test_drain_before_reschedule_clears_worker_reference():
     """Scheduling a rebuild must drain any prior worker before starting another."""
     host = TagExportUnionHost.__new__(TagExportUnionHost)
-    host._worker = None
+    host._worker = object()
     host._generation = 0
     drain_calls: list[float] = []
 
@@ -102,6 +102,7 @@ def test_drain_before_reschedule_clears_worker_reference():
     harness.current_studies = {}
     harness._schedule_tag_export_union_rebuild()
     assert drain_calls == [180.0]
+    assert host._worker is None
 
 
 # ---------------------------------------------------------------------------
