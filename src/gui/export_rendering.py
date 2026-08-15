@@ -605,9 +605,9 @@ def create_projection_dataset(
         # Update Image Type to indicate this is a DERIVED image
         # Image Type is multi-valued: [ORIGINAL/DERIVED, PRIMARY/SECONDARY, additional values]
         projection_type_map = {
-            "mip": "MAXIMUM INTENSITY PROJECTION",
-            "aip": "AVERAGE INTENSITY PROJECTION",
-            "minip": "MINIMUM INTENSITY PROJECTION"
+            "mip": "MIP",
+            "aip": "AIP",
+            "minip": "MINIP",
         }
         projection_image_type = projection_type_map.get(projection_type, "PROJECTION")
         projection_dataset.ImageType = ["DERIVED", "SECONDARY", projection_image_type]

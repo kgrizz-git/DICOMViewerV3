@@ -215,27 +215,19 @@ def test_create_projection_dataset_updates_pixels_and_metadata(monkeypatch) -> N
         "get_pixel_array",
         lambda _dataset: np.zeros((2, 2), dtype=np.uint8),
     )
-    # The strict xfail below owns the conformance warning regression. Suppress
-    # this duplicate warning while checking the independent metadata behavior.
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="The value length.*")
-        result = rendering.create_projection_dataset(
-            dataset, _series(dataset, 3), "1.2.3", "1.2.3.4", 1, "mip", 2, False
-        )
+    result = rendering.create_projection_dataset(
+        dataset, _series(dataset, 3), "1.2.3", "1.2.3.4", 1, "mip", 2, False
+    )
     assert result is not None
     assert result.Rows == 2 and result.Columns == 2
     assert np.array_equal(np.frombuffer(result.PixelData, dtype=np.uint8), [0, 255, 2, 3])
-    assert result.ImageType == ["DERIVED", "SECONDARY", "MAXIMUM INTENSITY PROJECTION"]
+    assert result.ImageType == ["DERIVED", "SECONDARY", "MIP"]
     assert result.SeriesDescription == "synthetic - MIP"
     assert result.InstanceNumber == 9001
     assert not hasattr(result, "SpacingBetweenSlices")
     assert result.SOPInstanceUID != getattr(dataset, "SOPInstanceUID", None)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Projection ImageType value exceeds DICOM CS's 16-character limit; see investigation.",
-)
 def test_projection_dataset_image_type_values_are_dicom_cs_valid(monkeypatch) -> None:
     dataset = _dataset()
     monkeypatch.setattr(
@@ -259,11 +251,9 @@ def test_projection_dataset_image_type_values_are_dicom_cs_valid(monkeypatch) ->
 
 def test_create_projection_dataset_keeps_single_slice_and_guards_missing_data() -> None:
     dataset = _dataset()
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="The value length.*")
-        result = rendering.create_projection_dataset(
-            dataset, _series(dataset, 1), "1.2.3", "1.2.3.4", 0, "aip", 4, False
-        )
+    result = rendering.create_projection_dataset(
+        dataset, _series(dataset, 1), "1.2.3", "1.2.3.4", 0, "aip", 4, False
+    )
     assert result is not None
     assert result.PixelData == dataset.PixelData
     assert "Derived from instance 1" in result.ImageComments
