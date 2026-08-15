@@ -430,6 +430,22 @@ def test_move_selected_items_preserves_order_and_selection(qapp, tmp_path):
 
 
 @pytest.mark.qt
+def test_move_non_adjacent_selected_items_up_preserves_order(qapp, tmp_path):
+    paths = _paths(tmp_path, "a", "b", "c", "d", "e")
+    dialog = EditRecentListDialog(_cm(tmp_path, paths))
+    dialog.list_widget.item(1).setSelected(True)
+    dialog.list_widget.item(3).setSelected(True)
+
+    dialog._move_item_up()
+
+    assert _items(dialog) == [paths[1], paths[0], paths[3], paths[2], paths[4]]
+    assert [item.data(Qt.ItemDataRole.UserRole) for item in dialog.list_widget.selectedItems()] == [
+        paths[1],
+        paths[3],
+    ]
+
+
+@pytest.mark.qt
 def test_move_selected_items_at_boundary_is_noop(qapp, tmp_path):
     paths = _paths(tmp_path, "a", "b", "c")
     dialog = EditRecentListDialog(_cm(tmp_path, paths))

@@ -1,8 +1,19 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-15
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-15
+
+- **Test-discovered strict-xfail remediation:** Corrected two production defects
+  characterized during coverage work. Recent-list multi-selection moves now
+  preserve relative order when moving upward; derived projection exports now
+  use DICOM CS-valid `ImageType` values (`MIP`, `AIP`, `MINIP`) while retaining
+  descriptive metadata. Both tests are ordinary passing regressions. Full
+  parallel coverage verification: 6,193 passed, 15 skipped, 81.52%, with
+  `coverage.xml` produced. **Completed plan:** [Test-discovered strict-xfail
+  remediation](plans/completed/TEST_DISCOVERED_XFAIL_REMEDIATION_PLAN.md).
 
 ## 2026-08-12
 
