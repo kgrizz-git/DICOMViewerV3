@@ -139,6 +139,34 @@ xdist.
 for the next two measured façade candidates only after reviewing this batch in
 CI; do not introduce CI sharding until Phase 2 has a representative CI timing.
 
+## Recorded Phase 2 batch 2 — 2026-08-14
+
+- Converted the next two measured façade candidates together:
+  `tests/test_main_subwindow_lifecycle.py` and
+  `tests/test_main_facade_delegation.py`. The conversion reduces their repeated
+  `DICOMViewerApp()` constructions from fourteen to two under xdist, one real
+  configuration-and-delegation anchor in each module.
+- The remaining lifecycle checks use function-local
+  `SubwindowManagementMixin` instances with exact mocked collaborators. The
+  remaining export, QA, and MPR checks invoke the actual defining mixin method
+  with a narrow mock facade/controller. This keeps direct forwarding contracts
+  explicit without a mutable shared fixture or an implicit full-app setup.
+- Combined focused measurement under default `-n auto`: the prior selection
+  had 14 tests and completed in **12.21s**; the converted selection has 15
+  tests and completed in **11.88s**. This is a small absolute local reduction
+  despite the additional smoke assertion; CI timing remains the decision
+  metric.
+- Focused converted modules (15 tests), adjacent lifecycle/export/QA seam
+  coverage (27 tests), Ruff, and whitespace validation passed. The next step
+  is one complete parallel coverage run, then CI review of this two-batch
+  refactor before choosing another pair.
+- Two complete parallel coverage runs passed the enforced 80% gate. They
+  retained the identical 50,705-statement and 16,472-branch source set and
+  measured **80.4829%** and **80.5067%**, respectively. The small xdist-run
+  variation was limited to asynchronous, unrelated coordinator execution;
+  the repeat run is above the controlled 80.4948% pre-batch measurement.
+  Keep the 80% gate and use CI as the next timing/coverage decision point.
+
 ## Phase 3 — shard CI only after Phase 2 measurements
 
 1. Compare the post-Phase-2 duration with the baseline. Introduce CI sharding
