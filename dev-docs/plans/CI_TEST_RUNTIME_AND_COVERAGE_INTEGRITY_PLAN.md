@@ -107,6 +107,38 @@ safe hygiene change, not the primary performance lever.
 and branch coverage, and the complete suite remains order-independent under
 xdist.
 
+## Recorded Phase 2 batch 1 — 2026-08-14
+
+- Converted the two independent high-cost façade modules together, as an
+  intentionally bounded batch: `tests/test_main_signal_wiring.py` and
+  `tests/test_main_tag_export_union.py`. This replaces twelve
+  `DICOMViewerApp()` constructions under xdist with two anchor constructions
+  (one per module). The other assertions use short-lived, explicit harnesses:
+  Qt signal stubs for the individual `app_signal_wiring` helpers and a
+  `QObject` plus `TagEditingMixin` for tag-export host delegation.
+- Each module retains one real-app smoke test. The harnesses are function-local
+  rather than module- or session-scoped, so they do not introduce test-order
+  state or cross-worker sharing.
+- Combined focused measurement under the default `-n auto` configuration:
+  12 tests passed in **11.77s**, down from **13.31s** for the same selection
+  before the batch (**1.54s / 11.6%** local reduction, including xdist startup).
+  This is directional local evidence only; CI timing has deliberately not yet
+  been remeasured.
+- A detached, immediately preceding full-suite baseline and the refactored
+  full suite both collected 6,056 items and passed the 80% floor. Their source
+  set was identical: 50,705 statements and 16,472 branches. The baseline was
+  **80.4948%** (42,710 covered lines; 2,916 partial branches); the refactored
+  run was **80.5052%** (42,717 covered lines; 2,916 partial branches). The
+  small difference from the earlier 80.52% local record is normal xdist-run
+  variation; the controlled comparison shows no coverage regression.
+- Focused refactor checks passed: both converted modules (12 tests), their
+  direct seam suites (`test_app_signal_wiring.py` and
+  `test_tag_export_union_host.py`, 15 tests), Ruff, and `git diff --check`.
+
+**Next decision:** repeat the same bounded conversion-and-comparison approach
+for the next two measured façade candidates only after reviewing this batch in
+CI; do not introduce CI sharding until Phase 2 has a representative CI timing.
+
 ## Phase 3 — shard CI only after Phase 2 measurements
 
 1. Compare the post-Phase-2 duration with the baseline. Introduce CI sharding
