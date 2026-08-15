@@ -1,9 +1,22 @@
 # Test-Discovered Strict-Xfail Remediation Plan
 
-**Status:** Proposed
+**Status:** Completed
 **Last updated:** 2026-08-15
-**Scope:** Two validated production defects intentionally retained as strict
-xfails during coverage work.
+**Scope:** Two validated production defects that were intentionally retained as
+strict xfails during coverage work.
+
+## Completion record
+
+- `EditRecentListDialog._move_item_up()` now processes selected rows from top
+  to bottom, preserving the relative order and selection of adjacent and
+  non-adjacent items. The former strict xfail is an ordinary passing regression.
+- Projection exports now use the valid DICOM CS values `MIP`, `AIP`, and
+  `MINIP` in `ImageType`; full descriptions remain in `SeriesDescription` and
+  `ImageComments`. The former strict xfail is an ordinary passing conformance
+  regression with no CS-length warning.
+- Focused parallel checks passed: 32 recent-list tests and 19 export-rendering
+  tests. The CI-equivalent full parallel coverage gate passed: 6,193 passed,
+  15 skipped, 81.52% total coverage, and `coverage.xml` produced.
 
 ## Goal
 
@@ -89,12 +102,12 @@ check` on changed Python files.
 
 ## Review checklist
 
-- [ ] Both previously failing tests are ordinary passing tests, not skipped or
+- [x] Both previously failing tests are ordinary passing tests, not skipped or
   relaxed.
-- [ ] Recent-list entries and their selected identities preserve order across
+- [x] Recent-list entries and their selected identities preserve order across
   up/down operations.
-- [ ] Projection `ImageType` components satisfy DICOM CS length and character
+- [x] Projection `ImageType` components satisfy DICOM CS length and character
   constraints for MIP, AIP, MinIP, and fallback paths.
-- [ ] Existing projection display/export metadata remains descriptive.
-- [ ] Focused, nearest, full parallel, coverage, lint, harness, and architecture
+- [x] Existing projection display/export metadata remains descriptive.
+- [x] Focused, nearest, full parallel, coverage, lint, harness, and architecture
   checks have recorded results.

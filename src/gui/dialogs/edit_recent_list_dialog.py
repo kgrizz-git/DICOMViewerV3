@@ -386,29 +386,16 @@ class EditRecentListDialog(QDialog):
         if selected_rows[0] == 0:
             return
 
-        selected_set = set(selected_rows)
-        count = self.list_widget.count()
-        items = [self.list_widget.takeItem(0) for _ in range(count)]
+        selected_paths = [item.data(Qt.ItemDataRole.UserRole) for item in selected_items]
 
-        new_order: list[QListWidgetItem] = []
-        i = 0
-        while i < count:
-            if i in selected_set:
-                block_start = i
-                while i < count and i in selected_set:
-                    i += 1
-                above = new_order.pop()
-                new_order.extend(items[block_start:i])
-                new_order.append(above)
-            else:
-                new_order.append(items[i])
-                i += 1
+        # Process top-to-bottom so moving an earlier selected item does not
+        # change the row of a later selected item. This preserves the relative
+        # order of adjacent selections.
+        for row in selected_rows:
+            item = self.list_widget.takeItem(row)
+            self.list_widget.insertItem(row - 1, item)
 
-        for item in new_order:
-            self.list_widget.addItem(item)
-
-        selected_paths = {items[r].data(Qt.ItemDataRole.UserRole) for r in selected_rows}
-        for i in range(count):
+        for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if item and item.data(Qt.ItemDataRole.UserRole) in selected_paths:
                 item.setSelected(True)
@@ -489,4 +476,3 @@ class EditRecentListDialog(QDialog):
         self.config_manager.save_config()
 
         self.accept()
-
