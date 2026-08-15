@@ -195,9 +195,9 @@ There is **no Phase 1**. Historical numbering proceeds **0 → 2 → 3 → 4 →
      Re-run `python scripts/check_architecture_boundaries.py` to confirm clean.
   7. Add a type-check pass via `python scripts/check_basedpyright_errors.py` (the repo pins **basedpyright**, not raw `pyright`) to the verification set (mixin files use ImageViewer-style file pragmas per Typing deviation — not `TYPE_CHECKING` / `self: DICOMViewerApp`).
   8. **`interrogate` inventory — DONE:** `interrogate>=1.7.0` is already in `requirements-dev.txt` and registered in `security/security-tool-inventory.json`. Skip re-adding; only verify `python scripts/check_security_tool_inventory.py` still passes if those files are touched.
-  9. **Decide and apply the coverage strategy** (see *Coverage Strategy* below) so the new mixin files do not drop the repo below `--cov-fail-under=80`.
-  10. **Confirm Appendix B:** already populated — zero methods CCN ≥ 20. Re-measure only if `src/main.py` changed.
-  11. **Apply Option A (quarantine):** add `src/main_app_*.py` to the `omit` list in `.coveragerc` (alongside `src/main.py`) so the extracted files are not counted in coverage until deliberately opted in. This keeps CI green during the incremental extraction. Re-run `python -m pytest tests --cov=src --cov-fail-under=80` to confirm it still passes.
+ 9. **Decide and apply the coverage strategy** (see *Coverage Strategy* below) so the new mixin files do not drop the repo below `--cov-fail-under=80`.
+ 10. **Confirm Appendix B:** already populated — zero methods CCN ≥ 20. Re-measure only if `src/main.py` changed.
+ 11. **Apply Option A (quarantine):** add `src/main_app_*.py` to the `omit` list in `.coveragerc` (alongside `src/main.py`) so the extracted files are not counted in coverage until deliberately opted in. This keeps CI green during the incremental extraction. Re-run `python -m pytest tests --cov=src --cov-fail-under=80` to confirm it still passes.
 
 **Phase 2 temporary test must assert:**
 - `DICOMViewerApp` is a subclass of `QObject` and of every mixin class.

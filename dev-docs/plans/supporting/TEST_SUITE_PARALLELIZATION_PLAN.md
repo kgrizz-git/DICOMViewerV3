@@ -152,7 +152,7 @@ All on macOS, 18 logical cores (6 performance), `QT_QPA_PLATFORM=offscreen`.
 | serial | 521.98s | 4887 passed, clean |
 | `-n 4` **+ fix** | 212s / 215s / 237s | **3 of 3 clean** |
 | `-n auto` (18 workers) **+ fix** | 38.38s / 38.28s | **2 of 2 clean** |
-| `-n auto` **+ fix + `--cov`** | 48.14s | clean, TOTAL 71.01% |
+| `-n auto` **+ fix + `--cov`** | 48.14s | historical pre-80% policy sample, TOTAL 71.01% |
 | `-n 4` pre-fix | 70–75s | crash, 3 of 3 |
 | `-n auto` pre-fix | 22–51s | crash, 3 of 5 |
 
@@ -282,8 +282,9 @@ no tests were silently lost.
 `-n auto` is already in `ci.yml` from `4558a53`; this phase is about verifying
 it rather than adding it.
 
-1. **Coverage under xdist — verified, no action needed.** A green `-n auto`
-   run with `--cov=src --cov-fail-under=80` reports:
+1. **Coverage under xdist — verified, no action needed.** The following is a
+   historical pre-80% policy sample. It demonstrates xdist coverage combining,
+   but it is not evidence that the current 80% gate passes:
 
    ```text
    TOTAL   50705  12473  16472  2770   71%
@@ -291,8 +292,8 @@ it rather than adding it.
    4887 passed, 15 skipped in 48.14s
    ```
 
-   Coverage combining across workers works correctly and the floor passes with
-   room to spare. Note the [`ci.yml:119`](../../../.github/workflows/ci.yml)
+   Coverage combining across workers worked correctly against the former 65%
+   floor. Current validation must use the 80% gate. Note the [`ci.yml:119`](../../../.github/workflows/ci.yml)
    comment claims "local measured TOTAL is ~67%" — the actual figure is **71%**,
    so that comment is stale and worth correcting while editing the file.
 

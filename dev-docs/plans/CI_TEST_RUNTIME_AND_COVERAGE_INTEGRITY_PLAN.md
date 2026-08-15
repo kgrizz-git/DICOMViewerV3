@@ -180,7 +180,7 @@ CI; do not introduce CI sharding until Phase 2 has a representative CI timing.
 4. Upload every expected raw coverage file as a short-retention internal CI
    artifact with `if-no-files-found: error`. In the dependent merge job,
    download every expected shard explicitly and fail if any is absent, then run
-   `coverage combine`, `coverage xml`, and `coverage report --fail-under=65`.
+   `coverage combine`, `coverage xml`, and `coverage report --fail-under=80`.
    Upload the resulting single `coverage.xml` under the existing artifact name
    for SonarQube.
 5. Do not concatenate XML files or use `--cov-append` to mix unrelated job
