@@ -381,32 +381,38 @@ class EditRecentListDialog(QDialog):
         if not selected_items:
             return
 
-        # Get row indices of selected items, sorted from top to bottom
         selected_rows = sorted([self.list_widget.row(item) for item in selected_items])
 
-        # Check if any selected item is at the top (row 0)
         if selected_rows[0] == 0:
-            return  # Can't move up if first item is selected
+            return
 
-        # Store selected items to restore selection after move
-        selected_paths = [item.data(Qt.ItemDataRole.UserRole) for item in selected_items]
+        selected_set = set(selected_rows)
+        count = self.list_widget.count()
+        items = [self.list_widget.takeItem(0) for _ in range(count)]
 
-        # Move items from bottom to top to avoid index shifting issues
-        # Process from bottom to top
-        for row in reversed(selected_rows):
-            if row > 0:  # Can move up
-                # Take the item from current position
-                item = self.list_widget.takeItem(row)
-                # Insert it one position up
-                self.list_widget.insertItem(row - 1, item)
+        new_order: list[QListWidgetItem] = []
+        i = 0
+        while i < count:
+            if i in selected_set:
+                block_start = i
+                while i < count and i in selected_set:
+                    i += 1
+                above = new_order.pop()
+                new_order.extend(items[block_start:i])
+                new_order.append(above)
+            else:
+                new_order.append(items[i])
+                i += 1
 
-        # Restore selection
-        for i in range(self.list_widget.count()):
+        for item in new_order:
+            self.list_widget.addItem(item)
+
+        selected_paths = {items[r].data(Qt.ItemDataRole.UserRole) for r in selected_rows}
+        for i in range(count):
             item = self.list_widget.item(i)
             if item and item.data(Qt.ItemDataRole.UserRole) in selected_paths:
                 item.setSelected(True)
 
-        # Update button states
         self._update_move_buttons_state()
 
     def _move_item_down(self) -> None:
