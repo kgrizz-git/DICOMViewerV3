@@ -216,6 +216,8 @@ class TestSetControlsEnabled:
     @pytest.mark.qt
     def test_disabled_hides_overlay_groups(self, qapp):
         w = _widget()
+        w.show()
+        QApplication.processEvents()
         w._set_controls_enabled(False)
         assert not w.overlay_series_widget.isVisible()
         assert not w.opacity_widget.isVisible()
@@ -344,7 +346,7 @@ class TestUpdateSeriesLists:
         assert w.get_selected_overlay_series() == "uid2"
 
     @pytest.mark.qt
-    def test_prev_overlay_restored_when_not_in_new_list(self, qapp):
+    def test_single_new_overlay_is_selected_when_previous_is_absent(self, qapp):
         w = _widget()
         w.update_series_lists([("uid1", "S1")], current_overlay_uid="uid1")
         w.update_series_lists([("uid2", "S2")], current_overlay_uid="")
@@ -424,7 +426,9 @@ class TestClearStatus:
         original = w.status_text_edit
         w.status_text_edit = None
         w.clear_status()
+        assert w.status_text_edit is None
         w.status_text_edit = original
+        assert original.toPlainText() == ""
 
 
 class TestUpdateStatusTextColors:
@@ -457,24 +461,37 @@ class TestUpdateStatusTextColors:
         w = _widget(cm=None)
         w.set_status("test", severity="info")
         w.update_status_text_colors()
+        assert w.status_text_edit.toPlainText() == "[INFO] test"
 
     @pytest.mark.qt
     def test_no_status_text_edit(self, qapp):
         w = _widget()
+        original = w.status_text_edit
+        original.setPlainText("[INFO] retained")
         w.status_text_edit = None
         w.update_status_text_colors()
+        assert w.status_text_edit is None
+        w.status_text_edit = original
+        assert original.toPlainText() == "[INFO] retained"
 
     @pytest.mark.qt
     def test_no_document(self, qapp):
         w = _widget()
+        w.status_text_edit.setPlainText("[INFO] retained")
+        original_html = w.status_text_edit.document().toHtml()
         with patch.object(w.status_text_edit, "document", return_value=None):
             w.update_status_text_colors()
+        assert w.status_text_edit.toPlainText() == "[INFO] retained"
+        assert w.status_text_edit.document().toHtml() == original_html
 
     @pytest.mark.qt
     def test_block_without_prefix_skipped(self, qapp):
         w = _widget()
         w.status_text_edit.setPlainText("no prefix here")
+        original_html = w.status_text_edit.document().toHtml()
         w.update_status_text_colors()
+        assert w.status_text_edit.toPlainText() == "no prefix here"
+        assert w.status_text_edit.document().toHtml() == original_html
 
 
 class TestGetSelectedBaseSeries:
