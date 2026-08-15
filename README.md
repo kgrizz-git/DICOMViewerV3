@@ -39,14 +39,21 @@ orientation; **Help → Documentation** opens the full user-guide hub.
 | macOS | Double-click [`launch.command`](launch.command), or run `bash launch.command` | Creates and uses `venv`, offers dependency refresh, and starts the viewer. If macOS blocks a downloaded script, make it executable with `chmod +x launch.command` first. |
 | Linux / any platform | Create a virtual environment, then run [`run.py`](run.py) | Uses the same startup wrapper as the launchers. |
 
-For a manual Linux, macOS, or Windows PowerShell setup:
+For a manual Linux or macOS setup:
 
 ```bash
 python -m venv .venv
-# macOS/Linux:
 source .venv/bin/activate
-# Windows PowerShell:
-# .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python run.py
+```
+
+For a manual Windows PowerShell setup:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python run.py
@@ -57,7 +64,7 @@ path. From an activated environment, `python src/main.py` is also supported.
 
 ## Requirements
 
-- Python 3.10 or later. Python 3.11 or 3.12 is recommended on Windows because
+- Python 3.12 or later. Python 3.12 is the CI and recommended Windows version;
   imaging dependencies are more likely to have pre-built wheels.
 - The Python packages listed in [requirements.txt](requirements.txt).
 - A display environment supported by Qt/PySide6.

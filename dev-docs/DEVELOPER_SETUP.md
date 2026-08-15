@@ -45,8 +45,8 @@ The runtime decoder stack is defined in `requirements.txt`:
 
 ### Python version and native wheels (Windows)
 
-- **Python 3.10+** is required for the full `requirements.txt` stack (including **pylinac**); on Windows **3.11 or 3.12** is recommended so packages like **pyjpegls** install from pre-built wheels.
-- If **`pip install` fails building pyjpegls** with *Microsoft Visual C++ 14.0 or greater is required*, either switch the venv to **Python 3.11/3.12**, or install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the C++ workload.
+- **Python 3.12+** is required for the full `requirements.txt` stack because `numpy>=2.5.1` requires it. Python 3.12 is the supported CI baseline; on Windows it also has pre-built wheels for packages such as **pyjpegls**.
+- If **`pip install` fails building pyjpegls** with *Microsoft Visual C++ 14.0 or greater is required*, switch the venv to **Python 3.12** or install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the C++ workload.
 
 ### Parallels / network home paths (Windows guests)
 

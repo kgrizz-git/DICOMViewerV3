@@ -40,8 +40,8 @@ production behavior is implemented and verified.
 
 | Priority | Defect | Evidence | Intended outcome |
 | --- | --- | --- | --- |
-| P2 | Adjacent selected recent-list entries reverse when moved upward. | [Investigation](../investigations/RECENT_LIST_MULTI_SELECTION_MOVE_ORDER.md) and `test_move_selected_items_preserves_order_and_selection`. | A move-up preserves relative order and selection; moving back down restores the original list. |
-| P2 | Projection exports write an overlong DICOM CS `ImageType` component. | [Investigation](../investigations/PROJECTION_IMAGE_TYPE_CS_VIOLATION.md) and `test_projection_dataset_image_type_values_are_dicom_cs_valid`. | Every `ImageType` component is a valid CS value no longer than 16 characters, while descriptive metadata remains useful. |
+| P2 | Adjacent selected recent-list entries reverse when moved upward. | [Investigation](../../investigations/RECENT_LIST_MULTI_SELECTION_MOVE_ORDER.md) and `test_move_selected_items_preserves_order_and_selection`. | A move-up preserves relative order and selection; moving back down restores the original list. |
+| P2 | Projection exports write an overlong DICOM CS `ImageType` component. | [Investigation](../../investigations/PROJECTION_IMAGE_TYPE_CS_VIOLATION.md) and `test_projection_dataset_image_type_values_are_dicom_cs_valid`. | Every `ImageType` component is a valid CS value no longer than 16 characters, while descriptive metadata remains useful. |
 
 The nearby browser-column-order test is not part of this plan: the prior
 duplicate-ID defect is already fixed in `study_index_config.py` and its
