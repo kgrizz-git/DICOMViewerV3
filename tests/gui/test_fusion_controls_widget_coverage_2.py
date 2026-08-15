@@ -47,6 +47,8 @@ class TestSetCalculatedOffset:
         w = _widget()
         with patch("gui.fusion_controls_widget.DEBUG_OFFSET", True):
             w.set_calculated_offset(5.0, 3.0)
+        assert (w._calculated_offset_x, w._calculated_offset_y) == (5.0, 3.0)
+        assert w.calculated_offset_label.text() == "2D Calculated Offset: X=5.0, Y=3.0 pixels"
 
 
 class TestSetScalingFactors:
@@ -192,8 +194,10 @@ class TestPixelMmConversion:
         w = _widget()
         w.set_pixel_spacing(1.0, 1.0, "test")
         w.set_calculated_offset(10.0, 5.0)
-        w.offset_unit_combo.setCurrentText("px")
+        w.offset_unit_combo.setCurrentText("mm")
         QApplication.processEvents()
+        assert w._offset_unit == "mm"
+        assert (w.x_offset_spinbox.value(), w.y_offset_spinbox.value()) == (10, 5)
 
     @pytest.mark.qt
     def test_spacing_info_label_with_mm(self, qapp):
@@ -281,19 +285,29 @@ class TestSetResamplingStatus:
     @pytest.mark.qt
     def test_hide_warning(self, qapp):
         w = _widget()
+        w.show()
+        w.resampling_group.setVisible(True)
+        QApplication.processEvents()
         w.set_resampling_status("Fast", "reason", show_warning=True, warning_text="Warn")
+        assert w.resampling_warning_label.isVisible()
         w.set_resampling_status("Fast", "reason", show_warning=False)
         assert not w.resampling_warning_label.isVisible()
 
     @pytest.mark.qt
     def test_empty_warning_text_hides(self, qapp):
         w = _widget()
+        w.show()
+        w.resampling_group.setVisible(True)
+        QApplication.processEvents()
         w.set_resampling_status("Fast", "reason", show_warning=True, warning_text="")
         assert not w.resampling_warning_label.isVisible()
 
     @pytest.mark.qt
     def test_warning_false_hides(self, qapp):
         w = _widget()
+        w.show()
+        w.resampling_group.setVisible(True)
+        QApplication.processEvents()
         w.set_resampling_status("Fast", "reason", show_warning=False, warning_text="text")
         assert not w.resampling_warning_label.isVisible()
 
@@ -327,6 +341,7 @@ class TestSetOffsetStatusText:
         w = _widget()
         del w.spacing_info_label
         w.set_offset_status_text(True)
+        assert w._use_3d_mode is False
 
 
 class TestUserModifiedOffset:
