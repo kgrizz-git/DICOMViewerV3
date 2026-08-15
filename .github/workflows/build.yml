@@ -46,7 +46,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: 'pip'
           # Single pip cache key across build + PyInstaller deps (reduces orphan caches).
           cache-dependency-path: |
@@ -361,7 +361,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: 'pip'
           # Single pip cache key across build + PyInstaller deps (reduces orphan caches).
           cache-dependency-path: |
@@ -455,4 +455,3 @@ jobs:
           path: |
             DICOMViewerV3-*-macOS-slim.dmg
           retention-days: 30
-

@@ -199,7 +199,36 @@ def test_create_projection_returns_none_for_guarded_inputs(kwargs) -> None:
     assert rendering.create_projection_for_export(**values) is None
 
 
-def test_create_projection_dataset_updates_pixels_and_metadata(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("projection_type", "projection_method", "image_type", "display_name"),
+    [
+        (
+            "mip",
+            "maximum_intensity_projection",
+            "MIP",
+            "Maximum Intensity Projection (MIP)",
+        ),
+        (
+            "aip",
+            "average_intensity_projection",
+            "AIP",
+            "Average Intensity Projection (AIP)",
+        ),
+        (
+            "minip",
+            "minimum_intensity_projection",
+            "MINIP",
+            "Minimum Intensity Projection (MinIP)",
+        ),
+    ],
+)
+def test_create_projection_dataset_updates_pixels_and_metadata(
+    monkeypatch,
+    projection_type: str,
+    projection_method: str,
+    image_type: str,
+    display_name: str,
+) -> None:
     dataset = _dataset()
     dataset.ImageComments = "original"
     dataset.SeriesDescription = "synthetic"
@@ -207,7 +236,7 @@ def test_create_projection_dataset_updates_pixels_and_metadata(monkeypatch) -> N
     dataset.InstanceNumber = 3
     monkeypatch.setattr(
         rendering.DICOMProcessor,
-        "maximum_intensity_projection",
+        projection_method,
         lambda _slices: np.array([[0.0, 400.0], [2.0, 3.0]], dtype=np.float32),
     )
     monkeypatch.setattr(
@@ -216,13 +245,14 @@ def test_create_projection_dataset_updates_pixels_and_metadata(monkeypatch) -> N
         lambda _dataset: np.zeros((2, 2), dtype=np.uint8),
     )
     result = rendering.create_projection_dataset(
-        dataset, _series(dataset, 3), "1.2.3", "1.2.3.4", 1, "mip", 2, False
+        dataset, _series(dataset, 3), "1.2.3", "1.2.3.4", 1, projection_type, 2, False
     )
     assert result is not None
     assert result.Rows == 2 and result.Columns == 2
     assert np.array_equal(np.frombuffer(result.PixelData, dtype=np.uint8), [0, 255, 2, 3])
-    assert result.ImageType == ["DERIVED", "SECONDARY", "MIP"]
-    assert result.SeriesDescription == "synthetic - MIP"
+    assert result.ImageType == ["DERIVED", "SECONDARY", image_type]
+    assert result.SeriesDescription == f"synthetic - {projection_type.upper()}"
+    assert f"{display_name} - 2 slices (instances 2 to 3)" in result.ImageComments
     assert result.InstanceNumber == 9001
     assert not hasattr(result, "SpacingBetweenSlices")
     assert result.SOPInstanceUID != getattr(dataset, "SOPInstanceUID", None)
@@ -256,10 +286,25 @@ def test_create_projection_dataset_keeps_single_slice_and_guards_missing_data() 
     )
     assert result is not None
     assert result.PixelData == dataset.PixelData
+    assert result.ImageType == ["DERIVED", "SECONDARY", "AIP"]
     assert "Derived from instance 1" in result.ImageComments
     assert rendering.create_projection_dataset(
         dataset, {}, "1.2.3", "1.2.3.4", 0, "aip", 2, False
     ) is None
+
+
+def test_create_projection_dataset_uses_projection_fallback_for_single_slice() -> None:
+    dataset = _dataset()
+    dataset.SeriesDescription = "synthetic"
+
+    result = rendering.create_projection_dataset(
+        dataset, _series(dataset, 1), "1.2.3", "1.2.3.4", 0, "custom", 2, False
+    )
+
+    assert result is not None
+    assert result.ImageType == ["DERIVED", "SECONDARY", "PROJECTION"]
+    assert result.SeriesDescription == "synthetic - CUSTOM"
+    assert "Derived from instance 1" in result.ImageComments
 
 
 def test_render_overlays_composes_roi_and_measurement_without_mutating_source() -> None:

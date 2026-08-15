@@ -5,8 +5,8 @@
 # Installation: pip install -r requirements.txt
 #
 # Python version (especially Windows):
-# - pylinac (ACR QA) requires Python >= 3.10.
-# - Prefer 3.11 or 3.12 (same family as CI). Wheels exist for native deps (e.g. pyjpegls).
+# - The full stack requires Python >= 3.12 because numpy>=2.5.1 requires it.
+# - Python 3.12 is the CI and recommended version. Wheels exist for native deps (e.g. pyjpegls).
 # - 3.14+ may have no pyjpegls wheel on Windows yet; pip then builds from source and needs
 #   Microsoft C++ Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 # - Shared-folder paths can confuse venv/pip; a local clone is often more reliable if you see
