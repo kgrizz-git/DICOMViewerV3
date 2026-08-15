@@ -408,10 +408,6 @@ def test_move_buttons_handle_no_selection_and_boundaries(qapp, tmp_path):
 
 
 @pytest.mark.qt
-@pytest.mark.xfail(
-    strict=True,
-    reason="Moving adjacent selected recent items upward reverses their effective order",
-)
 def test_move_selected_items_preserves_order_and_selection(qapp, tmp_path):
     paths = _paths(tmp_path, "a", "b", "c", "d")
     dialog = EditRecentListDialog(_cm(tmp_path, paths))
