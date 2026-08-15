@@ -1,82 +1,123 @@
 # DICOM Viewer V3
 
-Cross-platform DICOM viewer for **Windows**, **macOS**, and **Linux**.
+> A cross-platform desktop DICOM viewer for reviewing studies, measurements,
+> reconstructions, exports, and selected automated QA workflows.
 
-## Overview
+DICOM Viewer V3 runs on Windows, macOS, and Linux. It is designed for local
+study review, with multi-window viewing, window/level controls, cine playback,
+MPR, PET/SPECT fusion, ROI and measurement tools, annotations, metadata
+inspection and editing, image/DICOM export, and optional ACR phantom QA through
+pylinac.
 
-View DICOM studies with **multi-window layouts**, **window/level**, **cine**, **MPR**, **image fusion** (PET/SPECT on CT/MR), **ROIs**, **measurements**, **annotations**, **metadata** viewing and editing, **export**, and optional **ACR phantom QA** (pylinac). See **[CHANGELOG.md](CHANGELOG.md)** for release notes.
+**Release notes:** [CHANGELOG.md](CHANGELOG.md) · **User guide:**
+[user-docs/USER_GUIDE.md](user-docs/USER_GUIDE.md) · **Developer docs:**
+[dev-docs/README.md](dev-docs/README.md)
 
-## Documentation
+## Start here
 
-**End users (running a release binary or the app from source):**
+### Use a packaged release
 
-- **In the app:** **Help → Quick Start Guide** — short onboarding, **table of contents**, and links that open full guides in your **browser** (GitHub; requires internet for those links).
-- **Help → Documentation** — opens the **[user guide hub](user-docs/USER_GUIDE.md)** in your browser.
-- **In this repo:** Topic guides under **[user-docs/](user-docs/)** — hub **[USER_GUIDE.md](user-docs/USER_GUIDE.md)**, **[CONFIGURATION.md](user-docs/CONFIGURATION.md)** (settings and local study index), plus MPR, QA, fusion, etc.
+Download the appropriate release for your platform and follow the included
+instructions. In the application, **Help → Quick Start Guide** gives a short
+orientation; **Help → Documentation** opens the full user-guide hub.
 
-**Developers and contributors:**
+### Run from a source checkout
 
-- **[DESIGN.md](DESIGN.md)** — canonical design specification: colour tokens, typography, spacing, iconography, and interaction patterns. Start here before making visual changes.
-- **[AGENTS.md](AGENTS.md)** — venv, run/test commands, `src/` layout, CI notes.
-- **[dev-docs/README.md](dev-docs/README.md)** — index into setup, releasing, security, plans, and reference material under `dev-docs/`.
+1. Get the code:
+
+   ```bash
+   git clone https://github.com/kgrizz-git/DICOMViewerV3.git
+   cd DICOMViewerV3
+   ```
+
+2. Use the launcher for your operating system, or create a virtual environment
+   and run the application directly.
+
+| Platform | Recommended launcher | What it does |
+| --- | --- | --- |
+| Windows | Double-click [`launch.bat`](launch.bat) | Creates a `venv` when needed, installs or refreshes dependencies, and starts the viewer. It can also use an existing `venv`, `.venv`, `env`, or `virtualenv`. |
+| macOS | Double-click [`launch.command`](launch.command), or run `bash launch.command` | Creates and uses `venv`, offers dependency refresh, and starts the viewer. If macOS blocks a downloaded script, make it executable with `chmod +x launch.command` first. |
+| Linux / any platform | Create a virtual environment, then run [`run.py`](run.py) | Uses the same startup wrapper as the launchers. |
+
+For a manual Linux, macOS, or Windows PowerShell setup:
+
+```bash
+python -m venv .venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows PowerShell:
+# .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python run.py
+```
+
+`run.py` starts `src/main.py` with the source directory on Python's import
+path. From an activated environment, `python src/main.py` is also supported.
 
 ## Requirements
 
-- **Python 3.10+** (required by **pylinac** for ACR QA; the rest of the viewer may run on older interpreters if you omit QA deps). On **Windows**, **Python 3.11 or 3.12** is recommended so dependencies such as **pyjpegls** install from pre-built wheels. Very new versions (e.g. **3.14+**) may require building native extensions. Details: **[requirements.txt](requirements.txt)** and **[AGENTS.md](AGENTS.md)**.
+- Python 3.10 or later. Python 3.11 or 3.12 is recommended on Windows because
+  imaging dependencies are more likely to have pre-built wheels.
+- The Python packages listed in [requirements.txt](requirements.txt).
+- A display environment supported by Qt/PySide6.
 
-## Technology stack (summary)
+Very new Python releases can require native-extension builds. The launcher
+scripts check the essential runtime imports after installation and report an
+incomplete environment before starting the application.
 
-- **GUI:** PySide6 · **DICOM:** pydicom · **Arrays / imaging:** NumPy, Pillow · **Histogram:** matplotlib · **Tag export (Excel / CSV / UTF-8 text):** openpyxl (`*.xlsx`); CSV and tab-separated `*.txt` use the standard library · **Fusion 3D resampling:** SimpleITK · **ACR QA:** **pylinac 3.43.2** (exact pin), scipy, scikit-image · **Compare PDF merge:** pypdf · **Cine export (GIF/AVI/MPG):** imageio + imageio-ffmpeg (ships a **FFmpeg** build — **LGPL/GPL** components; review license implications for **redistributed** / **frozen** bundles)  
-- **Compressed DICOM decoders:** `python-gdcm` (classic JPEG Baseline/Extended/Lossless), `pylibjpeg` + `pylibjpeg-openjpeg` (JPEG 2000), `pylibjpeg-rle` (RLE), `pyjpegls` (JPEG-LS) — see `requirements.txt` and [`dev-docs/info/DICOM_SUPPORT_ANALYSIS.md`](dev-docs/info/DICOM_SUPPORT_ANALYSIS.md) §3.
+## What is included
 
-## Project structure
+| Area | Capabilities |
+| --- | --- |
+| Viewing | Multi-pane layouts, window/level, slice navigation, cine, thumbnails, metadata, and configurable overlays. |
+| Reconstruction | MPR and slab projections; optional VTK-based volume rendering. |
+| Clinical tools | ROIs, distance and angle measurements, text/arrow annotations, and tag editing. |
+| Fusion | PET/SPECT overlays on CT or MR, including opacity, alignment, resampling, and display controls. |
+| Export | Images, screenshots, derived DICOM, tags, structured reports, and selected QA outputs. |
+| QA | Optional ACR CT/MRI and nuclear-medicine workflows powered by the pinned pylinac dependency. |
 
-```
+The full dependency and decoder details are in
+[requirements.txt](requirements.txt) and
+[DICOM support analysis](dev-docs/info/DICOM_SUPPORT_ANALYSIS.md).
+
+## Documentation
+
+### For users
+
+- [User guide hub](user-docs/USER_GUIDE.md)
+- [Configuration](user-docs/CONFIGURATION.md)
+- **Quick Start Guide** — available in the application through **Help → Quick
+  Start Guide**.
+- [Change log](CHANGELOG.md)
+
+### For contributors
+
+- [Contributing and CI](dev-docs/CONTRIBUTING.md)
+- [Developer setup and troubleshooting](dev-docs/DEVELOPER_SETUP.md)
+- [Test-suite guide](tests/README.md)
+- [Architecture](ARCHITECTURE.md) and [source layout](dev-docs/SOURCE_LAYOUT.md)
+- [Design system](DESIGN.md)
+- [Security-tool guide](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md)
+
+## Project layout
+
+```text
 DICOMViewerV3/
-├── src/              # Application source
-├── tests/            # Test suite — see tests/README.md
-├── user-docs/        # User-facing Markdown guides (hub: USER_GUIDE.md)
-├── dev-docs/         # Developer docs, plans, releasing, research
-├── resources/        # Bundled help HTML, Qt styles (themes)
-├── scripts/          # Helper scripts (e.g. TruffleHog install)
-└── .github/          # CI workflows
+├── src/        Application source
+├── tests/      Automated tests and test-running guidance
+├── user-docs/  User-facing guides
+├── dev-docs/   Contributor documentation, plans, and investigations
+├── resources/  Bundled help and Qt styling resources
+├── scripts/    Verification, maintenance, and local tooling helpers
+└── .github/    Continuous-integration workflows
 ```
 
-## Installation
+## Contributing
 
-### Get the code
+Please begin with [CONTRIBUTING.md](dev-docs/CONTRIBUTING.md). It explains the
+development environment, hooks, privacy safeguards, test and coverage gates,
+and release process. Before changing the UI, also consult [DESIGN.md](DESIGN.md).
 
-- **ZIP:** [GitHub — DICOMViewerV3](https://github.com/kgrizz-git/DICOMViewerV3) → **Code** → **Download ZIP** → extract.  
-- **Git:** `git clone https://github.com/kgrizz-git/DICOMViewerV3.git` then `cd DICOMViewerV3`.
-
-### Dependencies
-
-From the **project root** (folder containing `requirements.txt` and `src/`):
-
-```bash
-pip install -r requirements.txt
-```
-
-Using a **virtual environment** is recommended (`python -m venv .venv`, then activate — see **[AGENTS.md](AGENTS.md)**). On Windows, **`launch.bat`** picks the first existing env among `venv`, `.venv`, `env`, and `virtualenv` (each must contain `Scripts\python.exe`). It installs and runs via that interpreter directly; if the env folder exists but packages are missing, **Run** will install `requirements.txt` before starting.
-
-### Run the application
-
-```bash
-python src/main.py
-```
-
-or:
-
-```bash
-python -m src.main
-```
-
-## Contributing / development
-
-- **[dev-docs/CONTRIBUTING.md](dev-docs/CONTRIBUTING.md)** — hooks, backups, security tooling, CI policy, releases, pylinac pin bumps, license inventory.  
-- **[AGENTS.md](AGENTS.md)** — AI/agent and quick-reference: venv, commands, `src/` layout, orchestration, in-app display notes.  
-- **[dev-docs/README.md](dev-docs/README.md)** — index of developer docs under `dev-docs/`.  
-- **[tests/README.md](tests/README.md)** — running tests.  
-- **[dev-docs/DEVELOPER_SETUP.md](dev-docs/DEVELOPER_SETUP.md)** — troubleshooting installs and paths.
-
-Optional contributor tooling: `requirements-dev.txt` and **[dev-docs/SECURITY_TOOLS_CLI_GUIDE.md](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md)**.
+For repository automation and AI-assisted work, [AGENTS.md](AGENTS.md) is the
+operational reference.

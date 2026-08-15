@@ -57,6 +57,7 @@ This file tracks active and near-term tasks.
 
 ## Bugs / Correctness
 
+- [ ] **[P2]** **Resolve the two strict-xfail defects discovered during test writing.** Preserve their behavioral regressions and remove each marker only with its production correction. **Plan:** [Test-discovered strict-xfail remediation](plans/TEST_DISCOVERED_XFAIL_REMEDIATION_PLAN.md). Added 2026-08-15.
 - [ ] **[P2]** **Preserve order when moving multiple selected recent-list items upward.** `EditRecentListDialog._move_item_up()` can produce `c, a, b, d` when adjacent `b, c` are selected in `a, b, c, d`; the strict regression is retained in [`test_edit_recent_list_dialog_coverage.py`](../tests/gui/test_edit_recent_list_dialog_coverage.py). **Investigation:** [Recent-list multi-selection move order](investigations/RECENT_LIST_MULTI_SELECTION_MOVE_ORDER.md). Added 2026-08-15.
 <!-- OverlayConfigDialog findings — corrected 2026-07-10 after reviewer pushback on original #1/#2/#4. See tmp/overlay-config-dialog-test-review-2026-07-10.md -->
 - [ ] **[P2]** **Make derived projection `ImageType` values valid DICOM CS components.** MIP/AIP/MinIP export currently assigns descriptive third components longer than the 16-character CS limit, producing pydicom validation warnings and potentially non-conformant exported instances. Keep the strict-xfail regression until corrected. **Investigation:** [Projection ImageType CS violation](investigations/PROJECTION_IMAGE_TYPE_CS_VIOLATION.md). Added 2026-08-13.
