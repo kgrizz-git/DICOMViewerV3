@@ -328,9 +328,12 @@ asks for more.
       token states.
 - [ ] **Export dialog Expand/Collapse All buttons** (parity with metadata panel
       `metadata_panel.py:267`) folded into the export-dialog work (D4).
-- [ ] **Filter parity guard (D5/B7):** blockSignals during `_apply_tag_filter_recursive`,
-      then recompute stripe parity **once** at the end of `_filter_tags` — do not
-      let in-walk `setExpanded` re-enter the recompute.
+- [ ] **Filter parity guard (D5/B7):** do **not** block *all* `QTreeWidget`
+      signals during filtering (blunt — can suppress selection/repaint). Instead
+      set a boolean `_is_filtering = True` guard inside the `itemExpanded`/
+      `itemCollapsed` slots so they return early, then recompute stripe parity
+      **once** at the end of `_filter_tags` and clear the flag — do not let
+      in-walk `setExpanded` re-enter the recompute.
 - [ ] **Heavier top rule as a token** (`--border-strong`, D6) + a **contrast
       check** (rule vs header fill *and* adjacent row shade, Carbon band); no
       hand-waved "thicker QPen."
@@ -554,7 +557,10 @@ via a delegate, instead of only hiding non-matches.
   buried in a long value; strong orientation aid in dense tables.
 - *Cons:* requires a rich-text/span-painting delegate (moderate complexity);
   must coexist with the dynamic stripe delegate from Goal 2 (one delegate can
-  own both).
+  own both). **Perf guard (E2):** never use a live `QTextDocument` inside
+  `paint()` — it is O(expensive) per row and will destroy scroll perf on
+  thousands of rows. Use `QStaticText` / `QPainter.drawText` with precomputed
+  bounding rects, cached per cell.
 - *Verdict:* high value, pairs naturally with the shared tree delegate.
 
 ### P9 — Dimmed empty / null value states  · **Adopt**
@@ -799,3 +805,64 @@ redundancy via monochrome kind icons + bar (D17), and make `DESIGN.md` doc-edit
 treatment (D3) as an explicit in-scope-or-out decision. Defer D20–D24 and the
 earlier P3/P6/C8–C11. All additions token-scoped, animation-free (C7/D8), and
 color-blind-safe via shape redundancy (B8/D17).
+
+---
+
+# Part 6 — Ad-hoc assessment (tmp/tag_tree_assessment_20260816_171112.md)
+
+A standalone assessment file was dropped in `tmp/` and reviewed critically. Most
+of its points are **already covered** by earlier parts (stripe-parity role
+`UserRole + 3` = A-7; no-fill metadata scope = A4; expand animation off = D8;
+collapsed-group chip = D10; shared-chrome token fix = D2). A few points were
+genuinely new or sharpened an existing one, and are captured here as the
+**E-series** (low-churn; folded into the checklist where actionable).
+
+## Adopted refinements / new ideas
+- **E1 — D5 signal-blocking is too blunt (sharpened).** Blocking *all*
+  `QTreeWidget` signals during the filter walk can suppress selection/repaint
+  signals. Use a boolean `_is_filtering` guard inside the `itemExpanded`/
+  `itemCollapsed` slots instead (return early), then recompute parity once.
+  Applied to the D5 checklist item.
+- **E2 — P8 highlight must be cached (new perf risk).** Painting filter-match
+  substrings via `QTextDocument` inside `paint()` is O(expensive) per row and
+  will destroy scroll perf on thousands of rows. Mandate `QStaticText` /
+  `QPainter.drawText` with precomputed rects, cached per cell — not live
+  `QTextDocument`. Add to the P8 implement note.
+- **E3 — Dynamic insert/delete parity (gap closed).** The export tree is rebuilt
+  wholesale (`_render_tag_tree` clears + rebuilds), so incremental add/remove
+  doesn't occur; parity is recomputed at build. Note as a guard: any future
+  incremental mutation path must recompute parity, not assume it persists.
+- **E4 — Font bump, if kept, use a relative multiplier (B3 nuance).** GLM (D3/B3)
+  preferred `setBold` only / QSS token over `setPointSize`. If a size bump is
+  nonetheless kept, use `setPointSizeF(base * 1.1)` (relative) rather than an
+  absolute `+1/+2` offset for better HiDPI/accessibility scaling.
+- **E5 — Search/filter enhancements (new, adopt as follow-up).**
+  - *Fuzzy matching* (`sqnc` → `Sequence`) — forgiving, fast; risk of false
+    positives in dense dictionaries. **Adopt** as a later enhancement.
+  - *Filter chips / quick toggles* (`[Private] [Sequences] [Empties]
+    [Selected]`) for boolean filtering without typing. **Adopt** (high value,
+    pairs with C1/C2); note vertical-space cost.
+  - *Search-history dropdown* (last N terms). **Adopt** (cheap; aids repetitive
+    validation); needs filter-state persistence (session or ConfigManager).
+- **E6 — Subtle token-driven row hover tint** (`--bg-surface-hover`). Native
+  hover exists but a token-driven, contrast-checked tint aids target
+  acquisition in dense rows. **Adopt** lightly; must be contrast-checked against
+  both stripe shades (Shade A/B). (Consistent with existing `QTreeWidget::item:hover`
+  QSS already in themes — verify it covers both trees via the new objectName.)
+
+## Considered and ruled out
+- **E7 — Skeleton/shimmer loading for trees.** Conflicts with the C7/D8
+  no-animation guardrail for dense UI; the existing "Updating tag list…" banner
+  (D15) is the restrained equivalent. **Drop.**
+- **E8 — Floating `QLabel` sticky-header simulation.** The plan already dropped
+  native sticky headers (high effort); a viewport-floating label is a lighter
+  variant but still needs scroll/viewport event sync and adds UI complexity for
+  marginal gain. **Drop** (defer with the earlier sticky-header item).
+
+## Updated combined recommendation (final)
+Adds to the carry list: D5 via boolean guard (E1), P8 cached draw (E2), the
+search enhancements E5 (fuzzy + chips + history) and subtle hover tint E6 as
+follow-ups; font bump as relative multiplier only if kept (E4). Rules out
+skeleton/shimmer (E7) and floating sticky header (E8). Everything else
+unchanged.
+
