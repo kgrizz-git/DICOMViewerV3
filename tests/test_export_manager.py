@@ -132,14 +132,14 @@ class TestProcessImageByPhotometricInterpretation(unittest.TestCase):
         arr = np.array(out)
         self.assertEqual(arr[0, 0], 100)
 
-    def test_monochrome1_inverts_grayscale(self):
+    def test_monochrome1_no_longer_inverts_in_export(self):
         img = _make_grayscale_image(fill=100)
         ds = _make_mock_dataset("MONOCHROME1")
         out = ExportManager.process_image_by_photometric_interpretation(img, ds)
         self.assertIsNotNone(out)
         self.assertEqual(out.mode, "L")
         arr = np.array(out)
-        self.assertEqual(arr[0, 0], 255 - 100)
+        self.assertEqual(arr[0, 0], 100)
 
     def test_empty_photometric_defaults_to_monochrome2(self):
         img = _make_grayscale_image(fill=50)

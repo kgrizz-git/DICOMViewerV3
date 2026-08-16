@@ -323,3 +323,28 @@ def test_inversion_and_orientation_guards_use_current_series() -> None:
 
     assert manager.series_defaults["series-id"]["flip_h"] is False
     manager.image_viewer._apply_view_transform.assert_called_once_with()
+
+
+def test_monochrome1_legacy_inversion_is_not_promoted_by_generic_view_state_writes() -> None:
+    """Only an explicit inversion action may mark a series as migrated."""
+    manager = _manager()
+    manager.current_series_identifier = "series-id"
+    manager.series_defaults["series-id"] = {
+        "image_inverted": True,
+        "window_center": 40.0,
+        "window_width": 400.0,
+        "use_rescaled_values": False,
+        "window_level_defaults_set": False,
+    }
+
+    manager._upsert_series_defaults_from_current_view(None)
+
+    defaults = manager.series_defaults["series-id"]
+    assert "image_inversion_schema_version" not in defaults
+    assert manager.get_series_inversion_state("series-id", pi="MONOCHROME1") is False
+    assert manager.get_series_inversion_state("series-id", pi="MONOCHROME2") is True
+
+    manager.set_series_inversion_state("series-id", True)
+
+    assert defaults["image_inversion_schema_version"] == 1
+    assert manager.get_series_inversion_state("series-id", pi="MONOCHROME1") is True

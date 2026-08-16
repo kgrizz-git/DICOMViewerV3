@@ -1,6 +1,6 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-08-16
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
 
 Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator changes when automated tests pass but behavior needs human or browser-agent eyes.
@@ -45,6 +45,9 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
 - [ ] **Tools → Structured Report…** on RDSR fixture.
 - [ ] **Toolbar → 3D View** on a multi-slice CT/MR series (VTK installed): dialog builds volume; rotate/zoom; close without crash.
 - [ ] Export → PNG on a loaded slice (path dialog appears).
+- [ ] If a MONOCHROME1 secondary-capture series is available: load it, verify
+  screen polarity matches export (still + cine). Manual Invert toggle should
+  flip without double-inverting. Status bar shows `(MI)` marker.
 
 ---
 

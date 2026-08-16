@@ -4,6 +4,7 @@
 **Investigator:** Kilo
 **Repository:** kgrizz-git/DICOMViewerV3
 **Severity:** High (visual correctness — presets produce wrong/invalid display for CR, DX, MG, NM, RF, XA, US and any modality without HU rescale)
+**Status:** Implemented 2026-08-16. See [completed plan](../plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md). MONOCHROME1 inversion moved from export (`export_rendering.process_image_by_photometric_interpretation`) to core render (`core.dicom_image_render.render_grayscale_image`).
 
 ---
 

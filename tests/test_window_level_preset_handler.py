@@ -79,7 +79,7 @@ def test_apply_preset_no_conversion_when_modes_match() -> None:
     assert vsm.current_preset_index == 0
     assert vsm.window_level_user_modified is False
     app.main_window.update_zoom_preset_status.assert_called_once_with(
-        1.5, 100.0, 200.0, unit=None
+        1.5, 100.0, 200.0, unit=None, is_monochrome1=False
     )
     app._schedule_histogram_wl_only.assert_called_once()
 

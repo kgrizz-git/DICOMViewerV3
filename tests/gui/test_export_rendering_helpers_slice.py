@@ -42,14 +42,13 @@ def test_process_image_monochrome_passthrough() -> None:
     assert out.mode in ("L", "RGB", "RGBA")
 
 
-def test_process_image_monochrome1_inverts() -> None:
+def test_process_image_monochrome1_is_noop() -> None:
     img = Image.new("L", (4, 4), 0)
     ds = Dataset()
     ds.PhotometricInterpretation = "MONOCHROME1"
     out = process_image_by_photometric_interpretation(img, ds)
-    # Inverted black → near-white in L mode (or RGB equivalent).
     px = out.getpixel((0, 0))
     if isinstance(px, tuple):
-        assert px[0] > 200
+        assert px[0] == 0
     else:
-        assert px > 200
+        assert px == 0

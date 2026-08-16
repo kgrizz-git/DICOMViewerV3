@@ -229,12 +229,12 @@ class TestUpdateZoomPresetStatusBar:
         app = _make_app()
         app.image_viewer.current_zoom = 3.0
         view_state_handlers.update_zoom_preset_status_bar(app)
-        app.main_window.update_zoom_preset_status.assert_called_once_with(3.0, 40.0, 400.0, unit="HU")
+        app.main_window.update_zoom_preset_status.assert_called_once_with(3.0, 40.0, 400.0, unit="HU", is_monochrome1=False)
 
     def test_defaults_zoom_to_one_when_image_viewer_none(self):
         app = _make_app(image_viewer=None)
         view_state_handlers.update_zoom_preset_status_bar(app)
-        app.main_window.update_zoom_preset_status.assert_called_once_with(1.0, 40.0, 400.0, unit="HU")
+        app.main_window.update_zoom_preset_status.assert_called_once_with(1.0, 40.0, 400.0, unit="HU", is_monochrome1=False)
 
 
 class TestUpdateZoomWlStatusFromViewState:
@@ -255,14 +255,14 @@ class TestUpdateZoomWlStatusFromViewState:
         vsm = self._make_vsm(current_window_center=10.0, current_window_width=20.0)
         view_state_handlers.update_zoom_wl_status_from_view_state(vsm)
         vsm.window_level_controls.get_window_level.assert_not_called()
-        vsm.main_window.update_zoom_preset_status.assert_called_once_with(2.0, 10.0, 20.0, unit="HU")
+        vsm.main_window.update_zoom_preset_status.assert_called_once_with(2.0, 10.0, 20.0, unit="HU", is_monochrome1=False)
 
     def test_falls_back_to_window_level_controls_when_center_missing(self):
         vsm = self._make_vsm(current_window_center=None, current_window_width=20.0)
         view_state_handlers.update_zoom_wl_status_from_view_state(vsm)
-        vsm.main_window.update_zoom_preset_status.assert_called_once_with(2.0, 50.0, 500.0, unit="HU")
+        vsm.main_window.update_zoom_preset_status.assert_called_once_with(2.0, 50.0, 500.0, unit="HU", is_monochrome1=False)
 
     def test_defaults_zoom_to_one_when_image_viewer_none(self):
         vsm = self._make_vsm(image_viewer=None, current_window_center=1.0, current_window_width=2.0)
         view_state_handlers.update_zoom_wl_status_from_view_state(vsm)
-        vsm.main_window.update_zoom_preset_status.assert_called_once_with(1.0, 1.0, 2.0, unit="HU")
+        vsm.main_window.update_zoom_preset_status.assert_called_once_with(1.0, 1.0, 2.0, unit="HU", is_monochrome1=False)

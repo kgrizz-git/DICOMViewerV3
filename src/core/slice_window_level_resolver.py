@@ -29,6 +29,21 @@ from utils.privacy.console import print_redacted
 # ---------------------------------------------------------------------------
 
 
+def _is_current_dataset_monochrome1(view_state_manager: Any) -> bool:
+    """Return True if the current dataset has PhotometricInterpretation == MONOCHROME1."""
+    dataset = getattr(view_state_manager, "current_dataset", None)
+    if dataset is None:
+        return False
+    pi = getattr(dataset, "PhotometricInterpretation", None)
+    if pi is None:
+        return False
+    if isinstance(pi, (list, tuple)):
+        pi = str(pi[0]).strip()
+    else:
+        pi = str(pi).strip()
+    return pi.upper() == "MONOCHROME1"
+
+
 def _set_rescale_toggle_state(mgr: Any, checked: bool) -> None:
     """Update injected rescale toggle targets without importing GUI modules."""
     main_window = getattr(mgr.view_state_manager, "main_window", None)
@@ -258,8 +273,9 @@ def _store_wl_and_defaults(
 
     current_zoom = mgr.image_viewer.current_zoom
     unit = mgr.view_state_manager.window_level_controls.unit
+    is_monochrome1 = _is_current_dataset_monochrome1(mgr.view_state_manager)
     mgr.view_state_manager.main_window.update_zoom_preset_status(
-        current_zoom, window_center, window_width, unit=unit
+        current_zoom, window_center, window_width, unit=unit, is_monochrome1=is_monochrome1
     )
 
     if series_identifier not in mgr.view_state_manager.series_defaults:
@@ -268,7 +284,6 @@ def _store_wl_and_defaults(
         'window_center': window_center,
         'window_width': window_width,
         'use_rescaled_values': use_rescaled_values,
-        'image_inverted': mgr.image_viewer.image_inverted,
         'window_level_defaults_set': True,
     })
 
@@ -466,7 +481,6 @@ def _apply_fallback_new_series_wl(
                 "window_center": wc,
                 "window_width": ww,
                 "use_rescaled_values": use_rescaled_values,
-                "image_inverted": mgr.image_viewer.image_inverted,
                 "window_level_defaults_set": True,
             }
         )

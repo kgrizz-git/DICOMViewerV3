@@ -766,15 +766,14 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
         window_width: float | None = None,
         *,
         unit: str | None = None,
+        is_monochrome1: bool = False,
     ) -> None:
         """
         Update zoom and current W/L values in the center status-bar segment.
 
         Shows numeric center/width only (never preset names).
         """
-        self._status_controller.set_zoom_preset(
-            zoom, window_center, window_width, unit=unit
-        )
+        self._status_controller.set_zoom_preset(zoom, window_center, window_width, unit=unit, is_monochrome1=is_monochrome1)
 
     def update_undo_redo_state(self, can_undo: bool, can_redo: bool) -> None:
         """

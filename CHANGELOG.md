@@ -2,11 +2,21 @@
 
 All notable changes to DICOM Viewer V3 are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increment rules.
 
-**Current version:** `0.4.0` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
+**Current version:** `0.4.1` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
 
 ## [Unreleased]
 
 ### Fixed
+- **Bit-depth-aware W/L presets and MONOCHROME1 on-screen inversion:** Built-in
+  window/level presets for CR, DX, MG, NM, RF, XA, US, and ANY now derive from
+  the dataset's actual stored pixel range (`BitsStored`/`BitsAllocated`/`PixelRepresentation`)
+  instead of hardcoding a 12-bit range. CR/DX `Chest`/`Bone` HU presets are gated
+  behind a real rescale (rare for these modalities) so they convert correctly when
+  present. MONOCHROME1 images now invert in the core render layer, matching
+  export polarity (no more double-inversion). The manual Invert toggle is a
+  user-only offset (XOR with the dataset baseline). An inversion-specific migration
+  discards pre-upgrade MONOCHROME1 stored inversion state. Status bar shows
+  `(MI)` for MONOCHROME1 series. **Semantic versioning note: patch.**
 - **3D viewer first paint:** opening a 3D volume now shows a Fast preview before
   higher detail is considered. Auto Detail caps large float32 volumes and only
   refines after a responsive preview; a GPU blank-frame CPU fallback also stays
