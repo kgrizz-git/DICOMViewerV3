@@ -84,37 +84,56 @@ re-apply in the nested/sequence render path so headers stay consistent):
 - **Font:** build one shared `QFont` from the tree's base font, bump
   `setPointSize(base + 1 or 2)`, set `setBold(True)`, and call
   `group_item.setFont(0/1, font)`.
-- **Top border (1 pt heavier):** `QTreeWidgetItem` has no per-side border API.
-  Options:
-  - (a) Draw a 1px top line via a small `QStyledItemDelegate.paint` override for
-    header rows; or
-  - (b) Use a 1px top `QFrame`/spacer look by drawing the border in the
-    delegate's `paint` (recommended — keeps it inside the tree, no layout
-    surgery).
-  - A CSS `border-top` on the `QTreeWidget` cannot target only header rows, so a
-    delegate is the clean path.
+- **Top border (1 pt heavier):** `QTreeWidgetItem` has no per-side border API,
+  **but a delegate already exists for exactly this**. `metadata_panel.py:296`
+  installs `GroupHeaderDelegate` (`src/gui/metadata_table_model.py:52`), which
+  draws a 1px rule above *and* below each group heading and suppresses
+  hover/selection washout. **Reuse/extend that delegate for `tags_tree`** rather
+  than writing a new one — see the review correction in the note below. A CSS
+  `border-top` on the `QTreeWidget` cannot target only header rows, so a
+  delegate is the right mechanism; we just shouldn't duplicate the existing
+  one.
 
 All four sub-goals are best centralized in a single helper,
 `_style_group_header_item(item)`, called wherever a group header is created, to
-avoid drift between the standard and sequence render paths.
+avoid drift between the standard and sequence render paths. The font/shade/height
+part of that helper is new; the top-border part should live in a *shared*
+group-header delegate used by both `metadata_panel` and `tag_export_dialog`.
+
+> **Review-correction note (Gemini Pro, 2026-08-16):** the plan's earlier
+> "no `QStyledItemDelegate` is installed on `tags_tree`" / "write a new delegate
+> from scratch" was **wrong** — `metadata_panel.py` already has
+> `GroupHeaderDelegate`. Goal 1's 1pt top border must reuse it (extend to also
+> draw the heavier top rule, or parameterize the rule weight) so the export
+> dialog and metadata panel don't diverge — which would also violate this plan's
+> own P5 (consistent chrome) goal.
 
 ### Goal 2 — Alternating colors reset per group
 
-Because built-in alternation is global, compute the alternating shade
-**per group** when building rows:
+**Correction (Gemini Pro review, 2026-08-16):** the earlier approach of
+statically assigning `SHADE_A`/`SHADE_B` by threading an `alt_toggle` boolean
+down `_build_export_tag_tree_item` is **fragile and will visibly break**. The
+export tree has collapsible sequence/item nodes; expanding or collapsing
+re-orders rows in the visual flow, so two same-shade rows can end up adjacent
+and the per-group reset is lost. Static per-item backgrounds cannot honor
+"reset per group" in a tree with dynamic expansion.
 
-- In `_build_tag_tree_from_items`, reset an `alt_toggle = False` for each group.
-  For each regular row in the group, set
-  `row_item.setBackground(0/1, SHADE_A if alt_toggle else SHADE_B)` and flip
-  `alt_toggle`.
-- For nested sequence/item/leaf rows (`_build_export_tag_tree_item`), pass the
-  running `alt_toggle` down the recursion so the alternation continues
-  contiguously *within* a group (it only *resets* at group boundaries, not at
-  every sequence parent). This matches "reset for each group" while keeping
-  nested rows readable.
-- Decide whether the group header row itself participates in alternation:
-  recommended **no** — the header uses the dedicated `GROUP_HEADER_COLOR` so the
-  reset is visually clean.
+Preferred approaches (pick one):
+
+- **(A) Dynamic delegate (recommended).** Install a `QStyledItemDelegate` whose
+  `background` / `paint` computes the row's shade from its *visual* index within
+  its group — e.g. walk the group's visible leaf/child count via
+  `QTreeWidget.indexFromItem` / `visualIndex`, or track a "stripe parity" reset
+  at each group header. This stays correct under expand/collapse. (Pairs with the
+  shared group-header delegate from Goal 1 — one delegate can own both the
+  header rule and the per-group stripe.)
+- **(B) Built-in global alternation only.** `setAlternatingRowColors(True)` is
+  correct under collapse but alternates across the *whole* tree, not per group.
+  Acceptable if the per-group reset is lowered in priority, but does **not**
+  satisfy the stated goal.
+
+Group headers should *not* participate in striping — they keep the dedicated
+header treatment so each group's reset reads cleanly.
 
 ### Goal 3 — Group checkbox state (checkmark / partial indicator)
 
@@ -125,11 +144,14 @@ The tri-state plumbing already exists. Two refinements:
   `select_all_tags_checkbox` and the group header both show a full checkmark in
   this case. (Near-zero code; mostly a verification + a screenshot check.)
 - **Partial → clearer indicator:** native `PartiallyChecked` shows a dash/fill.
-  To meet "dot or rectangle or something," add a delegate `paint` for the
-  checkbox of header rows when state == `PartiallyChecked` that draws a small
-  filled dot or inset rectangle instead of (or in addition to) the native dash.
-  This is an aesthetic layer on top of the existing state — it does not change
-  selection semantics.
+  **Prefer a QSS swap over manual delegate painting** (review correction): set
+  `QTreeWidget::indicator:indeterminate { image: <dot-or-rect svg> }` so Qt
+  keeps native hover/pressed/focus behavior and we only replace the glyph.
+  - Caveat: this QSS selector applies to **every** indeterminate checkbox, i.e.
+    also to partially-checked Sequence/Item parents — which is actually
+    *desirable* consistency, not a bug. No special-casing needed.
+  - Avoid hand-painting checkbox primitives in `paint()` (brittle: loses OS
+    hover/pressed/focus rings).
 
 > Note: the same tri-state logic already drives the *top* Select-All checkbox
 > (`_refresh_select_all_checkbox_state`, `tag_export_dialog_selection.py:86`).
@@ -196,23 +218,36 @@ asks for more.
 
 ## Implementation checklist (for later, not in this branch)
 
-- [ ] Add `GROUP_HEADER_COLOR`, `ROW_SHADE_A`, `ROW_SHADE_B` to the dialog's
-      color constants (or to the app theme/palette if one exists).
-- [ ] `_style_group_header_item(item)`: font (+1–2pt, bold), background,
-      `sizeHint` height, (delegate-drawn top border).
-- [ ] Reset `alt_toggle` per group in `_build_tag_tree_from_items`; thread it
-      through `_build_export_tag_tree_item`.
-- [ ] Install a `QStyledItemDelegate` on `tags_tree` for: header top border
-      (1px) and partial-checkbox dot/rectangle for group headers.
+> **Token discipline:** do **not** add raw hex constants like `GROUP_HEADER_COLOR`
+> / `ROW_SHADE_A`. `DESIGN.md §2` mandates semantic tokens (e.g. `--bg-surface`,
+> `--bg-surface-raised`, `--text-secondary`, `--accent`, `--fg-disabled`). Any new
+> shade must be added as a token in `resources/themes/*.qss` (and resolved via
+> `main_window_theme.py`), not hardcoded in the dialog.
+
+- [ ] Reuse/extend `GroupHeaderDelegate` (`src/gui/metadata_table_model.py:52`,
+      already used by `metadata_panel.py:296`) for `tags_tree` — header top rule
+      (1pt heavier) + hover/selection suppression. Make it shared so both trees
+      match (supports P5).
+- [ ] `_style_group_header_item(item)`: font (+1–2pt, bold), header background
+      (token), taller `sizeHint` (no layout surgery).
+- [ ] Per-group alternation via a **dynamic delegate** keyed on visual index /
+      group-boundary reset (correct under expand/collapse) — **not** static
+      `alt_toggle` per-item. Single shared delegate can own both header rule and
+      stripe.
+- [ ] Partial-checkbox indicator via QSS
+      `QTreeWidget::indicator:indeterminate { image: <dot-or-rect svg> }`
+      (dot/rectangle glyph); covers group headers *and* partial Sequence/Item
+      parents.
 - [ ] Verify all-selected → full checkmark on group header + top Select-All.
 - [ ] (Goal 4, optional) depth font ladder, left color bar, header selection
       chip.
 - [ ] Tests: `tests/gui` widget test asserting group header font/size/background
-      differ from leaf rows; per-group alternation resets at group boundary;
-      group header `CheckState` == `Checked` when all leaves checked,
-      `PartiallyChecked` when partial.
+      differ from leaf rows; per-group alternation resets at group boundary after
+      expand/collapse; group header `CheckState` == `Checked` when all leaves
+      checked, `PartiallyChecked` when partial.
 - [ ] Manual smoke: open tag export, confirm header shading/height/font,
-      per-group striping, partial/full group checkbox indicators.
+      per-group striping (and that it survives expand/collapse), partial/full
+      group checkbox indicators.
 
 ## Verification (when implemented)
 
@@ -222,10 +257,10 @@ asks for more.
 
 ## Files touched (expected)
 
-- `src/gui/dialogs/tag_export_dialog.py` (tree build + new delegate/helper)
+- `src/gui/metadata_table_model.py` (extend shared `GroupHeaderDelegate`)
+- `src/gui/dialogs/tag_export_dialog.py` (tree build + reuse delegate + helper)
+- `resources/themes/*.qss` (any new tokens; `::indicator:indeterminate` glyph)
 - `tests/gui/test_tag_export_dialog*.py` (new assertions)
-- Possibly a small `src/gui/` delegate module if the delegate grows beyond the
-  dialog file.
 
 ---
 
@@ -359,3 +394,77 @@ orientation.
 - `src/gui/metadata_panel.py`, `tag_export_dialog.py` (share tier helper)
 - `src/gui/main_window.py` / toolbar builder (active-state styling)
 - `DESIGN.md` (document the tier/state language before merge, per its rule)
+
+---
+
+# Part 3 — External review (Gemini Pro, 2026-08-16) & additional ideas
+
+A Gemini Pro agent (provider `agy`) reviewed this plan read-only against the
+codebase. Its feedback was reviewed critically (not assumed correct). Three of
+its technical corrections were **verified accurate and adopted** (see inline
+"Review-correction note" / Goal 1–3 above):
+
+1. **Static per-group alternation breaks on collapse** → replaced with a dynamic
+   delegate keyed on visual index (Goal 2).
+2. **`metadata_panel` already has `GroupHeaderDelegate`** → reuse/extend it
+   instead of writing a new delegate for the 1pt border (Goal 1), and share it
+   to satisfy P5.
+3. **Partial-checkbox indicator via QSS, not manual paint** → use
+   `::indicator:indeterminate` (Goal 3).
+Plus a valid **token-system warning**: the original checklist's raw hex
+constants violate `DESIGN.md §2`; corrected to semantic tokens.
+
+The reviewer also surfaced ideas beyond this plan's P1–P6. After critical
+review, the worthwhile ones are captured below as **P7–P10** (added to Part 2's
+proposal set); two were rejected as too costly/noisy (sticky group headers,
+sequence block tinting) and are noted as **dropped**.
+
+### P7 — Monospace font for Tag / VR columns (typography)  · **Adopt**
+Apply a mono font (e.g. `IBM Plex Mono`, already bundled per `DESIGN.md §3.1`)
+to the Tag ID and VR columns, leaving names in the sans font.
+- *Pros:* perfect numeric alignment makes long tag lists dramatically easier to
+  scan; already sanctioned by the design spec; zero new assets.
+- *Cons:* monospace needs slightly more horizontal width (mitigated by the
+  existing 120px Tag column).
+- *Verdict:* low-hanging fruit the plan's typography ladder (Idea B) missed.
+
+### P8 — Filter-match substring highlighting  · **Adopt**
+When the filter box is used, paint the matched substring in `--accent` (or bold)
+via a delegate, instead of only hiding non-matches.
+- *Pros:* explains *why* a row survived the filter, especially when the match is
+  buried in a long value; strong orientation aid in dense tables.
+- *Cons:* requires a rich-text/span-painting delegate (moderate complexity);
+  must coexist with the dynamic stripe delegate from Goal 2 (one delegate can
+  own both).
+- *Verdict:* high value, pairs naturally with the shared tree delegate.
+
+### P9 — Dimmed empty / null value states  · **Adopt**
+Render tags with empty values in `--fg-disabled` + italic (e.g. dimmed
+`<empty>`), so missing data recedes.
+- *Pros:* reduces noise, draws the eye to tags that actually carry data; matches
+  Carbon "clarity over decoration".
+- *Cons:* minor addition to tree-population logic.
+- *Verdict:* cheap, conforms to tokens, directly aids orientation.
+
+### P10 — Keyboard expand/collapse shortcuts for sequence blocks  · **Adopt**
+Add shortcuts (e.g. `Ctrl+Right`/`Ctrl+Left`, or `Shift+Click`) to
+expand/collapse whole sequence subtrees in the export dialog.
+- *Pros:* large speed-up for power users navigating sequences that can hold
+  thousands of items (`tag_export_dialog.py` large-sequence threshold); no
+  discoverability cost if it mirrors OS tree conventions.
+- *Cons:* must avoid clashing with existing shortcuts (audit `DESIGN.md §6`).
+- *Verdict:* complements the visual hierarchy work with a navigation aid.
+
+### Dropped (per review, with rationale)
+- **Sticky / pinned group headers** — perfect for "what group am I in?" but very
+  high effort to do robustly in `QTreeWidget` (overlay hacks / QML). Defer.
+- **Sequence block background tint** — clashes with alternating rows; nesting is
+  already conveyed by branch lines (`setRootIsDecorated`). Too noisy. Defer.
+
+### Updated Part 2 recommendation
+Add **P7, P8, P9, P10** to the adopt set. The combined rollout becomes:
+tier ladder (P1) + state color (P2) + active toolbar/pane frame (P4) + shared
+chrome (P5) + **mono tag columns (P7)** + **filter highlight (P8)** + **dimmed
+empties (P9)** + **expand/collapse shortcuts (P10)**; defer P3/P6 and the two
+dropped items until broader design-system feedback. All additions stay within
+the token system and the "clarity over decoration" stance.
