@@ -866,3 +866,221 @@ follow-ups; font bump as relative multiplier only if kept (E4). Rules out
 skeleton/shimmer (E7) and floating sticky header (E8). Everything else
 unchanged.
 
+---
+
+# Part 7 — Recommendation pass (Cursor assistant, 2026-08-16)
+
+Six rounds of drafting/review (Parts 1–6) have accumulated **60+ discrete
+action items** across Goals 1–4, P1–P10, C1–C11, D1–D24, and E1–E8. Three
+independent external reviews each caught *new* correctness bugs in earlier
+rounds (nonexistent `visualIndex` API, O(n²) repaint, unproven `::indicator`
+QSS, a filter-parity race) — that pattern is itself a signal worth acting on,
+not just noting. This pass gives an independent verdict per cluster, flags
+what should be **split out of this branch entirely**, and adds a few new
+ideas. It does not re-litigate items Parts 1–6 already settled with solid
+reasoning; it only calls out disagreements, sequencing risk, and scope risk.
+
+## Strongly recommend — keep in this branch
+
+- **Goal 1 (header shade/height/font/heavier-top-rule via extended
+  `GroupHeaderDelegate`)** — this is the literal user request, the reuse
+  plan is now technically sound (A3's role/collision/span fixes folded in),
+  and it fixes the metadata-panel "twin" problem for free. Ship it.
+- **Goal 2 (stripe-parity role, O(n), recomputed on structural change)** —
+  correct after the A2/A6 and D5/E1 corrections. See the fragility risk note
+  below, but the *current* design is sound; ship it with the perf test in
+  "New ideas" §3.
+- **Goal 3's A5 fix (Select-All never checks group headers) and the
+  checkmark verification** — this is a real functional bug, not polish. It
+  should ship regardless of whether the partial-indicator glyph work
+  (`::indicator` QSS) pans out.
+- **D1/D11 (`tags_tree` objectName + scoped QSS)** — trivial, unblocks
+  everything else that needs to target the export tree without blast
+  radius. Do this first.
+- **D2 (fix the existing hardcoded `QColor(80,50,120)` edited-row color)** —
+  bundle with whatever P2 work happens; it's a pre-existing `DESIGN.md §2`
+  violation independent of this plan's scope, and it's cheap to fix while
+  already touching row-coloring code. Add a regression test asserting the
+  edited-row color resolves to a token, not a literal.
+- **D5 + E1 (filter-parity race, boolean guard not blanket
+  `blockSignals`)** — real bug, correct fix already specified.
+- **D6 (token the heavier rule) + D7 (no-span decision, confirmed) + D8
+  (disable expand animation) + D9/D18 (document in `DESIGN.md`)** — all
+  cheap, all close real gaps, no new design debate needed.
+- **P9 (dimmed empty/null values)** and **C2 (filter "no match" + Clear)** —
+  both cheap, both directly aid orientation, no open design questions.
+- **D4 (Expand/Collapse All buttons) + P10 (keyboard shortcuts) + C5
+  (context menu)** — these three are the same feature described three times
+  across rounds; implement as one unit, audit `DESIGN.md §6` once for
+  shortcut collisions.
+- **D10 (collapsed-group `"Group 0008 (12/40)"` chip)** — prefer this over
+  **C4 (hover tooltip)**; a hover-only affordance is invisible until
+  discovered, while the chip is always legible and directly answers "how
+  much of this group is selected" without an extra interaction. Treat C4 as
+  redundant once D10 ships rather than building both.
+- **E4 (relative font multiplier, `setPointSizeF(base * 1.1)`, not a fixed
+  +1/+2pt offset)** — better HiDPI/accessibility behavior for the same
+  visual goal; adopt for Goal 1's header font bump.
+- **E6 (token-driven hover tint)** — cheap, verify it already covers both
+  trees once D1/D11 objectNames exist.
+- **C6 (color-blind screenshot pass) and C7 (motion-restraint line in
+  `DESIGN.md`)** — both are verification/governance, not code; low cost,
+  keep as required gate items before merge.
+
+## Recommend, but split into a separate plan/PR (wrong scope for *this*
+branch)
+
+- **P4 / C3 (active toolbar-toggle state + focused-pane accent frame)** —
+  genuinely one of the two biggest orientation gaps in the app per the
+  Part 2 survey, but it lives in `main_window.py` / `image_viewer` /
+  toolbar code, not the tag tree or metadata panel. Folding it into a
+  branch named `feature/tag-tree-visual-hierarchy-plan` invites scope creep
+  and makes review harder. **Recommendation:** spin off a
+  `PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md` and cross-link it from here (and
+  from `DESIGN.md`) rather than implementing it under this plan.
+- **P5 phase 2 (SR browser, nuclear results, ROI stats chrome)** — D19
+  already proposed splitting this; make it a hard split, not a note. Phase 1
+  (metadata panel + tag export dialog, already the two trees this plan
+  touches) stays here. Phase 2 becomes its own follow-up plan once phase 1
+  has shipped and been used, so its shared-QSS-class design is informed by
+  a real implementation rather than speculation.
+- **D3 (`series_tree` decision)** — recommend **explicitly marking it
+  out-of-scope** for this plan rather than doing it inline. `series_tree`
+  rows are interactively selectable (they drive navigation), so the header
+  delegate needs a selection-aware variant — that's a meaningfully
+  different component, not a copy-paste of the tag-tree header. Track it as
+  a backlog item once the tag-export version has shipped and proven out.
+- **C1 (unified PHI/private-tag marker across panel/viewer/export)** — a
+  good, privacy-relevant idea, but it's cross-cutting (three separate
+  widgets) and privacy-adjacent UI changes in this codebase get their own
+  review lane per `PHI_PII_REPOSITORY_GUARDRAILS.md`. Give it a dedicated
+  small plan rather than a bullet here.
+- **D12 ("Select group" right-click)** — a new *selection interaction*, not
+  a visual-hierarchy change. Worth doing, but it belongs in a fast-follow
+  PR so this branch's diff stays reviewable and test-scoped to
+  visuals/state-display rather than new selection semantics.
+
+## Defer / low priority (valid ideas, not worth doing now)
+
+- **P2 (state color for selected/edited rows)** — real value, but sequence
+  it *after* P1 ships and is validated, since P1 already changes row
+  chrome; stacking both at once makes any visual regression harder to
+  bisect.
+- **D14 (sticky filter + Select-All row)** — the filter bar is one short
+  row above a tree that's usually the tallest thing in the dialog; the
+  benefit (never scrolling past the filter box) is marginal against a real
+  layout change. Defer until user feedback specifically asks for it.
+- **D16 (force export-tree indentation to match metadata panel's 7px)** —
+  don't commit to this blind. The export tree's checkboxes at every level
+  need more breathing room than the metadata panel's read-only rows; take a
+  screenshot at 7px before deciding. Treat as "verify visually, then decide"
+  rather than an assumed change.
+- **E5 — filter chips (`[Private] [Sequences] [Empties] [Selected]`)** —
+  audit for overlap first: the export dialog **already has** "Include
+  private" / "Include sequences" checkboxes above the tree (per the Goal 4
+  current-state table). New chips duplicating those controls would be
+  confusing, not clarifying. Only build chips for filters that don't already
+  exist as checkboxes (e.g. `[Selected]`, `[Empties]` once P9 exists).
+- **E5 — search-history dropdown** — low value for a dialog that's
+  typically opened once per export task in a single session; needs new
+  persistence plumbing for a marginal win. Defer indefinitely absent a
+  specific request.
+- **P7, font-bundling path** — see "Discourage" below; the *goal* (mono tag
+  IDs) is worth keeping, just not via a new bundled font yet.
+
+## Discourage / reconsider
+
+- **E5 — fuzzy filter matching** — actively discourage as a default. This
+  is a precise tag-lookup tool; a clinician or physicist typing a tag ID or
+  keyword needs to trust that "no results" means "not present," not "maybe
+  present but the fuzzy matcher didn't like it." If pursued at all, it must
+  be an explicit opt-in toggle, never silently replacing substring
+  matching.
+- **D17, the *new-icon-set* half specifically** (keep the left color bar
+  half) — Idea A's own listed con already flags "risk of visual clutter,"
+  and a monochrome folder/chevron/dot glyph set adds an asset-review burden
+  (`security/approved-media-sha256.json`) for a signal that indentation +
+  branch lines + a color bar already convey. Ship the bar; skip the icons
+  unless a usability test specifically shows the bar alone is insufficient.
+- **P7, "bundle IBM Plex Mono" specifically** — A7 already found Plex Mono
+  isn't shipped today. Rather than treat font-bundling as a prerequisite to
+  fix, just use a platform monospace fallback stack (Qt's generic
+  `"monospace"` family, or `Consolas, monospace`) for the Tag/VR columns.
+  Tag IDs are plain ASCII hex — any monospace font gives the alignment win.
+  Bundling a real Plex Mono is only worth the license/asset-review cost if
+  the fallback visibly looks inconsistent across the app's supported OSes
+  in testing, which should be checked before deciding to bundle.
+- **Treating this document's checklist as one PR.** At 60+ items spanning a
+  delegate rewrite, a new stripe-tracking subsystem, QSS spikes, new tests,
+  a `DESIGN.md` edit, and multiple net-new features (search chips, group
+  right-click, PHI markers), a single PR is both hard to review and hard to
+  bisect if something regresses `metadata_panel` (which already works
+  correctly today). See the phasing proposal below.
+
+## New ideas / alternatives (not previously in this plan)
+
+1. **Fallback for Goal 2 if stripe-parity proves fragile in practice.**
+   Three independent reviews each found a *new* correctness bug in the
+   "per-group alternation" mechanism (nonexistent `visualIndex`, O(n²)
+   repaint, filter-walk race). That's not a coincidence — reliably tracking
+   "visible row parity, reset per group, under expand/collapse/filter" in a
+   `QTreeWidget` is inherently fiddly. Recommend keeping a documented
+   fallback: if the stripe-parity role implementation turns out to be a
+   maintenance burden (e.g. a fourth bug surfaces after ship), the
+   acceptable degraded version is **no alternation within a group at all**
+   — rely on the header rule + hover + selection alone to convey structure
+   (this is how VS Code's own tree views work, with no row striping).
+   Losing "alternation resets per group" is a smaller regression than a
+   flaky delegate.
+2. **Automated perf-regression test, not just manual review, for the
+   stripe/delegate work.** `tag_export_dialog.py:565` and
+   `metadata_table_model.py:215-216` already have a documented ~19s O(n²)
+   incident, and this plan's own history shows reviewers repeatedly having
+   to catch new O(n²) attempts by inspection. Add a `tests/gui` timing test
+   that builds/expands-all/filters a synthetic large tree (e.g. 50 groups ×
+   100 tags, plus a few deep sequences) and asserts wall-clock time stays
+   under a generous bound (e.g. 2s). This converts "reviewer vigilance" into
+   a durable guardrail that catches regressions automatically, including
+   ones introduced long after this plan is closed out.
+3. **De-risking spike before writing the full Phase B implementation.**
+   Given how many times external review corrected a *load-bearing*
+   technical claim in this plan (delegate reuse assumptions, API
+   existence, QSS behavior), spend a short throwaway spike (not full
+   feature work, can live in `tmp/`) proving two specific unknowns before
+   committing to the checklist: (a) `GroupHeaderDelegate` reuse renders
+   correctly on `tags_tree` once the role/span fixes are applied, and (b)
+   whether `QTreeWidget::indicator:indeterminate` actually paints on the
+   pinned PySide6 version. Both are flagged "unproven" multiple times in
+   this document; resolving them first avoids re-planning mid-implementation.
+4. **Phased delivery instead of one branch/PR.** Given the item count,
+   recommend splitting into sequential, independently reviewable PRs (can
+   still share this branch's planning doc, but land separately):
+   - **Phase A — bug fixes, no visual change:** D1/D11 objectName, D2
+     hardcoded-color fix, A5 Select-All group-header fix, D5/E1
+     filter-parity guard. Ships value immediately with minimal review
+     surface.
+   - **Phase B — Goals 1–3 core ask:** header styling via extended
+     delegate, stripe-parity + the new perf test from idea #2, partial
+     indicator (spike from idea #3 decides QSS vs. delegate-paint
+     fallback).
+   - **Phase C — Part 2 backbone (in-scope only):** P1 tier ladder, P5
+     phase 1 (export dialog + metadata panel only), P7 via font fallback
+     (not bundling), P8 filter highlight (with E2's cached-draw
+     requirement), P9, D4/P10/C5 expand-collapse unit, D9/D18 `DESIGN.md`
+     update.
+   - **Phase D — fast-follows, each its own small plan/PR:** P2 state
+     color, P4/C3 (separate plan), P5 phase 2 (separate plan), C1 (separate
+     plan), D12, D13's badge, E5's chip-only subset (post-audit).
+   This matches the "keep files/PRs modular" convention already used
+   elsewhere in this repo and makes it far easier to bisect a regression to
+   a specific, small change.
+
+## Updated combined recommendation (Part 7)
+Keep Phase A + Phase B + Phase C (above) as the scope of this plan/branch.
+Move P4/C3, P5-phase-2, C1, D3 (series_tree), and D12 out to their own
+follow-up plans rather than this plan's checklist. Drop the new-icon-set
+half of D17 and font-bundling half of P7 in favor of the color-bar-only and
+monospace-fallback alternatives, respectively. Discourage fuzzy filtering by
+default. Add the perf-regression test and the two-part spike (idea #2/#3)
+as prerequisites before Phase B implementation begins.
+
