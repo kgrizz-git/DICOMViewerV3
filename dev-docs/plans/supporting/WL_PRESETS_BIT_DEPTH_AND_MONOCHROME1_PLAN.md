@@ -61,14 +61,20 @@ Add `src/core/dicom_pixel_range.py` (or extend `dicom_rescale.py`):
 def get_stored_value_range(dataset) -> tuple[float, float]:
     """Return (stored_min, stored_max) for raw stored pixels.
 
-    Uses BitsAllocated, BitsStored, HighBit, PixelRepresentation.
-    Unsigned N-bit: 0 .. 2**bits_stored - 1.
-    Signed N-bit:   -(2**(bits_stored-1)) .. 2**(bits_stored-1) - 1.
-    Falls back to (0, 2**bits_allocated - 1) / signed when BitsStored missing.
+    Resolution rules (robust to malformed/missing tags):
+    - `BitsStored` is AUTHORITATIVE for the value width; `HighBit` is used ONLY for
+      validation (warn if HighBit != BitsStored-1), never as the range source.
+    - `PixelRepresentation` 1 => signed, else unsigned.
+    - Unsigned N-bit: 0 .. 2**bits_stored - 1.
+    - Signed   N-bit: -(2**(bits_stored-1)) .. 2**(bits_stored-1) - 1.
+    - Missing/zero/invalid BitsStored: fall back to BitsAllocated (clamped to >=1).
+    - If BitsStored > BitsAllocated (malformed): clamp BitsStored = BitsAllocated.
+    - Guarantee stored_max > stored_min (never a 0-width range): if equal, max += 1.
     """
 ```
 
 Wire into `dicom_processor.py` as a static method (mirror existing `dataset_to_image` shape).
+The helper reads **only tags** (no pixel scan) so it is safe on the hot path.
 
 ### 2. Rewrite non-HU preset tables
 
@@ -77,11 +83,21 @@ In `src/core/wl_builtin_presets.py`:
 - Change signatures so built-in presets can be **generated from the dataset's stored range**
   rather than hardcoded. Introduce a function `get_builtin_presets(modality, dataset=None)`
   (keep backward-compatible `modality`-only overload) that, for CR/DX/MG/NM/RF/XA/US/ANY,
-  derives a "Default" / "Wide" preset from the stored range:
-  - `Default`: center = midpoint, width = full range (or a percentile-trimmed width).
-  - `Wide`: center = midpoint, width = full range (clamped).
+  derives a "Default" / "Wide" preset from the stored range returned by `get_stored_value_range`
+  (§1):
+  - `Default`: center = midpoint, width = **full stored range** (tag-derived, deterministic).
+  - `Wide`: center = midpoint, width = full stored range (clamped to [1, full range]).
+  - **No percentile-trimmed width in this change.** Trimming needs pixel data / a per-series
+    scan, which contradicts the tag-only helper and duplicates
+    `_compute_wl_from_series_pixel_range`. Percentile/auto-W/L belongs with the separate auto-W/L
+    TO_DO item (`UX_IMPROVEMENTS_BATCH1_PLAN.md` #4), not this preset fix.
 - Remove `Chest`/`Bone` `is_rescaled=True` CR/DX entries. If a CR/DX genuinely carries a HU
-  rescale, those presets are produced by the **HU gate** (see step 3), not hardcoded.
+  rescale, those presets are produced by the **HU gate** (see §3), not hardcoded.
+- **MR scope (was silent — now explicit):** MR raw defaults (`wl_builtin_presets.py:33-40`) are
+  also hardcoded numbers with no bit-depth basis. Bringing them into the tag-derived model is
+  **out of scope for this change** (MR is already `is_rescaled=False` and not broken in the same
+  way as CR/DX); track as a follow-up. CT/PT remain untouched (correct HU logic). This scoping is
+  deliberate, not implied.
 
 ### 3. HU-gate CR/DX presets (like MR-HU)
 
@@ -96,18 +112,58 @@ if modality.upper() in ("CR", "DX") and _has_usable_rescale(rescale_slope, resca
 Only when the dataset actually rescales (rare for CR/DX) are HU presets offered, and they will
 convert correctly because `rescale_slope` is non-`None`.
 
-### 4. MONOCHROME1 auto-inversion on screen
+### 3b. Resolve NM preset (same latent bug as CR/DX)
 
-- Pass `photometric_interpretation` into `render_grayscale_image`
-  (`dicom_image_render.py:188-219`). When `MONOCHROME1`, invert the windowed array before the
-  uint8 cast (`255 - arr`, equivalent to the export step at `export_rendering.py:225`).
-- Define `effective_inverted = dataset_is_monochrome1 XOR user_toggled_invert`.
-  - The dataset baseline is computed in `dataset_to_image` / `slice_display_manager`.
-  - The manual toggle (`image_viewer.image_inverted`) becomes an *additional* user offset.
-  - Persist the combined state per series in `ViewStateManager.series_defaults`
-    (`view_state_manager.py:1098-1112`) as today, but initialize it from the dataset baseline
-    so MONOCHROME1 series open correctly without user action.
-- Keep `invert_image` (manual) semantics: toggling flips the current effective polarity.
+`wl_builtin_presets.py:59` has `(500.0, 1000.0, True, "Default")` — an `is_rescaled=True` entry
+with no unit and no gate. NM *can* carry an SUV-like rescale, so treat it exactly like CR/DX:
+
+- If the NM dataset has a usable rescale (`_has_usable_rescale`), gate the `(500,1000,True)`
+  "Default" behind that rescale (rename it to reflect the unit, e.g. "SUV-like" / keep only
+  when `RescaleType` is meaningful), so it converts correctly.
+- If there is **no** rescale, replace it with a bit-depth-aware raw "Default" derived from
+  `get_stored_value_range` (see §1/§2), `is_rescaled=False`.
+- The raw `(128.0, 256.0, False)` NM fallback already matches the tag-derived range for small
+  stored ranges; keep it but also let it be derived from the stored range so it is correct for
+  other bit depths.
+
+### 4. MONOCHROME1 auto-inversion on screen (layer ownership is the critical part)
+
+**Inversion order (matches export exactly):** in `render_grayscale_image`
+(`dicom_image_render.py:188-219`), apply window/level / normalization **first**, cast to `uint8`,
+**then** invert with `255 - arr` — identical to `export_rendering.py:221-230`. Do NOT invert
+before the uint8 cast: `apply_window_level` clips to `[window_min, window_max]` then normalizes
+to 0..255, so pre-cast inversion would operate on clipped rescaled floats and produce a
+qualitatively different (wrong) result that would not match export output. Goal #4 requires
+"export output matches screen", so cast-then-invert is mandatory.
+
+**XOR ownership — the single most important rule (prevents double-inversion):**
+
+```
+effective_inverted = dataset_is_monochrome1 XOR user_toggled_invert
+```
+
+- **Core render layer** (`render_grayscale_image`) owns the **dataset baseline** half: it inverts
+  iff `PhotometricInterpretation == MONOCHROME1`. It must NOT read or trust any persisted
+  `image_inverted`.
+- **View / user layer** (`image_viewer_view._apply_inversion`, `set_image`) owns ONLY the
+  **user toggle** half. The persisted `image_inverted` in `ViewStateManager.series_defaults`
+  (`view_state_manager.py:1098-1112`) and `image_viewer.image_inverted` MUST represent the
+  *user* offset (default `False`), **never the combined effective polarity**.
+- Therefore `set_image` must never re-invert an image that core has already inverted: it applies
+  `_apply_inversion` only when the *user* toggle is set, on top of the core-rendered baseline. A
+  MONOCHROME1 series with user toggle `False` is inverted once (in core) and not again in view.
+
+**Persisted-state migration for already-stored series:** `image_viewer_view.set_image`
+(`image_viewer_view.py:473-477`) currently prefers stored `image_inverted` over re-deriving the
+baseline, which would keep a pre-change MONOCHROME1 series wrongly polarized. Rule: on a **new
+series identifier** (or when a stored-state schema/version key is absent), recompute the dataset
+baseline from `PhotometricInterpretation` and reset the persisted user half to `False`; only
+restore a non-`False` user half when the series was previously seen *with* this scheme. Store the
+dataset baseline separately (or derive it fresh each load) so it always wins for MONOCHROME1.
+
+- Keep `invert_image` (manual) semantics: toggling flips the *user* half; effective polarity is
+  the XOR, so a user invert on a MONOCHROME2 (or a deliberate un-invert on a MONOCHROME1) is
+  preserved and never cancelled by re-derivation.
 
 ### 5. Menu labeling
 
@@ -129,21 +185,34 @@ the HU gate applied. Confirm no CR/DX raw preset is mislabeled HU.
 | `src/core/window_level_preset_handler.py` | No logic change expected (already correct no-op) |
 | `src/core/slice_window_level_resolver.py` | Init per-series inversion from dataset baseline (lines 59–103, 248–273) |
 | `src/gui/image_viewer.py` / `image_viewer_view.py` | User toggle = offset on top of dataset baseline; avoid double-invert |
-| `src/gui/view_state_manager.py` | Persist combined inversion state (lines 1098–1112) |
+| `src/gui/view_state_manager.py` | Persist **user** inversion half only (lines 1098–1112) |
 | Tests (below) | New + updated |
 
 ---
 
-## Tests
+## Tests (acceptance-linked)
+
+Concrete assertions (each Goal maps to at least one):
 
 - `tests/core/test_wl_builtin_presets.py`: assert CR/DX presets are `is_rescaled=False`,
-  bit-depth-aware (10/12/14/16-bit, signed vs unsigned), and contain no HU-style values.
-- New `tests/core/test_dicom_pixel_range.py`: stored-range math for all bit combos.
-- `tests/core/test_slice_window_level_resolver.py`: update fixtures (line 155 HU `Bone` no
-  longer a CR preset) and add MONOCHROME1 default-inversion case.
-- New `tests/core/test_dicom_image_render_monochrome1.py`: MONOCHROME1 grayscale inversion.
-- `tests/test_wl_preset_catalog.py`: CR/DX HU gate only when rescale present.
-- `tests/gui/`: MONOCHROME1 + manual-toggle combined state (XOR, no double-invert).
+  bit-depth-aware (10/12/14/16-bit, signed vs unsigned), and contain **no** HU-style
+  `is_rescaled=True` values. NM resolved per §3b.
+- `tests/core/test_dicom_pixel_range.py`: stored-range math for all bit combos **plus malformed
+  inputs** (BitsStored=0, HighBit missing, BitsStored>BitsAllocated) → clamped, non-zero-width.
+- `tests/core/test_slice_window_level_resolver.py`: update fixture (line 155 HU `Bone` no longer
+  a CR preset); assert `current_preset_index=0` CR/DX preset is `is_rescaled=False` and within
+  the stored range (this *is* the default-display change — assert it explicitly, see B4); add a
+  MONOCHROME1 default-inversion case.
+- `tests/core/test_dicom_image_render_monochrome1.py`: MONOCHROME1 grayscale inversion for
+  **unsigned and signed** data; assert output == `255 - export_render(MONOCHROME2_array)` (i.e.
+  cast-then-invert matches `export_rendering.py:221-230` exactly).
+- `tests/test_wl_preset_catalog.py`: CR/DX HU gate adds presets **only** when rescale present;
+  no `is_rescaled=True` CR/DX preset without a real rescale.
+- `tests/gui/`: MONOCHROME1 + manual-toggle **combined state (XOR, no double-invert)** — assert a
+  MONOCHROME1 series with user toggle `False` is inverted once (core only) and that a
+  persisted `image_inverted` restored from storage is the *user* half, never the combined value.
+- MPR / projection pane: at least one test exercises `dataset_to_image` through an MPR or
+  projection (MIP/AIP) path to confirm the core-routed inversion is inherited there (OQ7).
 
 ---
 
@@ -156,14 +225,50 @@ the HU gate applied. Confirm no CR/DX raw preset is mislabeled HU.
 - `python scripts/check_user_docs_links.py`
 - Manual: load 10-bit, 12-bit, 14-bit unsigned CR/DX and a MONOCHROME1 series; confirm presets
   render anatomically sensible windows, MONOCHROME1 opens with correct polarity, export output
-  matches screen, and the manual Invert toggle flips without double-inverting.
+  matches screen, and the manual Invert toggle flips without double-inverting. Also confirm a
+  signed MONOCHROME1 secondary-capture renders correctly.
+
+---
+
+## Phases (with exit criteria)
+
+- **Phase A — range helper + tests.** Exit: `test_dicom_pixel_range` green; verified for
+  10/12/14/16-bit, signed/unsigned, missing/malformed tags.
+- **Phase B — preset tables + HU gate + NM + MR scope.** Exit: `test_wl_builtin_presets` +
+  `test_wl_preset_catalog` green; NM `(500,1000,True)` resolved; no CR/DX `is_rescaled=True`
+  without a real rescale; MR explicitly scoped out (follow-up).
+- **Phase C — MONOCHROME1 render + combined-toggle + migration + MPR/projection.** Exit:
+  `test_dicom_image_render_monochrome1` + GUI XOR/double-invert tests green; persisted-state
+  migration decided; manual MONOCHROME1 == export check passes.
+
+### Definition of Done (before merge)
+
+- All targeted tests green; full suite green; `check_architecture_boundaries` passes;
+  `agent_smoke_harness` passes; `check_user_docs_links` passes.
+- Manual MONOCHROME1 polarity == export; debug flags False (`src/utils/debug_flags.py`).
+- CHANGELOG/version patch bump if warranted; TO_DO link updated; migration behavior documented.
+- No double-inversion: review confirms core inverts dataset baseline and view persists only the
+  user toggle.
+
+---
+
+## Risk / rollback
+
+- **Highest risk:** double-inversion (B1) and export/screen divergence (B2). Mitigated by the
+  layer-ownership rule and cast-then-invert. Add a regression test that asserts screen uint8 ==
+  export uint8 for the same MONOCHROME1 dataset.
+- **Behavior change:** removing CR/DX `Chest`/`Bone` changes the default applied W/L for existing
+  CR/DX (B4) — intended, but call out in release notes.
+- **Rollback:** each phase is its own commit on `fix/wl-presets-bit-depth-monochrome1`; revert the
+  phase commit if a gate fails. Persisted-state migration is forward-only (safe to leave; baseline
+  re-derived per load).
 
 ---
 
 ## Rollout / Commits
 
 - Single feature branch `fix/wl-presets-bit-depth-monochrome1`.
-- Commit 1: stored-range helper + tests.
-- Commit 2: bit-depth-aware presets + HU gate.
-- Commit 3: MONOCHROME1 on-screen inversion + combined-toggle state.
+- Commit 1: stored-range helper + tests (Phase A).
+- Commit 2: bit-depth-aware presets + HU gate + NM + MR scope (Phase B).
+- Commit 3: MONOCHROME1 on-screen inversion + combined-toggle state + migration (Phase C).
 - Commit 4: docs (link TO_DO, update investigation file status).
