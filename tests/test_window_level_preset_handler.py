@@ -10,7 +10,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.window_level_preset_handler import apply_window_level_preset
+from core.window_level_preset_handler import (
+    _is_dataset_monochrome1,
+    apply_window_level_preset,
+)
 from core.wl_preset_catalog import WindowLevelPreset
 
 
@@ -32,6 +35,12 @@ class _FakeVSM:
         self.window_level_user_modified = False
         self.current_window_center = center
         self.current_window_width = width
+
+
+def test_monochrome1_helper_treats_empty_sequence_as_unspecified() -> None:
+    """Preset application must not index an empty PI sequence."""
+    dataset = MagicMock(PhotometricInterpretation=[])
+    assert _is_dataset_monochrome1(dataset) is False
 
 
 class _FakeDicomProcessor:

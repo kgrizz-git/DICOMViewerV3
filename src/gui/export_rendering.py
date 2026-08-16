@@ -189,7 +189,7 @@ def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dat
     Process image based on PhotometricInterpretation tag.
     
     Handles:
-    - MONOCHROME1: Invert image (pixel values increase with decreasing brightness)
+    - MONOCHROME1: Preserve polarity rendered by ``render_grayscale_image``
     - MONOCHROME2: No inversion needed (standard grayscale)
     - RGB: No special handling needed (already RGB)
     - YBR_FULL, YBR_FULL_422, YBR_ICT, YBR_RCT: Convert to RGB
@@ -208,7 +208,7 @@ def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dat
 
         # Handle string or list/tuple values
         if isinstance(photometric_interpretation, (list, tuple)):
-            photometric_interpretation = str(photometric_interpretation[0]).strip()
+            photometric_interpretation = str(next(iter(photometric_interpretation), '')).strip()
         else:
             photometric_interpretation = str(photometric_interpretation).strip()
 

@@ -13,6 +13,7 @@ from core.slice_window_level_resolver import (
     _compute_wl_from_series_pixel_range,
     _compute_wl_from_single_slice,
     _init_new_series_state,
+    _is_current_dataset_monochrome1,
     _restore_user_wl_cache,
     _set_rescale_toggle_state,
     _store_wl_and_defaults,
@@ -36,6 +37,12 @@ def _make_dataset(study_uid="study1", series_uid="series1", series_number=1, mod
     ds.SeriesNumber = series_number
     ds.Modality = modality
     return ds
+
+
+def test_monochrome1_helper_treats_empty_sequence_as_unspecified() -> None:
+    """Malformed empty PI sequences do not break series-transition resolution."""
+    manager = SimpleNamespace(current_dataset=SimpleNamespace(PhotometricInterpretation=[]))
+    assert _is_current_dataset_monochrome1(manager) is False
 
 
 def _make_mgr(**overrides):

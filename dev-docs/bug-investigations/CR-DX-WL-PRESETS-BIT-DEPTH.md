@@ -289,6 +289,7 @@ Auto-derive inversion from `PhotometricInterpretation` in the on-screen path:
 
 ## Verification Steps After Fix
 
+- `source .venv/bin/activate`
 - `python -m pytest tests/core -q` (and `tests/test_wl_preset_catalog.py`,
   `tests/test_window_level_preset_handler.py`)
 - Manual: load 10-bit, 12-bit, 14-bit unsigned CR/DX and a MONOCHROME1 series; confirm presets

@@ -276,6 +276,7 @@ class TestCRDXNMHUGate:
 
     def test_cr_with_rescale_includes_hu_presets(self) -> None:
         ds = self._make_cr_dataset()
+        ds.RescaleType = "HU"
         dicom_processor = MagicMock()
         dicom_processor.get_window_level_presets_from_dataset.return_value = []
         config = MagicMock()
@@ -285,6 +286,21 @@ class TestCRDXNMHUGate:
         names = [p.name for p in merged if p.source == "builtin"]
         assert "Chest" in names
         assert "Bone" in names
+
+    def test_cr_non_hu_rescale_excludes_hu_presets(self) -> None:
+        """A calibrated non-HU CR image must not receive fixed-HU presets."""
+        ds = self._make_cr_dataset()
+        ds.RescaleType = "BQML"
+        dicom_processor = MagicMock()
+        dicom_processor.get_window_level_presets_from_dataset.return_value = []
+        config = MagicMock()
+        config.get_wl_user_presets.return_value = []
+
+        merged = build_preset_list(ds, dicom_processor, config, rescale_slope=1.0, rescale_intercept=0.0)
+
+        names = [p.name for p in merged if p.source == "builtin"]
+        assert "Chest" not in names
+        assert "Bone" not in names
 
     def test_nm_with_rescale_includes_gated_presets(self) -> None:
         ds = Dataset()

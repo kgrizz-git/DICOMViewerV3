@@ -33,6 +33,12 @@ def _make_app(**overrides):
     return app
 
 
+def test_monochrome1_helper_treats_empty_sequence_as_unspecified() -> None:
+    """Status updates safely ignore malformed empty PI sequences."""
+    dataset = SimpleNamespace(PhotometricInterpretation=[])
+    assert view_state_handlers._is_dataset_monochrome1(dataset) is False
+
+
 class TestOnRescaleToggleChanged:
     def test_calls_handle_rescale_toggle(self):
         app = _make_app()
