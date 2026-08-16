@@ -84,15 +84,20 @@ re-apply in the nested/sequence render path so headers stay consistent):
 - **Font:** build one shared `QFont` from the tree's base font, bump
   `setPointSize(base + 1 or 2)`, set `setBold(True)`, and call
   `group_item.setFont(0/1, font)`.
-- **Top border (1 pt heavier):** `QTreeWidgetItem` has no per-side border API,
-  **but a delegate already exists for exactly this**. `metadata_panel.py:296`
+- **Top border (1 pt heavier than the existing rule):** `QTreeWidgetItem` has no
+  per-side border API, **but a delegate already exists**. `metadata_panel.py:296`
   installs `GroupHeaderDelegate` (`src/gui/metadata_table_model.py:52`), which
-  draws a 1px rule above *and* below each group heading and suppresses
-  hover/selection washout. **Reuse/extend that delegate for `tags_tree`** rather
-  than writing a new one — see the review correction in the note below. A CSS
-  `border-top` on the `QTreeWidget` cannot target only header rows, so a
-  delegate is the right mechanism; we just shouldn't duplicate the existing
-  one.
+  draws a **1px** rule above *and* below each group heading (color stepped from
+  `Base`→`Text` by `GROUP_HEADER_RULE_STRENGTH`) and suppresses hover/selection
+  washout. The request is for the group heading's **top** border to be **heavier
+  than that existing 1px rule** — i.e. more prominent, not just a copy of it.
+  So: **reuse/extend that delegate** for `tags_tree` rather than writing a new
+  one, but make the top rule *heavier* — concretely, draw the top line with a
+  thicker `QPen` (e.g. 2px, or `1px + 1px` via a slightly stronger color/weight)
+  and/or a darker token than the existing symmetric 1px rule. A CSS
+  `border-top` on the `QTreeWidget` cannot target only header rows, so the
+  delegate is the right mechanism; we just shouldn't duplicate the existing one
+  verbatim — it needs the heavier-top variant.
 
 All four sub-goals are best centralized in a single helper,
 `_style_group_header_item(item)`, called wherever a group header is created, to
@@ -103,9 +108,10 @@ group-header delegate used by both `metadata_panel` and `tag_export_dialog`.
 > **Review-correction note (Gemini Pro, 2026-08-16):** the plan's earlier
 > "no `QStyledItemDelegate` is installed on `tags_tree`" / "write a new delegate
 > from scratch" was **wrong** — `metadata_panel.py` already has
-> `GroupHeaderDelegate`. Goal 1's 1pt top border must reuse it (extend to also
-> draw the heavier top rule, or parameterize the rule weight) so the export
-> dialog and metadata panel don't diverge — which would also violate this plan's
+> `GroupHeaderDelegate`. Goal 1's heavier top border must reuse it (extend the
+> existing delegate so the **top** rule is drawn *heavier* — thicker `QPen` /
+> stronger token — than the current symmetric 1px rule) so the export dialog and
+> metadata panel don't diverge — which would also violate this plan's
 > own P5 (consistent chrome) goal.
 
 ### Goal 2 — Alternating colors reset per group
@@ -225,9 +231,10 @@ asks for more.
 > `main_window_theme.py`), not hardcoded in the dialog.
 
 - [ ] Reuse/extend `GroupHeaderDelegate` (`src/gui/metadata_table_model.py:52`,
-      already used by `metadata_panel.py:296`) for `tags_tree` — header top rule
-      (1pt heavier) + hover/selection suppression. Make it shared so both trees
-      match (supports P5).
+      already used by `metadata_panel.py:296`) for `tags_tree`. Make the **top**
+      group-heading rule *heavier* than the existing symmetric 1px rule (thicker
+      `QPen` / stronger token), keep hover/selection suppression, and make it
+      shared so both trees match (supports P5).
 - [ ] `_style_group_header_item(item)`: font (+1–2pt, bold), header background
       (token), taller `sizeHint` (no layout surgery).
 - [ ] Per-group alternation via a **dynamic delegate** keyed on visual index /
