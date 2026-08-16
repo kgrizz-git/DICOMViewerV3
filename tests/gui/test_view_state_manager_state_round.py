@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 from PySide6.QtCore import QPointF
 
+from core.view_state_inversion import get_persisted_user_inversion
 from gui.view_state_manager import ViewStateManager
 
 
@@ -41,6 +42,12 @@ def _manager() -> ViewStateManager:
     manager.current_window_width = 400.0
     manager.redisplay_slice_callback = MagicMock()
     return manager
+
+
+def test_empty_pi_sequence_is_unspecified_for_inversion_migration() -> None:
+    """Only an actual MONOCHROME1 value triggers legacy-state suppression."""
+    defaults = {"image_inverted": True}
+    assert get_persisted_user_inversion(defaults, []) is True
 
 
 def test_setters_update_callbacks_and_navigator_reference() -> None:

@@ -12,7 +12,9 @@ def get_persisted_user_inversion(
     """Return the user inversion half, safely migrating legacy MONOCHROME1 state."""
     if not defaults:
         return False
-    pi = photometric_interpretation[0] if isinstance(photometric_interpretation, (list, tuple)) else photometric_interpretation
+    if isinstance(photometric_interpretation, (list, tuple)):
+        photometric_interpretation = photometric_interpretation[0] if photometric_interpretation else None
+    pi = photometric_interpretation
     if (
         "image_inversion_schema_version" not in defaults
         and str(pi or "").strip().upper() == "MONOCHROME1"

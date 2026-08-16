@@ -7,7 +7,7 @@ This file records development and repository-maintenance history that is useful 
 ## 2026-08-16
 
 - **W/L presets bit-depth awareness + MONOCHROME1 on-screen inversion:**
-  Implemented the full plan at `plans/supporting/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md`.
+  Implemented the full plan at `plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md`.
   Core render layer (`render_grayscale_image`) now owns MONOCHROME1 inversion;
   export/cine no longer re-invert (single-inversion ownership). Export-render
   ownership moved from `export_rendering.process_image_by_photometric_interpretation`

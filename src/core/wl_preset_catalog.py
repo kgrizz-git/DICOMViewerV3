@@ -17,6 +17,7 @@ from typing import Any, Literal, NamedTuple
 
 from pydicom.dataset import Dataset
 
+from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
 from core.dicom_window_level import (
     convert_window_level_raw_to_rescaled,
     convert_window_level_rescaled_to_raw,
@@ -89,7 +90,10 @@ def build_preset_list(
     rescale_intercept: float | None = None,
 ) -> list[WindowLevelPreset]:
     """
-    Build merged preset list: DICOM tags, built-in (modality + optional MR HU), then user.
+    Build merged preset list: DICOM tags, built-in (modality + optional HU), then user.
+
+    CR/DX fixed-HU presets require both usable rescale parameters and a resolved
+    ``HU`` rescale type; NM calibrated defaults require only usable parameters.
 
     Args:
         dataset: Current slice dataset (for Modality and DICOM WC/WW).
@@ -121,7 +125,15 @@ def build_preset_list(
     if mod_upper == "MR" and _has_usable_rescale(rescale_slope, rescale_intercept):
         builtin_tuples = list(builtin_tuples) + get_mr_hu_builtin_presets()
     if mod_upper in ("CR", "DX", "NM") and _has_usable_rescale(rescale_slope, rescale_intercept):
-        builtin_tuples = list(builtin_tuples) + get_hu_gated_builtin_presets(mod_upper)
+        dataset_slope, dataset_intercept, explicit_type = get_rescale_parameters(dataset)
+        resolved_type = infer_rescale_type(
+            dataset,
+            rescale_slope if rescale_slope is not None else dataset_slope,
+            rescale_intercept if rescale_intercept is not None else dataset_intercept,
+            explicit_type,
+        )
+        if mod_upper == "NM" or resolved_type == "HU":
+            builtin_tuples = list(builtin_tuples) + get_hu_gated_builtin_presets(mod_upper)
 
     builtin_presets = [
         WindowLevelPreset(

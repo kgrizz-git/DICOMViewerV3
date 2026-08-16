@@ -52,3 +52,10 @@ def test_process_image_monochrome1_is_noop() -> None:
         assert px[0] == 0
     else:
         assert px == 0
+
+
+def test_process_image_empty_photometric_sequence_falls_back_to_monochrome2() -> None:
+    """Export processing treats malformed empty PI sequences as its safe default."""
+    image = Image.new("L", (2, 2), 40)
+    dataset = type("DatasetStub", (), {"PhotometricInterpretation": []})()
+    assert process_image_by_photometric_interpretation(image, dataset).tobytes() == image.tobytes()

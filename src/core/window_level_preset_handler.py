@@ -30,6 +30,8 @@ def _is_dataset_monochrome1(dataset: Any) -> bool:
     if pi is None:
         return False
     if isinstance(pi, (list, tuple)):
+        if not pi:
+            return False
         pi = str(pi[0]).strip()
     else:
         pi = str(pi).strip()

@@ -140,7 +140,7 @@ Pass `photometric_interpretation`; when `MONOCHROME1`, after WL/normalize and th
 
 ### W2.2 XOR ownership (Invariant #1)
 
-```
+```python
 effective_inverted = dataset_is_monochrome1 XOR user_toggled_invert
 ```
 - Core layer owns the **dataset baseline** (inverts iff `MONOCHROME1`).
@@ -192,7 +192,7 @@ this.
 - Context-menu check (`image_viewer_context_menu.py:667`) reflects the **user offset** (checkbox
   unchecked when user half is `False`, even though a MONOCHROME1 image looks inverted on screen).
 - Status-bar note: extend the WL status segment (`format_status_bar_wl`, `wl_preset_catalog.py:243`)
-  to append a modality-inverted marker (e.g. ` (MI)`) for MONOCHROME1 so users understand the inversion
+  to append a modality-inverted marker (e.g. `(MI)`) for MONOCHROME1 so users understand the inversion
   is by modality, not the toggle. **Plumb point:** `update_zoom_preset_status` (on `main_window`,
   invoked via `main_window_status_controller.py:38` / `main_window.py:762`) is the carrier; it has
   three call sites — `window_level_preset_handler.py:65`, `slice_window_level_resolver.py:261`, and
@@ -272,7 +272,7 @@ this.
 
 ## Verification (run all before merge)
 
-```
+```bash
 python -m pytest tests/core tests/gui -q
 python -m pytest tests/ -q
 python scripts/check_architecture_boundaries.py
