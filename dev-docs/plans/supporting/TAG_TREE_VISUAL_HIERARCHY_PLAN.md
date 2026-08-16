@@ -315,18 +315,47 @@ asks for more.
       New SVG glyph assets must pass the repo's artifact/approved-media review.
 - [ ] **Goal-3 fix (A5):** add a targeted pass that recomputes only group-header
       tri-state from their visible children, and call it from
-      `_toggle_all_tags` / `_on_select_all_tag_checkbox` (which currently skip
-      `_update_ancestors_check_state`, leaving headers `Unchecked` on Select All).
+      `_toggle_all_tags` / `_on_select_all_tag_checkbox` / the **Select-All
+      button** (`tag_export_dialog.py:314`) / **after `_filter_tags`** — all
+      currently skip ancestor update, leaving headers `Unchecked`.
+- [ ] **Set `self.tags_tree.setObjectName("tag_export_tags_tree")`** (D1) + a
+      scoped `QTreeWidget#tag_export_tags_tree` block in both themes, so the
+      `::indicator` / striping / active-row QSS can be targeted without app-wide
+      blast radius (prereq for A1/B2).
+- [ ] **Fix the existing token violation** in `metadata_panel.py:626`
+      (hardcoded `QColor(80,50,120)` edited-row color) as part of P2 unification
+      — route through a tokenized `_edited_tag_row_colors()` (D2), not just new
+      token states.
+- [ ] **Export dialog Expand/Collapse All buttons** (parity with metadata panel
+      `metadata_panel.py:267`) folded into the export-dialog work (D4).
+- [ ] **Filter parity guard (D5/B7):** blockSignals during `_apply_tag_filter_recursive`,
+      then recompute stripe parity **once** at the end of `_filter_tags` — do not
+      let in-walk `setExpanded` re-enter the recompute.
+- [ ] **Heavier top rule as a token** (`--border-strong`, D6) + a **contrast
+      check** (rule vs header fill *and* adjacent row shade, Carbon band); no
+      hand-waved "thicker QPen."
+- [ ] **Span decision (D7):** do NOT `setFirstColumnSpanned` export headers
+      (preserve two-column alignment); delegate paints the top rule
+      `rect.left()` → full viewport width.
+- [ ] **Disable tree expand animation** for dense UI (extends C7/D8); verify in
+      harness smoke.
 - [ ] Re-apply header shade/rule + stripe-parity colors on **theme/accent flip**
       (`PaletteChange` / `changeEvent`, as `metadata_panel.py:531-552` already
       does) so they don't go stale — B2.
+- [ ] **`series_tree` decision (D3):** either give it the same group-header
+      treatment (with a delegate variant that *allows* selection, since study/
+      series rows are interactive) or mark it explicitly out-of-scope.
 - [ ] (Goal 4, optional) depth font ladder, left color bar, header selection
-      chip (fill-scope caveat applies).
+      chip (fill-scope caveat applies); enforce **shape/position redundancy, not
+      hue alone**, for color-blind safety (B8/D17).
+- [ ] **Document the tier/state language in `DESIGN.md`** as an explicit step
+      (D9/D18) — the hierarchy system is not a system if undocumented.
 - [ ] Tests: `tests/gui` widget test asserting group header font/size/background
       differ from leaf rows; per-group alternation resets at group boundary after
       expand/collapse AND after filter; group header `CheckState` == `Checked`
       when all leaves checked, `PartiallyChecked` when partial; **group headers
-      reach `Checked` after top Select All** (A5 regression).
+      reach `Checked` after top Select All** (A5 regression) **and after the
+      Select-All button and after filter**.
 - [ ] Manual smoke + **device-pixel (HiDPI) check** of the heavier top rule
       (B4); **color-blind (deuteranopia/protanopia) screenshot pass** for the new
       tier/state hues (C6).
@@ -650,3 +679,123 @@ Carry forward P1–P5 + P7(corrected)–P10, and add the lightweight, high-value
 **C1–C7** (with C6/C7 as verification/governance items). Defer C8–C11 and the
 earlier P3/P6. Keep everything token-scoped and "clarity over decoration"; the
 C7 motion guardrail explicitly forbids animation creep in the tree UI.
+
+---
+
+# Part 5 — Third external review (Nvidia GLM 5.2, 2026-08-16)
+
+A third, independent read-only review was run with an opencode / Nvidia GLM
+5.2 subagent and critically evaluated (not assumed correct). It confirmed the
+prior corrections and surfaced several **new, code-verified gaps** the first two
+reviews missed. The non-duplicative, high-value items are folded in below as the
+**D-series**; the prior P1–P10 / C1–C7 set stands.
+
+## Verified new findings (adopted)
+- **D1 — `tags_tree` has no `objectName`** (`grep setObjectName` in the export
+  dialog finds only the status label at `:155`; the metadata tree is
+  `metadata_tag_tree` at `metadata_panel.py:278`). Any scoped QSS
+  (`::indicator`, striping, active-row) is therefore untargetable today.
+  **Action:** add `self.tags_tree.setObjectName("tag_export_tags_tree")` and a
+  scoped `QTreeWidget#tag_export_tags_tree` block in both themes before any
+  tree-level token work (prereq for A1/B2).
+- **D2 — Existing token violation in edited-row color (ties to P2).**
+  `metadata_panel.py:626` hardcodes `QColor(80, 50, 120)` (dark purple, no
+  token) for edited rows, bypassing `DESIGN.md §2` — exactly what the checklist
+  forbids for *new* code. P2 unification must **also fix this existing
+  violation** (route through a tokenized `_edited_tag_row_colors()` like
+  `tag_viewer_dialog` does), not only add new token states.
+- **D3 — `series_tree` is unaddressed (P5 gap, B6).** The export dialog has
+  *two* trees (`series_tree` `:151`, `tags_tree` `:152`); all plan work targets
+  `tags_tree`. `series_tree` has the same group/header + tri-state shape and no
+  header styling. Acknowledge it: either give it the same group-header treatment
+  (with a delegate variant that *allows* selection, since study/series rows are
+  interactive) or mark it explicitly out-of-scope for this plan.
+- **D4 — Export dialog lacks Expand/Collapse All (parity gap, B1).** The
+  metadata panel has Expand All / Collapse All buttons (`metadata_panel.py:267`)
+  and a group-collapse context menu; the export dialog has neither. Fold at least
+  Expand/Collapse All buttons (matching the panel) into the export-dialog work;
+  small addition, directly aids orienting sequence-heavy trees.
+- **D5 — Filter walk can desync parity (B7).** `_apply_tag_filter_recursive`
+  (`:771`) auto-expands matching descendants, firing `itemExpanded` *during* the
+  `setHidden` walk. Parity recompute must run **once after** `_filter_tags`
+  completes, not as a side effect of each in-walk `setExpanded`. Guard:
+  blockSignals during the filter walk, then recompute parity once at the end.
+- **D6 — "Heavier top rule" needs a token, not hand-waving (B4).** Specify the
+  rule color as a token (e.g. `--border-strong`) and add a **contrast check**
+  (rule vs header fill *and* vs adjacent row shade, within Carbon's band) —
+  especially since export headers get a fill while metadata headers stay Base.
+- **D7 — Set the span decision (B5).** The plan left "span vs full-width rule"
+  open. Decision: **do not span** export headers (col-0 = "Group 0008", col-1 =
+  "N tags" are separate, scannable cells; spanning forces a merged string that
+  loses two-column alignment). Delegate paints the heavier top rule from
+  `rect.left()` → full viewport width. State explicitly so an implementer
+  doesn't span-and-merge by default.
+- **D8 — Disable tree expand animation for dense UI (extends C7).** Qt's
+  expand/collapse animation can feel laggy on huge groups; verify it is off (or
+  disable) as part of the motion-restraint harness check.
+- **D9 — Document the tier/state language in `DESIGN.md` as a checklist item.**
+  The plan lists `DESIGN.md` under "Files likely touched" but the Goal-1–3
+  checklist has no doc-edit task. An undocumented hierarchy system is not a
+  system — make it an explicit implement step.
+
+## Additional ideas (D10–D20) — after critical review
+**Adopt:**
+- **D10 — Collapsed-group selection chip in header text** (e.g. `"Group 0008
+  (12/40)"`) so coverage is visible without expanding. *Pros:* always-visible,
+  no tooltip latency (stronger than C4 for collapsed case). *Cons:* more text
+  per header.
+- **D11 — `setObjectName` + scoped QSS block for `tags_tree`** (mirrors
+  `#metadata_tag_tree`). *Pros:* enables scoped striping/indicator/active-row
+  without app-wide blast radius. *Cons:* small per-theme block. (Prereq D1.)
+- **D12 — "Select group" right-click on export tree** (checks all visible leaves
+  under that group); must re-run the Goal-3 group-header recompute. *Pros:*
+  fast selection of e.g. all `(0008,*)`; complements Select-All. *Cons:* must
+  wire the A5 header refresh.
+- **D13 — Filter-box focus shortcut (`Ctrl+F`/`Ctrl+L`)** + **match-count badge
+  (`"42 matches"`)** in both the export dialog and metadata panel. *Pros:* filter
+  is the primary orientation tool; standard, high value-per-line; badge answers
+  "did my filter do anything?" *Cons:* audit `DESIGN.md §6`.
+- **D14 — Sticky filter + Select-All row** so scrolling a long tree doesn't lose
+  the controls. *Pros:* prevents re-narrow loop. *Cons:* modest layout change.
+- **D15 — Concrete empty + disabled states:** whole-tree empty body when
+  `studies` is empty (`_initial_tag_tree_build` early-return `:442`) and a
+  prominent banner/dim for the "Updating tag list…" disabled state (`:454`,
+  today only `setEnabled(False)`). *Pros:* fills B7's gap with real artifacts.
+  *Cons:* overlay is non-trivial; use a label/banner variant.
+- **D16 — Indentation parity between the two trees** (metadata sets
+  `setIndentation(7)`, export uses default ~20px). *Pros:* trustworthy shared
+  visual language (P5). *Cons:* verify no test asserts default indentation.
+- **D17 — Monochrome kind icons (folder/chevron/dot) + color bar** (color as
+  *secondary* cue) to enforce B8's shape-redundancy rule for color-blind safety.
+  *Pros:* satisfies B8's "differ by shape/position, not hue alone." *Cons:* new
+  SVG assets → repo asset/approved-media gate.
+- **D18 — DESIGN.md edit as an explicit checklist item** (see D9).
+- **D19 — P5 as two phases:** export dialog + metadata panel *now*; SR browser /
+  nuclear results / ROI stats *next* (their "Files touched" only lists the first
+  two). *Pros:* keeps P5 from being silently aspirational.
+
+**Drop (with rationale):**
+- **D20 — Selection-count color ladder on the group chip** (muted/secondary/
+  accent by 0/partial/full) — redundant with the checkbox tri-state, risks
+  clutter. Drop.
+- **D21 — Distinct partial glyph for group vs SQ parents** (dot only for groups)
+  — contradicts P5 consistency; let them match. Drop.
+- **D22 — VR column in export dialog** — scope creep; VR belongs to the metadata
+  panel. Drop.
+- **D23 — Persist group expand/collapse in the export dialog** — dialog is
+  session-scoped; mark out-of-scope (don't copy the panel's pattern blindly).
+  Drop.
+- **D24 — "Recently exported" preset auto-pin** — belongs to a presets plan, not
+  this tree-visual scope. Drop.
+
+## Updated combined recommendation
+Carry P1–P5 + P7(corrected)–P10, C1–C7, and add the high-value D-items:
+`tags_tree` objectName + scoped QSS (D1/D11), fix the existing hardcoded edit
+color as part of P2 (D2), export-dialog Expand/Collapse All (D4), filter focus
+shortcut + match-count badge (D13), collapsed-group chip (D10), concrete
+empty/disabled states (D15), indentation parity (D16), color-blind shape
+redundancy via monochrome kind icons + bar (D17), and make `DESIGN.md` doc-edit
+(D9/D18) and P5 two-phase (D19) explicit checklist items. Keep series-tree
+treatment (D3) as an explicit in-scope-or-out decision. Defer D20–D24 and the
+earlier P3/P6/C8–C11. All additions token-scoped, animation-free (C7/D8), and
+color-blind-safe via shape redundancy (B8/D17).
