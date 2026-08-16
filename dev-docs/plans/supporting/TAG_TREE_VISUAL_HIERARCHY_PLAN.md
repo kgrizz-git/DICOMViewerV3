@@ -3,9 +3,14 @@
 **Branch:** `feature/tag-tree-visual-hierarchy-plan`
 **Created:** 2026-08-16
 **Status:** proposed
-**Scope:** `src/gui/dialogs/tag_export_dialog.py` (the left-pane "tag browser" tree
-= `self.tags_tree`, a `QTreeWidget` with depth-0 group headers and nested
-sequence/item/leaf rows). No behavior change to export logic — visual/UX only.
+**Scope:**
+- **Part 1 (tag-tree specifics):** `src/gui/dialogs/tag_export_dialog.py`
+  (the left-pane "tag browser" tree = `self.tags_tree`, a `QTreeWidget` with
+  depth-0 group headers and nested sequence/item/leaf rows). No behavior change
+  to export logic — visual/UX only.
+- **Part 2 (whole-app UX exploration):** design summary + multiple proposals for
+  broader visual-orientation variety across the entire interface. Exploration
+  only; must conform to `DESIGN.md` and the UX Assessment Remediation Plan.
 
 ---
 
@@ -221,3 +226,136 @@ asks for more.
 - `tests/gui/test_tag_export_dialog*.py` (new assertions)
 - Possibly a small `src/gui/` delegate module if the delegate grows beyond the
   dialog file.
+
+---
+
+# Part 2 — Whole-application visual-orientation UX summary & proposals
+
+> This part answers the broader question raised alongside Goals 1–3: **how could
+> more varied font color / size / weight and icon / border color across the
+> *entire* interface help users orient?** It is a design exploration only. Any
+> implementation must conform to the existing design system
+> (`DESIGN.md`) and the [UX Assessment Remediation & Design System
+> Plan](../../dev-docs/plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md),
+> which is the canonical source of truth. Ideas here are **additive**, not a
+> replacement for that system.
+
+## Current interface map (what users actually see)
+
+| Region | Widget(s) | Pain points for orientation |
+|---|---|---|
+| Menu bar | `QMenuBar` (File/Edit/View/Tools/Help), many submenus | Deep nesting; hard to tell which menu owns an action after the fact. |
+| Main toolbar | `QToolBar` of `QToolButton`s, **SVG icons + text-under-icon**, accent-tinted, 20×20 px | Mixed icon/label; toggled actions (privacy, cine) only signal state via icon swap — easy to miss. |
+| Status bar / toast | `MainWindowStatusController` + `MainWindowToastController` | Transient info; severity (info/warn/error/success) already color-codes left border + icon. |
+| Left panel | scrollable `QScrollArea` → `metadata_panel` (`QTreeWidget` with group headers + sequence/item/leaf nesting) | Group headers indistinguishable from rows (same font/size/bg) — **same problem as Goal 1**. |
+| Center | `image_viewer` panes in a `QSplitter`; 1×1 / 1×2 / 2×1 / 2×2 layouts, tabs, MPR, overlays, corner text | Focused vs non-focused pane not obvious; many overlays compete for attention. |
+| Right panel | scrollable `QScrollArea` → tools, `roi_statistics_panel` (`QTableWidget`), histogram, etc. | Multiple stacked tools; no visual grouping between tool sections. |
+| Dialogs | tag export (tree), SR browser (`QTabWidget` + `QTableWidget`), nuclear results, settings, cine, screenshot — each with its own table/tree/list mix | Inconsistent table/tree styling between dialogs; users re-learn each one. |
+| Theme | light / dark + 4 accent presets (`accent_presets.py`), color tokens in `DESIGN.md`, QSS in `resources/themes` | Already tokenized — good base to extend, not to bypass. |
+
+**Key takeaway:** the app *already* has a token system, severity-coded toasts,
+and themeable SVG icons. The weak spots are (a) **group/tier hierarchy is not
+visually encoded** in trees/tables (metadata panel + tag export both suffer),
+and (b) **state and section** are mostly conveyed by text/icon swap rather than
+by color/weight/border cues. That is exactly where "more variety" helps most.
+
+## Design principles to honor (from `DESIGN.md`)
+
+- **Carbon-flavored density:** clarity over decoration; thin borders; neutral
+  palette; don't introduce heavy shadows/elevation on a desktop medical UI.
+- **Color roles, not literals:** any new color must be a token
+  (`--accent`, `--danger`, `--warn`, `--bg-surface-*`, `--text-secondary`, …),
+  not a raw hex in code.
+- **Severity coding** (M3 borrow): error/warning/info/success already have
+  rules — extend the same language to inline states, not a new one.
+- **Hide-vs-disable (HIG):** prefer removing inapplicable controls over
+  graying them; when something *is* disabled, say why (tooltip), don't just dim.
+- **Icon requirement (HIG):** toolbar buttons need icons; iconography should
+  stay in the existing SVG set (Carbon / Material Symbols per `DESIGN.md §0`).
+
+## Multiple proposals (with pros / cons)
+
+### P1 — Semantic "tier" typography + color ladder across all trees/tables
+Encode hierarchy with a consistent font/size/weight + a 3 px left accent bar:
+group header = bold +2 pt + neutral-dark left bar; sequence parent = bold +
+accent left bar; item = italic; leaf = regular. Apply identically to
+`metadata_panel`, `tag_export_dialog`, and SR/results tables.
+- *Pros:* one rule, every tree in the app; directly fixes Goal 1 and the
+  metadata-panel twin problem; cheap (font + border per item kind).
+- *Cons:* italics hurt long tag strings; must be disabled for editable cells;
+  needs a shared helper so panels don't diverge.
+
+### P2 — Status / state color language for interactive rows
+Give checkable/selected/edited/disabled rows a token-driven cue: selected =
+accent-tinted background + accent left bar; edited (unsaved metadata) = amber
+left bar + amber text; disabled-but-meaningful = dimmed *with* a tooltip reason.
+- *Pros:* turns "did I select this?" and "is this saved?" into glanceable
+  signals; consistent with toast severity coding.
+- *Cons:* risks clutter if every hover/selection changes color; must keep
+  contrast-safe on both alternating shades and both themes.
+
+### P3 — Section grouping & separators in panels/dialogs
+Replace flat stacks of controls with labeled group boxes / hairline section
+dividers + small section headers (already partially in `DESIGN.md` `QGroupBox`
+rules). Used in right panel tool sections and dialog column groups.
+- *Pros:* reduces "wall of widgets"; maps to progressive-disclosure philosophy;
+  mostly QSS, little code.
+- *Cons:* can add vertical space on already-dense dialogs; needs spacing tokens
+  to avoid inconsistency.
+
+### P4 — Icon + color reinforcement for toggled/active toolbar & pane state
+Toolbar toggles (privacy on/off, cine play/pause, sync on) get a persistent
+accent "active" background + a small state dot, not just an icon swap; the
+**focused** image pane gets an accent frame, non-focused a muted frame.
+- *Pros:* answers "what mode am I in?" and "which pane is active?" at a glance —
+  currently the two biggest orientation gaps in the center/toolbar.
+- *Cons:* accent-on-every-toggle can look "lit up"; needs a restrained active
+  treatment (e.g. outline only) to avoid noise.
+
+### P5 — Consistent table/tree chrome across dialogs (design-system enforcement)
+Standardize striping, header row, selection, and group-header styling via shared
+QSS classes (`.mpdv-tree`, `.mpdv-table`, `.mpdv-group-header`) so the tag
+export tree, SR browser, nuclear results, and ROI stats all read the same.
+- *Pros:* users stop re-learning each dialog; enforces `DESIGN.md`; shrinks
+  per-dialog duplication.
+- *Cons:* requires auditing each dialog's current custom styling; some dialogs
+  have legitimately different needs (read-only vs editable).
+
+### P6 — "Why disabled / what's different" microcopy & affordances
+Where a control or row is not applicable, show a tiny inline reason (tooltip +
+optional `(locked)` / `(no data)` tag) instead of silent graying; flag private/
+PHI tags with a distinct hue + lock glyph.
+- *Pros:* satisfies HIG hide-vs-disable + privacy aid; directly helps
+  orientation for sensitive data.
+- *Cons:* more text in tight UIs; PHI hue must be unambiguous and not clash
+  with error/warning.
+
+## Recommendation (restrained, system-conformant)
+
+Adopt a **coherent, token-driven tier + state language** rather than scattered
+emphasis:
+
+1. **P1 (tier ladder)** as the backbone — fixes Goal 1 and the metadata-panel
+   twin, uniformly.
+2. **P2 (state color)** for selected/edited rows — complements Goal 3's
+   group-checkbox work.
+3. **P4 (active toolbar/pane frame)** for the two biggest center/toolbar
+   orientation gaps.
+4. **P5 (shared chrome)** to keep all dialogs consistent.
+5. Defer **P3/P6** to the broader design-system pass unless user feedback
+   specifically asks for sectioning / PHI flags.
+
+Keep the palette to the existing tokens + **one** new "active/accent" treatment
+and **one** "edited/PHI" treatment, both contrast-checked against both
+alternating shades and both themes. This matches the "clarity over decoration"
+Carbon stance while delivering the requested variety where it actually aids
+orientation.
+
+## Files likely touched (Part 2, future)
+
+- `resources/themes/*.qss` (new token rules: `.mpdv-group-header`, state rows,
+  active frame)
+- `src/gui/main_window_theme.py` (resolve any new tokens)
+- `src/gui/metadata_panel.py`, `tag_export_dialog.py` (share tier helper)
+- `src/gui/main_window.py` / toolbar builder (active-state styling)
+- `DESIGN.md` (document the tier/state language before merge, per its rule)
