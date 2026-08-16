@@ -114,6 +114,30 @@ group-header delegate used by both `metadata_panel` and `tag_export_dialog`.
 > metadata panel don't diverge — which would also violate this plan's
 > own P5 (consistent chrome) goal.
 
+> **Review-correction note (DeepSeek v4 flash, 2026-08-16) — reuse trap (A3) and
+> fill-scope (A4):**
+> - The reused `GroupHeaderDelegate` keys off `GROUP_HEADER_KEY_ROLE =
+>   UserRole + 2` (`metadata_table_model.py:33`); **tag-export group headers do
+>   NOT set that role** (`tag_export_dialog.py:582-587`), so a verbatim reuse
+>   would treat every export row as a leaf and never draw the rule. The export
+>   tree must set `GROUP_HEADER_KEY_ROLE` (or a shared role) on its headers.
+> - Tag-export rows already use `UserRole + 1` for large-sequence leaf counts
+>   (`tag_export_dialog.py:631`); the new stripe-parity role must avoid colliding
+>   with `UserRole + 1` / `UserRole + 2` — audit roles per widget before sharing.
+> - Metadata-panel group rows are `setFirstColumnSpanned(True)`
+>   (`metadata_panel.py:500`); export group rows are **not** spanned
+>   (`tag_export_dialog.py:582`). The existing delegate paints the rule across
+>   `option.rect` per column, so on the export tree a non-spanned header would
+>   draw the heavier top border only across the 120px Tag column. Either span the
+>   export header (which merges col-0/col-1 text — so Idea E's `n/total` chip must
+>   move into the merged string) or paint the top rule from `rect.left()` to the
+>   tree's full viewport width.
+> - **Fill scope (A4):** `metadata_panel.py:553-573` deliberately uses **Base +
+>   rule, no fill** because every colored band "read as an odd block floating on
+>   the pane." Any *background fill* in Goal 1 / P1 must be scoped to the **export
+>   dialog only**; the metadata panel stays on Base + rules (which the "heavier
+>   top rule" already satisfies). Do not re-introduce panel fills.
+
 ### Goal 2 — Alternating colors reset per group
 
 **Correction (Gemini Pro review, 2026-08-16):** the earlier approach of
@@ -124,19 +148,31 @@ re-orders rows in the visual flow, so two same-shade rows can end up adjacent
 and the per-group reset is lost. Static per-item backgrounds cannot honor
 "reset per group" in a tree with dynamic expansion.
 
-Preferred approaches (pick one):
+**Correction (DeepSeek v4 flash review, 2026-08-16):** approach (A) above is
+wrong on two counts and must not be used:
+- `QTreeWidget` has **no** `visualIndex` API — the only `visualIndex` in the
+  repo is `QHeaderView.visualIndex` (`metadata_panel.py:339`), which reorders
+  *sections*, not tree rows. `indexFromItem` returns a flat model index, not a
+  visual position. So "compute shade from visual index" references a
+  nonexistent call.
+- Computing parity per painted row (walking the group's visible children inside
+  `paint()`) is **O(n²)** on a fully expanded large study — the exact trap this
+  codebase already paid for at `tag_export_dialog.py:565` and
+  `metadata_table_model.py:215-216` (~19s). Forbidden.
 
-- **(A) Dynamic delegate (recommended).** Install a `QStyledItemDelegate` whose
-  `background` / `paint` computes the row's shade from its *visual* index within
-  its group — e.g. walk the group's visible leaf/child count via
-  `QTreeWidget.indexFromItem` / `visualIndex`, or track a "stripe parity" reset
-  at each group header. This stays correct under expand/collapse. (Pairs with the
-  shared group-header delegate from Goal 1 — one delegate can own both the
-  header rule and the per-group stripe.)
-- **(B) Built-in global alternation only.** `setAlternatingRowColors(True)` is
-  correct under collapse but alternates across the *whole* tree, not per group.
-  Acceptable if the per-group reset is lowered in priority, but does **not**
-  satisfy the stated goal.
+**Adopted approach — parity in a role, recomputed on structural change (O(n)):**
+- At build time (`_build_tag_tree_from_items` / `_build_export_tag_tree_item`),
+  assign a **stripe-parity role** (`UserRole + N`, distinct from the existing
+  `UserRole + 1` large-sequence-leaf-count and `UserRole + 2`
+  `GROUP_HEADER_KEY_ROLE`) per visible row, resetting parity at each group
+  header. One O(n) pass.
+- Recompute that role (not in `paint`) whenever the visible set changes: on
+  `itemExpanded` (`tag_export_dialog.py:345`), a new `itemCollapsed` connection,
+  and after `_filter_tags` (the filter hides rows, which can make two
+  same-parity visible rows adjacent — double-shade adjacency).
+- The delegate reads the parity role in `paint()` and fills the background —
+  `paint()` stays O(1) per row, correct under expand/collapse/filter.
+- Group headers keep the dedicated header treatment (no stripe).
 
 Group headers should *not* participate in striping — they keep the dedicated
 header treatment so each group's reset reads cleanly.
@@ -158,6 +194,28 @@ The tri-state plumbing already exists. Two refinements:
     *desirable* consistency, not a bug. No special-casing needed.
   - Avoid hand-painting checkbox primitives in `paint()` (brittle: loses OS
     hover/pressed/focus rings).
+
+> **Review correction (DeepSeek v4 flash, 2026-08-16) — two real traps the
+> earlier text missed:**
+> 1. **Select-All does NOT update group headers.** `_toggle_all_tags`
+>    (`tag_export_dialog.py:679`) deliberately skips `_update_ancestors_check_state`
+>    (to avoid clobbering independently-checked SQ/Item parents). So after the top
+>    "Select All" checkbox or the Select-All button, **every group header stays
+>    `Unchecked`** — the "all-selected → checkmark on group header" goal fails.
+>    Fix: add a *targeted* pass that recomputes only group-header tri-state from
+>    their visible children (without touching SQ/Item parents), and call it from
+>    `_toggle_all_tags` / `_on_select_all_tag_checkbox`. Add this to the Goal-3
+>    checklist.
+> 2. **`::indicator` QSS on trees is unproven on this Qt.** The app pins
+>    `PySide6>=6.11.1` and the themes have **no** `QTreeWidget`/`QTreeView`
+>    `::indicator` rules today (only `QMenu::indicator` + `QCheckBox::indicator`,
+>    `resources/themes/*light/dark.qss`). Item-view `::indicator` styling has a
+>    long Qt-6 bug history (QTBUG-98848 et al.). **Do not assume it works:**
+>    spike it on the pinned PySide6 first; if it fails, the fallback is a delegate
+>    that draws `PE_IndicatorItemViewItemCheck` over the native `paint()` (keeps
+>    native hover/focus, unlike hand-painting the box). The selector also blast-
+>    radiates to the series tree, tag-viewer dialog, and SR browser — scope it
+>    `objectName`-based if app-wide unification is not intended.
 
 > Note: the same tri-state logic already drives the *top* Select-All checkbox
 > (`_refresh_select_all_checkbox_state`, `tag_export_dialog_selection.py:86`).
@@ -231,30 +289,47 @@ asks for more.
 > `main_window_theme.py`), not hardcoded in the dialog.
 
 - [ ] Reuse/extend `GroupHeaderDelegate` (`src/gui/metadata_table_model.py:52`,
-      already used by `metadata_panel.py:296`) for `tags_tree`. Make the **top**
-      group-heading rule *heavier* than the existing symmetric 1px rule (thicker
-      `QPen` / stronger token), keep hover/selection suppression, and make it
-      shared so both trees match (supports P5).
+      already used by `metadata_panel.py:296`) for `tags_tree`. Tag-export group
+      headers must set `GROUP_HEADER_KEY_ROLE` (or a shared role) or the delegate
+      treats them as leaves. Make the **top** group-heading rule *heavier* than
+      the existing symmetric 1px rule (thicker `QPen` / stronger token), keep
+      hover/selection suppression, and make it shared so both trees match (P5).
+      Audit `UserRole + 1` (export leaf count) / `UserRole + 2` (header role)
+      collisions before sharing. Paint the top rule across the tree's full width
+      (export headers are not `setFirstColumnSpanned`).
 - [ ] `_style_group_header_item(item)`: font (+1–2pt, bold), header background
-      (token), taller `sizeHint` (no layout surgery).
-- [ ] Per-group alternation via a **dynamic delegate** keyed on visual index /
-      group-boundary reset (correct under expand/collapse) — **not** static
-      `alt_toggle` per-item. Single shared delegate can own both header rule and
+      (token), taller `sizeHint` (no layout surgery). **Fill scoped to export
+      dialog only** — metadata panel stays Base + rules (A4).
+- [ ] Per-group alternation via a **stripe-parity role** assigned at build time
+      (O(n) once), recomputed on `itemExpanded` / new `itemCollapsed` /
+      after `_filter_tags` — **not** computed in `paint()` (would be O(n²)), and
+      **not** via a nonexistent `QTreeWidget.visualIndex` (A2/A6). Delegate reads
+      the role in `paint()` (O(1)). Single shared delegate can own header rule +
       stripe.
-- [ ] Partial-checkbox indicator via QSS
-      `QTreeWidget::indicator:indeterminate { image: <dot-or-rect svg> }`
-      (dot/rectangle glyph); covers group headers *and* partial Sequence/Item
-      parents.
-- [ ] Verify all-selected → full checkmark on group header + top Select-All.
+- [ ] Partial-checkbox indicator: **spike the QSS
+      `QTreeWidget::indicator:indeterminate` on pinned PySide6>=6.11.1 first**
+      (trees have no such rule today; Qt-6 `::indicator` has a bug history, A1).
+      If it works, use a scoped (objectName) `image: <dot-or-rect svg>` glyph
+      covering group headers + partial SQ/Item parents. If not, fall back to a
+      delegate drawing `PE_IndicatorItemViewItemCheck` over native `paint()`.
+      New SVG glyph assets must pass the repo's artifact/approved-media review.
+- [ ] **Goal-3 fix (A5):** add a targeted pass that recomputes only group-header
+      tri-state from their visible children, and call it from
+      `_toggle_all_tags` / `_on_select_all_tag_checkbox` (which currently skip
+      `_update_ancestors_check_state`, leaving headers `Unchecked` on Select All).
+- [ ] Re-apply header shade/rule + stripe-parity colors on **theme/accent flip**
+      (`PaletteChange` / `changeEvent`, as `metadata_panel.py:531-552` already
+      does) so they don't go stale — B2.
 - [ ] (Goal 4, optional) depth font ladder, left color bar, header selection
-      chip.
+      chip (fill-scope caveat applies).
 - [ ] Tests: `tests/gui` widget test asserting group header font/size/background
       differ from leaf rows; per-group alternation resets at group boundary after
-      expand/collapse; group header `CheckState` == `Checked` when all leaves
-      checked, `PartiallyChecked` when partial.
-- [ ] Manual smoke: open tag export, confirm header shading/height/font,
-      per-group striping (and that it survives expand/collapse), partial/full
-      group checkbox indicators.
+      expand/collapse AND after filter; group header `CheckState` == `Checked`
+      when all leaves checked, `PartiallyChecked` when partial; **group headers
+      reach `Checked` after top Select All** (A5 regression).
+- [ ] Manual smoke + **device-pixel (HiDPI) check** of the heavier top rule
+      (B4); **color-blind (deuteranopia/protanopia) screenshot pass** for the new
+      tier/state hues (C6).
 
 ## Verification (when implemented)
 
@@ -426,14 +501,22 @@ review, the worthwhile ones are captured below as **P7–P10** (added to Part 2'
 proposal set); two were rejected as too costly/noisy (sticky group headers,
 sequence block tinting) and are noted as **dropped**.
 
-### P7 — Monospace font for Tag / VR columns (typography)  · **Adopt**
-Apply a mono font (e.g. `IBM Plex Mono`, already bundled per `DESIGN.md §3.1`)
-to the Tag ID and VR columns, leaving names in the sans font.
+### P7 — Monospace font for Tag / VR columns (typography)  · **Adopt (with correction)**
+Apply a mono font to the Tag ID and VR columns, leaving names in the sans font.
 - *Pros:* perfect numeric alignment makes long tag lists dramatically easier to
-  scan; already sanctioned by the design spec; zero new assets.
+  scan; sanctioned by the design spec (`DESIGN.md §3.1` specifies Plex Mono as the
+  mono family).
 - *Cons:* monospace needs slightly more horizontal width (mitigated by the
   existing 120px Tag column).
-- *Verdict:* low-hanging fruit the plan's typography ladder (Idea B) missed.
+- *Correction (DeepSeek review, A7):* **`IBM Plex Mono` is NOT actually
+  bundled.** `DESIGN.md` *specifies* it, but `resources/fonts/` ships none and
+  `bundled_fonts.py` registers only Plex Sans / Noto / Spectral / Raleway / Red
+  Hat Text / Open Sans / DejaVu — no Mono key. So this is **not** "zero new
+  assets": it needs a newly bundled mono font (license + artifact/approved-media
+  review) or a platform `Consolas, monospace` fallback with variable metrics.
+  **Reduce P7 to: tag/VR columns get a mono font — pending the font-bundling
+  decision** (track as a pre-req, not a free win).
+- *Verdict:* still worthwhile, but scope the bundling cost honestly.
 
 ### P8 — Filter-match substring highlighting  · **Adopt**
 When the filter box is used, paint the matched substring in `--accent` (or bold)
@@ -475,3 +558,95 @@ chrome (P5) + **mono tag columns (P7)** + **filter highlight (P8)** + **dimmed
 empties (P9)** + **expand/collapse shortcuts (P10)**; defer P3/P6 and the two
 dropped items until broader design-system feedback. All additions stay within
 the token system and the "clarity over decoration" stance.
+
+---
+
+# Part 4 — Second external review (DeepSeek v4-flash-free, 2026-08-16)
+
+A second, independent read-only review was run with an opencode / DeepSeek
+v4-flash-free subagent and critically evaluated (not assumed correct). It
+confirmed the earlier Gemini corrections and surfaced **additional, verified
+technical errors** in the plan that the first review missed. The load-bearing
+fixes (A2/A6, A3, A5, A1) are already folded into Goals 1–3 and the
+implementation checklist above; the gaps (B1–B7) and new ideas (C1–C11) are
+summarized here.
+
+## Verified corrections adopted
+- **A2 / A6 — no `QTreeWidget.visualIndex`; parity-in-`paint` is O(n²).** The
+  Goal-2 "dynamic delegate keyed on visualIndex" used a nonexistent API and an
+  O(n²) repaint. Replaced with a **stripe-parity role** assigned at build time
+  (O(n)) and refreshed on expand/collapse/filter; `paint()` reads the role
+  (O(1)). See Goal 2.
+- **A3 — reuse trap.** `GroupHeaderDelegate` keys off `GROUP_HEADER_KEY_ROLE`
+  (`UserRole + 2`), which tag-export headers never set; a verbatim reuse would
+  render every export row as a leaf. Export headers must set the role; role
+  collisions (`UserRole + 1` leaf count) must be audited; the export header is
+  not `setFirstColumnSpanned`, so the heavier top rule must span the full tree
+  width, not just the Tag column. See Goal 1 note.
+- **A5 — Select All leaves group headers `Unchecked`.** `_toggle_all_tags`
+  skips `_update_ancestors_check_state`, so the top Select-All never checks the
+  group headers — the Goal-3 "all-selected → checkmark" goal silently fails.
+  Added a targeted group-header-only recompute to the Select-All path.
+- **A1 — tree `::indicator` QSS unproven on pinned PySide6>=6.11.1.** No tree
+  `::indicator` rules exist today; Qt-6 item-view indicator styling has a long
+  bug history. Made it **spike-first** with a `PE_IndicatorItemViewItemCheck`
+  delegate fallback, and flagged the app-wide blast radius (series tree,
+  tag-viewer, SR browser) → scope `objectName`-based.
+- **A4 — fill scope.** Metadata panel deliberately uses Base + rule (no fill);
+  Goal-1 / P1 fills must be export-dialog-only. Captured as a hard scope rule.
+- **A7 — Plex Mono not bundled.** P7 corrected to "pending font-bundling
+  decision," not "zero new assets."
+
+## Gaps / risks the review flagged (B1–B7)
+- **B1** shared-delegate scope creep touches the metadata panel's existing
+  per-item `border-bottom` QSS — needs panel regression + theme-flip coverage.
+- **B2** theme/accent flip (`PaletteChange`) must re-apply header/stripe colors
+  (the panel already does via `changeEvent`/`_apply_group_header_colors`).
+- **B3** global `::indicator` rule hits series tree, tag-viewer, SR browser too
+  — decide app-wide vs scoped.
+- **B4** "1pt heavier" is ambiguous on HiDPI — specify logical px + device-pixel
+  smoke.
+- **B5** `setPointSize` vs app-level QSS `font-size` override risk.
+- **B6** new glyph SVG crosses the repo's asset/approved-media gate.
+- **B7** no empty/disabled-state or selection-scoped test; the disabled-tree
+  "Updating tag list…" state is never revisited.
+
+## Additional ideas (C1–C11) — after critical review
+**Adopt:**
+- **C1 — Unified PHI/private-tag marker** (muted hue + "P" monogram on every
+  private row across panel/viewer/export). *Pros:* privacy safety + cross-dialog
+  consistency with repo PHI guardrails. *Cons:* one new glyph + audit when
+  "Include private" is on.
+- **C2 — Filter "no match" state with one-click Clear** in both filter boxes.
+  *Pros:* explains the empty tree + hands back control. *Cons:* a few pixels.
+- **C3 — Focused-pane chrome** (2px accent frame + dimmed non-focused overlays
+  across 1×2/2×2/MPR). *Pros:* answers "which pane am I on?" directly. *Cons:*
+  overlaps draw stack; keep animation-free. (Small first step: frame only.)
+- **C4 — Group-header tri-state tooltip + count** ("7 of 40 selected") on hover,
+  mirroring Idea E without permanent text. *Pros:* near-zero cost, no new glyph
+  (weakens reliance on A1). *Cons:* tooltip delay on dense trees.
+- **C5 — Tag-tree context menu + Expand/Collapse All** (mirror metadata panel's
+  existing menu) + group-to-group collapse shortcut (audit `DESIGN.md §6`).
+  *Pros:* huge for sequence-heavy studies; reuses a pattern. *Cons:* shortcut
+  conflict risk only.
+- **C6 — Color-blind screenshot pass** (deuteranopia/protanopia) for new tier/
+  state hues before merge. *Pros:* cheap insurance for a color-coded UI. *Cons:*
+  manual step. (Verification item, not code.)
+- **C7 — Motion/restraint guardrail in DESIGN.md** ("no animation in dense tree
+  UI; state changes instant or ≤120ms"). *Pros:* protects "clarity over
+  decoration." *Cons:* none. (Governance.)
+
+**Drop:**
+- **C8 — Series/tag-union coherence** (show which series drove each row) — large
+  pipeline change; revisit later.
+- **C9 — Density toggle** (comfortable/compact) — scope + cross-panel testing;
+  Carbon density is fixed.
+- **C10 — Frozen/pinned Tag column** — not natively supported by QTreeWidget.
+- **C11 — Keyboard group-hopping** — conflict/discovery burden; fold into C5's
+  expand/collapse-all.
+
+## Updated combined recommendation
+Carry forward P1–P5 + P7(corrected)–P10, and add the lightweight, high-value
+**C1–C7** (with C6/C7 as verification/governance items). Defer C8–C11 and the
+earlier P3/P6. Keep everything token-scoped and "clarity over decoration"; the
+C7 motion guardrail explicitly forbids animation creep in the tree UI.
