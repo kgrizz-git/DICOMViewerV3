@@ -52,8 +52,11 @@ as a Phase B commitment.
    partial → clearer indeterminate glyph after a spike (QSS vs delegate).
    Depends on Phase A’s Select-All header fix where relevant. **No requirement**
    in this phase to restyle export headers/stripes to match metadata.
-4. Automated perf regression on a synthetic large tree exercising the
-   **metadata** population path (investigation Part 7 #2).
+4. Automated perf regression on the **metadata** population path (investigation
+   Part 7 #2): compare **at least two** synthetic tree sizes and assert
+   **near-linear** growth (or a calibrated wall-clock bound with a generous CI
+   margin **plus** an explicit growth check). Do not rely on a single fixed
+   two-second limit alone.
 
 ## Prerequisites (spike — do before full implement)
 
@@ -63,8 +66,10 @@ as a Phase B commitment.
       works. Scratch under `tmp/` OK.
 - [ ] **(B0b)** Spike: per-group stripe-parity role on the metadata tree under
       expand/collapse/filter (no `visualIndex`, no O(n²) in `paint()`).
-- [ ] **(B0c)** Spike (export): `::indicator:indeterminate` on pinned
-      `PySide6>=6.11.1` for Goal 3; fallback
+- [ ] **(B0c)** Spike (export): `::indicator:indeterminate` on the
+      **resolver-selected** PySide6/Qt in the active env (floor
+      `PySide6>=6.11.1` in `requirements.txt`, not a pinned exact version).
+      Record resolved `PySide6` and Qt versions in the spike notes. Fallback:
       `PE_IndicatorItemViewItemCheck` if needed. Can run parallel to B0a/B0b.
 
 ## Checklist
@@ -85,8 +90,9 @@ as a Phase B commitment.
       header chrome + hover + selection.
 - [ ] **(B4)** Widget + visual tests centered on the **metadata panel**; HiDPI
       smoke of heavier top rule; color-blind pass if new hues land.
-- [ ] **(B5)** Disable expand animation / perf test for the **metadata** dense
-      tree path where applicable.
+- [ ] **(B5)** Disable expand animation where applicable; add metadata dense-tree
+      perf coverage with **≥2 sizes** and near-linear growth (or calibrated
+      bound + growth check) — see success criterion 4.
 
 ### Export dialog (Goal 3 only)
 

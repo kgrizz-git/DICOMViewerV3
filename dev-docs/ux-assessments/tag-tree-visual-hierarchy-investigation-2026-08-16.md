@@ -227,17 +227,19 @@ The tri-state plumbing already exists. Two refinements:
 >    their visible children (without touching SQ/Item parents), and call it from
 >    `_toggle_all_tags` / `_on_select_all_tag_checkbox`. Add this to the Goal-3
 >    checklist.
-> 2. **`::indicator` QSS on trees is unproven on this Qt.** The app pins
->    `PySide6>=6.11.1` and the themes have **no** `QTreeWidget`/`QTreeView`
+> 2. **`::indicator` QSS on trees is unproven on this Qt.** `requirements.txt`
+>    sets a **minimum** `PySide6>=6.11.1` (not an exact pin). CI uses the
+>    resolver-selected PySide6/Qt. Themes have **no** `QTreeWidget`/`QTreeView`
 >    `::indicator` rules today (only `QMenu::indicator` + `QCheckBox::indicator`,
 >    `resources/themes/*light/dark.qss`). Item-view `::indicator` styling has a
 >    long Qt-6 bug history (QTBUG-98848 et al.). **Do not assume it works:**
->    spike it on the pinned PySide6 first; if it fails, the fallback is a delegate
+>    spike on the **resolved** PySide6/Qt in the active env and **record those
+>    versions** in the spike notes; if it fails, the fallback is a delegate
 >    that draws `PE_IndicatorItemViewItemCheck` over the native `paint()` (keeps
 >    native hover/focus, unlike hand-painting the box). The selector also blast-
 >    radiates to the series tree, tag-viewer dialog, and SR browser — scope it
 >    `objectName`-based if app-wide unification is not intended.
-
+>
 > Note: the same tri-state logic already drives the *top* Select-All checkbox
 > (`_refresh_select_all_checkbox_state`, `tag_export_dialog_selection.py:86`).
 > Keep that behavior; only the *group header* indicator is enhanced.
@@ -328,7 +330,8 @@ asks for more.
       the role in `paint()` (O(1)). Single shared delegate can own header rule +
       stripe.
 - [ ] Partial-checkbox indicator: **spike the QSS
-      `QTreeWidget::indicator:indeterminate` on pinned PySide6>=6.11.1 first**
+      `QTreeWidget::indicator:indeterminate` on the resolver-selected PySide6/Qt
+      (floor `PySide6>=6.11.1`; record resolved PySide6 + Qt versions)** first
       (trees have no such rule today; Qt-6 `::indicator` has a bug history, A1).
       If it works, use a scoped (objectName) `image: <dot-or-rect svg>` glyph
       covering group headers + partial SQ/Item parents. If not, fall back to a
@@ -554,7 +557,7 @@ review, the worthwhile ones are captured below as **P7–P10** (added to Part 2'
 proposal set); two were rejected as too costly/noisy (sticky group headers,
 sequence block tinting) and are noted as **dropped**.
 
-### P7 — Monospace font for Tag / VR columns (typography)  · **Adopt (with correction)**
+## P7 — Monospace font for Tag / VR columns (typography)  · **Adopt (with correction)**
 Apply a mono font to the Tag ID and VR columns, leaving names in the sans font.
 - *Pros:* perfect numeric alignment makes long tag lists dramatically easier to
   scan; sanctioned by the design spec (`DESIGN.md §3.1` specifies Plex Mono as the
@@ -571,7 +574,7 @@ Apply a mono font to the Tag ID and VR columns, leaving names in the sans font.
   decision** (track as a pre-req, not a free win).
 - *Verdict:* still worthwhile, but scope the bundling cost honestly.
 
-### P8 — Filter-match substring highlighting  · **Adopt**
+## P8 — Filter-match substring highlighting  · **Adopt**
 When the filter box is used, paint the matched substring in `--accent` (or bold)
 via a delegate, instead of only hiding non-matches.
 - *Pros:* explains *why* a row survived the filter, especially when the match is
@@ -584,7 +587,7 @@ via a delegate, instead of only hiding non-matches.
   bounding rects, cached per cell.
 - *Verdict:* high value, pairs naturally with the shared tree delegate.
 
-### P9 — Dimmed empty / null value states  · **Adopt**
+## P9 — Dimmed empty / null value states  · **Adopt**
 Render tags with empty values in `--fg-disabled` + italic (e.g. dimmed
 `<empty>`), so missing data recedes.
 - *Pros:* reduces noise, draws the eye to tags that actually carry data; matches
@@ -592,7 +595,7 @@ Render tags with empty values in `--fg-disabled` + italic (e.g. dimmed
 - *Cons:* minor addition to tree-population logic.
 - *Verdict:* cheap, conforms to tokens, directly aids orientation.
 
-### P10 — Keyboard expand/collapse shortcuts for sequence blocks  · **Adopt**
+## P10 — Keyboard expand/collapse shortcuts for sequence blocks  · **Adopt**
 Add shortcuts (e.g. `Ctrl+Right`/`Ctrl+Left`, or `Shift+Click`) to
 expand/collapse whole sequence subtrees in the export dialog.
 - *Pros:* large speed-up for power users navigating sequences that can hold
@@ -601,13 +604,13 @@ expand/collapse whole sequence subtrees in the export dialog.
 - *Cons:* must avoid clashing with existing shortcuts (audit `DESIGN.md §6`).
 - *Verdict:* complements the visual hierarchy work with a navigation aid.
 
-### Dropped (per review, with rationale)
+## Dropped (per review, with rationale)
 - **Sticky / pinned group headers** — perfect for "what group am I in?" but very
   high effort to do robustly in `QTreeWidget` (overlay hacks / QML). Defer.
 - **Sequence block background tint** — clashes with alternating rows; nesting is
   already conveyed by branch lines (`setRootIsDecorated`). Too noisy. Defer.
 
-### Updated Part 2 recommendation
+## Updated Part 2 recommendation
 Add **P7, P8, P9, P10** to the adopt set. The combined rollout becomes:
 tier ladder (P1) + state color (P2) + active toolbar/pane frame (P4) + shared
 chrome (P5) + **mono tag columns (P7)** + **filter highlight (P8)** + **dimmed
@@ -643,11 +646,13 @@ summarized here.
   skips `_update_ancestors_check_state`, so the top Select-All never checks the
   group headers — the Goal-3 "all-selected → checkmark" goal silently fails.
   Added a targeted group-header-only recompute to the Select-All path.
-- **A1 — tree `::indicator` QSS unproven on pinned PySide6>=6.11.1.** No tree
+- **A1 — tree `::indicator` QSS unproven on resolver-selected PySide6/Qt
+  (floor `>=6.11.1`).** No tree
   `::indicator` rules exist today; Qt-6 item-view indicator styling has a long
   bug history. Made it **spike-first** with a `PE_IndicatorItemViewItemCheck`
   delegate fallback, and flagged the app-wide blast radius (series tree,
-  tag-viewer, SR browser) → scope `objectName`-based.
+  tag-viewer, SR browser) → scope `objectName`-based. Record resolved PySide6
+  and Qt versions in spike notes (CI does not pin an exact wheel).
 - **A4 — fill scope.** Metadata panel deliberately uses Base + rule (no fill);
   Goal-1 / P1 fills must be export-dialog-only. Captured as a hard scope rule.
 - **A7 — Plex Mono not bundled.** P7 corrected to "pending font-bundling
@@ -1058,10 +1063,11 @@ branch)
    `metadata_table_model.py:215-216` already have a documented ~19s O(n²)
    incident, and this plan's own history shows reviewers repeatedly having
    to catch new O(n²) attempts by inspection. Add a `tests/gui` timing test
-   that builds/expands-all/filters a synthetic large tree (e.g. 50 groups ×
-   100 tags, plus a few deep sequences) and asserts wall-clock time stays
-   under a generous bound (e.g. 2s). This converts "reviewer vigilance" into
-   a durable guardrail that catches regressions automatically, including
+   that builds/expands-all/filters synthetic trees at **at least two sizes**
+   and asserts **near-linear** growth (or a calibrated wall-clock bound with
+   a generous CI margin **plus** an explicit growth check). Do not rely on a
+   single fixed two-second limit alone. This converts "reviewer vigilance"
+   into a durable guardrail that catches regressions automatically, including
    ones introduced long after this plan is closed out.
 3. **De-risking spike before writing the full Phase B implementation.**
    Given how many times external review corrected a *load-bearing*
@@ -1071,7 +1077,8 @@ branch)
    committing to the checklist: (a) `GroupHeaderDelegate` reuse renders
    correctly on `tags_tree` once the role/span fixes are applied, and (b)
    whether `QTreeWidget::indicator:indeterminate` actually paints on the
-   pinned PySide6 version. Both are flagged "unproven" multiple times in
+   **resolver-selected** PySide6/Qt (floor `>=6.11.1`; **record resolved
+   PySide6 and Qt versions**). Both are flagged "unproven" multiple times in
    this document; resolving them first avoids re-planning mid-implementation.
 4. **Phased delivery instead of one branch/PR.** Given the item count,
    recommend splitting into sequential, independently reviewable PRs (can

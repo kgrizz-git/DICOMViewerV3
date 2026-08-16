@@ -42,12 +42,17 @@ Two of the largest whole-app orientation gaps are **not** in the tag tree:
       `main_window` toolbar builder — no per-dialog hacks.
 - [ ] **(PT4)** Focused-pane accent frame (start with frame only; defer dimming
       non-focused overlays until frame alone is validated) — C3 “small first step.”
-- [ ] **(PT5)** Tests or harness steps for 1×1 / 1×2 / 2×2 focus change; manual
-      smoke for privacy/cine toggles.
+- [ ] **(PT5)** Tests or harness/smoke for focus-state rendering across **1×1,
+      1×2, 2×1, 2×2, and MPR**; include multi-window focus, expand/revert
+      transitions, and overlay draw-stack ordering (focused frame must not
+      bury or invert overlay z-order). Manual smoke for privacy/cine (and other)
+      toolbar toggles’ active-state cues.
 
 ## Verification
 
-- Manual multi-pane focus + toolbar toggle smoke  
+- Focus-state smoke: 1×1 / 1×2 / 2×1 / 2×2 / MPR + multi-window  
+- Non-regression: expand/revert and overlay draw-stack order unchanged  
+- Toolbar active-state smoke (privacy, cine, other toggles from PT1)  
 - Theme/accent flip does not leave stale frames  
 - `python scripts/agent_smoke_harness.py` where applicable
 
