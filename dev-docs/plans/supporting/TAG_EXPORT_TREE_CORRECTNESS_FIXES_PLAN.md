@@ -46,7 +46,8 @@ immediately useful correctness and unblocks later phases.
       `QColor(80, 50, 120)` via a tokenized helper (mirror
       `tag_viewer_dialog` / `_edited_tag_row_colors()` pattern)
       (investigation D2). Regression test: edited-row color is not a raw RGB
-      literal.
+      literal. (Metadata panel touchpoint — does not replace Phase B’s
+      left-pane header/stripe work.)
 - [ ] **(A5)** Tests: group headers reach `Checked` after top Select All and
       after the Select-All button; remain coherent after filter; objectName
       present on `tags_tree`.

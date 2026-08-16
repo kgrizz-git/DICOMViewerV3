@@ -23,6 +23,14 @@ as one mega-diff.
 
 ### After Phase C — still tag-tree / metadata
 
+- [ ] **(D-export-visual)** **Open question — export tree richer formatting.**
+      The export `tags_tree` is mostly ID + name for selection; it may not need
+      metadata-panel header/stripe/tier chrome. **Default: defer / leave alone**
+      beyond Goal 3 checkboxes. **Gate (Phase B item B7):** after metadata
+      Goals 1–2 ship, side-by-side appearance check → choose
+      (a) full parity, (b) light-touch subset, or (c) none. Record the decision
+      here before any export visual PR. Do not lock styling in without this
+      check.
 - [ ] **(D-P2)** State color for selected / edited rows (tokenized); sequence
       **after** Phase C tier chrome so regressions are bisectable. Include any
       leftover edited-row polish beyond Phase A’s D2 fix.

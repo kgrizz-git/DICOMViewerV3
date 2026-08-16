@@ -11,21 +11,24 @@ work. **Do not implement from this file.** Actionable checklists live in the
 phased plans linked below; the hub index is
 [`TAG_TREE_VISUAL_HIERARCHY_PLAN.md`](../plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md).
 
+**Primary surface:** left-pane **metadata panel** (Goals 1–2). Export dialog:
+Goal 3 checkboxes in scope; **richer export formatting deferred / open**
+(Part 9 appearance gate). See Parts 8–9.
+
 | Phase | Plan | Priority |
 |---|---|---|
 | Hub / index | [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](../plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md) | — |
-| A — Correctness fixes | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../plans/supporting/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | P1 |
-| B — Goals 1–3 (headers, striping, checkboxes) | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | P2 |
+| A — Export correctness (+ edited-row token) | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../plans/supporting/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | P1 |
+| B — Headers/stripes (**metadata first**) + export Goal 3 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | P2 |
 | C — Tier / orientation / nav backbone | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](../plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | P2 |
 | D — Tag-tree follow-ups | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](../plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | P3 |
 | Split-out — pane/toolbar state | [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](../plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md) | P2 |
 | Backlog | [TO_DO.md](../TO_DO.md) (UX / Workflow) | — |
 
-**Original scope (historical):**
-- **Part 1 (tag-tree specifics):** `src/gui/dialogs/tag_export_dialog.py`
-  (the left-pane "tag browser" tree = `self.tags_tree`, a `QTreeWidget` with
-  depth-0 group headers and nested sequence/item/leaf rows). No behavior change
-  to export logic — visual/UX only.
+**Original scope (historical — partially superseded by Part 8):**
+- **Part 1** was drafted against `tag_export_dialog.py` / `self.tags_tree`. The
+  user’s primary intent for Goals 1–2 is the **left-pane metadata panel**;
+  export remains secondary for visuals and primary for Goal 3 checkboxes.
 - **Part 2 (whole-app UX exploration):** design summary + multiple proposals for
   broader visual-orientation variety across the entire interface. Exploration
   only; must conform to `DESIGN.md` and the UX Assessment Remediation Plan.
@@ -1119,4 +1122,70 @@ was split into phased plans linked from the
 | Pane/toolbar | [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](../plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md) |
 
 Backlog entries live under [TO_DO.md](../TO_DO.md) → UX / Workflow.
+
+---
+
+# Part 8 — Scope correction: metadata panel is primary (2026-08-16)
+
+## What went wrong
+
+Planning conflated two backlog threads:
+
+1. **Left-pane tag browser** (`metadata_panel` / `metadata_tag_tree`) — group
+   heading differentiation + per-group striping
+   ([TO_DO](../TO_DO.md) “Tag browser group-heading styling (left pane)”).
+2. **Tag export dialog** — group checkbox tri-state / partial indicator, plus
+   optional visual parity.
+
+Early drafts labeled Part 1 as `tag_export_dialog.py` and treated the export
+tree as the implementation home for Goals 1–2. Review note **A4** then froze a
+past metadata-panel experiment (“fills read as odd blocks → Base + rules only”)
+into a hard “fills are export-dialog-only” rule. That protected an old styling
+choice; it did **not** match the user’s primary ask, which is to improve the
+**main-window left pane**.
+
+## Corrected product priority
+
+| Goal | Primary surface | Export dialog |
+|---|---|---|
+| 1 — Group heading chrome (shade, height, font, heavier top border) | **Metadata panel** | **Open / deferred** — not assumed; appearance gate before any apply |
+| 2 — Alternating colors reset per group | **Metadata panel** | **Open / deferred** — same gate |
+| 3 — Group checkbox check / partial indicator | N/A | **In scope** (export selection UI) |
+
+**Rationale for deferring export rich chrome:** the left-pane metadata tree
+shows tag **values** as well as numbers and names, so hierarchy styling carries
+more information. The export tree is mainly a selection list (ID + name); it
+may only need checkbox clarity. **Do not lock export styling to match
+metadata** until a side-by-side appearance check (Phase B `B7` → Phase D
+`D-export-visual`) chooses apply, light-touch, or none.
+
+**A4 superseded (metadata only):** try a **tokenized** header treatment on the
+metadata panel (including a restrained fill if contrast-safe). If a fill still
+fails visual review, strengthen rule + font/height and document that decision —
+do not default to “skip the metadata panel.”
+
+## Plan updates
+
+Phased plans and the hub were updated 2026-08-16 for Part 8 (metadata primary)
+and Part 9 (export rich chrome deferred / gated)
+([hub](../plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md),
+[Phase B](../plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md),
+[Phase C](../plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md),
+[Phase D](../plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md)).
+Historical Parts 1–7 above remain as review archaeology; where they conflict
+with Parts 8–9 on **which widget is primary** or **whether export gets rich
+chrome**, Parts 8–9 win.
+
+---
+
+# Part 9 — Export dialog: checkbox yes, rich chrome open (2026-08-16)
+
+User clarification: export tag tree likely needs little visual styling beyond
+checkbox issues; richer formatting should be **deferred**, flagged as an
+**open question**, and/or gated on an **explicit appearance check** before
+locking in.
+
+**Decision recorded in plans:** all three — default defer; open question
+`D-export-visual`; mandatory Phase B `B7` appearance gate before any export
+header/stripe/tier work.
 

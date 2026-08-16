@@ -6,33 +6,43 @@
 **Branch (planning):** `feature/tag-tree-visual-hierarchy-plan`
 
 This file is the **entry point** for the tag-tree / visual-orientation workstream.
-The former monolithic plan (goals, Part 2 proposals, three external reviews, and
-the Part 7 recommendation pass) was moved to an investigation document so
-actionable work can proceed in small, ordered plans.
+The former monolithic plan was moved to an investigation document so actionable
+work can proceed in small, ordered plans.
+
+## Primary surface & export stance
+
+**Goals 1–2 (group heading chrome + per-group striping)** target the
+**main-window left-pane metadata panel** (`metadata_panel` /
+`metadata_tag_tree`). That tree shows tag numbers, names, **and values**, so
+hierarchy styling carries more load.
+
+**Tag export dialog:** ship **Goal 3** (group checkbox tri-state / partial
+indicator) and Phase A correctness. **Richer export-tree formatting is an open
+question** — defer by default; run Phase B’s **appearance gate** (side-by-side
+with the restyled metadata panel) before locking in any header/stripe/tier
+parity on export. See Phase D `D-export-visual`.
 
 ## Investigation (full history)
 
 [tag-tree-visual-hierarchy-investigation-2026-08-16.md](../../ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md)
 
-Contains: stated goals, current-implementation facts, Goals 1–4 proposals,
-Part 2 whole-app ideas (P1–P10), external reviews (Gemini / DeepSeek / GLM),
-ad-hoc assessment refinements (E-series), and the Part 7 recommend / discourage /
-defer / phase guidance. **Not an implementation checklist.**
+Parts 1–7: archaeology. **Part 8–9:** scope corrections (metadata primary;
+export rich chrome deferred / gated). **Not an implementation checklist.**
 
 ## Phased implementation plans (recommended order)
 
 | Phase | Priority | Plan | What it covers |
 |---|---|---|---|
-| **A** | P1 | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | objectName/scoped QSS; Select-All → group-header tri-state; filter guard; fix hardcoded edited-row color |
-| **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | Goals 1–3: header chrome via shared delegate, per-group striping, partial checkbox spike + indicator, perf test |
-| **C** | P2 | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | Tier ladder + P5 phase 1 (export + metadata); mono fallback; filter highlight; empties; Expand/Collapse unit; `DESIGN.md` |
-| **D** | P3 | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | State colors, series_tree decision, select-group, P5 phase 2, PHI marker (privacy-gated), deferred items |
+| **A** | P1 | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | Export Select-All → group-header tri-state; filter guard; `tags_tree` objectName; tokenized edited-row color (metadata) |
+| **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | **Metadata:** Goals 1–2. **Export:** Goal 3 checkboxes + appearance-gate decision (no rich chrome locked in) |
+| **C** | P2 | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | Tier / orientation / nav on **metadata**; export only if appearance gate said so (else leave export visual alone) |
+| **D** | P3 | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | `D-export-visual` open question; other follow-ups |
 
 ## Split-out (not tag-tree scope)
 
 | Priority | Plan | What it covers |
 |---|---|---|
-| P2 | [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md) | Active toolbar toggles + focused-pane accent frame (investigation P4 / C3) |
+| P2 | [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md) | Active toolbar toggles + focused-pane accent frame |
 
 ## Related
 
@@ -43,8 +53,9 @@ defer / phase guidance. **Not an implementation checklist.**
 
 ## Quick “what to do next”
 
-1. Implement **Phase A** (correctness, no visual redesign).  
-2. Run Phase B spikes (delegate reuse + `::indicator` QSS) before coding Goals 1–3.  
-3. Land **Phase B**, then **Phase C**.  
-4. Pull items from **Phase D** / the pane-toolbar plan only when needed; prefer
-   one small PR per follow-up subsection.
+1. **Phase B on the metadata panel** (Goals 1–2); Phase A in parallel for export
+   checkbox correctness.
+2. Finish export **Goal 3** only; run the **appearance gate** and record
+   apply / light-touch / none under Phase D.
+3. **Phase C** on metadata; touch export visuals only if the gate promoted them.
+4. Other Phase D / pane-toolbar items as separate PRs.
