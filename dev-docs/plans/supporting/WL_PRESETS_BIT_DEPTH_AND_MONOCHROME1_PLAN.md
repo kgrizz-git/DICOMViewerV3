@@ -30,8 +30,9 @@ same commit as its render change (see Invariant #3).
 1. **Core inverts the dataset baseline; the view layer persists ONLY the user toggle.** The persisted
    `image_inverted` is the *user* half, never the combined effective polarity. (Prevents double-inversion.)
 2. **Invert on the finalized `uint8` array** (`arr = arr.astype(uint8); arr = 255 - arr`), matching
-   `export_rendering.py:221-230` exactly. Both `apply_window_level` and `normalize_to_uint8` already
-   return `uint8`, so this is byte-identical to export.
+   the pre-change export math (`255 - arr` on the uint8 'L' array in `export_rendering.py`'s
+   `process_image_by_photometric_interpretation`, which W2.3 removes). Both `apply_window_level` and
+   `normalize_to_uint8` already return `uint8`, so this is byte-identical to export.
 3. **Export/cine must NOT re-invert MONOCHROME1 once core owns it** — remove the MONOCHROME1 branch in
    `process_image_by_photometric_interpretation` (keep YBR/RGB/PALETTE) in the **same commit** as the
    render change, or exports/cine regress to wrong polarity.
@@ -102,10 +103,23 @@ branch as CR/DX:
 
 ```python
 if modality.upper() in ("CR", "DX", "NM") and _has_usable_rescale(rescale_slope, rescale_intercept):
-    builtin_tuples = list(builtin_tuples) + get_cr_dx_hu_builtin_presets()  # + nm rescaled Default
+    builtin_tuples = list(builtin_tuples) + get_hu_gated_builtin_presets(modality)
 ```
 
-HU presets only appear when a real rescale exists, so they convert correctly (`rescale_slope` non-`None`).
+Define `get_hu_gated_builtin_presets(modality)` in `wl_builtin_presets.py` (mirrors the existing
+`get_mr_hu_builtin_presets` shape). For CR/DX it returns the CT-HU-style windows
+(`Chest -600/1500`, `Bone 300/1500`); for NM it returns a generic **"rescaled Default"** (the
+modality-specific lists already live in `wl_builtin_presets.py` — CR/DX reuse the prior CT-HU
+values, NM gets one gated entry). HU presets only appear when a real rescale exists, so they
+convert correctly (`rescale_slope` non-`None`).
+
+**Justification for resurrecting CT-HU values behind the gate (R3):** a rescaled CR/DX/NM is rare,
+but when present the stored values really are in the rescale unit (HU-like for CR/DX, NM's unit for
+NM), so a rescaled window is the correct display — and it now converts correctly instead of being
+applied as raw. Names stay clinically descriptive (`Chest`/`Bone` for CR/DX; `rescaled Default` for
+NM, avoiding an SUV assumption). This is the only place the old HU values persist, and only by
+design (gated + converted).
+
 Add an NM row to the W1 gate test so "NM resolved" is actually asserted.
 
 ### W1.4 Menu labeling (`src/core/wl_preset_catalog.py:storage_space_label` / `format_preset_tooltip`)
@@ -152,28 +166,37 @@ effective_inverted = dataset_is_monochrome1 XOR user_toggled_invert
 
 ### W2.4 Persisted-state migration (`src/gui/view_state_manager.py`)
 
-Add a `schema_version` key to `series_defaults` (absence = pre-scheme); stamp it on the **first
-write** to `series_defaults` after upgrade. Rule:
+Add a `schema_version` key to `series_defaults` (absence = pre-scheme). **Stamp only at write
+sites** — the existing `_store_wl_and_defaults` (`slice_window_level_resolver.py:248`) and the
+inversion-persist path (`subwindow_manager_factory.py:254-261` →
+`view_state_manager.set_series_inversion_state`). **Reads must be side-effect-free**: discarding a
+pre-scheme MONOCHROME1 stored value happens at read time and must NOT write back (idempotent, no
+read-path mutation). Rule:
 - **MONOCHROME2:** honor stored user half as-is (incl. pre-scheme `True`).
 - **MONOCHROME1:** discard pre-scheme stored value, start user half `False` (baseline auto-inverts).
   Rationale: pre-upgrade a user could only "fix" MONOCHROME1 by pressing Invert (`True`); restoring
   that under the new XOR would yield effective **un-inverted** (wrong).
 - Post-scheme: restore user half normally for both PI values.
 
-**Where the PI-dependent decision runs (it needs the dataset):** the restore path
-(`_resolve_view_preserve_and_inversion`, `slice_display_manager.py:559-577`) currently receives no
-dataset, but its caller holds `self.current_dataset`. Decision: the caller passes
-`PhotometricInterpretation` (from `self.current_dataset`) into the restore/read so the PI branch in
-W2.4 can be applied; do NOT store PI in `series_defaults`. Mixed-PI series (rare) → baseline wins per
-current slice; document this.
+**Read signature:** `get_series_inversion_state(series_identifier, pi=None)` — `pi=None` ⇒ treat as
+MONOCHROME2 (honor stored half), so existing no-arg callers/tests (`test_view_state_manager_state_round.py`)
+stay green. **Where the PI-dependent decision runs:** the only call site is
+`_resolve_view_preserve_and_inversion` (`slice_display_manager.py:559-577`); its caller holds
+`self.current_dataset` and passes `PhotometricInterpretation` into the read so the PI branch applies.
+Do NOT store PI in `series_defaults`. Mixed-PI series (rare) → baseline wins per current slice; document
+this.
 
 ### W2.5 UX details
 
 - Context-menu check (`image_viewer_context_menu.py:667`) reflects the **user offset** (checkbox
   unchecked when user half is `False`, even though a MONOCHROME1 image looks inverted on screen).
-- Status-bar note: extend the WL status segment (`format_status_bar_wl`, `wl_preset_catalog.py`) to
-  append a modality-inverted marker (e.g. ` (MI)`) for MONOCHROME1 so users understand the inversion
-  is by modality, not the toggle. Log via the existing logger/debug flag, not `print`.
+- Status-bar note: extend the WL status segment (`format_status_bar_wl`, `wl_preset_catalog.py:243`)
+  to append a modality-inverted marker (e.g. ` (MI)`) for MONOCHROME1 so users understand the inversion
+  is by modality, not the toggle. **Plumb point:** `update_zoom_preset_status` (on `main_window`,
+  invoked via `main_window_status_controller.py:38` / `main_window.py:762`) is the carrier; it has
+  three call sites — `window_level_preset_handler.py:65`, `slice_window_level_resolver.py:261`, and
+  `view_state_handlers.py:103,116` — so add an optional `is_monochrome1: bool = False` param there and
+  thread it through to `format_status_bar_wl`. Log via the existing logger/debug flag, not `print`.
 - `invert_image` still toggles the user half; effective polarity is the XOR.
 
 ---
@@ -193,7 +216,8 @@ current slice; document this.
 | `src/gui/export_rendering.py` | W2 | Drop MONOCHROME1 branch (keep YBR/RGB/PALETTE) (W2.3) |
 | `src/gui/export_manager.py` | W2 | No re-invert MONOCHROME1 (W2.3) |
 | `src/gui/cine_video_export.py` | W2 | No re-invert MONOCHROME1 (W2.3) |
-| `src/core/slice_window_level_resolver.py` | W2 | None for inversion baseline (core owns it, Invariant #1); caller passes PI into the user-half restore (W2.4) |
+| `src/core/slice_window_level_resolver.py` | W2 | **No code change** for inversion (core owns baseline, Invariant #1). Its tests change (matrix W1 default). |
+| `src/gui/slice_display_manager.py` | W2 | Caller of `_resolve_view_preserve_and_inversion` passes PI (from `self.current_dataset`) into the user-half restore (W2.4) |
 
 ---
 
