@@ -30,6 +30,7 @@ from pydicom.dataset import Dataset
 from PySide6.QtCore import QPointF
 
 from core.dicom_processor import DICOMProcessor
+from core.view_state_inversion import get_persisted_user_inversion
 from gui.image_viewer import ImageViewer
 from gui.main_window import MainWindow
 from gui.window_level_controls import WindowLevelControls
@@ -291,7 +292,6 @@ class ViewStateManager:
             'v_scroll': self.image_viewer.verticalScrollBar().value(),
             'scene_center': scene_center,
             'use_rescaled_values': self.use_rescaled_values,
-            'image_inverted': self.image_viewer.image_inverted
         })
 
     def _restore_stored_series_wl_and_refresh(self, scene_center: QPointF | None) -> None:
@@ -334,7 +334,6 @@ class ViewStateManager:
             'h_scroll': self.image_viewer.horizontalScrollBar().value(),
             'v_scroll': self.image_viewer.verticalScrollBar().value(),
             'scene_center': scene_center,
-            'image_inverted': self.image_viewer.image_inverted
         })
         series_entry['window_level_defaults_set'] = True
 
@@ -362,7 +361,6 @@ class ViewStateManager:
                     'v_scroll': self.image_viewer.verticalScrollBar().value(),
                     'scene_center': scene_center,
                     'use_rescaled_values': self.use_rescaled_values,
-                    'image_inverted': self.image_viewer.image_inverted
                 }
             elif self.series_defaults[self.current_series_identifier].get('window_level_defaults_set', False):
                 self._restore_stored_series_wl_and_refresh(scene_center)
@@ -1078,30 +1076,24 @@ class ViewStateManager:
         """
         self.current_series_identifier = identifier
 
-    def get_series_inversion_state(self, series_identifier: str | None = None) -> bool:
-        """
-        Get inversion state for a series.
-        
-        Args:
-            series_identifier: Optional series identifier. If None, uses current series identifier.
-            
-        Returns:
-            True if image is inverted for this series, False otherwise
-        """
+    def get_series_inversion_state(
+        self,
+        series_identifier: str | None = None,
+        pi: str | None = None,
+    ) -> bool:
+        """Return the persisted user inversion half, migrating legacy MONOCHROME1 state safely."""
         if series_identifier is None:
             series_identifier = self.current_series_identifier
 
-        if series_identifier and series_identifier in self.series_defaults:
-            return self.series_defaults[series_identifier].get('image_inverted', False)
-        return False
+        defaults = self.series_defaults.get(series_identifier) if series_identifier else None
+        return get_persisted_user_inversion(defaults, pi)
 
     def set_series_inversion_state(self, series_identifier: str | None = None, inverted: bool = False) -> None:
-        """
-        Set inversion state for a series.
-        
-        Args:
-            series_identifier: Optional series identifier. If None, uses current series identifier.
-            inverted: True if image should be inverted, False otherwise
+        """Set the user-half inversion state for a series.
+
+        Stamps an inversion-specific schema key on explicit user-toggle writes
+        so generic view/WL persistence cannot accidentally mark legacy data as
+        migrated.
         """
         if series_identifier is None:
             series_identifier = self.current_series_identifier
@@ -1110,6 +1102,7 @@ class ViewStateManager:
             if series_identifier not in self.series_defaults:
                 self.series_defaults[series_identifier] = {}
             self.series_defaults[series_identifier]['image_inverted'] = inverted
+            self.series_defaults[series_identifier].setdefault('image_inversion_schema_version', 1)
 
     def set_current_data_context(
         self,
@@ -1212,4 +1205,3 @@ class ViewStateManager:
         self.image_viewer._flip_v = flip_v
         self.image_viewer._rotation_deg = rotation_deg
         self.image_viewer._apply_view_transform()
-

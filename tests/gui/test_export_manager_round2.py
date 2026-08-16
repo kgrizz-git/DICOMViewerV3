@@ -50,13 +50,13 @@ def test_scale_and_annotation_sizes_follow_export_limits(requested: float, expec
     assert ExportManager.export_text_size_pixels(50, 512, 512, requested) >= 8
 
 
-def test_photometric_wrapper_inverts_synthetic_monochrome1() -> None:
+def test_photometric_wrapper_no_longer_inverts_monochrome1() -> None:
     image = Image.fromarray(np.array([[0, 100]], dtype=np.uint8), mode="L")
     dataset = _dataset(photometric="MONOCHROME1")
 
     result = ExportManager.process_image_by_photometric_interpretation(image, dataset)
 
-    assert np.array_equal(np.asarray(result), np.array([[255, 155]], dtype=np.uint8))
+    assert np.array_equal(np.asarray(result), np.array([[0, 100]], dtype=np.uint8))
 
 
 class _Progress:

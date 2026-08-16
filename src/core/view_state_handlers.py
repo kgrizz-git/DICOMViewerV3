@@ -100,8 +100,9 @@ def update_zoom_preset_status_bar(app: Any) -> None:
     current_zoom = app.image_viewer.current_zoom if app.image_viewer is not None else 1.0
     center, width = app.window_level_controls.get_window_level()
     unit = app.window_level_controls.unit
+    is_monochrome1 = _is_dataset_monochrome1(getattr(app, "current_dataset", None))
     app.main_window.update_zoom_preset_status(
-        current_zoom, center, width, unit=unit
+        current_zoom, center, width, unit=unit, is_monochrome1=is_monochrome1
     )
 
 
@@ -113,6 +114,21 @@ def update_zoom_wl_status_from_view_state(vsm: Any) -> None:
     if center is None or width is None:
         center, width = vsm.window_level_controls.get_window_level()
     unit = vsm.window_level_controls.unit
+    is_monochrome1 = _is_dataset_monochrome1(getattr(vsm, "current_dataset", None))
     vsm.main_window.update_zoom_preset_status(
-        current_zoom, center, width, unit=unit
+        current_zoom, center, width, unit=unit, is_monochrome1=is_monochrome1
     )
+
+
+def _is_dataset_monochrome1(dataset: Any) -> bool:
+    """Return True if the dataset has PhotometricInterpretation == MONOCHROME1."""
+    if dataset is None:
+        return False
+    pi = getattr(dataset, "PhotometricInterpretation", None)
+    if pi is None:
+        return False
+    if isinstance(pi, (list, tuple)):
+        pi = str(pi[0]).strip()
+    else:
+        pi = str(pi).strip()
+    return pi.upper() == "MONOCHROME1"

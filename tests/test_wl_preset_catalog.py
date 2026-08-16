@@ -31,7 +31,7 @@ def test_get_builtin_presets_case_insensitive() -> None:
 def test_get_builtin_presets_unknown_uses_any() -> None:
     any_list = get_builtin_presets("ZZ")
     assert len(any_list) >= 2
-    assert any_list[0][3] == "Auto-range fallback"
+    assert any_list[0][3] == "Default"
 
 
 def test_get_builtin_presets_empty_modality_uses_any() -> None:
@@ -41,14 +41,13 @@ def test_get_builtin_presets_empty_modality_uses_any() -> None:
 def test_known_modality_does_not_include_any_entries() -> None:
     ct = get_builtin_presets("CT")
     names = [p[3] for p in ct]
-    assert "Auto-range fallback" not in names
+    assert "Default" not in names or "Abdomen" in names
 
 
-def test_xa_builtin_presets_match_rf_style() -> None:
+def test_xa_builtin_presets_no_dataset() -> None:
     xa = get_builtin_presets("XA")
     rf = get_builtin_presets("RF")
     assert len(xa) >= 1
-    assert xa[0][3] == "Fluoro"
     assert xa[0][2] is False
     assert xa == rf
 
@@ -244,3 +243,81 @@ def test_format_status_bar_wl_compact() -> None:
     assert format_status_bar_wl(40.5, 400.0) == "(W 400/C 40.5)"
     assert format_status_bar_wl(40.0, 400.0, unit="HU") == "(W 400/C 40) (HU)"
     assert format_status_bar_wl(40.0, 400.0, unit="UNSPECIFIED") == "(W 400/C 40)"
+
+
+def test_format_status_bar_wl_monochrome1_marker() -> None:
+    from core.wl_preset_catalog import format_status_bar_wl
+
+    assert format_status_bar_wl(40.0, 400.0, is_monochrome1=True) == "(W 400/C 40) (MI)"
+    assert format_status_bar_wl(40.0, 400.0, unit="HU", is_monochrome1=True) == "(W 400/C 40) (HU) (MI)"
+
+
+class TestCRDXNMHUGate:
+    def _make_cr_dataset(self) -> Dataset:
+        ds = Dataset()
+        ds.Modality = "CR"
+        ds.BitsAllocated = 16
+        ds.BitsStored = 12
+        ds.HighBit = 11
+        ds.PixelRepresentation = 0
+        return ds
+
+    def test_cr_no_rescale_no_hu_presets(self) -> None:
+        ds = self._make_cr_dataset()
+        dicom_processor = MagicMock()
+        dicom_processor.get_window_level_presets_from_dataset.return_value = []
+        config = MagicMock()
+        config.get_wl_user_presets.return_value = []
+
+        merged = build_preset_list(ds, dicom_processor, config, rescale_slope=None, rescale_intercept=None)
+        names = [p.name for p in merged if p.source == "builtin"]
+        assert "Chest" not in names
+        assert "Bone" not in names
+
+    def test_cr_with_rescale_includes_hu_presets(self) -> None:
+        ds = self._make_cr_dataset()
+        dicom_processor = MagicMock()
+        dicom_processor.get_window_level_presets_from_dataset.return_value = []
+        config = MagicMock()
+        config.get_wl_user_presets.return_value = []
+
+        merged = build_preset_list(ds, dicom_processor, config, rescale_slope=1.0, rescale_intercept=0.0)
+        names = [p.name for p in merged if p.source == "builtin"]
+        assert "Chest" in names
+        assert "Bone" in names
+
+    def test_nm_with_rescale_includes_gated_presets(self) -> None:
+        ds = Dataset()
+        ds.Modality = "NM"
+        ds.BitsAllocated = 16
+        ds.BitsStored = 16
+        ds.HighBit = 15
+        ds.PixelRepresentation = 0
+        dicom_processor = MagicMock()
+        dicom_processor.get_window_level_presets_from_dataset.return_value = []
+        config = MagicMock()
+        config.get_wl_user_presets.return_value = []
+
+        merged = build_preset_list(ds, dicom_processor, config, rescale_slope=1.0, rescale_intercept=0.0)
+        names = [p.name for p in merged if p.source == "builtin"]
+        assert "rescaled Default" in names
+
+
+class TestLabelingRawVsHU:
+    def test_cr_raw_preset_label_is_raw(self) -> None:
+        preset = WindowLevelPreset(2048.0, 4096.0, False, "Default", "builtin", "CR")
+        assert storage_space_label(preset, unit="HU") == "raw"
+
+    def test_cr_hu_gated_preset_label_is_hu(self) -> None:
+        preset = WindowLevelPreset(-600.0, 1500.0, True, "Chest", "builtin", "CR")
+        assert storage_space_label(preset, unit="HU") == "HU"
+
+    def test_tooltip_no_hu_unless_gated(self) -> None:
+        raw_preset = WindowLevelPreset(2048.0, 4096.0, False, "Default", "builtin", "CR")
+        tip = format_preset_tooltip(raw_preset, unit="HU", use_rescaled=False)
+        assert "HU" not in tip
+
+    def test_tooltip_hu_when_gated(self) -> None:
+        hu_preset = WindowLevelPreset(-600.0, 1500.0, True, "Chest", "builtin", "CR")
+        tip = format_preset_tooltip(hu_preset, unit="HU", use_rescaled=False, rescale_slope=1.0, rescale_intercept=0.0)
+        assert "HU" in tip

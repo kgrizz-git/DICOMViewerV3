@@ -1,8 +1,21 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-16
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-16
+
+- **W/L presets bit-depth awareness + MONOCHROME1 on-screen inversion:**
+  Implemented the full plan at `plans/supporting/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md`.
+  Core render layer (`render_grayscale_image`) now owns MONOCHROME1 inversion;
+  export/cine no longer re-invert (single-inversion ownership). Export-render
+  ownership moved from `export_rendering.process_image_by_photometric_interpretation`
+  to `core.dicom_image_render.render_grayscale_image`. Built-in presets for
+  CR/DX/MG/NM/RF/XA/US/ANY derive from the dataset's stored pixel range via a
+  new tag-only helper (`core.dicom_pixel_range`). CR/DX HU presets gated behind
+  real rescale. An inversion-specific migration key in `ViewStateManager` discards
+  pre-upgrade MONOCHROME1 stored inversion state. Status bar shows `(MI)` marker.
 
 ## 2026-08-15
 

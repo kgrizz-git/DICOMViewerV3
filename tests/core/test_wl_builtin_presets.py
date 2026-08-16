@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import pytest
+from pydicom.dataset import Dataset
 
 from core.wl_builtin_presets import (
     BUILTIN_PRESETS,
     MR_HU_PRESETS,
     WLPreset,
     get_builtin_presets,
+    get_hu_gated_builtin_presets,
     get_mr_hu_builtin_presets,
 )
 
@@ -44,9 +46,10 @@ def test_get_builtin_presets_unknown_modality():
 
 
 @pytest.mark.parametrize("modality", ["", None])
-def test_get_builtin_presets_empty_modality(modality):
+def test_get_builtin_presets_empty_modality_uses_any(modality):
     presets = get_builtin_presets(modality)
-    assert presets == list(BUILTIN_PRESETS["ANY"])
+    assert len(presets) >= 2
+    assert all(p[2] is False for p in presets)
 
 
 def test_get_builtin_presets_returns_copy():
@@ -62,7 +65,8 @@ def test_get_mr_hu_builtin_presets():
 
 
 def test_preset_tuple_shape():
-    for modality, presets in BUILTIN_PRESETS.items():
+    for modality in ("CT", "MR", "PT"):
+        presets = BUILTIN_PRESETS[modality]
         for preset in presets:
             assert len(preset) == 4, f"{modality}: {preset}"
             assert isinstance(preset, tuple)
@@ -72,9 +76,10 @@ def test_preset_tuple_shape():
             assert isinstance(preset[3], str) or preset[3] is None
 
 
-def test_any_table_present():
-    assert "ANY" in BUILTIN_PRESETS
-    assert len(BUILTIN_PRESETS["ANY"]) >= 2
+def test_any_fallback_present():
+    presets = get_builtin_presets("ZZZ")
+    assert len(presets) >= 2
+    assert all(p[2] is False for p in presets)
 
 
 def test_mr_hu_presets_all_rescaled():
@@ -84,3 +89,76 @@ def test_mr_hu_presets_all_rescaled():
 def test_wlpreset_type_alias():
     preset: WLPreset = (40.0, 400.0, True, "Test")
     assert preset == (40.0, 400.0, True, "Test")
+
+
+def _make_dataset(*, bits_allocated: int = 16, bits_stored: int = 12, pixel_representation: int = 0) -> Dataset:
+    ds = Dataset()
+    ds.BitsAllocated = bits_allocated
+    ds.BitsStored = bits_stored
+    ds.HighBit = bits_stored - 1
+    ds.PixelRepresentation = pixel_representation
+    return ds
+
+
+class TestBitDepthAwarePresets:
+    def test_cr_with_dataset_is_rescaled_false(self):
+        ds = _make_dataset(bits_stored=12)
+        presets = get_builtin_presets("CR", dataset=ds)
+        assert all(p[2] is False for p in presets)
+
+    def test_dx_with_dataset_is_rescaled_false(self):
+        ds = _make_dataset(bits_stored=10)
+        presets = get_builtin_presets("DX", dataset=ds)
+        assert all(p[2] is False for p in presets)
+
+    def test_cr_no_dataset_uses_16bit_fallback(self):
+        presets = get_builtin_presets("CR")
+        assert len(presets) >= 2
+        assert all(p[2] is False for p in presets)
+        default = presets[0]
+        assert default[0] == pytest.approx(32767.5)
+        assert default[1] == pytest.approx(65535.0)
+
+    def test_wide_is_1_5x_default_width(self):
+        ds = _make_dataset(bits_stored=12)
+        presets = get_builtin_presets("CR", dataset=ds)
+        default = presets[0]
+        wide = presets[1]
+        assert wide[1] - default[1] == pytest.approx(0.5 * default[1])
+
+    def test_10bit_dataset_range(self):
+        ds = _make_dataset(bits_stored=10)
+        presets = get_builtin_presets("MG", dataset=ds)
+        default = presets[0]
+        assert default[0] == pytest.approx(511.5)
+        assert default[1] == pytest.approx(1023.0)
+
+    def test_signed_dataset_range(self):
+        ds = _make_dataset(bits_allocated=16, bits_stored=16, pixel_representation=1)
+        presets = get_builtin_presets("US", dataset=ds)
+        default = presets[0]
+        assert default[0] == pytest.approx(-0.5)
+        assert default[1] == pytest.approx(65535.0)
+
+
+class TestHUGatedPresets:
+    def test_cr_dx_hu_gated(self):
+        presets = get_hu_gated_builtin_presets("CR")
+        assert len(presets) == 2
+        assert all(p[2] is True for p in presets)
+        names = [p[3] for p in presets]
+        assert "Chest" in names
+        assert "Bone" in names
+
+    def test_nm_hu_gated_uses_nonzero_calibrated_window(self):
+        presets = get_hu_gated_builtin_presets("NM")
+        assert presets == [(500.0, 1000.0, True, "rescaled Default")]
+
+    def test_nm_hu_gated(self):
+        presets = get_hu_gated_builtin_presets("NM")
+        assert len(presets) == 1
+        assert presets[0][2] is True
+
+    def test_unknown_modality_returns_empty(self):
+        assert get_hu_gated_builtin_presets("CT") == []
+        assert get_hu_gated_builtin_presets("MR") == []

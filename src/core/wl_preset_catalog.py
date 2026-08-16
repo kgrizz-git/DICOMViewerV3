@@ -21,7 +21,11 @@ from core.dicom_window_level import (
     convert_window_level_raw_to_rescaled,
     convert_window_level_rescaled_to_raw,
 )
-from core.wl_builtin_presets import get_builtin_presets, get_mr_hu_builtin_presets
+from core.wl_builtin_presets import (
+    get_builtin_presets,
+    get_hu_gated_builtin_presets,
+    get_mr_hu_builtin_presets,
+)
 
 PresetSource = Literal["dicom", "builtin", "user"]
 
@@ -112,9 +116,12 @@ def build_preset_list(
     ]
 
     modality = str(getattr(dataset, "Modality", "") or "")
-    builtin_tuples = get_builtin_presets(modality)
-    if modality.upper() == "MR" and _has_usable_rescale(rescale_slope, rescale_intercept):
+    builtin_tuples = get_builtin_presets(modality, dataset=dataset)
+    mod_upper = modality.upper().strip()
+    if mod_upper == "MR" and _has_usable_rescale(rescale_slope, rescale_intercept):
         builtin_tuples = list(builtin_tuples) + get_mr_hu_builtin_presets()
+    if mod_upper in ("CR", "DX", "NM") and _has_usable_rescale(rescale_slope, rescale_intercept):
+        builtin_tuples = list(builtin_tuples) + get_hu_gated_builtin_presets(mod_upper)
 
     builtin_presets = [
         WindowLevelPreset(
@@ -245,16 +252,21 @@ def format_status_bar_wl(
     width: float,
     *,
     unit: str | None = None,
+    is_monochrome1: bool = False,
 ) -> str:
     """
     Status-bar W/L segment: compact ``(W …/C …)`` plus optional unit suffix.
 
+    When *is_monochrome1* is True, appends `` (MI)`` to indicate modality-driven inversion.
     Never includes preset names — only numeric center/width in viewer space.
     """
     wl_part = format_preset_menu_wl_compact(center, width).strip()
+    parts = [wl_part]
     if unit and unit.upper() not in ("", "UNSPECIFIED", "US"):
-        return f"{wl_part} ({unit})"
-    return wl_part
+        parts.append(f"({unit})")
+    if is_monochrome1:
+        parts.append("(MI)")
+    return " ".join(parts)
 
 
 def format_preset_menu_label(

@@ -217,20 +217,11 @@ def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dat
 
         pi_upper = photometric_interpretation.upper()
 
-        # Handle MONOCHROME1: Invert image
-        if pi_upper == 'MONOCHROME1':
-            img_array = np.array(image)
-            if len(img_array.shape) == 2:
-                # Grayscale
-                img_array = 255 - img_array
-                image = Image.fromarray(img_array, mode='L')
-            elif len(img_array.shape) == 3:
-                # Color (shouldn't happen for MONOCHROME1, but handle gracefully)
-                img_array = 255 - img_array
-                image = Image.fromarray(img_array, mode=image.mode)
+        # MONOCHROME1 inversion is now owned by the core render layer
+        # (render_grayscale_image). Export no longer re-inverts.
 
         # Handle MONOCHROME2: No inversion needed (standard grayscale)
-        elif pi_upper == 'MONOCHROME2':
+        if pi_upper == 'MONOCHROME2':
             # No processing needed - MONOCHROME2 is the standard format
             pass
 

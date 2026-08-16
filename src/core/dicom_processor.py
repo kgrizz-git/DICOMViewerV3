@@ -37,6 +37,7 @@ from core import (
     dicom_image_render,
     dicom_palette,
     dicom_pixel_array,
+    dicom_pixel_range,
     dicom_pixel_stats,
     dicom_projections,
     dicom_rescale,
@@ -59,6 +60,11 @@ class DICOMProcessor:
 
     # Class-level set to track files that have shown compression errors (to suppress redundant messages)
     _compression_error_files: ClassVar[set[str]] = set()
+
+    @staticmethod
+    def get_stored_value_range(dataset: Dataset) -> tuple[float, float]:
+        """Return ``(stored_min, stored_max)`` for raw stored pixels. Tag-only (no pixel scan)."""
+        return dicom_pixel_range.get_stored_value_range(dataset)
 
     @staticmethod
     def get_rescale_parameters(dataset: Dataset) -> tuple[float | None, float | None, str | None]:
@@ -229,7 +235,8 @@ class DICOMProcessor:
             )
 
         return dicom_image_render.render_grayscale_image(
-            pixel_array, window_center, window_width, rescale_slope, rescale_intercept
+            pixel_array, window_center, window_width, rescale_slope, rescale_intercept,
+            photometric_interpretation=photometric_interpretation,
         )
 
     @staticmethod

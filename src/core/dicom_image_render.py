@@ -191,8 +191,14 @@ def render_grayscale_image(
     window_width: float | None,
     rescale_slope: float | None,
     rescale_intercept: float | None,
+    *,
+    photometric_interpretation: str | None = None,
 ) -> Image.Image | None:
-    """Apply window/level (or normalize) to a grayscale pixel array and build a PIL Image."""
+    """Apply window/level (or normalize) to a grayscale pixel array and build a PIL Image.
+
+    When *photometric_interpretation* is ``MONOCHROME1``, the final uint8 array is
+    inverted (``255 - arr``) so the core render layer owns the dataset baseline polarity.
+    """
     if window_center is not None and window_width is not None:
         processed_array = apply_window_level(
             pixel_array, window_center, window_width, rescale_slope, rescale_intercept
@@ -207,6 +213,19 @@ def render_grayscale_image(
     if len(processed_array.shape) == 3:
         # Take first frame (fallback - should not normally happen if organizer worked correctly)
         processed_array = processed_array[0]
+
+    pi_upper = ""
+    if photometric_interpretation:
+        pi_val = photometric_interpretation
+        if isinstance(pi_val, (list, tuple)):
+            pi_val = str(pi_val[0]).strip()
+        else:
+            pi_val = str(pi_val).strip()
+        pi_upper = pi_val.upper()
+
+    if pi_upper == "MONOCHROME1":
+        processed_array = processed_array.astype(np.uint8)
+        processed_array = 255 - processed_array
 
     try:
         if len(processed_array.shape) == 2:

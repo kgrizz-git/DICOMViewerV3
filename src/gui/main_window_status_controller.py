@@ -28,6 +28,7 @@ def format_zoom_preset_status(
     window_width: float | None = None,
     *,
     unit: str | None = None,
+    is_monochrome1: bool = False,
 ) -> str:
     """Build the centered status text: zoom plus optional numeric W/L.
 
@@ -35,7 +36,7 @@ def format_zoom_preset_status(
     (never preset names). W/L is appended only when both center and width are given.
     """
     if window_center is not None and window_width is not None:
-        wl_text = format_status_bar_wl(window_center, window_width, unit=unit)
+        wl_text = format_status_bar_wl(window_center, window_width, unit=unit, is_monochrome1=is_monochrome1)
         return f"Zoom = {zoom:.1f}, W/L {wl_text}"
     return f"Zoom = {zoom:.1f}"
 
@@ -77,10 +78,11 @@ class MainWindowStatusController:
         window_width: float | None = None,
         *,
         unit: str | None = None,
+        is_monochrome1: bool = False,
     ) -> None:
         """Set the centered zoom + numeric W/L segment."""
         self.zoom_preset_label.setText(
-            format_zoom_preset_status(zoom, window_center, window_width, unit=unit)
+            format_zoom_preset_status(zoom, window_center, window_width, unit=unit, is_monochrome1=is_monochrome1)
         )
 
     def set_pixel_info(self, text: str) -> None:

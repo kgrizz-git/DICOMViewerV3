@@ -563,16 +563,16 @@ class SliceDisplayManager:
         series_identifier: str,
         preserve_view_override: bool | None,
     ) -> tuple[bool, bool, bool | None]:
-        """Return (preserve_view, force_fit_to_view, apply_inversion)."""
         apply_inversion = None
         preserve_view = is_same_series and not is_new_study_series
         force_fit_to_view = False
         if preserve_view_override is not None:
-            preserve_view = preserve_view_override
-            force_fit_to_view = not preserve_view_override
+            preserve_view, force_fit_to_view = preserve_view_override, not preserve_view_override
+        if not preserve_view and series_identifier in self.view_state_manager.series_defaults:
+            pi = getattr(self.current_dataset, "PhotometricInterpretation", None)
+            pi = pi[0] if isinstance(pi, (list, tuple)) and pi else pi
+            apply_inversion = self.view_state_manager.get_series_inversion_state(series_identifier, pi=pi)
         if not preserve_view:
-            if series_identifier and series_identifier in self.view_state_manager.series_defaults:
-                apply_inversion = self.view_state_manager.get_series_inversion_state(series_identifier)
             self.view_state_manager.restore_orientation(series_identifier)
         return preserve_view, force_fit_to_view, apply_inversion
 

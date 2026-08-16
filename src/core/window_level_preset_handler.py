@@ -22,6 +22,20 @@ from __future__ import annotations
 from typing import Any
 
 
+def _is_dataset_monochrome1(dataset: Any) -> bool:
+    """Return True if the dataset has PhotometricInterpretation == MONOCHROME1."""
+    if dataset is None:
+        return False
+    pi = getattr(dataset, "PhotometricInterpretation", None)
+    if pi is None:
+        return False
+    if isinstance(pi, (list, tuple)):
+        pi = str(pi[0]).strip()
+    else:
+        pi = str(pi).strip()
+    return pi.upper() == "MONOCHROME1"
+
+
 def apply_window_level_preset(app: Any, preset_index: int) -> None:
     """Apply the preset at ``preset_index`` if valid; no-op if presets or index are missing."""
     vsm = app.view_state_manager
@@ -62,8 +76,9 @@ def apply_window_level_preset(app: Any, preset_index: int) -> None:
             if vsm.use_rescaled_values
             else None
         )
+        is_monochrome1 = _is_dataset_monochrome1(getattr(vsm, "current_dataset", None))
         app.main_window.update_zoom_preset_status(
-            app.image_viewer.current_zoom, wc, ww, unit=unit
+            app.image_viewer.current_zoom, wc, ww, unit=unit, is_monochrome1=is_monochrome1
         )
 
     if hasattr(app, "_schedule_histogram_wl_only"):

@@ -1,6 +1,6 @@
 # Plan: Bit-Depth / Photometric-Aware W/L Presets and MONOCHROME1 Display
 
-**Date:** 2026-08-15 · **Status:** Ready to implement · **Severity:** High
+**Date:** 2026-08-15 · **Status:** Implemented 2026-08-16 · **Severity:** High
 **Branch:** `fix/wl-presets-bit-depth-monochrome1`
 **Investigation basis:** `dev-docs/bug-investigations/CR-DX-WL-PRESETS-BIT-DEPTH.md`
 **TO_DO items:** "Window/Level presets should depend on bit depth and photometric interpretation" (2026-08-11); "MONOCHROME1 not handled in on-screen viewer" (2026-08-15); MPR/projection MONOCHROME1 follow-up (this plan §Follow-up).
@@ -166,10 +166,11 @@ effective_inverted = dataset_is_monochrome1 XOR user_toggled_invert
 
 ### W2.4 Persisted-state migration (`src/gui/view_state_manager.py`)
 
-Add a `schema_version` key to `series_defaults` (absence = pre-scheme). **Stamp only at write
-sites** — the existing `_store_wl_and_defaults` (`slice_window_level_resolver.py:248`) and the
-inversion-persist path (`subwindow_manager_factory.py:254-261` →
-`view_state_manager.set_series_inversion_state`). **Reads must be side-effect-free**: discarding a
+Add an inversion-specific `image_inversion_schema_version` key to `series_defaults` (absence =
+pre-scheme). **Stamp only on explicit user inversion writes** through
+`view_state_manager.set_series_inversion_state`; generic W/L/view-state writes must neither replace
+`image_inverted` nor stamp the inversion schema, because they run before inversion restoration.
+**Reads must be side-effect-free**: discarding a
 pre-scheme MONOCHROME1 stored value happens at read time and must NOT write back (idempotent, no
 read-path mutation). Rule:
 - **MONOCHROME2:** honor stored user half as-is (incl. pre-scheme `True`).
@@ -212,11 +213,11 @@ this.
 | `src/core/window_level_preset_handler.py` | — | No change (correct no-op) |
 | `src/core/dicom_image_render.py` | W2 | MONOCHROME1 invert in `render_grayscale_image` (W2.1) |
 | `src/gui/image_viewer.py` / `image_viewer_view.py` | W2 | User toggle = offset; no double-invert (W2.2) |
-| `src/gui/view_state_manager.py` | W2 | Persist user half; `schema_version` key (W2.4) |
+| `src/gui/view_state_manager.py` | W2 | Persist user half; inversion-specific migration key (W2.4) |
 | `src/gui/export_rendering.py` | W2 | Drop MONOCHROME1 branch (keep YBR/RGB/PALETTE) (W2.3) |
 | `src/gui/export_manager.py` | W2 | No re-invert MONOCHROME1 (W2.3) |
 | `src/gui/cine_video_export.py` | W2 | No re-invert MONOCHROME1 (W2.3) |
-| `src/core/slice_window_level_resolver.py` | W2 | **No code change** for inversion (core owns baseline, Invariant #1). Its tests change (matrix W1 default). |
+| `src/core/slice_window_level_resolver.py` | W2 | Keep W/L persistence separate from user inversion persistence; status marker plumbing. |
 | `src/gui/slice_display_manager.py` | W2 | Caller of `_resolve_view_preserve_and_inversion` passes PI (from `self.current_dataset`) into the user-half restore (W2.4) |
 
 ---
@@ -224,28 +225,28 @@ this.
 ## Implementation Task List (check off as done)
 
 **Workstream 1**
-- [ ] W1.1 `get_stored_value_range` + `DICOMProcessor` static method
-- [ ] W1.2 `get_builtin_presets(modality, dataset=None)`; `Default`/`Wide` from stored range (Wide = 1.5·R); modality-only overload uses 16-bit-unsigned fallback; remove CR/DX `Chest`/`Bone`; NM resolved
-- [ ] W1.3 CR/DX/NM HU gate in `build_preset_list`
-- [ ] W1.4 labeling correct (raw vs HU)
+- [x] W1.1 `get_stored_value_range` + `DICOMProcessor` static method
+- [x] W1.2 `get_builtin_presets(modality, dataset=None)`; `Default`/`Wide` from stored range (Wide = 1.5·R); modality-only overload uses 16-bit-unsigned fallback; remove CR/DX `Chest`/`Bone`; NM resolved
+- [x] W1.3 CR/DX/NM HU gate in `build_preset_list`
+- [x] W1.4 labeling correct (raw vs HU)
 
 **Workstream 2** (W2.1 + W2.3 in ONE commit)
-- [ ] W2.1 MONOCHROME1 invert in `render_grayscale_image` (cast-then-invert)
-- [ ] W2.3 remove MONOCHROME1 branch in `export_rendering` + stop re-invert in `export_manager`/`cine_video_export` + **update the 3 existing export tests** (`test_export_manager.py:135-142`, `test_export_rendering_helpers_slice.py:45-55`, `test_export_manager_round2.py:55`)
-- [ ] W2.2 view layer persists user half only; `set_image` applies only user offset
-- [ ] W2.4 `schema_version` migration (MONOCHROME1 discards pre-scheme stored value; caller passes PI)
-- [ ] W2.5 context-menu reflects user half + status-bar `(MI)` marker
+- [x] W2.1 MONOCHROME1 invert in `render_grayscale_image` (cast-then-invert)
+- [x] W2.3 remove MONOCHROME1 branch in `export_rendering` + stop re-invert in `export_manager`/`cine_video_export` + **update the 3 existing export tests** (`test_export_manager.py:135-142`, `test_export_rendering_helpers_slice.py:45-55`, `test_export_manager_round2.py:55`)
+- [x] W2.2 view layer persists user half only; `set_image` applies only user offset
+- [x] W2.4 inversion-specific migration (MONOCHROME1 discards pre-scheme stored value; caller passes PI)
+- [x] W2.5 context-menu reflects user half + status-bar `(MI)` marker
 
 **Tests** (see matrix below)
-- [ ] `test_dicom_pixel_range` + `DICOMProcessor` wrapper (W1.1)
-- [ ] `test_wl_builtin_presets` (incl. modality-only overload fallback) (W1.2)
-- [ ] `test_wl_preset_catalog` (CR/DX **and NM** gate) (W1.3)
-- [ ] `test_wl_preset_catalog` labeling (`storage_space_label` raw; tooltip no HU unless gated) (W1.4)
-- [ ] `test_dicom_image_render_monochrome1` (W2.1, signed + unsigned; multi-frame first-frame)
-- [ ] GUI XOR / no-double-invert + migration + context-menu-check-state (W2.2/W2.4/W2.5)
-- [ ] `test_export_monochrome1` still + cine polarity == screen (W2.3)
-- [ ] duplicate-preset guard (`wide.width - default.width == 0.5·R`)
-- [ ] `test_slice_window_level_resolver` (`current_preset_index=0` CR/DX in range; MONOCHROME1 default)
+- [x] `test_dicom_pixel_range` + `DICOMProcessor` wrapper (W1.1)
+- [x] `test_wl_builtin_presets` (incl. modality-only overload fallback) (W1.2)
+- [x] `test_wl_preset_catalog` (CR/DX **and NM** gate) (W1.3)
+- [x] `test_wl_preset_catalog` labeling (`storage_space_label` raw; tooltip no HU unless gated) (W1.4)
+- [x] `test_dicom_image_render_monochrome1` (W2.1, signed + unsigned; multi-frame first-frame)
+- [x] GUI XOR / no-double-invert + migration + context-menu-check-state (W2.2/W2.4/W2.5)
+- [x] `test_export_monochrome1` still + cine polarity == screen (W2.3)
+- [x] duplicate-preset guard (`wide.width - default.width == 0.5·R`)
+- [x] `test_slice_window_level_resolver` (`current_preset_index=0` CR/DX in range; MONOCHROME1 default)
 
 ---
 
@@ -293,7 +294,7 @@ MONOCHROME1 renders correctly, and the manual Invert toggle flips without double
   - `dev-docs/bug-investigations/CR-DX-WL-PRESETS-BIT-DEPTH.md` → status *implemented*; note MONOCHROME1
     inversion moved from export to core render (its §4 is now stale).
   - `CHANGELOG.md` + `src/version.py`: user-visible change (bit-depth-aware presets; CR/DX `Chest`/`Bone`
-    removal = default W/L behavior change; MONOCHROME1 on-screen inversion; `schema_version` migration).
+    removal = default W/L behavior change; MONOCHROME1 on-screen inversion; inversion-specific migration).
     Patch bump per `dev-docs/RELEASING.md`.
   - `dev-docs/MAINTENANCE_LOG.md`: short entry for the export-render ownership move.
   - `dev-docs/TO_DO.md`: mark the two linked items done **and create** the MPR/projection follow-up item.
