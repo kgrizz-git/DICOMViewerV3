@@ -157,12 +157,26 @@ def test_dark_theme_uses_readable_accent_tinted_alternate_rows() -> None:
 
 
 def test_export_tags_tree_selector_present_in_both_themes() -> None:
-    """Phase A: both compiled themes must expose QTreeWidget#tag_export_tags_tree as a stable hook."""
+    """Phase A/B: stable objectName hook plus scoped indeterminate indicator."""
     white_p, black_p = "/dummy/white.png", "/dummy/black.png"
     light = get_theme_stylesheet("light", white_p, black_p, accent_id="garnet")
     dark = get_theme_stylesheet("dark", white_p, black_p, accent_id="garnet")
     assert "QTreeWidget#tag_export_tags_tree" in light
     assert "QTreeWidget#tag_export_tags_tree" in dark
+    assert "QTreeWidget#tag_export_tags_tree::indicator:indeterminate" in light
+    assert "QTreeWidget#tag_export_tags_tree::indicator:indeterminate" in dark
+    light_indeterminate = light[
+        light.index("QTreeWidget#tag_export_tags_tree::indicator:indeterminate") :
+        light.index("}", light.index("QTreeWidget#tag_export_tags_tree::indicator:indeterminate"))
+        + 1
+    ]
+    dark_indeterminate = dark[
+        dark.index("QTreeWidget#tag_export_tags_tree::indicator:indeterminate") :
+        dark.index("}", dark.index("QTreeWidget#tag_export_tags_tree::indicator:indeterminate"))
+        + 1
+    ]
+    assert "#a0303f" in light_indeterminate
+    assert "#a0303f" in dark_indeterminate
 
 
 def test_metadata_bands_derived_from_selected_accent() -> None:

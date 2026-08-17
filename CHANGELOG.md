@@ -7,6 +7,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Metadata tag tree hierarchy (Phase B):** Left-pane group headings use a
+  restrained palette-mixed fill, a heavier top rule, a ~10% font bump, and
+  slightly taller rows. Alternating row shades reset per group. Export picker
+  partial checkboxes use a scoped accent fill (`::indicator:indeterminate`).
+  **Semantic versioning note: patch.**
 - The tag-export picker tree now has a stable `objectName`
   (`tag_export_tags_tree`) and a scoped QSS hook in both themes so later
   visual work can target it without app-wide tree rules. **Semantic

@@ -1,7 +1,7 @@
 # Plan: Tag Tree Visual Follow-ups (Phase D)
 
 **Created:** 2026-08-16  
-**Last updated:** 2026-08-16  
+**Last updated:** 2026-08-17  
 **Status:** proposed / deferred  
 **Priority:** P3 (unless a subsection is promoted)  
 **Phase:** D of the tag-tree visual-hierarchy workstream  
@@ -23,14 +23,13 @@ as one mega-diff.
 
 ### After Phase C — still tag-tree / metadata
 
-- [ ] **(D-export-visual)** **Open question — export tree richer formatting.**
-      The export `tags_tree` is mostly ID + name for selection; it may not need
-      metadata-panel header/stripe/tier chrome. **Default: defer / leave alone**
-      beyond Goal 3 checkboxes. **Gate (Phase B item B7):** after metadata
-      Goals 1–2 ship, side-by-side appearance check → choose
-      (a) full parity, (b) light-touch subset, or (c) none. Record the decision
-      here before any export visual PR. Do not lock styling in without this
-      check.
+- [x] **(D-export-visual)** **Open question — export tree richer formatting.**
+      **Decision (Phase B item B7, 2026-08-17): (c) none.** The export
+      `tags_tree` stays ID + name for selection; metadata now carries header
+      chrome + per-group stripes. Export gets Goal 3 checkbox glyphs only
+      (scoped `::indicator:indeterminate` accent fill). Do not apply
+      header/stripe/tier parity to export unless a later visual review
+      reopens this item. Default remains defer / leave alone beyond Goal 3.
 - [ ] **(D-P2)** State color for selected / edited rows (tokenized); sequence
       **after** Phase C tier chrome so regressions are bisectable. Include any
       leftover edited-row polish beyond Phase A’s D2 fix.

@@ -609,7 +609,7 @@ def _close(a: QColor, b: QColor, tol: int = 2) -> bool:
 def test_group_header_background_survives_hover_and_selection(qapp) -> None:
     """Regression: Qt paints hover/selection *over* the item's background brush, so a
     hovered heading was replaced by a pale highlight block while keeping its own text
-    color — unreadable on a light theme. A heading must render as the pane background in
+    color — unreadable on a light theme. A heading must render as its tokenized band in
     every state."""
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_nested_code_sequence())
@@ -715,20 +715,29 @@ def test_theme_switch_recolors_existing_headings(qapp) -> None:
 
 
 def test_heading_takes_the_pane_background_and_is_ruled_off(qapp) -> None:
-    """A heading has no fill of its own — it is separated by rules, not by color.
+    """A heading uses a restrained palette-mixed fill plus a heavier top rule.
 
-    Set explicitly to Base rather than left unset, so a heading can't pick up the
-    accent-tinted alternating-row color on odd rows.
+    Loud grey/burgundy bands were rejected as floating blocks; Base-only headings
+    were indistinguishable from tag rows. The fill is Base mixed toward Text.
     """
+    from gui.metadata_table_model import group_header_top_rule_color
+
     panel = MetadataPanel()
 
     for base, text in (("#141414", "#e0e0e0"), ("#ffffff", "#000000")):
         _apply_theme(panel, base, text)
         band, fg = panel._group_header_colors()
-        assert _close(band, QColor(base)), "heading must be the pane background"
+        pane = QColor(base)
+        assert not _close(band, pane), "heading fill must differ from pane Base"
         assert _close(fg, QColor(text)), "heading text must agree with the tag rows"
+        # Fill stays on the pane's side of the contrast (not a flipped band).
+        assert (band.lightness() < 128) == (pane.lightness() < 128)
 
-        # The rule is what actually separates it, so it must be visible against the pane.
         rule = group_header_rule_color(panel.tree_widget.palette())
-        assert abs(rule.lightness() - QColor(base).lightness()) >= 30
+        top_rule = group_header_top_rule_color(panel.tree_widget.palette())
+        assert abs(rule.lightness() - pane.lightness()) >= 30
+        assert abs(top_rule.lightness() - pane.lightness()) > abs(
+            rule.lightness() - pane.lightness()
+        )
         assert rule.saturation() <= 8, "rules stay neutral against any accent preset"
+        assert top_rule.saturation() <= 8

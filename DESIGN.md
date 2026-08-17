@@ -1,7 +1,7 @@
 # DESIGN.md — MPDV Design Specification
 
 **Project:** Medical Physics DICOM Viewer (MPDV)  
-**Last updated:** 2026-05-17  
+**Last updated:** 2026-08-17  
 **Status:** Active — maintained alongside the [UX Assessment Remediation Plan](dev-docs/plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md)
 
 This document is the single source of truth for visual design, interaction design, and naming conventions across the application. All UI code and QSS changes must be consistent with what is defined here. When this document conflicts with the code, update the code; when the code introduces a new pattern, document it here before the change is merged.
@@ -167,6 +167,10 @@ The light theme is intentionally conventional — neutral grays, no tinting. The
 | Splitter — visual at rest | 1 px centred line, `--border` colour | Hit zone is transparent; only the hairline is drawn |
 | Splitter — visual on hover | Full 5 px fill, `--border` colour | Expands to fill hit zone — clear "grab me" signal |
 | QGroupBox border | 1 px `--border`, 4 px radius | Title text in `--fg-secondary` |
+| Metadata group header fill | Base mixed 10% toward Text | Tokenized layer on the same contrast axis as the heading rules — not a separate hue |
+| Metadata group header rules | 2 px top (55% Base→Text), 1 px bottom (38%) | Heavier top edge marks the group boundary |
+| Metadata per-group stripe | AlternateBase / `{metadata_tag_band}` | Parity resets at each group header; headers do not stripe |
+| Export tag-tree partial checkbox | `{accent}` fill on `#tag_export_tags_tree::indicator:indeterminate` | Goal 3 glyph only; no header/stripe parity on export |
 | Scrollbar track width | 12 px | No arrow buttons |
 | Toolbar separator | 1 px `--border` colour | |
 

@@ -191,8 +191,13 @@
                     border-bottom: 1px solid #e7eaed;
                 }
 
-                /* Tag export picker — Phase A structure only; visual chrome is Phase B. */
-                QTreeWidget#tag_export_tags_tree {
+                /* Tag export picker — Goal 3 indeterminate glyph (Phase B). */
+                QTreeWidget#tag_export_tags_tree::indicator:indeterminate {
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid #808080;
+                    border-radius: 3px;
+                    background-color: {accent};
                 }
                 
                 /* Headers */
