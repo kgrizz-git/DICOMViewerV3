@@ -58,5 +58,6 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 
 1. **Phase B** (headers/stripes + export Goal 3 glyphs) is implemented; confirm
    visually in the left-pane metadata panel, then **Phase C** on metadata
-   (tier/orientation/nav). Do not restyle the export tree — B7 recorded **(c) none**.
+   (tier/orientation/nav). Do not add richer export-tree formatting; retain
+   the implemented indicator glyphs — B7 recorded **(c) none**.
 2. Other Phase D / pane-toolbar items as separate PRs.
