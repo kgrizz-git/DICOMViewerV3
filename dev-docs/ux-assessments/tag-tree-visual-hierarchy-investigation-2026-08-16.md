@@ -18,8 +18,8 @@ Goal 3 checkboxes in scope; **richer export formatting deferred / open**
 | Phase | Plan | Priority |
 |---|---|---|
 | Hub / index | [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](../plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md) | — |
-| A — Export correctness (+ edited-row token) | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../plans/supporting/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | P1 |
-| B — Headers/stripes (**metadata first**) + export Goal 3 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | P2 |
+| A — Export correctness (+ edited-row token) | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../plans/completed/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | P1 |
+| B — Headers/stripes (**metadata first**) + export Goal 3 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../plans/completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | P2 |
 | C — Tier / orientation / nav backbone | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](../plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | P2 |
 | D — Tag-tree follow-ups | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](../plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | P3 |
 | Split-out — pane/toolbar state | [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](../plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md) | P2 |
@@ -1122,8 +1122,8 @@ was split into phased plans linked from the
 
 | Phase | Plan |
 |---|---|
-| A | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../plans/supporting/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) |
-| B | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) |
+| A | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../plans/completed/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) |
+| B | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../plans/completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) |
 | C | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](../plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) |
 | D | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](../plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) |
 | Pane/toolbar | [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](../plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md) |
@@ -1176,7 +1176,7 @@ do not default to “skip the metadata panel.”
 Phased plans and the hub were updated 2026-08-16 for Part 8 (metadata primary)
 and Part 9 (export rich chrome deferred / gated)
 ([hub](../plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md),
-[Phase B](../plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md),
+[Phase B](../plans/completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md),
 [Phase C](../plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md),
 [Phase D](../plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md)).
 Historical Parts 1–7 above remain as review archaeology; where they conflict

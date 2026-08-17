@@ -1,15 +1,15 @@
 # Plan: Tag Tree Tier Orientation & Navigation Backbone (Phase C)
 
 **Created:** 2026-08-16  
-**Last updated:** 2026-08-16  
+**Last updated:** 2026-08-17  
 **Status:** proposed  
 **Priority:** P2  
 **Phase:** C of the tag-tree visual-hierarchy workstream  
-**Depends on:** [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) (Phase B)  
+**Depends on:** [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) (Phase B, implemented)
 **Primary surface:** **left-pane metadata panel**  
-**Export visuals:** only if Phase B appearance gate (`B7` / `D-export-visual`)
-chose apply or light-touch — otherwise **checkbox/nav affordances only**, no
-tier chrome on export.
+**Export visuals:** Phase B appearance gate (`B7` / `D-export-visual`) chose
+**(c) none** — retain the checkbox indicator glyphs and provide **navigation
+affordances only**, with no header/stripe/tier chrome on export.
 
 In-scope Part 2 backbone for the **metadata panel** (values + IDs + names):
 shared tier language, navigation/orientation aids, `DESIGN.md` update. Keeps
@@ -21,7 +21,7 @@ Carbon “clarity over decoration.”
 - **Investigation:** [tag-tree-visual-hierarchy-investigation-2026-08-16.md](../../ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md)
   (Part 7–9)
 - **Previous:** Phase B (metadata Goals 1–2; export Goal 3 + appearance gate)  
-- **Follow-ups / open export-visual question:** [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md)  
+- **Follow-ups:** [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) (`D-export-visual` recorded **(c) none**)  
 - **Pane/toolbar (split-out):** [PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md](PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md)  
 - **Design:** [DESIGN.md](../../../DESIGN.md)
 
@@ -37,8 +37,8 @@ Carbon “clarity over decoration.”
   filter UI only if useful without implying full visual parity.
 - Export Expand/Collapse All / shortcuts / context menu remain useful
   **navigation** parity (independent of rich styling).
-- `DESIGN.md` documents the metadata tier language; note that export rich
-  chrome is optional pending the appearance gate.
+- `DESIGN.md` documents the metadata tier language; export stays checkbox- and
+  navigation-focused (appearance gate **(c) none**).
 
 ## Checklist
 
@@ -55,9 +55,9 @@ Carbon “clarity over decoration.”
       Expand/Collapse All + shortcuts + context menu (D4 / P10 / C5); audit
       `DESIGN.md §6`. Collapsed-group selection chip only if still wanted for
       selection UX (not as “visual hierarchy parity”).
-- [ ] **(C7)** If `D-export-visual` = apply or light-touch: implement that
-      subset here or in a small follow-up PR — **do not invent full parity by
-      default.**
+- [x] **(C7) Skipped/cancelled:** `D-export-visual` recorded **(c) none** on
+      2026-08-17; do not implement export header/stripe/tier chrome. C6 remains
+      in scope for export Expand/Collapse All, shortcuts, and context menu.
 - [ ] **(C8)** Token-driven hover tint verify on metadata objectName (E6).
 - [ ] **(C9)** Document tier/state language in `DESIGN.md` for the **metadata
       panel**; record export as checkbox-focused unless gate decided otherwise.
