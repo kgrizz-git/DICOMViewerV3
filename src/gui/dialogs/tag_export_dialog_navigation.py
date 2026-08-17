@@ -14,7 +14,9 @@ Requirements:
 """
 # Pyright: methods run only on ``TagExportDialog`` (combined Qt type); mixin bases
 # cannot express cross-mixin ``self`` without a duplicate protocol surface.
-# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
+# ``reportArgumentType`` / ``reportCallIssue`` are also off so ``self`` can be
+# passed as a ``QWidget`` / ``QObject`` parent without a Protocol cast surface.
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false, reportArgumentType=false, reportCallIssue=false
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt
