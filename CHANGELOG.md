@@ -6,7 +6,23 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- The tag-export picker tree now has a stable `objectName`
+  (`tag_export_tags_tree`) and a scoped QSS hook in both themes so later
+  visual work can target it without app-wide tree rules. **Semantic
+  versioning note: patch.**
+
 ### Fixed
+- **Tag export group-header checkboxes:** Top Select All, Deselect All, the
+  Select All checkbox, and the tag filter now recompute group-header tri-state
+  from visible exportable leaves. Independently checked Sequence/Item parents
+  are left alone. A visible group whose exportable leaves are all hidden
+  (filter matched only the group label) is Unchecked rather than keeping a
+  stale check. Filtering no longer pops large-sequence warnings when it
+  expands matching ancestors. **Semantic versioning note: patch.**
+- **Metadata edited-row color:** Edited tags in the left-pane metadata panel
+  use the accent-soft token (same helper pattern as the tag viewer) instead of
+  a hardcoded purple `QColor`. **Semantic versioning note: patch.**
 - **Bit-depth-aware W/L presets and MONOCHROME1 on-screen inversion:** Built-in
   window/level presets for CR, DX, MG, NM, RF, XA, US, and ANY now derive from
   the dataset's actual stored pixel range (`BitsStored`/`BitsAllocated`/`PixelRepresentation`)

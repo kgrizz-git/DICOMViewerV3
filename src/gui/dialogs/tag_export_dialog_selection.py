@@ -27,7 +27,8 @@ from gui.metadata_table_model import metadata_row_kind
 
 class TagExportDialogSelectionMixin:
     """
-    Mixin for visible-leaf Select All behavior and the selected-tag count label.
+    Mixin for visible-leaf Select All behavior, group-header tri-state, and
+    the selected-tag count label.
 
     Expects the owning dialog to provide ``tags_tree``, union caches, the top
     Select All checkbox, the count label, and ``_iter_all_tag_items`` /
@@ -45,16 +46,22 @@ class TagExportDialogSelectionMixin:
             return self._tag_union_merged_sequences or {}
         return self._tag_union_merged_full or {}
 
-    def _iter_visible_exportable_leaves(self) -> Iterator[QTreeWidgetItem]:
+    def _iter_visible_exportable_leaves(
+        self, start_item: QTreeWidgetItem | None = None
+    ) -> Iterator[QTreeWidgetItem]:
         """
         Yield visible exportable leaf tag items (``row_kind == "element"``).
+
+        When *start_item* is given, only leaves beneath it are yielded (used by
+        the group-header tri-state pass); otherwise the whole tree is walked.
 
         Sequence and Item parent rows are independently checkable export columns
         and are intentionally excluded from Select All / the top checkbox aggregate.
         """
         merged = self._active_merged_tags_for_kind_lookup()
-        root = self.tags_tree.invisibleRootItem()
-        for item in self._iter_all_tag_items(root):
+        if start_item is None:
+            start_item = self.tags_tree.invisibleRootItem()
+        for item in self._iter_all_tag_items(start_item):
             if item.isHidden():
                 continue
             tag_str = item.data(0, Qt.ItemDataRole.UserRole)
@@ -125,3 +132,121 @@ class TagExportDialogSelectionMixin:
         else:
             text = f"{count} tags selected"
         self.tag_count_label.setText(text)
+
+    def _on_tag_tree_item_collapsed(self, item: QTreeWidgetItem) -> None:
+        """
+        Return immediately while ``_filter_tags`` is walking.
+
+        Outside filtering this is a no-op in Phase A; Phase B uses it for
+        stripe parity.
+        """
+        if self._is_filtering:
+            return
+        del item
+
+    def _visible_children_aggregate(
+        self, item: QTreeWidgetItem
+    ) -> Qt.CheckState | None:
+        """
+        Aggregate *item*'s tri-state from its **visible direct children**.
+
+        Returns ``None`` when there are no visible children (callers leave such
+        parents untouched).
+        """
+        any_visible_child = False
+        all_checked = True
+        any_checked = False
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if child.isHidden():
+                continue
+            any_visible_child = True
+            child_state = child.checkState(0)
+            if child_state == Qt.CheckState.Checked:
+                any_checked = True
+            elif child_state == Qt.CheckState.PartiallyChecked:
+                any_checked = True
+                all_checked = False
+            else:
+                all_checked = False
+
+        if not any_visible_child:
+            return None
+        if all_checked:
+            return Qt.CheckState.Checked
+        if any_checked:
+            return Qt.CheckState.PartiallyChecked
+        return Qt.CheckState.Unchecked
+
+    def _exportable_leaf_aggregate(
+        self, item: QTreeWidgetItem
+    ) -> Qt.CheckState | None:
+        """
+        Aggregate *item*'s tri-state from its **visible exportable leaves**.
+
+        Sequence/Item parent rows are not part of the aggregation, so a group
+        that still has an independently unchecked SQ summary row can still read
+        ``Checked`` once its leaves are all selected. Returns ``None`` when
+        there are no visible exportable leaves.
+        """
+        any_visible_leaf = False
+        all_checked = True
+        any_checked = False
+        for leaf in self._iter_visible_exportable_leaves(start_item=item):
+            any_visible_leaf = True
+            leaf_state = leaf.checkState(0)
+            if leaf_state == Qt.CheckState.Checked:
+                any_checked = True
+            elif leaf_state == Qt.CheckState.PartiallyChecked:
+                any_checked = True
+                all_checked = False
+            else:
+                all_checked = False
+
+        if not any_visible_leaf:
+            return None
+        if all_checked:
+            return Qt.CheckState.Checked
+        if any_checked:
+            return Qt.CheckState.PartiallyChecked
+        return Qt.CheckState.Unchecked
+
+    def _update_ancestors_check_state(self, item: QTreeWidgetItem | None) -> None:
+        """
+        Recompute tri-state check state from *item* up to the tree root.
+
+        Sequence/Item ancestors use visible **direct children**. Group headers
+        (no tag string in ``UserRole``) use visible **exportable leaves**.
+        """
+        while item is not None:
+            if item.data(0, Qt.ItemDataRole.UserRole) is None:
+                aggregate = self._exportable_leaf_aggregate(item)
+            else:
+                aggregate = self._visible_children_aggregate(item)
+            if aggregate is not None:
+                item.setCheckState(0, aggregate)
+            item = item.parent()
+
+    def _refresh_group_header_check_states(self) -> None:
+        """
+        Recompute only top-level group-header tri-state from visible exportable
+        leaves beneath each header. Never rewrites Sequence/Item parents.
+        """
+        root = self.tags_tree.invisibleRootItem()
+        self.tags_tree.blockSignals(True)
+        try:
+            for i in range(root.childCount()):
+                group_item = root.child(i)
+                if group_item.isHidden():
+                    continue
+                if group_item.data(0, Qt.ItemDataRole.UserRole) is not None:
+                    continue
+                aggregate = self._exportable_leaf_aggregate(group_item)
+                if aggregate is None:
+                    # Visible header whose exportable leaves are all hidden
+                    # (e.g. filter matched only the group label).
+                    group_item.setCheckState(0, Qt.CheckState.Unchecked)
+                else:
+                    group_item.setCheckState(0, aggregate)
+        finally:
+            self.tags_tree.blockSignals(False)

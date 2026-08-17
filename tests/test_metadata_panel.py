@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.tag_edit_history import TagEditHistoryManager
+from gui.accent_presets import DEFAULT_ACCENT_ID, get_preset
 from gui.metadata_panel import MetadataPanel
 from gui.metadata_table_model import group_header_rule_color
 
@@ -77,6 +78,29 @@ def _find_in_tree(panel: MetadataPanel, tag_str: str) -> QTreeWidgetItem | None:
         if found is not None:
             return found
     return None
+
+
+class _FakeHistoryManager:
+    def is_tag_edited(self, _dataset: Dataset, tag: str) -> bool:
+        return tag == str(pydicom.tag.Tag("PatientName"))
+
+
+def test_edited_tag_uses_readable_accent_tinted_highlight(qapp) -> None:
+    """Regression: the edited-row 'Dark purple' literal must become the accent-tinted
+    highlight (matching the tag viewer dialog), with black foreground text."""
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_nested_code_sequence())
+    panel.history_manager = _FakeHistoryManager()
+
+    panel._populate_tags("")
+
+    patient_name = _find_in_tree(panel, str(pydicom.tag.Tag("PatientName")))
+    assert patient_name is not None
+    assert patient_name.background(0).color() != QColor(80, 50, 120)
+    assert patient_name.foreground(0).color() == QColor(0, 0, 0)
+    # No config accent set: the default preset's soft accent tints the row.
+    expected = QColor(get_preset(DEFAULT_ACCENT_ID).accent_soft)
+    assert patient_name.background(0).color() == expected
 
 
 def test_groups_start_collapsed_on_fresh_panel(qapp) -> None:

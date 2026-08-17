@@ -156,6 +156,15 @@ def test_dark_theme_uses_readable_accent_tinted_alternate_rows() -> None:
     assert "alternate-background-color: #a0303f" not in result
 
 
+def test_export_tags_tree_selector_present_in_both_themes() -> None:
+    """Phase A: both compiled themes must expose QTreeWidget#tag_export_tags_tree as a stable hook."""
+    white_p, black_p = "/dummy/white.png", "/dummy/black.png"
+    light = get_theme_stylesheet("light", white_p, black_p, accent_id="garnet")
+    dark = get_theme_stylesheet("dark", white_p, black_p, accent_id="garnet")
+    assert "QTreeWidget#tag_export_tags_tree" in light
+    assert "QTreeWidget#tag_export_tags_tree" in dark
+
+
 def test_metadata_bands_derived_from_selected_accent() -> None:
     """The {metadata_tag_band} placeholder is substituted with metadata_tag_band_color() for both themes."""
     white_p, black_p = "/dummy/white.png", "/dummy/black.png"

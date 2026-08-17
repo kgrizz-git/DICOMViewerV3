@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from pydicom.dataset import Dataset
@@ -10,6 +11,7 @@ from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 from PySide6.QtCore import Qt
 
+from gui.dialogs import tag_export_dialog as _tag_export_dialog_mod
 from gui.dialogs.tag_export_dialog import _ITEM_NO_PRESET, TagExportDialog
 from utils.config_manager import ConfigManager
 
@@ -44,6 +46,18 @@ def _first_exportable_leaves(dialog: TagExportDialog, limit: int = 3):
     return leaves[:limit]
 
 
+def _visible_group_headers(dialog: TagExportDialog) -> list:
+    """Visible top-level group headers (no tag string in UserRole)."""
+    root = dialog.tags_tree.invisibleRootItem()
+    out = []
+    for i in range(root.childCount()):
+        item = root.child(i)
+        assert item.data(0, Qt.ItemDataRole.UserRole) is None
+        if not item.isHidden():
+            out.append(item)
+    return out
+
+
 @pytest.mark.qt
 def test_construct_populates_series_and_tags(qapp, tmp_path) -> None:
     dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
@@ -51,6 +65,13 @@ def test_construct_populates_series_and_tags(qapp, tmp_path) -> None:
     assert dlg.tags_tree.topLevelItemCount() >= 1
     dlg.reject()
     assert dlg.result() == int(dlg.DialogCode.Rejected)
+
+
+@pytest.mark.qt
+def test_tags_tree_has_qss_targetable_object_name(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    assert dlg.tags_tree.objectName() == "tag_export_tags_tree"
+    dlg.close()
 
 
 @pytest.mark.qt
@@ -422,4 +443,254 @@ def test_filter_preserves_independently_checked_sequence_parents(qapp, tmp_path)
     dlg._load_preset_by_name("seq-parent", show_feedback=False)
     assert seq_item.checkState(0) == Qt.CheckState.Checked
     assert seq_tag in dlg.selected_tags
+    dlg.close()
+
+
+# --- Task A2: group-header tri-state after Select All / filter -----------------
+
+
+@pytest.mark.qt
+def test_toggle_all_checks_visible_group_headers(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._toggle_all_tags(True)
+    headers = _visible_group_headers(dlg)
+    assert headers
+    for header in headers:
+        assert header.checkState(0) == Qt.CheckState.Checked
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_deselect_all_unchecks_visible_group_headers(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._toggle_all_tags(True)
+    dlg._toggle_all_tags(False)
+    for header in _visible_group_headers(dlg):
+        assert header.checkState(0) == Qt.CheckState.Unchecked
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_group_header_partial_after_single_leaf_unchecked(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._toggle_all_tags(True)
+    headers = _visible_group_headers(dlg)
+    assert headers
+    target_group = None
+    target_leaf = None
+    for header in headers:
+        visible_children = [
+            header.child(i) for i in range(header.childCount())
+            if not header.child(i).isHidden()
+        ]
+        if len(visible_children) >= 2:
+            target_group = header
+            target_leaf = visible_children[0]
+            break
+    assert target_group is not None
+    target_leaf.setCheckState(0, Qt.CheckState.Unchecked)
+    dlg._on_tag_selection_changed(target_leaf, 0)
+    assert target_group.checkState(0) == Qt.CheckState.PartiallyChecked
+    for header in headers:
+        if header is target_group:
+            continue
+        assert header.checkState(0) == Qt.CheckState.Checked
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_group_header_stays_checked_after_leaf_click_when_leaves_all_checked(
+    qapp, tmp_path
+) -> None:
+    """Leaf-click ancestor walk must use the same leaf aggregate as Select All."""
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._toggle_all_tags(True)
+    headers = _visible_group_headers(dlg)
+    assert headers
+    leaf = _first_exportable_leaves(dlg, 1)[0]
+    dlg._on_tag_selection_changed(leaf, 0)
+    for header in headers:
+        assert header.checkState(0) == Qt.CheckState.Checked
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_select_all_checkbox_updates_visible_group_headers(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._on_select_all_tag_checkbox(Qt.CheckState.Checked)
+    for header in _visible_group_headers(dlg):
+        assert header.checkState(0) == Qt.CheckState.Checked
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_toggle_all_preserves_independent_sequence_parent_checks(qapp, tmp_path) -> None:
+    item1 = Dataset()
+    item1.CodeValue = "113100"
+    item1.CodingSchemeDesignator = "DCM"
+    item1.CodeMeaning = "Basic Application Confidentiality Profile"
+    item2 = Dataset()
+    item2.CodeValue = "113107"
+    item2.CodingSchemeDesignator = "DCM"
+    item2.CodeMeaning = "Retain Longitudinal Temporal Information Modified Dates Option"
+    ds = Dataset()
+    ds.DeidentificationMethodCodeSequence = Sequence([item1, item2])
+    ds.PatientID = "SYNTH01"
+    studies = {"study1": {"series1": [ds]}}
+
+    dlg = TagExportDialog(studies, config_manager=_cm(tmp_path))
+    dlg.include_sequences_checkbox.setChecked(True)
+    seq_tag = str(Tag("DeidentificationMethodCodeSequence"))
+    seq_item = _find_tag_item(dlg, seq_tag)
+    assert seq_item is not None
+
+    dlg.tags_tree.blockSignals(True)
+    seq_item.setCheckState(0, Qt.CheckState.Checked)
+    dlg.tags_tree.blockSignals(False)
+
+    dlg._toggle_all_tags(True)
+    assert seq_item.checkState(0) == Qt.CheckState.Checked
+    dlg._toggle_all_tags(False)
+    assert seq_item.checkState(0) == Qt.CheckState.Checked
+    dlg.close()
+
+
+# --- Task A3: filter-walk _is_filtering guard --------------------------------
+
+
+def _sequence_dialog(tmp_path: Path) -> TagExportDialog:
+    """Dialog whose tree carries one sequence parent with >0 leaf descendants."""
+    item1 = Dataset()
+    item1.CodeValue = "113100"
+    item1.CodingSchemeDesignator = "DCM"
+    item1.CodeMeaning = "Basic Application Confidentiality Profile"
+    item2 = Dataset()
+    item2.CodeValue = "113107"
+    item2.CodingSchemeDesignator = "DCM"
+    item2.CodeMeaning = "Retain Longitudinal Temporal Information Modified Dates Option"
+    ds = Dataset()
+    ds.DeidentificationMethodCodeSequence = Sequence([item1, item2])
+    ds.PatientID = "SYNTH01"
+    return TagExportDialog(
+        {"study1": {"series1": [ds]}}, config_manager=_cm(tmp_path)
+    )
+
+
+@pytest.mark.qt
+def test_filtering_does_not_warn_on_large_sequence_expand(
+    qapp, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        _tag_export_dialog_mod, "LARGE_SEQUENCE_LEAF_THRESHOLD", 0
+    )
+    dlg = _sequence_dialog(tmp_path)
+    dlg.include_sequences_checkbox.setChecked(True)
+    seq_tag = str(Tag("DeidentificationMethodCodeSequence"))
+    seq_item = _find_tag_item(dlg, seq_tag)
+    assert seq_item is not None
+    # Threshold was patched to 0, so the build flags this node for the warning.
+    assert isinstance(seq_item.data(0, Qt.ItemDataRole.UserRole + 1), int)
+
+    warning = mock.Mock()
+    monkeypatch.setattr(_tag_export_dialog_mod.QMessageBox, "warning", warning)
+
+    # "Code Value" matches leaves nested under the sequence, so the walk
+    # programmatically expands the sequence parent (emitting itemExpanded).
+    dlg._filter_tags("Code Value")
+    assert seq_item.isExpanded()
+    warning.assert_not_called()
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_item_expanded_warns_outside_filtering(qapp, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        _tag_export_dialog_mod, "LARGE_SEQUENCE_LEAF_THRESHOLD", 0
+    )
+    dlg = _sequence_dialog(tmp_path)
+    dlg.include_sequences_checkbox.setChecked(True)
+    seq_tag = str(Tag("DeidentificationMethodCodeSequence"))
+    seq_item = _find_tag_item(dlg, seq_tag)
+    assert seq_item is not None
+
+    warning = mock.Mock()
+    monkeypatch.setattr(_tag_export_dialog_mod.QMessageBox, "warning", warning)
+
+    assert dlg._is_filtering is False
+    dlg._on_tag_tree_item_expanded(seq_item)
+    assert warning.called
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_filter_tags_leaves_tree_signals_unblocked(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._filter_tags("Patient")
+    assert dlg.tags_tree.signalsBlocked() is False
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_is_filtering_cleared_after_filter(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    assert dlg._is_filtering is False
+    dlg._filter_tags("Patient ID")
+    assert dlg._is_filtering is False
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_is_filtering_cleared_when_filter_walk_raises(
+    qapp, tmp_path, monkeypatch
+) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(dlg, "_apply_tag_filter_recursive", _boom)
+    with pytest.raises(RuntimeError):
+        dlg._filter_tags("Patient")
+    assert dlg._is_filtering is False
+    assert dlg.tags_tree.signalsBlocked() is False
+    dlg.close()
+
+
+# --- Task A5: remaining Select All / filter / objectName coherence ------------
+
+
+@pytest.mark.qt
+def test_filter_then_select_all_updates_visible_group_headers(qapp, tmp_path) -> None:
+    """After a filter, Select All still checks every remaining visible group header."""
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._filter_tags("Patient ID")
+    visible = _visible_group_headers(dlg)
+    assert visible
+    dlg._toggle_all_tags(True)
+    for header in visible:
+        assert header.checkState(0) == Qt.CheckState.Checked
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_filter_matching_only_group_label_unchecks_header(qapp, tmp_path) -> None:
+    """A filter that matches only a group label unchecks that header.
+
+    Exportable leaves under the header are hidden, so the aggregate is None
+    and the header must not keep a stale Checked state from Select All.
+    """
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._toggle_all_tags(True)
+    headers = _visible_group_headers(dlg)
+    assert headers
+    header = headers[0]
+    assert header.checkState(0) == Qt.CheckState.Checked
+    label = header.text(0)
+    assert label.startswith("Group ")
+
+    dlg._filter_tags(label)
+    visible = _visible_group_headers(dlg)
+    assert header in visible
+    assert list(dlg._iter_visible_exportable_leaves(start_item=header)) == []
+    assert header.checkState(0) == Qt.CheckState.Unchecked
     dlg.close()

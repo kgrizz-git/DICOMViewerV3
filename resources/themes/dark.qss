@@ -184,6 +184,10 @@
                     border-bottom: 1px solid #1b1d20;
                 }
 
+                /* Tag export picker — Phase A structure only; visual chrome is Phase B. */
+                QTreeWidget#tag_export_tags_tree {
+                }
+
                 /* Headers */
                 QHeaderView::section {
                     background-color: #252525;
