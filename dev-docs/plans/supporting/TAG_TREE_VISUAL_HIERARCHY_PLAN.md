@@ -1,7 +1,7 @@
 # Tag Tree Visual Hierarchy — Plan Hub
 
 **Created:** 2026-08-16  
-**Last updated:** 2026-08-16  
+**Last updated:** 2026-08-17  
 **Status:** index (implementation lives in phased plans below)  
 **Branch (planning):** `feature/tag-tree-visual-hierarchy-plan`
 
@@ -56,10 +56,7 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 
 ## Quick "what to do next"
 
-1. **Phase A** for export checkbox **tri-state correctness/behavior**; **Phase B**
-   on the metadata panel (Goals 1–2) in parallel.
-2. Finish export **Goal 3** checkbox **visual presentation** (Phase B); **run**
-   the **appearance gate** (Phase B) and **record** the outcome
-   (apply / light-touch / none) under Phase D.
-3. **Phase C** on metadata; touch export visuals only if the gate promoted them.
-4. Other Phase D / pane-toolbar items as separate PRs.
+1. **Phase B** (headers/stripes + export Goal 3 glyphs) is implemented; confirm
+   visually in the left-pane metadata panel, then **Phase C** on metadata
+   (tier/orientation/nav). Do not restyle the export tree — B7 recorded **(c) none**.
+2. Other Phase D / pane-toolbar items as separate PRs.

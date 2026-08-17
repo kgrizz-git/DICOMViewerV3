@@ -24,7 +24,7 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QPalette
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -34,7 +34,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
-    QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -47,11 +46,16 @@ from gui.dialogs.tag_edit_dialog import TagEditDialog
 from gui.metadata_table_model import (
     GROUP_HEADER_KEY_ROLE,
     GroupHeaderDelegate,
+    MetadataTagTree,
+    apply_group_header_colors,
+    assign_group_stripe_parity,
     filter_metadata_tags_by_search,
     format_metadata_value_for_tree,
+    group_header_colors,
     group_metadata_tags_sorted,
     index_metadata_tag_children,
     metadata_row_kind,
+    style_group_header_item,
 )
 from gui.tag_edit_support import (
     apply_tag_edit,
@@ -129,6 +133,7 @@ class MetadataPanel(QWidget):
         # Set while Expand/Collapse All is running, so its per-row signals don't each
         # trigger a config write; the batch is persisted once at the end.
         self._suspend_group_persist: bool = False
+        self._suspend_stripe_recompute: bool = False
 
         # Search debouncing timer
         self._search_timer = QTimer()
@@ -275,7 +280,7 @@ class MetadataPanel(QWidget):
         layout.addLayout(expand_collapse_layout)
 
         # Tree widget for tags
-        self.tree_widget = QTreeWidget()
+        self.tree_widget = MetadataTagTree()
         self.tree_widget.setObjectName("metadata_tag_tree")
         self.tree_widget.setHeaderLabels(["Tag", "Name", "VR", "Value"])
         # Root decorations ON: this is what draws the expand/collapse triangle on group
@@ -296,9 +301,10 @@ class MetadataPanel(QWidget):
         # Keeps a heading's band from being washed out by hover/selection.
         self.tree_widget.setItemDelegate(GroupHeaderDelegate(self.tree_widget))
 
-        # Banded rows make a long, dense tag list far easier to track across
-        # columns (matches the tag viewer dialog).
-        self.tree_widget.setAlternatingRowColors(True)
+        # Per-group stripe parity lives on STRIPE_PARITY_ROLE (not Qt's global
+        # alternating-row index, which does not reset at group boundaries).
+        self.tree_widget.setAlternatingRowColors(False)
+        self.tree_widget.setAnimated(False)
 
         # Restore saved column widths or use defaults
         if self.config_manager is not None:
@@ -482,12 +488,6 @@ class MetadataPanel(QWidget):
             # Tags will be children of group items (enabling collapse) but rendered fully left-aligned via delegate
             root_item = self.tree_widget.invisibleRootItem()
 
-            # Create bold font for group headings
-            bold_font = QFont()
-            bold_font.setBold(True)
-
-            header_bg, header_fg = self._group_header_colors()
-
             for group, tag_list in grouped:
                 # Group header as child of root (will be indented by tree widget indentation)
                 group_item = QTreeWidgetItem(root_item)
@@ -495,17 +495,13 @@ class MetadataPanel(QWidget):
                 group_item.setText(0, f"Group {group_label} — {len(tag_list)} tags")
                 # Enable expansion/collapse for group items - need both ItemIsEnabled and ItemIsSelectable
                 group_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
-                group_item.setFont(0, bold_font)  # Make group heading bold
                 # Let the heading run the full width of the tree instead of being
                 # clipped to the narrow Tag column ("Group 0002 — 7 t...").
                 group_item.setFirstColumnSpanned(True)
-                # Tinted band so a heading reads as a section divider, not as one more
-                # tag row. Spanning means column 0's brush fills the whole row.
-                group_item.setBackground(0, header_bg)
-                group_item.setForeground(0, header_fg)
                 group_item.setToolTip(0, "Click to expand or collapse this group")
                 # Raw bucket key, used to key session-scoped expand/collapse memory.
                 group_item.setData(0, GROUP_HEADER_KEY_ROLE, group)
+                style_group_header_item(group_item, self.tree_widget)
 
                 # Add tag items (and their nested descendants) as children
                 for tag_str, tag_data in tag_list:
@@ -525,6 +521,7 @@ class MetadataPanel(QWidget):
             # Always re-enable updates/signals, even if an error occurred
             self.tree_widget.blockSignals(False)
             self.tree_widget.setUpdatesEnabled(True)
+        assign_group_stripe_parity(self.tree_widget)
 
         # Note: Column widths are preserved from saved configuration
         # Removed resizeColumnToContents calls to maintain user's preferred column widths
@@ -543,35 +540,11 @@ class MetadataPanel(QWidget):
 
     def _apply_group_header_colors(self) -> None:
         """Push the current theme's heading colors onto every existing heading row."""
-        background, foreground = self._group_header_colors()
-        root = self.tree_widget.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            if self._is_group_header(item):
-                item.setBackground(0, background)
-                item.setForeground(0, foreground)
+        apply_group_header_colors(self.tree_widget)
 
     def _group_header_colors(self) -> tuple[QColor, QColor]:
-        """
-        Return (background, foreground) for a group heading row.
-
-        The heading takes the tree's own background (Base) — no fill of its own. Every
-        colored band tried here (grey, burgundy, the theme's black/white extreme) read as
-        an odd block floating on the pane. What separates a heading now is the rule drawn
-        above and below it by ``GroupHeaderDelegate``, which also keeps consecutive
-        *collapsed* headings visually distinct, something a fill alone did poorly.
-
-        Base is set explicitly rather than left unset so a heading never picks up the
-        accent-tinted alternating-row color.
-
-        Foreground is Text, so a heading always agrees with the tag rows beneath it. Both
-        come from the palette, which is where the app's QSS theme resolves to.
-        """
-        palette = self.tree_widget.palette()
-        return (
-            palette.color(QPalette.ColorRole.Base),
-            palette.color(QPalette.ColorRole.Text),
-        )
+        """Return (background, foreground) for a group heading row."""
+        return group_header_colors(self.tree_widget.palette())
 
     def _build_tag_tree_item(
         self,
@@ -693,6 +666,7 @@ class MetadataPanel(QWidget):
         burst of disk writes for a single click.
         """
         self._suspend_group_persist = True
+        self._suspend_stripe_recompute = True
         try:
             if expanded:
                 self.tree_widget.expandAll()
@@ -700,7 +674,9 @@ class MetadataPanel(QWidget):
                 self.tree_widget.collapseAll()
         finally:
             self._suspend_group_persist = False
+            self._suspend_stripe_recompute = False
         self._persist_group_expansion()
+        assign_group_stripe_parity(self.tree_widget)
 
     def _is_group_header(self, item: QTreeWidgetItem) -> bool:
         """True for a group heading row (the only rows carrying the bucket-key marker)."""
@@ -721,10 +697,14 @@ class MetadataPanel(QWidget):
     def _on_tree_item_expanded(self, item: QTreeWidgetItem) -> None:
         """Remember a group's expanded state for this session (see ``_group_expanded``)."""
         self._remember_group_expansion(item, True)
+        if not self._suspend_stripe_recompute:
+            assign_group_stripe_parity(self.tree_widget)
 
     def _on_tree_item_collapsed(self, item: QTreeWidgetItem) -> None:
         """Remember a group's collapsed state for this session (see ``_group_expanded``)."""
         self._remember_group_expansion(item, False)
+        if not self._suspend_stripe_recompute:
+            assign_group_stripe_parity(self.tree_widget)
 
     def _remember_group_expansion(self, item: QTreeWidgetItem, expanded: bool) -> None:
         """

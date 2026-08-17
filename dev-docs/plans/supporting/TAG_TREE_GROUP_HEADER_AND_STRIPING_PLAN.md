@@ -1,8 +1,8 @@
 # Plan: Tag Tree Group Headers, Striping & Checkbox Indicators (Phase B)
 
 **Created:** 2026-08-16  
-**Last updated:** 2026-08-16  
-**Status:** proposed  
+**Last updated:** 2026-08-17  
+**Status:** implemented (PR on `feature/tag-tree-group-header-striping`)  
 **Priority:** P2  
 **Phase:** B of the tag-tree visual-hierarchy workstream  
 **Primary surface:** **left-pane metadata panel** (`src/gui/metadata_panel.py`)  
@@ -60,46 +60,54 @@ as a Phase B commitment.
 
 ## Prerequisites (spike — do before full implement)
 
-- [ ] **(B0a)** Spike on **`metadata_tag_tree`:** extend `GroupHeaderDelegate`
+- [x] **(B0a)** Spike on **`metadata_tag_tree`:** extend `GroupHeaderDelegate`
       for heavier top rule + try tokenized header fill / taller / font bump;
       confirm theme flip (`changeEvent` / `_apply_group_header_colors`) still
-      works. Scratch under `tmp/` OK.
-- [ ] **(B0b)** Spike: per-group stripe-parity role on the metadata tree under
+      works. **Result:** restrained Base→Text fill (`GROUP_HEADER_FILL_STRENGTH=0.10`)
+      plus 2px top rule; loud grey/burgundy fills remain rejected. Theme flip
+      reapplies via `apply_group_header_colors`.
+- [x] **(B0b)** Spike: per-group stripe-parity role on the metadata tree under
       expand/collapse/filter (no `visualIndex`, no O(n²) in `paint()`).
-- [ ] **(B0c)** Spike (export): `::indicator:indeterminate` on the
+      **Result:** `STRIPE_PARITY_ROLE` (UserRole+3), `assign_group_stripe_parity`
+      O(n) on expand/collapse/filter; `paint()` reads the role.
+- [x] **(B0c)** Spike (export): `::indicator:indeterminate` on the
       **resolver-selected** PySide6/Qt in the active env (floor
       `PySide6>=6.11.1` in `requirements.txt`, not a pinned exact version).
       Record resolved `PySide6` and Qt versions in the spike notes. Fallback:
       `PE_IndicatorItemViewItemCheck` if needed. Can run parallel to B0a/B0b.
+      **Result (2026-08-17):** PySide6 **6.11.1**, Qt **6.11.1** — scoped QSS
+      fill + border on `QTreeWidget#tag_export_tags_tree::indicator:indeterminate`
+      **does** paint. No delegate fallback. No new raster glyph (avoids PHI
+      media review).
 
 ## Checklist
 
 ### Metadata panel (Goals 1–2)
 
-- [ ] **(B1)** Extend `GroupHeaderDelegate` (`metadata_table_model.py`): heavier
+- [x] **(B1)** Extend `GroupHeaderDelegate` (`metadata_table_model.py`): heavier
       top rule via token (e.g. `--border-strong`) + contrast check; keep
       hover/selection suppression sensible for headings.
-- [ ] **(B2)** Metadata `_style_group_header_item` / `_group_header_colors`:
+- [x] **(B2)** Metadata `_style_group_header_item` / `_group_header_colors`:
       bold + relative font bump, **tokenized header background** (supersedes
       “Base only forever”), taller `sizeHint`. Update the docstring that
       currently forbids fills so it records the new product decision and any
       fill that failed review.
-- [ ] **(B3)** Per-group stripe-parity on `metadata_tag_tree`; recompute on
+- [x] **(B3)** Per-group stripe-parity on `metadata_tag_tree`; recompute on
       structural change; headers do not stripe. Theme/accent flip re-applies
       colors. **Fallback if striping fragile:** drop intra-group striping; keep
       header chrome + hover + selection.
-- [ ] **(B4)** Widget + visual tests centered on the **metadata panel**; HiDPI
+- [x] **(B4)** Widget + visual tests centered on the **metadata panel**; HiDPI
       smoke of heavier top rule; color-blind pass if new hues land.
-- [ ] **(B5)** Disable expand animation where applicable; add metadata dense-tree
+- [x] **(B5)** Disable expand animation where applicable; add metadata dense-tree
       perf coverage with **≥2 sizes** and near-linear growth (or calibrated
       bound + growth check) — see success criterion 4.
 
 ### Export dialog (Goal 3 only)
 
-- [ ] **(B6)** Partial / full group checkbox indicator (scoped QSS or delegate
+- [x] **(B6)** Partial / full group checkbox indicator (scoped QSS or delegate
       fallback from B0c). Prefer objectName scope. Confirm Select-All paths
       (Phase A) leave headers correct.
-- [ ] **(B7)** **Appearance gate (decision only — do not implement rich chrome
+- [x] **(B7)** **Appearance gate (decision only — do not implement rich chrome
       here):** after metadata B1–B5 look right, open the export dialog beside it
       and record whether export needs (a) full header/stripe parity, (b) a
       light-touch subset, or (c) checkbox-only / leave visual alone. Write the

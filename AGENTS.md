@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-17
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -96,14 +96,10 @@ use `find` and the platform's available text-search tool rather than assuming
 
 ## Optional delegation
 
-Default to one agent implementing and verifying the requested change. Use
-subagents only when the user asks for them, two tasks are genuinely independent,
-or a single independent review materially reduces risk. Do not auto-chain
-planner/coder/tester/reviewer roles or maintain orchestration counters for normal
-work. For a high-risk privacy, security, persistence, or release change, prefer
-one focused independent review and one full test-suite run at the end of the
-completed batch. Do not create orchestration state, role handoff logs, or test
-ledgers for ordinary work.
+Use worktrees and subagents for isolated or parallel work; archive or remove
+them when the task is done. For a high-risk privacy, security, persistence, or
+release change, prefer one focused independent review and one full test-suite
+run at the end of the completed batch.
 
 ## Verification before claiming done
 

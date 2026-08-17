@@ -4,7 +4,7 @@ Metadata panel — group-heading delegate and pure tag-list helpers.
 ``MetadataPanel`` uses a ``QTreeWidget`` (historical plan wording referenced a
 “table model”; there is no ``QAbstractTableModel`` here). This module holds:
 
-- ``GroupHeaderDelegate`` — keeps a heading's colored band under hover/selection.
+- ``GroupHeaderDelegate`` — heading fill + heavier top rule; per-group stripe fills.
 - Pure functions to filter, group, and format tag dicts when building tree items.
 
 An earlier ``MetadataItemDelegate`` repainted each tag row's first column at x=0 to
@@ -23,25 +23,45 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPalette, QPen
-from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
+from PySide6.QtWidgets import (
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTreeWidget,
+    QTreeWidgetItem,
+)
 
 METADATA_VALUE_DISPLAY_MAX_LEN = 50
 
 # Group heading rows carry their bucket key here; nothing else does.
 GROUP_HEADER_KEY_ROLE = Qt.ItemDataRole.UserRole + 2
 
-# How far from the tree's Base toward its Text the heading rules sit. Derived rather than
-# hardcoded so the rules land on the correct side of the contrast in either theme.
+# 0/1 among currently visible non-header rows, resetting at each group.
+# Distinct from UserRole (tag key), UserRole+1 (tag dict / export leaf count).
+STRIPE_PARITY_ROLE = Qt.ItemDataRole.UserRole + 3
+
+# Heading fill: Base stepped toward Text (palette tokens, not a hardcoded hue).
+# Earlier Base-only headings read as undifferentiated rows; loud grey/burgundy
+# fills read as floating blocks. This mix is a restrained layer on the same
+# contrast axis as the rules.
+GROUP_HEADER_FILL_STRENGTH = 0.10
+
+# Bottom rule stays the original 1px mix; the top rule is heavier (thicker pen
+# + stronger mix) so the group boundary is the prominent edge.
 GROUP_HEADER_RULE_STRENGTH = 0.38
+GROUP_HEADER_TOP_RULE_STRENGTH = 0.55
+GROUP_HEADER_TOP_RULE_WIDTH = 2.0
+GROUP_HEADER_EXTRA_HEIGHT = 4
+GROUP_HEADER_FONT_SCALE = 1.1
 
 
-def group_header_rule_color(palette: QPalette) -> QColor:
-    """Color of the rules above and below a group heading: Base stepped toward Text."""
+def _palette_mix(palette: QPalette, strength: float) -> QColor:
+    """Return Base stepped toward Text by *strength* (0..1)."""
     base = palette.color(QPalette.ColorRole.Base)
     text = palette.color(QPalette.ColorRole.Text)
-    step = GROUP_HEADER_RULE_STRENGTH
+    step = max(0.0, min(1.0, strength))
     return QColor(
         round(base.red() + (text.red() - base.red()) * step),
         round(base.green() + (text.green() - base.green()) * step),
@@ -49,35 +69,166 @@ def group_header_rule_color(palette: QPalette) -> QColor:
     )
 
 
+def group_header_rule_color(palette: QPalette) -> QColor:
+    """Color of the 1px rule below a group heading."""
+    return _palette_mix(palette, GROUP_HEADER_RULE_STRENGTH)
+
+
+def group_header_top_rule_color(palette: QPalette) -> QColor:
+    """Color of the heavier rule above a group heading."""
+    return _palette_mix(palette, GROUP_HEADER_TOP_RULE_STRENGTH)
+
+
+def group_header_colors(palette: QPalette) -> tuple[QColor, QColor]:
+    """Return (background, foreground) for a group heading row."""
+    return (
+        _palette_mix(palette, GROUP_HEADER_FILL_STRENGTH),
+        palette.color(QPalette.ColorRole.Text),
+    )
+
+
+def _row_index(index):
+    """Return the column-0 index for *index*'s row (roles live on column 0)."""
+    return index.siblingAtColumn(0)
+
+
+def style_group_header_item(item: QTreeWidgetItem, tree: QTreeWidget) -> None:
+    """Apply tokenized fill and a bold relative font bump.
+
+    Extra height is owned by ``GroupHeaderDelegate.sizeHint`` so it is not
+    applied twice.
+    """
+    font = QFont(tree.font())
+    font.setBold(True)
+    point_size = font.pointSizeF()
+    if point_size <= 0:
+        point_size = float(font.pointSize() or 12)
+    font.setPointSizeF(point_size * GROUP_HEADER_FONT_SCALE)
+    item.setFont(0, font)
+    background, foreground = group_header_colors(tree.palette())
+    item.setBackground(0, background)
+    item.setForeground(0, foreground)
+
+
+def apply_group_header_colors(tree: QTreeWidget) -> None:
+    """Push the current theme's heading colors onto every existing heading row."""
+    background, foreground = group_header_colors(tree.palette())
+    root = tree.invisibleRootItem()
+    for i in range(root.childCount()):
+        item = root.child(i)
+        if item.data(0, GROUP_HEADER_KEY_ROLE) is not None:
+            item.setBackground(0, background)
+            item.setForeground(0, foreground)
+
+
+def _walk_visible_descendants(item: QTreeWidgetItem):
+    """Yield currently visible descendants (skips hidden; enters expanded only)."""
+    for i in range(item.childCount()):
+        child = item.child(i)
+        if child.isHidden():
+            continue
+        yield child
+        if child.isExpanded():
+            yield from _walk_visible_descendants(child)
+
+
+def assign_group_stripe_parity(tree: QTreeWidget) -> None:
+    """
+    Assign STRIPE_PARITY_ROLE 0/1 among visible non-header rows, resetting at
+    each group. O(n) over the visible tree; paint() only reads the role.
+    """
+    root = tree.invisibleRootItem()
+    for i in range(root.childCount()):
+        group_item = root.child(i)
+        group_item.setData(0, STRIPE_PARITY_ROLE, None)
+        if group_item.isHidden():
+            continue
+        if not group_item.isExpanded():
+            continue
+        for parity, child in enumerate(_walk_visible_descendants(group_item)):
+            child.setData(0, STRIPE_PARITY_ROLE, parity % 2)
+
+
+def _index_has_item_background(index) -> bool:
+    """True when the row already carries a brush (e.g. edited-tag highlight)."""
+    value = index.data(Qt.ItemDataRole.BackgroundRole)
+    if value is None:
+        return False
+    if isinstance(value, QBrush):
+        return value.style() != Qt.BrushStyle.NoBrush
+    return isinstance(value, QColor)
+
+
+class MetadataTagTree(QTreeWidget):
+    """
+    Metadata tag tree whose row backgrounds honor heading fill and per-group
+    stripe parity across the full row (indent gutter included).
+
+    ``QStyleSheetStyle`` paints ``PE_PanelItemViewRow`` for the row, then the
+    delegate paints each cell. Filling here is what covers the branch column
+    and any gap past the last section; the delegate still fills cells so a
+    ``::item`` rule cannot leave Name/VR/Value on the pane Base.
+    """
+
+    def drawRow(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
+        row = _row_index(index)
+        if row.data(GROUP_HEADER_KEY_ROLE) is not None:
+            painter.fillRect(option.rect, group_header_colors(option.palette)[0])
+        elif (
+            not _index_has_item_background(row)
+            and row.data(STRIPE_PARITY_ROLE) == 1
+        ):
+            painter.fillRect(
+                option.rect,
+                option.palette.color(QPalette.ColorRole.AlternateBase),
+            )
+        super().drawRow(painter, option, index)
+
+
 class GroupHeaderDelegate(QStyledItemDelegate):
     """
-    Rule off group headings, and keep them out of hover/selection.
+    Heading chrome plus O(1) per-group stripe fills.
 
-    A heading takes the tree's own background — no fill of its own — so what separates it
-    from the rows around it is a horizontal rule at its top and bottom. That works whether
-    the group is expanded (rules bracket its tag rows) or collapsed (consecutive headings
-    still read as separate bands, which a fill-free heading otherwise would not).
-
-    Hover and selection are dropped for headings: Qt paints those highlights *over* an
-    item's background, which previously washed a heading's fill out to a pale block while
-    leaving its text color untouched — unreadable on a light theme. Headings are
-    structure, not selectable content. Every other row paints normally.
+    Headings use a restrained palette-mixed fill, a heavier top rule, and a
+    1px bottom rule. Hover/selection are dropped for headings so Qt cannot
+    wash the band out. Tag rows with stripe parity 1 fill AlternateBase
+    unless they already have an item background (edited highlight). Roles are
+    stored on column 0 and read via ``siblingAtColumn(0)`` so every cell of
+    the row gets the same treatment.
     """
 
+    def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
+        hint = super().sizeHint(option, index)
+        if _row_index(index).data(GROUP_HEADER_KEY_ROLE) is None:
+            return hint
+        return QSize(hint.width(), hint.height() + GROUP_HEADER_EXTRA_HEIGHT)
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
-        if index.data(GROUP_HEADER_KEY_ROLE) is None:
+        row = _row_index(index)
+        if row.data(GROUP_HEADER_KEY_ROLE) is None:
+            option = QStyleOptionViewItem(option)
+            if (
+                not _index_has_item_background(row)
+                and row.data(STRIPE_PARITY_ROLE) == 1
+            ):
+                stripe = option.palette.color(QPalette.ColorRole.AlternateBase)
+                painter.fillRect(option.rect, stripe)
             super().paint(painter, option, index)
             return
 
         option = QStyleOptionViewItem(option)
         option.state &= ~QStyle.StateFlag.State_MouseOver
         option.state &= ~QStyle.StateFlag.State_Selected
+        painter.fillRect(option.rect, group_header_colors(option.palette)[0])
         super().paint(painter, option, index)
 
         painter.save()
-        painter.setPen(QPen(group_header_rule_color(option.palette)))
         rect = option.rect
-        painter.drawLine(rect.left(), rect.top(), rect.right(), rect.top())
+        top_pen = QPen(group_header_top_rule_color(option.palette))
+        top_pen.setWidthF(GROUP_HEADER_TOP_RULE_WIDTH)
+        painter.setPen(top_pen)
+        painter.drawLine(rect.left(), rect.top() + 1, rect.right(), rect.top() + 1)
+        painter.setPen(QPen(group_header_rule_color(option.palette)))
         painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
         painter.restore()
 
