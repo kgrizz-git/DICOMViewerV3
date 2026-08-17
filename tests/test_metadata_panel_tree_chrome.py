@@ -263,3 +263,207 @@ def test_themed_heading_fill_and_name_column_stripe(qapp) -> None:
         assert abs(selected_px.lightness() - pane.lightness()) > 20
     finally:
         qapp.setStyleSheet(previous)
+
+
+# --- Phase C (tier ladder, mono Tag/VR, filter highlight, empty state, hover QSS) ---
+
+from pathlib import Path
+
+from pydicom.sequence import Sequence
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QTreeWidgetItem
+
+from gui.main_window_theme import get_theme_stylesheet
+from gui.metadata_tree_chrome import (
+    METADATA_TIER_ROLE,
+    FilterHighlightCache,
+    is_metadata_value_empty,
+    metadata_disabled_text_color,
+    metadata_tag_mono_font,
+)
+
+
+def _dataset_with_nested_code_sequence():
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.PatientName = "Test^Patient"
+    ds.PatientID = "12345"
+    item = Dataset()
+    item.CodeValue = "113100"
+    item.CodingSchemeDesignator = "DCM"
+    item.CodeMeaning = "Basic Application Confidentiality Profile"
+    ds.DeidentificationMethodCodeSequence = Sequence([item])
+    return ds
+
+
+def _dataset_with_empty_value_tag():
+    from pydicom.dataset import Dataset
+    from pydicom.tag import Tag
+
+    ds = Dataset()
+    ds.PatientName = "Test^Patient"
+    ds.add_new(Tag(0x0010, 0x0021), "LO", "")
+    return ds
+
+
+def _find_sequence_parent(panel: MetadataPanel) -> QTreeWidgetItem | None:
+    for group in _group_items(panel):
+        for index in range(group.childCount()):
+            child = group.child(index)
+            if child.data(0, METADATA_TIER_ROLE) == "sequence":
+                return child
+    return None
+
+
+def _find_first_leaf(panel: MetadataPanel) -> QTreeWidgetItem | None:
+    for group in _group_items(panel):
+        group.setExpanded(True)
+        for index in range(group.childCount()):
+            child = group.child(index)
+            if child.data(0, METADATA_TIER_ROLE) == "element":
+                return child
+    return None
+
+
+def test_sequence_parent_bolder_than_leaf(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_nested_code_sequence())
+    groups = _group_items(panel)
+    groups[0].setExpanded(True)
+    sequence = _find_sequence_parent(panel)
+    assert sequence is not None
+    sequence.setExpanded(True)
+    leaf = None
+    for index in range(sequence.childCount()):
+        candidate = sequence.child(index)
+        if candidate.data(0, METADATA_TIER_ROLE) == "element":
+            leaf = candidate
+            break
+        candidate.setExpanded(True)
+        for sub in range(candidate.childCount()):
+            sub_child = candidate.child(sub)
+            if sub_child.data(0, METADATA_TIER_ROLE) == "element":
+                leaf = sub_child
+                break
+        if leaf is not None:
+            break
+    assert leaf is not None
+    assert sequence.font(0).bold()
+    assert not leaf.font(0).bold()
+    assert sequence.font(0).weight() >= leaf.font(0).weight()
+
+
+def test_tag_and_vr_columns_use_monospace_family(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    row = header.child(0)
+    mono = metadata_tag_mono_font(panel.tree_widget.font())
+    expected = mono.families()[0].lower()
+    assert expected in row.font(0).family().lower() or row.font(0).families()[0].lower() in (
+        "consolas",
+        "menlo",
+        "monospace",
+    )
+    assert row.font(2).families()[0].lower() in ("consolas", "menlo", "monospace")
+
+
+def test_empty_value_uses_disabled_foreground(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_empty_value_tag())
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    value_item = None
+    for index in range(header.childCount()):
+        child = header.child(index)
+        if child.text(3) == "":
+            value_item = child
+            break
+    assert value_item is not None
+    disabled = metadata_disabled_text_color(panel.tree_widget.palette())
+    fg = value_item.foreground(3).color()
+    assert fg.red() == disabled.red()
+    assert fg.green() == disabled.green()
+    assert fg.blue() == disabled.blue()
+    assert is_metadata_value_empty("")
+
+
+def test_filter_highlight_cache_paints_match_without_qtextdocument(qapp) -> None:
+    cache = FilterHighlightCache()
+    pixmap = QPixmap(200, 20)
+    pixmap.fill(QColor("#ffffff"))
+    painter = QPainter(pixmap)
+    fg = QColor("#101010")
+    hl = QColor("#ffee88")
+    font = QFont("Arial", 10)
+    cache.draw(painter, QRect(2, 2, 180, 16), "PatientName", "name", fg, hl, font)
+    painter.end()
+    assert len(cache._cache) == 1
+    image = pixmap.toImage()
+    # Highlight band should differ from plain background.
+    assert image.pixelColor(40, 10).lightness() != image.pixelColor(4, 10).lightness()
+
+
+def test_delegate_filter_highlight_paints_on_match(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    panel.search_edit.setText("Patient")
+    qapp.processEvents()
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    row = header.child(0)
+    delegate = panel._metadata_tree_delegate
+    assert delegate is not None
+    index = panel.tree_widget.indexFromItem(row, 1)
+    pixmap = QPixmap(240, 20)
+    pixmap.fill(QColor("#ffffff"))
+    painter = QPainter(pixmap)
+    option = QStyleOptionViewItem()
+    option.rect = QRect(0, 0, 240, 20)
+    option.palette = panel.tree_widget.palette()
+    option.state = QStyle.StateFlag.State_Enabled
+    delegate.paint(painter, option, index)
+    painter.end()
+    assert pixmap.toImage().pixelColor(60, 10).lightness() != pixmap.toImage().pixelColor(4, 10).lightness()
+
+
+def test_filter_no_match_shows_clear_and_restores_rows(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    panel._populate_tags("zzznomatchzzz")
+    panel.show()
+    qapp.processEvents()
+    banner = panel._filter_empty_banner
+    assert banner is not None
+    assert banner.isVisible()
+    from PySide6.QtWidgets import QPushButton
+
+    clear_btn = banner.findChild(QPushButton, "metadata_filter_clear_button")
+    assert clear_btn is not None
+    clear_btn.click()
+    qapp.processEvents()
+    assert not banner.isVisible()
+    assert panel.search_edit.text() == ""
+    header = _group_items(panel)[0]
+    assert header.childCount() > 0
+
+
+def test_metadata_tag_tree_hover_rule_in_both_qss_files() -> None:
+    root = Path(__file__).resolve().parents[1]
+    for name in ("dark.qss", "light.qss"):
+        text = (root / "resources" / "themes" / name).read_text(encoding="utf-8")
+        assert "QTreeWidget#metadata_tag_tree::item:hover" in text
+        assert "{metadata_tag_hover}" in text
+        assert "background-color: transparent" not in text.split("metadata_tag_tree")[1].split("tag_export")[0]
+
+
+def test_metadata_tag_tree_selection_token_in_theme_stylesheet() -> None:
+    sheet = get_theme_stylesheet("light", "/w.png", "/b.png", accent_id="steel-blue")
+    assert "QTreeWidget#metadata_tag_tree::item:selected" in sheet
+    assert "metadata_tag_selection" not in sheet  # substituted
+    assert "metadata_tag_selection_fg" not in sheet
+    chunk = sheet.split("metadata_tag_tree::item:selected")[1][:180]
+    assert "#" in chunk
+    assert "color: #ffffff" not in chunk

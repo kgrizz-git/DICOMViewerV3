@@ -56,7 +56,8 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 
 ## Quick "what to do next"
 
-1. **Next: Phase C** on the metadata panel (tier/orientation/nav). Export gets
-   navigation affordances only; do not add richer export-tree formatting, and
-   retain the implemented indicator glyphs — B7 recorded **(c) none**.
-2. Other Phase D / pane-toolbar items as separate PRs.
+1. **Phase C** (tier/orientation/nav + export Expand/Collapse All) is on
+   `feature/tag-tree-tier-orientation-nav`. Confirm visually in the left-pane
+   metadata panel, then **Phase D** leftovers as separate PRs. Export stays
+   checkbox + navigation — B7 recorded **(c) none**.
+2. Pane-toolbar items remain a separate plan.

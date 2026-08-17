@@ -45,21 +45,23 @@ from core.tag_edit_history import TagEditHistoryManager
 from gui.dialogs.tag_edit_dialog import TagEditDialog
 from gui.metadata_table_model import (
     GROUP_HEADER_KEY_ROLE,
-    GroupHeaderDelegate,
     MetadataTagTree,
     apply_group_header_colors,
     assign_group_stripe_parity,
     filter_metadata_tags_by_search,
-    format_metadata_value_for_tree,
     group_header_colors,
     group_metadata_tags_sorted,
     index_metadata_tag_children,
-    metadata_row_kind,
     style_group_header_item,
+)
+from gui.metadata_tree_chrome import (
+    attach_metadata_tree_chrome,
+    build_metadata_tag_tree_item,
+    on_metadata_panel_palette_change,
+    update_filter_empty_banner,
 )
 from gui.tag_edit_support import (
     apply_tag_edit,
-    edited_tag_row_colors,
     is_editable_metadata_item,
 )
 from utils.config_manager import ConfigManager
@@ -298,8 +300,8 @@ class MetadataPanel(QWidget):
         # toggle and cancel it out.
         self.tree_widget.setExpandsOnDoubleClick(False)
 
-        # Keeps a heading's band from being washed out by hover/selection.
-        self.tree_widget.setItemDelegate(GroupHeaderDelegate(self.tree_widget))
+        # Phase B headings + Phase C tier/highlight delegate (see metadata_tree_chrome).
+        attach_metadata_tree_chrome(self)
 
         # Per-group stripe parity lives on STRIPE_PARITY_ROLE (not Qt's global
         # alternating-row index, which does not reset at group boundaries).
@@ -505,8 +507,8 @@ class MetadataPanel(QWidget):
 
                 # Add tag items (and their nested descendants) as children
                 for tag_str, tag_data in tag_list:
-                    self._build_tag_tree_item(
-                        group_item, tag_str, tag_data, children_by_parent, is_filtering
+                    build_metadata_tag_tree_item(
+                        self, group_item, tag_str, tag_data, children_by_parent, is_filtering
                     )
 
                 # Set indicator policy and expanded state after children are added
@@ -522,6 +524,12 @@ class MetadataPanel(QWidget):
             self.tree_widget.blockSignals(False)
             self.tree_widget.setUpdatesEnabled(True)
         assign_group_stripe_parity(self.tree_widget)
+        delegate = getattr(self, "_metadata_tree_delegate", None)
+        if delegate is not None:
+            delegate.set_filter_needle(search_text)
+        banner = getattr(self, "_filter_empty_banner", None)
+        if banner is not None:
+            update_filter_empty_banner(banner, self.tree_widget, search_text)
 
         # Note: Column widths are preserved from saved configuration
         # Removed resizeColumnToContents calls to maintain user's preferred column widths
@@ -537,6 +545,7 @@ class MetadataPanel(QWidget):
         super().changeEvent(event)
         if event.type() == QEvent.Type.PaletteChange:
             self._apply_group_header_colors()
+            on_metadata_panel_palette_change(self)
 
     def _apply_group_header_colors(self) -> None:
         """Push the current theme's heading colors onto every existing heading row."""
@@ -545,84 +554,6 @@ class MetadataPanel(QWidget):
     def _group_header_colors(self) -> tuple[QColor, QColor]:
         """Return (background, foreground) for a group heading row."""
         return group_header_colors(self.tree_widget.palette())
-
-    def _build_tag_tree_item(
-        self,
-        parent_item: QTreeWidgetItem,
-        tag_str: str,
-        tag_data: dict[str, Any],
-        children_by_parent: dict[str | None, list[tuple[str, dict[str, Any]]]],
-        force_expand_sequences: bool,
-    ) -> QTreeWidgetItem:
-        """
-        Create a ``QTreeWidgetItem`` for one row and recursively attach its
-        children (via ``parent_key``), matching the Phase 2 tree shape
-        (``tag_viewer_dialog._build_tag_tree_item``): SQ parents hold ``Item N``
-        nodes, which hold their own leaves/nested sequences.
-
-        Args:
-            parent_item: The group header or ancestor row this item nests under.
-            tag_str: Row key (a path key, e.g. ``(0012, 0064)[0].(0008, 0104)``).
-            tag_data: Row dict as returned by ``DICOMParser.get_all_tags``.
-            children_by_parent: Child index from ``index_metadata_tag_children``
-                (built ONCE per populate call — never re-index per parent, that
-                is the O(n^2) trap this helper exists to avoid).
-            force_expand_sequences: When True (active filter), expand SQ parents
-                instead of defaulting to collapsed.
-        """
-        tag_item = QTreeWidgetItem(parent_item)
-        # Use the map key (a path) so two leaves sharing a tag number under
-        # different sequences stay distinguishable in the Tag column.
-        tag_item.setText(0, tag_str)
-
-        # Check if tag is edited
-        tag_name = tag_data.get("name", "")
-        is_edited = False
-        if self.history_manager and self.dataset:
-            is_edited = self.history_manager.is_tag_edited(self.dataset, tag_str)
-
-        # Add asterisk to name if edited
-        if is_edited:
-            tag_name = tag_name + "*"
-
-        tag_item.setText(1, tag_name)
-        tag_item.setText(2, tag_data.get("VR", ""))
-
-        # Set left alignment for tag column
-        tag_item.setTextAlignment(0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-
-        value_str = format_metadata_value_for_tree(tag_data.get("value", ""))
-        tag_item.setText(3, value_str)
-
-        if is_edited:
-            edited_color, edited_text_color = edited_tag_row_colors(self.config_manager)
-            for col in range(4):
-                tag_item.setBackground(col, edited_color)
-                tag_item.setForeground(col, edited_text_color)
-
-        tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
-        tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)
-
-        children = children_by_parent.get(tag_str, [])
-        if children:
-            tag_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
-
-        kind = metadata_row_kind(tag_data)
-        if kind == "sequence":
-            # Sequence parents always start collapsed and are never remembered
-            # across populate calls — only an active filter match forces one open.
-            tag_item.setExpanded(force_expand_sequences)
-        elif kind == "item":
-            # Item nodes default expanded so an expanded SQ parent's leaves are
-            # visible without an extra click.
-            tag_item.setExpanded(True)
-
-        for child_key, child_data in children:
-            self._build_tag_tree_item(
-                tag_item, child_key, child_data, children_by_parent, force_expand_sequences
-            )
-
-        return tag_item
 
     def _on_search_changed(self, _text: str) -> None:
         """

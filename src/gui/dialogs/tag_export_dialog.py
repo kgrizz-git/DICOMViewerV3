@@ -44,6 +44,7 @@ from core.dicom_parser import DICOMParser
 from core.tag_export_controller import TagExportController, resolve_export_format
 from core.tag_export_union import union_tags_across_datasets
 from gui.dialogs import tag_export_dialog_helpers as _tag_export_helpers
+from gui.dialogs.tag_export_dialog_navigation import TagExportDialogNavigationMixin
 from gui.dialogs.tag_export_dialog_presets import TagExportDialogPresetsMixin
 from gui.dialogs.tag_export_dialog_selection import TagExportDialogSelectionMixin
 from gui.metadata_table_model import (
@@ -96,6 +97,7 @@ def _leaf_descendant_counts(
 
 
 class TagExportDialog(
+    TagExportDialogNavigationMixin,
     TagExportDialogSelectionMixin,
     TagExportDialogPresetsMixin,
     QDialog,
@@ -172,6 +174,7 @@ class TagExportDialog(
         self.tag_count_label = QLabel("No tags selected", self)
 
         self._create_ui()
+        self._init_tag_export_navigation_state()
         self._populate_series()
         if self._tag_union_host is not None:
             self._tag_union_host.tag_export_union_ready.connect(
@@ -309,6 +312,7 @@ class TagExportDialog(
         self.tag_search.textChanged.connect(self._filter_tags)
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.tag_search)
+        self._add_tag_filter_clear_button(search_layout)
         layout.addLayout(search_layout)
 
         # Select/Deselect buttons
@@ -320,6 +324,7 @@ class TagExportDialog(
         deselect_all_btn = QPushButton("Deselect All")
         deselect_all_btn.clicked.connect(lambda: self._toggle_all_tags(False))
         button_layout.addWidget(deselect_all_btn)
+        self._add_tag_navigation_buttons(button_layout)
         button_layout.addStretch()
 
         # Show private tags checkbox
@@ -347,6 +352,7 @@ class TagExportDialog(
         self.tags_tree.itemChanged.connect(self._on_tag_selection_changed)
         self.tags_tree.itemExpanded.connect(self._on_tag_tree_item_expanded)
         self.tags_tree.itemCollapsed.connect(self._on_tag_tree_item_collapsed)
+        self._wire_tag_tree_navigation()
         layout.addWidget(self.tags_tree)
 
         group.setLayout(layout)
@@ -644,33 +650,6 @@ class TagExportDialog(
 
         return tag_item
 
-    def _on_tag_tree_item_expanded(self, item: QTreeWidgetItem) -> None:
-        """
-        Warn when the user expands a sequence node flagged as large (plan's
-        large-sequence warning). Eager population is already fast (Phase 2 perf
-        finding), so this is a UX guard against browsing/over-selecting a huge
-        subtree unintentionally, not a performance mitigation.
-
-        During ``_filter_tags`` the walk expands ancestor rows programmatically
-        (``_is_filtering`` is True); the slot returns early then so filtering
-        never pops the warning. Structural state is recomputed once at the end
-        of the filter walk instead of per-row.
-        """
-        if self._is_filtering:
-            return
-        leaf_count = item.data(0, Qt.ItemDataRole.UserRole + 1)
-        if not isinstance(leaf_count, int):
-            return
-        tag_str = item.data(0, Qt.ItemDataRole.UserRole)
-        QMessageBox.warning(
-            self,
-            "Large Sequence",
-            f"{tag_str} contains {leaf_count:,} nested tags across its items.\n\n"
-            "Expanding and selecting individual leaves may be slow to browse. "
-            "Use the filter box to narrow down, or check the sequence row itself "
-            "to export a single summary column instead.",
-        )
-
     def _toggle_all_series(self, checked: bool) -> None:
         """Toggle all series and instance selection."""
         self.series_tree.blockSignals(True)
@@ -754,6 +733,7 @@ class TagExportDialog(
             # rewrite Sequence/Item parent checks via _update_ancestors_check_state.
             self._refresh_select_all_checkbox_state()
             self._refresh_group_header_check_states()
+            self._update_tag_filter_clear_visibility(search_text)
         finally:
             self._is_filtering = False
 

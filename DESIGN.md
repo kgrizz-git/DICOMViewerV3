@@ -171,6 +171,11 @@ The light theme is intentionally conventional — neutral grays, no tinting. The
 | Metadata group header rules | 2 px top (55% Base→Text), 1 px bottom (38%) | Heavier top edge marks the group boundary |
 | Metadata per-group stripe | AlternateBase / `{metadata_tag_band}` | Parity resets at each group header; headers do not stripe |
 | Export tag-tree partial checkbox | `{accent}` fill on `#tag_export_tags_tree::indicator:indeterminate` | Goal 3 glyph only; no header/stripe parity on export |
+| Metadata tier bars | 3 px left edge, palette-mixed (sequence stronger than item) | Group headers keep Phase B fill/rules; no kind-icon set |
+| Metadata Tag/VR typeface | Platform `Consolas, Menlo, monospace` fallback | Name/Value stay proportional; no bundled mono font in this phase |
+| Metadata filter highlight | Accent-tinted run, cached pixmap/metrics | No live `QTextDocument` in `paint()` |
+| Metadata empty values | Disabled/text-muted token | Does not override edited-row accent-soft |
+| Metadata row hover/selection | `{metadata_tag_hover}` / `{metadata_tag_selection}` | Scoped to `#metadata_tag_tree`; selection text uses `{metadata_tag_selection_fg}` |
 | Scrollbar track width | 12 px | No arrow buttons |
 | Toolbar separator | 1 px `--border` colour | |
 
@@ -222,6 +227,9 @@ Qt supports two sizing modes and they behave differently across platforms and DP
 **Rule:** Use **point sizes** for all standard UI widgets (labels, buttons, menus, dialogs). Use pixel sizes only for the image overlay font. The pt column in §3.2 gives the equivalent values at 96 DPI — use those when constructing `QFont` objects in code.
 
 The app currently sets the application-wide font in one place (search for `setFont` on `QApplication`). Prefer adjusting the app-wide font there rather than setting fonts on individual widgets, which creates maintenance debt. Override only where a specific widget genuinely needs to differ (e.g. monospace for the tag viewer).
+The left-pane metadata **Tag** and **VR** columns use a platform monospace fallback
+(`Consolas, Menlo, monospace`); IBM Plex Mono remains the documented long-term family
+and is not bundled in Phase C.
 
 ---
 
@@ -354,6 +362,8 @@ All shortcuts must be registered via `QAction.setShortcut()` or `QKeySequence.St
 | Zoom In | Ctrl++ | |
 | Zoom Out | Ctrl+- | |
 | Reset View | Ctrl+0 | |
+| Tag export dialog — Expand All | Ctrl+Shift+E | Active while Export DICOM Tags is focused |
+| Tag export dialog — Collapse All | Ctrl+Shift+C | Active while Export DICOM Tags is focused |
 
 > Shortcut table must be kept complete; add new bindings here before implementing them.
 

@@ -191,6 +191,19 @@
                     border-bottom: 1px solid #e7eaed;
                 }
 
+                QTreeWidget#metadata_tag_tree::item:hover {
+                    background-color: {metadata_tag_hover};
+                }
+
+                QTreeWidget#metadata_tag_tree::item:selected {
+                    background-color: {metadata_tag_selection};
+                    color: {metadata_tag_selection_fg};
+                }
+
+                QTreeWidget#metadata_tag_tree::item:selected:hover {
+                    background-color: {metadata_tag_selection};
+                }
+
                 /* Tag export picker — Goal 3 indeterminate glyph (Phase B). */
                 QTreeWidget#tag_export_tags_tree::indicator:indeterminate {
                     width: 16px;

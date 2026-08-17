@@ -54,6 +54,27 @@ def metadata_tag_band_color(theme: str, accent: str) -> str:
     return _blend_hex_colors("#ffffff", accent, 0.08)
 
 
+def metadata_tag_hover_color(theme: str, accent: str) -> str:
+    """Tokenized hover wash for ``#metadata_tag_tree`` rows (not global tree grey)."""
+    if theme == "dark":
+        return _blend_hex_colors("#141414", accent, 0.12)
+    return _blend_hex_colors("#ffffff", accent, 0.14)
+
+
+def metadata_tag_selection_color(theme: str, accent: str) -> str:
+    """Low-contrast selection fill for metadata tag rows (readable on stripe rows)."""
+    if theme == "dark":
+        return _boost_hex_saturation(_blend_hex_colors("#141414", accent, 0.28), 1.12)
+    return _blend_hex_colors("#ffffff", accent, 0.22)
+
+
+def metadata_tag_selection_fg_color(theme: str) -> str:
+    """Foreground on the low-contrast metadata selection fill (not white-on-pale)."""
+    if theme == "dark":
+        return "#e0e0e0"
+    return "#000000"
+
+
 def _themes_dir() -> Path:
     """
     Resolve resources/themes for dev and frozen PyInstaller builds.
@@ -92,6 +113,9 @@ def get_theme_stylesheet(
     * ``{accent_soft}``   – pale accent tint for readable light-theme rows
     * ``{accent_muted}``  – dark accent tint for readable dark-theme rows
     * ``{metadata_tag_band}`` – deliberately subtle tint for metadata row bands
+    * ``{metadata_tag_hover}`` – scoped metadata-tree hover wash
+    * ``{metadata_tag_selection}`` – scoped metadata-tree selection fill
+    * ``{metadata_tag_selection_fg}`` – scoped metadata-tree selection text
 
     Args:
         theme: ``"light"`` or ``"dark"``
@@ -118,6 +142,9 @@ def get_theme_stylesheet(
     effective_theme = qss_file.stem
     preset = get_preset(accent_id)
     metadata_tag_band = metadata_tag_band_color(effective_theme, preset.accent)
+    metadata_tag_hover = metadata_tag_hover_color(effective_theme, preset.accent)
+    metadata_tag_selection = metadata_tag_selection_color(effective_theme, preset.accent)
+    metadata_tag_selection_fg = metadata_tag_selection_fg_color(effective_theme)
     stylesheet = qss_file.read_text(encoding="utf-8")
     return (
         stylesheet
@@ -129,6 +156,9 @@ def get_theme_stylesheet(
         .replace("{accent_soft}", preset.accent_soft)
         .replace("{accent_muted}", preset.accent_muted)
         .replace("{metadata_tag_band}", metadata_tag_band)
+        .replace("{metadata_tag_hover}", metadata_tag_hover)
+        .replace("{metadata_tag_selection}", metadata_tag_selection)
+        .replace("{metadata_tag_selection_fg}", metadata_tag_selection_fg)
     )
 
 

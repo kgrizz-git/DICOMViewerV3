@@ -2,7 +2,7 @@
 
 **Created:** 2026-08-16  
 **Last updated:** 2026-08-17  
-**Status:** proposed  
+**Status:** in progress (`feature/tag-tree-tier-orientation-nav`)  
 **Priority:** P2  
 **Phase:** C of the tag-tree visual-hierarchy workstream  
 **Depends on:** [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) (Phase B, implemented)
@@ -42,26 +42,26 @@ Carbon “clarity over decoration.”
 
 ## Checklist
 
-- [ ] **(C1)** Tier helper on **metadata panel** (font weight/size ladder;
+- [x] **(C1)** Tier helper on **metadata panel** (font weight/size ladder;
       optional left color bar only — no new kind-icon set unless needed).
-- [ ] **(C2)** Shared tokens/QSS for the metadata tree (target
+- [x] **(C2)** Shared tokens/QSS for the metadata tree (target
       `QTreeWidget#metadata_tag_tree` / group-header as needed). Do **not**
       force the same classes onto export until `D-export-visual` says so.
-- [ ] **(C3)** Mono Tag/VR columns via platform fallback on metadata.
-- [ ] **(C4)** Filter substring highlight (cached draw) on metadata filter.
-- [ ] **(C5)** Dim empty/null values; filter empty state + Clear on metadata
+- [x] **(C3)** Mono Tag/VR columns via platform fallback on metadata.
+- [x] **(C4)** Filter substring highlight (cached draw) on metadata filter.
+- [x] **(C5)** Dim empty/null values; filter empty state + Clear on metadata
       (and export filter box if cheap / already shared).
-- [ ] **(C6)** Export navigation only (unless gate promoted visuals):
+- [x] **(C6)** Export navigation only (unless gate promoted visuals):
       Expand/Collapse All + shortcuts + context menu (D4 / P10 / C5); audit
       `DESIGN.md §6`. Collapsed-group selection chip only if still wanted for
       selection UX (not as “visual hierarchy parity”).
 - [x] **(C7) Skipped/cancelled:** `D-export-visual` recorded **(c) none** on
       2026-08-17; do not implement export header/stripe/tier chrome. C6 remains
       in scope for export Expand/Collapse All, shortcuts, and context menu.
-- [ ] **(C8)** Token-driven hover tint verify on metadata objectName (E6).
-- [ ] **(C9)** Document tier/state language in `DESIGN.md` for the **metadata
+- [x] **(C8)** Token-driven hover tint verify on metadata objectName (E6).
+- [x] **(C9)** Document tier/state language in `DESIGN.md` for the **metadata
       panel**; record export as checkbox-focused unless gate decided otherwise.
-- [ ] **(C10)** Color-blind / harness smoke with **left-pane metadata** as the
+- [x] **(C10)** Color-blind / harness smoke with **left-pane metadata** as the
       primary visual check.
 
 ## Verification
