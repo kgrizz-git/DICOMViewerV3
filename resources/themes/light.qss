@@ -190,6 +190,10 @@
                     padding: 3px 2px;
                     border-bottom: 1px solid #e7eaed;
                 }
+
+                /* Tag export picker — Phase A structure only; visual chrome is Phase B. */
+                QTreeWidget#tag_export_tags_tree {
+                }
                 
                 /* Headers */
                 QHeaderView::section {

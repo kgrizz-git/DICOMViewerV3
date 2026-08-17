@@ -55,6 +55,7 @@ from gui.metadata_table_model import (
 )
 from gui.tag_edit_support import (
     apply_tag_edit,
+    edited_tag_row_colors,
     is_editable_metadata_item,
 )
 from utils.config_manager import ConfigManager
@@ -620,12 +621,11 @@ class MetadataPanel(QWidget):
         value_str = format_metadata_value_for_tree(tag_data.get("value", ""))
         tag_item.setText(3, value_str)
 
-        # Set background color for edited tags
         if is_edited:
-            # Use dark purple background (works well with white text in dark mode)
-            edited_color = QColor(80, 50, 120)  # Dark purple
+            edited_color, edited_text_color = edited_tag_row_colors(self.config_manager)
             for col in range(4):
                 tag_item.setBackground(col, edited_color)
+                tag_item.setForeground(col, edited_text_color)
 
         tag_item.setData(0, Qt.ItemDataRole.UserRole, tag_str)
         tag_item.setData(0, Qt.ItemDataRole.UserRole + 1, tag_data)

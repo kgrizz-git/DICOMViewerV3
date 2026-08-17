@@ -145,11 +145,13 @@ class TagExportDialog(
         # runs to tens of thousands of rows on enhanced multi-frame studies, to show a
         # tree that by default hides all of them.
         self._tag_union_merged_sequences: dict[str, Any] | None = None
+        self._is_filtering = False
         self.selected_series: dict[str, dict[str, list[int]]] = {}  # {study_uid: {series_uid: [instance_indices]}}
         self.selected_tags: list[str] = []  # List of selected tag strings
 
         self.series_tree = QTreeWidget(self)
         self.tags_tree = QTreeWidget(self)
+        self.tags_tree.setObjectName("tag_export_tags_tree")
         self.tag_search = QLineEdit(self)
         self.tag_union_status_label = QLabel(self)
         self.tag_union_status_label.setObjectName("tagExportUnionStatus")
@@ -343,6 +345,7 @@ class TagExportDialog(
         self.tags_tree.setColumnWidth(1, 300)
         self.tags_tree.itemChanged.connect(self._on_tag_selection_changed)
         self.tags_tree.itemExpanded.connect(self._on_tag_tree_item_expanded)
+        self.tags_tree.itemCollapsed.connect(self._on_tag_tree_item_collapsed)
         layout.addWidget(self.tags_tree)
 
         group.setLayout(layout)
@@ -646,7 +649,14 @@ class TagExportDialog(
         large-sequence warning). Eager population is already fast (Phase 2 perf
         finding), so this is a UX guard against browsing/over-selecting a huge
         subtree unintentionally, not a performance mitigation.
+
+        During ``_filter_tags`` the walk expands ancestor rows programmatically
+        (``_is_filtering`` is True); the slot returns early then so filtering
+        never pops the warning. Structural state is recomputed once at the end
+        of the filter walk instead of per-row.
         """
+        if self._is_filtering:
+            return
         leaf_count = item.data(0, Qt.ItemDataRole.UserRole + 1)
         if not isinstance(leaf_count, int):
             return
@@ -693,6 +703,7 @@ class TagExportDialog(
         self.tags_tree.blockSignals(False)
         self._update_selected_tags()
         self._refresh_select_all_checkbox_state()
+        self._refresh_group_header_check_states()
 
     def _iter_all_tag_items(self, item: QTreeWidgetItem):
         """
@@ -721,52 +732,34 @@ class TagExportDialog(
             child.setCheckState(0, state)
             self._set_descendants_check_state(child, state)
 
-    def _update_ancestors_check_state(self, item: QTreeWidgetItem | None) -> None:
-        """
-        Recompute tri-state check state from *item* up to the tree root, based
-        on each ancestor's visible children (any depth, not just one level).
-        """
-        while item is not None:
-            any_visible_child = False
-            all_checked = True
-            any_checked = False
-            for i in range(item.childCount()):
-                child = item.child(i)
-                if child.isHidden():
-                    continue
-                any_visible_child = True
-                child_state = child.checkState(0)
-                if child_state == Qt.CheckState.Checked:
-                    any_checked = True
-                elif child_state == Qt.CheckState.PartiallyChecked:
-                    any_checked = True
-                    all_checked = False
-                else:
-                    all_checked = False
-
-            if any_visible_child:
-                if all_checked:
-                    item.setCheckState(0, Qt.CheckState.Checked)
-                elif any_checked:
-                    item.setCheckState(0, Qt.CheckState.PartiallyChecked)
-                else:
-                    item.setCheckState(0, Qt.CheckState.Unchecked)
-            item = item.parent()
-
     def _filter_tags(self, search_text: str) -> None:
         """
         Filter tags based on search text, recursively: a node stays visible if
         its own text matches or any descendant matches, so a matching nested
         leaf keeps its sequence/item ancestors reachable (and visible).
+
+        ``_apply_tag_filter_recursive`` expands matched-ancestor rows via
+        ``setExpanded``, which emits ``itemExpanded`` per row. ``_is_filtering``
+        (set for the whole walk) makes the expand/collapse slots return early —
+        suppressing large-sequence warnings and preventing any re-entry into
+        structural handlers. Signals are **not** blanket-blocked on the tree:
+        the guard is the suppression mechanism, and structural state (Select All
+        aggregate + group-header tri-state) is recomputed exactly once after the
+        walk.
         """
-        search_lower = search_text.lower()
-        root = self.tags_tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            group_item = root.child(i)
-            self._apply_tag_filter_recursive(group_item, search_lower, search_text)
-        # Aggregate top Select All from the newly visible leaf set only; do not
-        # rewrite Sequence/Item parent checks via _update_ancestors_check_state.
-        self._refresh_select_all_checkbox_state()
+        self._is_filtering = True
+        try:
+            search_lower = search_text.lower()
+            root = self.tags_tree.invisibleRootItem()
+            for i in range(root.childCount()):
+                group_item = root.child(i)
+                self._apply_tag_filter_recursive(group_item, search_lower, search_text)
+            # Aggregate top Select All from the newly visible leaf set only; do not
+            # rewrite Sequence/Item parent checks via _update_ancestors_check_state.
+            self._refresh_select_all_checkbox_state()
+            self._refresh_group_header_check_states()
+        finally:
+            self._is_filtering = False
 
     def _apply_tag_filter_recursive(
         self, item: QTreeWidgetItem, search_lower: str, search_text: str

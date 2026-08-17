@@ -8,11 +8,13 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QTreeWidgetItem
 
 from core.dicom_editor import DICOMEditor
 from core.tag_edit_history import TagEditHistoryManager
 from core.tag_path import resolve_tag_path
+from gui.accent_presets import DEFAULT_ACCENT_ID, get_preset
 from gui.metadata_table_model import metadata_row_depth, metadata_row_kind
 from utils.dicom_tag_keys import leaf_tag_from_key
 from utils.undo_redo import UndoRedoManager
@@ -23,6 +25,14 @@ def is_editable_metadata_item(item: QTreeWidgetItem) -> bool:
     """Return True for scalar element rows at any depth."""
     tag_data = item.data(0, Qt.ItemDataRole.UserRole + 1)
     return tag_data is not None and metadata_row_kind(tag_data) == "element"
+
+
+def edited_tag_row_colors(config_manager: Any | None = None) -> tuple[QColor, QColor]:
+    """Return accent-tinted background and black text for edited DICOM tag rows."""
+    accent_id = DEFAULT_ACCENT_ID
+    if config_manager is not None and hasattr(config_manager, "get_accent"):
+        accent_id = config_manager.get_accent()
+    return QColor(get_preset(accent_id).accent_soft), QColor(0, 0, 0)
 
 
 def store_original_value_for_direct_tag_edit(
