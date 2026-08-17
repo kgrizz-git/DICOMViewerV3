@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-17
 
 ---
 
@@ -107,7 +107,6 @@ This file tracks active and near-term tasks.
 ## UX / Workflow
 
 - [ ] **[P2]** **Consider moving remaining export actions from Tools to the File menu** (consistency). **Export DICOM Tags…** now lives under File (see [Tag Export UX Improvements](plans/completed/TAG_EXPORT_UX_IMPROVEMENTS.md)). This item covers **Export ROI Statistics…** (`export_roi_stats_action`) still under **Tools**, and whether remaining/future exports should sit in a **File → Export ▸** submenu so File does not get crowded. Keep keyboard shortcuts and update `user-docs` accordingly. Surfaced 2026-06-16.
-- [ ] **[P1]** **Tag export tree — correctness fixes (Phase A):** `tags_tree` objectName + scoped QSS; Select All / Select-All button / filter leave group headers in correct tri-state; filter-walk boolean guard (no blanket `blockSignals`); fix metadata-panel hardcoded edited-row `QColor(80,50,120)` via tokens. Surfaced 2026-08-16 from visual-hierarchy investigation. **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Plan:** [Tag export tree correctness fixes](plans/supporting/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md). **Investigation:** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md).
 
 - [ ] **[P2]** **Tag tree — group headers, per-group striping, checkbox indicators (Phase B):** **Primary: left-pane metadata panel** — Goals 1–2 (header chrome + per-group striping). **Export: Goal 3 checkboxes only** in this phase; richer export-tree formatting is **deferred / open** pending a side-by-side appearance gate after metadata lands (`B7` → Phase D `D-export-visual`). Metadata visual work does **not** wait on Phase A. **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Plan:** [Group header & striping](plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md). **Investigation:** [Parts 8–9](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md). **Also covers:** left-pane backlog item below.
 
@@ -156,7 +155,7 @@ This file tracks active and near-term tasks.
 - [ ] **[P2]** Where is it getting frame rate from?
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P2]** Allow showing DICOM tags for more than just the focused window in the left pane: support up to 4 tag panels, where each panel can be assigned either to a fixed window or to follow whichever window is currently focused
-- [ ] **[P2]** **Tag browser group-heading styling (left pane):** make group headings visually distinct from regular tag rows — e.g. a different shade, slightly taller rows, a font 1–2 pt larger, and a 1 pt heavier top border; also reset the alternating row colors for each group so striping restarts per group rather than running continuously across the whole list. Surfaced 2026-08-11. **This is the primary Goals 1–2 ask** (main-window metadata panel, not the export dialog). Tracked and implemented under Phase B: [Group header & striping](plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md). **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Investigation (Part 8):** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md).
+- [ ] **[P2]** **Tag browser group-heading styling (left pane):** make group headings visually distinct from regular tag rows — e.g. a different shade, slightly taller rows, a font 1–2 pt larger, and a 1 pt heavier top border; also reset the alternating row colors for each group so striping restarts per group rather than running continuously across the whole list. Surfaced 2026-08-11. **This is the primary Goals 1–2 ask** (main-window metadata panel, not the export dialog). Tracked under Phase B: [Group header & striping](plans/supporting/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md). **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Investigation (Part 8):** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md).
 - [ ] Allow filtering of columns in study index (some, anyway) and sorting — **Partial:** FTS5 "search all text" + per-field filters + movable columns; column filter/sort not implemented.
 
 ## Features (Near-Term)

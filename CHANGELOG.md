@@ -16,7 +16,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Tag export group-header checkboxes:** Top Select All, Deselect All, the
   Select All checkbox, and the tag filter now recompute group-header tri-state
   from visible exportable leaves. Independently checked Sequence/Item parents
-  are left alone. Filtering no longer pops large-sequence warnings when it
+  are left alone. A visible group whose exportable leaves are all hidden
+  (filter matched only the group label) is Unchecked rather than keeping a
+  stale check. Filtering no longer pops large-sequence warnings when it
   expands matching ancestors. **Semantic versioning note: patch.**
 - **Metadata edited-row color:** Edited tags in the left-pane metadata panel
   use the accent-soft token (same helper pattern as the tag viewer) instead of

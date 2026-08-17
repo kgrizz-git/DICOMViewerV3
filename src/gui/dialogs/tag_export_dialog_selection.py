@@ -242,7 +242,11 @@ class TagExportDialogSelectionMixin:
                 if group_item.data(0, Qt.ItemDataRole.UserRole) is not None:
                     continue
                 aggregate = self._exportable_leaf_aggregate(group_item)
-                if aggregate is not None:
+                if aggregate is None:
+                    # Visible header whose exportable leaves are all hidden
+                    # (e.g. filter matched only the group label).
+                    group_item.setCheckState(0, Qt.CheckState.Unchecked)
+                else:
                     group_item.setCheckState(0, aggregate)
         finally:
             self.tags_tree.blockSignals(False)

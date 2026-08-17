@@ -670,3 +670,27 @@ def test_filter_then_select_all_updates_visible_group_headers(qapp, tmp_path) ->
     for header in visible:
         assert header.checkState(0) == Qt.CheckState.Checked
     dlg.close()
+
+
+@pytest.mark.qt
+def test_filter_matching_only_group_label_unchecks_header(qapp, tmp_path) -> None:
+    """A filter that matches only a group label unchecks that header.
+
+    Exportable leaves under the header are hidden, so the aggregate is None
+    and the header must not keep a stale Checked state from Select All.
+    """
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg._toggle_all_tags(True)
+    headers = _visible_group_headers(dlg)
+    assert headers
+    header = headers[0]
+    assert header.checkState(0) == Qt.CheckState.Checked
+    label = header.text(0)
+    assert label.startswith("Group ")
+
+    dlg._filter_tags(label)
+    visible = _visible_group_headers(dlg)
+    assert header in visible
+    assert list(dlg._iter_visible_exportable_leaves(start_item=header)) == []
+    assert header.checkState(0) == Qt.CheckState.Unchecked
+    dlg.close()
