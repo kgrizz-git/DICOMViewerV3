@@ -44,9 +44,9 @@ Carbon “clarity over decoration.”
 
 - [ ] **(C1)** Tier helper on **metadata panel** (font weight/size ladder;
       optional left color bar only — no new kind-icon set unless needed).
-- [ ] **(C2)** Shared tokens/QSS for the metadata tree (`.mpdv-tree` /
-      group-header as needed). Do **not** force the same classes onto export
-      until `D-export-visual` says so.
+- [ ] **(C2)** Shared tokens/QSS for the metadata tree (target
+      `QTreeWidget#metadata_tag_tree` / group-header as needed). Do **not**
+      force the same classes onto export until `D-export-visual` says so.
 - [ ] **(C3)** Mono Tag/VR columns via platform fallback on metadata.
 - [ ] **(C4)** Filter substring highlight (cached draw) on metadata filter.
 - [ ] **(C5)** Dim empty/null values; filter empty state + Clear on metadata

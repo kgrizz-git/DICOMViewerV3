@@ -17,10 +17,13 @@ work can proceed in small, ordered plans.
 hierarchy styling carries more load.
 
 **Tag export dialog:** ship **Goal 3** (group checkbox tri-state / partial
-indicator) and Phase A correctness. **Richer export-tree formatting is an open
-question** — defer by default; run Phase B’s **appearance gate** (side-by-side
-with the restyled metadata panel) before locking in any header/stripe/tier
-parity on export. See Phase D `D-export-visual`.
+indicator). **Phase A** owns group-header tri-state **correctness/behavior**.
+**Phase B** owns checkbox **visual presentation** (indicator glyphs) and
+**runs** the **appearance gate** (side-by-side with the restyled metadata
+panel) to decide whether export needs richer formatting; **Phase D**
+**records** the appearance-gate outcome. **Richer export-tree formatting is an
+open question** — defer by default; do not lock in header/stripe/tier parity
+on export without the appearance gate. See Phase D `D-export-visual`.
 
 ## Investigation (full history)
 
@@ -33,10 +36,10 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 
 | Phase | Priority | Plan | What it covers |
 |---|---|---|---|
-| **A** | P1 | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | Export Select-All → group-header tri-state; filter guard; `tags_tree` objectName; tokenized edited-row color (metadata) |
-| **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | **Metadata:** Goals 1–2. **Export:** Goal 3 checkboxes + appearance-gate decision (no rich chrome locked in) |
+| **A** | P1 | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | Export Select-All → group-header tri-state **correctness/behavior**; filter guard; `tags_tree` objectName; tokenized edited-row color (metadata) |
+| **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | **Metadata:** Goals 1–2. **Export:** Goal 3 checkbox **visual presentation** (indicator glyphs) + runs appearance gate (no rich chrome locked in) |
 | **C** | P2 | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | Tier / orientation / nav on **metadata**; export only if appearance gate said so (else leave export visual alone) |
-| **D** | P3 | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | `D-export-visual` open question; other follow-ups |
+| **D** | P3 | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | `D-export-visual` records appearance-gate outcome; other follow-ups |
 
 ## Split-out (not tag-tree scope)
 
@@ -51,11 +54,12 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 - UX remediation: [UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md](UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md)
 - Prior tag-export UX: [TAG_EXPORT_UX_IMPROVEMENTS.md](../completed/TAG_EXPORT_UX_IMPROVEMENTS.md)
 
-## Quick “what to do next”
+## Quick "what to do next"
 
-1. **Phase B on the metadata panel** (Goals 1–2); Phase A in parallel for export
-   checkbox correctness.
-2. Finish export **Goal 3** only; run the **appearance gate** and record
-   apply / light-touch / none under Phase D.
+1. **Phase A** for export checkbox **tri-state correctness/behavior**; **Phase B**
+   on the metadata panel (Goals 1–2) in parallel.
+2. Finish export **Goal 3** checkbox **visual presentation** (Phase B); **run**
+   the **appearance gate** (Phase B) and **record** the outcome
+   (apply / light-touch / none) under Phase D.
 3. **Phase C** on metadata; touch export visuals only if the gate promoted them.
 4. Other Phase D / pane-toolbar items as separate PRs.
