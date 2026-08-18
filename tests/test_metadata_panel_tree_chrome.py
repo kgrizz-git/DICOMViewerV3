@@ -277,9 +277,12 @@ from gui.main_window_theme import get_theme_stylesheet
 from gui.metadata_tree_chrome import (
     METADATA_TIER_ROLE,
     FilterHighlightCache,
+    casefold_source_index_map,
     is_metadata_value_empty,
     metadata_disabled_text_color,
     metadata_tag_mono_font,
+    on_metadata_panel_palette_change,
+    source_span_for_folded_span,
 )
 
 
@@ -390,6 +393,14 @@ def test_empty_value_uses_disabled_foreground(qapp) -> None:
     assert is_metadata_value_empty("")
 
 
+def test_casefold_source_map_handles_eszett_expansion() -> None:
+    mapping = casefold_source_index_map("Straße")
+    assert "".join(ch.casefold() for ch in "Straße") == "strasse"
+    assert len(mapping) == len("strasse")
+    start, end = source_span_for_folded_span(mapping, 4, 6)
+    assert "Straße"[start:end] == "ß"
+
+
 def test_filter_highlight_cache_paints_match_without_qtextdocument(qapp) -> None:
     cache = FilterHighlightCache()
     pixmap = QPixmap(200, 20)
@@ -410,7 +421,8 @@ def test_delegate_filter_highlight_paints_on_match(qapp) -> None:
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
     panel.search_edit.setText("Patient")
-    qapp.processEvents()
+    panel._populate_tags("Patient")
+    assert panel._metadata_tree_delegate._filter_needle == "Patient"
     header = _group_items(panel)[0]
     header.setExpanded(True)
     row = header.child(0)
@@ -448,6 +460,43 @@ def test_filter_no_match_shows_clear_and_restores_rows(qapp) -> None:
     assert panel.search_edit.text() == ""
     header = _group_items(panel)[0]
     assert header.childCount() > 0
+
+
+def test_clearing_dataset_hides_filter_empty_banner(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    panel._populate_tags("zzznomatchzzz")
+    panel.show()
+    qapp.processEvents()
+    banner = panel._filter_empty_banner
+    assert banner is not None
+    assert banner.isVisible()
+    panel.set_dataset(None)
+    assert not banner.isVisible()
+
+
+def test_empty_value_recolors_on_palette_change(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_empty_value_tag())
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    value_item = None
+    for index in range(header.childCount()):
+        child = header.child(index)
+        if child.text(3) == "":
+            value_item = child
+            break
+    assert value_item is not None
+    palette = panel.tree_widget.palette()
+    palette.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(11, 22, 33)
+    )
+    panel.tree_widget.setPalette(palette)
+    on_metadata_panel_palette_change(panel)
+    fg = value_item.foreground(3).color()
+    assert fg.red() == 11
+    assert fg.green() == 22
+    assert fg.blue() == 33
 
 
 def test_metadata_tag_tree_hover_rule_in_both_qss_files() -> None:

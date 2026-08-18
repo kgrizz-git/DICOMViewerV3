@@ -21,7 +21,7 @@
     "src/gui/image_viewer_input.py": 1204,
     "src/gui/image_viewer_view.py": 1350,
     "src/gui/main_window.py": 1061,
-    "src/gui/metadata_panel.py": 857,
+    "src/gui/metadata_panel.py": 852,
     "src/gui/mpr_controller.py": 1921,
     "src/gui/multi_window_layout.py": 898,
     "src/gui/overlay_manager.py": 1111,

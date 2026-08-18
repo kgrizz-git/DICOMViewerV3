@@ -20,7 +20,7 @@ Requirements:
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QAction, QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMenu,
@@ -78,17 +78,6 @@ class TagExportDialogNavigationMixin:
         collapse_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         collapse_shortcut.activated.connect(self._on_collapse_all_clicked)
 
-        # QAction shortcuts for tests and future menu/toolbar wiring.
-        self._expand_all_action = QAction("Expand All", self)
-        self._expand_all_action.setShortcut(_EXPAND_ALL_SHORTCUT)
-        self.addAction(self._expand_all_action)
-        self._expand_all_action.triggered.connect(self._on_expand_all_clicked)
-
-        self._collapse_all_action = QAction("Collapse All", self)
-        self._collapse_all_action.setShortcut(_COLLAPSE_ALL_SHORTCUT)
-        self.addAction(self._collapse_all_action)
-        self._collapse_all_action.triggered.connect(self._on_collapse_all_clicked)
-
     def _on_expand_all_clicked(self) -> None:
         """Expand every group and sequence parent currently in the tree."""
         self._set_all_tags_expanded(True)
@@ -128,12 +117,15 @@ class TagExportDialogNavigationMixin:
             self.tag_filter_clear_button.setVisible(False)
             return
         root = self.tags_tree.invisibleRootItem()
-        any_visible = False
-        for i in range(root.childCount()):
-            if not root.child(i).isHidden():
-                any_visible = True
-                break
-        self.tag_filter_clear_button.setVisible(not any_visible)
+        any_visible_tag = False
+        for item in self._iter_all_tag_items(root):
+            if item.isHidden():
+                continue
+            if item.data(0, Qt.ItemDataRole.UserRole) is None:
+                continue
+            any_visible_tag = True
+            break
+        self.tag_filter_clear_button.setVisible(not any_visible_tag)
 
     def _show_tags_context_menu(self, position: QPoint) -> None:
         """

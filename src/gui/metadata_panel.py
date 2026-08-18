@@ -57,6 +57,7 @@ from gui.metadata_table_model import (
 from gui.metadata_tree_chrome import (
     attach_metadata_tree_chrome,
     build_metadata_tag_tree_item,
+    clear_metadata_panel_for_empty_dataset,
     on_metadata_panel_palette_change,
     update_filter_empty_banner,
 )
@@ -378,13 +379,7 @@ class MetadataPanel(QWidget):
         self.dataset = dataset
 
         if dataset is None:
-            # Clear everything when dataset is None
-            self.parser = None
-            self.editor = None
-            self._cached_tags = None
-            self._cached_search_text = ""
-            self.search_edit.clear()
-            self.tree_widget.clear()
+            clear_metadata_panel_for_empty_dataset(self)
             return
 
         self.parser = DICOMParser(dataset)

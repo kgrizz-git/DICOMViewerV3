@@ -203,7 +203,7 @@ To add a new preset: add an entry to `ACCENT_PRESETS` in `src/gui/accent_presets
 | Role | Family | Fallback |
 |---|---|---|
 | UI primary | IBM Plex Sans | system-ui, sans-serif |
-| Monospace (DICOM tags, values) | IBM Plex Mono | Consolas, monospace |
+| Monospace (Tag and VR columns) | IBM Plex Mono | Consolas, Menlo, monospace |
 | Overlay (on image) | IBM Plex Sans | (no fallback — set programmatically) |
 
 Open Sans and Noto Sans must not appear in the UI. The Annotation Options dialog currently loads them via system font fallback; fix by explicitly constructing `QFont("IBM Plex Sans", ...)` on each widget.

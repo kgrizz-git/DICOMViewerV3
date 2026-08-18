@@ -95,16 +95,23 @@ def test_collapse_all_collapses_groups(qapp, tmp_path) -> None:
 
 
 @pytest.mark.qt
-def test_expand_all_shortcuts_registered(qapp, tmp_path) -> None:
+def test_expand_all_shortcuts_deliver_commands(qapp, tmp_path) -> None:
     dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
-    shortcuts = [
-        child
-        for child in dlg.findChildren(QShortcut)
-        if child.key() in (_EXPAND_ALL_SHORTCUT, _COLLAPSE_ALL_SHORTCUT)
-    ]
-    assert len(shortcuts) == 2
-    assert dlg._expand_all_action.shortcut() == _EXPAND_ALL_SHORTCUT
-    assert dlg._collapse_all_action.shortcut() == _COLLAPSE_ALL_SHORTCUT
+    group = _first_group_with_children(dlg)
+    assert group is not None
+    expand = collapse = None
+    for child in dlg.findChildren(QShortcut):
+        if child.key() == _EXPAND_ALL_SHORTCUT:
+            expand = child
+        elif child.key() == _COLLAPSE_ALL_SHORTCUT:
+            collapse = child
+    assert expand is not None
+    assert collapse is not None
+    group.setExpanded(False)
+    expand.activated.emit()
+    assert group.isExpanded()
+    collapse.activated.emit()
+    assert not group.isExpanded()
     dlg.close()
 
 
@@ -179,4 +186,12 @@ def test_filter_clear_visible_when_filter_hides_all(qapp, tmp_path) -> None:
     dlg.tag_filter_clear_button.click()
     assert dlg.tag_search.text() == ""
     assert dlg.tag_filter_clear_button.isHidden()
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_filter_clear_visible_when_only_group_headers_match(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg.tag_search.setText("Group 00")
+    assert not dlg.tag_filter_clear_button.isHidden()
     dlg.close()

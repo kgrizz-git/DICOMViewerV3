@@ -163,6 +163,27 @@ def apply_metadata_row_tier(
         tag_item.setForeground(METADATA_COL_VALUE, disabled)
 
 
+def casefold_source_index_map(text: str) -> list[int]:
+    """Map each ``str.casefold()`` index back to the source character index.
+
+    Needed because casefold can expand (``ß`` → ``ss``), so folded match
+    offsets are not valid slices of the original display string.
+    """
+    mapping: list[int] = []
+    for index, char in enumerate(text):
+        mapping.extend([index] * len(char.casefold()))
+    return mapping
+
+
+def source_span_for_folded_span(
+    mapping: list[int], start: int, end: int
+) -> tuple[int, int]:
+    """Convert a ``[start, end)`` span in casefold space to a source slice."""
+    if start >= end or not mapping:
+        return (0, 0)
+    return mapping[start], mapping[end - 1] + 1
+
+
 class FilterHighlightCache:
     """
   Cache draw results for case-insensitive substring highlights.
@@ -246,21 +267,26 @@ class FilterHighlightCache:
         x = 0
         y = metrics.ascent()
         lower = text.casefold()
+        src_of = casefold_source_index_map(text)
         pos = 0
-        while pos < len(text):
+        while pos < len(lower):
             match_at = lower.find(needle_cf, pos)
             if match_at < 0:
-                segment = text[pos:]
+                src_pos = src_of[pos] if pos < len(src_of) else len(text)
+                segment = text[src_pos:]
                 painter.setPen(fg)
                 painter.drawText(x, y, segment)
                 break
             if match_at > pos:
-                segment = text[pos:match_at]
+                src_pos = src_of[pos]
+                src_match = src_of[match_at]
+                segment = text[src_pos:src_match]
                 painter.setPen(fg)
                 painter.drawText(x, y, segment)
                 x += metrics.horizontalAdvance(segment)
             match_end = match_at + len(needle_cf)
-            matched = text[match_at:match_end]
+            src_start, src_end = source_span_for_folded_span(src_of, match_at, match_end)
+            matched = text[src_start:src_end]
             match_width = metrics.horizontalAdvance(matched)
             painter.fillRect(x, 0, match_width, height, hl)
             painter.setPen(fg)
@@ -490,6 +516,57 @@ def build_metadata_tag_tree_item(
     return tag_item
 
 
+def clear_metadata_panel_for_empty_dataset(panel: Any) -> None:
+    """Clear parser, tree, search, and the no-match banner when the dataset is None."""
+    panel.parser = None
+    panel.editor = None
+    panel._cached_tags = None
+    panel._cached_search_text = ""
+    panel.search_edit.clear()
+    panel.tree_widget.clear()
+    banner = getattr(panel, "_filter_empty_banner", None)
+    if banner is not None:
+        banner.hide()
+
+
+def _recolor_empty_metadata_value_row(
+    item: QTreeWidgetItem,
+    disabled: QColor,
+    history: Any,
+    dataset: Any,
+) -> None:
+    """Dim empty Value cells; leave edited-row foreground unchanged."""
+    if item.data(METADATA_COL_TAG, GROUP_HEADER_KEY_ROLE) is not None:
+        return
+    tag_data = item.data(METADATA_COL_TAG, Qt.ItemDataRole.UserRole + 1)
+    if not isinstance(tag_data, dict):
+        return
+    tag_str = item.data(METADATA_COL_TAG, Qt.ItemDataRole.UserRole)
+    is_edited = False
+    if history is not None and dataset is not None and tag_str is not None:
+        is_edited = bool(history.is_tag_edited(dataset, tag_str))
+    if is_edited:
+        return
+    if is_metadata_value_empty(tag_data.get("value")):
+        item.setForeground(METADATA_COL_VALUE, disabled)
+
+
+def _recolor_empty_metadata_values(panel: Any) -> None:
+    """Recompute disabled Value color for empty non-edited rows from the live palette."""
+    tree = panel.tree_widget
+    disabled = metadata_disabled_text_color(tree.palette())
+    history = getattr(panel, "history_manager", None)
+    dataset = getattr(panel, "dataset", None)
+
+    def walk(parent: QTreeWidgetItem) -> None:
+        for index in range(parent.childCount()):
+            child = parent.child(index)
+            _recolor_empty_metadata_value_row(child, disabled, history, dataset)
+            walk(child)
+
+    walk(tree.invisibleRootItem())
+
+
 def attach_metadata_tree_chrome(panel: Any) -> MetadataFilterEmptyBanner:
     """
     Wire Phase C chrome onto an existing ``MetadataPanel`` instance.
@@ -510,7 +587,8 @@ def attach_metadata_tree_chrome(panel: Any) -> MetadataFilterEmptyBanner:
 
 
 def on_metadata_panel_palette_change(panel: Any) -> None:
-    """Invalidate highlight caches when the theme palette changes."""
+    """Invalidate highlight caches and refresh empty-value colors on theme flip."""
     delegate = getattr(panel, "_metadata_tree_delegate", None)
     if delegate is not None:
         delegate.clear_theme_caches()
+    _recolor_empty_metadata_values(panel)

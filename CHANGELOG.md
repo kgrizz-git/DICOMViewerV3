@@ -12,7 +12,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   filter-match highlighting, dimmed empty values, and a no-match Clear control.
   Export DICOM Tags gains Expand All / Collapse All (Ctrl+Shift+E / Ctrl+Shift+C)
   and a context menu, without header/stripe/tier chrome.
-  **Semantic versioning note: patch.**
+  **Semantic versioning note: minor.**
 - **Metadata tag tree hierarchy (Phase B):** Left-pane group headings use a
   restrained palette-mixed fill, a heavier top rule, a ~10% font bump, and
   slightly taller rows. Alternating row shades reset per group. Export picker

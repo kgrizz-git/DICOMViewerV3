@@ -1,7 +1,7 @@
 # Tag Tree Visual Hierarchy — Investigation & Review
 
 **Created:** 2026-08-16  
-**Last updated:** 2026-08-16  
+**Last updated:** 2026-08-17  
 **Status:** investigation / design review (not an implementation checklist)  
 **Branch (planning):** `feature/tag-tree-visual-hierarchy-plan`
 
