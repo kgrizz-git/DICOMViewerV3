@@ -278,6 +278,7 @@ from gui.metadata_tree_chrome import (
     METADATA_TIER_ROLE,
     FilterHighlightCache,
     casefold_source_index_map,
+    folded_match_source_spans,
     is_metadata_value_empty,
     metadata_disabled_text_color,
     metadata_tag_mono_font,
@@ -399,6 +400,13 @@ def test_casefold_source_map_handles_eszett_expansion() -> None:
     assert len(mapping) == len("strasse")
     start, end = source_span_for_folded_span(mapping, 4, 6)
     assert "Straße"[start:end] == "ß"
+
+
+def test_folded_match_spans_coalesce_eszett_for_single_s() -> None:
+    spans = folded_match_source_spans("Straße", "s")
+    assert spans == [(0, 1), (4, 5)]
+    assert "Straße"[0:1] == "S"
+    assert "Straße"[4:5] == "ß"
 
 
 def test_filter_highlight_cache_paints_match_without_qtextdocument(qapp) -> None:

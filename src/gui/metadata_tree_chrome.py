@@ -184,6 +184,39 @@ def source_span_for_folded_span(
     return mapping[start], mapping[end - 1] + 1
 
 
+def coalesce_source_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Merge overlapping or touching source spans so each glyph is painted once."""
+    if not spans:
+        return []
+    merged: list[tuple[int, int]] = [spans[0]]
+    for start, end in spans[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def folded_match_source_spans(text: str, needle: str) -> list[tuple[int, int]]:
+    """Return coalesced source spans for case-insensitive substring matches."""
+    needle_cf = needle.casefold()
+    if not text or not needle_cf:
+        return []
+    lower = text.casefold()
+    src_of = casefold_source_index_map(text)
+    spans: list[tuple[int, int]] = []
+    pos = 0
+    while pos < len(lower):
+        match_at = lower.find(needle_cf, pos)
+        if match_at < 0:
+            break
+        match_end = match_at + len(needle_cf)
+        spans.append(source_span_for_folded_span(src_of, match_at, match_end))
+        pos = match_end
+    return coalesce_source_spans(spans)
+
+
 class FilterHighlightCache:
     """
   Cache draw results for case-insensitive substring highlights.
@@ -266,33 +299,24 @@ class FilterHighlightCache:
         painter.setFont(font)
         x = 0
         y = metrics.ascent()
-        lower = text.casefold()
-        src_of = casefold_source_index_map(text)
-        pos = 0
-        while pos < len(lower):
-            match_at = lower.find(needle_cf, pos)
-            if match_at < 0:
-                src_pos = src_of[pos] if pos < len(src_of) else len(text)
-                segment = text[src_pos:]
-                painter.setPen(fg)
-                painter.drawText(x, y, segment)
-                break
-            if match_at > pos:
-                src_pos = src_of[pos]
-                src_match = src_of[match_at]
-                segment = text[src_pos:src_match]
+        cursor = 0
+        for start, end in folded_match_source_spans(text, needle_cf):
+            if start > cursor:
+                segment = text[cursor:start]
                 painter.setPen(fg)
                 painter.drawText(x, y, segment)
                 x += metrics.horizontalAdvance(segment)
-            match_end = match_at + len(needle_cf)
-            src_start, src_end = source_span_for_folded_span(src_of, match_at, match_end)
-            matched = text[src_start:src_end]
+            matched = text[start:end]
             match_width = metrics.horizontalAdvance(matched)
             painter.fillRect(x, 0, match_width, height, hl)
             painter.setPen(fg)
             painter.drawText(x, y, matched)
             x += match_width
-            pos = match_end
+            cursor = end
+        if cursor < len(text):
+            segment = text[cursor:]
+            painter.setPen(fg)
+            painter.drawText(x, y, segment)
         painter.end()
         return pixmap
 
