@@ -12,10 +12,10 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
 from gui.metadata_panel import MetadataPanel
 from gui.metadata_table_model import (
-    GROUP_HEADER_EXTRA_HEIGHT,
     GROUP_HEADER_FONT_SCALE,
     GROUP_HEADER_TOP_RULE_WIDTH,
     STRIPE_PARITY_ROLE,
+    group_header_fill_color,
     group_header_top_rule_color,
 )
 
@@ -50,7 +50,7 @@ def _group_items(panel: MetadataPanel):
 
 
 def test_group_header_font_and_height_are_bumped(qapp) -> None:
-    """Goal 1: headings are bold, ~10% larger, and slightly taller than a tag row."""
+    """Goal 1: headings are bold and ~10% larger, without extra vertical padding."""
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
     header = _group_items(panel)[0]
@@ -77,7 +77,7 @@ def test_group_header_font_and_height_are_bumped(qapp) -> None:
         option, panel.tree_widget.indexFromItem(tag_row, 0)
     ).height()
     assert tag_h > 0
-    assert header_h >= tag_h + GROUP_HEADER_EXTRA_HEIGHT
+    assert header_h >= tag_h
     assert panel.tree_widget.isAnimated() is False
     assert panel.tree_widget.alternatingRowColors() is False
 
@@ -145,29 +145,38 @@ def test_odd_stripe_uses_alternate_base_in_paint(qapp) -> None:
         assert abs(sampled.blue() - stripe.blue()) <= 30
 
 
-def test_heavier_top_rule_is_visible_on_header(qapp) -> None:
-    """HiDPI-style smoke: the top rule is thicker than the bottom rule."""
+def test_header_top_rule_is_one_px_lighter_and_full_width(qapp) -> None:
+    """Top hairline is 1px, lighter than the fill, and reaches the left gutter."""
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
+    panel.resize(720, 420)
+    panel.show()
+    qapp.processEvents()
+    tree = panel.tree_widget
     header = _group_items(panel)[0]
-    band, _fg = panel._group_header_colors()
-    top_rule = group_header_top_rule_color(panel.tree_widget.palette())
+    palette = tree.palette()
+    band = group_header_fill_color(palette)
+    top_rule = group_header_top_rule_color(palette)
+    assert top_rule.lightness() > band.lightness()
+    assert GROUP_HEADER_TOP_RULE_WIDTH == 1.0
 
-    index = panel.tree_widget.indexFromItem(header, 0)
-    height = 22
-    pixmap = QPixmap(240, height)
+    index = tree.indexFromItem(header, 0)
+    option = QStyleOptionViewItem()
+    option.initFrom(tree)
+    option.rect = tree.visualRect(index)
+    option.palette = palette
+    option.state = QStyle.StateFlag.State_Enabled
+    pixmap = QPixmap(tree.viewport().size())
     pixmap.fill(band)
     painter = QPainter(pixmap)
-    option = QStyleOptionViewItem()
-    option.rect = QRect(0, 0, 240, height)
-    option.palette = panel.tree_widget.palette()
-    option.state = QStyle.StateFlag.State_Enabled
-    panel.tree_widget.itemDelegate().paint(painter, option, index)
+    tree.drawRow(painter, option, index)
     painter.end()
     image = pixmap.toImage()
-    top_pixel = image.pixelColor(120, 1)
-    assert abs(top_pixel.lightness() - top_rule.lightness()) <= 40
-    assert GROUP_HEADER_TOP_RULE_WIDTH >= 2.0
+    y = max(option.rect.top(), 0)
+    left_pixel = image.pixelColor(2, y)
+    mid_pixel = image.pixelColor(min(120, image.width() - 1), y)
+    assert abs(left_pixel.lightness() - top_rule.lightness()) <= 40
+    assert abs(mid_pixel.lightness() - top_rule.lightness()) <= 40
 
 
 def test_panel_stripe_recompute_scales_near_linearly(qapp) -> None:

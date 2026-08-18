@@ -40,7 +40,7 @@ def _blend_hex_colors(base: str, tint: str, tint_fraction: float) -> str:
 
 
 def _boost_hex_saturation(color: str, factor: float) -> str:
-    """Increase a dark tint's chroma without making its value brighter."""
+    """Scale a tint's chroma without changing its value (factor < 1 desaturates)."""
     red, green, blue = (int(color[index : index + 2], 16) / 255 for index in (1, 3, 5))
     hue, saturation, value = rgb_to_hsv(red, green, blue)
     saturated = hsv_to_rgb(hue, min(1.0, saturation * factor), value)
@@ -48,10 +48,15 @@ def _boost_hex_saturation(color: str, factor: float) -> str:
 
 
 def metadata_tag_band_color(theme: str, accent: str) -> str:
-    """Return the restrained, accent-derived alternate-row color for metadata tags."""
+    """Return a grey-leaning, accent-hued alternate-row color for metadata tags.
+
+    The selected accent still shifts the stripe hue; chroma is kept lower than a
+    raw mix so bands stay faint in both themes.
+    """
     if theme == "dark":
-        return _boost_hex_saturation(_blend_hex_colors("#141414", accent, 0.045), 1.18)
-    return _blend_hex_colors("#ffffff", accent, 0.08)
+        return _blend_hex_colors("#141414", accent, 0.045)
+    mixed = _blend_hex_colors("#ffffff", accent, 0.08)
+    return _boost_hex_saturation(mixed, 0.72)
 
 
 def metadata_tag_hover_color(theme: str, accent: str) -> str:
@@ -112,7 +117,7 @@ def get_theme_stylesheet(
     * ``{accent_dark}``   – darker accent (light-theme hover/press states)
     * ``{accent_soft}``   – pale accent tint for readable light-theme rows
     * ``{accent_muted}``  – dark accent tint for readable dark-theme rows
-    * ``{metadata_tag_band}`` – deliberately subtle tint for metadata row bands
+    * ``{metadata_tag_band}`` – accent-hued, desaturated tint for metadata row bands
     * ``{metadata_tag_hover}`` – scoped metadata-tree hover wash
     * ``{metadata_tag_selection}`` – scoped metadata-tree selection fill
     * ``{metadata_tag_selection_fg}`` – scoped metadata-tree selection text
