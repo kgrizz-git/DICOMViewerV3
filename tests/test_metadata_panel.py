@@ -715,13 +715,12 @@ def test_theme_switch_recolors_existing_headings(qapp) -> None:
 
 
 def test_heading_takes_the_pane_background_and_is_ruled_off(qapp) -> None:
-    """A heading fill sits between the Phase B mix and black or #ffffff.
-
-    The 10% Base→Text mix matched window chrome; the extra step toward black
-    (dark) or #ffffff (light) separates the heading. The top hairline is lighter
-    than the fill.
-    """
-    from gui.metadata_table_model import group_header_top_rule_color
+    """Heading fill is a fixed per-theme color; hairlines step away from it in
+    the theme's own contrast direction (lighter in dark, darker in light)."""
+    from gui.metadata_table_model import (
+        group_header_bottom_rule_color,
+        group_header_top_rule_color,
+    )
 
     panel = MetadataPanel()
 
@@ -740,6 +739,9 @@ def test_heading_takes_the_pane_background_and_is_ruled_off(qapp) -> None:
         else:
             assert band.lightness() >= 230
 
-        top_rule = group_header_top_rule_color(panel.tree_widget.palette())
-        assert top_rule.lightness() > band.lightness()
-        assert top_rule.saturation() <= 8
+        # Rules step lighter than the fill in dark theme, darker in light theme.
+        rules_lighter = pane.lightness() < 128
+        palette = panel.tree_widget.palette()
+        for rule in (group_header_top_rule_color(palette), group_header_bottom_rule_color(palette)):
+            assert (rule.lightness() > band.lightness()) == rules_lighter
+            assert rule.saturation() <= 8

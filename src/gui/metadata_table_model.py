@@ -4,7 +4,8 @@ Metadata panel — group-heading delegate and pure tag-list helpers.
 ``MetadataPanel`` uses a ``QTreeWidget`` (historical plan wording referenced a
 “table model”; there is no ``QAbstractTableModel`` here). This module holds:
 
-- ``GroupHeaderDelegate`` — heading fill + 1px top hairline; per-group stripe fills.
+- ``GroupHeaderDelegate`` — heading fill + 1px top/bottom hairlines; per-group
+  stripe fills.
 - Pure functions to filter, group, and format tag dicts when building tree items.
 
 An earlier ``MetadataItemDelegate`` repainted each tag row's first column at x=0 to
@@ -44,18 +45,27 @@ GROUP_HEADER_KEY_ROLE = Qt.ItemDataRole.UserRole + 2
 # Distinct from UserRole (tag key), UserRole+1 (tag dict / export leaf count).
 STRIPE_PARITY_ROLE = Qt.ItemDataRole.UserRole + 3
 
-# Heading fill: start at Base mixed toward Text, then step toward black (dark
-# theme) or #ffffff (light theme). The 10% Text mix alone sat on the window
-# chrome (#1e1e1e / #f0f0f0); the extra step separates the heading from that
-# chrome without a new hue.
-GROUP_HEADER_FILL_STRENGTH = 0.10
-GROUP_HEADER_FILL_TOWARD_EXTREME = 0.65
+# Heading fill: fixed per theme rather than palette-mixed. A palette-relative
+# mix (Base stepped toward Text) kept landing within a few units of the window
+# chrome color (#1e1e1e dark / #f0f0f0 light) no matter which direction it was
+# pushed, since chrome sits between Base and the mid-tones a small mix reaches.
+# These are picked to clear chrome by a comfortable margin on both themes while
+# staying close enough to Base to read as "this pane," not a foreign block.
+GROUP_HEADER_FILL_DARK = QColor(0x0B, 0x0B, 0x0C)
+GROUP_HEADER_FILL_LIGHT = QColor(0xF3, 0xF3, 0xF3)
 
-# 1px top hairline, faintly lighter than the heading fill (toward #ffffff).
-# Kept close to the fill so dark-theme lines are less bright and light-theme
-# lines stay a soft highlight rather than a dark rule. No bottom rule.
+# 1px top/bottom hairlines. Dark theme lightens both relative to the fill;
+# light theme darkens both — a light "highlight" edge in light theme kept
+# reading as fill-colored, since there was no headroom left above the fill
+# before hitting the tag rows' white. Bottom is one step fainter than top so
+# the pair doesn't read as a boxed-in card.
 GROUP_HEADER_TOP_RULE_WIDTH = 1.0
-GROUP_HEADER_TOP_RULE_LIGHTEN = 0.16
+GROUP_HEADER_BOTTOM_RULE_WIDTH = 1.0
+GROUP_HEADER_TOP_RULE_DARK = QColor(0x32, 0x32, 0x33)
+GROUP_HEADER_TOP_RULE_LIGHT = QColor(0xCC, 0xCC, 0xCC)
+GROUP_HEADER_BOTTOM_RULE_DARK = QColor(0x2D, 0x2D, 0x2E)
+GROUP_HEADER_BOTTOM_RULE_LIGHT = QColor(0xD3, 0xD3, 0xD3)
+
 GROUP_HEADER_FONT_SCALE = 1.1
 
 
@@ -71,33 +81,35 @@ def _palette_mix(palette: QPalette, strength: float) -> QColor:
     )
 
 
-def _mix_colors(start: QColor, end: QColor, strength: float) -> QColor:
-    """Return *start* stepped toward *end* by *strength* (0..1)."""
-    step = max(0.0, min(1.0, strength))
-    return QColor(
-        round(start.red() + (end.red() - start.red()) * step),
-        round(start.green() + (end.green() - start.green()) * step),
-        round(start.blue() + (end.blue() - start.blue()) * step),
-    )
+def _is_dark_theme_palette(palette: QPalette) -> bool:
+    """True when the tree's Base color reads as a dark-theme background."""
+    return palette.color(QPalette.ColorRole.Base).lightness() < 128
 
 
 def group_header_fill_color(palette: QPalette) -> QColor:
-    """Heading band: Phase B mix, then most of the way toward black or #ffffff."""
-    current = _palette_mix(palette, GROUP_HEADER_FILL_STRENGTH)
-    extreme = (
-        QColor(0, 0, 0)
-        if palette.color(QPalette.ColorRole.Base).lightness() < 128
-        else QColor(255, 255, 255)
+    """Heading band: fixed per-theme fill, clear of both Base and window chrome."""
+    return (
+        GROUP_HEADER_FILL_DARK
+        if _is_dark_theme_palette(palette)
+        else GROUP_HEADER_FILL_LIGHT
     )
-    return _mix_colors(current, extreme, GROUP_HEADER_FILL_TOWARD_EXTREME)
 
 
 def group_header_top_rule_color(palette: QPalette) -> QColor:
-    """1px top hairline, faintly lighter than the heading fill."""
-    return _mix_colors(
-        group_header_fill_color(palette),
-        QColor(255, 255, 255),
-        GROUP_HEADER_TOP_RULE_LIGHTEN,
+    """1px top hairline: lighter than the fill in dark theme, darker in light."""
+    return (
+        GROUP_HEADER_TOP_RULE_DARK
+        if _is_dark_theme_palette(palette)
+        else GROUP_HEADER_TOP_RULE_LIGHT
+    )
+
+
+def group_header_bottom_rule_color(palette: QPalette) -> QColor:
+    """1px bottom hairline: same direction as the top rule, one step fainter."""
+    return (
+        GROUP_HEADER_BOTTOM_RULE_DARK
+        if _is_dark_theme_palette(palette)
+        else GROUP_HEADER_BOTTOM_RULE_LIGHT
     )
 
 
@@ -203,16 +215,21 @@ class MetadataTagTree(QTreeWidget):
             )
         super().drawRow(painter, option, index)
         if is_header:
-            self._paint_header_top_rule(painter, option)
+            self._paint_header_rules(painter, option)
 
 
-    def _paint_header_top_rule(
+    def _paint_header_rules(
         self, painter: QPainter, option: QStyleOptionViewItem
     ) -> None:
-        """Draw a 1px lighter top hairline across the full row, including the gutter."""
-        fill = group_header_colors(option.palette)[0]
+        """Draw 1px top and bottom hairlines across the full row, including the gutter."""
         viewport_width = self.viewport().width()
-        painter.fillRect(0, option.rect.bottom(), viewport_width, 1, fill)
+        painter.fillRect(
+            0,
+            option.rect.bottom(),
+            viewport_width,
+            1,
+            group_header_bottom_rule_color(option.palette),
+        )
         painter.save()
         top_pen = QPen(group_header_top_rule_color(option.palette))
         top_pen.setWidthF(GROUP_HEADER_TOP_RULE_WIDTH)
@@ -225,13 +242,12 @@ class GroupHeaderDelegate(QStyledItemDelegate):
     """
     Heading chrome plus O(1) per-group stripe fills.
 
-    Headings use a palette-mixed fill stepped toward black or #ffffff and a 1px
-    lighter top hairline painted in ``drawRow`` so it reaches the pane's left
-    edge. Hover/selection are dropped for headings so Qt cannot wash the band
-    out. Tag rows with stripe parity 1 fill AlternateBase unless they already
-    have an item background (edited highlight). Roles are stored on column 0
-    and read via ``siblingAtColumn(0)`` so every cell of the row gets the same
-    treatment.
+    Headings use a fixed per-theme fill and 1px top/bottom hairlines painted in
+    ``drawRow`` so they reach the pane's left edge. Hover/selection are dropped
+    for headings so Qt cannot wash the band out. Tag rows with stripe parity 1
+    fill AlternateBase unless they already have an item background (edited
+    highlight). Roles are stored on column 0 and read via ``siblingAtColumn(0)``
+    so every cell of the row gets the same treatment.
     """
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:

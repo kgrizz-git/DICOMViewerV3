@@ -12,9 +12,11 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
 from gui.metadata_panel import MetadataPanel
 from gui.metadata_table_model import (
+    GROUP_HEADER_BOTTOM_RULE_WIDTH,
     GROUP_HEADER_FONT_SCALE,
     GROUP_HEADER_TOP_RULE_WIDTH,
     STRIPE_PARITY_ROLE,
+    group_header_bottom_rule_color,
     group_header_fill_color,
     group_header_top_rule_color,
 )
@@ -145,8 +147,14 @@ def test_odd_stripe_uses_alternate_base_in_paint(qapp) -> None:
         assert abs(sampled.blue() - stripe.blue()) <= 30
 
 
-def test_header_top_rule_is_one_px_lighter_and_full_width(qapp) -> None:
-    """Top hairline is 1px, lighter than the fill, and reaches the left gutter."""
+def test_header_top_and_bottom_rules_are_one_px_and_full_width(qapp) -> None:
+    """Top/bottom hairlines are 1px, distinct from the fill, and reach the left gutter.
+
+    Dark theme lightens both rules relative to the fill; light theme darkens
+    them instead — a light "highlight" edge had no headroom left above the
+    fill before hitting the tag rows' white, so light theme's rules step
+    toward black instead.
+    """
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
     panel.resize(720, 420)
@@ -157,8 +165,16 @@ def test_header_top_rule_is_one_px_lighter_and_full_width(qapp) -> None:
     palette = tree.palette()
     band = group_header_fill_color(palette)
     top_rule = group_header_top_rule_color(palette)
-    assert top_rule.lightness() > band.lightness()
+    bottom_rule = group_header_bottom_rule_color(palette)
+    is_dark = palette.color(QPalette.ColorRole.Base).lightness() < 128
+    if is_dark:
+        assert top_rule.lightness() > band.lightness()
+        assert bottom_rule.lightness() > band.lightness()
+    else:
+        assert top_rule.lightness() < band.lightness()
+        assert bottom_rule.lightness() < band.lightness()
     assert GROUP_HEADER_TOP_RULE_WIDTH == 1.0
+    assert GROUP_HEADER_BOTTOM_RULE_WIDTH == 1.0
 
     index = tree.indexFromItem(header, 0)
     option = QStyleOptionViewItem()
@@ -172,11 +188,14 @@ def test_header_top_rule_is_one_px_lighter_and_full_width(qapp) -> None:
     tree.drawRow(painter, option, index)
     painter.end()
     image = pixmap.toImage()
-    y = max(option.rect.top(), 0)
-    left_pixel = image.pixelColor(2, y)
-    mid_pixel = image.pixelColor(min(120, image.width() - 1), y)
+    top_y = max(option.rect.top(), 0)
+    bottom_y = min(option.rect.bottom(), image.height() - 1)
+    left_pixel = image.pixelColor(2, top_y)
+    mid_pixel = image.pixelColor(min(120, image.width() - 1), top_y)
+    mid_bottom_pixel = image.pixelColor(min(120, image.width() - 1), bottom_y)
     assert abs(left_pixel.lightness() - top_rule.lightness()) <= 40
     assert abs(mid_pixel.lightness() - top_rule.lightness()) <= 40
+    assert abs(mid_bottom_pixel.lightness() - bottom_rule.lightness()) <= 40
 
 
 def test_panel_stripe_recompute_scales_near_linearly(qapp) -> None:

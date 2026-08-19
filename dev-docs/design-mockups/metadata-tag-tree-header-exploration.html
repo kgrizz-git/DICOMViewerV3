@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Metadata Tag Tree — Group Header Proposals</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #dcdcdc;
+    margin: 0;
+    padding: 32px;
+    color: #111;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #555; font-size: 13px; margin-bottom: 8px; max-width: 900px; }
+  .proposal-block {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 26px;
+  }
+  .proposal-block h2 { font-size: 15px; margin: 0 0 4px; }
+  .proposal-block .desc { font-size: 12.5px; color: #555; margin: 0 0 14px; max-width: 800px; line-height: 1.5; }
+  .windows { display: flex; gap: 20px; flex-wrap: wrap; }
+
+  /* ---- wireframe app window ---- */
+  .app-window {
+    width: 460px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .app-window.light { background: #f0f0f0; border: 1px solid #c8c8c8; }
+  .app-window.dark  { background: #1e1e1e; border: 1px solid #050505; }
+
+  .titlebar { height: 22px; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
+  .app-window.light .titlebar { background: #e2e2e2; }
+  .app-window.dark  .titlebar { background: #141414; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #bbb; }
+
+  .toolbar { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; }
+  .app-window.light .toolbar { background: #ececec; border-bottom: 1px solid #d5d5d5; }
+  .app-window.dark  .toolbar { background: #1a1a1a; border-bottom: 1px solid #050505; }
+  .tb-btn { width: 18px; height: 14px; border-radius: 3px; }
+  .app-window.light .tb-btn { background: #d2d2d2; }
+  .app-window.dark  .tb-btn { background: #3a3a3a; }
+
+  .body-row { display: flex; height: 260px; }
+
+  .viewport {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .app-window.light .viewport { background: #d8d8d8; }
+  .app-window.dark  .viewport { background: #0a0a0a; }
+  .viewport .ph {
+    width: 70%; height: 70%;
+    border: 1px dashed #999;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #888;
+  }
+  .app-window.dark .viewport .ph { border-color: #444; color: #555; }
+
+  .statusbar { height: 18px; }
+  .app-window.light .statusbar { background: #e6e6e6; border-top: 1px solid #d0d0d0; }
+  .app-window.dark  .statusbar { background: #161616; border-top: 1px solid #050505; }
+
+  /* ---- metadata pane (the real thing under test) ---- */
+  .metapane {
+    width: 190px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10.5px;
+    overflow: hidden;
+    border-right: 1px solid;
+  }
+  .metapane.light { border-color: #d5d5d5; }
+  .metapane.dark  { border-color: #050505; }
+
+  .g-header {
+    padding: 4px 8px;
+    font-weight: 700;
+    font-family: -apple-system, sans-serif;
+    font-size: 10.5px;
+  }
+  .tag-row {
+    padding: 3px 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .tag-row .tagnum { opacity: 0.65; }
+  .metapane.light .tag-row { color: #000; border-bottom: 1px solid #e7eaed; }
+  .metapane.dark  .tag-row { color: #e0e0e0; border-bottom: 1px solid #1b1d20; }
+  .metapane.light .tag-row.alt { background: #f3f7fc; }
+  .metapane.dark  .tag-row.alt { background: #16191d; }
+  .metapane.light .tag-row.base { background: #ffffff; }
+  .metapane.dark  .tag-row.base { background: #141414; }
+
+  .swatch-strip { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .chip-sm { width: 90px; }
+  .chip-sm .box { height: 30px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.15); }
+  .chip-sm .txt { font-size: 10.5px; margin-top: 3px; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+
+<h1>Left Metadata Pane — Group Header Proposals</h1>
+<div class="sub">
+  Root issue found: the current header fill sits almost exactly on the main window's chrome color
+  (<code>#f0f0f0</code> light / <code>#1e1e1e</code> dark — confirmed in <code>metadata_table_model.py</code>'s own comment).
+  The "soften" commit pushed the light-theme header <em>toward white</em>, which crosses through that chrome value
+  instead of moving away from it. All proposals below fix the direction first, then add a touch more separation and
+  a 1% accent tint for a bit of chroma. Each is shown in a wireframe app window (menu bar / toolbar / viewport are
+  placeholders — only the left pane is "real").
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal A — Deeper neutral fill + 1% accent tint</h2>
+  <div class="desc">
+    Continues the original Base→Text mix in the <em>same</em> direction (toward black) instead of reversing
+    toward white. A small additional push clears the chrome color by ~22 units (light) / ~19 units (dark) while
+    adding real separation from the plain row (37 units light / 9 units dark, vs. ~9 / ~6 today). A 1% accent
+    blend keeps it from reading as flat institutional grey.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#dadbdc"></div><div class="txt">L fill #dadbdc</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c; border-color:#444"></div><div class="txt">D fill #0b0b0c</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal B — Accent-tinted wash</h2>
+  <div class="desc">
+    Instead of fighting for lightness separation against a neutral grey chrome, lean on <em>hue</em>: blend
+    12% (light) / 9% (dark) of the accent color straight into the header fill. Even where lightness happens to
+    land near the chrome value, the visible blue cast makes it read as clearly different — "this is the tag
+    tree's own chrome," not the OS window background bleeding through.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#e8f0fb; border-top:1px solid #ecf2fc; color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#e8f0fb; border-top:1px solid #ecf2fc; color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#181e26; border-top:1px solid #3d4249; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#181e26; border-top:1px solid #3d4249; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#e8f0fb"></div><div class="txt">L fill #e8f0fb</div></div>
+    <div class="chip-sm"><div class="box" style="background:#181e26; border-color:#444"></div><div class="txt">D fill #181e26</div></div>
+  </div>
+  <div class="desc" style="margin-top:10px;">Caveat: this reuses the accent hue that hover/selection also use — worth checking it doesn't read as "always hovered."</div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal C — No fill wash, bold accent top rule only</h2>
+  <div class="desc">
+    Cheapest fix: leave the header fill exactly equal to the plain row color (so there's zero risk of ever
+    landing near the chrome value) and rely entirely on a crisp 2px accent-colored top rule — same visual
+    language as the sequence/item tier bars already in this pane. Reads as "section start," not "different
+    background block."
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#ffffff; border-top:2px solid #4285da; color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#ffffff; border-top:2px solid #4285da; color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#141414; border-top:2px solid #4285da; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#141414; border-top:2px solid #4285da; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#4285da"></div><div class="txt">rule #4285da</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal D — Subtle fill + grey border frame</h2>
+  <div class="desc">
+    Your "subtle greyish border" idea: keep the fill wash very light (barely above the row color, so it never
+    approaches chrome), and instead frame the header with a crisp 1px border top and bottom in a distinct grey
+    — darker than chrome in light theme, lighter than chrome in dark theme. Definition comes from a clean edge
+    rather than a lightness fight with the window background.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid #cfcfcf; border-bottom:1px solid #cfcfcf; color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid #cfcfcf; border-bottom:1px solid #cfcfcf; color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#181818; border-top:1px solid #3a3a3a; border-bottom:1px solid #3a3a3a; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#181818; border-top:1px solid #3a3a3a; border-bottom:1px solid #3a3a3a; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#f3f3f3"></div><div class="txt">L fill #f3f3f3</div></div>
+    <div class="chip-sm"><div class="box" style="background:#cfcfcf"></div><div class="txt">L border #cfcfcf</div></div>
+    <div class="chip-sm"><div class="box" style="background:#181818; border-color:#444"></div><div class="txt">D fill #181818</div></div>
+    <div class="chip-sm"><div class="box" style="background:#3a3a3a"></div><div class="txt">D border #3a3a3a</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">New Batch — Accent lives only on the header; rows go pure grayscale</h1>
+<div class="sub">
+  Two changes requested: (1) move all the accent color budget onto the header band and make the alternating
+  tag rows plain low-contrast greys instead of accent-tinted; (2) header separators use a <strong>bottom-only</strong>
+  border/rule — never a top one. That's the fix for the collapse case: if a header's bottom edge is immediately
+  followed by another header (an empty/collapsed group), a top+bottom pair on adjacent headers would double up
+  into one heavy line. With bottom-only borders, two stacked headers still show exactly one line between them.
+  A small proof strip is included in each proposal.
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal E — Accent wash header (bottom border only) + grayscale rows</h2>
+  <div class="desc">
+    Same accent-tinted header fill as Proposal B, but the top hairline is dropped entirely and replaced with a
+    single, slightly more saturated bottom border that does all the separating work. Alternating rows drop the
+    accent tint and become a plain low-contrast grey step.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#e8f0fb; border-bottom:1px solid #c6daf4; color:#000;">Patient Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#e8f0fb; border-bottom:1px solid #c6daf4; color:#000;">Study Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#181e26; border-bottom:1px solid #22364f; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#181e26; border-bottom:1px solid #22364f; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:12px; margin-bottom:4px;"><strong>Collapse-adjacency proof</strong> — two headers back-to-back, no doubled line:</div>
+  <div style="display:flex; gap:16px;">
+    <div class="metapane light" style="width:190px;">
+      <div class="g-header" style="background:#e8f0fb; border-bottom:1px solid #c6daf4; color:#000;">Patient Module</div>
+      <div class="g-header" style="background:#e8f0fb; border-bottom:1px solid #c6daf4; color:#000;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+    <div class="metapane dark" style="width:190px;">
+      <div class="g-header" style="background:#181e26; border-bottom:1px solid #22364f; color:#e0e0e0;">Patient Module</div>
+      <div class="g-header" style="background:#181e26; border-bottom:1px solid #22364f; color:#e0e0e0;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#e8f0fb"></div><div class="txt">L fill #e8f0fb</div></div>
+    <div class="chip-sm"><div class="box" style="background:#c6daf4"></div><div class="txt">L border #c6daf4</div></div>
+    <div class="chip-sm"><div class="box" style="background:#181e26; border-color:#444"></div><div class="txt">D fill #181e26</div></div>
+    <div class="chip-sm"><div class="box" style="background:#22364f"></div><div class="txt">D border #22364f</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal F — Neutral header + accent left bar + bottom border, grayscale rows</h2>
+  <div class="desc">
+    Header fill matches the plain row exactly (zero chrome-collision risk, like Proposal C), and the accent
+    lives only in a 3px left bar — the same visual language as the sequence/item tier bars already in this
+    pane. A subtle neutral bottom border (doing more work than the C hairline, since there's no fill contrast
+    to help) closes off the band. Rows are grayscale.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#ffffff; border-left:3px solid #4285da; border-bottom:1px solid #dadada; color:#000; padding-left:5px;">Patient Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#ffffff; border-left:3px solid #4285da; border-bottom:1px solid #dadada; color:#000; padding-left:5px;">Study Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#141414; border-left:3px solid #4285da; border-bottom:1px solid #333333; color:#e0e0e0; padding-left:5px;">Patient Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#141414; border-left:3px solid #4285da; border-bottom:1px solid #333333; color:#e0e0e0; padding-left:5px;">Study Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:12px; margin-bottom:4px;"><strong>Collapse-adjacency proof</strong>:</div>
+  <div style="display:flex; gap:16px;">
+    <div class="metapane light" style="width:190px;">
+      <div class="g-header" style="background:#ffffff; border-left:3px solid #4285da; border-bottom:1px solid #dadada; color:#000; padding-left:5px;">Patient Module</div>
+      <div class="g-header" style="background:#ffffff; border-left:3px solid #4285da; border-bottom:1px solid #dadada; color:#000; padding-left:5px;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+    <div class="metapane dark" style="width:190px;">
+      <div class="g-header" style="background:#141414; border-left:3px solid #4285da; border-bottom:1px solid #333333; color:#e0e0e0; padding-left:5px;">Patient Module</div>
+      <div class="g-header" style="background:#141414; border-left:3px solid #4285da; border-bottom:1px solid #333333; color:#e0e0e0; padding-left:5px;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#4285da"></div><div class="txt">left bar #4285da</div></div>
+    <div class="chip-sm"><div class="box" style="background:#dadada"></div><div class="txt">L border #dadada</div></div>
+    <div class="chip-sm"><div class="box" style="background:#333333"></div><div class="txt">D border #333333</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal G — Bolder accent header (bottom border only), grayscale rows</h2>
+  <div class="desc">
+    Turns up the accent wash further than E — a clearly "branded" panel header, similar to how Finder/Mail
+    sidebar section headers sometimes carry a tint. Since the rows carry zero accent now, this reads as
+    intentional chrome rather than a stray hover state. Most visually assertive of the batch.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#d9e7f8; border-bottom:1px solid #aac8ee; color:#000;">Patient Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#d9e7f8; border-bottom:1px solid #aac8ee; color:#000;">Study Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#1b2634; border-bottom:1px solid #253f5f; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#1b2634; border-bottom:1px solid #253f5f; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:12px; margin-bottom:4px;"><strong>Collapse-adjacency proof</strong>:</div>
+  <div style="display:flex; gap:16px;">
+    <div class="metapane light" style="width:190px;">
+      <div class="g-header" style="background:#d9e7f8; border-bottom:1px solid #aac8ee; color:#000;">Patient Module</div>
+      <div class="g-header" style="background:#d9e7f8; border-bottom:1px solid #aac8ee; color:#000;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+    <div class="metapane dark" style="width:190px;">
+      <div class="g-header" style="background:#1b2634; border-bottom:1px solid #253f5f; color:#e0e0e0;">Patient Module</div>
+      <div class="g-header" style="background:#1b2634; border-bottom:1px solid #253f5f; color:#e0e0e0;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#d9e7f8"></div><div class="txt">L fill #d9e7f8</div></div>
+    <div class="chip-sm"><div class="box" style="background:#aac8ee"></div><div class="txt">L border #aac8ee</div></div>
+    <div class="chip-sm"><div class="box" style="background:#1b2634; border-color:#444"></div><div class="txt">D fill #1b2634</div></div>
+    <div class="chip-sm"><div class="box" style="background:#253f5f"></div><div class="txt">D border #253f5f</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal H — Neutral deep fill (from A) + bottom-only border, grayscale rows</h2>
+  <div class="desc">
+    Takes Proposal A's corrected neutral fill (already clear of the chrome color) and drops its top hairline
+    in favor of a single bottom border, keeping the same one-edge-only discipline as E/F/G. No accent on the
+    header at all here — useful as the "quiet" control to compare against the three accent-forward options above.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#dadbdc; border-bottom:1px solid #c5c5c5; color:#000;">Patient Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-bottom:1px solid #c5c5c5; color:#000;">Study Module</div>
+          <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#f5f5f5; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#0b0b0c; border-bottom:1px solid #303030; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-bottom:1px solid #303030; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#1a1a1a; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:12px; margin-bottom:4px;"><strong>Collapse-adjacency proof</strong>:</div>
+  <div style="display:flex; gap:16px;">
+    <div class="metapane light" style="width:190px;">
+      <div class="g-header" style="background:#dadbdc; border-bottom:1px solid #c5c5c5; color:#000;">Patient Module</div>
+      <div class="g-header" style="background:#dadbdc; border-bottom:1px solid #c5c5c5; color:#000;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#ffffff; border-bottom:1px solid #e7eaed; color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+    <div class="metapane dark" style="width:190px;">
+      <div class="g-header" style="background:#0b0b0c; border-bottom:1px solid #303030; color:#e0e0e0;">Patient Module</div>
+      <div class="g-header" style="background:#0b0b0c; border-bottom:1px solid #303030; color:#e0e0e0;">Study Module (collapsed above)</div>
+      <div class="tag-row" style="background:#141414; border-bottom:1px solid #1b1d20; color:#e0e0e0;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#dadbdc"></div><div class="txt">L fill #dadbdc</div></div>
+    <div class="chip-sm"><div class="box" style="background:#c5c5c5"></div><div class="txt">L border #c5c5c5</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c; border-color:#444"></div><div class="txt">D fill #0b0b0c</div></div>
+    <div class="chip-sm"><div class="box" style="background:#303030"></div><div class="txt">D border #303030</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">Third Batch (revised) — A's fill + A's top hairline + a thin bottom border added</h1>
+<div class="sub">
+  Correction from the previous round: keep Proposal A's top hairline (it wasn't being dropped after all —
+  you want it back), and add a thin bottom border alongside it rather than replacing it. "Thin" is done via
+  alpha rather than width, same as before, since a true sub-pixel border isn't renderable crisply in CSS or Qt:
+  the bottom border is 1px at ~14% opacity so it reads as a soft close rather than a second hard rule.
+  <strong>Trade-off to flag:</strong> having both a top and a bottom border brings back the collapse-adjacency
+  problem from two rounds ago — when a group is collapsed and one header sits directly above another, header 1's
+  bottom border and header 2's top border now sit right next to each other and read as one slightly heavier
+  line. Each proof strip below shows exactly what that looks like so you can judge whether it's noticeable
+  enough to matter.
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal I — A's fill + A's top hairline + thin alpha bottom border</h2>
+  <div class="desc">
+    Fill and top hairline are exactly Proposal A. Adds a ~14%-opacity 1px bottom border underneath.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:12px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong> (top+bottom means these two lines now sit back-to-back):</div>
+  <div style="display:flex; gap:16px;">
+    <div class="metapane light" style="width:190px;">
+      <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+      <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module (collapsed above)</div>
+      <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+    <div class="metapane dark" style="width:190px;">
+      <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Patient Module</div>
+      <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Study Module (collapsed above)</div>
+      <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#dadbdc"></div><div class="txt">L fill #dadbdc</div></div>
+    <div class="chip-sm"><div class="box" style="background:#e0e1e2"></div><div class="txt">L top #e0e1e2</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.14)"></div><div class="txt">L bottom 14% black</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c; border-color:#444"></div><div class="txt">D fill #0b0b0c</div></div>
+    <div class="chip-sm"><div class="box" style="background:#323233"></div><div class="txt">D top #323233</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal J — I, plus soft left/right borders on header rows</h2>
+  <div class="desc">
+    Same fill, top hairline, and thin bottom border as I, with the header additionally framed left and right by
+    an equally soft alpha border. Side borders never stack vertically, so — unlike the top/bottom pair — they
+    add no extra collapse-adjacency risk of their own.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); border-left:1px solid rgba(0,0,0,0.10); border-right:1px solid rgba(0,0,0,0.10); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); border-left:1px solid rgba(0,0,0,0.10); border-right:1px solid rgba(0,0,0,0.10); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); border-left:1px solid rgba(255,255,255,0.10); border-right:1px solid rgba(255,255,255,0.10); color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); border-left:1px solid rgba(255,255,255,0.10); border-right:1px solid rgba(255,255,255,0.10); color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#dadbdc"></div><div class="txt">L fill #dadbdc</div></div>
+    <div class="chip-sm"><div class="box" style="background:#c9c9c9"></div><div class="txt">L side ~10% black</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c; border-color:#444"></div><div class="txt">D fill #0b0b0c</div></div>
+    <div class="chip-sm"><div class="box" style="background:#2b2b2b"></div><div class="txt">D side ~10% white</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal K — I, plus accent-colored left/right borders on header rows</h2>
+  <div class="desc">
+    Same as J but the side borders carry the accent color instead of neutral grey — a bolder "bracketed" look
+    that ties the header back to the accent without a wash covering the text. Reads like a highlighted card.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); border-left:2px solid #4285da; border-right:2px solid #4285da; color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); border-left:2px solid #4285da; border-right:2px solid #4285da; color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); border-left:2px solid #4285da; border-right:2px solid #4285da; color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); border-left:2px solid #4285da; border-right:2px solid #4285da; color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#dadbdc"></div><div class="txt">L fill #dadbdc</div></div>
+    <div class="chip-sm"><div class="box" style="background:#4285da"></div><div class="txt">side rule #4285da</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal L — I, plus a fainter/thinner border framing the whole tag pane</h2>
+  <div class="desc">
+    Same outer-frame idea as before, but toned down on your feedback that it read too strong: the frame color
+    is now alpha-based (~9% light / ~11% dark, fainter than even the header's own bottom border) rather than a
+    solid mid-grey hex. It still needs to hold its own edge against the toolbar/viewport wireframes next to it,
+    so it stays solid enough to register — this is close to the floor before it disappears entirely against
+    those neighboring surfaces.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid rgba(0,0,0,0.09);">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark" style="border:1px solid rgba(255,255,255,0.11);">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.09)"></div><div class="txt">L outer frame 9% black</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c;"><div style="width:100%;height:100%;background:rgba(255,255,255,0.11)"></div></div><div class="txt">D outer frame 11% white</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">Fourth Batch — L variations: asymmetric per theme</h1>
+<div class="sub">
+  Splitting the outer pane frame's weight by theme instead of using one alpha value for both: light theme gets
+  a darker/more prominent edge (it was getting lost against the light chrome), dark theme gets an even fainter
+  one than the current L (it was already reading fine, so pushed further toward "barely there"). All three keep
+  I's header treatment (fill + top hairline + thin bottom border) unchanged — only the outer frame changes.
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal L2 — Light: 16% black · Dark: 7% white</h2>
+  <div class="desc">
+    A modest step in both directions from the current L (9% / 11%): light bumped up to 16% opacity
+    (≈ solid <code>#cacaca</code> against the window chrome), dark eased down to 7% (≈ solid <code>#2e2e2e</code>).
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid rgba(0,0,0,0.16);">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark" style="border:1px solid rgba(255,255,255,0.07);">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.16)"></div><div class="txt">L frame 16% black (≈#cacaca)</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c;"><div style="width:100%;height:100%;background:rgba(255,255,255,0.07)"></div></div><div class="txt">D frame 7% white (≈#2e2e2e)</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal L3 — Light: solid #b8b8b8 · Dark: 5% white</h2>
+  <div class="desc">
+    Light theme switches from alpha to a flat solid grey for maximum legibility against the chrome — clearly a
+    drawn edge, not a soft suggestion of one. Dark theme keeps easing down, now close to disappearing against
+    its own window chrome.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark" style="border:1px solid rgba(255,255,255,0.05);">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#b8b8b8"></div><div class="txt">L frame solid #b8b8b8</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c;"><div style="width:100%;height:100%;background:rgba(255,255,255,0.05)"></div></div><div class="txt">D frame 5% white (≈#292929)</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Proposal L4 — Light: solid #a8a8a8 · Dark: 3.5% white</h2>
+  <div class="desc">
+    Furthest split of the three. Light frame is now bold enough to read as an intentional panel boundary even
+    at a glance. Dark frame is pushed to the floor — at 3.5% it's only ~8 units away from the window chrome
+    itself, testing whether dark theme needs a visible frame at all or whether the header/row contrast already
+    does enough work to define the pane's edge.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #a8a8a8;">
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#dadbdc; border-top:1px solid #e0e1e2; border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+    <div class="app-window dark">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane dark" style="border:1px solid rgba(255,255,255,0.035);">
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#0b0b0c; border-top:1px solid #323233; border-bottom:1px solid rgba(255,255,255,0.14); color:#e0e0e0;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#a8a8a8"></div><div class="txt">L frame solid #a8a8a8</div></div>
+    <div class="chip-sm"><div class="box" style="background:#0b0b0c;"><div style="width:100%;height:100%;background:rgba(255,255,255,0.035)"></div></div><div class="txt">D frame 3.5% white (≈#262626)</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">Fifth Batch — L3 dark locked in; light-theme header variations</h1>
+<div class="sub">
+  Dark theme is now fixed exactly as L3 (fill <code>#0b0b0c</code>, top hairline <code>#323233</code>, bottom
+  border 14% white, pane frame 5% white) and not shown again below to keep focus on light. For light: the top
+  hairline switches from a light highlight (<code>#e0e1e2</code>, lighter than the fill) to the same dark, soft
+  alpha treatment as the bottom border — so the header reads as "darker fill, dark edges" rather than "darker
+  fill with one light and one dark edge." Three fill lightness steps are tried; the last one is intentionally
+  close to the window-chrome collision floor so you can see where it stops being safe.
+</div>
+
+<div class="proposal-block">
+  <h2>Light A — fill #e0e1e2, top+bottom both 14% black (gap to chrome: 16)</h2>
+  <div class="desc">
+    Smallest step lighter than L3's current fill. Both header edges now match the bottom border's soft dark
+    alpha instead of one being a light highlight — still comfortably clear of the chrome color.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#e0e1e2; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#e0e1e2; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:10px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong> (still a top+bottom pair, so still doubles slightly on collapse):</div>
+  <div class="metapane light" style="width:190px; border:1px solid #b8b8b8;">
+    <div class="g-header" style="background:#e0e1e2; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+    <div class="g-header" style="background:#e0e1e2; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module (collapsed above)</div>
+    <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#e0e1e2"></div><div class="txt">fill #e0e1e2</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.14)"></div><div class="txt">top+bottom 14% black</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Light B — fill #e5e6e7, top+bottom both 14% black (gap to chrome: 11)</h2>
+  <div class="desc">
+    A step lighter again. Gap to the window chrome is down to 11 units — still holding, but noticeably closer
+    than A. Worth comparing side-by-side against the chrome color in the actual app before committing.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#e5e6e7; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#e5e6e7; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:10px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong>:</div>
+  <div class="metapane light" style="width:190px; border:1px solid #b8b8b8;">
+    <div class="g-header" style="background:#e5e6e7; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Patient Module</div>
+    <div class="g-header" style="background:#e5e6e7; border-top:1px solid rgba(0,0,0,0.14); border-bottom:1px solid rgba(0,0,0,0.14); color:#000;">Study Module (collapsed above)</div>
+    <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#e5e6e7"></div><div class="txt">fill #e5e6e7</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.14)"></div><div class="txt">top+bottom 14% black</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>Light C — fill #eaebec, top+bottom both 18% black (gap to chrome: 6)</h2>
+  <div class="desc">
+    Deliberately pushed to the edge of the safe range — only 6 units from the window chrome on fill alone.
+    Bumped the border alpha up to 18% (from 14%) specifically to compensate, since at this fill lightness the
+    borders are doing most of the work of separating the header from the chrome, not the fill. Included so you
+    can see exactly where "lighter" stops paying off — past this the fill and chrome are close enough that only
+    the border reads as intentional, and the fill itself risks looking like a rendering inconsistency rather
+    than a deliberate color.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#eaebec; border-top:1px solid rgba(0,0,0,0.18); border-bottom:1px solid rgba(0,0,0,0.18); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#eaebec; border-top:1px solid rgba(0,0,0,0.18); border-bottom:1px solid rgba(0,0,0,0.18); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:10px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong>:</div>
+  <div class="metapane light" style="width:190px; border:1px solid #b8b8b8;">
+    <div class="g-header" style="background:#eaebec; border-top:1px solid rgba(0,0,0,0.18); border-bottom:1px solid rgba(0,0,0,0.18); color:#000;">Patient Module</div>
+    <div class="g-header" style="background:#eaebec; border-top:1px solid rgba(0,0,0,0.18); border-bottom:1px solid rgba(0,0,0,0.18); color:#000;">Study Module (collapsed above)</div>
+    <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#eaebec"></div><div class="txt">fill #eaebec</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.18)"></div><div class="txt">top+bottom 18% black</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">Sixth Batch — Light C confirmed; two new directions</h1>
+<div class="sub">
+  Light C's fill/border combo is the new baseline for light theme. Worth noting: since the pane now has its own
+  outer frame (L3), the header-vs-chrome collision risk that drove most of this exploration matters less than
+  it used to — the frame itself already marks the pane's boundary, so colors near the chrome value are safer
+  than they were in the frame-less early rounds. That headroom is what makes N1 viable. N2/N3 flip the whole
+  model: instead of the header being the darker band, the tag rows get a light grey wash and the header becomes
+  the <em>brightest</em> element in the pane, popping up rather than receding.
+</div>
+
+<div class="proposal-block">
+  <h2>N1 — Header fill lighter than the window chrome itself</h2>
+  <div class="desc">
+    Fill is <code>#f3f3f3</code> — 3 units <em>lighter</em> than chrome's <code>#f0f0f0</code>, sitting between
+    chrome and the white tag rows rather than below chrome like every other light variant so far. Since the
+    fill barely separates from either neighbor on its own, the border alpha is bumped to 22% (from Light C's
+    18%) to do correspondingly more of the defining work.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.22); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.22); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:10px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong>:</div>
+  <div class="metapane light" style="width:190px; border:1px solid #b8b8b8;">
+    <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.22); color:#000;">Patient Module</div>
+    <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.22); color:#000;">Study Module (collapsed above)</div>
+    <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#f3f3f3"></div><div class="txt">fill #f3f3f3</div></div>
+    <div class="chip-sm"><div class="box" style="background:#f0f0f0"></div><div class="txt">window chrome #f0f0f0</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.22)"></div><div class="txt">top+bottom 22% black</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>N2 — Inverted: rows go light grey, header becomes the brightest thing (moderate)</h2>
+  <div class="desc">
+    Tag rows: base <code>#e8e8e8</code>, alt <code>#dedede</code>. Header fill: pure white <code>#ffffff</code>
+    — now the brightest element in the pane instead of the darkest. The header/row contrast (23 units) does most
+    of the separating on its own, so the border eases down to 12% black.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.12); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+          <div class="tag-row" style="background:#e8e8e8; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#dedede; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#e8e8e8; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.12); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Study Module</div>
+          <div class="tag-row" style="background:#e8e8e8; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#dedede; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:10px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong>:</div>
+  <div class="metapane light" style="width:190px; border:1px solid #b8b8b8;">
+    <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.12); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+    <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.12); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Study Module (collapsed above)</div>
+    <div class="tag-row" style="background:#e8e8e8; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#ffffff"></div><div class="txt">header fill #ffffff</div></div>
+    <div class="chip-sm"><div class="box" style="background:#e8e8e8"></div><div class="txt">row base #e8e8e8</div></div>
+    <div class="chip-sm"><div class="box" style="background:#dedede"></div><div class="txt">row alt #dedede</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>N3 — Inverted: rows go darker grey, header stays brightest (stronger)</h2>
+  <div class="desc">
+    Same idea as N2, pushed further: base <code>#e0e0e0</code>, alt <code>#d4d4d4</code>, header still pure
+    white. Header/row contrast is now 31 units — the largest gap in this whole exploration — so the border
+    eases down further, to 8% black, since it's barely needed anymore.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.08); border-bottom:1px solid rgba(0,0,0,0.08); color:#000;">Patient Module</div>
+          <div class="tag-row" style="background:#e0e0e0; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row" style="background:#d4d4d4; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row" style="background:#e0e0e0; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.08); border-bottom:1px solid rgba(0,0,0,0.08); color:#000;">Study Module</div>
+          <div class="tag-row" style="background:#e0e0e0; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row" style="background:#d4d4d4; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="desc" style="margin-top:10px; margin-bottom:4px;"><strong>Collapse-adjacency check</strong>:</div>
+  <div class="metapane light" style="width:190px; border:1px solid #b8b8b8;">
+    <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.08); border-bottom:1px solid rgba(0,0,0,0.08); color:#000;">Patient Module</div>
+    <div class="g-header" style="background:#ffffff; border-top:1px solid rgba(0,0,0,0.08); border-bottom:1px solid rgba(0,0,0,0.08); color:#000;">Study Module (collapsed above)</div>
+    <div class="tag-row" style="background:#e0e0e0; border-bottom:1px solid rgba(0,0,0,0.08); color:#000;"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:#ffffff"></div><div class="txt">header fill #ffffff</div></div>
+    <div class="chip-sm"><div class="box" style="background:#e0e0e0"></div><div class="txt">row base #e0e0e0</div></div>
+    <div class="chip-sm"><div class="box" style="background:#d4d4d4"></div><div class="txt">row alt #d4d4d4</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">Seventh Batch — N1, thinning just the bottom border</h1>
+<div class="sub">
+  N1's fill (<code>#f3f3f3</code>) and top border (22% black) stay fixed; only the bottom border's opacity
+  drops across these three. The bottom border sits against the tag rows rather than the pane frame, and the
+  alt row's blue-tinted <code>#f3f7fc</code> is close to the header fill in raw lightness — so there's a floor
+  below which the header stops reading as a distinct band and starts blending into the row beneath it. Included
+  a plain N1 reference row at the top of each strip for direct comparison.
+</div>
+
+<div class="proposal-block">
+  <h2>N1a — bottom border 16% black (top stays 22%)</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.16); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.16); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.22)"></div><div class="txt">top 22% (unchanged)</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.16)"></div><div class="txt">bottom 16%</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>N1b — bottom border 12% black (top stays 22%)</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.22)"></div><div class="txt">top 22% (unchanged)</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.12)"></div><div class="txt">bottom 12%</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>N1c — bottom border 8% black (top stays 22%) — near the floor</h2>
+  <div class="desc">
+    At 8% the bottom edge is close to vanishing against the <code>#f3f7fc</code> alt row directly below a
+    header — included to show where it stops being worth going thinner.
+  </div>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.08); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.22); border-bottom:1px solid rgba(0,0,0,0.08); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.22)"></div><div class="txt">top 22% (unchanged)</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.08)"></div><div class="txt">bottom 8%</div></div>
+  </div>
+</div>
+
+<h1 style="margin-top:40px;">Eighth Batch — top 20% / bottom 12%, at 1px vs 0.5px</h1>
+<div class="sub">
+  Fill (<code>#f3f3f3</code>) and pane frame (<code>#b8b8b8</code>) unchanged. Top border alpha nudged down
+  slightly to 20% (from 22%), bottom stays at N1b's 12%. Four combinations below: both at the normal 1px width,
+  then top-only, bottom-only, and both reduced to a genuine 0.5px width. This page is rendered at 2x scale
+  (device-pixel-ratio 2, roughly what a Retina display gives you) specifically so the 0.5px variants show their
+  real geometric thinning rather than collapsing into the same look as the alpha-only versions — on a standard
+  1x display they'd read close to identical to their 1px counterparts.
+</div>
+
+<div class="proposal-block">
+  <h2>O1 — top 20% / bottom 12%, both at 1px (baseline for this batch)</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.20); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.20); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.20)"></div><div class="txt">top 1px @ 20%</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.12)"></div><div class="txt">bottom 1px @ 12%</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>O2 — top reduced to 0.5px @ 20%, bottom stays 1px @ 12%</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:0.5px solid rgba(0,0,0,0.20); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:0.5px solid rgba(0,0,0,0.20); border-bottom:1px solid rgba(0,0,0,0.12); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.20)"></div><div class="txt">top 0.5px @ 20%</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.12)"></div><div class="txt">bottom 1px @ 12%</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>O3 — top stays 1px @ 20%, bottom reduced to 0.5px @ 12%</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.20); border-bottom:0.5px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.20); border-bottom:0.5px solid rgba(0,0,0,0.12); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.20)"></div><div class="txt">top 1px @ 20%</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.12)"></div><div class="txt">bottom 0.5px @ 12%</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>O4 — both reduced to 0.5px (top 20%, bottom 12%)</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:0.5px solid rgba(0,0,0,0.20); border-bottom:0.5px solid rgba(0,0,0,0.12); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:0.5px solid rgba(0,0,0,0.20); border-bottom:0.5px solid rgba(0,0,0,0.12); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.20)"></div><div class="txt">top 0.5px @ 20%</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.12)"></div><div class="txt">bottom 0.5px @ 12%</div></div>
+  </div>
+</div>
+
+<div class="proposal-block">
+  <h2>O5 — top 16%, bottom 13% (both 1px)</h2>
+  <div class="windows">
+    <div class="app-window light">
+      <div class="titlebar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="toolbar"><div class="tb-btn"></div><div class="tb-btn"></div><div class="tb-btn"></div></div>
+      <div class="body-row">
+        <div class="metapane light" style="border:1px solid #b8b8b8;">
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.16); border-bottom:1px solid rgba(0,0,0,0.13); color:#000;">Patient Module</div>
+          <div class="tag-row base"><span>PatientName</span><span class="tagnum">(0010,0010)</span></div>
+          <div class="tag-row alt"><span>PatientID</span><span class="tagnum">(0010,0020)</span></div>
+          <div class="tag-row base"><span>PatientSex</span><span class="tagnum">(0010,0040)</span></div>
+          <div class="g-header" style="background:#f3f3f3; border-top:1px solid rgba(0,0,0,0.16); border-bottom:1px solid rgba(0,0,0,0.13); color:#000;">Study Module</div>
+          <div class="tag-row base"><span>StudyDate</span><span class="tagnum">(0008,0020)</span></div>
+          <div class="tag-row alt"><span>StudyDescription</span><span class="tagnum">(0008,1030)</span></div>
+        </div>
+        <div class="viewport"><div class="ph">viewport</div></div>
+      </div>
+      <div class="statusbar"></div>
+    </div>
+  </div>
+  <div class="swatch-strip">
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.16)"></div><div class="txt">top 1px @ 16%</div></div>
+    <div class="chip-sm"><div class="box" style="background:rgba(0,0,0,0.13)"></div><div class="txt">bottom 1px @ 13%</div></div>
+  </div>
+</div>
+
+</body>
+</html>
