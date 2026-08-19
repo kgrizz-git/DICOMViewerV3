@@ -235,8 +235,7 @@ class TagExportDialogSelectionMixin:
         root = self.tags_tree.invisibleRootItem()
         self.tags_tree.blockSignals(True)
         try:
-            for i in range(root.childCount()):
-                group_item = root.child(i)
+            for group_item in iter_tree_children(root):
                 if group_item.isHidden():
                     continue
                 if group_item.data(0, Qt.ItemDataRole.UserRole) is not None:
