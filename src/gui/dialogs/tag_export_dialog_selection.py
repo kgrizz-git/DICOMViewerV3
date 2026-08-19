@@ -23,6 +23,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTreeWidgetItem
 
 from gui.metadata_table_model import metadata_row_kind
+from gui.qt_tree_widget_utils import iter_tree_children
 
 
 class TagExportDialogSelectionMixin:
@@ -156,8 +157,7 @@ class TagExportDialogSelectionMixin:
         any_visible_child = False
         all_checked = True
         any_checked = False
-        for i in range(item.childCount()):
-            child = item.child(i)
+        for child in iter_tree_children(item):
             if child.isHidden():
                 continue
             any_visible_child = True

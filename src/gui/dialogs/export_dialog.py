@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from gui.dialogs.anonymization_options_widget import AnonymizationOptionsDialog
 from gui.export_manager import ExportManager, ExportSelectedRequest
+from gui.qt_tree_widget_utils import iter_tree_children
 from utils.deep_anonymizer import DeepAnonymizerOptions
 from utils.log_sanitizer import sanitize_message
 
@@ -466,8 +467,7 @@ class ExportDialog(QDialog):
         """Toggle all items selection."""
         self.tree_widget.blockSignals(True)
         root = self.tree_widget.invisibleRootItem()
-        for i in range(root.childCount()):
-            study_item = root.child(i)
+        for study_item in iter_tree_children(root):
             study_item.setCheckState(0, Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
         self.tree_widget.blockSignals(False)
         self._update_selection()
@@ -479,31 +479,28 @@ class ExportDialog(QDialog):
 
         self.tree_widget.blockSignals(True)
         check_state = item.checkState(0)
+        parent = item.parent()
 
         # If this is a study item, update all series
-        if item.parent() is None:
-            for i in range(item.childCount()):
-                series_item = item.child(i)
+        if parent is None:
+            for series_item in iter_tree_children(item):
                 series_item.setCheckState(0, check_state)
-                # Update all slices under this series
-                for j in range(series_item.childCount()):
-                    slice_item = series_item.child(j)
+                for slice_item in iter_tree_children(series_item):
                     slice_item.setCheckState(0, check_state)
         # If this is a series item, update all slices
-        elif item.parent().parent() is None:
-            for i in range(item.childCount()):
-                slice_item = item.child(i)
+        elif parent.parent() is None:
+            for slice_item in iter_tree_children(item):
                 slice_item.setCheckState(0, check_state)
             # Update parent study state
-            self._update_parent_state(item.parent())
+            self._update_parent_state(parent)
         # If this is a slice item, update parent series and study states
         else:
-            self._update_parent_state(item.parent())
+            self._update_parent_state(parent)
 
         self.tree_widget.blockSignals(False)
         self._update_selection()
 
-    def _update_parent_state(self, item: QTreeWidgetItem) -> None:
+    def _update_parent_state(self, item: QTreeWidgetItem | None) -> None:
         """Update parent item state based on children."""
         if item is None:
             return
@@ -511,8 +508,7 @@ class ExportDialog(QDialog):
         checked_count = 0
         unchecked_count = 0
 
-        for i in range(item.childCount()):
-            child = item.child(i)
+        for child in iter_tree_children(item):
             state = child.checkState(0)
             if state == Qt.CheckState.Checked:
                 checked_count += 1
@@ -537,16 +533,13 @@ class ExportDialog(QDialog):
         self.selected_items.clear()
         root = self.tree_widget.invisibleRootItem()
 
-        for i in range(root.childCount()):
-            study_item = root.child(i)
+        for study_item in iter_tree_children(root):
             study_uid = study_item.data(0, Qt.ItemDataRole.UserRole)
 
-            for j in range(study_item.childCount()):
-                series_item = study_item.child(j)
+            for series_item in iter_tree_children(study_item):
                 series_uid = series_item.data(0, Qt.ItemDataRole.UserRole)
 
-                for k in range(series_item.childCount()):
-                    slice_item = series_item.child(k)
+                for slice_item in iter_tree_children(series_item):
                     if slice_item.checkState(0) == Qt.CheckState.Checked:
                         slice_index = slice_item.data(0, Qt.ItemDataRole.UserRole)
                         key = (study_uid, series_uid, slice_index)

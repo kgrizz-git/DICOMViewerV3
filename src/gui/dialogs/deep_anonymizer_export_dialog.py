@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 
 from gui.dialogs.anonymization_options_widget import AnonymizationOptionsWidget
 from gui.export_manager import ExportManager, ExportSelectedRequest
+from gui.qt_tree_widget_utils import iter_tree_children
 from utils.deep_anonymizer import DeepAnonymizerOptions
 from utils.log_sanitizer import sanitize_message
 
@@ -181,8 +182,8 @@ class DeepAnonymizerExportDialog(QDialog):
         self.tree_widget.blockSignals(True)
         root = self.tree_widget.invisibleRootItem()
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
-        for i in range(root.childCount()):
-            root.child(i).setCheckState(0, state)
+        for study_item in iter_tree_children(root):
+            study_item.setCheckState(0, state)
         self.tree_widget.blockSignals(False)
         self._update_selection()
 
@@ -191,18 +192,18 @@ class DeepAnonymizerExportDialog(QDialog):
             return
         self.tree_widget.blockSignals(True)
         check_state = item.checkState(0)
-        if item.parent() is None:
-            for i in range(item.childCount()):
-                series_item = item.child(i)
+        parent = item.parent()
+        if parent is None:
+            for series_item in iter_tree_children(item):
                 series_item.setCheckState(0, check_state)
-                for j in range(series_item.childCount()):
-                    series_item.child(j).setCheckState(0, check_state)
-        elif item.parent().parent() is None:
-            for i in range(item.childCount()):
-                item.child(i).setCheckState(0, check_state)
-            self._update_parent_state(item.parent())
+                for slice_item in iter_tree_children(series_item):
+                    slice_item.setCheckState(0, check_state)
+        elif parent.parent() is None:
+            for child_item in iter_tree_children(item):
+                child_item.setCheckState(0, check_state)
+            self._update_parent_state(parent)
         else:
-            self._update_parent_state(item.parent())
+            self._update_parent_state(parent)
         self.tree_widget.blockSignals(False)
         self._update_selection()
 
@@ -210,8 +211,8 @@ class DeepAnonymizerExportDialog(QDialog):
         if item is None:
             return
         checked = unchecked = 0
-        for i in range(item.childCount()):
-            state = item.child(i).checkState(0)
+        for child in iter_tree_children(item):
+            state = child.checkState(0)
             if state == Qt.CheckState.Checked:
                 checked += 1
             elif state == Qt.CheckState.Unchecked:
@@ -230,14 +231,11 @@ class DeepAnonymizerExportDialog(QDialog):
     def _update_selection(self) -> None:
         self.selected_items.clear()
         root = self.tree_widget.invisibleRootItem()
-        for i in range(root.childCount()):
-            study_item = root.child(i)
+        for study_item in iter_tree_children(root):
             study_uid = study_item.data(0, Qt.ItemDataRole.UserRole)
-            for j in range(study_item.childCount()):
-                series_item = study_item.child(j)
+            for series_item in iter_tree_children(study_item):
                 series_uid = series_item.data(0, Qt.ItemDataRole.UserRole)
-                for k in range(series_item.childCount()):
-                    slice_item = series_item.child(k)
+                for slice_item in iter_tree_children(series_item):
                     if slice_item.checkState(0) == Qt.CheckState.Checked:
                         slice_index = slice_item.data(0, Qt.ItemDataRole.UserRole)
                         key = (study_uid, series_uid, slice_index)
