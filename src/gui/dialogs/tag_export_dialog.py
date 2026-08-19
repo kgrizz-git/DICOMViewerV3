@@ -51,6 +51,7 @@ from gui.metadata_table_model import (
     metadata_row_depth,
     metadata_row_kind,
 )
+from gui.qt_tree_widget_utils import iter_tree_children
 from utils.log_sanitizer import sanitize_message
 
 # Re-export helpers/constants for existing tests and callers.
@@ -674,15 +675,13 @@ class TagExportDialog(
         """Toggle all series and instance selection."""
         self.series_tree.blockSignals(True)
         root = self.series_tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            study_item = root.child(i)
-            study_item.setCheckState(0, Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
-            for j in range(study_item.childCount()):
-                series_item = study_item.child(j)
-                series_item.setCheckState(0, Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
-                for k in range(series_item.childCount()):
-                    instance_item = series_item.child(k)
-                    instance_item.setCheckState(0, Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+        check_state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        for study_item in iter_tree_children(root):
+            study_item.setCheckState(0, check_state)
+            for series_item in iter_tree_children(study_item):
+                series_item.setCheckState(0, check_state)
+                for instance_item in iter_tree_children(series_item):
+                    instance_item.setCheckState(0, check_state)
         self.series_tree.blockSignals(False)
         self._update_selected_series()
 
@@ -716,8 +715,7 @@ class TagExportDialog(
         callers can filter those out generically instead of relying on nesting
         depth.
         """
-        for i in range(item.childCount()):
-            child = item.child(i)
+        for child in iter_tree_children(item):
             yield child
             yield from self._iter_all_tag_items(child)
 
@@ -725,8 +723,7 @@ class TagExportDialog(
         self, item: QTreeWidgetItem, state: Qt.CheckState
     ) -> None:
         """Recursively apply *state* to every visible descendant of *item*."""
-        for i in range(item.childCount()):
-            child = item.child(i)
+        for child in iter_tree_children(item):
             if child.isHidden():
                 continue
             child.setCheckState(0, state)
@@ -751,8 +748,7 @@ class TagExportDialog(
         try:
             search_lower = search_text.lower()
             root = self.tags_tree.invisibleRootItem()
-            for i in range(root.childCount()):
-                group_item = root.child(i)
+            for group_item in iter_tree_children(root):
                 self._apply_tag_filter_recursive(group_item, search_lower, search_text)
             # Aggregate top Select All from the newly visible leaf set only; do not
             # rewrite Sequence/Item parent checks via _update_ancestors_check_state.
@@ -769,8 +765,7 @@ class TagExportDialog(
         own_match = not search_text or search_lower in own_text
 
         any_child_visible = False
-        for i in range(item.childCount()):
-            child = item.child(i)
+        for child in iter_tree_children(item):
             if self._apply_tag_filter_recursive(child, search_lower, search_text):
                 any_child_visible = True
 
@@ -792,25 +787,21 @@ class TagExportDialog(
         # If this is a study item, update all series and instances under it
         if parent is None:
             check_state = item.checkState(0)
-            for i in range(item.childCount()):
-                series_item = item.child(i)
+            for series_item in iter_tree_children(item):
                 series_item.setCheckState(0, check_state)
-                for j in range(series_item.childCount()):
-                    instance_item = series_item.child(j)
+                for instance_item in iter_tree_children(series_item):
                     instance_item.setCheckState(0, check_state)
         # If this is a series item, update all instances under it and parent study
         elif parent.parent() is None:
             check_state = item.checkState(0)
-            for i in range(item.childCount()):
-                instance_item = item.child(i)
+            for instance_item in iter_tree_children(item):
                 instance_item.setCheckState(0, check_state)
 
             # Update parent study's check state
             study_item = parent
             all_checked = True
             any_checked = False
-            for i in range(study_item.childCount()):
-                series_item = study_item.child(i)
+            for series_item in iter_tree_children(study_item):
                 series_state = series_item.checkState(0)
                 if series_state == Qt.CheckState.Unchecked:
                     all_checked = False
@@ -829,8 +820,8 @@ class TagExportDialog(
             series_item = parent
             all_checked = True
             any_checked = False
-            for i in range(series_item.childCount()):
-                instance_state = series_item.child(i).checkState(0)
+            for instance_item in iter_tree_children(series_item):
+                instance_state = instance_item.checkState(0)
                 if instance_state == Qt.CheckState.Unchecked:
                     all_checked = False
                 else:
@@ -845,21 +836,22 @@ class TagExportDialog(
 
             # Update parent study's check state
             study_item = series_item.parent()
-            all_checked = True
-            any_checked = False
-            for i in range(study_item.childCount()):
-                series_state = study_item.child(i).checkState(0)
-                if series_state == Qt.CheckState.Unchecked:
-                    all_checked = False
-                else:
-                    any_checked = True
+            if study_item is not None:
+                all_checked = True
+                any_checked = False
+                for series_item_child in iter_tree_children(study_item):
+                    series_state = series_item_child.checkState(0)
+                    if series_state == Qt.CheckState.Unchecked:
+                        all_checked = False
+                    else:
+                        any_checked = True
 
-            if all_checked:
-                study_item.setCheckState(0, Qt.CheckState.Checked)
-            elif any_checked:
-                study_item.setCheckState(0, Qt.CheckState.PartiallyChecked)
-            else:
-                study_item.setCheckState(0, Qt.CheckState.Unchecked)
+                if all_checked:
+                    study_item.setCheckState(0, Qt.CheckState.Checked)
+                elif any_checked:
+                    study_item.setCheckState(0, Qt.CheckState.PartiallyChecked)
+                else:
+                    study_item.setCheckState(0, Qt.CheckState.Unchecked)
 
         self.series_tree.blockSignals(False)
         self._update_selected_series()
@@ -885,18 +877,15 @@ class TagExportDialog(
         self.selected_series = {}
         root = self.series_tree.invisibleRootItem()
 
-        for i in range(root.childCount()):
-            study_item = root.child(i)
+        for study_item in iter_tree_children(root):
             study_uid = study_item.data(0, Qt.ItemDataRole.UserRole)
 
             series_dict = {}
-            for j in range(study_item.childCount()):
-                series_item = study_item.child(j)
+            for series_item in iter_tree_children(study_item):
                 series_uid = series_item.data(0, Qt.ItemDataRole.UserRole)
 
                 instance_list = []
-                for k in range(series_item.childCount()):
-                    instance_item = series_item.child(k)
+                for instance_item in iter_tree_children(series_item):
                     if instance_item.checkState(0) == Qt.CheckState.Checked:
                         instance_idx = instance_item.data(0, Qt.ItemDataRole.UserRole)
                         instance_list.append(instance_idx)

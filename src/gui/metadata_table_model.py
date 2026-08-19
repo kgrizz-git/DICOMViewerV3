@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
 )
 
+from gui.qt_tree_widget_utils import iter_tree_children
+
 METADATA_VALUE_DISPLAY_MAX_LEN = 50
 
 # Group heading rows carry their bucket key here; nothing else does.
@@ -114,8 +116,7 @@ def apply_group_header_colors(tree: QTreeWidget) -> None:
     """Push the current theme's heading colors onto every existing heading row."""
     background, foreground = group_header_colors(tree.palette())
     root = tree.invisibleRootItem()
-    for i in range(root.childCount()):
-        item = root.child(i)
+    for item in iter_tree_children(root):
         if item.data(0, GROUP_HEADER_KEY_ROLE) is not None:
             item.setBackground(0, background)
             item.setForeground(0, foreground)
@@ -123,8 +124,7 @@ def apply_group_header_colors(tree: QTreeWidget) -> None:
 
 def _walk_visible_descendants(item: QTreeWidgetItem):
     """Yield currently visible descendants (skips hidden; enters expanded only)."""
-    for i in range(item.childCount()):
-        child = item.child(i)
+    for child in iter_tree_children(item):
         if child.isHidden():
             continue
         yield child
@@ -138,8 +138,7 @@ def assign_group_stripe_parity(tree: QTreeWidget) -> None:
     each group. O(n) over the visible tree; paint() only reads the role.
     """
     root = tree.invisibleRootItem()
-    for i in range(root.childCount()):
-        group_item = root.child(i)
+    for group_item in iter_tree_children(root):
         group_item.setData(0, STRIPE_PARITY_ROLE, None)
         if group_item.isHidden():
             continue

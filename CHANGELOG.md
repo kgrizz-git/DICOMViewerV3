@@ -18,6 +18,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   versioning note: patch.**
 
 ### Fixed
+- **PySide6 6.11.2 tree typing (CI):** Fresh CI installs can resolve
+  PySide6 6.11.2, whose stubs type ``QTreeWidgetItem.child()`` and
+  ``parent()`` as optional. Export and metadata tree walks now use a shared
+  ``iter_tree_children`` helper and explicit ``None`` guards so basedpyright
+  stays at zero errors without pinning PySide6. No user-visible behavior
+  change. **Semantic versioning note: patch.**
 - **Tag export group-header checkboxes:** Top Select All, Deselect All, the
   Select All checkbox, and the tag filter now recompute group-header tri-state
   from visible exportable leaves. Independently checked Sequence/Item parents
