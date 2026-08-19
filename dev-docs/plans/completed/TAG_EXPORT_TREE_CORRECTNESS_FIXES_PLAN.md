@@ -2,19 +2,18 @@
 
 **Created:** 2026-08-16  
 **Last updated:** 2026-08-17  
-**Status:** implemented (`feature/tag-export-tree-correctness`)  
+**Status:** implemented (PR 68 / `feature/tag-export-tree-correctness` merged to `main`)  
 **Priority:** P1  
 **Phase:** A of the tag-tree visual-hierarchy workstream  
-**Branch (planning):** `feature/tag-tree-visual-hierarchy-plan`
 
 Bug fixes and prerequisites with **no intentional visual redesign**. Ships
 immediately useful correctness and unblocks later phases.
 
 ## Context and links
 
-- **Hub:** [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](TAG_TREE_VISUAL_HIERARCHY_PLAN.md)
+- **Hub:** [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](../supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md)
 - **Investigation / review history:** [tag-tree-visual-hierarchy-investigation-2026-08-16.md](../../ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md) (esp. Part 7; A5, D1/D11, D2, D5/E1)
-- **Next:** [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) (Phase B)
+- **Next:** [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) (Phase B, implemented)
 - **Backlog:** [TO_DO.md](../../TO_DO.md) UX / Workflow
 - **Design:** [DESIGN.md](../../../DESIGN.md) §2 (token discipline for D2)
 

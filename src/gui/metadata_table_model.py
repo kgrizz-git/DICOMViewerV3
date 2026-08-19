@@ -4,7 +4,8 @@ Metadata panel — group-heading delegate and pure tag-list helpers.
 ``MetadataPanel`` uses a ``QTreeWidget`` (historical plan wording referenced a
 “table model”; there is no ``QAbstractTableModel`` here). This module holds:
 
-- ``GroupHeaderDelegate`` — heading fill + heavier top rule; per-group stripe fills.
+- ``GroupHeaderDelegate`` — heading fill + 1px top/bottom hairlines; per-group
+  stripe fills.
 - Pure functions to filter, group, and format tag dicts when building tree items.
 
 An earlier ``MetadataItemDelegate`` repainted each tag row's first column at x=0 to
@@ -23,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QStyle,
@@ -44,18 +45,27 @@ GROUP_HEADER_KEY_ROLE = Qt.ItemDataRole.UserRole + 2
 # Distinct from UserRole (tag key), UserRole+1 (tag dict / export leaf count).
 STRIPE_PARITY_ROLE = Qt.ItemDataRole.UserRole + 3
 
-# Heading fill: Base stepped toward Text (palette tokens, not a hardcoded hue).
-# Earlier Base-only headings read as undifferentiated rows; loud grey/burgundy
-# fills read as floating blocks. This mix is a restrained layer on the same
-# contrast axis as the rules.
-GROUP_HEADER_FILL_STRENGTH = 0.10
+# Heading fill: fixed per theme rather than palette-mixed. A palette-relative
+# mix (Base stepped toward Text) kept landing within a few units of the window
+# chrome color (#1e1e1e dark / #f0f0f0 light) no matter which direction it was
+# pushed, since chrome sits between Base and the mid-tones a small mix reaches.
+# These are picked to clear chrome by a comfortable margin on both themes while
+# staying close enough to Base to read as "this pane," not a foreign block.
+GROUP_HEADER_FILL_DARK = QColor(0x0B, 0x0B, 0x0C)
+GROUP_HEADER_FILL_LIGHT = QColor(0xF3, 0xF3, 0xF3)
 
-# Bottom rule stays the original 1px mix; the top rule is heavier (thicker pen
-# + stronger mix) so the group boundary is the prominent edge.
-GROUP_HEADER_RULE_STRENGTH = 0.38
-GROUP_HEADER_TOP_RULE_STRENGTH = 0.55
-GROUP_HEADER_TOP_RULE_WIDTH = 2.0
-GROUP_HEADER_EXTRA_HEIGHT = 4
+# 1px top/bottom hairlines. Dark theme lightens both relative to the fill;
+# light theme darkens both — a light "highlight" edge in light theme kept
+# reading as fill-colored, since there was no headroom left above the fill
+# before hitting the tag rows' white. Bottom is one step fainter than top so
+# the pair doesn't read as a boxed-in card.
+GROUP_HEADER_TOP_RULE_WIDTH = 1.0
+GROUP_HEADER_BOTTOM_RULE_WIDTH = 1.0
+GROUP_HEADER_TOP_RULE_DARK = QColor(0x32, 0x32, 0x33)
+GROUP_HEADER_TOP_RULE_LIGHT = QColor(0xCC, 0xCC, 0xCC)
+GROUP_HEADER_BOTTOM_RULE_DARK = QColor(0x2D, 0x2D, 0x2E)
+GROUP_HEADER_BOTTOM_RULE_LIGHT = QColor(0xD3, 0xD3, 0xD3)
+
 GROUP_HEADER_FONT_SCALE = 1.1
 
 
@@ -71,20 +81,42 @@ def _palette_mix(palette: QPalette, strength: float) -> QColor:
     )
 
 
-def group_header_rule_color(palette: QPalette) -> QColor:
-    """Color of the 1px rule below a group heading."""
-    return _palette_mix(palette, GROUP_HEADER_RULE_STRENGTH)
+def _is_dark_theme_palette(palette: QPalette) -> bool:
+    """True when the tree's Base color reads as a dark-theme background."""
+    return palette.color(QPalette.ColorRole.Base).lightness() < 128
+
+
+def group_header_fill_color(palette: QPalette) -> QColor:
+    """Heading band: fixed per-theme fill, clear of both Base and window chrome."""
+    return (
+        GROUP_HEADER_FILL_DARK
+        if _is_dark_theme_palette(palette)
+        else GROUP_HEADER_FILL_LIGHT
+    )
 
 
 def group_header_top_rule_color(palette: QPalette) -> QColor:
-    """Color of the heavier rule above a group heading."""
-    return _palette_mix(palette, GROUP_HEADER_TOP_RULE_STRENGTH)
+    """1px top hairline: lighter than the fill in dark theme, darker in light."""
+    return (
+        GROUP_HEADER_TOP_RULE_DARK
+        if _is_dark_theme_palette(palette)
+        else GROUP_HEADER_TOP_RULE_LIGHT
+    )
+
+
+def group_header_bottom_rule_color(palette: QPalette) -> QColor:
+    """1px bottom hairline: same direction as the top rule, one step fainter."""
+    return (
+        GROUP_HEADER_BOTTOM_RULE_DARK
+        if _is_dark_theme_palette(palette)
+        else GROUP_HEADER_BOTTOM_RULE_LIGHT
+    )
 
 
 def group_header_colors(palette: QPalette) -> tuple[QColor, QColor]:
     """Return (background, foreground) for a group heading row."""
     return (
-        _palette_mix(palette, GROUP_HEADER_FILL_STRENGTH),
+        group_header_fill_color(palette),
         palette.color(QPalette.ColorRole.Text),
     )
 
@@ -97,8 +129,7 @@ def _row_index(index):
 def style_group_header_item(item: QTreeWidgetItem, tree: QTreeWidget) -> None:
     """Apply tokenized fill and a bold relative font bump.
 
-    Extra height is owned by ``GroupHeaderDelegate.sizeHint`` so it is not
-    applied twice.
+    Row height follows the bold ~10% font bump; no extra padding.
     """
     font = QFont(tree.font())
     font.setBold(True)
@@ -171,7 +202,8 @@ class MetadataTagTree(QTreeWidget):
 
     def drawRow(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
         row = _row_index(index)
-        if row.data(GROUP_HEADER_KEY_ROLE) is not None:
+        is_header = row.data(GROUP_HEADER_KEY_ROLE) is not None
+        if is_header:
             painter.fillRect(option.rect, group_header_colors(option.palette)[0])
         elif (
             not _index_has_item_background(row)
@@ -182,25 +214,41 @@ class MetadataTagTree(QTreeWidget):
                 option.palette.color(QPalette.ColorRole.AlternateBase),
             )
         super().drawRow(painter, option, index)
+        if is_header:
+            self._paint_header_rules(painter, option)
+
+
+    def _paint_header_rules(
+        self, painter: QPainter, option: QStyleOptionViewItem
+    ) -> None:
+        """Draw 1px top and bottom hairlines across the full row, including the gutter."""
+        viewport_width = self.viewport().width()
+        painter.fillRect(
+            0,
+            option.rect.bottom(),
+            viewport_width,
+            1,
+            group_header_bottom_rule_color(option.palette),
+        )
+        painter.save()
+        top_pen = QPen(group_header_top_rule_color(option.palette))
+        top_pen.setWidthF(GROUP_HEADER_TOP_RULE_WIDTH)
+        painter.setPen(top_pen)
+        painter.drawLine(0, option.rect.top(), viewport_width - 1, option.rect.top())
+        painter.restore()
 
 
 class GroupHeaderDelegate(QStyledItemDelegate):
     """
     Heading chrome plus O(1) per-group stripe fills.
 
-    Headings use a restrained palette-mixed fill, a heavier top rule, and a
-    1px bottom rule. Hover/selection are dropped for headings so Qt cannot
-    wash the band out. Tag rows with stripe parity 1 fill AlternateBase
-    unless they already have an item background (edited highlight). Roles are
-    stored on column 0 and read via ``siblingAtColumn(0)`` so every cell of
-    the row gets the same treatment.
+    Headings use a fixed per-theme fill and 1px top/bottom hairlines painted in
+    ``drawRow`` so they reach the pane's left edge. Hover/selection are dropped
+    for headings so Qt cannot wash the band out. Tag rows with stripe parity 1
+    fill AlternateBase unless they already have an item background (edited
+    highlight). Roles are stored on column 0 and read via ``siblingAtColumn(0)``
+    so every cell of the row gets the same treatment.
     """
-
-    def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
-        hint = super().sizeHint(option, index)
-        if _row_index(index).data(GROUP_HEADER_KEY_ROLE) is None:
-            return hint
-        return QSize(hint.width(), hint.height() + GROUP_HEADER_EXTRA_HEIGHT)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
         row = _row_index(index)
@@ -220,16 +268,6 @@ class GroupHeaderDelegate(QStyledItemDelegate):
         option.state &= ~QStyle.StateFlag.State_Selected
         painter.fillRect(option.rect, group_header_colors(option.palette)[0])
         super().paint(painter, option, index)
-
-        painter.save()
-        rect = option.rect
-        top_pen = QPen(group_header_top_rule_color(option.palette))
-        top_pen.setWidthF(GROUP_HEADER_TOP_RULE_WIDTH)
-        painter.setPen(top_pen)
-        painter.drawLine(rect.left(), rect.top() + 1, rect.right(), rect.top() + 1)
-        painter.setPen(QPen(group_header_rule_color(option.palette)))
-        painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
-        painter.restore()
 
 
 def metadata_row_depth(tag_data: dict[str, Any]) -> int:

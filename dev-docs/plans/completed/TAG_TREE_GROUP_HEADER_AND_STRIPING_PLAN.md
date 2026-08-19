@@ -2,7 +2,7 @@
 
 **Created:** 2026-08-16  
 **Last updated:** 2026-08-17  
-**Status:** implemented (PR on `feature/tag-tree-group-header-striping`)  
+**Status:** implemented (PR 69 / `feature/tag-tree-group-header-striping` merged to `main`)  
 **Priority:** P2  
 **Phase:** B of the tag-tree visual-hierarchy workstream  
 **Primary surface:** **left-pane metadata panel** (`src/gui/metadata_panel.py`)  
@@ -30,14 +30,14 @@ as a Phase B commitment.
 
 ## Context and links
 
-- **Hub:** [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](TAG_TREE_VISUAL_HIERARCHY_PLAN.md)
+- **Hub:** [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](../supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md)
 - **Investigation:** [tag-tree-visual-hierarchy-investigation-2026-08-16.md](../../ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md)
   (Goals 1–3; Part 8–9 scope)
 - **Backlog (original left-pane ask):** [TO_DO.md](../../TO_DO.md) — “Tag browser
   group-heading styling (left pane)”
-- **Export richer styling (open):** [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) (D-export-visual)
-- **Next:** [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) (Phase C — metadata-first)
-- **Design:** [DESIGN.md](../../../DESIGN.md); [UX remediation plan](UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md)
+- **Export richer styling (open):** [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](../supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) (D-export-visual; decision `(c) none`)
+- **Next:** [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](../supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) (Phase C — metadata-first)
+- **Design:** [DESIGN.md](../../../DESIGN.md); [UX remediation plan](../supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md)
 
 ## Goal and success criteria
 

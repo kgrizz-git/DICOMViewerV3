@@ -23,8 +23,8 @@ as one mega-diff.
 
 ### After Phase C — still tag-tree / metadata
 
-- [x] **(D-export-visual)** **Open question — export tree richer formatting.**
-      **Decision (Phase B item B7, 2026-08-17): (c) none.** The export
+- [x] **(D-export-visual) Recorded decision — export tree richer formatting.**
+      **Phase B item B7 decided (c) none on 2026-08-17.** The export
       `tags_tree` stays ID + name for selection; metadata now carries header
       chrome + per-group stripes. Export gets Goal 3 checkbox glyphs only
       (scoped `::indicator:indeterminate` accent fill). Do not apply

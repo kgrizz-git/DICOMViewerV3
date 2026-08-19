@@ -12,10 +12,12 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
 from gui.metadata_panel import MetadataPanel
 from gui.metadata_table_model import (
-    GROUP_HEADER_EXTRA_HEIGHT,
+    GROUP_HEADER_BOTTOM_RULE_WIDTH,
     GROUP_HEADER_FONT_SCALE,
     GROUP_HEADER_TOP_RULE_WIDTH,
     STRIPE_PARITY_ROLE,
+    group_header_bottom_rule_color,
+    group_header_fill_color,
     group_header_top_rule_color,
 )
 
@@ -50,7 +52,7 @@ def _group_items(panel: MetadataPanel):
 
 
 def test_group_header_font_and_height_are_bumped(qapp) -> None:
-    """Goal 1: headings are bold, ~10% larger, and slightly taller than a tag row."""
+    """Goal 1: headings are bold and ~10% larger, without extra vertical padding."""
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
     header = _group_items(panel)[0]
@@ -77,7 +79,7 @@ def test_group_header_font_and_height_are_bumped(qapp) -> None:
         option, panel.tree_widget.indexFromItem(tag_row, 0)
     ).height()
     assert tag_h > 0
-    assert header_h >= tag_h + GROUP_HEADER_EXTRA_HEIGHT
+    assert header_h >= tag_h
     assert panel.tree_widget.isAnimated() is False
     assert panel.tree_widget.alternatingRowColors() is False
 
@@ -145,29 +147,55 @@ def test_odd_stripe_uses_alternate_base_in_paint(qapp) -> None:
         assert abs(sampled.blue() - stripe.blue()) <= 30
 
 
-def test_heavier_top_rule_is_visible_on_header(qapp) -> None:
-    """HiDPI-style smoke: the top rule is thicker than the bottom rule."""
+def test_header_top_and_bottom_rules_are_one_px_and_full_width(qapp) -> None:
+    """Top/bottom hairlines are 1px, distinct from the fill, and reach the left gutter.
+
+    Dark theme lightens both rules relative to the fill; light theme darkens
+    them instead — a light "highlight" edge had no headroom left above the
+    fill before hitting the tag rows' white, so light theme's rules step
+    toward black instead.
+    """
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
+    panel.resize(720, 420)
+    panel.show()
+    qapp.processEvents()
+    tree = panel.tree_widget
     header = _group_items(panel)[0]
-    band, _fg = panel._group_header_colors()
-    top_rule = group_header_top_rule_color(panel.tree_widget.palette())
+    palette = tree.palette()
+    band = group_header_fill_color(palette)
+    top_rule = group_header_top_rule_color(palette)
+    bottom_rule = group_header_bottom_rule_color(palette)
+    is_dark = palette.color(QPalette.ColorRole.Base).lightness() < 128
+    if is_dark:
+        assert top_rule.lightness() > band.lightness()
+        assert bottom_rule.lightness() > band.lightness()
+    else:
+        assert top_rule.lightness() < band.lightness()
+        assert bottom_rule.lightness() < band.lightness()
+    assert GROUP_HEADER_TOP_RULE_WIDTH == 1.0
+    assert GROUP_HEADER_BOTTOM_RULE_WIDTH == 1.0
 
-    index = panel.tree_widget.indexFromItem(header, 0)
-    height = 22
-    pixmap = QPixmap(240, height)
+    index = tree.indexFromItem(header, 0)
+    option = QStyleOptionViewItem()
+    option.initFrom(tree)
+    option.rect = tree.visualRect(index)
+    option.palette = palette
+    option.state = QStyle.StateFlag.State_Enabled
+    pixmap = QPixmap(tree.viewport().size())
     pixmap.fill(band)
     painter = QPainter(pixmap)
-    option = QStyleOptionViewItem()
-    option.rect = QRect(0, 0, 240, height)
-    option.palette = panel.tree_widget.palette()
-    option.state = QStyle.StateFlag.State_Enabled
-    panel.tree_widget.itemDelegate().paint(painter, option, index)
+    tree.drawRow(painter, option, index)
     painter.end()
     image = pixmap.toImage()
-    top_pixel = image.pixelColor(120, 1)
-    assert abs(top_pixel.lightness() - top_rule.lightness()) <= 40
-    assert GROUP_HEADER_TOP_RULE_WIDTH >= 2.0
+    top_y = max(option.rect.top(), 0)
+    bottom_y = min(option.rect.bottom(), image.height() - 1)
+    left_pixel = image.pixelColor(2, top_y)
+    mid_pixel = image.pixelColor(min(120, image.width() - 1), top_y)
+    mid_bottom_pixel = image.pixelColor(min(120, image.width() - 1), bottom_y)
+    assert abs(left_pixel.lightness() - top_rule.lightness()) <= 40
+    assert abs(mid_pixel.lightness() - top_rule.lightness()) <= 40
+    assert abs(mid_bottom_pixel.lightness() - bottom_rule.lightness()) <= 40
 
 
 def test_panel_stripe_recompute_scales_near_linearly(qapp) -> None:
@@ -263,3 +291,264 @@ def test_themed_heading_fill_and_name_column_stripe(qapp) -> None:
         assert abs(selected_px.lightness() - pane.lightness()) > 20
     finally:
         qapp.setStyleSheet(previous)
+
+
+# --- Phase C (tier ladder, mono Tag/VR, filter highlight, empty state, hover QSS) ---
+
+from pathlib import Path
+
+from pydicom.sequence import Sequence
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QTreeWidgetItem
+
+from gui.main_window_theme import get_theme_stylesheet
+from gui.metadata_tree_chrome import (
+    METADATA_TIER_ROLE,
+    FilterHighlightCache,
+    casefold_source_index_map,
+    folded_match_source_spans,
+    is_metadata_value_empty,
+    metadata_disabled_text_color,
+    metadata_tag_mono_font,
+    on_metadata_panel_palette_change,
+    source_span_for_folded_span,
+)
+
+
+def _dataset_with_nested_code_sequence():
+    from pydicom.dataset import Dataset
+
+    ds = Dataset()
+    ds.PatientName = "Test^Patient"
+    ds.PatientID = "12345"
+    item = Dataset()
+    item.CodeValue = "113100"
+    item.CodingSchemeDesignator = "DCM"
+    item.CodeMeaning = "Basic Application Confidentiality Profile"
+    ds.DeidentificationMethodCodeSequence = Sequence([item])
+    return ds
+
+
+def _dataset_with_empty_value_tag():
+    from pydicom.dataset import Dataset
+    from pydicom.tag import Tag
+
+    ds = Dataset()
+    ds.PatientName = "Test^Patient"
+    ds.add_new(Tag(0x0010, 0x0021), "LO", "")
+    return ds
+
+
+def _find_sequence_parent(panel: MetadataPanel) -> QTreeWidgetItem | None:
+    for group in _group_items(panel):
+        for index in range(group.childCount()):
+            child = group.child(index)
+            if child.data(0, METADATA_TIER_ROLE) == "sequence":
+                return child
+    return None
+
+
+def _find_first_leaf(panel: MetadataPanel) -> QTreeWidgetItem | None:
+    for group in _group_items(panel):
+        group.setExpanded(True)
+        for index in range(group.childCount()):
+            child = group.child(index)
+            if child.data(0, METADATA_TIER_ROLE) == "element":
+                return child
+    return None
+
+
+def test_sequence_parent_bolder_than_leaf(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_nested_code_sequence())
+    groups = _group_items(panel)
+    groups[0].setExpanded(True)
+    sequence = _find_sequence_parent(panel)
+    assert sequence is not None
+    sequence.setExpanded(True)
+    leaf = None
+    for index in range(sequence.childCount()):
+        candidate = sequence.child(index)
+        if candidate.data(0, METADATA_TIER_ROLE) == "element":
+            leaf = candidate
+            break
+        candidate.setExpanded(True)
+        for sub in range(candidate.childCount()):
+            sub_child = candidate.child(sub)
+            if sub_child.data(0, METADATA_TIER_ROLE) == "element":
+                leaf = sub_child
+                break
+        if leaf is not None:
+            break
+    assert leaf is not None
+    assert sequence.font(0).bold()
+    assert not leaf.font(0).bold()
+    assert sequence.font(0).weight() >= leaf.font(0).weight()
+
+
+def test_tag_and_vr_columns_use_monospace_family(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    row = header.child(0)
+    mono = metadata_tag_mono_font(panel.tree_widget.font())
+    expected = mono.families()[0].lower()
+    assert expected in row.font(0).family().lower() or row.font(0).families()[0].lower() in (
+        "consolas",
+        "menlo",
+        "monospace",
+    )
+    assert row.font(2).families()[0].lower() in ("consolas", "menlo", "monospace")
+
+
+def test_empty_value_uses_disabled_foreground(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_empty_value_tag())
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    value_item = None
+    for index in range(header.childCount()):
+        child = header.child(index)
+        if child.text(3) == "":
+            value_item = child
+            break
+    assert value_item is not None
+    disabled = metadata_disabled_text_color(panel.tree_widget.palette())
+    fg = value_item.foreground(3).color()
+    assert fg.red() == disabled.red()
+    assert fg.green() == disabled.green()
+    assert fg.blue() == disabled.blue()
+    assert is_metadata_value_empty("")
+
+
+def test_casefold_source_map_handles_eszett_expansion() -> None:
+    mapping = casefold_source_index_map("Straße")
+    assert "".join(ch.casefold() for ch in "Straße") == "strasse"
+    assert len(mapping) == len("strasse")
+    start, end = source_span_for_folded_span(mapping, 4, 6)
+    assert "Straße"[start:end] == "ß"
+
+
+def test_folded_match_spans_coalesce_eszett_for_single_s() -> None:
+    spans = folded_match_source_spans("Straße", "s")
+    assert spans == [(0, 1), (4, 5)]
+    assert "Straße"[0:1] == "S"
+    assert "Straße"[4:5] == "ß"
+
+
+def test_filter_highlight_cache_paints_match_without_qtextdocument(qapp) -> None:
+    cache = FilterHighlightCache()
+    pixmap = QPixmap(200, 20)
+    pixmap.fill(QColor("#ffffff"))
+    painter = QPainter(pixmap)
+    fg = QColor("#101010")
+    hl = QColor("#ffee88")
+    font = QFont("Arial", 10)
+    cache.draw(painter, QRect(2, 2, 180, 16), "PatientName", "name", fg, hl, font)
+    painter.end()
+    assert len(cache._cache) == 1
+    image = pixmap.toImage()
+    # Highlight band should differ from plain background.
+    assert image.pixelColor(40, 10).lightness() != image.pixelColor(4, 10).lightness()
+
+
+def test_delegate_filter_highlight_paints_on_match(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    panel.search_edit.setText("Patient")
+    panel._populate_tags("Patient")
+    assert panel._metadata_tree_delegate._filter_needle == "Patient"
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    row = header.child(0)
+    delegate = panel._metadata_tree_delegate
+    assert delegate is not None
+    index = panel.tree_widget.indexFromItem(row, 1)
+    pixmap = QPixmap(240, 20)
+    pixmap.fill(QColor("#ffffff"))
+    painter = QPainter(pixmap)
+    option = QStyleOptionViewItem()
+    option.rect = QRect(0, 0, 240, 20)
+    option.palette = panel.tree_widget.palette()
+    option.state = QStyle.StateFlag.State_Enabled
+    delegate.paint(painter, option, index)
+    painter.end()
+    assert pixmap.toImage().pixelColor(60, 10).lightness() != pixmap.toImage().pixelColor(4, 10).lightness()
+
+
+def test_filter_no_match_shows_clear_and_restores_rows(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    panel._populate_tags("zzznomatchzzz")
+    panel.show()
+    qapp.processEvents()
+    banner = panel._filter_empty_banner
+    assert banner is not None
+    assert banner.isVisible()
+    from PySide6.QtWidgets import QPushButton
+
+    clear_btn = banner.findChild(QPushButton, "metadata_filter_clear_button")
+    assert clear_btn is not None
+    clear_btn.click()
+    qapp.processEvents()
+    assert not banner.isVisible()
+    assert panel.search_edit.text() == ""
+    header = _group_items(panel)[0]
+    assert header.childCount() > 0
+
+
+def test_clearing_dataset_hides_filter_empty_banner(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_two_groups())
+    panel._populate_tags("zzznomatchzzz")
+    panel.show()
+    qapp.processEvents()
+    banner = panel._filter_empty_banner
+    assert banner is not None
+    assert banner.isVisible()
+    panel.set_dataset(None)
+    assert not banner.isVisible()
+
+
+def test_empty_value_recolors_on_palette_change(qapp) -> None:
+    panel = MetadataPanel()
+    panel.set_dataset(_dataset_with_empty_value_tag())
+    header = _group_items(panel)[0]
+    header.setExpanded(True)
+    value_item = None
+    for index in range(header.childCount()):
+        child = header.child(index)
+        if child.text(3) == "":
+            value_item = child
+            break
+    assert value_item is not None
+    palette = panel.tree_widget.palette()
+    palette.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(11, 22, 33)
+    )
+    panel.tree_widget.setPalette(palette)
+    on_metadata_panel_palette_change(panel)
+    fg = value_item.foreground(3).color()
+    assert fg.red() == 11
+    assert fg.green() == 22
+    assert fg.blue() == 33
+
+
+def test_metadata_tag_tree_hover_rule_in_both_qss_files() -> None:
+    root = Path(__file__).resolve().parents[1]
+    for name in ("dark.qss", "light.qss"):
+        text = (root / "resources" / "themes" / name).read_text(encoding="utf-8")
+        assert "QTreeWidget#metadata_tag_tree::item:hover" in text
+        assert "{metadata_tag_hover}" in text
+        assert "background-color: transparent" not in text.split("metadata_tag_tree")[1].split("tag_export")[0]
+
+
+def test_metadata_tag_tree_selection_token_in_theme_stylesheet() -> None:
+    sheet = get_theme_stylesheet("light", "/w.png", "/b.png", accent_id="steel-blue")
+    assert "QTreeWidget#metadata_tag_tree::item:selected" in sheet
+    assert "metadata_tag_selection" not in sheet  # substituted
+    assert "metadata_tag_selection_fg" not in sheet
+    chunk = sheet.split("metadata_tag_tree::item:selected")[1][:180]
+    assert "#" in chunk
+    assert "color: #ffffff" not in chunk

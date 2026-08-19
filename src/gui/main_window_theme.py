@@ -40,7 +40,7 @@ def _blend_hex_colors(base: str, tint: str, tint_fraction: float) -> str:
 
 
 def _boost_hex_saturation(color: str, factor: float) -> str:
-    """Increase a dark tint's chroma without making its value brighter."""
+    """Scale a tint's chroma without changing its value (factor < 1 desaturates)."""
     red, green, blue = (int(color[index : index + 2], 16) / 255 for index in (1, 3, 5))
     hue, saturation, value = rgb_to_hsv(red, green, blue)
     saturated = hsv_to_rgb(hue, min(1.0, saturation * factor), value)
@@ -48,10 +48,36 @@ def _boost_hex_saturation(color: str, factor: float) -> str:
 
 
 def metadata_tag_band_color(theme: str, accent: str) -> str:
-    """Return the restrained, accent-derived alternate-row color for metadata tags."""
+    """Return a grey-leaning, accent-hued alternate-row color for metadata tags.
+
+    The selected accent still shifts the stripe hue; chroma is kept lower than a
+    raw mix so bands stay faint in both themes.
+    """
     if theme == "dark":
-        return _boost_hex_saturation(_blend_hex_colors("#141414", accent, 0.045), 1.18)
-    return _blend_hex_colors("#ffffff", accent, 0.08)
+        return _blend_hex_colors("#141414", accent, 0.045)
+    mixed = _blend_hex_colors("#ffffff", accent, 0.08)
+    return _boost_hex_saturation(mixed, 0.72)
+
+
+def metadata_tag_hover_color(theme: str, accent: str) -> str:
+    """Tokenized hover wash for ``#metadata_tag_tree`` rows (not global tree grey)."""
+    if theme == "dark":
+        return _blend_hex_colors("#141414", accent, 0.12)
+    return _blend_hex_colors("#ffffff", accent, 0.14)
+
+
+def metadata_tag_selection_color(theme: str, accent: str) -> str:
+    """Low-contrast selection fill for metadata tag rows (readable on stripe rows)."""
+    if theme == "dark":
+        return _boost_hex_saturation(_blend_hex_colors("#141414", accent, 0.28), 1.12)
+    return _blend_hex_colors("#ffffff", accent, 0.22)
+
+
+def metadata_tag_selection_fg_color(theme: str) -> str:
+    """Foreground on the low-contrast metadata selection fill (not white-on-pale)."""
+    if theme == "dark":
+        return "#e0e0e0"
+    return "#000000"
 
 
 def _themes_dir() -> Path:
@@ -91,7 +117,10 @@ def get_theme_stylesheet(
     * ``{accent_dark}``   – darker accent (light-theme hover/press states)
     * ``{accent_soft}``   – pale accent tint for readable light-theme rows
     * ``{accent_muted}``  – dark accent tint for readable dark-theme rows
-    * ``{metadata_tag_band}`` – deliberately subtle tint for metadata row bands
+    * ``{metadata_tag_band}`` – accent-hued, desaturated tint for metadata row bands
+    * ``{metadata_tag_hover}`` – scoped metadata-tree hover wash
+    * ``{metadata_tag_selection}`` – scoped metadata-tree selection fill
+    * ``{metadata_tag_selection_fg}`` – scoped metadata-tree selection text
 
     Args:
         theme: ``"light"`` or ``"dark"``
@@ -118,6 +147,9 @@ def get_theme_stylesheet(
     effective_theme = qss_file.stem
     preset = get_preset(accent_id)
     metadata_tag_band = metadata_tag_band_color(effective_theme, preset.accent)
+    metadata_tag_hover = metadata_tag_hover_color(effective_theme, preset.accent)
+    metadata_tag_selection = metadata_tag_selection_color(effective_theme, preset.accent)
+    metadata_tag_selection_fg = metadata_tag_selection_fg_color(effective_theme)
     stylesheet = qss_file.read_text(encoding="utf-8")
     return (
         stylesheet
@@ -129,6 +161,9 @@ def get_theme_stylesheet(
         .replace("{accent_soft}", preset.accent_soft)
         .replace("{accent_muted}", preset.accent_muted)
         .replace("{metadata_tag_band}", metadata_tag_band)
+        .replace("{metadata_tag_hover}", metadata_tag_hover)
+        .replace("{metadata_tag_selection}", metadata_tag_selection)
+        .replace("{metadata_tag_selection_fg}", metadata_tag_selection_fg)
     )
 
 

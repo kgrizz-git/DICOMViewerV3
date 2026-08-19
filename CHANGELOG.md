@@ -7,6 +7,18 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Metadata group headers:** Fill steps from the Phase B mix most of the way toward
+  black in dark theme or #ffffff in light theme so headings no longer match the window chrome.
+  A faint 1 px lighter top hairline spans the full row, including the indent
+  gutter; the bottom rule and extra row padding are gone. Per-group stripes
+  still follow the selected accent hue with lowered chroma. **Semantic
+  versioning note: patch.**
+- **Metadata tag tree hierarchy (Phase C):** Left-pane rows use a restrained
+  sequence/item/leaf type ladder, platform-monospace Tag/VR columns, cached
+  filter-match highlighting, dimmed empty values, and a no-match Clear control.
+  Export DICOM Tags gains Expand All / Collapse All (Ctrl+Shift+E / Ctrl+Shift+C)
+  and a context menu, without header/stripe/tier chrome.
+  **Semantic versioning note: minor.**
 - **Metadata tag tree hierarchy (Phase B):** Left-pane group headings use a
   restrained palette-mixed fill, a heavier top rule, a ~10% font bump, and
   slightly taller rows. Alternating row shades reset per group. Export picker

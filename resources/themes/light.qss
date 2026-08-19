@@ -181,14 +181,31 @@
                 }
 
                 /* The left-pane tag list gets a low-contrast version of the selected
-                   accent: enough for tracking, but never a competing visual band. */
+                   accent: enough for tracking, but never a competing visual band.
+                   The pane also gets its own frame, distinct from the generic
+                   QTreeWidget border above, so it reads as a bounded region
+                   against the toolbar/viewport next to it. */
                 QTreeWidget#metadata_tag_tree {
                     alternate-background-color: {metadata_tag_band};
+                    border: 1px solid #b8b8b8;
                 }
 
                 QTreeWidget#metadata_tag_tree::item {
                     padding: 3px 2px;
                     border-bottom: 1px solid #e7eaed;
+                }
+
+                QTreeWidget#metadata_tag_tree::item:hover {
+                    background-color: {metadata_tag_hover};
+                }
+
+                QTreeWidget#metadata_tag_tree::item:selected {
+                    background-color: {metadata_tag_selection};
+                    color: {metadata_tag_selection_fg};
+                }
+
+                QTreeWidget#metadata_tag_tree::item:selected:hover {
+                    background-color: {metadata_tag_selection};
                 }
 
                 /* Tag export picker — Goal 3 indeterminate glyph (Phase B). */

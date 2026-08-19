@@ -141,7 +141,7 @@ class TagExportDialogSelectionMixin:
         Outside filtering this is a no-op in Phase A; Phase B uses it for
         stripe parity.
         """
-        if self._is_filtering:
+        if self._is_filtering or self._suspend_expand_signals:
             return
         del item
 

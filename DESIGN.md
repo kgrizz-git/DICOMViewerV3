@@ -1,7 +1,7 @@
 # DESIGN.md — MPDV Design Specification
 
 **Project:** Medical Physics DICOM Viewer (MPDV)  
-**Last updated:** 2026-08-17  
+**Last updated:** 2026-08-18  
 **Status:** Active — maintained alongside the [UX Assessment Remediation Plan](dev-docs/plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md)
 
 This document is the single source of truth for visual design, interaction design, and naming conventions across the application. All UI code and QSS changes must be consistent with what is defined here. When this document conflicts with the code, update the code; when the code introduces a new pattern, document it here before the change is merged.
@@ -167,10 +167,15 @@ The light theme is intentionally conventional — neutral grays, no tinting. The
 | Splitter — visual at rest | 1 px centred line, `--border` colour | Hit zone is transparent; only the hairline is drawn |
 | Splitter — visual on hover | Full 5 px fill, `--border` colour | Expands to fill hit zone — clear "grab me" signal |
 | QGroupBox border | 1 px `--border`, 4 px radius | Title text in `--fg-secondary` |
-| Metadata group header fill | Base mixed 10% toward Text | Tokenized layer on the same contrast axis as the heading rules — not a separate hue |
-| Metadata group header rules | 2 px top (55% Base→Text), 1 px bottom (38%) | Heavier top edge marks the group boundary |
-| Metadata per-group stripe | AlternateBase / `{metadata_tag_band}` | Parity resets at each group header; headers do not stripe |
+| Metadata group header fill | Base mixed 10% toward Text, then 65% toward black (dark theme) or #ffffff (light theme) | Separates headings from window chrome without a new hue |
+| Metadata group header rules | 1 px top hairline, faintly lighter than the fill; no bottom rule | Full-row line including the indent gutter |
+| Metadata per-group stripe | AlternateBase / `{metadata_tag_band}` (accent hue, lowered chroma) | Parity resets at each group header; headers do not stripe |
 | Export tag-tree partial checkbox | `{accent}` fill on `#tag_export_tags_tree::indicator:indeterminate` | Goal 3 glyph only; no header/stripe parity on export |
+| Metadata tier bars | 3 px left edge, palette-mixed (sequence stronger than item) | Group headers keep Phase B fill/rules; no kind-icon set |
+| Metadata Tag/VR typeface | Platform `Consolas, Menlo, monospace` fallback | Name/Value stay proportional; no bundled mono font in this phase |
+| Metadata filter highlight | Accent-tinted run, cached pixmap/metrics | No live `QTextDocument` in `paint()` |
+| Metadata empty values | Disabled/text-muted token | Does not override edited-row accent-soft |
+| Metadata row hover/selection | `{metadata_tag_hover}` / `{metadata_tag_selection}` | Scoped to `#metadata_tag_tree`; selection text uses `{metadata_tag_selection_fg}` |
 | Scrollbar track width | 12 px | No arrow buttons |
 | Toolbar separator | 1 px `--border` colour | |
 
@@ -198,7 +203,7 @@ To add a new preset: add an entry to `ACCENT_PRESETS` in `src/gui/accent_presets
 | Role | Family | Fallback |
 |---|---|---|
 | UI primary | IBM Plex Sans | system-ui, sans-serif |
-| Monospace (DICOM tags, values) | IBM Plex Mono | Consolas, monospace |
+| Monospace (Tag and VR columns) | IBM Plex Mono | Consolas, Menlo, monospace |
 | Overlay (on image) | IBM Plex Sans | (no fallback — set programmatically) |
 
 Open Sans and Noto Sans must not appear in the UI. The Annotation Options dialog currently loads them via system font fallback; fix by explicitly constructing `QFont("IBM Plex Sans", ...)` on each widget.
@@ -222,6 +227,9 @@ Qt supports two sizing modes and they behave differently across platforms and DP
 **Rule:** Use **point sizes** for all standard UI widgets (labels, buttons, menus, dialogs). Use pixel sizes only for the image overlay font. The pt column in §3.2 gives the equivalent values at 96 DPI — use those when constructing `QFont` objects in code.
 
 The app currently sets the application-wide font in one place (search for `setFont` on `QApplication`). Prefer adjusting the app-wide font there rather than setting fonts on individual widgets, which creates maintenance debt. Override only where a specific widget genuinely needs to differ (e.g. monospace for the tag viewer).
+The left-pane metadata **Tag** and **VR** columns use a platform monospace fallback
+(`Consolas, Menlo, monospace`); IBM Plex Mono remains the documented long-term family
+and is not bundled in Phase C.
 
 ---
 
@@ -354,6 +362,8 @@ All shortcuts must be registered via `QAction.setShortcut()` or `QKeySequence.St
 | Zoom In | Ctrl++ | |
 | Zoom Out | Ctrl+- | |
 | Reset View | Ctrl+0 | |
+| Tag export dialog — Expand All | Ctrl+Shift+E | Active while Export DICOM Tags is focused |
+| Tag export dialog — Collapse All | Ctrl+Shift+C | Active while Export DICOM Tags is focused |
 
 > Shortcut table must be kept complete; add new bindings here before implementing them.
 

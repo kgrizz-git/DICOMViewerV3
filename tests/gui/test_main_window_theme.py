@@ -34,21 +34,44 @@ def test_blend_hex_colors() -> None:
 
 
 def test_boost_hex_saturation() -> None:
-    """Test boosting saturation of a hex color."""
+    """Test scaling saturation of a hex color."""
     boosted = _boost_hex_saturation("#141414", 1.18)
     assert boosted.startswith("#")
     assert len(boosted) == 7
+    # Factor < 1 must desaturate without changing the #rrggbb shape.
+    muted = _boost_hex_saturation("#3d5a80", 0.72)
+    assert muted.startswith("#")
+    assert len(muted) == 7
 
 
 def test_metadata_tag_band_color() -> None:
-    """Test metadata tag band color for dark and light themes."""
-    dark_band = metadata_tag_band_color("dark", "#2196F3")
+    """Bands stay accent-hued but greyer than a chroma-boosted mix."""
+    from colorsys import rgb_to_hsv
+
+    accent = "#2196F3"
+    dark_band = metadata_tag_band_color("dark", accent)
     assert dark_band.startswith("#")
     assert len(dark_band) == 7
 
-    light_band = metadata_tag_band_color("light", "#2196F3")
+    light_band = metadata_tag_band_color("light", accent)
     assert light_band.startswith("#")
     assert len(light_band) == 7
+
+    def hsv(color: str) -> tuple[float, float, float]:
+        red, green, blue = (int(color[index : index + 2], 16) / 255 for index in (1, 3, 5))
+        return rgb_to_hsv(red, green, blue)
+
+    accent_hue, _, _ = hsv(accent)
+    dark_hue, dark_sat, _ = hsv(dark_band)
+    light_hue, light_sat, _ = hsv(light_band)
+    assert abs(dark_hue - accent_hue) < 0.03
+    assert abs(light_hue - accent_hue) < 0.03
+    punchier_dark = _boost_hex_saturation(_blend_hex_colors("#141414", accent, 0.045), 1.18)
+    punchier_light = _blend_hex_colors("#ffffff", accent, 0.08)
+    assert dark_sat < hsv(punchier_dark)[1]
+    assert light_sat < hsv(punchier_light)[1]
+    assert metadata_tag_band_color("dark", "#a0303f") != dark_band
+    assert metadata_tag_band_color("light", "#a0303f") != light_band
 
 
 def test_themes_dir_default_and_frozen(tmp_path: Path, monkeypatch) -> None:

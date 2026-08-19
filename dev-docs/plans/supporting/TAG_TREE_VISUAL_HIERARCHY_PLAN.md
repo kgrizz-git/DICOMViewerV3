@@ -3,7 +3,7 @@
 **Created:** 2026-08-16  
 **Last updated:** 2026-08-17  
 **Status:** index (implementation lives in phased plans below)  
-**Branch (planning):** `feature/tag-tree-visual-hierarchy-plan`
+**Planning status:** Phases A and B landed on `main` via PRs 68 and 69.
 
 This file is the **entry point** for the tag-tree / visual-orientation workstream.
 The former monolithic plan was moved to an investigation document so actionable
@@ -21,9 +21,9 @@ indicator). **Phase A** owns group-header tri-state **correctness/behavior**.
 **Phase B** owns checkbox **visual presentation** (indicator glyphs) and
 **runs** the **appearance gate** (side-by-side with the restyled metadata
 panel) to decide whether export needs richer formatting; **Phase D**
-**records** the appearance-gate outcome. **Richer export-tree formatting is an
-open question** — defer by default; do not lock in header/stripe/tier parity
-on export without the appearance gate. See Phase D `D-export-visual`.
+**records** the appearance-gate outcome. **B7 decided (c) none on 2026-08-17:**
+retain the implemented checkbox indicator glyphs and do not add header/stripe/tier
+parity to export without a new visual review. See Phase D `D-export-visual`.
 
 ## Investigation (full history)
 
@@ -36,9 +36,9 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 
 | Phase | Priority | Plan | What it covers |
 |---|---|---|---|
-| **A** | P1 | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | Export Select-All → group-header tri-state **correctness/behavior**; filter guard; `tags_tree` objectName; tokenized edited-row color (metadata) |
-| **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | **Metadata:** Goals 1–2. **Export:** Goal 3 checkbox **visual presentation** (indicator glyphs) + runs appearance gate (no rich chrome locked in) |
-| **C** | P2 | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | Tier / orientation / nav on **metadata**; export only if appearance gate said so (else leave export visual alone) |
+| **A** | P1 | [TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md](../completed/TAG_EXPORT_TREE_CORRECTNESS_FIXES_PLAN.md) | Export Select-All → group-header tri-state **correctness/behavior**; filter guard; `tags_tree` objectName; tokenized edited-row color (metadata) |
+| **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | **Metadata:** Goals 1–2. **Export:** Goal 3 checkbox **visual presentation** (indicator glyphs) + runs appearance gate (no rich chrome locked in) |
+| **C** | P2 | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | Tier / orientation / nav on **metadata**; export **navigation only** (B7 = none) |
 | **D** | P3 | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | `D-export-visual` records appearance-gate outcome; other follow-ups |
 
 ## Split-out (not tag-tree scope)
@@ -56,8 +56,8 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 
 ## Quick "what to do next"
 
-1. **Phase B** (headers/stripes + export Goal 3 glyphs) is implemented; confirm
-   visually in the left-pane metadata panel, then **Phase C** on metadata
-   (tier/orientation/nav). Do not add richer export-tree formatting; retain
-   the implemented indicator glyphs — B7 recorded **(c) none**.
-2. Other Phase D / pane-toolbar items as separate PRs.
+1. **Phase C** (tier/orientation/nav + export Expand/Collapse All) is on
+   `feature/tag-tree-tier-orientation-nav`. Confirm visually in the left-pane
+   metadata panel, then **Phase D** leftovers as separate PRs. Export stays
+   checkbox + navigation — B7 recorded **(c) none**.
+2. Pane-toolbar items remain a separate plan.

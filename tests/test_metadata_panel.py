@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from core.tag_edit_history import TagEditHistoryManager
 from gui.accent_presets import DEFAULT_ACCENT_ID, get_preset
 from gui.metadata_panel import MetadataPanel
-from gui.metadata_table_model import group_header_rule_color
+from gui.metadata_table_model import group_header_fill_color
 
 
 def _dataset_with_nested_code_sequence() -> Dataset:
@@ -715,29 +715,33 @@ def test_theme_switch_recolors_existing_headings(qapp) -> None:
 
 
 def test_heading_takes_the_pane_background_and_is_ruled_off(qapp) -> None:
-    """A heading uses a restrained palette-mixed fill plus a heavier top rule.
-
-    Loud grey/burgundy bands were rejected as floating blocks; Base-only headings
-    were indistinguishable from tag rows. The fill is Base mixed toward Text.
-    """
-    from gui.metadata_table_model import group_header_top_rule_color
+    """Heading fill is a fixed per-theme color; hairlines step away from it in
+    the theme's own contrast direction (lighter in dark, darker in light)."""
+    from gui.metadata_table_model import (
+        group_header_bottom_rule_color,
+        group_header_top_rule_color,
+    )
 
     panel = MetadataPanel()
 
-    for base, text in (("#141414", "#e0e0e0"), ("#ffffff", "#000000")):
-        _apply_theme(panel, base, text)
+    for base_hex, text_hex in (("#141414", "#e0e0e0"), ("#ffffff", "#000000")):
+        _apply_theme(panel, base_hex, text_hex)
         band, fg = panel._group_header_colors()
-        pane = QColor(base)
+        pane = QColor(base_hex)
         assert not _close(band, pane), "heading fill must differ from pane Base"
-        assert _close(fg, QColor(text)), "heading text must agree with the tag rows"
+        assert _close(fg, QColor(text_hex)), "heading text must agree with the tag rows"
         # Fill stays on the pane's side of the contrast (not a flipped band).
         assert (band.lightness() < 128) == (pane.lightness() < 128)
+        fill = group_header_fill_color(panel.tree_widget.palette())
+        assert fill == band
+        if pane.lightness() < 128:
+            assert band.lightness() <= pane.lightness()
+        else:
+            assert band.lightness() >= 230
 
-        rule = group_header_rule_color(panel.tree_widget.palette())
-        top_rule = group_header_top_rule_color(panel.tree_widget.palette())
-        assert abs(rule.lightness() - pane.lightness()) >= 30
-        assert abs(top_rule.lightness() - pane.lightness()) > abs(
-            rule.lightness() - pane.lightness()
-        )
-        assert rule.saturation() <= 8, "rules stay neutral against any accent preset"
-        assert top_rule.saturation() <= 8
+        # Rules step lighter than the fill in dark theme, darker in light theme.
+        rules_lighter = pane.lightness() < 128
+        palette = panel.tree_widget.palette()
+        for rule in (group_header_top_rule_color(palette), group_header_bottom_rule_color(palette)):
+            assert (rule.lightness() > band.lightness()) == rules_lighter
+            assert rule.saturation() <= 8
