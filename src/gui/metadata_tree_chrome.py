@@ -25,6 +25,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from gui.qt_tree_widget_utils import iter_tree_children
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import (
     QColor,
@@ -434,8 +435,7 @@ def tree_has_visible_tag_rows(tree: QTreeWidget) -> bool:
     root = tree.invisibleRootItem()
 
     def walk(item: QTreeWidgetItem) -> bool:
-        for index in range(item.childCount()):
-            child = item.child(index)
+        for child in iter_tree_children(item):
             if child.isHidden():
                 continue
             if child.data(METADATA_COL_TAG, GROUP_HEADER_KEY_ROLE) is None:
@@ -447,8 +447,7 @@ def tree_has_visible_tag_rows(tree: QTreeWidget) -> bool:
                 return True
         return False
 
-    for index in range(root.childCount()):
-        group = root.child(index)
+    for group in iter_tree_children(root):
         if group.isHidden():
             continue
         if group.isExpanded() and walk(group):
@@ -583,8 +582,7 @@ def _recolor_empty_metadata_values(panel: Any) -> None:
     dataset = getattr(panel, "dataset", None)
 
     def walk(parent: QTreeWidgetItem) -> None:
-        for index in range(parent.childCount()):
-            child = parent.child(index)
+        for child in iter_tree_children(parent):
             _recolor_empty_metadata_value_row(child, disabled, history, dataset)
             walk(child)
 
