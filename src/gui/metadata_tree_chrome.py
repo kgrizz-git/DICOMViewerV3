@@ -25,7 +25,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from gui.qt_tree_widget_utils import iter_tree_children
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import (
     QColor,
@@ -57,6 +56,7 @@ from gui.metadata_table_model import (
     format_metadata_value_for_tree,
     metadata_row_kind,
 )
+from gui.qt_tree_widget_utils import iter_tree_children
 
 # Column indices (Tag=0, Name=1, VR=2, Value=3).
 METADATA_COL_TAG = 0
