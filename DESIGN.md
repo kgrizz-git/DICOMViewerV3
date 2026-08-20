@@ -1,7 +1,7 @@
 # DESIGN.md — MPDV Design Specification
 
 **Project:** Medical Physics DICOM Viewer (MPDV)  
-**Last updated:** 2026-08-18  
+**Last updated:** 2026-08-20<br>
 **Status:** Active — maintained alongside the [UX Assessment Remediation Plan](dev-docs/plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md)
 
 This document is the single source of truth for visual design, interaction design, and naming conventions across the application. All UI code and QSS changes must be consistent with what is defined here. When this document conflicts with the code, update the code; when the code introduces a new pattern, document it here before the change is merged.
@@ -167,8 +167,8 @@ The light theme is intentionally conventional — neutral grays, no tinting. The
 | Splitter — visual at rest | 1 px centred line, `--border` colour | Hit zone is transparent; only the hairline is drawn |
 | Splitter — visual on hover | Full 5 px fill, `--border` colour | Expands to fill hit zone — clear "grab me" signal |
 | QGroupBox border | 1 px `--border`, 4 px radius | Title text in `--fg-secondary` |
-| Metadata group header fill | Base mixed 10% toward Text, then 65% toward black (dark theme) or #ffffff (light theme) | Separates headings from window chrome without a new hue |
-| Metadata group header rules | 1 px top hairline, faintly lighter than the fill; no bottom rule | Full-row line including the indent gutter |
+| Metadata group header fill | Fixed `#0B0B0C` (dark) / `#F3F3F3` (light); bold at the tree font size (`GROUP_HEADER_FONT_SCALE = 1`) | Separates headings from window chrome without a new hue |
+| Metadata group header rules | 1 px top hairline; 1 px bottom hairline at 65% of its token opacity | Full-row lines including the indent gutter |
 | Metadata per-group stripe | AlternateBase / `{metadata_tag_band}` (accent hue, lowered chroma) | Parity resets at each group header; headers do not stripe |
 | Export tag-tree partial checkbox | `{accent}` fill on `#tag_export_tags_tree::indicator:indeterminate` | Goal 3 glyph only; no header/stripe parity on export |
 | Metadata tier bars | 3 px left edge, palette-mixed (sequence stronger than item) | Group headers keep Phase B fill/rules; no kind-icon set |

@@ -1,9 +1,9 @@
 # Tag Tree Visual Hierarchy — Plan Hub
 
 **Created:** 2026-08-16  
-**Last updated:** 2026-08-17  
+**Last updated:** 2026-08-20<br>
 **Status:** index (implementation lives in phased plans below)  
-**Planning status:** Phases A and B landed on `main` via PRs 68 and 69.
+**Planning status:** Phases A and B landed on `main` via PRs 68 and 69. Header chrome polish (drop 10% font scale; 65% bottom-rule opacity) is a separate small plan.
 
 This file is the **entry point** for the tag-tree / visual-orientation workstream.
 The former monolithic plan was moved to an investigation document so actionable
@@ -40,6 +40,7 @@ export rich chrome deferred / gated). **Not an implementation checklist.**
 | **B** | P2 | [TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md](../completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md) | **Metadata:** Goals 1–2. **Export:** Goal 3 checkbox **visual presentation** (indicator glyphs) + runs appearance gate (no rich chrome locked in) |
 | **C** | P2 | [TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md](TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md) | Tier / orientation / nav on **metadata**; export **navigation only** (B7 = none) |
 | **D** | P3 | [TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md](TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md) | `D-export-visual` records appearance-gate outcome; other follow-ups |
+| **B polish** | P3 | [METADATA_GROUP_HEADER_CHROME_POLISH_PLAN.md](../completed/METADATA_GROUP_HEADER_CHROME_POLISH_PLAN.md) | **Completed 2026-08-20:** metadata headers use `GROUP_HEADER_FONT_SCALE = 1`; 1 px bottom rule at 65% opacity; DESIGN synced |
 
 ## Split-out (not tag-tree scope)
 
