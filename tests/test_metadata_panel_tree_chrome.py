@@ -12,6 +12,8 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
 from gui.metadata_panel import MetadataPanel
 from gui.metadata_table_model import (
+    GROUP_HEADER_BOTTOM_RULE_DARK,
+    GROUP_HEADER_BOTTOM_RULE_OPACITY_FACTOR,
     GROUP_HEADER_BOTTOM_RULE_WIDTH,
     GROUP_HEADER_FONT_SCALE,
     GROUP_HEADER_TOP_RULE_WIDTH,
@@ -51,8 +53,8 @@ def _group_items(panel: MetadataPanel):
     return [root.child(i) for i in range(root.childCount())]
 
 
-def test_group_header_font_and_height_are_bumped(qapp) -> None:
-    """Goal 1: headings are bold and ~10% larger, without extra vertical padding."""
+def test_group_header_font_and_height_match_the_tree(qapp) -> None:
+    """Goal 1: headings are bold at tree size, without extra vertical padding."""
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_two_groups())
     header = _group_items(panel)[0]
@@ -66,7 +68,8 @@ def test_group_header_font_and_height_are_bumped(qapp) -> None:
     header_size = header_font.pointSizeF() or float(header_font.pointSize())
     tree_size = tree_font.pointSizeF() or float(tree_font.pointSize() or 12)
     if header_size > 0 and tree_size > 0:
-        assert header_size >= tree_size * GROUP_HEADER_FONT_SCALE - 0.05
+        assert header_size >= tree_size - 0.05
+        assert abs(header_size - tree_size * GROUP_HEADER_FONT_SCALE) <= 0.05
 
     delegate = panel.tree_widget.itemDelegate()
     option = QStyleOptionViewItem()
@@ -175,6 +178,7 @@ def test_header_top_and_bottom_rules_are_one_px_and_full_width(qapp) -> None:
         assert bottom_rule.lightness() < band.lightness()
     assert GROUP_HEADER_TOP_RULE_WIDTH == 1.0
     assert GROUP_HEADER_BOTTOM_RULE_WIDTH == 1.0
+    assert bottom_rule.alpha() == round(255 * GROUP_HEADER_BOTTOM_RULE_OPACITY_FACTOR)
 
     index = tree.indexFromItem(header, 0)
     option = QStyleOptionViewItem()
@@ -185,7 +189,11 @@ def test_header_top_and_bottom_rules_are_one_px_and_full_width(qapp) -> None:
     pixmap = QPixmap(tree.viewport().size())
     pixmap.fill(band)
     painter = QPainter(pixmap)
-    tree.drawRow(painter, option, index)
+    # Test the rule painter over a controlled opaque band. ``QTreeWidget``'s
+    # platform style may repaint the lower row edge inside ``super().drawRow``,
+    # which would make a SourceOver assertion depend on the host style rather
+    # than the bottom-rule token and its opacity.
+    tree._paint_header_rules(painter, option)
     painter.end()
     image = pixmap.toImage()
     top_y = max(option.rect.top(), 0)
@@ -195,7 +203,28 @@ def test_header_top_and_bottom_rules_are_one_px_and_full_width(qapp) -> None:
     mid_bottom_pixel = image.pixelColor(min(120, image.width() - 1), bottom_y)
     assert abs(left_pixel.lightness() - top_rule.lightness()) <= 40
     assert abs(mid_pixel.lightness() - top_rule.lightness()) <= 40
-    assert abs(mid_bottom_pixel.lightness() - bottom_rule.lightness()) <= 40
+    expected_bottom = QColor(band)
+    alpha = bottom_rule.alpha()
+    expected_bottom.setRgb(
+        round((bottom_rule.red() * alpha + band.red() * (255 - alpha)) / 255),
+        round((bottom_rule.green() * alpha + band.green() * (255 - alpha)) / 255),
+        round((bottom_rule.blue() * alpha + band.blue() * (255 - alpha)) / 255),
+    )
+    for sampled, expected in zip(
+        (mid_bottom_pixel.red(), mid_bottom_pixel.green(), mid_bottom_pixel.blue()),
+        (expected_bottom.red(), expected_bottom.green(), expected_bottom.blue()),
+        strict=True,
+    ):
+        assert abs(sampled - expected) <= 1
+
+
+def test_bottom_rule_color_does_not_mutate_the_dark_token() -> None:
+    """The opacity helper returns a copy, leaving module color tokens intact."""
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Base, QColor("#141414"))
+    returned = group_header_bottom_rule_color(palette)
+    returned.setAlpha(0)
+    assert GROUP_HEADER_BOTTOM_RULE_DARK.alpha() == 255
 
 
 def test_panel_stripe_recompute_scales_near_linearly(qapp) -> None:

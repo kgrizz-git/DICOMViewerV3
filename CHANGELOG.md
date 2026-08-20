@@ -7,23 +7,17 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
-- **Metadata group headers:** Fill steps from the Phase B mix most of the way toward
-  black in dark theme or #ffffff in light theme so headings no longer match the window chrome.
-  A faint 1 px lighter top hairline spans the full row, including the indent
-  gutter; the bottom rule and extra row padding are gone. Per-group stripes
-  still follow the selected accent hue with lowered chroma. **Semantic
-  versioning note: patch.**
+- **Metadata group headers:** Fixed per-theme fills (`#0B0B0C` dark / `#F3F3F3`
+  light) keep headings clear of window chrome. Headers are bold at the tree font
+  size, with full-row 1 px top hairlines and quieter 1 px bottom hairlines at 65%
+  token opacity; per-group stripes still follow the selected accent hue with
+  lowered chroma. **Semantic versioning note: patch.**
 - **Metadata tag tree hierarchy (Phase C):** Left-pane rows use a restrained
   sequence/item/leaf type ladder, platform-monospace Tag/VR columns, cached
   filter-match highlighting, dimmed empty values, and a no-match Clear control.
   Export DICOM Tags gains Expand All / Collapse All (Ctrl+Shift+E / Ctrl+Shift+C)
   and a context menu, without header/stripe/tier chrome.
   **Semantic versioning note: minor.**
-- **Metadata tag tree hierarchy (Phase B):** Left-pane group headings use a
-  restrained palette-mixed fill, a heavier top rule, a ~10% font bump, and
-  slightly taller rows. Alternating row shades reset per group. Export picker
-  partial checkboxes use a scoped accent fill (`::indicator:indeterminate`).
-  **Semantic versioning note: patch.**
 - The tag-export picker tree now has a stable `objectName`
   (`tag_export_tags_tree`) and a scoped QSS hook in both themes so later
   visual work can target it without app-wide tree rules. **Semantic

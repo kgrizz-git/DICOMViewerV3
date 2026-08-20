@@ -65,8 +65,10 @@ GROUP_HEADER_TOP_RULE_DARK = QColor(0x32, 0x32, 0x33)
 GROUP_HEADER_TOP_RULE_LIGHT = QColor(0xCC, 0xCC, 0xCC)
 GROUP_HEADER_BOTTOM_RULE_DARK = QColor(0x2D, 0x2D, 0x2E)
 GROUP_HEADER_BOTTOM_RULE_LIGHT = QColor(0xD3, 0xD3, 0xD3)
+# Keep 65% of the bottom-rule token alpha (a 35% opacity reduction).
+GROUP_HEADER_BOTTOM_RULE_OPACITY_FACTOR = 0.65
 
-GROUP_HEADER_FONT_SCALE = 1.1
+GROUP_HEADER_FONT_SCALE = 1.0
 
 
 def _palette_mix(palette: QPalette, strength: float) -> QColor:
@@ -105,12 +107,15 @@ def group_header_top_rule_color(palette: QPalette) -> QColor:
 
 
 def group_header_bottom_rule_color(palette: QPalette) -> QColor:
-    """1px bottom hairline: same direction as the top rule, one step fainter."""
-    return (
+    """1px bottom hairline: 65% of token opacity, one step fainter than top."""
+    token = (
         GROUP_HEADER_BOTTOM_RULE_DARK
         if _is_dark_theme_palette(palette)
         else GROUP_HEADER_BOTTOM_RULE_LIGHT
     )
+    color = QColor(token)
+    color.setAlpha(round(color.alpha() * GROUP_HEADER_BOTTOM_RULE_OPACITY_FACTOR))
+    return color
 
 
 def group_header_colors(palette: QPalette) -> tuple[QColor, QColor]:
@@ -127,9 +132,9 @@ def _row_index(index):
 
 
 def style_group_header_item(item: QTreeWidgetItem, tree: QTreeWidget) -> None:
-    """Apply tokenized fill and a bold relative font bump.
+    """Apply tokenized fill and a bold font at the tree's requested size.
 
-    Row height follows the bold ~10% font bump; no extra padding.
+    Row height follows the bold face; no extra padding.
     """
     font = QFont(tree.font())
     font.setBold(True)
@@ -227,7 +232,7 @@ class MetadataTagTree(QTreeWidget):
             0,
             option.rect.bottom(),
             viewport_width,
-            1,
+            int(GROUP_HEADER_BOTTOM_RULE_WIDTH),
             group_header_bottom_rule_color(option.palette),
         )
         painter.save()
