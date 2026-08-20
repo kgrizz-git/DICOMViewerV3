@@ -92,10 +92,10 @@ or any QSS `{metadata_tag_*}` tokens.
       `header_size >= tree_size * SCALE - 0.05` as the only size contract:
       that floor was calibrated for a 10% bump. New contract (both):
 
-      ```python
-      assert header_size >= tree_size - 0.05  # no visible shrink vs tree font
-      assert abs(header_size - tree_size * GROUP_HEADER_FONT_SCALE) <= 0.05
-      ```
+  ```python
+  assert header_size >= tree_size - 0.05  # no visible shrink vs tree font
+  assert abs(header_size - tree_size * GROUP_HEADER_FONT_SCALE) <= 0.05
+  ```
 
       The `0.05` pt dip matches the existing test epsilon. It is not a
       visible shrink; it covers Qt `pointSizeF()` round-trip on non-integer
@@ -116,7 +116,8 @@ or any QSS `{metadata_tag_*}` tokens.
         Keep bold and `header_h >= tag_h`.
       - `test_header_top_and_bottom_rules_are_one_px_and_full_width`: keep
         width asserts at `1.0`. The pixmap is filled with opaque `band`
-        before `drawRow`. **Replace** the
+        before `_paint_header_rules` so the SourceOver assertion is not
+        affected by platform-style painting in `drawRow`. **Replace** the
         `abs(mid_bottom_pixel.lightness() - bottom_rule.lightness()) <= 40`
         check. Compute expected SourceOver blend of
         `group_header_bottom_rule_color` (RGB + alpha 166) over opaque

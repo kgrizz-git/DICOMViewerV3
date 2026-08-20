@@ -3,7 +3,7 @@
 **Created:** 2026-08-16  
 **Last updated:** 2026-08-20<br>
 **Status:** index (implementation lives in phased plans below)  
-**Planning status:** Phases A and B landed on `main` via PRs 68 and 69. Header chrome polish (drop 10% font scale; 65% bottom-rule opacity) is a separate small plan.
+**Planning status:** Phases A and B landed on `main` via PRs 68 and 69. The completed [B polish plan](../completed/METADATA_GROUP_HEADER_CHROME_POLISH_PLAN.md) drops the 10% font scale and sets the bottom-rule opacity to 65%.
 
 This file is the **entry point** for the tag-tree / visual-orientation workstream.
 The former monolithic plan was moved to an investigation document so actionable

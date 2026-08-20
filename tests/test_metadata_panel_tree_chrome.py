@@ -189,7 +189,11 @@ def test_header_top_and_bottom_rules_are_one_px_and_full_width(qapp) -> None:
     pixmap = QPixmap(tree.viewport().size())
     pixmap.fill(band)
     painter = QPainter(pixmap)
-    tree.drawRow(painter, option, index)
+    # Test the rule painter over a controlled opaque band. ``QTreeWidget``'s
+    # platform style may repaint the lower row edge inside ``super().drawRow``,
+    # which would make a SourceOver assertion depend on the host style rather
+    # than the bottom-rule token and its opacity.
+    tree._paint_header_rules(painter, option)
     painter.end()
     image = pixmap.toImage()
     top_y = max(option.rect.top(), 0)
