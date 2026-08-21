@@ -7,6 +7,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Launchers prefer `.venv`:** `launch.bat` and `launch.command` resolve an
+  existing environment in order `.venv` → `venv` → `env` → `virtualenv`, and
+  create `.venv` when none exist (macOS launcher previously only looked for
+  `venv`). Docs (`README`, `AGENTS`, `DEVELOPER_SETUP`) match this order.
+  **Semantic versioning note: patch.**
 - **Metadata group headers:** Fixed per-theme fills (`#0B0B0C` dark / `#F3F3F3`
   light) keep headings clear of window chrome. Headers are bold at the tree font
   size, with full-row 1 px top hairlines and quieter 1 px bottom hairlines at 65%

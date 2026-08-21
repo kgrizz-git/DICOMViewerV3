@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableDelayedExpansion
 set "ROOT=%~dp0"
-rem Resolve VENV: use first existing env among common names; default target for create is venv.
+rem Resolve VENV: first existing among .venv, venv, env, virtualenv; create target is .venv.
 set "VENV="
-if exist "%ROOT%venv\Scripts\python.exe" set "VENV=%ROOT%venv"
-if not defined VENV if exist "%ROOT%.venv\Scripts\python.exe" set "VENV=%ROOT%.venv"
+if exist "%ROOT%.venv\Scripts\python.exe" set "VENV=%ROOT%.venv"
+if not defined VENV if exist "%ROOT%venv\Scripts\python.exe" set "VENV=%ROOT%venv"
 if not defined VENV if exist "%ROOT%env\Scripts\python.exe" set "VENV=%ROOT%env"
 if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" set "VENV=%ROOT%virtualenv"
-if not defined VENV set "VENV=%ROOT%venv"
+if not defined VENV set "VENV=%ROOT%.venv"
 set "VENV_PY=%VENV%\Scripts\python.exe"
 
 :MENU
@@ -19,6 +19,7 @@ echo.
 
 if exist "%VENV_PY%" (
     echo Virtual environment: FOUND
+    echo   %VENV%
     echo.
     echo   1  Run DICOM Viewer
     echo   2  Reinstall / update requirements
@@ -163,8 +164,8 @@ if /i "!CONFIRM!"=="y" (
     echo Deleting virtual environment...
     rmdir /s /q "%VENV%"
     echo Done.
-    rem Recreate default target path after delete (may have been .venv etc.).
-    set "VENV=%ROOT%venv"
+    rem Next create targets the default (.venv), even if a different name was deleted.
+    set "VENV=%ROOT%.venv"
     set "VENV_PY=%VENV%\Scripts\python.exe"
     pause
 )

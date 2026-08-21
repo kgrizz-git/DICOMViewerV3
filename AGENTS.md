@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-20
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -23,7 +23,7 @@ its values.
 
 **Always activate the project virtual environment before running tests or application code.**
 
-The env folder may be named `venv`, `.venv`, `env`, or `virtualenv`. **`launch.bat`** picks the first that exists under the project root (must contain `Scripts\python.exe`). It uses that interpreter for `pip install` and `run.py` (not bare `python` after `activate`). If the env is incomplete, **Run** installs requirements first. Many setups use **`.venv`** next to `requirements.txt`.
+The env folder may be named `.venv`, `venv`, `env`, or `virtualenv`. **`launch.bat`** and **`launch.command`** pick the first that exists under the project root (Windows: `Scripts\python.exe`; macOS/Linux: `bin/python`), in that order. If none exist, they create **`.venv`**. They use that interpreter for `pip install` and `run.py` (not bare `python` after `activate`). If the env is incomplete, **Run** installs requirements first. Prefer **`.venv`** next to `requirements.txt`.
 
 On a typical Windows checkout (if search ignores hidden folders):
 

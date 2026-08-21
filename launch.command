@@ -1,10 +1,27 @@
 #!/bin/bash
 # DICOM Viewer V3 Launcher
 # Double-click this file on macOS to open in Terminal, or run: bash launch.command
+#
+# Virtual environment resolution (first match wins): .venv, venv, env, virtualenv.
+# If none exist, create/setup targets .venv.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV="$SCRIPT_DIR/venv"
-VENV_PY="$VENV/bin/python"
+
+resolve_venv() {
+    local candidate
+    for candidate in .venv venv env virtualenv; do
+        if [[ -x "$SCRIPT_DIR/$candidate/bin/python" ]]; then
+            VENV="$SCRIPT_DIR/$candidate"
+            VENV_PY="$VENV/bin/python"
+            return 0
+        fi
+    done
+    VENV="$SCRIPT_DIR/.venv"
+    VENV_PY="$VENV/bin/python"
+    return 1
+}
+
+resolve_venv
 
 install_requirements() {
     echo ""
@@ -111,6 +128,9 @@ delete_venv() {
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         rm -rf "$VENV"
         echo "Virtual environment deleted."
+        # Next create targets the default (.venv), even if a different name was deleted.
+        VENV="$SCRIPT_DIR/.venv"
+        VENV_PY="$VENV/bin/python"
     fi
     echo ""
     show_menu
@@ -125,6 +145,7 @@ show_menu() {
 
     if [[ -x "$VENV_PY" ]]; then
         echo "Virtual environment: FOUND"
+        echo "  $VENV"
         echo ""
         echo "  1  Run DICOM Viewer"
         echo "  2  Reinstall / update requirements"
