@@ -87,6 +87,37 @@ class TestScanDocDates(unittest.TestCase):
         self.assertIn("stale.md", stale[0])
 
 
+class TestLauncherVenvResolution(unittest.TestCase):
+    """Unit-test launch.bat / launch.command shared venv candidate order."""
+
+    def test_repo_launchers_match_expected_order(self) -> None:
+        module = _load_harness_module()
+        errors = module.check_launcher_venv_resolution(REPO_ROOT)
+        self.assertEqual(errors, [])
+
+    def test_detects_diverging_candidate_orders(self) -> None:
+        import tempfile
+
+        module = _load_harness_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "launch.bat").write_text(
+                'if exist "%ROOT%venv\\Scripts\\python.exe" set "VENV=%ROOT%venv"\n'
+                'if not defined VENV if exist "%ROOT%.venv\\Scripts\\python.exe" '
+                'set "VENV=%ROOT%.venv"\n'
+                'if not defined VENV set "VENV=%ROOT%.venv"\n',
+                encoding="utf-8",
+            )
+            (root / "launch.command").write_text(
+                "for candidate in .venv venv env virtualenv; do\n"
+                'VENV="$SCRIPT_DIR/.venv"\n',
+                encoding="utf-8",
+            )
+            errors = module.check_launcher_venv_resolution(root)
+        self.assertTrue(any("launch.bat venv candidate order" in e for e in errors))
+        self.assertTrue(any("diverge" in e for e in errors))
+
+
 class TestTodoBacklogPolicy(unittest.TestCase):
     """Unit-test the active-backlog-only TO_DO policy."""
 

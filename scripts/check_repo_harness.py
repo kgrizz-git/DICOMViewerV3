@@ -3,8 +3,9 @@
 Validate repository harness documentation and structure.
 
 Checks required harness files, AGENTS.md size/shape, TO_DO freshness metadata,
-maintenance-log presence, plan paths referenced from TO_DO.md, and relative
-links in harness markdown.
+maintenance-log presence, plan paths referenced from TO_DO.md, relative links
+in harness markdown, and shared launch.bat / launch.command venv resolution
+order.
 Optional ``--doc-garden`` prints a non-blocking documentation hygiene report.
 
 Usage (from repository root):
@@ -94,6 +95,24 @@ APPROVED_SONARQUBE_CLOUD_WORKFLOW = ".github/workflows/ci.yml"
 APPROVED_SONARQUBE_CLOUD_ACTION = (
     "sonarsource/sonarqube-scan-action@"
     "7006c4492b2e0ee0f816d36501671557c97f5995"
+)
+
+# Shared by launch.bat / launch.command; keep both launchers and this tuple in sync.
+LAUNCHER_VENV_CANDIDATES = (".venv", "venv", "env", "virtualenv")
+LAUNCHER_VENV_CREATE_TARGET = ".venv"
+_BAT_VENV_EXIST_PATTERN = re.compile(
+    r'exist "%ROOT%([^"\\]+)\\Scripts\\python\.exe"',
+    re.IGNORECASE,
+)
+_CMD_VENV_FOR_PATTERN = re.compile(
+    r"for candidate in ((?:\.venv|venv|env|virtualenv)(?:\s+(?:\.venv|venv|env|virtualenv))*)\s*;",
+)
+_CMD_VENV_CREATE_PATTERN = re.compile(
+    r'VENV="\$SCRIPT_DIR/(\.venv)"',
+)
+_BAT_VENV_CREATE_PATTERN = re.compile(
+    r'if not defined VENV set "VENV=%ROOT%(\.venv)"',
+    re.IGNORECASE,
 )
 
 
@@ -271,6 +290,62 @@ def check_todo_backlog_policy(repo_root: Path) -> list[str]:
     return errors
 
 
+def check_launcher_venv_resolution(repo_root: Path) -> list[str]:
+    """Ensure launch.bat and launch.command share the same venv candidate order."""
+    errors: list[str] = []
+    bat_path = repo_root / "launch.bat"
+    cmd_path = repo_root / "launch.command"
+    if not bat_path.is_file():
+        errors.append("missing launch.bat")
+        return errors
+    if not cmd_path.is_file():
+        errors.append("missing launch.command")
+        return errors
+
+    bat_text = bat_path.read_text(encoding="utf-8")
+    cmd_text = cmd_path.read_text(encoding="utf-8")
+
+    bat_order = _BAT_VENV_EXIST_PATTERN.findall(bat_text)
+    cmd_match = _CMD_VENV_FOR_PATTERN.search(cmd_text)
+    cmd_order = cmd_match.group(1).split() if cmd_match else []
+
+    expected = list(LAUNCHER_VENV_CANDIDATES)
+    if bat_order != expected:
+        errors.append(
+            "launch.bat venv candidate order "
+            f"{bat_order!r} != expected {expected!r}"
+        )
+    if cmd_order != expected:
+        errors.append(
+            "launch.command venv candidate order "
+            f"{cmd_order!r} != expected {expected!r}"
+        )
+    if bat_order and cmd_order and bat_order != cmd_order:
+        errors.append(
+            "launch.bat and launch.command venv candidate orders diverge: "
+            f"bat={bat_order!r} command={cmd_order!r}"
+        )
+
+    bat_create = _BAT_VENV_CREATE_PATTERN.search(bat_text)
+    cmd_create = _CMD_VENV_CREATE_PATTERN.search(cmd_text)
+    if not bat_create or bat_create.group(1) != LAUNCHER_VENV_CREATE_TARGET:
+        errors.append(
+            "launch.bat create target must be "
+            f"{LAUNCHER_VENV_CREATE_TARGET!r} when no env exists"
+        )
+    if not cmd_create or cmd_create.group(1) != LAUNCHER_VENV_CREATE_TARGET:
+        errors.append(
+            "launch.command create target must be "
+            f"{LAUNCHER_VENV_CREATE_TARGET!r} when no env exists"
+        )
+    if expected and expected[0] != LAUNCHER_VENV_CREATE_TARGET:
+        errors.append(
+            "LAUNCHER_VENV_CREATE_TARGET must match the first candidate "
+            f"({expected[0]!r})"
+        )
+    return errors
+
+
 def check_user_guide_hub_topics(repo_root: Path) -> list[str]:
     """Ensure shipped feature topic guides exist and USER_GUIDE.md links to them."""
     errors: list[str] = []
@@ -432,6 +507,7 @@ def main() -> int:
     all_errors.extend(check_todo_backlog_policy(repo_root))
     all_errors.extend(check_plan_links_in_todo(repo_root))
     all_errors.extend(check_user_guide_hub_topics(repo_root))
+    all_errors.extend(check_launcher_venv_resolution(repo_root))
 
     for rel in HARNESS_MARKDOWN:
         md = repo_root / rel
@@ -448,7 +524,7 @@ def main() -> int:
         "OK: repo harness "
         f"({len(REQUIRED_FILES)} required files, AGENTS.md <= {AGENTS_MAX_LINES} lines, "
         "TO_DO active-backlog policy + TO_DO plans + harness links + "
-        f"{len(REQUIRED_USER_DOC_TOPICS)} user-guide topics)"
+        f"launcher venv order + {len(REQUIRED_USER_DOC_TOPICS)} user-guide topics)"
     )
     if args.doc_garden:
         print()

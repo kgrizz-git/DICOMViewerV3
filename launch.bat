@@ -1,14 +1,14 @@
 @echo off
-setlocal EnableDelayedExpansion
+rem DICOM Viewer V3 Launcher
+rem Virtual environment resolution (first match wins): .venv, venv, env, virtualenv.
+rem If none exist, create/setup targets .venv.
+rem Keep this candidate list in sync with launch.command (enforced by check_repo_harness.py).
+rem
+rem Avoid EnableDelayedExpansion so checkout paths containing "!" are not corrupted.
+
+setlocal
 set "ROOT=%~dp0"
-rem Resolve VENV: first existing among .venv, venv, env, virtualenv; create target is .venv.
-set "VENV="
-if exist "%ROOT%.venv\Scripts\python.exe" set "VENV=%ROOT%.venv"
-if not defined VENV if exist "%ROOT%venv\Scripts\python.exe" set "VENV=%ROOT%venv"
-if not defined VENV if exist "%ROOT%env\Scripts\python.exe" set "VENV=%ROOT%env"
-if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" set "VENV=%ROOT%virtualenv"
-if not defined VENV set "VENV=%ROOT%.venv"
-set "VENV_PY=%VENV%\Scripts\python.exe"
+call :RESOLVE_VENV
 
 :MENU
 cls
@@ -17,39 +17,44 @@ echo   DICOM Viewer V3 Launcher
 echo ===============================
 echo.
 
-if exist "%VENV_PY%" (
-    echo Virtual environment: FOUND
-    echo   %VENV%
-    echo.
-    echo   1  Run DICOM Viewer
-    echo   2  Reinstall / update requirements
-    echo   3  Delete virtual environment
-    echo   4  Exit
-    echo.
-    set /p "CHOICE=Choose [1-4]: "
-    if "!CHOICE!"=="1" goto :RUN
-    if "!CHOICE!"=="2" goto :REINSTALL
-    if "!CHOICE!"=="3" goto :DELETE
-    if "!CHOICE!"=="4" goto :END
-    goto :MENU
-) else (
-    echo Virtual environment: NOT FOUND
-    echo.
-    echo What is a venv? A separate folder of Python packages used only by this app.
-    echo It avoids mixing versions with other Python programs on your PC and makes
-    echo updates or cleanup simpler. Using one is recommended, not required.
-    echo You can run with system Python instead ^(option 2 below^) if you prefer.
-    echo.
-    echo   1  Create venv, install requirements, then run
-    echo   2  Run using system Python ^(no venv^)
-    echo   3  Exit
-    echo.
-    set /p "CHOICE=Choose [1-3]: "
-    if "!CHOICE!"=="1" goto :SETUP
-    if "!CHOICE!"=="2" goto :RUN_SYS
-    if "!CHOICE!"=="3" goto :END
-    goto :MENU
-)
+if exist "%VENV_PY%" goto :MENU_FOUND
+goto :MENU_MISSING
+
+:MENU_FOUND
+echo Virtual environment: FOUND
+echo   %VENV%
+echo.
+echo   1  Run DICOM Viewer
+echo   2  Reinstall / update requirements
+echo   3  Delete virtual environment
+echo   4  Exit
+echo.
+set "CHOICE="
+set /p "CHOICE=Choose [1-4]: "
+if "%CHOICE%"=="1" goto :RUN
+if "%CHOICE%"=="2" goto :REINSTALL
+if "%CHOICE%"=="3" goto :DELETE
+if "%CHOICE%"=="4" goto :END
+goto :MENU
+
+:MENU_MISSING
+echo Virtual environment: NOT FOUND
+echo.
+echo What is a venv? A separate folder of Python packages used only by this app.
+echo It avoids mixing versions with other Python programs on your PC and makes
+echo updates or cleanup simpler. Using one is recommended, not required.
+echo You can run with system Python instead ^(option 2 below^) if you prefer.
+echo.
+echo   1  Create venv, install requirements, then run
+echo   2  Run using system Python ^(no venv^)
+echo   3  Exit
+echo.
+set "CHOICE="
+set /p "CHOICE=Choose [1-3]: "
+if "%CHOICE%"=="1" goto :SETUP
+if "%CHOICE%"=="2" goto :RUN_SYS
+if "%CHOICE%"=="3" goto :END
+goto :MENU
 
 :SETUP
 echo.
@@ -159,17 +164,34 @@ goto :END
 
 :DELETE
 echo.
+set "CONFIRM="
 set /p "CONFIRM=Delete the virtual environment? This cannot be undone. (y/n): "
-if /i "!CONFIRM!"=="y" (
-    echo Deleting virtual environment...
-    rmdir /s /q "%VENV%"
-    echo Done.
-    rem Next create targets the default (.venv), even if a different name was deleted.
-    set "VENV=%ROOT%.venv"
-    set "VENV_PY=%VENV%\Scripts\python.exe"
+if /i not "%CONFIRM%"=="y" goto :MENU
+echo Deleting virtual environment...
+echo   %VENV%
+rmdir /s /q "%VENV%"
+if exist "%VENV%" (
+    echo ERROR: Could not delete the virtual environment ^(files may be in use^).
+    echo Close the app and any terminals using that Python, then try again.
+    echo   %VENV%
     pause
+    goto :MENU
 )
+echo Virtual environment deleted.
+call :RESOLVE_VENV
+pause
 goto :MENU
+
+:RESOLVE_VENV
+rem First existing among .venv, venv, env, virtualenv; otherwise create target .venv.
+set "VENV="
+if exist "%ROOT%.venv\Scripts\python.exe" set "VENV=%ROOT%.venv"
+if not defined VENV if exist "%ROOT%venv\Scripts\python.exe" set "VENV=%ROOT%venv"
+if not defined VENV if exist "%ROOT%env\Scripts\python.exe" set "VENV=%ROOT%env"
+if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" set "VENV=%ROOT%virtualenv"
+if not defined VENV set "VENV=%ROOT%.venv"
+set "VENV_PY=%VENV%\Scripts\python.exe"
+exit /b 0
 
 :END
 endlocal
