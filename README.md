@@ -1,130 +1,56 @@
 # DICOM Viewer V3
 
-> A cross-platform desktop DICOM viewer for reviewing studies, measurements,
-> reconstructions, exports, and selected automated QA workflows.
+DICOM Viewer V3 is a cross-platform desktop application for reviewing medical
+imaging studies locally on Windows, macOS, and Linux. Open studies from files
+or folders, review them with multi-window viewing and clinical measurement
+tools, and export images or derived DICOM — all on your own machine. It is not
+a PACS server or archive.
 
-DICOM Viewer V3 runs on Windows, macOS, and Linux. It is designed for local
-study review, with multi-window viewing, window/level controls, cine playback,
-MPR, PET/SPECT fusion, ROI and measurement tools, annotations, metadata
-inspection and editing, image/DICOM export, and optional ACR phantom QA through
-pylinac.
+<!-- Hero screenshot: intentionally not included yet. Screenshots are
+     human-captured and pass PHI review before being committed and added to
+     security/approved-media-sha256.json. Insert one primary image (optional
+     second) directly below this line once approved. -->
 
-**Release notes:** [CHANGELOG.md](CHANGELOG.md) · **User guide:**
-[user-docs/USER_GUIDE.md](user-docs/USER_GUIDE.md) · **Developer docs:**
-[dev-docs/README.md](dev-docs/README.md)
+## Get the app
 
-## Start here
+Download a packaged release for your platform from the
+[releases page](https://github.com/kgrizz-git/DICOMViewerV3/releases) and run
+the installer or bundle. Inside the app, **Help → Quick Start Guide** gives a
+short orientation and **Help → Documentation** opens the full user guide.
 
-### Use a packaged release
-
-Download the appropriate release for your platform and follow the included
-instructions. In the application, **Help → Quick Start Guide** gives a short
-orientation; **Help → Documentation** opens the full user-guide hub.
-
-### Run from a source checkout
-
-1. Get the code:
-
-   ```bash
-   git clone https://github.com/kgrizz-git/DICOMViewerV3.git
-   cd DICOMViewerV3
-   ```
-
-2. Use the launcher for your operating system, or create a virtual environment
-   and run the application directly.
-
-| Platform | Recommended launcher | What it does |
-| --- | --- | --- |
-| Windows | Double-click [`launch.bat`](launch.bat) | Uses an existing `.venv`, `venv`, `env`, or `virtualenv` (first match), or creates `.venv` when needed; installs or refreshes dependencies and starts the viewer. |
-| macOS | Double-click [`launch.command`](launch.command), or run `bash launch.command` | Same env resolution as Windows; creates `.venv` when none exist. If macOS blocks a downloaded script, make it executable with `chmod +x launch.command` first. |
-| Linux / any platform | Create and activate a virtual environment, install requirements, then run [`run.py`](run.py) | Uses the same startup wrapper as the launchers. |
-
-For a manual Linux or macOS setup:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python run.py
-```
-
-For a manual Windows PowerShell setup:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python run.py
-```
-
-`run.py` starts `src/main.py` with the source directory on Python's import
-path. From an activated environment, `python src/main.py` is also supported.
-
-## Requirements
-
-- Python 3.12 or later. Python 3.12 is the CI and recommended Windows version;
-  imaging dependencies are more likely to have pre-built wheels.
-- The Python packages listed in [requirements.txt](requirements.txt).
-- A display environment supported by Qt/PySide6.
-
-Very new Python releases can require native-extension builds. The launcher
-scripts check the essential runtime imports after installation and report an
-incomplete environment before starting the application.
-
-## What is included
+## What you can do
 
 | Area | Capabilities |
 | --- | --- |
-| Viewing | Multi-pane layouts, window/level, slice navigation, cine, thumbnails, metadata, and configurable overlays. |
-| Reconstruction | MPR and slab projections; optional VTK-based volume rendering. |
-| Clinical tools | ROIs, distance and angle measurements, text/arrow annotations, and tag editing. |
-| Fusion | PET/SPECT overlays on CT or MR, including opacity, alignment, resampling, and display controls. |
-| Export | Images, screenshots, derived DICOM, tags, structured reports, and selected QA outputs. |
-| QA | Optional ACR CT/MRI and nuclear-medicine workflows powered by the pinned pylinac dependency. |
+| Viewing | Multi-pane layouts, window/level presets, slice navigation, cine playback, series navigator, configurable overlays. |
+| Reconstruction | MPR and slab projections; optional volume rendering. |
+| Clinical tools | ROIs, distance/angle measurements, text and arrow annotations, metadata inspection and tag editing. |
+| Fusion | PET/SPECT overlays on CT or MR with opacity, alignment, and display controls. |
+| Export | Images, screenshots, cine video, derived DICOM, tags, and structured reports. |
+| QA (optional) | ACR CT/MRI and nuclear-medicine phantom workflows. |
 
-The full dependency and decoder details are in
-[requirements.txt](requirements.txt) and
-[DICOM support analysis](dev-docs/info/DICOM_SUPPORT_ANALYSIS.md).
+Studies opened locally are indexed into an encrypted local study database so
+you can find and reopen them quickly.
 
-## Documentation
+## Documentation for users
 
-### For users
-
-- [User guide hub](user-docs/USER_GUIDE.md)
+- [User guide](user-docs/USER_GUIDE.md)
 - [Configuration](user-docs/CONFIGURATION.md)
-- **Quick Start Guide** — available in the application through **Help → Quick
-  Start Guide**.
 - [Change log](CHANGELOG.md)
 
-### For contributors
+## Run from source
 
-- [Contributing and CI](dev-docs/CONTRIBUTING.md)
-- [Developer setup and troubleshooting](dev-docs/DEVELOPER_SETUP.md)
-- [Test-suite guide](tests/README.md)
-- [Architecture](ARCHITECTURE.md) and [source layout](dev-docs/SOURCE_LAYOUT.md)
-- [Design system](DESIGN.md)
-- [Security-tool guide](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md)
+Clone the repository, then double-click [`launch.bat`](launch.bat) (Windows) or
+run `bash launch.command` (macOS/Linux). The launcher creates a virtual
+environment if needed, installs dependencies, and starts the viewer.
 
-## Project layout
+Prefer a manual setup, hit a launcher problem, or want tests and tooling? See
+[dev-docs/DEVELOPER_SETUP.md](dev-docs/DEVELOPER_SETUP.md).
 
-```text
-DICOMViewerV3/
-├── src/        Application source
-├── tests/      Automated tests and test-running guidance
-├── user-docs/  User-facing guides
-├── dev-docs/   Contributor documentation, plans, and investigations
-├── resources/  Bundled help and Qt styling resources
-├── scripts/    Verification, maintenance, and local tooling helpers
-└── .github/    Continuous-integration workflows
-```
+## Contributing and project layout
 
-## Contributing
-
-Please begin with [CONTRIBUTING.md](dev-docs/CONTRIBUTING.md). It explains the
-development environment, hooks, privacy safeguards, test and coverage gates,
-and release process. Before changing the UI, also consult [DESIGN.md](DESIGN.md).
-
-For repository automation and AI-assisted work, [AGENTS.md](AGENTS.md) is the
-operational reference.
+Contributions start with [dev-docs/CONTRIBUTING.md](dev-docs/CONTRIBUTING.md);
+architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md), and the full
+developer documentation index is [dev-docs/README.md](dev-docs/README.md).
+Source is under `src/`, user guides under `user-docs/`, contributor docs and
+plans under `dev-docs/`.
