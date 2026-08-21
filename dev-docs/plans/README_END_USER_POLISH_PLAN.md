@@ -77,7 +77,8 @@ Checklist additions for screenshots:
 - [ ] Soften or relocate Requirements / project-layout / tech pointers so they do not interrupt the user path.
 - [ ] Place hero screenshot slot(s) in the draft layout (images may land in a follow-up commit after human capture/review).
 - [ ] Update any cross-links that assume the old section order (`AGENTS`, `dev-docs/README`, assessments) only if they cite README anchors or wording that changes.
-- [ ] Run `python scripts/check_user_docs_links.py` after edits.
+- [ ] Run `python scripts/check_user_docs_links.py` after edits (covers
+      `user-docs/`, root `README.md`, and `dev-docs/README.md`).
 - [ ] Changelog entry (docs-only; patch note) when the rewrite lands.
 
 ## Success criteria
