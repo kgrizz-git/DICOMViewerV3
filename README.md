@@ -35,8 +35,8 @@ orientation; **Help → Documentation** opens the full user-guide hub.
 
 | Platform | Recommended launcher | What it does |
 | --- | --- | --- |
-| Windows | Double-click [`launch.bat`](launch.bat) | Creates a `venv` when needed, installs or refreshes dependencies, and starts the viewer. It can also use an existing `venv`, `.venv`, `env`, or `virtualenv`. |
-| macOS | Double-click [`launch.command`](launch.command), or run `bash launch.command` | Creates and uses `venv`, offers dependency refresh, and starts the viewer. If macOS blocks a downloaded script, make it executable with `chmod +x launch.command` first. |
+| Windows | Double-click [`launch.bat`](launch.bat) | Uses an existing `.venv`, `venv`, `env`, or `virtualenv` (first match), or creates `.venv` when needed; installs or refreshes dependencies and starts the viewer. |
+| macOS | Double-click [`launch.command`](launch.command), or run `bash launch.command` | Same env resolution as Windows; creates `.venv` when none exist. If macOS blocks a downloaded script, make it executable with `chmod +x launch.command` first. |
 | Linux / any platform | Create and activate a virtual environment, install requirements, then run [`run.py`](run.py) | Uses the same startup wrapper as the launchers. |
 
 For a manual Linux or macOS setup:

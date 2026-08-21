@@ -7,6 +7,22 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Launchers prefer `.venv`:** `launch.bat` and `launch.command` resolve an
+  existing environment in order `.venv` → `venv` → `env` → `virtualenv`, and
+  create `.venv` when none exist (macOS launcher previously only looked for
+  `venv`). Docs (`README`, `AGENTS`, `DEVELOPER_SETUP`) match this order.
+  Delete checks that the folder is gone before reporting success, then
+  re-resolves any remaining env (instead of blindly retargeting `.venv`).
+  `launch.bat` no longer enables delayed expansion (paths with `!` stay intact);
+  `launch.command` uses a menu loop and treats `bin/python` by existence.
+  `check_repo_harness.py` pins the shared candidate order across both launchers.
+  `scripts/scan-security.ps1` uses the same env resolution order (also pinned by
+  the harness) and file-only (`-PathType Leaf`) interpreter checks; `launch.bat`
+  likewise treats `python.exe` as a file, not a same-named directory. Root
+  `README.md` is included in `scripts/check_user_docs_links.py`.
+  `scripts/scan-security.ps1` is saved as UTF-8 with BOM so Windows PowerShell
+  correctly decodes its status symbols.
+  **Semantic versioning note: patch.**
 - **Metadata group headers:** Fixed per-theme fills (`#0B0B0C` dark / `#F3F3F3`
   light) keep headings clear of window chrome. Headers are bold at the tree font
   size, with full-row 1 px top hairlines and quieter 1 px bottom hairlines at 65%

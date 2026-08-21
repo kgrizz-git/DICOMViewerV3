@@ -1,4 +1,4 @@
-# Security Scanner PowerShell Wrapper
+﻿# Security Scanner PowerShell Wrapper
 # Quick access to security scanning tools
 # 
 # Usage:
@@ -79,19 +79,21 @@ EXAMPLES:
     exit 0
 }
 
-# Resolve project Python from common venv locations
+# Resolve project Python: same order as launch.bat (.venv, venv, env, virtualenv).
 $pythonExe = $null
 $activateScript = $null
-if (Test-Path ".\.venv\Scripts\python.exe") {
-    $pythonExe = ".\.venv\Scripts\python.exe"
-    $activateScript = ".\.venv\Scripts\Activate.ps1"
-} elseif (Test-Path ".\venv\Scripts\python.exe") {
-    $pythonExe = ".\venv\Scripts\python.exe"
-    $activateScript = ".\venv\Scripts\Activate.ps1"
+foreach ($name in @(".venv", "venv", "env", "virtualenv")) {
+    $candidatePy = ".\$name\Scripts\python.exe"
+    $candidateActivate = ".\$name\Scripts\Activate.ps1"
+    if (Test-Path -LiteralPath $candidatePy -PathType Leaf) {
+        $pythonExe = $candidatePy
+        $activateScript = $candidateActivate
+        break
+    }
 }
 
 if (-not $pythonExe) {
-    Write-Error-Custom "No project virtual environment found (.venv or venv)."
+    Write-Error-Custom "No project virtual environment found (.venv, venv, env, or virtualenv)."
     exit 1
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Verify relative Markdown links under user-docs/ (and dev-docs/README.md).
+Verify relative Markdown links under user-docs/, the root README.md, and
+dev-docs/README.md.
 
 Scans inline links of the form [text](url). Skips http(s), mailto, and bare
 fragment-only targets. Resolves each relative URL against the source file's
@@ -28,14 +29,15 @@ LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 
 
 def iter_markdown_files(repo_root: Path) -> list[Path]:
-    """Markdown files to validate (user-facing + dev-docs index)."""
+    """Markdown files to validate (user-facing docs + root and dev-docs indexes)."""
     paths: list[Path] = []
     user_docs = repo_root / "user-docs"
     if user_docs.is_dir():
         paths.extend(sorted(user_docs.rglob("*.md")))
-    readme = repo_root / "dev-docs" / "README.md"
-    if readme.is_file():
-        paths.append(readme)
+    for rel in ("README.md", "dev-docs/README.md"):
+        candidate = repo_root / rel
+        if candidate.is_file():
+            paths.append(candidate)
     return paths
 
 
@@ -115,7 +117,10 @@ def main() -> int:
         return 1
 
     n_files = len(iter_markdown_files(repo_root))
-    print(f"OK: checked links in {n_files} Markdown file(s) under user-docs/ and dev-docs/README.md.")
+    print(
+        f"OK: checked links in {n_files} Markdown file(s) under "
+        "user-docs/, README.md, and dev-docs/README.md."
+    )
     return 0
 
 

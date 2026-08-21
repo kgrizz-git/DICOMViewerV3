@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-20
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -8,7 +8,7 @@ Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AG
 
 ### Incomplete virtual environment (Windows launcher)
 
-`launch.bat` and `launch.command` install and run through the venv interpreter directly (`…/python.exe -m pip` / `…/bin/python -m pip`) instead of relying on `activate` plus bare `pip`/`python`. On Windows setups with multiple Python installs (for example pyenv), the old pattern could leave an empty `venv` folder that looks valid but has no packages.
+`launch.bat` and `launch.command` resolve an existing environment under the project root in order: `.venv`, `venv`, `env`, `virtualenv`. If none exist, create/setup targets `.venv`. Both install and run through the venv interpreter directly (`…/python.exe -m pip` / `…/bin/python -m pip`) instead of relying on `activate` plus bare `pip`/`python`. On Windows setups with multiple Python installs (for example pyenv), the old pattern could leave an empty env folder that looks valid but has no packages.
 
 - **Symptom:** `launch.bat` → **Run** fails with missing `pydicom`, `PySide6`, `numpy`, or `PIL`, or the venv folder exists but `Scripts\python.exe` cannot import the app stack.
 - **Fix:** Choose **Reinstall / update requirements** in the launcher menu, or delete the broken env folder and recreate it (`python -m venv .venv`, then `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`).

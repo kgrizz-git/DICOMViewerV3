@@ -1,10 +1,30 @@
 #!/bin/bash
 # DICOM Viewer V3 Launcher
 # Double-click this file on macOS to open in Terminal, or run: bash launch.command
+#
+# Virtual environment resolution (first match wins): .venv, venv, env, virtualenv.
+# If none exist, create/setup targets .venv.
+# Keep this candidate list in sync with launch.bat (enforced by check_repo_harness.py).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV="$SCRIPT_DIR/venv"
-VENV_PY="$VENV/bin/python"
+
+resolve_venv() {
+    # Always returns 0 so a future `set -e` cannot abort at startup when no env exists.
+    local candidate
+    for candidate in .venv venv env virtualenv; do
+        # Prefer a regular file (existence), matching launch.bat's python.exe check.
+        if [[ -f "$SCRIPT_DIR/$candidate/bin/python" ]]; then
+            VENV="$SCRIPT_DIR/$candidate"
+            VENV_PY="$VENV/bin/python"
+            return 0
+        fi
+    done
+    VENV="$SCRIPT_DIR/.venv"
+    VENV_PY="$VENV/bin/python"
+    return 0
+}
+
+resolve_venv
 
 install_requirements() {
     echo ""
@@ -66,7 +86,7 @@ setup_and_run() {
         echo "ERROR: Failed to create virtual environment."
         exit 1
     }
-    if [[ ! -x "$VENV_PY" ]]; then
+    if [[ ! -f "$VENV_PY" ]]; then
         echo "ERROR: Virtual environment was created but python is missing:"
         echo "  $VENV_PY"
         exit 1
@@ -76,7 +96,7 @@ setup_and_run() {
 }
 
 reinstall() {
-    if [[ ! -x "$VENV_PY" ]]; then
+    if [[ ! -f "$VENV_PY" ]]; then
         echo "ERROR: Virtual environment python not found:"
         echo "  $VENV_PY"
         exit 1
@@ -88,7 +108,7 @@ reinstall() {
 }
 
 run_with_check() {
-    if [[ ! -x "$VENV_PY" ]]; then
+    if [[ ! -f "$VENV_PY" ]]; then
         echo "ERROR: Virtual environment python not found:"
         echo "  $VENV_PY"
         exit 1
@@ -106,59 +126,74 @@ run_with_check() {
 }
 
 delete_venv() {
+    local target="$VENV"
     echo ""
     read -rp "Delete the virtual environment? This cannot be undone. (y/n): " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        rm -rf "$VENV"
-        echo "Virtual environment deleted."
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        return 0
     fi
-    echo ""
-    show_menu
+    echo "Deleting virtual environment..."
+    echo "  $target"
+    rm -rf "$target"
+    if [[ -e "$target" ]]; then
+        echo "ERROR: Could not delete the virtual environment (files may be in use)."
+        echo "Close the app and any terminals using that Python, then try again."
+        echo "  $target"
+        read -rp "Press Enter to continue..."
+        return 1
+    fi
+    echo "Virtual environment deleted."
+    resolve_venv
+    return 0
 }
 
-show_menu() {
-    echo ""
-    echo "==============================="
-    echo "  DICOM Viewer V3 Launcher"
-    echo "==============================="
-    echo ""
+menu_loop() {
+    local choice
+    while true; do
+        echo ""
+        echo "==============================="
+        echo "  DICOM Viewer V3 Launcher"
+        echo "==============================="
+        echo ""
 
-    if [[ -x "$VENV_PY" ]]; then
-        echo "Virtual environment: FOUND"
-        echo ""
-        echo "  1  Run DICOM Viewer"
-        echo "  2  Reinstall / update requirements"
-        echo "  3  Delete virtual environment"
-        echo "  4  Exit"
-        echo ""
-        read -rp "Choose [1-4]: " choice
-        case "$choice" in
-            1) run_with_check ;;
-            2) reinstall ;;
-            3) delete_venv ;;
-            4) exit 0 ;;
-            *) show_menu ;;
-        esac
-    else
-        echo "Virtual environment: NOT FOUND"
-        echo ""
-        echo "What is a venv? A separate folder of Python packages used only by this app."
-        echo "It avoids mixing versions with other Python programs on your PC and makes"
-        echo "updates or cleanup simpler. Using one is recommended, not required."
-        echo "You can run with system Python instead (option 2 below) if you prefer."
-        echo ""
-        echo "  1  Create venv, install requirements, then run"
-        echo "  2  Run using system Python (no venv)"
-        echo "  3  Exit"
-        echo ""
-        read -rp "Choose [1-3]: " choice
-        case "$choice" in
-            1) setup_and_run ;;
-            2) run_sys ;;
-            3) exit 0 ;;
-            *) show_menu ;;
-        esac
-    fi
+        if [[ -f "$VENV_PY" ]]; then
+            echo "Virtual environment: FOUND"
+            echo "  $VENV"
+            echo ""
+            echo "  1  Run DICOM Viewer"
+            echo "  2  Reinstall / update requirements"
+            echo "  3  Delete virtual environment"
+            echo "  4  Exit"
+            echo ""
+            read -rp "Choose [1-4]: " choice
+            case "$choice" in
+                1) run_with_check ;;
+                2) reinstall ;;
+                3) delete_venv ;;
+                4) exit 0 ;;
+                *) continue ;;
+            esac
+        else
+            echo "Virtual environment: NOT FOUND"
+            echo ""
+            echo "What is a venv? A separate folder of Python packages used only by this app."
+            echo "It avoids mixing versions with other Python programs on your PC and makes"
+            echo "updates or cleanup simpler. Using one is recommended, not required."
+            echo "You can run with system Python instead (option 2 below) if you prefer."
+            echo ""
+            echo "  1  Create venv, install requirements, then run"
+            echo "  2  Run using system Python (no venv)"
+            echo "  3  Exit"
+            echo ""
+            read -rp "Choose [1-3]: " choice
+            case "$choice" in
+                1) setup_and_run ;;
+                2) run_sys ;;
+                3) exit 0 ;;
+                *) continue ;;
+            esac
+        fi
+    done
 }
 
-show_menu
+menu_loop
