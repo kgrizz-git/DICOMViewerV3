@@ -88,7 +88,7 @@ class TestScanDocDates(unittest.TestCase):
 
 
 class TestLauncherVenvResolution(unittest.TestCase):
-    """Unit-test launch.bat / launch.command shared venv candidate order."""
+    """Unit-test shared venv candidate order across launchers and scan-security.ps1."""
 
     def test_repo_launchers_match_expected_order(self) -> None:
         module = _load_harness_module()
@@ -113,9 +113,48 @@ class TestLauncherVenvResolution(unittest.TestCase):
                 'VENV="$SCRIPT_DIR/.venv"\n',
                 encoding="utf-8",
             )
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (scripts / "scan-security.ps1").write_text(
+                'foreach ($name in @(".venv", "venv", "env", "virtualenv")) {\n',
+                encoding="utf-8",
+            )
             errors = module.check_launcher_venv_resolution(root)
         self.assertTrue(any("launch.bat venv candidate order" in e for e in errors))
         self.assertTrue(any("diverge" in e for e in errors))
+
+    def test_detects_scan_security_ps1_order_drift(self) -> None:
+        import tempfile
+
+        module = _load_harness_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "launch.bat").write_text(
+                'if exist "%ROOT%.venv\\Scripts\\python.exe" set "VENV=%ROOT%.venv"\n'
+                'if not defined VENV if exist "%ROOT%venv\\Scripts\\python.exe" '
+                'set "VENV=%ROOT%venv"\n'
+                'if not defined VENV if exist "%ROOT%env\\Scripts\\python.exe" '
+                'set "VENV=%ROOT%env"\n'
+                'if not defined VENV if exist "%ROOT%virtualenv\\Scripts\\python.exe" '
+                'set "VENV=%ROOT%virtualenv"\n'
+                'if not defined VENV set "VENV=%ROOT%.venv"\n',
+                encoding="utf-8",
+            )
+            (root / "launch.command").write_text(
+                "for candidate in .venv venv env virtualenv; do\n"
+                'VENV="$SCRIPT_DIR/.venv"\n',
+                encoding="utf-8",
+            )
+            scripts = root / "scripts"
+            scripts.mkdir()
+            (scripts / "scan-security.ps1").write_text(
+                'foreach ($name in @(".venv", "venv")) {\n',
+                encoding="utf-8",
+            )
+            errors = module.check_launcher_venv_resolution(root)
+        self.assertTrue(
+            any("scripts/scan-security.ps1 venv candidate order" in e for e in errors)
+        )
 
 
 class TestTodoBacklogPolicy(unittest.TestCase):

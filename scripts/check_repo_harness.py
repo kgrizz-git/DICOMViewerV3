@@ -4,8 +4,8 @@ Validate repository harness documentation and structure.
 
 Checks required harness files, AGENTS.md size/shape, TO_DO freshness metadata,
 maintenance-log presence, plan paths referenced from TO_DO.md, relative links
-in harness markdown, and shared launch.bat / launch.command venv resolution
-order.
+in harness markdown, and shared launch.bat / launch.command /
+scripts/scan-security.ps1 venv resolution order.
 Optional ``--doc-garden`` prints a non-blocking documentation hygiene report.
 
 Usage (from repository root):
@@ -97,7 +97,7 @@ APPROVED_SONARQUBE_CLOUD_ACTION = (
     "7006c4492b2e0ee0f816d36501671557c97f5995"
 )
 
-# Shared by launch.bat / launch.command; keep both launchers and this tuple in sync.
+# Shared by launch.bat / launch.command / scripts/scan-security.ps1.
 LAUNCHER_VENV_CANDIDATES = (".venv", "venv", "env", "virtualenv")
 LAUNCHER_VENV_CREATE_TARGET = ".venv"
 _BAT_VENV_EXIST_PATTERN = re.compile(
@@ -114,6 +114,19 @@ _BAT_VENV_CREATE_PATTERN = re.compile(
     r'if not defined VENV set "VENV=%ROOT%(\.venv)"',
     re.IGNORECASE,
 )
+_PS1_VENV_FOREACH_PATTERN = re.compile(
+    r"foreach\s*\(\s*\$name\s+in\s*@\(([^)]+)\)\)",
+    re.IGNORECASE,
+)
+_PS1_VENV_NAME_PATTERN = re.compile(r'"([^"]+)"')
+
+
+def _ps1_venv_candidate_order(ps1_text: str) -> list[str]:
+    """Extract the foreach ($name in @(...)) candidate list from scan-security.ps1."""
+    match = _PS1_VENV_FOREACH_PATTERN.search(ps1_text)
+    if not match:
+        return []
+    return _PS1_VENV_NAME_PATTERN.findall(match.group(1))
 
 
 def split_anchor(url: str) -> tuple[str, str]:
@@ -291,10 +304,11 @@ def check_todo_backlog_policy(repo_root: Path) -> list[str]:
 
 
 def check_launcher_venv_resolution(repo_root: Path) -> list[str]:
-    """Ensure launch.bat and launch.command share the same venv candidate order."""
+    """Ensure launchers and scan-security.ps1 share the same venv candidate order."""
     errors: list[str] = []
     bat_path = repo_root / "launch.bat"
     cmd_path = repo_root / "launch.command"
+    ps1_path = repo_root / "scripts" / "scan-security.ps1"
     if not bat_path.is_file():
         errors.append("missing launch.bat")
         return errors
@@ -343,6 +357,16 @@ def check_launcher_venv_resolution(repo_root: Path) -> list[str]:
             "LAUNCHER_VENV_CREATE_TARGET must match the first candidate "
             f"({expected[0]!r})"
         )
+
+    if not ps1_path.is_file():
+        errors.append("missing scripts/scan-security.ps1")
+    else:
+        ps1_order = _ps1_venv_candidate_order(ps1_path.read_text(encoding="utf-8"))
+        if ps1_order != expected:
+            errors.append(
+                "scripts/scan-security.ps1 venv candidate order "
+                f"{ps1_order!r} != expected {expected!r}"
+            )
     return errors
 
 
