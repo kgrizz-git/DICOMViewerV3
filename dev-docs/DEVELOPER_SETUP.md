@@ -11,14 +11,14 @@ create a virtual environment when needed, install requirements, and start the
 viewer. Both resolve an existing environment in order `.venv` → `venv` → `env`
 → `virtualenv`, and create `.venv` when none exist. For a manual setup:
 
-macOS / Linux:
+macOS / Linux (`python3` must resolve to **Python 3.12 or newer**):
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python run.py
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+python3 run.py
 ```
 
 Windows PowerShell:
@@ -32,8 +32,8 @@ python run.py
 ```
 
 `run.py` starts `src/main.py` with the source directory on Python's import
-path; from an activated environment, `python src/main.py` also works.
-Python 3.12+ is required (see the wheels note below).
+path; from an activated environment, `python src/main.py` (or `python3`) also
+works. Python 3.12+ is required (see the wheels note below).
 
 ## Common issues
 
