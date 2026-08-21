@@ -7,6 +7,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **README end-user polish:** Root `README.md` rewritten so end users can see
+  what the app is and how to get it within about one screen: short intro,
+  packaged-release-first "Get the app", compact capability table, user-docs
+  links, and a short "Run from source" section that points to
+  `dev-docs/DEVELOPER_SETUP.md` instead of duplicating manual install blocks.
+  Manual macOS/Linux setup in `DEVELOPER_SETUP.md` uses `python3` (3.12+).
+  A hero-screenshot slot is reserved pending human capture and PHI review.
+  Docs-only change. **Semantic versioning note: patch.**
 - **Launchers prefer `.venv`:** `launch.bat` and `launch.command` resolve an
   existing environment in order `.venv` → `venv` → `env` → `virtualenv`, and
   create `.venv` when none exist (macOS launcher previously only looked for
