@@ -1,8 +1,26 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-21
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-21
+
+- **Dependency-license policy: accepted build-only PyInstaller exceptions.**
+  The pre-commit license gate (`scripts/check_dependency_licenses.py`) flagged
+  `pyinstaller` (GPLv2) and `pyinstaller-hooks-contrib` (GPLv2 + Apache) as
+  `FORBIDDEN` because `accepted_exceptions` in
+  `dev-docs/info/dependency_license_policy.json` was empty. These are
+  **build-only** tools pinned in `requirements-build.txt` (not `requirements.txt`)
+  and are never bundled into the shipped application. `pyinstaller-hooks-contrib`
+  is additionally a hard transitive dependency of `pyinstaller`. PyInstaller's GPL
+  carries a special exception permitting proprietary/frozen builds, so its
+  copyleft does not extend to the distributed binary. Added both to
+  `accepted_exceptions` with `reason` + `review_by: 2026-12-31`, and synced the
+  "Current accepted exceptions" table in `DEPENDENCY_LICENSE_POLICY.md`. This does
+  not undermine the policy's intent (rejecting future strong-copyleft *runtime
+  decoder* dependencies); the gate still fails on any new copyleft runtime dep.
+  Validated by a `opencode/mimo-v2.5-free` subagent (plan mode).
 
 ## 2026-08-16
 

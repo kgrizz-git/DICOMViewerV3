@@ -2,6 +2,17 @@
   "_comment": "Machine-readable dependency-license policy. Documentation: dev-docs/info/DEPENDENCY_LICENSE_POLICY.md. Enforced by scripts/check_dependency_licenses.py. Edit accepted_exceptions/overrides here; keep the .md in sync.",
   "forbidden_categories": ["FORBIDDEN"],
   "fail_on_unknown": false,
-  "accepted_exceptions": {},
+  "accepted_exceptions": {
+    "pyinstaller": {
+      "license": "GPL-2.0-or-later WITH PyInstaller-Bootloader-CPE",
+      "reason": "Build-only freezer pinned in requirements-build.txt (not requirements.txt). PyInstaller's GPL carries a special exception permitting proprietary/frozen builds, so its copyleft does not extend to the distributed application. Never imported or bundled as a runtime library.",
+      "review_by": "2026-12-31"
+    },
+    "pyinstaller-hooks-contrib": {
+      "license": "GPL-2.0 OR Apache-2.0",
+      "reason": "Build-only hook collection, forced in as a hard transitive dependency of pyinstaller (Requires: pyinstaller-hooks-contrib>=2026.6). Not bundled into the shipped application.",
+      "review_by": "2026-12-31"
+    }
+  },
   "overrides": {}
 }

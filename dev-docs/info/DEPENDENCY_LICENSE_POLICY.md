@@ -131,9 +131,15 @@ All policy lives in [`dependency_license_policy.json`](dependency_license_policy
 
 ### Current accepted exceptions
 
-None. `pylibjpeg-libjpeg` was removed from the runtime requirements on 2026-07-29 in favor of
-`python-gdcm`; the policy must remain empty so a future strong-copyleft decoder is rejected by the
-gate rather than silently accepted.
+| Package | License | Reason | Review by |
+|---------|---------|--------|-----------|
+| `pyinstaller` | GPL-2.0-or-later WITH PyInstaller-Bootloader-CPE | Build-only freezer (requirements-build.txt, not requirements.txt). PyInstaller's GPL has a special exception permitting proprietary/frozen builds, so copyleft does not extend to the distributed app. Never bundled as a runtime library. | 2026-12-31 |
+| `pyinstaller-hooks-contrib` | GPL-2.0 OR Apache-2.0 | Build-only hook collection, forced in as a hard transitive dependency of `pyinstaller` (Requires: `pyinstaller-hooks-contrib>=2026.6`). Not shipped. | 2026-12-31 |
+
+> `pylibjpeg-libjpeg` was removed from the runtime requirements on 2026-07-29 in favor of
+> `python-gdcm`; the policy intentionally rejects *future strong-copyleft decoder/runtime*
+> dependencies via the gate. The entries above are **build-only tooling** that is never bundled,
+> so they do not undermine that goal.
 
 > Keep this table in sync with `accepted_exceptions` in the JSON when you add or
 > remove an entry.
