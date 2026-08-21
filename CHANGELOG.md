@@ -20,6 +20,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   the harness) and file-only (`-PathType Leaf`) interpreter checks; `launch.bat`
   likewise treats `python.exe` as a file, not a same-named directory. Root
   `README.md` is included in `scripts/check_user_docs_links.py`.
+  `scripts/scan-security.ps1` is saved as UTF-8 with BOM so Windows PowerShell
+  correctly decodes its status symbols.
   **Semantic versioning note: patch.**
 - **Metadata group headers:** Fixed per-theme fills (`#0B0B0C` dark / `#F3F3F3`
   light) keep headings clear of window chrome. Headers are bold at the tree font

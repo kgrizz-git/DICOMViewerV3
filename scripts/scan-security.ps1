@@ -1,4 +1,4 @@
-# Security Scanner PowerShell Wrapper
+﻿# Security Scanner PowerShell Wrapper
 # Quick access to security scanning tools
 # 
 # Usage:
