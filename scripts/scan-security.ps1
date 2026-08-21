@@ -85,7 +85,7 @@ $activateScript = $null
 foreach ($name in @(".venv", "venv", "env", "virtualenv")) {
     $candidatePy = ".\$name\Scripts\python.exe"
     $candidateActivate = ".\$name\Scripts\Activate.ps1"
-    if (Test-Path $candidatePy) {
+    if (Test-Path -LiteralPath $candidatePy -PathType Leaf) {
         $pythonExe = $candidatePy
         $activateScript = $candidateActivate
         break

@@ -17,7 +17,7 @@ echo   DICOM Viewer V3 Launcher
 echo ===============================
 echo.
 
-if exist "%VENV_PY%" goto :MENU_FOUND
+if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :MENU_FOUND
 goto :MENU_MISSING
 
 :MENU_FOUND
@@ -66,23 +66,23 @@ if errorlevel 1 (
     pause
     goto :END
 )
-if not exist "%VENV_PY%" (
+if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :SETUP_PY_OK
     echo ERROR: Virtual environment was created but python.exe is missing:
     echo   %VENV_PY%
     pause
     goto :END
-)
+:SETUP_PY_OK
 call :INSTALL_REQUIREMENTS
 if errorlevel 1 goto :END
 goto :RUN_ACTIVATED
 
 :REINSTALL
-if not exist "%VENV_PY%" (
+if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :REINSTALL_PY_OK
     echo ERROR: Virtual environment python not found:
     echo   %VENV_PY%
     pause
     goto :END
-)
+:REINSTALL_PY_OK
 call :INSTALL_REQUIREMENTS
 if errorlevel 1 goto :END
 goto :RUN_ACTIVATED
@@ -121,12 +121,12 @@ echo Requirements installed successfully.
 exit /b 0
 
 :RUN
-if not exist "%VENV_PY%" (
+if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :RUN_PY_OK
     echo ERROR: Virtual environment python not found:
     echo   %VENV_PY%
     pause
     goto :END
-)
+:RUN_PY_OK
 rem Recover from a half-created venv (folder exists, packages never installed).
 "%VENV_PY%" -c "import pydicom, PySide6, numpy, PIL" 1>nul 2>nul
 if errorlevel 1 (
@@ -184,11 +184,12 @@ goto :MENU
 
 :RESOLVE_VENV
 rem First existing among .venv, venv, env, virtualenv; otherwise create target .venv.
+rem Require python.exe as a file (exist alone is true for a same-named directory).
 set "VENV="
-if exist "%ROOT%.venv\Scripts\python.exe" set "VENV=%ROOT%.venv"
-if not defined VENV if exist "%ROOT%venv\Scripts\python.exe" set "VENV=%ROOT%venv"
-if not defined VENV if exist "%ROOT%env\Scripts\python.exe" set "VENV=%ROOT%env"
-if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" set "VENV=%ROOT%virtualenv"
+if exist "%ROOT%.venv\Scripts\python.exe" if not exist "%ROOT%.venv\Scripts\python.exe\" set "VENV=%ROOT%.venv"
+if not defined VENV if exist "%ROOT%venv\Scripts\python.exe" if not exist "%ROOT%venv\Scripts\python.exe\" set "VENV=%ROOT%venv"
+if not defined VENV if exist "%ROOT%env\Scripts\python.exe" if not exist "%ROOT%env\Scripts\python.exe\" set "VENV=%ROOT%env"
+if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" if not exist "%ROOT%virtualenv\Scripts\python.exe\" set "VENV=%ROOT%virtualenv"
 if not defined VENV set "VENV=%ROOT%.venv"
 set "VENV_PY=%VENV%\Scripts\python.exe"
 exit /b 0

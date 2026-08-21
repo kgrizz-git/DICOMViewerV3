@@ -17,7 +17,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   `launch.command` uses a menu loop and treats `bin/python` by existence.
   `check_repo_harness.py` pins the shared candidate order across both launchers.
   `scripts/scan-security.ps1` uses the same env resolution order (also pinned by
-  the harness); root `README.md` is included in `scripts/check_user_docs_links.py`.
+  the harness) and file-only (`-PathType Leaf`) interpreter checks; `launch.bat`
+  likewise treats `python.exe` as a file, not a same-named directory. Root
+  `README.md` is included in `scripts/check_user_docs_links.py`.
   **Semantic versioning note: patch.**
 - **Metadata group headers:** Fixed per-theme fills (`#0B0B0C` dark / `#F3F3F3`
   light) keep headings clear of window chrome. Headers are bold at the tree font

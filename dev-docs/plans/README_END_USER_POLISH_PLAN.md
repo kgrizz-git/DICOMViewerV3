@@ -39,10 +39,13 @@ Suggested set (keep small):
 
 Rules:
 
-- Use **wholly synthetic / approved demo** studies only. Never real patient pixels or burned-in identifiers.
+- Use **wholly synthetic studies from approved demo fixtures** only. Never real
+  patient pixels, real clinical studies, or burned-in identifiers. After human
+  visual PHI review, record the approved asset hash in
+  [`security/approved-media-sha256.json`](../../security/approved-media-sha256.json).
 - Prefer a dark or light theme that matches current UI; crop chrome that adds noise.
 - Draft locally under gitignored `resources/screenshots-ignored/` (or `tmp/`) until review is done.
-- Before committing tracked images (e.g. under `resources/` or `docs/media/`), follow [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md): human visual review (+ OCR if useful), then update [`security/approved-media-sha256.json`](../../security/approved-media-sha256.json). A clean advisory scanner is not permission to update the manifest.
+- Before committing tracked images (e.g. under `resources/` or `docs/media/`), follow [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md): human visual review (+ OCR if useful), then update the approved-media manifest. A clean advisory scanner is not permission to update the manifest.
 - Cap at **1–2** images in the README so the page stays short.
 
 Checklist additions for screenshots:
