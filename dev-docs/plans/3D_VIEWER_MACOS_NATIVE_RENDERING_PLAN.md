@@ -1,7 +1,7 @@
 # Plan: Make the 3D viewer work on native macOS (offscreen render surface)
 
 **Date:** 2026-08-22
-**Status:** Active — root cause confirmed, implementation not started
+**Status:** Active — Phase 0 decision gate PASSED 2026-08-22; Phase 1 in progress
 **Priority:** P0 (3D viewer hard-freezes the application on native macOS; force quit required)
 **Branch suggestion:** `fix/3d-macos-native-offscreen-render`
 **Related:** [`3D_VOLUME_RENDERING_PLAN.md`](3D_VOLUME_RENDERING_PLAN.md),
@@ -154,20 +154,43 @@ rescue Parallels' blank frames, but on native macOS it never executes — the *f
 
 Prove the offscreen surface is viable *before* committing to the port.
 
-- [ ] **Step 1:** Standalone script: offscreen `vtkRenderWindow` + `SetOffScreenRendering(1)`
+- [x] **Step 1:** Standalone script: offscreen `vtkRenderWindow` + `SetOffScreenRendering(1)`
       → `Render()` → `GetRGBACharPixelData()` → numpy → `QImage` → `QLabel` in a live Qt
       window. Confirm a visible, correct volume image and a responsive event loop.
-- [ ] **Step 2:** Confirm Retina correctness — render at `devicePixelRatio`, set
+- [x] **Step 2:** Confirm Retina correctness — render at `devicePixelRatio`, set
       `QImage.setDevicePixelRatio()`, verify no blur and no half-size viewport.
-- [ ] **Step 3:** Confirm the vertical flip (VTK origin is bottom-left, `QImage` is
+- [x] **Step 3:** Confirm the vertical flip (VTK origin is bottom-left, `QImage` is
       top-left) and the RGBA byte order on ARM64.
-- [ ] **Step 4:** Measure blit cost per frame at 884×560 and at full-screen on Retina.
+- [x] **Step 4:** Measure blit cost per frame at 884×560 and at full-screen on Retina.
       Budget: < 5 ms per frame for the readback + `QImage` construction.
-- [ ] **Step 5:** Drag-loop feasibility — synthesize 60 camera updates and confirm sustained
+- [x] **Step 5:** Drag-loop feasibility — synthesize 60 camera updates and confirm sustained
       interactive frame rate with `set_interactive_quality(low=True)`.
-- [ ] **Decision gate:** all five green → proceed. Any red → record the failure here and
+- [x] **Decision gate:** all five green → proceed. Any red → record the failure here and
       escalate (options: ship 3D as Windows/Parallels-only on macOS with an explicit
       unsupported notice, or revisit building VTK with `QVTKOpenGLNativeWidget`).
+
+### Phase 0 results — 2026-08-22: **PASSED, proceed to Phase 1**
+
+Spike scripts: `tmp/spike/phase0_offscreen.py`, `tmp/spike/phase0_flip_dpr.py`
+(scratch only — not committed as production code).
+
+| Gate | Result |
+|---|---|
+| Step 1 — visible image + responsive loop | **PASS.** First offscreen render 0.140 s; event loop stayed responsive through **103 live re-renders** at 10 Hz with zero stalls. Rendered image visually verified as a correct phantom cylinder. |
+| Step 2 — Retina / DPR | **PASS.** At `dpr=2.0`, rendering 800×600 px yields a 400×300 logical image; blit 1.54 ms. *(This display reports `dpr=1.0`, so 2× was simulated — re-verify on a real Retina panel at the manual gate.)* |
+| Step 3 — flip + byte order | **PASS.** A superior-only bright marker lands at row 78/300 (top quarter), confirming `buf[::-1]` is correct. Colors correct — no BGR swap on ARM64. |
+| Step 4 — blit cost | **PASS, 17× under budget.** 884×560: median **0.29 ms**, max 0.47 ms (budget 5.00 ms). |
+| Step 5 — drag loop | **PASS.** 60 camera updates + readbacks in 0.16 s → **385 fps** at coarse quality. |
+
+**Critical finding — discard the alpha channel.** The offscreen buffer's background alpha
+is **0**: 118 817 of 120 000 pixels are fully transparent. Blitting via
+`QImage.Format_RGBA8888` therefore produces a near-invisible overlay. **Phase 1 must use
+`Format_RGB888` with the alpha channel sliced off** (`flipped[:, :, :3]`). Verified
+correct, with the renderer background color showing properly, once alpha is dropped.
+
+**Buffer lifetime:** `QImage` does not copy its backing buffer. Every `QImage` built over a
+numpy array must be `.copy()`-ed (or the array kept alive for the widget's lifetime)
+before the numpy buffer goes out of scope. Phase 1 Step 5 must test this.
 
 **Already-tested options (do not redo):**
 
