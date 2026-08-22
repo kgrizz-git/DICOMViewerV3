@@ -124,3 +124,102 @@ def test_control_panel_is_wide_enough_for_its_contents(qapp, monkeypatch):
         assert scroll.viewport().width() >= panel.sizeHint().width()
     finally:
         widget.cleanup()
+
+
+# ----------------------------------------------------------------------
+# Muted label contrast
+# ----------------------------------------------------------------------
+
+
+def _contrast_ratio(fg, bg) -> float:
+    """WCAG relative-luminance contrast ratio between two QColors."""
+
+    def channel(value: int) -> float:
+        v = value / 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    def luminance(colour) -> float:
+        return (
+            0.2126 * channel(colour.red())
+            + 0.7152 * channel(colour.green())
+            + 0.0722 * channel(colour.blue())
+        )
+
+    a, b = luminance(fg), luminance(bg)
+    high, low = max(a, b), min(a, b)
+    return (high + 0.05) / (low + 0.05)
+
+
+@pytest.mark.parametrize(
+    ("window_rgb", "text_rgb"),
+    [
+        ((239, 239, 239), (0, 0, 0)),  # light theme
+        ((30, 30, 30), (255, 255, 255)),  # dark theme
+        ((0, 0, 0), (255, 255, 255)),  # maximum contrast theme
+    ],
+)
+def test_muted_text_meets_wcag_aa(window_rgb, text_rgb):
+    """Muted labels must stay legible in any theme.
+
+    Regression: these labels used ``palette(mid)``, a 3D-bevel shading role,
+    which measures ~1.7:1 against the window background — nearly invisible.
+    """
+    from PySide6.QtGui import QColor, QPalette
+
+    from gui.volume.control_panel import muted_text_color
+
+    palette = QPalette()
+    window = QColor(*window_rgb)
+    palette.setColor(QPalette.ColorRole.Window, window)
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(*text_rgb))
+
+    assert _contrast_ratio(muted_text_color(palette), window) >= 4.5
+
+
+def test_muted_text_is_actually_muted():
+    """It must still read as de-emphasised, not identical to body text."""
+    from PySide6.QtGui import QColor, QPalette
+
+    from gui.volume.control_panel import muted_text_color
+
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 30))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
+
+    assert muted_text_color(palette) != QColor(255, 255, 255)
+
+
+def test_palette_change_recolours_labels(qapp, monkeypatch):
+    """A theme flip under a live viewer must restyle the muted labels."""
+    pytest.importorskip("vtkmodules.all")
+    import numpy as np
+    from PySide6.QtCore import QEvent
+
+    from core.volume_renderer import VolumeData, VolumeRenderer
+
+    array = np.full((8, 32, 32), -1000.0, dtype=np.float32)
+    array[:, 8:24, 8:24] = 300.0
+    renderer = VolumeRenderer()
+    renderer.attach_volume(
+        VolumeData(
+            array=np.ascontiguousarray(array),
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+            direction=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+            rescale_applied=True,
+            scalar_units="HU",
+        )
+    )
+
+    from gui.volume_viewer_widget import VolumeViewerWidget
+
+    widget = VolumeViewerWidget(renderer)
+    try:
+        widget.initialize(modality="CT")
+        for name in ("_help_strip", "_scalar_domain_label", "_render_status_label"):
+            getattr(widget, name).setStyleSheet("color: #ff0000;")
+        widget.changeEvent(QEvent(QEvent.Type.PaletteChange))
+        for name in ("_help_strip", "_scalar_domain_label", "_render_status_label"):
+            assert "#ff0000" not in getattr(widget, name).styleSheet()
+    finally:
+        widget.cleanup()

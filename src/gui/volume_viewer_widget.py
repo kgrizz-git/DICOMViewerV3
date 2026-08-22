@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar, cast
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import QEvent, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -84,7 +84,7 @@ from core.volume_renderer import (
     scalar_domain_label,
     vtk_mod,
 )
-from gui.volume.control_panel import fit_control_panel_width
+from gui.volume.control_panel import apply_muted_label_styles, fit_control_panel_width
 from gui.volume.detail import apply_auto_detail, apply_detail_index
 from gui.volume.first_paint import (
     apply_interaction_detail,
@@ -218,15 +218,12 @@ class VolumeViewerWidget(QWidget):
         layout.setSpacing(6)
 
         # ── Interaction help strip (T4) ──────────────────────────────────
-        help_strip = QLabel(
+        self._help_strip = help_strip = QLabel(
             "Rotate: left-drag  Zoom: right-drag/scroll  Pan: mid-drag\n"
             "Keys: R=reset  1-6=views  A=auto-rotate  +/-=opacity  [/]=preset",
             panel,
         )
         help_strip.setWordWrap(True)
-        help_strip.setStyleSheet(
-            "color: palette(mid); font-size: 10px; padding: 2px 4px;"
-        )
         help_strip.setToolTip(
             "Mouse and keyboard shortcuts for the 3D viewport.\n\n"
             "Mouse: Left-drag=Rotate, Right-drag/Scroll=Zoom, Middle-drag=Pan\n"
@@ -265,7 +262,6 @@ class VolumeViewerWidget(QWidget):
         # Honest scalar-domain readout (T0 / T3).
         self._scalar_domain_label = QLabel("", preset_group)
         self._scalar_domain_label.setWordWrap(True)
-        self._scalar_domain_label.setStyleSheet("color: palette(mid); font-size: 11px;")
         self._scalar_domain_label.setToolTip(
             "The scalar domain the renderer is operating on.  When complete "
             "DICOM rescale metadata is available, CT values are calibrated; "
@@ -718,9 +714,6 @@ class VolumeViewerWidget(QWidget):
         # Render status readout (T7).
         self._render_status_label = QLabel("", self._advanced_group)
         self._render_status_label.setWordWrap(True)
-        self._render_status_label.setStyleSheet(
-            "color: palette(mid); font-size: 11px;"
-        )
         self._render_status_label.setToolTip(
             "Technical readout: render method, mapper mode, and volume "
             "dimensions.  Useful for diagnosing performance or GPU fallback "
@@ -731,6 +724,7 @@ class VolumeViewerWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(panel)
+        apply_muted_label_styles(self)
         fit_control_panel_width(scroll, panel)
         return scroll
 
@@ -1669,6 +1663,12 @@ class VolumeViewerWidget(QWidget):
         self._vtk_render_window = None
         if DEBUG_VOLUME_3D:
             print("[DEBUG-VOLUME-3D] VolumeViewerWidget cleanup complete.")
+
+    def changeEvent(self, event: Any) -> None:
+        """Recolour muted labels when the theme flips under a live viewer."""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.PaletteChange:
+            apply_muted_label_styles(self)
 
     def closeEvent(self, event: Any) -> None:
         """Ensure cleanup on widget close."""

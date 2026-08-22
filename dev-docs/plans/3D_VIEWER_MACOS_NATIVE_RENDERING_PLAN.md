@@ -343,7 +343,16 @@ Found during the first real-UI check:
    Measured: the panel needs **278 px** (258 px content + 18 px scrollbar), so it was
    **38 px short**, and the clipped region was unreachable at any window size. Now derived
    from the panel's own size hint and clamped (`gui/volume/control_panel.py`).
-2. **Stale frame after resize (introduced by Phase 1).** `resizeEvent` resized the
+2. **Muted panel text nearly invisible (pre-existing).** The help strip, scalar-domain
+   label, and render-status readout used `color: palette(mid)`. `Mid` is a 3D-bevel
+   shading role, not a text role, and measured **2.6:1** against a dark window background
+   — well under the 4.5:1 WCAG AA floor. The `Disabled` text role is no better (~1.6:1)
+   and is semantically wrong, since these labels are informational rather than disabled.
+   Now derived from the live palette by blending `WindowText` 70% toward `Window`
+   (`gui/volume/control_panel.py`), measuring **6.7:1** on the same background while
+   still reading as de-emphasised. A `PaletteChange` handler recolours them on a live
+   theme flip, matching the existing pattern in `gui/metadata_panel.py:541`.
+3. **Stale frame after resize (introduced by Phase 1).** `resizeEvent` resized the
    offscreen buffer but never re-rendered, so the widget kept painting an image of the old
    size and newly exposed area showed stale content. Now schedules a debounced re-render;
    rendering still never happens inline, so a drag-resize cannot queue one volume render
