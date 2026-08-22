@@ -137,13 +137,13 @@ rescue Parallels' blank frames, but on native macOS it never executes — the *f
 | File | Role |
 |------|------|
 | `src/gui/volume/render_surface.py` | **New.** Offscreen render surface + QImage blit widget |
-| `src/gui/volume/camera_interaction.py` | **New.** Mouse/wheel → camera manipulation |
+| `src/gui/volume/interactor_bridge.py` | **New.** Qt events → `vtkGenericRenderWindowInteractor` |
 | `src/gui/volume_viewer_widget.py` | Swap `QVTKRenderWindowInteractor` for the new surface; re-wire observers |
 | `src/gui/volume/first_paint.py` | Preview/refine timers now drive the surface, not the interactor |
 | `src/core/volume_renderer.py` | Render-window ownership; `check_gpu_fallback` call site |
 | `src/gui/dialogs/volume_render_dialog.py` | Unchanged if the widget API is preserved |
 | `tests/gui/test_volume_render_surface.py` | **New.** Offscreen surface + blit unit tests |
-| `tests/gui/test_volume_camera_interaction.py` | **New.** Camera manipulation unit tests |
+| `tests/gui/test_volume_interactor_bridge.py` | **New.** Event-forwarding and coordinate tests |
 | `tests/gui/test_volume_viewer_widget.py` | Update for the new surface |
 | `user-docs/USER_GUIDE_3D.md` | Note platform support if behavior differs |
 | `CHANGELOG.md`, `dev-docs/MAINTENANCE_LOG.md`, `dev-docs/TO_DO.md` | Standard bookkeeping |
@@ -222,24 +222,44 @@ before the numpy buffer goes out of scope. Phase 1 Step 5 must test this.
 
 ## Phase 2 — Camera interaction
 
-**Produces:** `src/gui/volume/camera_interaction.py`
+**Produces:** `src/gui/volume/interactor_bridge.py`
 
-Replaces `vtkInteractorStyleTrackballCamera`, which came with the interactor widget.
-Drive the camera directly — more predictable than re-hosting a VTK interactor style.
+> **Design superseded 2026-08-22.** The original plan hand-rolled camera math. A spike
+> (`tmp/spike/phase2_generic_interactor.py`) showed that a
+> **`vtkGenericRenderWindowInteractor` binds cleanly to the offscreen render window**, so
+> the existing `vtkInteractorStyleTrackballCamera` can be kept verbatim. This is
+> strictly better: identical interaction feel to the Windows build (no tuning),
+> `StartInteractionEvent` / `EndInteractionEvent` keep firing so
+> `apply_interaction_detail()` needs no change, and — decisively — the **crop box widget
+> keeps working**. `vtkBoxWidget2.SetInteractor()` requires a real interactor
+> (`src/gui/volume_viewer_widget.py:1469`); hand-rolled camera math would have silently
+> broken 3D cropping.
 
-- [ ] **Step 1:** Left-drag → `Azimuth(-dx * k)` / `Elevation(dy * k)` with
-      `OrthogonalizeViewUp()`; clamp elevation to avoid pole flipping.
-- [ ] **Step 2:** Middle-drag (and Shift+left-drag) → pan via focal-point translation in
-      the camera's view plane.
-- [ ] **Step 3:** Wheel / right-drag → `Dolly()`, with clamps, then
-      `ResetCameraClippingRange()`.
-- [ ] **Step 4:** Press → `set_interactive_quality(low=True)`; release → `low=False` and a
-      fine re-render. This replaces the `StartInteractionEvent` / `EndInteractionEvent`
-      observers wired in `_deferred_vtk_init`; keep the coarse/fine semantics identical so
-      `apply_interaction_detail()` continues to work unchanged.
-- [ ] **Step 5:** Port the keyboard shortcuts currently bound via
-      `iren.AddObserver("KeyPressEvent", ...)` to `QWidget.keyPressEvent`.
-- [ ] **Step 6:** Unit tests driving synthetic `QMouseEvent`s and asserting camera state.
+Spike results:
+
+| Check | Result |
+|---|---|
+| Generic interactor binds to offscreen window (`rw.GetInteractor() is iren`) | **PASS** |
+| Trackball style moves the camera from synthetic drag events | **PASS** |
+| Render-window `EndEvent` fires per render (the blit hook) | **PASS** (11/11) |
+| `vtkBoxWidget2` crop widget attaches and renders | **PASS** |
+| Event loop stays responsive with the interactor attached | **PASS** |
+
+- [ ] **Step 1:** `VolumeRenderSurface` owns a `vtkGenericRenderWindowInteractor` bound to
+      its offscreen window, with `vtkInteractorStyleTrackballCamera` as the style.
+- [ ] **Step 2:** Blit on the render window's `EndEvent` observer, so renders triggered by
+      the *interactor* (not just explicit `render()` calls) also refresh the widget.
+      Guard against re-entrancy and against firing after `cleanup()`.
+- [ ] **Step 3:** Forward Qt events → interactor: press / move / release for left, middle
+      and right buttons, plus wheel. **Coordinates must be converted** — Qt is top-left
+      origin in logical units, VTK is bottom-left origin in device pixels
+      (`y_vtk = height_px - y_qt * dpr`).
+- [ ] **Step 4:** Forward modifier state (Ctrl / Shift) so the trackball style's
+      pan / spin / dolly modifiers behave as they do on Windows.
+- [ ] **Step 5:** Forward `keyPressEvent`, preserving the shortcuts currently bound via
+      `iren.AddObserver("KeyPressEvent", ...)`.
+- [ ] **Step 6:** Unit tests: coordinate conversion (pure function), synthetic drag moves
+      the camera, `EndEvent` triggers exactly one blit, no events delivered after cleanup.
 
 ---
 

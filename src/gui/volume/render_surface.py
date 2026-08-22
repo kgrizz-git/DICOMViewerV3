@@ -25,6 +25,12 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from gui.volume.interactor_bridge import (
+    button_event_names,
+    create_interactor,
+    modifier_flags,
+    set_event_information,
+)
 from utils.debug_flags import DEBUG_VOLUME_3D
 
 # Minimum offscreen buffer size.  A zero-sized render window is invalid in VTK
@@ -62,6 +68,24 @@ class VolumeRenderSurface(QWidget):
         # ``_image`` is always a detached copy, so no numpy buffer needs to be
         # retained.  Track the last buffer size to avoid redundant SetSize churn.
         self._buffer_size: tuple[int, int] = (_MIN_DIM, _MIN_DIM)
+
+        # A generic interactor keeps the stock trackball style and lets VTK 3D
+        # widgets (crop box) work without a native VTK window.
+        self._interactor: Any = create_interactor(self._render_window)
+        # Blit whenever the render window finishes a frame, so renders driven by
+        # the interactor refresh the widget too, not only explicit render()
+        # calls.
+        self._grabbing = False
+        self._render_window.AddObserver("EndEvent", self._on_render_end)
+
+    # ------------------------------------------------------------------
+    # Interactor
+    # ------------------------------------------------------------------
+
+    @property
+    def interactor(self) -> Any:
+        """Return the generic interactor driving this surface."""
+        return self._interactor
 
     # ------------------------------------------------------------------
     # Renderer wiring
@@ -122,8 +146,19 @@ class VolumeRenderSurface(QWidget):
             self._render_window.SetSize(width, height)
             self._buffer_size = (width, height)
 
+        # The EndEvent observer performs the readback and repaint.
         self._render_window.Render()
-        self._image = self._grab(width, height)
+
+    def _on_render_end(self, _caller: Any = None, _event: str = "") -> None:
+        """Cache the just-rendered frame and schedule a repaint."""
+        if self._cleaned_up or self._render_window is None or self._grabbing:
+            return
+        self._grabbing = True
+        try:
+            width, height = self._buffer_size
+            self._image = self._grab(width, height)
+        finally:
+            self._grabbing = False
         self.update()
 
     def _grab(self, width: int, height: int) -> QImage | None:
@@ -165,18 +200,98 @@ class VolumeRenderSurface(QWidget):
         painter.drawImage(0, 0, self._image)
 
     # ------------------------------------------------------------------
+    # Input forwarding
+    # ------------------------------------------------------------------
+
+    def _push_event_info(self, event: Any, key: str = chr(0)) -> bool:
+        """Feed a Qt pointer event's position and modifiers into VTK."""
+        if self._cleaned_up or self._interactor is None:
+            return False
+        position = event.position()
+        set_event_information(
+            self._interactor,
+            x=position.x(),
+            y=position.y(),
+            height_px=self._buffer_size[1],
+            ratio=self.devicePixelRatioF() or 1.0,
+            modifiers=event.modifiers(),
+            key=key,
+        )
+        return True
+
+    def mousePressEvent(self, event: Any) -> None:
+        names = button_event_names(event.button())
+        if names is None or not self._push_event_info(event):
+            super().mousePressEvent(event)
+            return
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        getattr(self._interactor, names[0])()
+
+    def mouseReleaseEvent(self, event: Any) -> None:
+        names = button_event_names(event.button())
+        if names is None or not self._push_event_info(event):
+            super().mouseReleaseEvent(event)
+            return
+        getattr(self._interactor, names[1])()
+
+    def mouseMoveEvent(self, event: Any) -> None:
+        if self._push_event_info(event):
+            self._interactor.MouseMoveEvent()
+        else:
+            super().mouseMoveEvent(event)
+
+    def wheelEvent(self, event: Any) -> None:
+        if self._cleaned_up or self._interactor is None:
+            super().wheelEvent(event)
+            return
+        position = event.position()
+        set_event_information(
+            self._interactor,
+            x=position.x(),
+            y=position.y(),
+            height_px=self._buffer_size[1],
+            ratio=self.devicePixelRatioF() or 1.0,
+            modifiers=event.modifiers(),
+        )
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self._interactor.MouseWheelForwardEvent()
+        elif delta < 0:
+            self._interactor.MouseWheelBackwardEvent()
+
+    def keyPressEvent(self, event: Any) -> None:
+        if self._cleaned_up or self._interactor is None:
+            super().keyPressEvent(event)
+            return
+        text = event.text()
+        key = text[0] if text else chr(0)
+        ctrl, shift = modifier_flags(event.modifiers())
+        self._interactor.SetEventInformation(
+            0, 0, ctrl, shift, key, 0, event.text() or None
+        )
+        self._interactor.KeyPressEvent()
+        super().keyPressEvent(event)
+
+    # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
     def cleanup(self) -> None:
-        """Release the offscreen window and the cached frame."""
+        """Release the interactor, offscreen window, and cached frame."""
         if self._cleaned_up:
             return
         self._cleaned_up = True
         self._image = None
         if self._render_window is not None:
             try:
+                self._render_window.RemoveAllObservers()
                 self._render_window.Finalize()
             except Exception:
                 pass
-            self._render_window = None
+        if self._interactor is not None:
+            try:
+                self._interactor.SetRenderWindow(None)
+            except Exception:
+                pass
+            self._interactor = None
+        self._render_window = None
