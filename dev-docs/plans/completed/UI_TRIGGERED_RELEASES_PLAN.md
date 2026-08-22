@@ -230,7 +230,7 @@ On each of the three `softprops/action-gh-release` steps (`build.yml:314-348`), 
           # strict validation regex guarantees "-" can only appear as the pre-release delimiter.
           # Branch names can contain "-", so the manual-publish branch keys off the input, not ref_name.
           prerelease: ${{ ((inputs.publish_to_release == true) && contains(inputs.release_tag_name, '-')) || (startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-')) }}
-          overwrite: true
+          overwrite_files: true
           draft: false
           generate_release_notes: true
 ```

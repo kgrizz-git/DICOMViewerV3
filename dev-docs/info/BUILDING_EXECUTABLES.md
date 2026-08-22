@@ -440,7 +440,9 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 4. Click "Run workflow" button
 5. Select the branch. **Optional:** check **Publish to a GitHub Release** and supply a **`release_tag_name`** (strict `vX.Y.Z` or `vX.Y.Z-pre`); this builds and attaches a release from the run and **skips** the Actions artifact upload on that run only (storage saving). Leave unchecked for a plain test build. Click **Run workflow**.
 6. Wait for builds to complete
-7. Download artifacts from the completed workflow run
+7. **Download outputs:**
+   - **Publish checked:** go to the repository **Releases** page and download assets from the release named for your `release_tag_name` (Windows `.zip`, macOS `.dmg`, Linux `.AppImage`).
+   - **Publish unchecked:** open the completed workflow run on the **Actions** tab and download platform artifacts from the **Artifacts** section at the bottom of the run.
 
 ### Understanding Artifacts vs Releases
 
@@ -608,7 +610,9 @@ If builds fail:
 3. **Verify dependencies**: Make sure all dependencies are in `requirements.txt` and `requirements-build.txt`
 4. **Check Python version**: Ensure the Python version in the workflow matches your local version
 5. **Remove typing package**: The workflow automatically removes the obsolete `typing` package, but you can do this manually if needed
-6. **Release-tag reuse recovery (manual publish / tag push):** the `prepare_release` job refuses a tag that already exists on origin pointing to a different commit, and a re-run after a code fix produces a new SHA (different from the tagged commit). Escape hatch: `gh release delete <tag> --cleanup-tag --yes` (removes the release *and* the tag together), then re-dispatch with the same tag name. An idempotent re-run on the *same* SHA is allowed without deletion.
+6. **Release-tag reuse recovery:**
+   - **Manual publish (`publish_to_release` checked):** the `prepare_release` job refuses a tag that already exists on origin pointing to a **different** commit than the dispatched SHA, and a re-run after a code fix produces a new SHA (different from the tagged commit). Escape hatch: `gh release delete <tag> --cleanup-tag --yes` (removes the release *and* the tag together), then re-dispatch with the same tag name. An idempotent re-run on the *same* SHA is allowed without deletion.
+   - **Tag push:** `prepare_release` validation steps do not run; the workflow builds the commit the tag already points to. To rebuild the same tag name from a **different** commit, delete the tag (and release if present) with `gh release delete <tag> --cleanup-tag --yes`, bump/version on `main`, then create and push a fresh tag. Re-run failed jobs on the *same* tagged commit repopulates release assets without deleting the tag.
 
 ### Complete Workflow Examples
 

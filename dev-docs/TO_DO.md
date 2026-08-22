@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-22
 
 ---
 
@@ -102,6 +102,11 @@ This file tracks active and near-term tasks.
 - [ ] **[P1]** Review what is included in git repo unnecessarily
 - [ ] **[P1]** Regularly run all scan templates and update the active backlog / maintenance log as appropriate — **Partial:** harness scripts and CI exist; this item is the recurring human/process discipline, not missing tooling.
 - [ ] **[P1]** Examine github actions, CI, CD, etc., and look for opportunities to optimize, simplify, or improve, including reducing use of limited storage quota and reducing overly busy secondary scans (eg, we push a commit, actions run, one tool spawns a PR, all actions run on that) — **supporting plan:** [GitHub Actions, CI/CD, and storage — review and recommendations](plans/supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md)
+- [ ] **[P2]** **Build Executables workflow follow-ups (post UI-triggered releases, PR #76).** Deferred from CodeRabbit review 2026-08-22; tackle after pre-rollout smoke (`v0.0.0-ci-smoke`) validates the current release path. **Archived plan:** [UI-triggered releases](plans/completed/UI_TRIGGERED_RELEASES_PLAN.md).
+  - [ ] **[P2]** Extend `prepare_release` to create release metadata on **tag pushes** too; matrix `softprops/action-gh-release` steps upload assets only (drop redundant `name` / `prerelease` / `generate_release_notes` on each leg).
+  - [ ] **[P3]** Replace `prepare_release` `actions/checkout` + `git ls-remote` tag peel with authenticated `gh api` ref lookups (avoid persisting checkout credentials).
+  - [ ] **[P3]** Consolidate duplicated release-version selection (`publish` tag vs git tag vs `latest`) into one early matrix step with a `pkgver` output reused by AppImage, Windows ZIP, and DMG steps.
+  - [ ] **[P3]** Mark body sections of [completed macOS bundle-size plan](plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md) as historical where they still read like active `PYINSTALLER_MACOS_SLIM` guidance (retirement note at top exists).
 - [ ] **[P2]** **GitHub open-source license compliance (public preview).** GitHub's [open-source license compliance](https://github.blog/changelog/2026-06-30-open-source-license-compliance-is-in-public-preview/) is in public preview (enterprise-only today). If/when it becomes available to non-enterprise users on public repos, it could be useful here for automatically flagging license issues in our dependency tree (e.g. the native assets collected by the selected **`python-gdcm`** decoder vs the BSD **imagecodecs** alternative tracked under Maintenance, and other copyleft/permissive conflicts). Watch for general availability and evaluate enabling it on this public repo's CI.
 
 ## UX / Workflow
