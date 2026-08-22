@@ -1,5 +1,7 @@
 # Release checklist (semantic versioning)
 
+**Last updated:** 2026-08-22
+
 Use this checklist when cutting a new release so version, changelog, and Git tags stay in sync. The app version is defined in **`src/version.py`** (`__version__`); **`CHANGELOG.md`** repeats it in the **Current version** line at the top for readability—keep those two in sync whenever you bump the version.
 
 ## When to bump version
@@ -40,7 +42,22 @@ See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](info/SEMANTIC_VERSIONING_GUIDE.
      ```
 
 7. **GitHub Actions**
-   - Pushing a version tag (`v*`) triggers [.github/workflows/build.yml](../.github/workflows/build.yml), which builds executables for Windows, macOS, and Linux and creates a GitHub Release with the built artifacts.
+    - Pushing a version tag (`v*`) triggers [.github/workflows/build.yml](../.github/workflows/build.yml), which builds executables for Windows, macOS, and Linux and creates a GitHub Release with the built artifacts.
+
+8. **Rotate release assets (repository storage hygiene)**
+    - Release assets persist forever and count against **repository** storage. Keep the **latest three releases** with assets; for each older release, delete its assets (keeps the release entry, notes, and tag; frees repo storage). There is **no `--delist` flag** on `gh release edit`; delete assets via the REST endpoint:
+      ```bash
+      OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+      (
+        set -euo pipefail
+        ASSET_IDS=$(gh api "repos/$OWNER_REPO/releases/tags/<tag>" --jq '.assets[].id')
+        while IFS= read -r asset_id; do
+          [ -n "$asset_id" ] || continue
+          gh api -X DELETE "repos/$OWNER_REPO/releases/assets/$asset_id"
+        done <<< "${ASSET_IDS}"
+      )
+      ```
+    - To fully retire a release instead: `gh release delete <tag> --cleanup-tag --yes` (removes assets, release, and git tag together; unblocks tag name reuse). See [BUILDING_EXECUTABLES.md](info/BUILDING_EXECUTABLES.md) for the full rotation practice.
 
 ## Quick reference
 

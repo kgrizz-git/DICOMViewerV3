@@ -23,7 +23,7 @@ This plan extends that work cross-platform and goes deeper.
 
 ## Phase 1 — Baseline measurement (all platforms)
 
-- [ ] Build on Windows, macOS (normal + slim), and Linux from the **same commit**.
+- [ ] ~~Build on Windows, macOS (normal + slim), and Linux from the **same commit**.~~ **Retired/superseded 2026-08-22 (D1):** the macOS slim flag (`PYINSTALLER_MACOS_SLIM` + `MACOS_PYSIDE6_MODULE_EXCLUDES`) measured **0 MB saved** (same-commit A/B: 1,178,268 KB for both standard and slim `.app`) and was removed. Cross-platform slim excludes are likewise moot for the current import graph; revisit only if a dependency bump starts importing excluded Qt modules.
 - [ ] Record total bundle size and top-20 largest files/directories in each bundle.
 - [ ] Record in a new markdown table in `dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md` with commit hash and date.
 - [ ] Identify the **top 5 size contributors** on each platform (likely: PySide6/Qt, VTK, SimpleITK, numpy, matplotlib, pylinac).
@@ -48,7 +48,7 @@ This plan extends that work cross-platform and goes deeper.
 
 ### 2c. Platform-specific Qt trims
 
-- [ ] **Windows:** Apply the same PySide6 module exclusion strategy as macOS slim. Qt WebEngine alone can add 150+ MB. Verify app doesn't use WebEngine, then exclude on all platforms.
+- [ ] ~~**Windows:** Apply the same PySide6 module exclusion strategy as macOS slim. Qt WebEngine alone can add 150+ MB. Verify app doesn't use WebEngine, then exclude on all platforms.~~ **Retired/superseded 2026-08-22 (D1):** the macOS slim flag (and by extension a cross-platform copy) measured **0 MB saved** — the import graph never collects those Qt modules — and was removed. Re-evaluate only after a dependency upgrade pulls an excluded Qt submodule into the bundle.
 - [ ] **Linux:** Same as Windows. Also check for bundled `libicu` (often 30+ MB) and whether system ICU can be used.
 - [ ] **All platforms:** Audit Qt plugins (`imageformats`, `platforms`, `styles`, `sqldrivers`) — keep only what's needed:
   - `imageformats`: keep `qjpeg`, `qico`, `qsvg`; likely remove `qtiff`, `qwebp`, `qpdf` etc.
@@ -61,7 +61,7 @@ This plan extends that work cross-platform and goes deeper.
   - `VTK_UNUSED_MODULE_EXCLUDES` — VTK modules not imported by `volume_renderer.py` or `volume_viewer_widget.py`.
   - `PYSIDE6_CROSS_PLATFORM_EXCLUDES` — WebEngine, 3D, Multimedia, etc. (superset of current macOS-only list, applied everywhere).
   - `QT_PLUGIN_EXCLUDES` — unused image format and SQL driver plugins.
-- [ ] Update `DICOMViewerV3.spec` to apply cross-platform excludes unconditionally (not just macOS slim).
+- [ ] ~~Update `DICOMViewerV3.spec` to apply cross-platform excludes unconditionally (not just macOS slim).~~ **Retired/superseded 2026-08-22 (D1):** the macOS slim flag (and the cross-platform generalization it implies) measured **0 MB saved** and was retired; the spec no longer carries a slim gate. The remaining shared exclude lists (matplotlib backends/writers, PIL/Tk) are retained and still audited by `tests/test_pyinstaller_exclude_audit.py`.
 - [ ] Extend `tests/test_pyinstaller_exclude_audit.py` to cover new excludes — verify no `src/` or `tests/` file imports excluded modules.
 
 ## Phase 4 — Advanced optimizations (if needed)

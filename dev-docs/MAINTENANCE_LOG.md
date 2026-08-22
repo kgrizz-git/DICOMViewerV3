@@ -6,6 +6,28 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-22
 
+- **UI-triggered releases — Step 0 evidence (macOS slim flag saves 0 MB; D1 chosen).**
+  Recorded for `dev-docs/plans/completed/UI_TRIGGERED_RELEASES_PLAN.md` Step 0. Same-commit
+  local A/B on macOS (arm64): standard `PYINSTALLER_MACOS_SLIM` unset vs `=1`
+  (`tmp/build_test.sh`, gitignored). `du -sk` measured **1,178,268 KB for both**
+  `DICOMViewerV3_standard.app` and `DICOMViewerV3_slim.app` — byte-identical,
+  **0 MB saved**. The PyInstaller analysis logs differ only by hook ordering.
+  Environment: PyInstaller **6.22.2**, pyinstaller-hooks-contrib **2026.6**,
+  PySide6 **6.11.2**, Python **3.12.10** (security floor `pyinstaller>=6.22.1`).
+  Why zero: the app imports only QtCore/QtGui/QtWidgets/QtOpenGL + matplotlib
+  qtagg; modern PyInstaller traces the import graph, so the
+  `MACOS_PYSIDE6_MODULE_EXCLUDES` modules (WebEngine, 3D, Quick, Multimedia, …)
+  were never collected in either build. The 200–500 MB figures in
+  `completed/pyinstaller-bundle-size-macos-2026-04-09.md` and the baseline doc are
+  conditional upper bounds *if* analysis would pull them in — falsified for this
+  dependency graph. **Conditionality:** property of the *current* dependency
+  graph; a future pylinac/PySide6 bump that imports an excluded module reverses
+  it (post-D1 detection relies on a human reading `du` logs vs the baseline
+  table — no CI tripwire). **Maintainer sign-off: D1 (full deletion)** chosen —
+  remove flag, list, test, job, docs. `git tag` → **(none)**; `gh release list` →
+  **(none)** (Assumption 1 verified; zero tags/releases exist). Baseline table in
+  `PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md` filled with the same evidence numbers.
+
 - **Dependency-license exceptions: SPDX / hooks-contrib scope correction.**
   Updated `accepted_exceptions` for `pyinstaller` to
   `GPL-2.0-or-later WITH Bootloader-exception` (upstream COPYING SPDX; replaces

@@ -1,44 +1,21 @@
 # PyInstaller bundle size — baselines and per-OS measurement
 
+**Last updated:** 2026-08-22
+
 This note supports reproducible **size tracking** for **Windows**, **macOS**, and **Linux** outputs from `DICOMViewerV3.spec`, and explains how rough **“what if we did not exclude X?”** estimates work.
 
-## Single flag: `PYINSTALLER_MACOS_SLIM` (where it is set)
+## macOS PySide6 slim flag — measured 0 MB (retired 2026-08-22, D1)
 
-**One environment variable** turns macOS **PySide6 submodule excludes** on or off. It is defined and read in **`DICOMViewerV3.spec`** (not in GitHub’s UI by name — CI passes it into the process environment).
+The historical **`PYINSTALLER_MACOS_SLIM`** flag gated macOS **PySide6 submodule excludes** (`MACOS_PYSIDE6_MODULE_EXCLUDES`: WebEngine, 3D, Quick, Multimedia, QtPdf, etc.). It was **retired (D1)** after a same-commit local A/B on macOS (arm64, 2026-08-21):
 
-| Where | How slim is controlled |
-|-------|-------------------------|
-| **Local macOS shell** | Export or prefix: `PYINSTALLER_MACOS_SLIM=1 pyinstaller DICOMViewerV3.spec --clean --noconfirm`. Omit or use `0` / `false` for **off** (default). |
-| **GitHub Actions — main matrix** | **`.github/workflows/build.yml`** sets **`PYINSTALLER_MACOS_SLIM`** to **`false`** (string) on the **macOS** matrix row and empty on Windows/Linux → **slim off** for **tag pushes** and default manual runs. |
-| **GitHub Actions — optional second job** | Manual **Run workflow** only: checkbox **Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1** → job **`macOS slim (PYINSTALLER_MACOS_SLIM=1)`** runs with **`PYINSTALLER_MACOS_SLIM=true`** → artifact **`DICOMViewerV3-macOS-slim`**. **Unchecked** → that job is **skipped** (no extra macOS slim build). |
+- `du -sk`: **1,178,268 KB for both** `DICOMViewerV3_standard.app` (`PYINSTALLER_MACOS_SLIM` unset) and `DICOMViewerV3_slim.app` (`=1`) — byte-identical, **0 MB saved**. The PyInstaller analysis logs differ only by hook ordering.
+- Environment: **PyInstaller 6.22.2**, pyinstaller-hooks-contrib **2026.6**, **PySide6 6.11.2**, **Python 3.12.10**.
+- **Why zero:** the app imports only QtCore/QtGui/QtWidgets/QtOpenGL + the matplotlib `qtagg` path; modern PyInstaller traces the import graph, so the excluded modules were never collected in either build. The earlier “200–500 MB” upper-bound estimates were conditional on analysis pulling them in — falsified for this dependency graph.
+- **Conditionality:** this is a property of the *current* dependency graph. A future **pylinac/PySide6 bump** that starts importing an excluded module reverses it. Post-D1, detection relies on a human reading the `du` logs against the baseline table below — there is no automated CI tripwire.
 
-**Disabling slim on GitHub:** Do **not** check the optional checkbox; tag-triggered builds never use slim. There is no separate “disable” beyond leaving slim **off** (default).
+**Authoritative method (now a one-shot measure, no flag):** On a Mac, build **`pyinstaller DICOMViewerV3.spec --clean --noconfirm`** and run **`du -sh dist/DICOMViewerV3.app`**; compare against the baseline row below after dependency upgrades. The earlier CI “macOS slim” checkbox job no longer exists.
 
-**Matplotlib** and **PIL/Tk-related** excludes in **`scripts/pyinstaller_exclude_lists.py`** still apply on **all** platforms regardless of **`PYINSTALLER_MACOS_SLIM`**.
-
-## When are large PySide6 modules excluded on macOS?
-
-**`MACOS_PYSIDE6_MODULE_EXCLUDES`** is applied only when **`sys.platform == "darwin"`** and **`PYINSTALLER_MACOS_SLIM`** is truthy (`1`, `true`, `yes`, `on`). Otherwise those names are **not** added to **`Analysis.excludes`**.
-
-## Order-of-magnitude: macOS PySide6 trims (`MACOS_PYSIDE6_MODULE_EXCLUDES`)
-
-PyInstaller only ships what its dependency analysis **collects**. If the app never imports a module, excludes may change **little or nothing**. If analysis **would** pull in optional Qt wheels (or a dependency starts importing them), **not** excluding can add a **large** amount on disk.
-
-Very rough **upper-bound** intuition if those Qt subsystems **did** get bundled on macOS (Qt 6 / PySide6 era, uncompressed on disk):
-
-| Area | Typical magnitude (order of magnitude) |
-|------|----------------------------------------|
-| **Qt WebEngine** (Core + Widgets + Quick) | Often **~150–350 MB** — usually the largest single chunk |
-| **Qt Multimedia** (+ widgets) | **~15–50 MB** |
-| **Qt 3D** (several modules) | **~25–80 MB** |
-| **Qt Charts / DataVisualization** | **~10–35 MB** |
-| **Qt Quick / QML / QuickWidgets** | **~15–60 MB** (more if combined with WebEngineQuick) |
-| **Qt Pdf / PdfWidgets**, **VirtualKeyboard** | **~10–40 MB** |
-| **Sql, Serial*, Bluetooth, Nfc, Positioning, Location** | **~5–25 MB** combined |
-
-**Combined ballpark** if everything in **`MACOS_PYSIDE6_MODULE_EXCLUDES`** were actually present in the `.app`: often **~200–500 MB** extra vs a lean QtWidgets-focused bundle — **high variance** by PySide6 version, PyInstaller version, and whether WebEngine is pulled in at all.
-
-**Authoritative method:** On a Mac, build twice from the same commit: **`PYINSTALLER_MACOS_SLIM`** unset vs **`PYINSTALLER_MACOS_SLIM=1`**; compare **`du -sh dist/DICOMViewerV3.app`**. In CI, run **Build Executables** manually with the **macOS slim** checkbox enabled and compare **`du`** in the **`DICOMViewerV3-macOS`** vs **`DICOMViewerV3-macOS-slim`** job logs.
+**Matplotlib** and **PIL/Tk-related** excludes in **`scripts/pyinstaller_exclude_lists.py`** still apply on **all** platforms.
 
 ## Matplotlib / PIL excludes (all OSes)
 
@@ -85,11 +62,10 @@ ls -lh DICOMViewerV3-*-x86_64.AppImage
 The **Build Executables** workflow (`.github/workflows/build.yml`) runs **`Log distribution sizes`** with **`du -sh`** on:
 
 - **Windows:** `dist/DICOMViewerV3` and `DICOMViewerV3.exe`
-- **macOS (default matrix job, slim off):** `dist/DICOMViewerV3.app` plus drill-downs under `Contents/`, `MacOS/`, `Frameworks/`, and top-N under `Frameworks/` / `Resources/`
-- **macOS slim (optional job):** same paths; log section labeled **`macOS SLIM (PYINSTALLER_MACOS_SLIM=1)`**
+- **macOS (matrix job):** `dist/DICOMViewerV3.app` plus drill-downs under `Contents/`, `MacOS/`, `Frameworks/`, and top-N under `Frameworks/` / `Resources/`
 - **Linux:** `dist/DICOMViewerV3` folder and main binary
 
-Open the job log for each matrix leg (and the slim job if you ran it) to record numbers into the table below.
+Open the job log for each matrix leg to record numbers into the table below. (The former macOS slim checkbox job no longer exists — the slim flag was retired 2026-08-22 after measuring 0 MB saved.)
 
 ## Baseline size table (maintainer-maintained)
 
@@ -97,9 +73,10 @@ Fill in after tagged builds or manual workflow runs. Use **git tag or SHA**, **r
 
 | Date | Git ref | OS | Output measured | Size | PySide6 | PyInstaller | Notes |
 |------|---------|----|-----------------|------|---------|-------------|-------|
-| | | Windows | `dist/DICOMViewerV3/` folder | | | | |
-| | | macOS | `dist/DICOMViewerV3.app` | | | | |
-| | | Linux | `dist/DICOMViewerV3/` or AppImage | | | | |
+| 2026-08-21 | same commit (A/B, `tmp/build_test.sh`) | macOS | `dist/DICOMViewerV3.app` (standard) | 1,178,268 KB (du -sk) | 6.11.2 | 6.22.2 | Standard build (`PYINSTALLER_MACOS_SLIM` unset); Python 3.12.10; hooks-contrib 2026.6. |
+| 2026-08-21 | same commit (A/B, `tmp/build_test.sh`) | macOS | `dist/DICOMViewerV3.app` (slim) | 1,178,268 KB (du -sk) | 6.11.2 | 6.22.2 | Slim build (`PYINSTALLER_MACOS_SLIM=1`) — **0 MB saved** vs standard; byte-identical. Flag retired 2026-08-22 (D1). |
+| | | Windows | `dist/DICOMViewerV3/` folder | | | | Not measured in the 2026-08-21 A/B; record after next tagged/Windows build. |
+| | | Linux | `dist/DICOMViewerV3/` or AppImage | | | | Not measured in the 2026-08-21 A/B; record after next tagged/Linux build. |
 
 ## Related docs
 

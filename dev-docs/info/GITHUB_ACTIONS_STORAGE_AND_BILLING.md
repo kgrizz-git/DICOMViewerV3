@@ -81,7 +81,7 @@ When a workflow uses `actions/upload-artifact` with **`retention-days`**:
 
 | Item | Detail |
 |------|--------|
-| **Large artifacts** | `.github/workflows/build.yml` uploads **Windows / macOS / Linux** outputs (`dist/` + Linux **AppImage** only — not PyInstaller **`build/`**). |
+| **Large artifacts** | `.github/workflows/build.yml` uploads **Windows / macOS / Linux** outputs (`dist/` + Linux **AppImage** only — not PyInstaller **`build/`**). **Manual `workflow_dispatch` runs that publish a GitHub Release skip the artifact upload** (`inputs.publish_to_release == true`) — the release assets are the distribution path on those runs, conserving Actions storage; tag pushes and plain manual runs still upload with the configured `retention-days` (30). |
 | **Retention** | See **`retention-days`** in `build.yml` (tuned for **GB-hours**; verify current value in the workflow). |
 | **Actions cache** | **Build** uses **`setup-python`** pip caching; PRs create branch-scoped caches. **`actions-cache-prune.yml`** trims stale non-protected entries weekly. |
 | **Other workflows** | `security-checks.yml`, `semgrep.yml`, `grype.yml` do not upload comparable artifact zips; they still consume **runner minutes** and may use **cache** or **SARIF** to the Security tab. |

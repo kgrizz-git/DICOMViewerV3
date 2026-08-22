@@ -10,7 +10,6 @@
 # The executable will be created in the dist/ directory.
 #
 # For detailed build instructions, see dev-docs/info/BUILDING_EXECUTABLES.md
-# macOS: optional PYINSTALLER_MACOS_SLIM=1 applies large PySide6 submodule excludes (default off).
 
 import os
 import sys
@@ -25,20 +24,12 @@ block_cipher = None
 IS_DARWIN = sys.platform == "darwin"
 USE_UPX = not IS_DARWIN
 
-# macOS-only optional size trim: exclude large PySide6 submodules (see MACOS_PYSIDE6_MODULE_EXCLUDES).
-# Single flag — environment variable PYINSTALLER_MACOS_SLIM (ignored on Windows/Linux):
-#   unset / empty / 0 / false / no / off  ->  do NOT apply those excludes (default; safest)
-#   1 / true / yes / on (case-insensitive) -> apply excludes (smaller .app; smoke before release)
-_PYINSTALLER_MACOS_SLIM_RAW = os.environ.get("PYINSTALLER_MACOS_SLIM", "").strip().lower()
-PYINSTALLER_MACOS_SLIM = _PYINSTALLER_MACOS_SLIM_RAW in ("1", "true", "yes", "on")
-
 # Load application version from single source of truth (used for macOS bundle and consistency)
 # Use SPECPATH (PyInstaller provides this) or fall back to current working directory
 spec_root = Path(SPECPATH if 'SPECPATH' in dir() else os.getcwd())
 sys.path.insert(0, str(spec_root))
 sys.path.insert(0, str(spec_root / "scripts"))
 from pyinstaller_exclude_lists import (
-    MACOS_PYSIDE6_MODULE_EXCLUDES,
     MATPLOTLIB_BACKEND_AND_WRITER_EXCLUDES,
     PIL_TK_RELATED_EXCLUDES,
 )
@@ -189,7 +180,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=(
-        # Matplotlib + macOS PySide6 exclude names live in scripts/pyinstaller_exclude_lists.py
+        # Matplotlib + PIL exclude names live in scripts/pyinstaller_exclude_lists.py
         # (single source; audited by tests/test_pyinstaller_exclude_audit.py).
         [
             # Test packages (never needed at runtime; verified not imported from src/).
@@ -207,9 +198,6 @@ a = Analysis(
         ]
         + list(PIL_TK_RELATED_EXCLUDES)
         + list(MATPLOTLIB_BACKEND_AND_WRITER_EXCLUDES)
-        # Darwin + PYINSTALLER_MACOS_SLIM: PySide6 trims in scripts/pyinstaller_exclude_lists.py
-        # (grep src/tests before adding; third-party lazy imports can still break — smoke the .app).
-        + (list(MACOS_PYSIDE6_MODULE_EXCLUDES) if IS_DARWIN and PYINSTALLER_MACOS_SLIM else [])
     ),
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

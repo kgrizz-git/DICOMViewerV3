@@ -3,21 +3,92 @@ name: Build Executables
 # This workflow builds executables for Windows, macOS, and Linux
 # It runs when you push a version tag (e.g., v1.0.0) or manually trigger it
 
+concurrency:
+  # Publishing runs serialize on the release tag; all other runs use github.ref.
+  group: build-${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_release && inputs.release_tag_name) || github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     tags:
       - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
   workflow_dispatch:
     inputs:
-      build_macos_slim:
-        description: 'Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1 (smaller .app; compare du in logs)'
+      publish_to_release:
+        description: 'Create/publish a GitHub Release from this run (requires release_tag_name)'
         required: false
-        default: false
         type: boolean
+        default: false
+      release_tag_name:
+        description: 'Version tag for the release, strict form vX.Y.Z or vX.Y.Z-pre (e.g. v1.2.3-rc1). Validated before any build step.'
+        required: false
+        type: string
+        default: ''
 
 jobs:
+  prepare_release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_to_release == true
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Validate release inputs
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_to_release == true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.release_tag_name }}
+        run: |
+          set -euo pipefail
+          TAG="$INPUT_TAG"
+          echo "Requested tag: '$TAG'"
+          if [ -z "$TAG" ]; then
+            echo "Error: release_tag_name is required when publish_to_release is checked." >&2
+            exit 1
+          fi
+          # Strict: no leading-zero X/Y/Z; prerelease identifiers non-empty (no "..").
+          if ! printf '%s' "$TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-][0-9A-Za-z-]*(\.[0-9A-Za-z-][0-9A-Za-z-]*)*)?$'; then
+            echo "Error: tag must match vX.Y.Z or vX.Y.Z-pre (got '$TAG')." >&2
+            exit 1
+          fi
+
+          # One commit SHA only: peel annotated tags (^{}), else lightweight tag object.
+          REMOTE_TAG_SHA=$(
+            git ls-remote --tags origin "refs/tags/$TAG" |
+            awk -v ref="refs/tags/$TAG" '
+              $2 == ref "^{}" { print $1; found=1; exit }
+              $2 == ref { lightweight=$1 }
+              END { if (!found && lightweight != "") print lightweight }
+            '
+          )
+          if [ -n "$REMOTE_TAG_SHA" ]; then
+            if [ "$REMOTE_TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "Error: tag '$TAG' already exists on origin pointing to a different commit ($REMOTE_TAG_SHA vs $GITHUB_SHA) — refusing. Choose a new version." >&2
+              exit 1
+            else
+              echo "Note: tag '$TAG' already exists on origin pointing to current commit ($GITHUB_SHA). Allowing idempotent re-run."
+            fi
+          fi
+
+          # Create release shell synchronously to prevent matrix jobs from racing
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Creating release $TAG..."
+            PRERELEASE_FLAG=""
+            if [[ "$TAG" == *-* ]]; then
+              PRERELEASE_FLAG="--prerelease"
+            fi
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Release $TAG" --generate-notes $PRERELEASE_FLAG
+          else
+            echo "Release $TAG already exists."
+          fi
+
   build:
     name: Build on ${{ matrix.os }}
+    needs: prepare_release
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -29,15 +100,12 @@ jobs:
           - os: windows-latest
             artifact_name: DICOMViewerV3-Windows
             executable_path: dist/DICOMViewerV3.exe
-            pyinstaller_macos_slim: ''
           - os: macos-latest
             artifact_name: DICOMViewerV3-macOS
             executable_path: dist/DICOMViewerV3.app
-            pyinstaller_macos_slim: 'false'
           - os: ubuntu-latest
             artifact_name: DICOMViewerV3-Linux
             executable_path: dist/DICOMViewerV3
-            pyinstaller_macos_slim: ''
 
     steps:
       - name: Checkout code
@@ -73,10 +141,7 @@ jobs:
 
       - name: Build executable
         shell: bash
-        env:
-          PYINSTALLER_MACOS_SLIM: ${{ matrix.pyinstaller_macos_slim }}
         run: |
-          echo "PYINSTALLER_MACOS_SLIM=${PYINSTALLER_MACOS_SLIM:-}"
           pyinstaller DICOMViewerV3.spec --clean --noconfirm
 
       - name: Download AppImageTool
@@ -151,9 +216,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         env:
           GH_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag_name }}
+          PUBLISH: ${{ inputs.publish_to_release }}
         run: |
           # Extract version from tag if available, otherwise use "latest"
-          if [[ "$GH_REF" == refs/tags/* ]]; then
+          if [ "$PUBLISH" = "true" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          elif [[ "$GH_REF" == refs/tags/* ]]; then
             VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
@@ -166,8 +235,12 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         env:
           GH_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag_name }}
+          PUBLISH: ${{ inputs.publish_to_release }}
         run: |
-          if [[ "$GH_REF" == refs/tags/* ]]; then
+          if [ "$PUBLISH" = "true" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          elif [[ "$GH_REF" == refs/tags/* ]]; then
             VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
@@ -201,13 +274,36 @@ jobs:
             ls -lh dist/DICOMViewerV3/DICOMViewerV3
           fi
 
+      - name: Create ZIP (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          GH_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag_name }}
+          PUBLISH: ${{ inputs.publish_to_release }}
+        run: |
+          if [ "$PUBLISH" = "true" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          elif [[ "$GH_REF" == refs/tags/* ]]; then
+            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
+          else
+            VERSION="latest"
+          fi
+          ZIP_NAME="DICOMViewerV3-${VERSION}-Windows.zip"
+          python -m zipfile -c "${ZIP_NAME}" dist/DICOMViewerV3
+          ls -lh "${ZIP_NAME}"
+
       - name: Create DMG (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
         env:
           GH_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag_name }}
+          PUBLISH: ${{ inputs.publish_to_release }}
         run: |
-          if [[ "$GH_REF" == refs/tags/* ]]; then
+          if [ "$PUBLISH" = "true" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          elif [[ "$GH_REF" == refs/tags/* ]]; then
             VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
@@ -224,8 +320,12 @@ jobs:
         shell: bash
         env:
           GH_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag_name }}
+          PUBLISH: ${{ inputs.publish_to_release }}
         run: |
-          if [[ "$GH_REF" == refs/tags/* ]]; then
+          if [ "$PUBLISH" = "true" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          elif [[ "$GH_REF" == refs/tags/* ]]; then
             VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
           else
             VERSION="latest"
@@ -282,7 +382,7 @@ jobs:
 
       # Windows artifact: one-folder PyInstaller output
       - name: Upload build artifacts (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && inputs.publish_to_release != true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact_name }}
@@ -293,7 +393,7 @@ jobs:
 
       # macOS artifact: DMG containing only DICOMViewerV3.app
       - name: Upload build artifacts (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-latest' && inputs.publish_to_release != true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact_name }}
@@ -303,7 +403,7 @@ jobs:
 
       # Linux artifact: AppImage only
       - name: Upload build artifacts (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && inputs.publish_to_release != true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact_name }}
@@ -311,147 +411,57 @@ jobs:
             DICOMViewerV3-*-x86_64.AppImage
           retention-days: 30
 
-      - name: Create Release (Windows, on tag push)
-        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'windows-latest'
+      - name: Create Release (Windows, tag push or manual publish)
+        if: (startsWith(github.ref, 'refs/tags/') || inputs.publish_to_release == true) && matrix.os == 'windows-latest'
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           files: |
-            dist/DICOMViewerV3*
+            DICOMViewerV3-*-Windows.zip
+          tag_name: ${{ inputs.release_tag_name || github.ref_name }}
+          name: Release ${{ inputs.release_tag_name || github.ref_name }}
+          # Any semver pre-release suffix ("vX.Y.Z-…") publishes as a pre-release; the
+          # strict validation regex guarantees "-" can only appear as the pre-release delimiter.
+          # Branch names can contain "-", so the manual-publish branch keys off the input, not ref_name.
+          prerelease: ${{ ((inputs.publish_to_release == true) && contains(inputs.release_tag_name, '-')) || (startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-')) }}
+          overwrite_files: true
           draft: false
-          prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Release (macOS DMG, on tag push)
-        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos-latest'
+      - name: Create Release (macOS DMG, tag push or manual publish)
+        if: (startsWith(github.ref, 'refs/tags/') || inputs.publish_to_release == true) && matrix.os == 'macos-latest'
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           files: |
             DICOMViewerV3-*-macOS.dmg
+          tag_name: ${{ inputs.release_tag_name || github.ref_name }}
+          name: Release ${{ inputs.release_tag_name || github.ref_name }}
+          # Any semver pre-release suffix ("vX.Y.Z-…") publishes as a pre-release; the
+          # strict validation regex guarantees "-" can only appear as the pre-release delimiter.
+          # Branch names can contain "-", so the manual-publish branch keys off the input, not ref_name.
+          prerelease: ${{ ((inputs.publish_to_release == true) && contains(inputs.release_tag_name, '-')) || (startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-')) }}
+          overwrite_files: true
           draft: false
-          prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Release (Linux AppImage, on tag push)
-        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest'
+      - name: Create Release (Linux AppImage, tag push or manual publish)
+        if: (startsWith(github.ref, 'refs/tags/') || inputs.publish_to_release == true) && matrix.os == 'ubuntu-latest'
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           files: |
             DICOMViewerV3-*-x86_64.AppImage
+          tag_name: ${{ inputs.release_tag_name || github.ref_name }}
+          name: Release ${{ inputs.release_tag_name || github.ref_name }}
+          # Any semver pre-release suffix ("vX.Y.Z-…") publishes as a pre-release; the
+          # strict validation regex guarantees "-" can only appear as the pre-release delimiter.
+          # Branch names can contain "-", so the manual-publish branch keys off the input, not ref_name.
+          prerelease: ${{ ((inputs.publish_to_release == true) && contains(inputs.release_tag_name, '-')) || (startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-')) }}
+          overwrite_files: true
           draft: false
-          prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Optional second macOS leg: same spec with PYINSTALLER_MACOS_SLIM=1 (off by default; enable in Run workflow UI).
-  build_macos_slim:
-    name: macOS slim (PYINSTALLER_MACOS_SLIM=1)
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos_slim == 'true'
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-          # Single pip cache key across build + PyInstaller deps (reduces orphan caches).
-          cache-dependency-path: |
-            requirements.txt
-            requirements-build.txt
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-build.txt
-
-      - name: Remove typing package if present (PyInstaller compatibility)
-        run: |
-          python -m pip uninstall -y typing || true
-
-      - name: Build executable (macOS slim)
-        env:
-          PYINSTALLER_MACOS_SLIM: 'true'
-        run: |
-          pyinstaller DICOMViewerV3.spec --clean --noconfirm
-
-      - name: Verify executable exists
-        shell: bash
-        run: |
-          if [ ! -d "dist/DICOMViewerV3.app" ]; then
-            echo "Error: DICOMViewerV3.app not found"
-            exit 1
-          fi
-          ls -lh dist/DICOMViewerV3.app
-
-      - name: Log distribution sizes
-        shell: bash
-        run: |
-          echo "=== macOS SLIM (PYINSTALLER_MACOS_SLIM=1) ==="
-          du -sh dist/DICOMViewerV3.app 2>/dev/null || true
-          if [ -d "dist/DICOMViewerV3.app/Contents/Frameworks" ]; then
-            echo "=== top 10 under Frameworks/ ==="
-            du -sh dist/DICOMViewerV3.app/Contents/Frameworks/* 2>/dev/null | sort -hr | head -10 || true
-          fi
-
-      - name: Create DMG (macOS slim)
-        shell: bash
-        env:
-          GH_REF: ${{ github.ref }}
-        run: |
-          if [[ "$GH_REF" == refs/tags/* ]]; then
-            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
-          else
-            VERSION="latest"
-          fi
-          DMG_NAME="DICOMViewerV3-${VERSION}-macOS-slim.dmg"
-          rm -rf packaging/macos
-          mkdir -p packaging/macos
-          cp -R dist/DICOMViewerV3.app packaging/macos/
-          hdiutil create -volname "DICOMViewerV3" -srcfolder packaging/macos -ov -format UDZO "${DMG_NAME}"
-          ls -lh "${DMG_NAME}"
-
-      - name: Verify DMG contents (macOS slim)
-        shell: bash
-        env:
-          GH_REF: ${{ github.ref }}
-        run: |
-          if [[ "$GH_REF" == refs/tags/* ]]; then
-            VERSION=$(echo "$GH_REF" | sed 's/refs\/tags\/v//')
-          else
-            VERSION="latest"
-          fi
-          DMG_NAME="DICOMViewerV3-${VERSION}-macOS-slim.dmg"
-          MOUNT_POINT=$(mktemp -d /tmp/dvv3-dmg.XXXXXX)
-          hdiutil attach "${DMG_NAME}" -mountpoint "${MOUNT_POINT}" -nobrowse -readonly
-          if [ ! -d "${MOUNT_POINT}/DICOMViewerV3.app" ]; then
-            echo "Error: DICOMViewerV3.app not found in DMG"
-            hdiutil detach "${MOUNT_POINT}" -quiet || true
-            exit 1
-          fi
-          EXTRA_ITEMS=$(ls -A "${MOUNT_POINT}" | rg -v '^DICOMViewerV3\.app$' || true)
-          if [ -n "${EXTRA_ITEMS}" ]; then
-            echo "Error: unexpected items found in DMG root:"
-            echo "${EXTRA_ITEMS}"
-            hdiutil detach "${MOUNT_POINT}" -quiet || true
-            exit 1
-          fi
-          hdiutil detach "${MOUNT_POINT}" -quiet
-          rm -rf "${MOUNT_POINT}"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: DICOMViewerV3-macOS-slim
-          path: |
-            DICOMViewerV3-*-macOS-slim.dmg
-          retention-days: 30
