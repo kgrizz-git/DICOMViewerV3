@@ -4,8 +4,9 @@ name: Build Executables
 # It runs when you push a version tag (e.g., v1.0.0) or manually trigger it
 
 concurrency:
-  # Publishing runs serialize on the release tag; all other runs use github.ref.
-  group: build-${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_release && inputs.release_tag_name) || github.ref }}
+  # Manual publish and tag push for the same tag share one group (e.g. build-v0.4.2).
+  # Plain manual/branch runs still key on github.ref.
+  group: build-${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_release && inputs.release_tag_name) || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || github.ref }}
   cancel-in-progress: false
 
 on:
