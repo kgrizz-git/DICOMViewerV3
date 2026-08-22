@@ -1,8 +1,48 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-22
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-22
+
+- **Dependency-license exceptions: SPDX / hooks-contrib scope correction.**
+  Updated `accepted_exceptions` for `pyinstaller` to
+  `GPL-2.0-or-later WITH Bootloader-exception` (upstream COPYING SPDX; replaces
+  the non-standard `PyInstaller-Bootloader-CPE` label). Split
+  `pyinstaller-hooks-contrib` rationale into GPL-2.0-or-later standard hooks
+  (build-time) vs Apache-2.0 `_pyinstaller_hooks_contrib/rthooks` (may embed in
+  frozen builds); removed the blanket “not bundled / not shipped” claim.
+  Documented freeze-graph candidates for this app (`hook-pydicom`,
+  `hook-imageio*`, `hook-cryptography`; likely contrib rthook
+  `pyi_rth_cryptography_openssl` when cryptography is collected). Synced
+  `DEPENDENCY_LICENSE_POLICY.md` table + guidance note. Validation (project
+  `.venv`): JSON load ok; `python scripts/check_dependency_licenses.py` → OK
+  (both packages still accepted).
+
+## 2026-08-21
+
+- **Dependency-license policy: accepted build-only PyInstaller exceptions.**
+  The pre-commit license gate (`scripts/check_dependency_licenses.py`) flagged
+  `pyinstaller` (GPLv2) and `pyinstaller-hooks-contrib` (GPLv2 + Apache) as
+  `FORBIDDEN` because `accepted_exceptions` in
+  `dev-docs/info/dependency_license_policy.json` was empty. These are
+  **build-only** tools in `requirements-build.txt` (not `requirements.txt`)
+  with security floor `pyinstaller>=6.22.1` (GHSA-9fxf-4qw3-ghmr; was
+  `>=6.21.0`) and are never imported as runtime libraries.
+  `pyinstaller-hooks-contrib` is additionally a hard transitive dependency of
+  `pyinstaller`. PyInstaller's GPL carries a bootloader exception permitting
+  proprietary/frozen builds for the embedded bootloader/loader. Added both to
+  `accepted_exceptions` with `reason` + `review_by: 2026-12-31`, and synced the
+  "Current accepted exceptions" table in `DEPENDENCY_LICENSE_POLICY.md`. This
+  does not undermine the policy's intent (rejecting future strong-copyleft
+  *runtime decoder* dependencies); the gate still fails on any new copyleft
+  runtime dep. (SPDX label and hooks-contrib embed scope refined 2026-08-22.)
+  Validation (project `.venv`, 2026-08-21):
+  `python -c "import json; json.load(open('dev-docs/info/dependency_license_policy.json'))"`
+  → ok; `python scripts/check_dependency_licenses.py` → OK (158 dists;
+  `pyinstaller` 6.22.2 and `pyinstaller-hooks-contrib` 2026.6 accepted);
+  `pip show pyinstaller` → Version: 6.22.2 (≥ 6.22.1 floor).
 
 ## 2026-08-16
 

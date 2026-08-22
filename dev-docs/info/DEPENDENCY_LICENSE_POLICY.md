@@ -1,6 +1,6 @@
 # Dependency License Policy & Check
 
-**Last updated:** 2026-07-29
+**Last updated:** 2026-08-22
 
 This is the **single source of documentation** for the automated dependency
 license check. It explains what the check does, the policy it enforces, how to
@@ -131,9 +131,18 @@ All policy lives in [`dependency_license_policy.json`](dependency_license_policy
 
 ### Current accepted exceptions
 
-None. `pylibjpeg-libjpeg` was removed from the runtime requirements on 2026-07-29 in favor of
-`python-gdcm`; the policy must remain empty so a future strong-copyleft decoder is rejected by the
-gate rather than silently accepted.
+| Package | License | Reason | Review by |
+|---------|---------|--------|-----------|
+| `pyinstaller` | GPL-2.0-or-later WITH Bootloader-exception | Build-only freezer in requirements-build.txt (not requirements.txt) with security floor `pyinstaller>=6.22.1` (GHSA-9fxf-4qw3-ghmr). Upstream SPDX bootloader exception covers linking/embedding the compiled bootloader/loader into the frozen executable so copyleft does not extend to the distributed app; the toolchain is not imported as a runtime library. | 2026-12-31 |
+| `pyinstaller-hooks-contrib` | GPL-2.0-or-later AND Apache-2.0 | Hard transitive of `pyinstaller` (`>=2026.6` constraint, not an exact pin). Dual-licensed: standard hooks/files are GPL-2.0-or-later (build-time analysis); `_pyinstaller_hooks_contrib/rthooks` are Apache-2.0 and may embed in frozen executables. Re-check selected hooks per freeze — this graph can use contrib stdhooks such as `hook-pydicom` / `hook-imageio*` / `hook-cryptography`; likely Apache-2.0 contrib rthook: `pyi_rth_cryptography_openssl` when cryptography is collected. | 2026-12-31 |
+
+> `pylibjpeg-libjpeg` was removed from the runtime requirements on 2026-07-29 in favor of
+> `python-gdcm`; the policy intentionally rejects *future strong-copyleft decoder/runtime*
+> dependencies via the gate. The `pyinstaller` entry is build-host tooling whose bootloader
+> exception covers the embedded bootloader/loader only. `pyinstaller-hooks-contrib` is dual-
+> licensed: GPL stdhooks stay on the build host, but Apache-2.0 runtime hooks under
+> `_pyinstaller_hooks_contrib/rthooks` may appear inside frozen executables — re-verify selected
+> hooks when the freeze graph changes.
 
 > Keep this table in sync with `accepted_exceptions` in the JSON when you add or
 > remove an entry.
