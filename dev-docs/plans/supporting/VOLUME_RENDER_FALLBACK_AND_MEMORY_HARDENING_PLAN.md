@@ -1,0 +1,188 @@
+# Plan: Fix the blank-frame GPU-fallback false positive and the volume build memory amplification
+
+**Date:** 2026-08-22
+**Status:** Supporting — both defects confirmed by measurement, implementation not started
+**Priority:** P1 (Task A — silent quality degradation), P2 (Task B — memory)
+**Area:** 3D Volume Rendering — renderer correctness and build-path memory
+**Branch suggestion:** `fix/volume-render-fallback-and-memory`
+**Related:** [`3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md`](../3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md),
+[`3D_VOLUME_RENDERING_PLAN.md`](../3D_VOLUME_RENDERING_PLAN.md),
+[`3D_VIEWER_FIRST_PAINT_RESPONSIVENESS_PLAN.md`](../3D_VIEWER_FIRST_PAINT_RESPONSIVENESS_PLAN.md)
+
+> Both defects were found while diagnosing the native-macOS 3D freeze. **Neither causes
+> that freeze** — they are independent, real, and reproducible. Task A and Task B are
+> independent of each other and of the macOS plan; they can land in any order.
+
+---
+
+## Task A — `check_gpu_fallback()` misdiagnoses legitimately blank frames
+
+### Problem
+
+[`src/core/volume_renderer.py:924`](../../../src/core/volume_renderer.py) infers "the GPU
+silently failed" from a single signal: the first rendered frame is entirely black. That
+inference is invalid whenever the transfer function legitimately maps every voxel in the
+volume to zero opacity.
+
+The default CT preset is **CT Bone**, which makes everything below roughly 200 HU fully
+transparent. A CT QC phantom is water and acrylic — roughly 0–120 HU, **no bone**. Its
+first frame is *correctly* black.
+
+**Confirmed by repro** on a synthetic water phantom (no bone, HU range −1000…120):
+
+```
+preset: CT Bone
+first Fast render 0.25s   (GetLastUsedRenderMode() == 2, i.e. GPU — the GPU worked fine)
+check_gpu_fallback -> True
+requested render mode now: 1   (CPU ray cast)
+```
+
+### Consequences
+
+- The mapper is switched to CPU ray casting for the rest of the session.
+- `_gpu_fallback_done` latches `True`, so the decision is never revisited.
+- `run_first_preview()` sets `_auto_refine_suppressed = True`, pinning detail at **Fast**.
+- The user is shown "3D preview shown at Fast detail… choose a detail level manually",
+  blaming their hardware for what is actually a transfer-function outcome.
+
+Any bone-free CT (QC phantoms, water phantoms, pure soft-tissue crops) hits this.
+
+### Fix
+
+Do not treat "black frame" as sufficient evidence. Establish whether a non-blank frame was
+even *expected* before concluding failure.
+
+- [ ] **Step 1:** Add a pure helper — `frame_expected_nonblank(opacity_tf, scalar_range) -> bool`.
+      Sample the opacity transfer function across the volume's actual scalar range; return
+      `False` when the maximum mapped opacity is ~0. Put it in
+      `src/core/volume_render_quality.py` (VTK-free, unit-testable) or a sibling pure module.
+- [ ] **Step 2:** In `check_gpu_fallback()`, when the frame is black **and**
+      `frame_expected_nonblank()` is `False`, return `False` without switching to CPU —
+      the render is correct, there is nothing to fall back from.
+- [ ] **Step 3:** Do **not** latch `_gpu_fallback_done` on this inconclusive outcome, so a
+      later preset change can still probe once for a genuine GPU failure.
+- [ ] **Step 4:** Do not set `_auto_refine_suppressed` when no fallback occurred.
+- [ ] **Step 5:** Consider a distinct, honest user message for the
+      expected-blank case (e.g. "Nothing is visible with this preset — try CT Soft Tissue")
+      instead of the hardware-performance warning. Keep it non-modal, reusing
+      `set_render_feedback()`.
+- [ ] **Step 6:** Tests — bone-free phantom + CT Bone → no fallback, detail not pinned;
+      genuine all-transparent-but-GPU-failed case still falls back; existing Parallels
+      blank-frame behavior preserved (a preset that *should* show something, frame black →
+      fallback still fires).
+
+### Success criteria
+
+- A bone-free CT phantom under CT Bone stays on the GPU path and keeps its Auto detail.
+- Real GPU failures on Parallels / virtual GPUs still fall back to CPU ray casting.
+- No user-facing message blames hardware for a transfer-function outcome.
+
+---
+
+## Task B — ~8× memory amplification in the volume build path
+
+### Problem
+
+Measured on a synthetic 800-slice CT (512×512×800), instrumented with `ru_maxrss`:
+
+```
+int16 source MB: 419   peak RSS 1032 MB
+after prepare_volume_data: peak RSS 3274 MB
+after attach_volume:       peak RSS 3276 MB
+```
+
+**419 MB of pixel data → 3.3 GB peak RSS**, on top of the pydicom datasets the viewer
+already holds. Four full-size buffers stack up:
+
+| Source | Buffer |
+|---|---|
+| `sitk.GetArrayFromImage(sitk_image)` | int16 copy (419 MB) |
+| `np.ascontiguousarray(arr, dtype=np.float32)` | float32 copy (838 MB) |
+| `_calibrate_volume_array()` → `calibrated = arr.copy()` | float32 copy (838 MB) |
+| `numpy_to_vtk(..., deep=True)` | float32 copy (838 MB) |
+
+Plus the `sitk_image` itself, retained by `MprVolume` for the dialog's lifetime, and
+`source_datasets`. Display smoothing (`vtkImageGaussianSmooth`,
+[`src/core/volume_renderer.py:796`](../../../src/core/volume_renderer.py)) allocates yet
+another full float32 volume at runtime when sigma > 0.
+
+There is no cap and no downsampling — `dev-docs/TO_DO.md:217` confirms the downsampling
+toggle was never implemented; only a cosmetic ">512 MB" warning exists in the Advanced
+render-status readout.
+
+> **Note:** `self._vtk_image_original = vtk_image` at
+> [`src/core/volume_renderer.py:485`](../../../src/core/volume_renderer.py) aliases the same
+> object, but this was checked and is **harmless** — the smoother emits a *new* output and
+> the original is never mutated in place. Do not "fix" it.
+
+### Fix
+
+- [ ] **Step 1:** Eliminate the `_calibrate_volume_array()` copy. The array it receives was
+      just created by `ascontiguousarray(..., dtype=np.float32)` and is uniquely owned, so
+      per-slice rescale can be applied **in place**. Guard this with an explicit ownership
+      contract: `prepare_volume_data()` must document that it hands over a fresh, owned
+      array, and `_calibrate_volume_array()` must assert `arr.flags.owndata` before
+      mutating. Preserve the existing early-return semantics exactly (mixed units,
+      non-finite slope/intercept, zero slope → fall back to raw, unmutated).
+- [ ] **Step 2:** Drop the `numpy_to_vtk(deep=True)` copy in favour of `deep=False`,
+      retaining a strong reference to the backing numpy array for the lifetime of the
+      `vtkImageData`. **This is the riskiest step** — a dangling reference is a
+      use-after-free, not a wrong picture. Store the array on the renderer alongside
+      `_vtk_image`, clear both together in `cleanup()`, and add a test that renders after
+      dropping every other reference to `VolumeData`.
+- [ ] **Step 3:** Release the int16 intermediate and the `sitk_image` as soon as the
+      float32 array exists, where `MprVolume`'s other consumers permit it. Audit
+      `MprVolume.sitk_image` users before changing retention.
+- [ ] **Step 4:** Add a real memory guard: estimate the peak requirement up front (reuse
+      `estimate_volume_megabytes()`), and above a threshold either downsample by an integer
+      factor or refuse with an actionable message. This closes the `TO_DO.md:217` P2 item.
+      Downsampling must be applied **before** the VTK attach, and the Advanced status
+      readout must state the volume was downsampled — never silently.
+- [ ] **Step 5:** Re-measure with the same `ru_maxrss` harness and record before/after in
+      this plan. Target: ≤ 2 full-size float32 buffers live at peak.
+- [ ] **Step 6:** Tests — in-place calibration correctness vs. the current copy-based
+      result (bit-identical on a fixture); `deep=False` lifetime safety; downsample
+      threshold policy as a pure unit test; existing rescale fall-back paths unchanged.
+
+### Success criteria
+
+- Peak RSS for the 800-slice fixture drops from ~3.3 GB to under ~1.5 GB.
+- Calibrated voxel values are bit-identical to today's output.
+- Oversized volumes downsample or refuse with a clear message rather than swap-thrashing.
+- No use-after-free under `deep=False` (test renders with all other references dropped).
+
+---
+
+## Global constraints
+
+- Activate the project `.venv` before tests. Full suite: `python -m pytest tests/ -v` (~10 min).
+- PHI: synthetic fixtures only; no series paths or patient identifiers in tests or logs.
+- Back up modified production files under `tmp/*.bak-*`; delete after a verified commit.
+- SemVer: **patch** for Task A; **patch** for Task B unless the downsampling guard becomes
+  a user-visible toggle, in which case **minor**.
+- Task B Step 2 must not land without Step 6's lifetime test passing.
+
+---
+
+## File map
+
+| File | Role |
+|------|------|
+| `src/core/volume_renderer.py` | `check_gpu_fallback()`, `prepare_volume_data()`, `attach_volume()`, `_calibrate_volume_array()`, `cleanup()` |
+| `src/core/volume_render_quality.py` | New `frame_expected_nonblank()` policy helper; downsample threshold policy |
+| `src/gui/volume/first_paint.py` | Stop suppressing auto-refine when no real fallback occurred |
+| `src/gui/volume_viewer_widget.py` | Status/feedback copy for the expected-blank case; downsample notice |
+| `tests/core/test_volume_render_quality.py` | Policy unit tests |
+| `tests/test_volume_renderer_controls.py` | Fallback behavior tests |
+| `tests/core/test_volume_memory.py` | **New.** Calibration equivalence + `deep=False` lifetime |
+| `CHANGELOG.md`, `dev-docs/MAINTENANCE_LOG.md`, `dev-docs/TO_DO.md` | Standard bookkeeping (close `TO_DO.md:217`) |
+
+---
+
+## Verification gate
+
+- [ ] Bone-free CT phantom + CT Bone preset: GPU path retained, Auto detail retained,
+      no hardware-blaming message.
+- [ ] Windows under Parallels: genuine blank-frame GPU failure still falls back to CPU.
+- [ ] 800-slice fixture: before/after peak RSS recorded here.
+- [ ] Full pytest suite green.
