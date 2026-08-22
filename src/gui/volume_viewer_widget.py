@@ -84,6 +84,7 @@ from core.volume_renderer import (
     scalar_domain_label,
     vtk_mod,
 )
+from gui.volume.control_panel import fit_control_panel_width
 from gui.volume.detail import apply_auto_detail, apply_detail_index
 from gui.volume.first_paint import (
     apply_interaction_detail,
@@ -155,10 +156,10 @@ class VolumeViewerWidget(QWidget):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # VTK viewport: an offscreen window blitted into a plain Qt widget.
-        # QVTKRenderWindowInteractor renders inside paintEvent, which deadlocks
-        # on native macOS (3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md).
-        from gui.volume.render_surface import VolumeRenderSurface
+        # VTK viewport: offscreen window blitted into a plain Qt widget, because
+        # QVTKRenderWindowInteractor renders inside paintEvent and deadlocks on
+        # native macOS (3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md).
+        from gui.volume.surface_factory import create_render_surface
 
         self._viewport_container = QWidget(self)
         self._viewport_container.setSizePolicy(
@@ -169,7 +170,7 @@ class VolumeViewerWidget(QWidget):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        self._surface = VolumeRenderSurface(self._viewport_container)
+        self._surface = create_render_surface(self._viewport_container)
         self._vtk_render_window = self._surface.render_window
         self._surface.add_renderer(self._renderer.get_renderer())
 
@@ -188,9 +189,7 @@ class VolumeViewerWidget(QWidget):
         self._overlay_label.move(8, 6)
         self._overlay_label.show()
 
-        # The render surface already installs a trackball camera style on its
-        # generic interactor.
-
+        # The render surface installs its own trackball camera style.
         main_layout.addWidget(self._viewport_container, stretch=1)
 
         # Control panel.
@@ -212,7 +211,6 @@ class VolumeViewerWidget(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setFixedWidth(240)
 
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -733,6 +731,7 @@ class VolumeViewerWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(panel)
+        fit_control_panel_width(scroll, panel)
         return scroll
 
     # ------------------------------------------------------------------

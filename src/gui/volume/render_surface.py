@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -36,6 +36,9 @@ from utils.debug_flags import DEBUG_VOLUME_3D
 # Minimum offscreen buffer size.  A zero-sized render window is invalid in VTK
 # and a 1x1 buffer makes camera resets degenerate.
 _MIN_DIM = 8
+
+# Debounce window for re-rendering after a resize.
+_RESIZE_DEBOUNCE_MS = 80
 
 
 def _vtk() -> Any:
@@ -78,6 +81,13 @@ class VolumeRenderSurface(QWidget):
         self._grabbing = False
         self._render_window.AddObserver("EndEvent", self._on_render_end)
 
+        # Debounce re-render after a resize so a drag-resize does not queue one
+        # full volume render per pixel of mouse travel.
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(_RESIZE_DEBOUNCE_MS)
+        self._resize_timer.timeout.connect(self.render)
+
     # ------------------------------------------------------------------
     # Interactor
     # ------------------------------------------------------------------
@@ -115,10 +125,13 @@ class VolumeRenderSurface(QWidget):
         return QSize(640, 480)
 
     def resizeEvent(self, event: Any) -> None:
-        """Resize the offscreen buffer.
+        """Resize the offscreen buffer and schedule a debounced re-render.
 
-        Does **not** render inline; the owning widget re-renders through its
-        own debounce timer so a drag-resize cannot queue a render per pixel.
+        Rendering never happens inline here: a drag-resize would otherwise
+        queue one full volume render per pixel of mouse travel.  The cached
+        frame must still be refreshed afterwards, or the widget keeps painting
+        an image of the old size and the newly exposed area shows stale
+        content.
         """
         super().resizeEvent(event)
         if self._cleaned_up or self._render_window is None:
@@ -127,6 +140,7 @@ class VolumeRenderSurface(QWidget):
         if (width, height) != self._buffer_size:
             self._render_window.SetSize(width, height)
             self._buffer_size = (width, height)
+            self._resize_timer.start()
 
     # ------------------------------------------------------------------
     # Rendering
@@ -288,6 +302,7 @@ class VolumeRenderSurface(QWidget):
         if self._cleaned_up:
             return
         self._cleaned_up = True
+        self._resize_timer.stop()
         self._image = None
         if self._render_window is not None:
             try:

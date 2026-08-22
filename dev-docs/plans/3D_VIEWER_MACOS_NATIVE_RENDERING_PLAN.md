@@ -1,7 +1,7 @@
 # Plan: Make the 3D viewer work on native macOS (offscreen render surface)
 
 **Date:** 2026-08-22
-**Status:** Active — Phases 0–3 complete and verified 2026-08-22; Phase 4 (platform strategy) and the manual gate remain
+**Status:** Active — Phases 0–4 complete 2026-08-22; Windows/Parallels smoke and the rest of the manual gate remain before merge
 **Priority:** P0 (3D viewer hard-freezes the application on native macOS; force quit required)
 **Branch suggestion:** `fix/3d-macos-native-offscreen-render`
 **Related:** [`3D_VOLUME_RENDERING_PLAN.md`](3D_VOLUME_RENDERING_PLAN.md),
@@ -303,28 +303,51 @@ black, because the water/acrylic body is fully transparent at that preset.
 
 ## Phase 4 — Platform strategy
 
-- [ ] **Step 1:** Ship the offscreen surface on **all** platforms (recommended) rather
+- [x] **Step 1:** Ship the offscreen surface on **all** platforms (recommended) rather
       than branching by OS. Rationale: one code path, and it retires the Parallels-specific
       blank-frame and GL-bleed workarounds. Two rendering paths would double the manual
       verification matrix permanently.
-- [ ] **Step 2:** Add a temporary escape hatch (`DICOMVIEWER_3D_LEGACY_INTERACTOR=1`) to
+- [x] **Step 2:** Add a temporary escape hatch (`DICOMVIEWER_3D_LEGACY_INTERACTOR=1`) to
       restore the old widget for one release, in case Windows/Parallels regresses in the
-      field.
+      field. Implemented in `gui/volume/surface_factory.py` +
+      `gui/volume/legacy_surface.py`. If the legacy surface cannot be constructed the
+      factory falls back to the offscreen one, so a stale variable can never leave the
+      user without a 3D viewer.
 - [ ] **Step 3:** After one clean release, delete the legacy path and the now-dead
-      Parallels workarounds. Track as a follow-up TO_DO item; do **not** delete in this plan.
+      Parallels workarounds. Tracked in `dev-docs/TO_DO.md` with the retirement trigger;
+      do **not** delete in this plan.
 
 ---
 
 ## Verification gate (manual — required before archiving)
 
-- [ ] Native macOS (this machine, macOS 26.5.2, ARM64): open 3D on the CT QC phantom —
-      volume visible, UI responsive, all controls functional, clean close.
+- [x] Native macOS (this machine, macOS 26.5.2, ARM64): open 3D on the CT QC phantom —
+      volume visible, UI responsive, clean close. **Confirmed by the user 2026-08-22,
+      including on a real Retina display.** Two layout defects found and fixed during this
+      check (see "Layout fixes" below); remaining per-control parity still to be walked.
 - [ ] Native macOS: a large series (≥ 300 slices) — first paint within budget, interaction
       usable.
 - [ ] Windows native: full 3D smoke per `dev-docs/TO_DO.md:102`.
 - [ ] Windows under Parallels: full 3D smoke — **no regression** vs. current behavior.
 - [ ] Open / close the dialog 5× consecutively — no leak, no abort, no orphaned timers.
 - [ ] Record results (platform, GPU, dims, timings) here. **No PHI.**
+
+---
+
+### Layout fixes — 2026-08-22
+
+Found during the first real-UI check:
+
+1. **Control panel clipped on the right (pre-existing).** `_build_controls()` pinned the
+   column with `scroll.setFixedWidth(240)` while disabling the horizontal scrollbar.
+   Measured: the panel needs **278 px** (258 px content + 18 px scrollbar), so it was
+   **38 px short**, and the clipped region was unreachable at any window size. Now derived
+   from the panel's own size hint and clamped (`gui/volume/control_panel.py`).
+2. **Stale frame after resize (introduced by Phase 1).** `resizeEvent` resized the
+   offscreen buffer but never re-rendered, so the widget kept painting an image of the old
+   size and newly exposed area showed stale content. Now schedules a debounced re-render;
+   rendering still never happens inline, so a drag-resize cannot queue one volume render
+   per pixel of mouse travel.
 
 ---
 
