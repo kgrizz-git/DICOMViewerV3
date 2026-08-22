@@ -1,7 +1,7 @@
 # test_pyinstaller_exclude_audit.py
 #
-# Guards PyInstaller macOS-only Qt excludes, matplotlib backend/writer excludes, and
-# PIL Tk helper excludes: fails if application (or test) code imports a stripped module.
+# Guards matplotlib backend/writer excludes and PIL Tk helper excludes: fails if
+# application (or test) code imports a stripped module.
 #
 # Limits: AST import analysis only — does not scan site-packages (pylinac, etc.)
 # or dynamic imports (importlib, string backend names to matplotlib.use()).
@@ -23,7 +23,6 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from pyinstaller_exclude_lists import (
-    MACOS_PYSIDE6_MODULE_EXCLUDES,
     MATPLOTLIB_BACKEND_AND_WRITER_EXCLUDES,
     PIL_TK_RELATED_EXCLUDES,
 )
@@ -91,22 +90,6 @@ def test_pil_tk_helpers_not_imported(root_name: str) -> None:
             for exc in bad:
                 offenders.append(f"{path.relative_to(_ROOT)}: imports {mod!r} (excluded {exc!r})")
     assert not offenders, "Excluded PIL Tk helper modules imported:\n" + "\n".join(offenders)
-
-
-@pytest.mark.parametrize("root_name", ["src", "tests"])
-def test_macos_excluded_pyside6_not_imported(root_name: str) -> None:
-    root = _ROOT / root_name
-    assert root.is_dir(), f"missing {root}"
-    offenders: list[str] = []
-    for path in _python_files_under(root):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for mod in _collect_import_module_names(tree):
-            if not mod.startswith("PySide6."):
-                continue
-            bad = _import_conflicts_excludes(mod, MACOS_PYSIDE6_MODULE_EXCLUDES)
-            for exc in bad:
-                offenders.append(f"{path.relative_to(_ROOT)}: imports {mod!r} (excluded on macOS {exc!r})")
-    assert not offenders, "Excluded PySide6 modules imported:\n" + "\n".join(offenders)
 
 
 def test_histogram_uses_qtagg_backend_only() -> None:

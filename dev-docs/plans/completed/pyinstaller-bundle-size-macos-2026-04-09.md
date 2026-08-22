@@ -2,6 +2,8 @@
 
 **Status:** Moved to `dev-docs/plans/completed/` on 2026-04-09. Core spec, CI, docs, and automated import audit are in place. Optional follow-ups (Qt plugin narrowing, hooks, retention tuning) remain below.
 
+**Retirement note (2026-08-22, D1):** The `PYINSTALLER_MACOS_SLIM` flag and `MACOS_PYSIDE6_MODULE_EXCLUDES` list described below were **retired** after a same-commit macOS A/B measured **0 MB saved** (1,178,268 KB for both standard and slim `.app`, byte-identical; PyInstaller 6.22.2, PySide6 6.11.2, Python 3.12.10). The import graph never collected the excluded Qt modules, so removing the flag changed nothing in the bundle. See `dev-docs/plans/completed/UI_TRIGGERED_RELEASES_PLAN.md` (Step 0) and `dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md` for the evidence and filled baseline.
+
 ## Goal and success criteria (met for shipped scope)
 
 - **Measure** the macOS `dist/DICOMViewerV3.app` bundle in CI via **`du`** (drill-down under `Contents/`, `MacOS/`, `Frameworks/`).

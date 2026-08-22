@@ -1,6 +1,6 @@
 # UI-Triggered Releases Workflow Plan
 
-**Status:** Revised pending review — incorporates the 2026-08-21 critical assessment (scratch copy: `tmp/assessment_ui_triggered_releases_plan_2026-08-21_1846.md`, gitignored; the durable record of its evidence lands in `MAINTENANCE_LOG.md` + the baseline table via Step 0 below) and a 2026-08-21 correctness review: rotation commands verified against installed `gh` (no `--delist` flag exists), `build.yml` edits made atomic before the smoke, tag-push-visible deltas documented, concurrency guard added, tag-reuse recovery documented.
+**Status:** Completed 2026-08-22 — implemented on `feature/implement-ui-triggered-releases` (build.yml UI-triggered releases, D1 slim cleanup, docs, version 0.4.2). Pre-rollout smoke and post-merge release cut remain maintainer steps in §Pre-rollout Smoke / §Steps.
 **Last updated:** 2026-08-22
 
 ## Objective
@@ -230,12 +230,12 @@ On each of the three `softprops/action-gh-release` steps (`build.yml:314-348`), 
           # strict validation regex guarantees "-" can only appear as the pre-release delimiter.
           # Branch names can contain "-", so the manual-publish branch keys off the input, not ref_name.
           prerelease: ${{ ((inputs.publish_to_release == true) && contains(inputs.release_tag_name, '-')) || (startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-')) }}
-          overwrite: true
+          overwrite_files: true
           draft: false
           generate_release_notes: true
 ```
 
-- **`overwrite: true` (important):** the three steps share one release. Today (default `overwrite: false`) a re-run re-uploading same-named assets fails with `already_exists`, so a partially published release can only be recovered by manually deleting the release **and** the tag. With `overwrite: true`, re-runs succeed (though note PyInstaller output is not *byte-identical* across re-runs, same-name replacement is practically safe). 
+- **`overwrite: true` (important):** the three steps share one release. Today (default `overwrite: false`) a re-run re-uploading same-named assets fails with `already_exists`, so a partially published release can only be recovered by manually deleting the release **and** the tag. With `overwrite: true`, re-runs succeed (though note PyInstaller output is not *byte-identical* across re-runs, same-name replacement is practically safe). **Implementation note (2026-08-22):** the pinned `softprops/action-gh-release@718ea10b…` input is **`overwrite_files: true`**, not `overwrite: true` — same intent (replace same-named release assets on re-run).
   *(Note on tag creation / empty releases: The new `prepare_release` job runs synchronously beforehand, creating the release shell. Because it creates an empty release before the matrix runs, if a matrix job fails, an empty release is left behind — publicly visible immediately, since `prepare_release` creates it non-draft. This is intentional: you should recover by clicking "Re-run failed jobs", which will idempotently populate the existing release; if you abandon the attempt instead, remove it with the escape-hatch command in Section 2. Additionally, while `prepare_release` removes the tag-creation race, the matrix jobs still race to upsert release metadata (name, prerelease, notes) via `softprops`. This is a pre-existing condition on tag pushes and softprops handles concurrent metadata upserts gracefully, so this remaining race is an accepted trade-off).*
 - **`name:` note for the changelog:** an explicit `name` makes softprops re-assert "Release vX.Y.Z" as the release title on every run. Existing published releases are untouched (none exist yet — see Assumption 1), but record it in the CHANGELOG entry so the naming is intentional, not accidental.
 - `GITHUB_TOKEN` env lines stay as-is.
@@ -309,7 +309,7 @@ Before the real release: on a throwaway branch, run the dispatched workflow with
 
 1. All three legs must produce the expected filenames (`v0.0.0-ci-smoke` versions) and attach to **one** release, tagged at the dispatched commit, flagged pre-release (derived), non-draft.
 2. Artifact upload must be **skipped** on this run (Objective behavior).
-3. Re-run the same dispatch to confirm `overwrite: true` idempotence (no `already_exists` failure).
+3. Re-run the same dispatch to confirm **`overwrite_files: true`** idempotence (no `already_exists` failure).
 4. Clean up: `gh release delete v0.0.0-ci-smoke --cleanup-tag --yes` (release + tag in one command). Record the run URLs in `MAINTENANCE_LOG.md` alongside the Step 0 evidence.
 
 (No frozen-app smoke: `scripts/agent_smoke_harness.py` is source-tree-only — it hard-codes `python src/main.py` — and under D1 there is no slim `.app` to smoke. The relevant smoke for a packaging change is the release itself plus the baseline `du` check in the run logs.)

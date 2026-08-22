@@ -2,11 +2,12 @@
 
 All notable changes to DICOM Viewer V3 are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increment rules.
 
-**Current version:** `0.4.1` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
+**Current version:** `0.4.2` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
 
 ## [Unreleased]
 
 ### Changed
+- **UI-triggered releases (Build Executables):** Manual `workflow_dispatch` can publish a GitHub Release from a user-supplied `release_tag_name` (`publish_to_release`); artifact upload is **skipped** on those runs only. Tag pushes keep 30-day Actions artifacts. Windows release payloads are a single **`DICOMViewerV3-*-Windows.zip`** (manual publish and tag push). Pre-release tags (`vX.Y.Z-…`) derive **prerelease** metadata. Release titles are set explicitly to **`Release vX.Y.Z`** (or the supplied tag) on every publish leg. Release asset rotation documented in `RELEASING.md` / `BUILDING_EXECUTABLES.md`. **`PYINSTALLER_MACOS_SLIM`** retired (D1): same-commit macOS A/B measured **0 MB saved** (1,178,268 KB both builds). **Semantic versioning note: patch.**
 - **PyInstaller security floor:** `requirements-build.txt` requires
   `pyinstaller>=6.22.1` (was `>=6.21.0`) for GHSA-9fxf-4qw3-ghmr onefile
   bootloader validation; dependency-license accepted-exception rationale records

@@ -1,5 +1,7 @@
 # Building Executables for DICOM Viewer V3
 
+**Last updated:** 2026-08-22
+
 This guide explains how to compile the DICOM Viewer V3 application into standalone executables for macOS, Windows, and Linux.
 
 ## Overview
@@ -60,7 +62,7 @@ See the "Version Control Considerations" section below for more details.
 Do not copy stale excerpts into docs—the real file at the repo root is the source of truth. At a high level it defines:
 
 - **`IS_DARWIN` / `USE_UPX`:** On macOS, **`upx=False`** on `EXE` and `COLLECT` (`USE_UPX = not IS_DARWIN`) so Mach-O layouts stay compatible with **codesign** and **notarization**; Windows/Linux keep UPX when the tool is installed.
-- **`Analysis`:** `main.py` via absolute paths, `pathex` including `src/`, `datas` for `resources/`, a long explicit **`hiddenimports`** list (GUI/core/utils, pydicom, codecs, **`matplotlib.backends.backend_qtagg`**, PySide6, etc.), and **`excludes`** for `*.tests` (including **`pylinac.tests`** / common stack test packages when present), **`PIL.ImageTk` / `PIL._tkinter_finder`** (Tk unused; **`PIL.Image`** stays for I/O), plus shared lists in **`scripts/pyinstaller_exclude_lists.py`** (matplotlib backend/writer trims including non-`qtagg` Qt/cairo paths). **Large macOS-only PySide6 submodule trims** (WebEngine, Multimedia, **QtPdf**, 3D/Quick, etc.) apply **only** when **`PYINSTALLER_MACOS_SLIM`** is truthy — see below (default **off** for compatibility). **`tests/test_pyinstaller_exclude_audit.py`** fails CI if `src/` or `tests/` imports any excluded matplotlib backend, trimmed PySide6 module, or excluded PIL Tk helper (AST scan; does not inspect third-party wheels). Size baselines / per-OS **`du`**: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
+- **`Analysis`:** `main.py` via absolute paths, `pathex` including `src/`, `datas` for `resources/`, a long explicit **`hiddenimports`** list (GUI/core/utils, pydicom, codecs, **`matplotlib.backends.backend_qtagg`**, PySide6, etc.), and **`excludes`** for `*.tests` (including **`pylinac.tests`** / common stack test packages when present), **`PIL.ImageTk` / `PIL._tkinter_finder`** (Tk unused; **`PIL.Image`** stays for I/O), plus shared lists in **`scripts/pyinstaller_exclude_lists.py`** (matplotlib backend/writer trims including non-`qtagg` Qt/cairo paths). The historical macOS-only PySide6 submodule trims (WebEngine, Multimedia, **QtPdf**, 3D/Quick, etc.) were a `PYINSTALLER_MACOS_SLIM` opt-in that measured **0 MB saved** (same-commit macOS A/B: 1,178,268 KB for both standard and slim `.app`) and were **retired 2026-08-22** (D1) — the names were never collected by the import graph, so removing the flag changed nothing. **`tests/test_pyinstaller_exclude_audit.py`** still fails CI if `src/` or `tests/` imports any excluded matplotlib backend, excluded PIL Tk helper, or any shared-listed module (AST scan; does not inspect third-party wheels). Size baselines / per-OS **`du`**: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
 - **Distribution shape:** `EXE` with **`exclude_binaries=True`**, then **`COLLECT`**, then **`BUNDLE`** for **`DICOMViewerV3.app`** on macOS.
 
 Truncated excerpt (structure only—see the spec for the full lists):
@@ -74,7 +76,7 @@ a = Analysis(
     pathex=[src_dir_abs],
     datas=[("resources", "resources")],
     hiddenimports=[...],  # gui/core/pydicom/PIL (no Tk helpers)/matplotlib qtagg/pylibjpeg/PySide6/...
-    excludes=[...],      # *.tests; PIL Tk; matplotlib backends; + darwin PySide6 trims only if PYINSTALLER_MACOS_SLIM
+    excludes=[...],      # *.tests; PIL Tk; matplotlib backends (macOS PySide6 trims retired 2026-08-22, D1 — measured 0 MB saved)
     ...
 )
 
@@ -91,31 +93,9 @@ app = BUNDLE(coll, name="DICOMViewerV3.app", ...)
 - **`upx`**: In `DICOMViewerV3.spec`, **`EXE` and `COLLECT` use `upx=USE_UPX`** where **`USE_UPX = not IS_DARWIN`**: UPX runs on Windows/Linux when the tool is installed; on **macOS UPX is off** because packed Mach-O often breaks or complicates **codesign**, **stapling**, and **notarization** (see **`dev-docs/info/CODE_SIGNING_AND_NOTARIZATION.md`**).
 - **`icon`**: Path to an icon file (`.ico` for Windows, `.icns` for macOS)
 
-### macOS slim bundle — `PYINSTALLER_MACOS_SLIM` (single flag)
+### macOS PySide6 submodule excludes (retired — historical note)
 
-One **environment variable** controls whether **`MACOS_PYSIDE6_MODULE_EXCLUDES`** (large unused Qt submodules) are applied in **`DICOMViewerV3.spec`**. It is read **only on macOS**; Windows/Linux ignore it.
-
-| Value | Behavior |
-|-------|----------|
-| **Unset**, empty, `0`, `false`, `no`, `off` (any case) | **Default.** Do **not** apply macOS PySide6 submodule excludes — **larger** `.app`, **fewest** surprise `ImportError`s from lazy imports in dependencies. |
-| **`1`**, `true`, `yes`, `on` (any case) | **Slim:** apply **`MACOS_PYSIDE6_MODULE_EXCLUDES`** — smaller `.app`; **smoke-test** before distributing. |
-
-**Local examples (macOS, project root, venv active):**
-
-```bash
-# default (full compatibility — same as CI tag / default matrix macOS job)
-pyinstaller DICOMViewerV3.spec --clean --noconfirm
-
-# slim A/B comparison
-PYINSTALLER_MACOS_SLIM=1 pyinstaller DICOMViewerV3.spec --clean --noconfirm
-```
-
-**GitHub Actions — Build Executables** (`.github/workflows/build.yml`):
-
-- **Tag push** and the **default** matrix **macOS** job set **`PYINSTALLER_MACOS_SLIM`** to empty / `false` → **not** slim (release `.app` is the full bundle).
-- **Manual `workflow_dispatch`:** leave **`build_macos_slim`** unchecked → **no** second macOS job (slim stays **off**). Check **`Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1`** → runs an extra job **`macOS slim (PYINSTALLER_MACOS_SLIM=1)`** and uploads artifact **`DICOMViewerV3-macOS-slim`** for **`du`** comparison — **not** attached to **Releases** by that job (releases still use the main matrix outputs only).
-
-More detail and a baseline table: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
+The **`PYINSTALLER_MACOS_SLIM`** env flag and its **`MACOS_PYSIDE6_MODULE_EXCLUDES`** list were a macOS-only opt-in that excluded large unused Qt submodules (WebEngine, Multimedia, **QtPdf**, 3D/Quick, etc.). A same-commit macOS A/B (2026-08-22) measured **0 MB saved** — 1,178,268 KB for both the standard (`PYINSTALLER_MACOS_SLIM` unset) and slim (`=1`) `.app`, byte-identical — because the app's import graph never collected those modules in either build. The flag, list, audit-test case, and CI slim job were **retired (D1)** on 2026-08-22; removing them changed nothing in the produced bundle. Size baselines / per-OS **`du`**: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
 
 ## Step 3: Build Executables
 
@@ -427,7 +407,7 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 
 1. **Trigger automatically** when you push a version tag (e.g., `v1.0.0`)
 2. **Build on all platforms** simultaneously (Windows, macOS, Linux)
-3. **Upload artifacts** with a bounded **`retention-days`** (see **`build.yml`**; also **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for **GB-hour** artifact storage on small plans). Artifacts are now platform-specific: **Windows** uploads `dist/DICOMViewerV3*`, **macOS** uploads a `.dmg` containing only `DICOMViewerV3.app`, and **Linux** uploads the `.AppImage`. PyInstaller’s **`build/`** folder is **never** uploaded — reproduce analysis issues locally. Per-OS size commands and a **baseline table** template: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **GitHub Releases** from tag builds remain the long-lived distribution path.
+3. **Upload artifacts** (**30-day** **`retention-days`** in **`build.yml`**; see **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for **GB-hour** artifact storage on small plans) for tag pushes and manual runs **without** **Publish to a GitHub Release** checked — **skipped** when a manual run publishes a release. Platform-specific artifact paths: **Windows** `dist/DICOMViewerV3*` (one-folder PyInstaller output; release assets use a **`DICOMViewerV3-*-Windows.zip`** instead), **macOS** a `.dmg` containing only `DICOMViewerV3.app`, **Linux** the `.AppImage`. PyInstaller’s **`build/`** folder is **never** uploaded — reproduce analysis issues locally. Per-OS size commands and a **baseline table** template: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **GitHub Releases** remain the long-lived distribution path.
 4. **Log bundle sizes** after each build (`du -sh` on `dist/` outputs; on macOS, drill-down under `.app/Contents/` plus **top 10 largest** entries under `Frameworks/` and `Resources/` via `sort -hr | head -10`) so regressions show up in the Actions log without uploading extra bytes.
 5. **Create releases** with executables attached when you push tags
 
@@ -458,10 +438,11 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 2. Click on the "Actions" tab
 3. Select "Build Executables" workflow
 4. Click "Run workflow" button
-5. Select the branch. **Optional:** check **Also run a second macOS build with PYINSTALLER_MACOS_SLIM=1** to produce artifact **`DICOMViewerV3-macOS-slim`** (for **`du`** A/B vs **`DICOMViewerV3-macOS`**). Leave it **unchecked** to keep slim builds **off** (default). Click **Run workflow**.
-6. See **`PYINSTALLER_MACOS_SLIM`** in the spec section above for the single env flag used by PyInstaller locally and by CI.
+5. Select the branch. **Optional:** check **Publish to a GitHub Release** and supply a **`release_tag_name`** (strict `vX.Y.Z` or `vX.Y.Z-pre`); this builds and attaches a release from the run and **skips** the Actions artifact upload on that run only (storage saving). Leave unchecked for a plain test build. Click **Run workflow**.
 6. Wait for builds to complete
-7. Download artifacts from the completed workflow run
+7. **Download outputs:**
+   - **Publish checked:** go to the repository **Releases** page and download assets from the release named for your `release_tag_name` (Windows `.zip`, macOS `.dmg`, Linux `.AppImage`).
+   - **Publish unchecked:** open the completed workflow run on the **Actions** tab and download platform artifacts from the **Artifacts** section at the bottom of the run.
 
 ### Understanding Artifacts vs Releases
 
@@ -475,7 +456,7 @@ GitHub Actions provides two ways to store and distribute your built executables:
 - Perfect for testing builds before creating official releases
 
 **Characteristics:**
-- **Storage duration**: 90 days for public repos, 400 days for private repos
+- **Storage duration**: **30 days** in this repo (`retention-days` in **`build.yml`**); GitHub’s account default is longer (90 days public / 400 days private) when a workflow omits `retention-days`
 - **Access**: Available from the "Actions" tab → workflow run → "Artifacts" section
 - **Purpose**: Testing, development builds, temporary distribution
 - **Size limit**: 10 GB per artifact, 1 GB per file
@@ -541,7 +522,7 @@ GitHub Actions provides two ways to store and distribute your built executables:
 
 | Feature | Artifacts | Releases |
 |---------|-----------|----------|
-| **Storage Duration** | 90 days (public), 400 days (private) | Permanent |
+| **Storage Duration** | **30 days** (this repo; see `build.yml`) | Permanent |
 | **Access** | Actions tab only | Public Releases page |
 | **Purpose** | Testing, development | Official distribution |
 | **Download Links** | Must download from GitHub | Direct, shareable links |
@@ -549,24 +530,44 @@ GitHub Actions provides two ways to store and distribute your built executables:
 | **Visibility** | Repository contributors | Public (for public repos) |
 | **Best For** | Testing builds | User distribution |
 
+### Release asset rotation (repository storage hygiene)
+
+Release assets persist forever and count against **repository** storage (repo-size guidance is ~10 GB advisory). Each release carries roughly a 1.1 GB-class macOS DMG plus the Windows zip and AppImage; keeping three releases is ~6 GB of repository storage — bounded, but only if rotation executes. **Run rotation as part of every release cut** (also recorded in `dev-docs/RELEASING.md`).
+
+- Keep the **latest three releases** with assets; for each older release, delete its assets (keeps the release entry, notes, and tag; frees repo storage). There is **no `--delist` flag** on `gh release edit`; delete assets via the REST endpoint:
+
+  ```bash
+  OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+  # Subshell so listing/deletion failures propagate; empty asset list is a no-op.
+  (
+    set -euo pipefail
+    ASSET_IDS=$(gh api "repos/$OWNER_REPO/releases/tags/<tag>" --jq '.assets[].id')
+    while IFS= read -r asset_id; do
+      [ -n "$asset_id" ] || continue
+      gh api -X DELETE "repos/$OWNER_REPO/releases/assets/$asset_id"
+    done <<< "${ASSET_IDS}"
+  )
+  ```
+
+- If fully retiring a release instead, `gh release delete <tag> --cleanup-tag --yes` removes assets, the release, and the git tag in one command (the tag deletion also unblocks name reuse under the SHA-validation guard in the workflow).
+- Pre-release tags created for smoke/CI use are deleted, not rotated.
+
 ### Workflow Behavior
 
-The included workflow (`.github/workflows/build.yml`) creates both:
+The included workflow (`.github/workflows/build.yml`) provides:
 
-1. **Artifacts**: Always created for every build (manual or tag-triggered)
-   - Available for 90 days
-   - Accessible from Actions tab
-   - Useful for testing
+1. **Artifacts** (30-day retention in this repo): Created for tag pushes and for manual runs **without** **Publish to a GitHub Release** checked. **Skipped** when a manual run publishes a release (`publish_to_release == true`) — release assets are the distribution path on those runs.
+   - Accessible from the Actions tab
+   - Useful for testing before an official release
 
-2. **Releases**: Only created when you push a version tag (e.g., `v1.0.0`)
-   - Permanent storage
-   - Publicly accessible
-   - Includes release notes
-   - Best for distribution
+2. **Releases**: Created when you push a version tag (`v*`) **or** when a manual run checks **Publish to a GitHub Release** and supplies `release_tag_name` (validated in the `prepare_release` job before the matrix builds).
+   - Windows release assets are a single **`DICOMViewerV3-*-Windows.zip`** (not loose `dist/` files).
+   - Tags with a semver pre-release suffix (`vX.Y.Z-…`) publish as **pre-releases** (derived from the tag name).
+   - Permanent repository storage; rotate older release assets per [Release asset rotation](#release-asset-rotation-repository-storage-hygiene) above.
 
-**Recommended Workflow:**
-1. **Test with artifacts**: Use manual trigger to build and test via artifacts
-2. **Create release**: When ready, push a version tag to create a permanent release
+**Recommended workflow:**
+1. **Test with artifacts:** Manual trigger, leave **Publish to a GitHub Release** unchecked; download artifacts from the Actions run.
+2. **Publish a release:** Manual trigger with **Publish to a GitHub Release** + `release_tag_name`, **or** push a version tag after merging a version bump to `main`.
 
 ### Workflow Configuration
 
@@ -593,7 +594,7 @@ You can modify `.github/workflows/build.yml` to:
 - **Requires GitHub repository**: You need to push your code to GitHub
 - **Build time**: Free tier includes 2000 minutes/month for private repos (unlimited for public)
 - **No code signing**: macOS/Windows executables won't be code signed (you'd need to sign them locally or use additional services)
-- **Artifact expiration**: Artifacts expire after 90 days (unless attached to releases)
+- **Artifact expiration**: Actions artifacts expire after **30 days** in this repo (`retention-days` in **`build.yml`**); release assets persist until rotated or deleted
 
 ### Cost
 
@@ -609,6 +610,9 @@ If builds fail:
 3. **Verify dependencies**: Make sure all dependencies are in `requirements.txt` and `requirements-build.txt`
 4. **Check Python version**: Ensure the Python version in the workflow matches your local version
 5. **Remove typing package**: The workflow automatically removes the obsolete `typing` package, but you can do this manually if needed
+6. **Release-tag reuse recovery:**
+   - **Manual publish (`publish_to_release` checked):** the `prepare_release` job refuses a tag that already exists on origin pointing to a **different** commit than the dispatched SHA. Note the distinction: re-running a previously failed/cancelled workflow run (via GitHub's "Re-run" button) retains the original GITHUB_SHA and GITHUB_REF, while triggering a brand new manual dispatch after pushing a code fix uses the new commit SHA. If you pushed a fix and need to re-dispatch with the same tag name, the new SHA will differ from the tagged commit. Escape hatch: `gh release delete <tag> --cleanup-tag --yes` (removes the release *and* the tag together), then re-dispatch with the same tag name. An idempotent re-run on the *same* SHA is allowed without deletion.
+   - **Tag push:** `prepare_release` validation steps do not run; the workflow builds the commit the tag already points to. To rebuild the same tag name from a **different** commit, delete the tag (and release if present) with `gh release delete <tag> --cleanup-tag --yes`, bump/version on `main`, then create and push a fresh tag. Re-run failed jobs on the *same* tagged commit repopulates release assets without deleting the tag.
 
 ### Complete Workflow Examples
 
@@ -670,7 +674,7 @@ git push origin v1.0.0
 - Permanent release at `https://github.com/yourusername/repo/releases/tag/v1.0.0`
 - All three platform executables available for download
 - Release notes automatically generated
-- Artifacts also available (for 90 days) in Actions tab
+- Actions artifacts also available (30-day retention) in the Actions tab
 
 #### Example 3: Pre-release Testing Workflow
 
