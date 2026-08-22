@@ -5,7 +5,7 @@
   "accepted_exceptions": {
     "pyinstaller": {
       "license": "GPL-2.0-or-later WITH PyInstaller-Bootloader-CPE",
-      "reason": "Build-only freezer pinned in requirements-build.txt (not requirements.txt). PyInstaller's GPL carries a special exception permitting proprietary/frozen builds, so its copyleft does not extend to the distributed application. Never imported or bundled as a runtime library.",
+      "reason": "Build-only freezer in requirements-build.txt (not requirements.txt) with security floor pyinstaller>=6.22.1 (GHSA-9fxf-4qw3-ghmr / onefile env spoofing). PyInstaller's GPL carries a special exception permitting proprietary/frozen builds, so its copyleft does not extend to the distributed application. Never imported or bundled as a runtime library.",
       "review_by": "2026-12-31"
     },
     "pyinstaller-hooks-contrib": {

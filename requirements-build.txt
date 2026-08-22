@@ -12,5 +12,6 @@
 #   2. Build executable: pyinstaller DICOMViewerV3.spec
 #   3. See docs/BUILDING_EXECUTABLES.md for detailed instructions
 
-pyinstaller>=6.21.0
+# Security floor 6.22.1: GHSA-9fxf-4qw3-ghmr (onefile env spoofing / LPE).
+pyinstaller>=6.22.1
 

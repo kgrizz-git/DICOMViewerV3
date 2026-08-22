@@ -26,7 +26,7 @@ Scope decisions from the review (do not drift from these):
 Same-commit local A/B on macOS (arm64), `tmp/build_test.sh` (scratch): standard build (`PYINSTALLER_MACOS_SLIM` unset) vs slim (`=1`).
 
 - `du -sk`: **1,178,268 KB for both** `DICOMViewerV3_standard.app` and `DICOMViewerV3_slim.app` — byte-identical, 0 MB saved. The PyInstaller analysis logs are identical apart from hook ordering.
-- Environment: PyInstaller 6.22.2, pyinstaller-hooks-contrib 2026.6, PySide6 6.11.2, Python 3.12.10 (`pyinstaller>=6.21.0` open pin — record exact versions in Step 0).
+- Environment: PyInstaller 6.22.2, pyinstaller-hooks-contrib 2026.6, PySide6 6.11.2, Python 3.12.10 (`pyinstaller>=6.22.1` security floor — record exact versions in Step 0).
 - Why zero: the app imports only QtCore/QtGui/QtWidgets/QtOpenGL + the matplotlib qtagg path; modern PyInstaller traces the import graph, so the `MACOS_PYSIDE6_MODULE_EXCLUDES` modules (WebEngine, 3D, Quick, Multimedia, …) were never collected in either build. The "200–500 MB" figures in `completed/pyinstaller-bundle-size-macos-2026-04-09.md` and the baseline doc are upper bounds *if analysis would pull them in* — a conditional the measurement has now falsified for this graph.
 - **Conditionality:** the result is a property of the *current* dependency graph, not of PyInstaller forever. A future `pylinac`/PySide6 bump that starts importing an excluded module reverses it.
 
@@ -88,13 +88,21 @@ Insert this immediately before the `build:` job definition (`build.yml:19`):
             echo "Error: release_tag_name is required when publish_to_release is checked." >&2
             exit 1
           fi
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
+          # Strict: no leading-zero X/Y/Z; prerelease identifiers non-empty (no "..").
+          if ! printf '%s' "$TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-][0-9A-Za-z-]*(\.[0-9A-Za-z-][0-9A-Za-z-]*)*)?$'; then
             echo "Error: tag must match vX.Y.Z or vX.Y.Z-pre (got '$TAG')." >&2
             exit 1
           fi
           
-          # Check tag existence
-          REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')
+          # One commit SHA only: peel annotated tags (^{}), else lightweight tag object.
+          REMOTE_TAG_SHA=$(
+            git ls-remote --tags origin "refs/tags/$TAG" |
+            awk -v ref="refs/tags/$TAG" '
+              $2 == ref "^{}" { print $1; found=1; exit }
+              $2 == ref { lightweight=$1 }
+              END { if (!found && lightweight != "") print lightweight }
+            '
+          )
           if [ -n "$REMOTE_TAG_SHA" ]; then
             if [ "$REMOTE_TAG_SHA" != "$GITHUB_SHA" ]; then
               echo "Error: tag '$TAG' already exists on origin pointing to a different commit ($REMOTE_TAG_SHA vs $GITHUB_SHA) — refusing. Choose a new version." >&2
@@ -238,11 +246,12 @@ Add at workflow top level (next to `on:`):
 
 ```yaml
 concurrency:
-  group: build-${{ github.ref }}
+  # Publishing runs serialize on the release tag; all other runs use github.ref.
+  group: build-${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_release && inputs.release_tag_name) || github.ref }}
   cancel-in-progress: false
 ```
 
-Without it, two simultaneous dispatches with the same tag both pass validation, then race `gh release create` — the loser gets HTTP 409 under `set -euo pipefail` and fails the whole run via `needs`. Per-ref serialization makes the second run queue, and the idempotent validation path (Section 2) lets it succeed once the first finishes. Internal-only change: no output differences; tag pushes and plain builds are unaffected in practice since identical refs rarely run concurrently.
+Without it, two simultaneous dispatches with the same tag both pass validation, then race `gh release create` — the loser gets HTTP 409 under `set -euo pipefail` and fails the whole run via `needs`. Per-tag serialization (when publishing) makes the second run queue, and the idempotent validation path (Section 2) lets it succeed once the first finishes. `cancel-in-progress: false` keeps an in-flight publish from being canceled when a second run for the same tag queues. Internal-only change: no output differences; tag pushes and plain builds still key on `github.ref`.
 
 ## Release Rotation (new practice — required by the repo-storage flip side)
 
@@ -252,8 +261,12 @@ Release assets persist forever and count against *repository* storage (repo-size
 
   ```bash
   OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+  # Releases with no assets: empty ID list → loop body never runs (no failing delete).
   gh api "repos/$OWNER_REPO/releases/tags/<tag>" --jq '.assets[].id' |
-    xargs -I{} gh api -X DELETE "repos/$OWNER_REPO/releases/assets/{}"
+    while IFS= read -r asset_id; do
+      [ -n "$asset_id" ] || continue
+      gh api -X DELETE "repos/$OWNER_REPO/releases/assets/$asset_id"
+    done
   ```
 
   If fully retiring a release instead, `gh release delete <tag> --cleanup-tag --yes` removes assets, the release, and the git tag in one command (the tag deletion also unblocks name reuse under the SHA-validation guard in Section 2).
@@ -282,7 +295,7 @@ Both options remove the flag, the slim job, and the flag-specific docs. Under A1
   - `dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`: add one line to the build.yml row — manual-release runs skip the artifact upload (retention otherwise unchanged).
   - `dev-docs/plans/supporting/EXECUTABLE_SIZE_REDUCTION_PLAN.md`: open items `:26, :51, :64` reference slim/cross-platform excludes — mark each retired/superseded (a "brief note" leaves stale open checklists). Under A1, item `:64` becomes done.
   - `dev-docs/RELEASING.md`: add the Release Rotation step to the release-cut checklist (belongs to the rotation practice, listed here so the Step-2 scrub owns the edit).
-  - `CHANGELOG.md` and `dev-docs/plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md` stay untouched (accurate history) — the completed plan gains only a one-line pointer noting the flag was later retired (and why), per the tracking-split convention.
+  - `CHANGELOG.md`: leave historical entries untouched (accurate history). Add only the new **Current version** sync and the release’s `[Unreleased]` → versioned entry required by Step 4 / `dev-docs/RELEASING.md`. `dev-docs/plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md` stays as history and gains only a one-line pointer noting the flag was later retired (and why), per the tracking-split convention.
   - `AGENTS.md` needs no change (no slim references — verified).
 
 After cleanup, `python -m pytest tests/test_pyinstaller_exclude_audit.py -v` must pass, and the full suite per AGENTS.md verification.

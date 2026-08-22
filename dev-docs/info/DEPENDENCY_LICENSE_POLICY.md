@@ -1,6 +1,6 @@
 # Dependency License Policy & Check
 
-**Last updated:** 2026-07-29
+**Last updated:** 2026-08-21
 
 This is the **single source of documentation** for the automated dependency
 license check. It explains what the check does, the policy it enforces, how to
@@ -133,7 +133,7 @@ All policy lives in [`dependency_license_policy.json`](dependency_license_policy
 
 | Package | License | Reason | Review by |
 |---------|---------|--------|-----------|
-| `pyinstaller` | GPL-2.0-or-later WITH PyInstaller-Bootloader-CPE | Build-only freezer (requirements-build.txt, not requirements.txt). PyInstaller's GPL has a special exception permitting proprietary/frozen builds, so copyleft does not extend to the distributed app. Never bundled as a runtime library. | 2026-12-31 |
+| `pyinstaller` | GPL-2.0-or-later WITH PyInstaller-Bootloader-CPE | Build-only freezer in requirements-build.txt (not requirements.txt) with security floor `pyinstaller>=6.22.1` (GHSA-9fxf-4qw3-ghmr). PyInstaller's GPL has a special exception permitting proprietary/frozen builds, so copyleft does not extend to the distributed app. Never bundled as a runtime library. | 2026-12-31 |
 | `pyinstaller-hooks-contrib` | GPL-2.0 OR Apache-2.0 | Build-only hook collection, forced in as a hard transitive dependency of `pyinstaller` (Requires: `pyinstaller-hooks-contrib>=2026.6`). Not shipped. | 2026-12-31 |
 
 > `pylibjpeg-libjpeg` was removed from the runtime requirements on 2026-07-29 in favor of

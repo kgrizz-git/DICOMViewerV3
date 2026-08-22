@@ -7,6 +7,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **PyInstaller security floor:** `requirements-build.txt` requires
+  `pyinstaller>=6.22.1` (was `>=6.21.0`) for GHSA-9fxf-4qw3-ghmr onefile
+  bootloader validation; dependency-license accepted-exception rationale records
+  the same floor. Build-only; not a runtime dependency.
+  **Semantic versioning note: patch.**
 - **README end-user polish:** Root `README.md` rewritten so end users can see
   what the app is and how to get it within about one screen: short intro,
   packaged-release-first "Get the app", compact capability table, user-docs
