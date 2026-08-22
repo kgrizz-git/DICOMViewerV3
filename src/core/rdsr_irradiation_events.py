@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Final, cast
+from typing import Final, TypeAlias, cast
 
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence as DicomSequence
@@ -62,7 +62,7 @@ _EVENT_CONCEPTS: Final[tuple[tuple[str, str], ...]] = (
     _CODE_IRR_EVENT_CT,
 )
 
-type DescWalk = Sequence[tuple[Dataset, int]]
+DescWalk: TypeAlias = Sequence[tuple[Dataset, int]]
 
 
 @dataclass(frozen=True)
