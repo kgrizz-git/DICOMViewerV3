@@ -179,3 +179,22 @@ def test_render_after_cleanup_is_a_noop(surface):
     surface.cleanup()
     surface.render()  # must not raise
     assert surface._image is None
+
+
+def test_cleanup_does_not_finalize_render_window(surface, monkeypatch):
+    """cleanup() must not call Finalize() on the offscreen render window.
+
+    Regression guard: Finalize() destroys the offscreen GL context, and VTK's
+    destructor frees it again when the last reference drops. That double free
+    segfaults at application teardown on macOS.
+    """
+    calls = {"finalize": 0}
+    monkeypatch.setattr(
+        surface.render_window,
+        "Finalize",
+        lambda: calls.__setitem__("finalize", calls["finalize"] + 1),
+    )
+
+    surface.cleanup()
+
+    assert calls["finalize"] == 0

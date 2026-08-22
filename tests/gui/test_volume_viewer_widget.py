@@ -180,20 +180,24 @@ class _FakeRenderWindow:
         return (640, 480)
 
 
-class _FakeInteractor:
+class _FakeSurface:
+    """Stands in for ``VolumeRenderSurface`` (offscreen render + Qt blit)."""
+
     def __init__(self, render_window: _FakeRenderWindow) -> None:
         self.render_window = render_window
-        self.initialized = False
-        self.finalized = False
+        self.interactor = render_window.iren
+        self.cleaned_up = False
+        self.render_calls = 0
 
-    def GetRenderWindow(self):
-        return self.render_window
+    def add_renderer(self, renderer) -> None:
+        self.renderer = renderer
 
-    def Initialize(self) -> None:
-        self.initialized = True
+    def render(self) -> None:
+        self.render_calls += 1
+        self.render_window.Render()
 
-    def Finalize(self) -> None:
-        self.finalized = True
+    def cleanup(self) -> None:
+        self.cleaned_up = True
 
     def width(self) -> int:
         return 320
@@ -567,8 +571,8 @@ def test_overlay_text_keypress_status_and_cleanup(monkeypatch, qapp) -> None:
     assert "Mapper:" in widget._render_status_label.text() or widget._render_status_label.text() == ""
 
     render_window = _FakeRenderWindow()
-    interactor = _FakeInteractor(render_window)
-    widget._interactor = interactor
+    surface = _FakeSurface(render_window)
+    widget._surface = surface
     widget._vtk_render_window = render_window
     widget._initialized = True
 
@@ -602,7 +606,7 @@ def test_overlay_text_keypress_status_and_cleanup(monkeypatch, qapp) -> None:
     assert renderer.interactive_quality[-2:] == [True, False]
     assert renderer.render_methods[-1] == RENDER_METHODS[1]
     assert renderer.cleanup_called is True
-    assert interactor.finalized is True
+    assert surface.cleaned_up is True
 
 
 @pytest.mark.qt
@@ -677,8 +681,8 @@ def test_misc_control_handlers_and_crop_box_paths(monkeypatch, qapp) -> None:
     widget._build_controls()
     widget._refresh_preset_combo(select_index=0)
     render_window = _FakeRenderWindow()
-    interactor = _FakeInteractor(render_window)
-    widget._interactor = interactor
+    surface = _FakeSurface(render_window)
+    widget._surface = surface
     widget._vtk_render_window = render_window
     widget._initialized = True
 

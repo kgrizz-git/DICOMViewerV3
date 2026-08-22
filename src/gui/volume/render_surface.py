@@ -277,7 +277,14 @@ class VolumeRenderSurface(QWidget):
     # ------------------------------------------------------------------
 
     def cleanup(self) -> None:
-        """Release the interactor, offscreen window, and cached frame."""
+        """Release the interactor, offscreen window, and cached frame.
+
+        Deliberately does **not** call ``vtkRenderWindow.Finalize()``.  On
+        macOS that destroys the offscreen GL context here, and VTK's own
+        destructor then frees it again when the last reference is dropped —
+        a double free that segfaults at application teardown.  Dropping the
+        references is sufficient; VTK releases the context in the destructor.
+        """
         if self._cleaned_up:
             return
         self._cleaned_up = True
@@ -285,13 +292,7 @@ class VolumeRenderSurface(QWidget):
         if self._render_window is not None:
             try:
                 self._render_window.RemoveAllObservers()
-                self._render_window.Finalize()
             except Exception:
                 pass
-        if self._interactor is not None:
-            try:
-                self._interactor.SetRenderWindow(None)
-            except Exception:
-                pass
-            self._interactor = None
+        self._interactor = None
         self._render_window = None

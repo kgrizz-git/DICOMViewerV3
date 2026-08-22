@@ -1,7 +1,7 @@
 # Plan: Make the 3D viewer work on native macOS (offscreen render surface)
 
 **Date:** 2026-08-22
-**Status:** Active — Phase 0 decision gate PASSED 2026-08-22; Phase 1 in progress
+**Status:** Active — Phases 0–3 complete and verified 2026-08-22; Phase 4 (platform strategy) and the manual gate remain
 **Priority:** P0 (3D viewer hard-freezes the application on native macOS; force quit required)
 **Branch suggestion:** `fix/3d-macos-native-offscreen-render`
 **Related:** [`3D_VOLUME_RENDERING_PLAN.md`](3D_VOLUME_RENDERING_PLAN.md),
@@ -206,16 +206,16 @@ before the numpy buffer goes out of scope. Phase 1 Step 5 must test this.
 
 **Produces:** `src/gui/volume/render_surface.py`
 
-- [ ] **Step 1:** `VolumeRenderSurface(QWidget)` owning an offscreen `vtkRenderWindow`.
+- [x] **Step 1:** `VolumeRenderSurface(QWidget)` owning an offscreen `vtkRenderWindow`.
       Public API mirrors what the viewer widget uses today: `render()`, `render_window`,
       `resize`, `cleanup()`.
-- [ ] **Step 2:** `render()` = `rw.Render()` → readback → `QImage` → `update()`.
+- [x] **Step 2:** `render()` = `rw.Render()` → readback → `QImage` → `update()`.
       `paintEvent` draws the **cached** `QImage` only — it must never call `rw.Render()`.
       This is the invariant that fixes the freeze; assert it in a test.
-- [ ] **Step 3:** Debounce resize: on `resizeEvent`, update the offscreen window size
+- [x] **Step 3:** Debounce resize: on `resizeEvent`, update the offscreen window size
       (× `devicePixelRatio`) and re-render through the existing owned timer, not inline.
-- [ ] **Step 4:** `cleanup()` releases the render window and drops the cached `QImage`.
-- [ ] **Step 5:** Unit tests: paintEvent-does-not-render invariant, DPR sizing, flip
+- [x] **Step 4:** `cleanup()` releases the render window and drops the cached `QImage`.
+- [x] **Step 5:** Unit tests: paintEvent-does-not-render invariant, DPR sizing, flip
       correctness, cleanup idempotence.
 
 ---
@@ -245,39 +245,59 @@ Spike results:
 | `vtkBoxWidget2` crop widget attaches and renders | **PASS** |
 | Event loop stays responsive with the interactor attached | **PASS** |
 
-- [ ] **Step 1:** `VolumeRenderSurface` owns a `vtkGenericRenderWindowInteractor` bound to
+- [x] **Step 1:** `VolumeRenderSurface` owns a `vtkGenericRenderWindowInteractor` bound to
       its offscreen window, with `vtkInteractorStyleTrackballCamera` as the style.
-- [ ] **Step 2:** Blit on the render window's `EndEvent` observer, so renders triggered by
+- [x] **Step 2:** Blit on the render window's `EndEvent` observer, so renders triggered by
       the *interactor* (not just explicit `render()` calls) also refresh the widget.
       Guard against re-entrancy and against firing after `cleanup()`.
-- [ ] **Step 3:** Forward Qt events → interactor: press / move / release for left, middle
+- [x] **Step 3:** Forward Qt events → interactor: press / move / release for left, middle
       and right buttons, plus wheel. **Coordinates must be converted** — Qt is top-left
       origin in logical units, VTK is bottom-left origin in device pixels
       (`y_vtk = height_px - y_qt * dpr`).
-- [ ] **Step 4:** Forward modifier state (Ctrl / Shift) so the trackball style's
+- [x] **Step 4:** Forward modifier state (Ctrl / Shift) so the trackball style's
       pan / spin / dolly modifiers behave as they do on Windows.
-- [ ] **Step 5:** Forward `keyPressEvent`, preserving the shortcuts currently bound via
+- [x] **Step 5:** Forward `keyPressEvent`, preserving the shortcuts currently bound via
       `iren.AddObserver("KeyPressEvent", ...)`.
-- [ ] **Step 6:** Unit tests: coordinate conversion (pure function), synthetic drag moves
+- [x] **Step 6:** Unit tests: coordinate conversion (pure function), synthetic drag moves
       the camera, `EndEvent` triggers exactly one blit, no events delivered after cleanup.
 
 ---
 
 ## Phase 3 — Port the viewer widget
 
-- [ ] **Step 1:** Replace the `QVTKRenderWindowInteractor` construction
+- [x] **Step 1:** Replace the `QVTKRenderWindowInteractor` construction
       (`src/gui/volume_viewer_widget.py:170`) with `VolumeRenderSurface`.
-- [ ] **Step 2:** Rewrite `_deferred_vtk_init` — no `Initialize()`, no interactor-style
+- [x] **Step 2:** Rewrite `_deferred_vtk_init` — no `Initialize()`, no interactor-style
       observers. Keep the deferred-first-paint structure and `schedule_first_preview()`.
-- [ ] **Step 3:** Repoint `_render()`, `_auto_rotate_step()`, and the first-paint helpers
+- [x] **Step 3:** Repoint `_render()`, `_auto_rotate_step()`, and the first-paint helpers
       at the surface.
-- [ ] **Step 4:** Verify feature parity item by item: presets, opacity, W/L,
+- [ ] **Step 4:** *(Automated coverage only so far — needs the manual gate.)* Verify feature parity item by item: presets, opacity, W/L,
       contrast-depth, detail slider, blend mode, cropping, standard views, auto-rotate,
       overlay text, background color, screenshot export.
-- [ ] **Step 5:** Confirm the Qt sibling overlay from the overlay-ghosting plan still
+- [ ] **Step 5:** *(Not yet visually confirmed — needs the manual gate.)* Confirm the Qt sibling overlay from the overlay-ghosting plan still
       composites correctly (it should get *simpler* — the volume is now a plain QImage
       underneath, eliminating the GL texture-bleed class of bug entirely).
-- [ ] **Step 6:** `cleanup()` path — timers stopped before teardown, no double-free.
+- [x] **Step 6:** `cleanup()` path — timers stopped before teardown, no double-free.
+
+---
+
+### Phase 3 results — 2026-08-22
+
+- The original freeze repro (real `VolumeRenderDialog`, real CT QC phantom) now runs to
+  **`clean exit, rc= 0`**. Previously it deadlocked the GUI thread indefinitely.
+- Open/close the dialog **5×**: no crash, no stall, peak RSS flat (561 → 567 MB).
+- Full suite: **6312 passed, 15 skipped, 0 failures**.
+
+**Critical finding — never call `vtkRenderWindow.Finalize()`.** The first working port
+still segfaulted (exit 139) at application teardown. Bisected to `Finalize()` in
+`VolumeRenderSurface.cleanup()`: it destroys the offscreen GL context, and VTK's
+destructor frees it again when the last reference drops. Removing renderers first does
+**not** help. Dropping the references is sufficient — VTK releases the context in its
+destructor. Locked by `test_cleanup_does_not_finalize_render_window`.
+
+Incidental confirmation of the supporting plan's Task A: the dialog's first paint on this
+phantom under the default **CT Bone** preset shows only the dense QA inserts floating in
+black, because the water/acrylic body is fully transparent at that preset.
 
 ---
 
