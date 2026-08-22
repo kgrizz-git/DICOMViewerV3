@@ -1,7 +1,7 @@
 # UI-Triggered Releases Workflow Plan
 
 **Status:** Revised pending review — incorporates the 2026-08-21 critical assessment (scratch copy: `tmp/assessment_ui_triggered_releases_plan_2026-08-21_1846.md`, gitignored; the durable record of its evidence lands in `MAINTENANCE_LOG.md` + the baseline table via Step 0 below) and a 2026-08-21 correctness review: rotation commands verified against installed `gh` (no `--delist` flag exists), `build.yml` edits made atomic before the smoke, tag-push-visible deltas documented, concurrency guard added, tag-reuse recovery documented.
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-22
 
 ## Objective
 
@@ -261,12 +261,15 @@ Release assets persist forever and count against *repository* storage (repo-size
 
   ```bash
   OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-  # Releases with no assets: empty ID list → loop body never runs (no failing delete).
-  gh api "repos/$OWNER_REPO/releases/tags/<tag>" --jq '.assets[].id' |
+  # Subshell so listing/deletion failures propagate; empty asset list is a no-op.
+  (
+    set -euo pipefail
+    ASSET_IDS=$(gh api "repos/$OWNER_REPO/releases/tags/<tag>" --jq '.assets[].id')
     while IFS= read -r asset_id; do
       [ -n "$asset_id" ] || continue
       gh api -X DELETE "repos/$OWNER_REPO/releases/assets/$asset_id"
-    done
+    done <<< "${ASSET_IDS}"
+  )
   ```
 
   If fully retiring a release instead, `gh release delete <tag> --cleanup-tag --yes` removes assets, the release, and the git tag in one command (the tag deletion also unblocks name reuse under the SHA-validation guard in Section 2).

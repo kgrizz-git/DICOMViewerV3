@@ -4,13 +4,13 @@
   "fail_on_unknown": false,
   "accepted_exceptions": {
     "pyinstaller": {
-      "license": "GPL-2.0-or-later WITH PyInstaller-Bootloader-CPE",
-      "reason": "Build-only freezer in requirements-build.txt (not requirements.txt) with security floor pyinstaller>=6.22.1 (GHSA-9fxf-4qw3-ghmr / onefile env spoofing). PyInstaller's GPL carries a special exception permitting proprietary/frozen builds, so its copyleft does not extend to the distributed application. Never imported or bundled as a runtime library.",
+      "license": "GPL-2.0-or-later WITH Bootloader-exception",
+      "reason": "Build-only freezer in requirements-build.txt (not requirements.txt) with security floor pyinstaller>=6.22.1 (GHSA-9fxf-4qw3-ghmr / onefile env spoofing). Upstream SPDX is GPL-2.0-or-later WITH Bootloader-exception: the exception covers linking/embedding the compiled bootloader and related loader files into the frozen executable so that copyleft does not extend to the distributed application; the PyInstaller toolchain itself is not imported as a runtime library.",
       "review_by": "2026-12-31"
     },
     "pyinstaller-hooks-contrib": {
-      "license": "GPL-2.0 OR Apache-2.0",
-      "reason": "Build-only hook collection, forced in as a hard transitive dependency of pyinstaller (Requires: pyinstaller-hooks-contrib>=2026.6). Not bundled into the shipped application.",
+      "license": "GPL-2.0-or-later AND Apache-2.0",
+      "reason": "Hard transitive of pyinstaller (Requires: pyinstaller-hooks-contrib>=2026.6; that floor is a constraint, not an exact pin). Dual-licensed by component: standard hooks/files are GPL-2.0-or-later (build-time analysis only); runtime hooks under _pyinstaller_hooks_contrib/rthooks are Apache-2.0 and may be embedded in frozen executables. Do not claim the package is never bundled — re-check which hooks the freeze selects. For this app's graph (pydicom, imageio, imageio_ffmpeg, cryptography, PySide6/matplotlib via PyInstaller's own hooks), contrib stdhooks such as hook-pydicom / hook-imageio* / hook-cryptography can apply at analysis time; the contrib Apache-2.0 rthook most likely to embed is pyi_rth_cryptography_openssl when cryptography is collected.",
       "review_by": "2026-12-31"
     }
   },
