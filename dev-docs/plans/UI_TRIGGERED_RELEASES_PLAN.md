@@ -1,6 +1,6 @@
 # UI-Triggered Releases Workflow Plan
 
-**Status:** Revised pending review — incorporates the 2026-08-21 critical assessment (scratch copy: `tmp/assessment_ui_triggered_releases_plan_2026-08-21_1846.md`, gitignored; the durable record of its evidence lands in `MAINTENANCE_LOG.md` + the baseline table via Step 0 below).
+**Status:** Revised pending review — incorporates the 2026-08-21 critical assessment (scratch copy: `tmp/assessment_ui_triggered_releases_plan_2026-08-21_1846.md`, gitignored; the durable record of its evidence lands in `MAINTENANCE_LOG.md` + the baseline table via Step 0 below) and a 2026-08-21 correctness review: rotation commands verified against installed `gh` (no `--delist` flag exists), `build.yml` edits made atomic before the smoke, tag-push-visible deltas documented, concurrency guard added, tag-reuse recovery documented.
 **Last updated:** 2026-08-21
 
 ## Objective
@@ -10,6 +10,7 @@ Allow a manual `workflow_dispatch` of **Build Executables** (`.github/workflows/
 Scope decisions from the review (do not drift from these):
 
 - **Tag-push behavior is unchanged** for artifacts: tag releases keep the 30-day `actions/upload-artifact` fallback (`GITHUB_ACTIONS_STORAGE_AND_BILLING.md`). The storage saving comes from *manual release* runs, which currently upload ~1 GB-class zips that sit 30 days and are then redundant with the release. We deliberately do **not** skip uploads on tag pushes — if a release step fails there (token, network, one of three legs), the artifact is the only debug/distribution fallback.
+- **Two deliberate tag-push-visible changes are in scope** (both listed in Step 4's changelog content): (a) Windows release assets become a single `DICOMViewerV3-*-Windows.zip` instead of the loose `dist/DICOMViewerV3*` tree — on manual publishes *and* tag pushes; (b) release `prerelease` is derived rather than hardcoded `false`, so a future tag like `vX.Y.Z-rc1` publishes as a pre-release (today every tag release is marked stable). "Tag-push behavior is unchanged" above refers to *Actions artifact uploads only*, not release payloads/metadata.
 - **Release-asset rotation is part of this plan** (Release Rotation section): release assets are *permanent* and count against **repository** storage, not Actions storage. Conserving Actions storage (Free tier 500 MB limit) by publishing more releases without a rotation policy means endless unbounded repository growth. While repo-size limits are advisory (~10 GB), Release Rotation is necessary hygiene.
 - The macOS-slim cleanup (Slim Cleanup section) ships with the same PR but is independent work; it is gated on Step 0 (archive the size evidence + maintainer sign-off on the cleanup option).
 
@@ -88,7 +89,7 @@ Insert this immediately before the `build:` job definition (`build.yml:19`):
             exit 1
           fi
           if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
-            echo "Error: tag must be strict semver vX.Y.Z or vX.Y.Z-pre (got '$TAG')." >&2
+            echo "Error: tag must match vX.Y.Z or vX.Y.Z-pre (got '$TAG')." >&2
             exit 1
           fi
           
@@ -120,12 +121,16 @@ Then, update the `build` job to declare `needs: prepare_release`:
 
 ```yaml
   build:
-    name: Build executable
+    name: Build on ${{ matrix.os }}  # display name kept as-is
     needs: prepare_release
     runs-on: ${{ matrix.os }}
 ```
 
 Rationale: Placing this in a dedicated preceding job removes the concurrent 409 API race on validation/creation. If `publish_to_release` is false (or on a tag push), the `prepare_release` steps gracefully skip, its job status evaluates to `success`, and `build` proceeds normally without requiring complex `if: always()` logic. The strict regex keeps `sed 's/^v//'` in Section 3 deterministic.
+
+Recovery beyond same-SHA re-runs: if a leg fails and you push a fix, the new SHA differs from the tagged commit and validation refuses ("Choose a new version"). Escape hatch: `gh release delete <tag> --cleanup-tag --yes` (removes release *and* tag together), then re-dispatch with the same tag name. Expect this loop during rollout; record the command in `BUILDING_EXECUTABLES.md` troubleshooting.
+
+Cost note: `prepare_release` provisions an ubuntu runner on every build (plain manual builds and tag pushes included) even when its steps skip instantly — avoiding that requires `always()`-style `needs` logic, which this design deliberately avoids; accepted. A workflow-level concurrency guard (Section 7) closes the remaining simultaneous-dispatch race on `gh release create`.
 
 ### 3. Version parsing in packaging steps
 
@@ -178,6 +183,8 @@ Pattern (adds two env vars; each step's `GH_REF` env is kept):
 
 The step already repeats this block verbatim per leg (shell-local `VERSION`), so all four need the same change. Gating on `PUBLISH` (not bare `-n "$RELEASE_TAG"`) means a plain manual build with a stray tag typed in still names its files `…-latest-…`, as it does today.
 
+Pre-existing quirk preserved: the tag-push `sed` assumes a leading `v` (`refs\/tags\/v`); a pushed tag without it leaves slashes in `VERSION`. Out of scope — the trigger only matches `v*` tags.
+
 ### 4. Artifact upload — skip on manual-release runs only
 
 Per the Objective scope decision, the `if:` on each of the three upload steps (`build.yml:285` Windows, `:296` macOS, `:306` Linux) becomes:
@@ -221,15 +228,36 @@ On each of the three `softprops/action-gh-release` steps (`build.yml:314-348`), 
 ```
 
 - **`overwrite: true` (important):** the three steps share one release. Today (default `overwrite: false`) a re-run re-uploading same-named assets fails with `already_exists`, so a partially published release can only be recovered by manually deleting the release **and** the tag. With `overwrite: true`, re-runs succeed (though note PyInstaller output is not *byte-identical* across re-runs, same-name replacement is practically safe). 
-  *(Note on tag creation / empty releases: The new `prepare_release` job runs synchronously beforehand, creating the release shell. Because it creates an empty release before the matrix runs, if a matrix job fails, an empty release is left behind. This is intentional: you should recover by clicking "Re-run failed jobs", which will idempotently populate the existing release. Additionally, while `prepare_release` removes the tag-creation race, the matrix jobs still race to upsert release metadata (name, prerelease, notes) via `softprops`. This is a pre-existing condition on tag pushes and softprops handles concurrent metadata upserts gracefully, so this remaining race is an accepted trade-off).*
+  *(Note on tag creation / empty releases: The new `prepare_release` job runs synchronously beforehand, creating the release shell. Because it creates an empty release before the matrix runs, if a matrix job fails, an empty release is left behind — publicly visible immediately, since `prepare_release` creates it non-draft. This is intentional: you should recover by clicking "Re-run failed jobs", which will idempotently populate the existing release; if you abandon the attempt instead, remove it with the escape-hatch command in Section 2. Additionally, while `prepare_release` removes the tag-creation race, the matrix jobs still race to upsert release metadata (name, prerelease, notes) via `softprops`. This is a pre-existing condition on tag pushes and softprops handles concurrent metadata upserts gracefully, so this remaining race is an accepted trade-off).*
 - **`name:` note for the changelog:** an explicit `name` makes softprops re-assert "Release vX.Y.Z" as the release title on every run. Existing published releases are untouched (none exist yet — see Assumption 1), but record it in the CHANGELOG entry so the naming is intentional, not accidental.
 - `GITHUB_TOKEN` env lines stay as-is.
 
+### 7. Workflow concurrency guard
+
+Add at workflow top level (next to `on:`):
+
+```yaml
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+```
+
+Without it, two simultaneous dispatches with the same tag both pass validation, then race `gh release create` — the loser gets HTTP 409 under `set -euo pipefail` and fails the whole run via `needs`. Per-ref serialization makes the second run queue, and the idempotent validation path (Section 2) lets it succeed once the first finishes. Internal-only change: no output differences; tag pushes and plain builds are unaffected in practice since identical refs rarely run concurrently.
+
 ## Release Rotation (new practice — required by the repo-storage flip side)
 
-Release assets persist forever and count against *repository* storage (repo-size guidance is ~10 GB advisory). Each release carries roughly a 1.1 GB-class macOS artifact plus Windows folder and AppImage. Add to `BUILDING_EXECUTABLES.md` (GitHub Actions section):
+Release assets persist forever and count against *repository* storage (repo-size guidance is ~10 GB advisory). Each release carries roughly a 1.1 GB-class macOS DMG plus the Windows zip and AppImage; keeping three releases is therefore ~**6 GB** of repository storage — bounded, but only if rotation actually executes. Add to `BUILDING_EXECUTABLES.md` (GitHub Actions section):
 
-- Keep the **latest three releases** with assets; for each superseded release, delist or delete its assets (`gh release edit --delist <tag>`, or delete assets via `gh api -X DELETE .../releases/<id>` asset endpoints) so `git`-relative repo storage stays bounded. Note: If fully retiring a release, explicitly delete its git tag as well so the SHA validation guard doesn't permanently block reusing the tag name.
+- Keep the **latest three releases** with assets; for each superseded release, delete its assets (keeps the release entry, notes, and tag; frees repo storage). There is **no `--delist` flag** on `gh release edit` (verified against installed gh); delete assets via the REST endpoint:
+
+  ```bash
+  OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+  gh api "repos/$OWNER_REPO/releases/tags/<tag>" --jq '.assets[].id' |
+    xargs -I{} gh api -X DELETE "repos/$OWNER_REPO/releases/assets/{}"
+  ```
+
+  If fully retiring a release instead, `gh release delete <tag> --cleanup-tag --yes` removes assets, the release, and the git tag in one command (the tag deletion also unblocks name reuse under the SHA-validation guard in Section 2).
+- **Rotation executes as part of every release cut**: add the rotation step to the release procedure in `dev-docs/RELEASING.md` (the BUILDING_EXECUTABLES section alone is reference prose nobody runs).
 - Pre-release tags created for smoke/CI use (pre-rollout smoke below) are deleted, not rotated.
 
 ## Slim Cleanup
@@ -253,6 +281,7 @@ Both options remove the flag, the slim job, and the flag-specific docs. Under A1
   - `dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`: the flag table (`:5-21`), the order-of-magnitude section (`:23-39`) → replace with the measured 0 MB result, the "Authoritative method" line (`:41`), "CI estimates" bullets (`:83-92`), and fill the baseline table (Step 0).
   - `dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`: add one line to the build.yml row — manual-release runs skip the artifact upload (retention otherwise unchanged).
   - `dev-docs/plans/supporting/EXECUTABLE_SIZE_REDUCTION_PLAN.md`: open items `:26, :51, :64` reference slim/cross-platform excludes — mark each retired/superseded (a "brief note" leaves stale open checklists). Under A1, item `:64` becomes done.
+  - `dev-docs/RELEASING.md`: add the Release Rotation step to the release-cut checklist (belongs to the rotation practice, listed here so the Step-2 scrub owns the edit).
   - `CHANGELOG.md` and `dev-docs/plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md` stay untouched (accurate history) — the completed plan gains only a one-line pointer noting the flag was later retired (and why), per the tracking-split convention.
   - `AGENTS.md` needs no change (no slim references — verified).
 
@@ -265,18 +294,18 @@ Before the real release: on a throwaway branch, run the dispatched workflow with
 1. All three legs must produce the expected filenames (`v0.0.0-ci-smoke` versions) and attach to **one** release, tagged at the dispatched commit, flagged pre-release (derived), non-draft.
 2. Artifact upload must be **skipped** on this run (Objective behavior).
 3. Re-run the same dispatch to confirm `overwrite: true` idempotence (no `already_exists` failure).
-4. Clean up: delete the release and the `v0.0.0-ci-smoke` tag. Record the run URLs in `MAINTENANCE_LOG.md` alongside the Step 0 evidence.
+4. Clean up: `gh release delete v0.0.0-ci-smoke --cleanup-tag --yes` (release + tag in one command). Record the run URLs in `MAINTENANCE_LOG.md` alongside the Step 0 evidence.
 
 (No frozen-app smoke: `scripts/agent_smoke_harness.py` is source-tree-only — it hard-codes `python src/main.py` — and under D1 there is no slim `.app` to smoke. The relevant smoke for a packaging change is the release itself plus the baseline `du` check in the run logs.)
 
 ## Steps, in order
 
-0. **(Maintainer sign-off & Verification)** Run `gh release list` and `git tag` to verify zero tags/releases exist (Assumption 1). Record the Evidence numbers + exact dependency versions into `MAINTENANCE_LOG.md`, fill the baseline table in `PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`, add the pointer line in the completed plan, and choose D1 vs A1. *The Slim Cleanup steps below are blocked until this lands.*
-1. `build.yml` dispatch inputs + release validation (Sections 1–2).
-2. `build.yml` version parsing, upload conditions, release steps (Sections 3–6).
-3. Pre-rollout smoke (above) **before** merging the real release workflow — if the smoke reveals release-machinery breakage (Assumption 1's risk), fix it as a first-class part of this change.
-4. Slim Cleanup (D1 or A1 per Step 0) + docs scrub + `CHANGELOG.md` entry.
-5. Version: patch bump of `src/version.py` + `CHANGELOG.md` **Current version** sync, per `dev-docs/RELEASING.md` — precedent `CHANGELOG:458` classifies distribution/CI-packaging-only changes as patch. Content: manual-dispatch release publishing; artifact upload skipped on manual-release runs; release rotation practice; macOS slim flag retired (0 MB measured) or made unconditional (if A1).
-6. Verification per AGENTS.md: `python -m pytest tests/ -v` (long timeout), `python scripts/check_repo_harness.py`, `python scripts/check_architecture_boundaries.py`, agent smoke.
+0. **(Maintainer sign-off & Verification)** Run `gh release list` and `git tag` to verify zero tags/releases exist (Assumption 1). Record the Evidence numbers + exact dependency versions into `MAINTENANCE_LOG.md`, fill the baseline table in `PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`, add the pointer line in the completed plan, and choose D1 vs A1. *Everything below is blocked until this lands (the D1-vs-A1 choice gates Step 1's spec/job deletions).*
+1. **All `.github/workflows/build.yml` edits in one atomic pass** (all `build.yml` line refs in this doc describe today's file; one pass makes shifting numbers irrelevant): dispatch inputs + `prepare_release` + concurrency guard (Sections 1–2, 7); version parsing + Windows zip + upload-skip conditions (Sections 3–4); release triggers + `with:` blocks (Sections 5–6); **and** the Slim Cleanup deletions inside `build.yml` (dispatch input, slim job, matrix rows, env, echo). Doing the slim deletions in the same pass avoids a dead slim job referencing a deleted dispatch input mid-sequence, and makes the smoke exercise the finished workflow.
+2. **Slim Cleanup outside `build.yml`** (D1 or A1 per Step 0): `DICOMViewerV3.spec`, `scripts/pyinstaller_exclude_lists.py`, `tests/test_pyinstaller_exclude_audit.py`, the docs scrub list, the completed-plan pointer line, and the `CHANGELOG.md` entry (content per Step 4).
+3. **Pre-rollout smoke** (above) from the throwaway branch — `workflow_dispatch` runs the workflow definition from the selected branch, so this exercises the edited `build.yml` before merging. If the smoke reveals release-machinery breakage (Assumption 1's risk), fix it as a first-class part of this change.
+4. Version: patch bump of `src/version.py` + `CHANGELOG.md` **Current version** sync, per `dev-docs/RELEASING.md` — precedent `CHANGELOG:458` classifies distribution/CI-packaging-only changes as patch. Content: manual-dispatch release publishing; artifact upload skipped on manual-release runs; **Windows release payloads become a single zip (tag pushes included)**; **derived prerelease marking on tag pushes (`vX.Y.Z-…` tags)**; release rotation practice; macOS slim flag retired (0 MB measured) or made unconditional (if A1).
+5. Verification per AGENTS.md (pre-merge gate): `python -m pytest tests/ -v` (long timeout), `python scripts/check_repo_harness.py`, `python scripts/check_architecture_boundaries.py`, agent smoke, plus `python scripts/check_user_docs_links.py` (insurance: the scrub removes doc sections other files reference).
+6. **Post-merge release cut:** dispatch from merged `main` (per RELEASING.md) so the binaries embed the bumped `src/version.py`; confirm all three legs' assets attach to one non-draft release.
 
-**Rollback:** the whole change is one commit/PR over `build.yml` + packaging files + docs; reverting it restores today's behavior exactly (no release machinery exists to half-revert — Assumption 1).
+**Rollback:** the whole change is one commit/PR over `build.yml` + packaging files + docs. While Assumption 1 still holds (no real release published yet), reverting restores today's behavior exactly. Once any real release/tag exists, revert removes only the *machinery* — published tags, releases, and assets persist and are disposed of via the Release Rotation deletion commands, not the revert.
