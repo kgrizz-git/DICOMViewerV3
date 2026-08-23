@@ -29,12 +29,20 @@ def fit_control_panel_width(scroll: Any, panel: Any) -> None:
     A hardcoded width clipped the right edge of the widest controls, and with
     the horizontal scrollbar disabled the clipped part was unreachable no
     matter how large the window grew.
+
+    If the content genuinely cannot fit within the maximum column width, the
+    horizontal scrollbar is re-enabled so the clamped remainder stays
+    reachable — otherwise the original bug returns for very large fonts.
     """
-    scroll.setFixedWidth(
-        control_panel_width(
-            panel.sizeHint().width(),
-            scroll.verticalScrollBar().sizeHint().width(),
-        )
+    from PySide6.QtCore import Qt
+
+    scrollbar_width = scroll.verticalScrollBar().sizeHint().width()
+    needed = panel.sizeHint().width() + scrollbar_width + CONTROL_PANEL_PADDING_PX
+    scroll.setFixedWidth(control_panel_width(panel.sizeHint().width(), scrollbar_width))
+    scroll.setHorizontalScrollBarPolicy(
+        Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        if needed > CONTROL_PANEL_MAX_WIDTH
+        else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     )
 
 

@@ -99,6 +99,7 @@ def button_event_names(button: Qt.MouseButton) -> tuple[str, str] | None:
 # Forwarding ``event.text()`` alone yields the literal character ("+", "]", " "),
 # which silently breaks every shortcut bound to a named key.
 _QT_KEY_TO_KEYSYM: dict[int, str] = {
+    # Escape is intentionally absent: the hosting dialog needs it to close.
     Qt.Key.Key_Space.value: "space",
     Qt.Key.Key_Plus.value: "plus",
     Qt.Key.Key_Equal.value: "equal",
@@ -108,7 +109,6 @@ _QT_KEY_TO_KEYSYM: dict[int, str] = {
     Qt.Key.Key_BracketRight.value: "bracketright",
     Qt.Key.Key_Return.value: "Return",
     Qt.Key.Key_Enter.value: "Return",
-    Qt.Key.Key_Escape.value: "Escape",
     Qt.Key.Key_Tab.value: "Tab",
     Qt.Key.Key_Backspace.value: "BackSpace",
     Qt.Key.Key_Delete.value: "Delete",

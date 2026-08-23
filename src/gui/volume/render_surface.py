@@ -170,15 +170,23 @@ class VolumeRenderSurface(QWidget):
         self._render_window.Render()
 
     def _on_render_end(self, _caller: Any = None, _event: str = "") -> None:
-        """Cache the just-rendered frame and schedule a repaint."""
+        """Cache the just-rendered frame and schedule a repaint.
+
+        Reads the size back from the render window rather than trusting the
+        requested one: a driver may grant something smaller, and a mismatched
+        readback would be discarded.  A failed grab keeps the previous frame
+        rather than blanking the viewport.
+        """
         if self._cleaned_up or self._render_window is None or self._grabbing:
             return
         self._grabbing = True
         try:
-            width, height = self._buffer_size
-            self._image = self._grab(width, height)
+            width, height = self._render_window.GetSize()
+            image = self._grab(int(width), int(height))
         finally:
             self._grabbing = False
+        if image is not None:
+            self._image = image
         self.update()
 
     def _grab(self, width: int, height: int) -> QImage | None:
@@ -296,6 +304,11 @@ class VolumeRenderSurface(QWidget):
 
     def keyPressEvent(self, event: Any) -> None:
         if self._cleaned_up or self._interactor is None:
+            super().keyPressEvent(event)
+            return
+        # Escape belongs to the hosting dialog (close), not to VTK.  Accepting
+        # it here would make the 3D window impossible to dismiss with Escape.
+        if event.key() == Qt.Key.Key_Escape:
             super().keyPressEvent(event)
             return
         keysym = qt_key_to_vtk_keysym(event.key(), event.text())

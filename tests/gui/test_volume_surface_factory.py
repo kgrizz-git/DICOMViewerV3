@@ -223,3 +223,44 @@ def test_palette_change_recolours_labels(qapp, monkeypatch):
             assert "#ff0000" not in getattr(widget, name).styleSheet()
     finally:
         widget.cleanup()
+
+
+def test_legacy_hatch_is_ignored_on_macos(qapp, monkeypatch):
+    """Honouring the hatch on macOS would hand the user a guaranteed freeze."""
+    pytest.importorskip("vtkmodules.all")
+    monkeypatch.setenv(LEGACY_ENV_VAR, "1")
+    monkeypatch.setattr("gui.volume.surface_factory._is_macos", lambda: True)
+
+    from gui.volume.render_surface import VolumeRenderSurface
+    from gui.volume.surface_factory import create_render_surface
+
+    surface = create_render_surface()
+    try:
+        assert isinstance(surface, VolumeRenderSurface)
+    finally:
+        surface.cleanup()
+
+
+def test_clamped_panel_reenables_horizontal_scrollbar(qapp):
+    """Content wider than the cap must stay reachable, not be clipped again."""
+    from PySide6.QtCore import Qt as QtNs
+    from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
+
+    from gui.volume.control_panel import (
+        CONTROL_PANEL_MAX_WIDTH,
+        fit_control_panel_width,
+    )
+
+    scroll = QScrollArea()
+    scroll.setHorizontalScrollBarPolicy(QtNs.ScrollBarPolicy.ScrollBarAlwaysOff)
+    panel = QWidget()
+    layout = QVBoxLayout(panel)
+    label = QLabel("x" * 4000)
+    label.setWordWrap(False)
+    layout.addWidget(label)
+    scroll.setWidget(panel)
+
+    assert panel.sizeHint().width() > CONTROL_PANEL_MAX_WIDTH
+    fit_control_panel_width(scroll, panel)
+
+    assert scroll.horizontalScrollBarPolicy() == QtNs.ScrollBarPolicy.ScrollBarAsNeeded

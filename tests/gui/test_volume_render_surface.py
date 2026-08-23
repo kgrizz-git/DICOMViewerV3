@@ -8,7 +8,6 @@ deadlocks in ``glFinish`` under a CoreAnimation transaction commit.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage, QPaintEvent, QResizeEvent
@@ -136,37 +135,55 @@ def test_device_pixel_ratio_applied_to_image(surface):
 
 
 def test_vertical_flip_orientation(surface):
-    """VTK's bottom-left origin must be flipped to QImage's top-left."""
+    """VTK's bottom-left origin must be flipped to QImage's top-left.
+
+    The camera is placed explicitly rather than via ResetCamera(): resetting
+    re-centres on the actor, which makes a vertically flipped frame produce the
+    same result and renders the assertion vacuous.
+    """
     import vtkmodules.all as vtk_mod
 
     renderer = vtk_mod.vtkRenderer()
     renderer.SetBackground(0.0, 0.0, 0.0)
-    # A cone placed high in the viewport should appear near the image top.
-    cone = vtk_mod.vtkConeSource()
-    mapper = vtk_mod.vtkPolyDataMapper()
-    mapper.SetInputConnection(cone.GetOutputPort())
-    actor = vtk_mod.vtkActor()
-    actor.SetMapper(mapper)
-    actor.GetProperty().SetColor(1.0, 1.0, 1.0)
-    actor.SetPosition(0.0, 3.0, 0.0)
-    renderer.AddActor(actor)
+    # Bright marker high in world space (+Y), dim marker low (-Y).
+    for y_position, grey in ((3.0, 1.0), (-3.0, 0.25)):
+        source = vtk_mod.vtkSphereSource()
+        source.SetRadius(1.0)
+        mapper = vtk_mod.vtkPolyDataMapper()
+        mapper.SetInputConnection(source.GetOutputPort())
+        actor = vtk_mod.vtkActor()
+        actor.SetMapper(mapper)
+        actor.SetPosition(0.0, y_position, 0.0)
+        actor.GetProperty().SetColor(grey, grey, grey)
+        actor.GetProperty().SetLighting(False)
+        renderer.AddActor(actor)
     surface.add_renderer(renderer)
-    renderer.ResetCamera()
+
+    # Fixed camera: +Y is up, so the bright marker belongs in the TOP half.
+    camera = renderer.GetActiveCamera()
+    camera.SetPosition(0.0, 0.0, 20.0)
+    camera.SetFocalPoint(0.0, 0.0, 0.0)
+    camera.SetViewUp(0.0, 1.0, 0.0)
+    renderer.ResetCameraClippingRange()
 
     surface.render_frame()
     image = surface._image
 
     width, height = image.width(), image.height()
-    rows = []
-    for y in range(height):
-        for x in range(0, width, 4):
-            colour = image.pixelColor(x, y)
-            if colour.red() + colour.green() + colour.blue() > 150:
-                rows.append(y)
-                break
-    if not rows:
+
+    def brightness(y_range):
+        total = 0
+        for y in y_range:
+            for x in range(0, width, 3):
+                colour = image.pixelColor(x, y)
+                total += colour.red() + colour.green() + colour.blue()
+        return total
+
+    top = brightness(range(0, height // 2))
+    bottom = brightness(range(height // 2, height))
+    if top == 0 and bottom == 0:
         pytest.skip("offscreen GL produced no geometry in this environment")
-    assert float(np.mean(rows)) < height / 2
+    assert top > bottom, "bright +Y marker should render in the top half"
 
 
 def test_cleanup_is_idempotent(surface):
@@ -292,3 +309,67 @@ def test_paint_fills_whole_rect_before_drawing(surface):
     grabbed = stained.toImage()
     corner = grabbed.pixelColor(grabbed.width() - 1, grabbed.height() - 1)
     assert (corner.red(), corner.green(), corner.blue()) == (0, 0, 0)
+
+
+def test_escape_is_not_swallowed(surface, monkeypatch):
+    """Escape must reach the hosting dialog so the 3D window can close.
+
+    Regression: adding Escape to the keysym map and accepting handled keys made
+    the dialog impossible to dismiss with Escape.
+    """
+    from PySide6.QtCore import Qt as QtNs
+    from PySide6.QtGui import QKeyEvent
+
+    forwarded = {"n": 0}
+    monkeypatch.setattr(
+        surface.interactor,
+        "KeyPressEvent",
+        lambda: forwarded.__setitem__("n", forwarded["n"] + 1),
+    )
+
+    event = QKeyEvent(
+        QKeyEvent.Type.KeyPress,
+        QtNs.Key.Key_Escape,
+        QtNs.KeyboardModifier.NoModifier,
+        "\x1b",
+    )
+    surface.keyPressEvent(event)
+
+    assert forwarded["n"] == 0
+    assert not event.isAccepted()
+
+
+def test_failed_grab_keeps_previous_frame(surface, monkeypatch):
+    """A failed readback must not blank the viewport to black."""
+    import vtkmodules.all as vtk_mod
+    from PySide6.QtGui import QImage
+
+    renderer = vtk_mod.vtkRenderer()
+    renderer.SetBackground(0.2, 0.4, 0.6)
+    surface.add_renderer(renderer)
+    surface.render_frame()
+    good = surface._image
+    assert good is not None
+
+    monkeypatch.setattr(surface, "_grab", lambda _w, _h: None)
+    surface.render_frame()
+
+    assert surface._image is good
+    assert isinstance(surface._image, QImage)
+
+
+def test_grab_uses_render_window_reported_size(surface, monkeypatch):
+    """Readback dimensions come from the window, not the requested size."""
+    import vtkmodules.all as vtk_mod
+
+    surface.add_renderer(vtk_mod.vtkRenderer())
+    seen: list[tuple[int, int]] = []
+    real_grab = surface._grab
+    monkeypatch.setattr(
+        surface, "_grab", lambda w, h: (seen.append((w, h)), real_grab(w, h))[1]
+    )
+
+    surface.render_frame()
+
+    assert seen
+    assert seen[-1] == tuple(int(v) for v in surface.render_window.GetSize())

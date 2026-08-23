@@ -41,7 +41,7 @@ The GUI thread stalls permanently; the application must be force-quit.
 
 Native stack from `sample(1)` — 61% of all samples in a single frame:
 
-```
+```text
 QWidgetPrivate::paintOnScreen → paintEvent → vtkRenderWindowInteractor::Render()
   → vtkCocoaRenderWindow::Render() → vtkOpenGLGPUVolumeRayCastMapper::GPURender()
     → glFinish_Exec → GLDShareGroupRec::waitUsage (AppleMetalOpenGLRenderer)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from typing import Any
 
 from PySide6.QtWidgets import QWidget
@@ -26,14 +27,27 @@ def legacy_interactor_requested(environ: dict[str, str] | None = None) -> bool:
     return source.get(LEGACY_ENV_VAR, "").strip().lower() in _TRUTHY
 
 
+def _is_macos() -> bool:
+    """Wrapped so static analysis does not fold the platform branch away."""
+    return sys.platform == "darwin"
+
+
 def create_render_surface(parent: QWidget | None = None) -> Any:
     """Return the render surface for the 3D viewer.
 
     Falls back to the offscreen surface if the legacy path is requested but
     cannot be constructed, so a stale environment variable can never leave the
-    user without a 3D viewer.
+    user without a 3D viewer.  The hatch is also ignored on native macOS, where
+    the legacy interactor deadlocks the GUI thread: honouring it there would
+    hand the user a guaranteed freeze.
     """
-    if legacy_interactor_requested():
+    if legacy_interactor_requested() and _is_macos():
+        _log.warning(
+            "%s is set but ignored on macOS: the legacy interactor deadlocks "
+            "the GUI thread there. Using the offscreen surface.",
+            LEGACY_ENV_VAR,
+        )
+    elif legacy_interactor_requested():
         try:
             from gui.volume.legacy_surface import LegacyInteractorSurface
 
