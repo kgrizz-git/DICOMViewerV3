@@ -4,6 +4,12 @@
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
+## 2026-08-23
+
+- **Modeless dialog lifetime:** The Structured Report browser is modeless and uncached, so without `WA_DeleteOnClose` the Qt parent kept every browser alive after the user closed it — one leaked per SR opened, for the life of the session. Fixed in `dialog_coordinator.open_structured_report_browser`, with a regression test that uses a real `QDialog` subclass (a mock would accept `setAttribute` and prove nothing).
+- **Correction to the 2026-08-23 dialog-accumulation claim:** the same report also asserted that the ~13 **modal** `dialog.exec()` dialogs leak, citing "20 live `OverlaySettingsDialog` children, +24 MB after 20 opens". That measurement was wrong: the probe constructed and dropped dialogs without ever showing or closing them, which is not the application's path. Exercised through `DialogCoordinator` with a real `exec()` that is then dismissed, the census stays empty — modal dialogs do **not** accumulate. No change was made to those call sites.
+- **Qt widget lifetime in tests:** Test suite leaked ~30 top-level widgets per `DICOMViewerApp()` and ~22 per direct `MainWindow(...)`, reaching 902 live windows / 633 MB across 8 modules. Root cause of the intermittent CI `worker 'gwN' crashed` flake. Added `tests/qt_widget_scope.py`; full suite `-n auto` dropped 25-37s to 15.6s.
+
 ## 2026-08-22
 
 - **UI-triggered releases — Step 0 evidence (macOS slim flag saves 0 MB; D1 chosen).**
