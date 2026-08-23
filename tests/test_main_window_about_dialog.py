@@ -22,6 +22,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QDialog, QTextBrowser
+from qt_widget_scope import widget_scope
 
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
@@ -34,6 +35,13 @@ def _find_about_dialog() -> QDialog | None:
             return widget
     return None
 
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_windows():
+    """Destroy windows this module's tests create (see ``qt_widget_scope``)."""
+    with widget_scope():
+        yield
 
 @pytest.mark.qt
 def test_show_about_dialog_title_visibility_and_body(qapp, tmp_path):

@@ -10,9 +10,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from main_test_helpers import with_test_config_manager
+from main_test_helpers import viewer_app
 
-import main as main_module
 import main_app_subwindow_management as subwindow_mgmt_module
 from main_app_subwindow_management import SubwindowManagementMixin
 
@@ -34,9 +33,7 @@ def _make_subwindow_stub(**attrs):
 @pytest.mark.qt
 def test_on_focused_subwindow_changed_delegates_to_controller(tmp_path, monkeypatch):
     """Focused subwindow changes must reach the lifecycle controller."""
-    restore, _ = with_test_config_manager(tmp_path)
-    try:
-        app = main_module.DICOMViewerApp()
+    with viewer_app(tmp_path) as app:
         controller = app._subwindow_lifecycle_controller
         controller.on_focused_subwindow_changed = MagicMock()
         monkeypatch.setattr(app, "_update_3d_view_action_state", MagicMock())
@@ -54,8 +51,6 @@ def test_on_focused_subwindow_changed_delegates_to_controller(tmp_path, monkeypa
         app._on_focused_subwindow_changed(subwindow)
 
         controller.on_focused_subwindow_changed.assert_called_once_with(subwindow)
-    finally:
-        restore()
 
 
 @pytest.mark.qt

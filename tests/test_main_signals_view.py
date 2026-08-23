@@ -17,9 +17,8 @@ real configuration file on disk.
 from pathlib import Path
 
 import pytest
+from main_test_helpers import viewer_app
 
-import main as main_module
-import main_app_initialization
 from utils.config_manager import ConfigManager as RealConfigManager
 
 
@@ -45,10 +44,7 @@ def test_privacy_view_signal_updates_privacy_state(tmp_path):
     - _connect_view_signals wired privacy_view_toggled to _on_privacy_view_toggled
     - the handler updates the application's privacy_view_enabled flag
     """
-    original_cm = main_app_initialization.ConfigManager
-    main_app_initialization.ConfigManager = lambda: _make_test_config_manager(tmp_path)
-    try:
-        app = main_module.DICOMViewerApp()
+    with viewer_app(tmp_path) as app:
 
         # Ensure initial state is a bool
         assert isinstance(app.privacy_view_enabled, bool)
@@ -60,8 +56,6 @@ def test_privacy_view_signal_updates_privacy_state(tmp_path):
         # Toggle privacy off
         app.main_window.privacy_view_toggled.emit(False)
         assert app.privacy_view_enabled is False
-    finally:
-        main_app_initialization.ConfigManager = original_cm
 
 
 @pytest.mark.qt
@@ -74,10 +68,7 @@ def test_smooth_when_zoomed_signal_updates_config_and_menu(tmp_path):
     This verifies both the signal wiring and the handler behavior in
     _on_smooth_when_zoomed_toggled.
     """
-    original_cm = main_app_initialization.ConfigManager
-    main_app_initialization.ConfigManager = lambda: _make_test_config_manager(tmp_path)
-    try:
-        app = main_module.DICOMViewerApp()
+    with viewer_app(tmp_path) as app:
 
         # Spy on MainWindow.set_smooth_when_zoomed_checked
         calls = []
@@ -96,6 +87,4 @@ def test_smooth_when_zoomed_signal_updates_config_and_menu(tmp_path):
         app.main_window.smooth_when_zoomed_toggled.emit(False)
         assert app.config_manager.get_smooth_image_when_zoomed() is False
         assert calls and calls[-1] is False
-    finally:
-        main_app_initialization.ConfigManager = original_cm
 
