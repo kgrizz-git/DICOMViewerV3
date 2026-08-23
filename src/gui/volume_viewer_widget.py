@@ -1,9 +1,11 @@
 """
 Volume Viewer Widget
 
-QWidget wrapping a ``QVTKRenderWindowInteractor`` for 3D volume rendering
-with a control panel for preset selection, global opacity, window/level,
-and camera reset.
+QWidget hosting an offscreen VTK render surface (``gui.volume.render_surface``)
+for 3D volume rendering, with a control panel for preset selection, global
+opacity, window/level, and camera reset.  The legacy
+``QVTKRenderWindowInteractor`` surface remains available behind
+``DICOMVIEWER_3D_LEGACY_INTERACTOR``; see ``gui.volume.surface_factory``.
 
 Inputs:
     - ``VolumeRenderer`` instance (from ``core.volume_renderer``).
@@ -13,7 +15,7 @@ Outputs:
 
 Requirements:
     - PySide6
-    - VTK >= 9.3.0 (``vtkmodules.qt.QVTKRenderWindowInteractor``)
+    - VTK >= 9.3.0
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar, cast
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import QEvent, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QStandardItemModel
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -84,6 +86,7 @@ from core.volume_renderer import (
     scalar_domain_label,
     vtk_mod,
 )
+from gui.volume.control_panel import apply_muted_label_styles, fit_control_panel_width
 from gui.volume.detail import apply_auto_detail, apply_detail_index
 from gui.volume.first_paint import (
     apply_interaction_detail,
@@ -94,6 +97,7 @@ from gui.volume.first_paint import (
     stop_first_paint_timers,
 )
 from gui.volume.overlay_text import build_overlay_text
+from gui.volume.shortcuts import handle_shortcut
 from utils.debug_flags import DEBUG_VOLUME_3D
 from utils.doc_urls import user_doc_url
 
@@ -133,7 +137,7 @@ class VolumeViewerWidget(QWidget):
         self._renderer = renderer
         self._config_manager = config_manager
         self._user_presets: list[dict[str, Any]] = []
-        self._interactor: Any = None
+        self._surface: Any = None
         self._vtk_render_window: Any = None
         self._viewport_container: QWidget | None = None
         self._overlay_label: QLabel | None = None
@@ -155,8 +159,10 @@ class VolumeViewerWidget(QWidget):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # VTK viewport.
-        from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+        # VTK viewport: offscreen window blitted into a plain Qt widget, because
+        # QVTKRenderWindowInteractor renders inside paintEvent and deadlocks on
+        # native macOS (3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md).
+        from gui.volume.surface_factory import create_render_surface
 
         self._viewport_container = QWidget(self)
         self._viewport_container.setSizePolicy(
@@ -167,11 +173,11 @@ class VolumeViewerWidget(QWidget):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        self._interactor = QVTKRenderWindowInteractor(self._viewport_container)
-        self._vtk_render_window = self._interactor.GetRenderWindow()
-        self._vtk_render_window.AddRenderer(self._renderer.get_renderer())
+        self._surface = create_render_surface(self._viewport_container)
+        self._vtk_render_window = self._surface.render_window
+        self._surface.add_renderer(self._renderer.get_renderer())
 
-        container_layout.addWidget(self._interactor)
+        container_layout.addWidget(self._surface)
 
         # Viewport text overlay — Qt QLabel sibling of QVTK (parent =
         # viewport_container), NOT a child of the native GL interactor.
@@ -186,10 +192,7 @@ class VolumeViewerWidget(QWidget):
         self._overlay_label.move(8, 6)
         self._overlay_label.show()
 
-        # Trackball camera interaction style.
-        style = vtk_mod.vtkInteractorStyleTrackballCamera()
-        self._interactor.SetInteractorStyle(style)
-
+        # The render surface installs its own trackball camera style.
         main_layout.addWidget(self._viewport_container, stretch=1)
 
         # Control panel.
@@ -211,7 +214,6 @@ class VolumeViewerWidget(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setFixedWidth(240)
 
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -219,15 +221,12 @@ class VolumeViewerWidget(QWidget):
         layout.setSpacing(6)
 
         # ── Interaction help strip (T4) ──────────────────────────────────
-        help_strip = QLabel(
+        self._help_strip = help_strip = QLabel(
             "Rotate: left-drag  Zoom: right-drag/scroll  Pan: mid-drag\n"
             "Keys: R=reset  1-6=views  A=auto-rotate  +/-=opacity  [/]=preset",
             panel,
         )
         help_strip.setWordWrap(True)
-        help_strip.setStyleSheet(
-            "color: palette(mid); font-size: 10px; padding: 2px 4px;"
-        )
         help_strip.setToolTip(
             "Mouse and keyboard shortcuts for the 3D viewport.\n\n"
             "Mouse: Left-drag=Rotate, Right-drag/Scroll=Zoom, Middle-drag=Pan\n"
@@ -266,7 +265,6 @@ class VolumeViewerWidget(QWidget):
         # Honest scalar-domain readout (T0 / T3).
         self._scalar_domain_label = QLabel("", preset_group)
         self._scalar_domain_label.setWordWrap(True)
-        self._scalar_domain_label.setStyleSheet("color: palette(mid); font-size: 11px;")
         self._scalar_domain_label.setToolTip(
             "The scalar domain the renderer is operating on.  When complete "
             "DICOM rescale metadata is available, CT values are calibrated; "
@@ -719,9 +717,6 @@ class VolumeViewerWidget(QWidget):
         # Render status readout (T7).
         self._render_status_label = QLabel("", self._advanced_group)
         self._render_status_label.setWordWrap(True)
-        self._render_status_label.setStyleSheet(
-            "color: palette(mid); font-size: 11px;"
-        )
         self._render_status_label.setToolTip(
             "Technical readout: render method, mapper mode, and volume "
             "dimensions.  Useful for diagnosing performance or GPU fallback "
@@ -732,6 +727,8 @@ class VolumeViewerWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(panel)
+        apply_muted_label_styles(self)
+        fit_control_panel_width(scroll, panel)
         return scroll
 
     # ------------------------------------------------------------------
@@ -792,21 +789,21 @@ class VolumeViewerWidget(QWidget):
 
     def _deferred_vtk_init(self) -> None:
         """Actually initialise the VTK interactor now that the window exists."""
-        if self._initialized or self._interactor is None:
+        if self._initialized or self._surface is None:
             return
         self._initialized = True
         if DEBUG_VOLUME_3D:
             rw = self._vtk_render_window
             print(f"[DEBUG-VOLUME-3D] _deferred_vtk_init — render window size: {rw.GetSize()}")
-            print(f"[DEBUG-VOLUME-3D] interactor widget size: {self._interactor.width()}x{self._interactor.height()}")
-        self._interactor.Initialize()
+            print(f"[DEBUG-VOLUME-3D] surface widget size: {self._surface.width()}x{self._surface.height()}")
+        # No Initialize(): the surface owns an already-initialised interactor.
         # Progressive refinement: coarser sampling during interaction.
         # StartInteractionEvent / EndInteractionEvent are fired by the
         # interactor *style* (vtkInteractorStyleTrackballCamera), not by the
-        # raw vtkRenderWindowInteractor.  Observing the raw interactor means
+        # raw interactor.  Observing the raw interactor means
         # EndInteractionEvent is never reliably delivered, leaving the coarse
         # sample distance permanently set after the first drag.
-        iren = self._interactor.GetRenderWindow().GetInteractor()
+        iren = self._surface.interactor
         if iren is not None:
             style = iren.GetInteractorStyle()
             if style is not None:
@@ -1322,12 +1319,12 @@ class VolumeViewerWidget(QWidget):
             self._auto_rotate_timer.stop()
 
     def _auto_rotate_step(self) -> None:
-        if not self._initialized or self._vtk_render_window is None:
+        if not self._initialized or self._surface is None:
             return
         cam = self._renderer.get_renderer().GetActiveCamera()
         cam.Azimuth(1.0)
         self._renderer.get_renderer().ResetCameraClippingRange()
-        self._vtk_render_window.Render()
+        self._surface.render_frame()
 
     def _on_open_documentation(self) -> None:
         """Open the 3D volume rendering user guide in the default web browser."""
@@ -1450,7 +1447,7 @@ class VolumeViewerWidget(QWidget):
 
     def _enable_crop_box(self) -> None:
         """Create and enable a vtkBoxWidget2 for interactive cropping."""
-        if not self._initialized or self._interactor is None:
+        if not self._initialized or self._surface is None:
             return
         if hasattr(self, "_box_widget") and self._box_widget is not None:
             self._box_widget.On()
@@ -1466,8 +1463,7 @@ class VolumeViewerWidget(QWidget):
                 return
             rep.PlaceWidget(bounds)
             box_widget.SetRepresentation(rep)
-            iren = self._interactor.GetRenderWindow().GetInteractor()
-            box_widget.SetInteractor(iren)
+            box_widget.SetInteractor(self._surface.interactor)
             box_widget.AddObserver("InteractionEvent", self._on_crop_box_changed)
             box_widget.On()
             self._box_widget = box_widget
@@ -1494,6 +1490,7 @@ class VolumeViewerWidget(QWidget):
             for i in range(planes.GetNumberOfPlanes()):
                 plane_list.append(planes.GetPlane(i))
             self._renderer.set_cropping(plane_list)
+            self._render()
         except Exception:
             pass
 
@@ -1587,43 +1584,11 @@ class VolumeViewerWidget(QWidget):
     # Progressive refinement
     # ------------------------------------------------------------------
 
-    _KEY_VIEW_MAP: ClassVar[dict[str, str]] = {"1": "Anterior", "2": "Posterior", "3": "Left",
-                      "4": "Right", "5": "Superior", "6": "Inferior"}
-
     def _on_key_press(self, _obj: Any = None, _event: str = "") -> None:
         """Handle keyboard shortcuts in the 3D viewport."""
-        iren = self._interactor.GetRenderWindow().GetInteractor() if self._interactor else None
-        if iren is None:
-            return
-        key = iren.GetKeySym()
-        if not key:
-            return
-        kl = key.lower()
-        if kl in ("r", "space"):
-            self._renderer.set_view("Anterior")
-            self._render()
-        elif kl == "f":
-            self._renderer.get_renderer().ResetCamera()
-            self._render()
-        elif kl == "a":
-            self._auto_rotate_btn.toggle()
-        elif kl in self._KEY_VIEW_MAP:
-            self._renderer.set_view(self._KEY_VIEW_MAP[kl])
-            self._render()
-        elif kl in ("plus", "equal"):
-            new_val = min(self._opacity_spin.value() + 5.0, 100.0)
-            self._opacity_spin.setValue(new_val)
-        elif kl in ("minus",):
-            new_val = max(self._opacity_spin.value() - 5.0, 0.0)
-            self._opacity_spin.setValue(new_val)
-        elif kl == "bracketright":
-            idx = self._preset_combo.currentIndex() + 1
-            if idx < self._preset_combo.count():
-                self._preset_combo.setCurrentIndex(idx)
-        elif kl == "bracketleft":
-            idx = self._preset_combo.currentIndex() - 1
-            if idx >= 0:
-                self._preset_combo.setCurrentIndex(idx)
+        iren = self._surface.interactor if self._surface is not None else None
+        if iren is not None:
+            handle_shortcut(self, iren.GetKeySym())
 
     def _on_interaction_start(self, _obj: Any = None, _event: str = "") -> None:
         """Switch to coarse sampling during mouse interaction for responsiveness."""
@@ -1642,8 +1607,8 @@ class VolumeViewerWidget(QWidget):
 
     def _render(self) -> None:
         """Trigger a VTK render update."""
-        if self._initialized and self._vtk_render_window is not None:
-            self._vtk_render_window.Render()
+        if self._initialized and self._surface is not None:
+            self._surface.render_frame()
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -1663,13 +1628,19 @@ class VolumeViewerWidget(QWidget):
             self._box_widget = None
         self._overlay_label = None
         self._viewport_container = None
-        if self._interactor is not None:
-            self._interactor.Finalize()
-            self._interactor = None
+        if self._surface is not None:
+            self._surface.cleanup()
+            self._surface = None
         self._renderer.cleanup()
         self._vtk_render_window = None
         if DEBUG_VOLUME_3D:
             print("[DEBUG-VOLUME-3D] VolumeViewerWidget cleanup complete.")
+
+    def changeEvent(self, event: Any) -> None:
+        """Recolour muted labels when the theme flips under a live viewer."""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.PaletteChange:
+            apply_muted_label_styles(self)
 
     def closeEvent(self, event: Any) -> None:
         """Ensure cleanup on widget close."""

@@ -30,7 +30,7 @@
     "src/gui/series_navigator.py": 1158,
     "src/gui/slice_display_manager.py": 1628,
     "src/gui/view_state_manager.py": 1207,
-    "src/gui/volume_viewer_widget.py": 1679,
+    "src/gui/volume_viewer_widget.py": 1650,
     "src/qa/pylinac_nuclear.py": 767,
     "src/tools/annotation_manager.py": 997,
     "src/tools/arrow_annotation_tool.py": 799,
