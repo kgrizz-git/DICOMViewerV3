@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-08-23
 
 ---
 
@@ -11,6 +11,23 @@ This file tracks active and near-term tasks.
 - Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md); **multi-pane splitters + cine axes:** [plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md)
 - Parallel implementation ownership/workstreams: [plans/supporting/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md](plans/supporting/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md)
 - **Competitive gap analysis (vs RadiAnt, Horos, OHIF, etc.):** [info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) — recommended Tier A→E order; maps to **Competitive feature gaps** below.
+
+## Next up
+
+Short, deliberately capped queue — **max 7**, pointers only. The full items live
+in their sections below; edit this list when priorities change, and do not let it
+grow into a second backlog. Rationale: 90 of the 233 open items are currently
+P0 or P1, so priority alone no longer selects anything.
+
+1. **Blank-frame GPU-fallback false positive** (3D, user-visible today) — [Features → 3D](#features-near-term)
+2. **Volume build memory amplification (~8x measured)** — [Features → 3D](#features-near-term)
+3. **Modal dialogs accumulate for the whole session** (measured, affects real usage) — [Bugs / Correctness](#bugs--correctness)
+4. **Finish the Qt test-leak sweep** (~25 direct `MainWindow(...)` sites still leak) — [Maintenance](#maintenance)
+5. **License compliance + commercial release readiness gate** (blocks release) — [Release / Product](#release--product)
+6. **Versioned release with executables** (blocks release) — [Release / Product](#release--product)
+7. **UX assessment Part A — design system / DESIGN.md** (gates the other visual work) — [UX / Workflow](#ux--workflow)
+
+---
 
 ## Priority Legend
 
@@ -236,7 +253,7 @@ Archived-implementation-plan leftovers, not current Phase C work. Revisit only w
 - [ ] **[P2]** Do we allow cine playback of multiple windows? We should be able to play each window's cine in sync, or independently, or a combination of both, ideally
 - [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
 - [ ] **[P1]** 3D visualization of DICOM datasets — **Partial:** VTK volume render shipped (`volume_renderer.py`, `VolumeRenderDialog`, toolbar **3D View**): presets (CT/MR + threshold), global opacity, W/L sync on preset change, modality-aware default preset, trackball navigation, background volume build. Open plan items below. **Plan:** [3D Volume Rendering](plans/3D_VOLUME_RENDERING_PLAN.md)
-    - [ ] **[P0]** **3D viewer hard-freezes on native macOS:** opening 3D View deadlocks the GUI thread (force quit required) for **any** volume, including a 32 KB synthetic one. `vtkCocoaRenderWindow` blocks in `glFinish` inside a CoreAnimation transaction commit under macOS 26's OpenGL-over-Metal shim. Offscreen rendering of the same volume works in 0.20 s. Not a regression — the 3D viewer was only ever verified on Windows/Parallels. **Plan:** [3D viewer native macOS rendering](plans/3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md)
+    - [ ] **[P2]** **3D viewer per-control parity walk on native macOS.** The macOS hard-freeze itself is fixed (offscreen render surface, merged in PR #78) and smoke-passed on both native macOS and Windows/Parallels, so the P0 is closed. What was never walked control-by-control on native macOS is the rest of the panel: blend mode, crop-box drag, the standard view buttons, auto-rotate, and export. Do that walk and record the result before retiring the escape hatch below. **Plan:** [3D viewer native macOS rendering](plans/3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md) Phase 3 Steps 4-5
     - [ ] **[P2]** **Retire the 3D legacy-interactor escape hatch:** delete `DICOMVIEWER_3D_LEGACY_INTERACTOR`, `src/gui/volume/legacy_surface.py`, and the fallback branch in `surface_factory.py`, then drop the now-dead Parallels workarounds it protects (blank-frame GPU fallback tuning, the `Parallels/software GL` overlay notes). **Recommended trigger:** after **one full release** has shipped with the offscreen surface as default *and* a Windows-native + Windows-under-Parallels 3D smoke has passed on that release with no user reports of the hatch being needed. **Do not retire earlier** — the hatch exists precisely because the historical verification environment (Parallels) differs from the new default path. If anyone does set the variable in the field, treat that as a P1 bug against the offscreen surface rather than a reason to keep the hatch. **Plan:** [3D viewer native macOS rendering](plans/3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md) Phase 4
     - [ ] **[P1]** **Blank-frame GPU-fallback false positive:** `check_gpu_fallback()` treats a legitimately black frame (bone-free CT phantom under the default CT Bone preset) as GPU failure, permanently switching to CPU ray casting and pinning detail at Fast. **Plan:** [Volume render fallback & memory hardening](plans/supporting/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)
     - [ ] **[P1]** **3D first-paint responsiveness:** **Partial:** implemented Fast preview, byte-size Auto Detail caps, Fast GPU blank-frame fallback, elapsed-time-gated automatic refinement, non-modal feedback, and timer-safe close. Required manual large-volume / integrated-GPU / Parallels timing matrix remains before the plan can be archived. **Plan:** [3D Viewer First-Paint Responsiveness](plans/3D_VIEWER_FIRST_PAINT_RESPONSIVENESS_PLAN.md)
