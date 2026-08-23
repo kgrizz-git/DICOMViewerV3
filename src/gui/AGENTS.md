@@ -10,7 +10,7 @@ for changes under `src/gui/`.
   [module tree](../../dev-docs/info/SOURCE_LAYOUT_MODULE_TREE.md) only for
   file-level detail.
 - Keep signal connections in the `DICOMViewerApp._connect_signals` family via
-  `core/app_signal_wiring.py`. Do not add `connect()` calls to unrelated
+  `gui/app_signal_wiring.py`. Do not add `connect()` calls to unrelated
   initialization helpers.
 - Preserve controller/widget ownership and avoid moving DICOM or geometry
   calculations into widgets when a core helper can own them.

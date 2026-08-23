@@ -53,7 +53,7 @@ class VolumeRenderSurface(QWidget):
     """Widget that displays an offscreen VTK render as a cached ``QImage``.
 
     The widget owns the ``vtkRenderWindow``.  Callers attach their renderer
-    via :meth:`add_renderer` and trigger frames with :meth:`render`.
+    via :meth:`add_renderer` and trigger frames with :meth:`render_frame`.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -77,8 +77,8 @@ class VolumeRenderSurface(QWidget):
         # widgets (crop box) work without a native VTK window.
         self._interactor: Any = create_interactor(self._render_window)
         # Blit whenever the render window finishes a frame, so renders driven by
-        # the interactor refresh the widget too, not only explicit render()
-        # calls.
+        # the interactor refresh the widget too, not only explicit
+        # render_frame() calls.
         self._grabbing = False
         self._buttons_down = 0
         self._render_window.AddObserver("EndEvent", self._on_render_end)
