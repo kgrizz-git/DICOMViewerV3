@@ -68,7 +68,7 @@ class LegacyInteractorSurface(QWidget):
     def add_renderer(self, renderer: Any) -> None:
         self._render_window.AddRenderer(renderer)
 
-    def render(self) -> None:
+    def render_frame(self) -> None:
         if self._cleaned_up or self._render_window is None:
             return
         self._render_window.Render()

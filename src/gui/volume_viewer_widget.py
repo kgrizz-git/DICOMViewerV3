@@ -1324,7 +1324,7 @@ class VolumeViewerWidget(QWidget):
         cam = self._renderer.get_renderer().GetActiveCamera()
         cam.Azimuth(1.0)
         self._renderer.get_renderer().ResetCameraClippingRange()
-        self._surface.render()
+        self._surface.render_frame()
 
     def _on_open_documentation(self) -> None:
         """Open the 3D volume rendering user guide in the default web browser."""
@@ -1608,7 +1608,7 @@ class VolumeViewerWidget(QWidget):
     def _render(self) -> None:
         """Trigger a VTK render update."""
         if self._initialized and self._surface is not None:
-            self._surface.render()
+            self._surface.render_frame()
 
     # ------------------------------------------------------------------
     # Cleanup

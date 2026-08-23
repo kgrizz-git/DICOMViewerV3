@@ -192,7 +192,7 @@ class _FakeSurface:
     def add_renderer(self, renderer) -> None:
         self.renderer = renderer
 
-    def render(self) -> None:
+    def render_frame(self) -> None:
         self.render_calls += 1
         self.render_window.Render()
 

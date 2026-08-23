@@ -88,7 +88,7 @@ class VolumeRenderSurface(QWidget):
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(_RESIZE_DEBOUNCE_MS)
-        self._resize_timer.timeout.connect(self.render)
+        self._resize_timer.timeout.connect(self.render_frame)
 
     # ------------------------------------------------------------------
     # Interactor
@@ -148,8 +148,12 @@ class VolumeRenderSurface(QWidget):
     # Rendering
     # ------------------------------------------------------------------
 
-    def render(self) -> None:
+    def render_frame(self) -> None:
         """Render offscreen and cache the frame, then schedule a repaint.
+
+        Deliberately **not** named ``render``: ``QWidget.render(QPaintDevice, ...)``
+        is an existing Qt API, and shadowing it with a different signature both
+        breaks that API for callers and trips static override checks.
 
         This is the only place ``Render()`` is called.  It blocks for the
         duration of the VTK render, exactly as the old interactor did, but it

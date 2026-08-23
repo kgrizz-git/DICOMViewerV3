@@ -57,7 +57,7 @@ def test_render_populates_cached_image(surface):
     renderer.SetBackground(0.2, 0.4, 0.6)
     surface.add_renderer(renderer)
 
-    surface.render()
+    surface.render_frame()
 
     assert surface._image is not None
     assert not surface._image.isNull()
@@ -75,7 +75,7 @@ def test_rendered_image_is_opaque_not_transparent(surface):
     renderer.SetBackground(0.2, 0.4, 0.6)
     surface.add_renderer(renderer)
 
-    surface.render()
+    surface.render_frame()
     image = surface._image
 
     assert image.format() == QImage.Format.Format_RGB888
@@ -93,7 +93,7 @@ def test_render_survives_dropped_numpy_buffer(surface):
     renderer.SetBackground(0.9, 0.1, 0.1)
     surface.add_renderer(renderer)
 
-    surface.render()
+    surface.render_frame()
     # Force garbage collection of any transient readback buffers.
     import gc
 
@@ -129,7 +129,7 @@ def test_device_pixel_ratio_applied_to_image(surface):
     import vtkmodules.all as vtk_mod
 
     surface.add_renderer(vtk_mod.vtkRenderer())
-    surface.render()
+    surface.render_frame()
 
     expected = surface.devicePixelRatioF() or 1.0
     assert surface._image.devicePixelRatio() == pytest.approx(expected)
@@ -153,7 +153,7 @@ def test_vertical_flip_orientation(surface):
     surface.add_renderer(renderer)
     renderer.ResetCamera()
 
-    surface.render()
+    surface.render_frame()
     image = surface._image
 
     width, height = image.width(), image.height()
@@ -177,7 +177,7 @@ def test_cleanup_is_idempotent(surface):
 
 def test_render_after_cleanup_is_a_noop(surface):
     surface.cleanup()
-    surface.render()  # must not raise
+    surface.render_frame()  # must not raise
     assert surface._image is None
 
 

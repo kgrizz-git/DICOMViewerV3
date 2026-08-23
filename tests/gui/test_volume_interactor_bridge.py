@@ -81,7 +81,7 @@ def surface(qapp):
     renderer.AddActor(actor)
     widget.add_renderer(renderer)
     renderer.ResetCamera()
-    widget.render()
+    widget.render_frame()
     yield widget
     widget.cleanup()
 
@@ -167,7 +167,7 @@ def test_crop_box_widget_can_attach(surface):
     box.SetRepresentation(representation)
     box.SetInteractor(surface.interactor)
     box.On()
-    surface.render()
+    surface.render_frame()
     box.Off()
 
 
