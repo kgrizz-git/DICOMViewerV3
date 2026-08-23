@@ -267,7 +267,7 @@ Suggested menu item wording: **"Show Instances Separately"** (or "Expand Multi-F
 
 ## PACS-like Query and Archive Integration
 
-**Competitive context:** [DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) §1 and Tier A in [`TO_DO.md`](TO_DO.md#competitive-feature-gaps-vs-other-dicom-viewers).
+**Competitive context:** [DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) §1 and Tier A in [`COMPETITIVE_FEATURE_BACKLOG.md`](COMPETITIVE_FEATURE_BACKLOG.md).
 
 - **Suggestions / best approaches**
   - Start with read-only query/retrieve workflows and clear server profile management.

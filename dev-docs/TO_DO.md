@@ -9,23 +9,28 @@
 This file tracks active and near-term tasks.
 
 - Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md); **multi-pane splitters + cine axes:** [plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md)
+- **Parked / someday:** [ICEBOX.md](ICEBOX.md) — self-labelled P3, Optional, Deferred, and spike items. Promote back here when one becomes real work.
+- **Competitive backlog:** [COMPETITIVE_FEATURE_BACKLOG.md](COMPETITIVE_FEATURE_BACKLOG.md) — Tier A-E product-strategy scope.
 - Parallel implementation ownership/workstreams: [plans/supporting/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md](plans/supporting/PARALLEL_WORKSTREAM_OWNERSHIP_PLAN.md)
-- **Competitive gap analysis (vs RadiAnt, Horos, OHIF, etc.):** [info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) — recommended Tier A→E order; maps to **Competitive feature gaps** below.
+- **Competitive gap analysis (vs RadiAnt, Horos, OHIF, etc.):** [info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) — recommended Tier A→E order; the item list lives in [COMPETITIVE_FEATURE_BACKLOG.md](COMPETITIVE_FEATURE_BACKLOG.md).
 
 ## Next up
 
-Short, deliberately capped queue — **max 7**, pointers only. The full items live
-in their sections below; edit this list when priorities change, and do not let it
-grow into a second backlog. Rationale: 90 of the 233 open items are currently
-P0 or P1, so priority alone no longer selects anything.
+**Max 5.** This is the queue, not a second backlog — everything else lives in the
+sections below and in [`ICEBOX.md`](ICEBOX.md).
 
-1. **Blank-frame GPU-fallback false positive** (3D, user-visible today) — [Features → 3D](#features-near-term)
-2. **Volume build memory amplification (~8x measured)** — [Features → 3D](#features-near-term)
-3. **Modal dialogs accumulate for the whole session** (measured, affects real usage) — [Bugs / Correctness](#bugs--correctness)
-4. **Finish the Qt test-leak sweep** (~25 direct `MainWindow(...)` sites still leak) — [Maintenance](#maintenance)
-5. **License compliance + commercial release readiness gate** (blocks release) — [Release / Product](#release--product)
-6. **Versioned release with executables** (blocks release) — [Release / Product](#release--product)
-7. **UX assessment Part A — design system / DESIGN.md** (gates the other visual work) — [UX / Workflow](#ux--workflow)
+> **Top-up rule:** when this list drops below **3**, refill it back toward 5
+> before starting anything else. An empty-ish queue is the moment to choose
+> deliberately, not to grab whatever is nearest.
+
+1. **Modal dialogs accumulate for the whole session** — measured, affects real usage, small and fully specified — [Bugs / Correctness](#bugs--correctness)
+2. **Blank-frame GPU-fallback false positive** — user-visible in the 3D viewer today, plan already written — [Features (Near-Term)](#features-near-term)
+3. **Finish the Qt test-leak sweep** — ~25 direct `MainWindow(...)` sites still leak — [Maintenance](#maintenance)
+4. **Volume build memory amplification (~8x measured)** — pairs naturally with #2, same plan — [Features (Near-Term)](#features-near-term)
+5. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
+
+Release blockers (license compliance, versioned executables) live in
+[Release / Product](#release--product) and are a separate track from this queue.
 
 ---
 
@@ -36,8 +41,7 @@ P0 or P1, so priority alone no longer selects anything.
 - **P2** = useful improvement / lower urgency
 - **P3** = polish / spike / long-tail
 - **Partial:** = shipped in code but incomplete vs the full TO_DO intent (see inline notes)
-- **Optional** = niche or nice-to-have; implement when a concrete user need appears
-- **Deferred** = archived-plan leftovers to revisit only with new evidence; distinct from Competitive Tier E, which is a different product class or explicitly later scope.
+- **Deferred** / **Optional** = parked; these now live in [ICEBOX.md](ICEBOX.md) rather than inline.
 
 ---
 
@@ -51,9 +55,7 @@ P0 or P1, so priority alone no longer selects anything.
 - [ ] **[P1]** **Assess HoundDog.ai as a local privacy code/data-flow scanner.** **Until further user direction, it is local-only, non-blocking, and disconnected from accounts, uploads, hosted processing, repository integrations, and CI.** Before installing it, record the exact binary/source, licence/EULA, supported Python scope, and vendor data-handling claims; then use an isolated local source/configuration-only trial with wholly synthetic findings to verify no code or scan result is uploaded and its report never reveals a matched value. Do not relax this restriction without an explicit user decision. See [HoundDog evaluation constraints](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md#hounddogai-high-priority-source-code-candidate).
 - [ ] **[P1]** **Evaluate local OCR for burned-in PHI and DICOM pixel review.** Audit a conventional local OCR engine and a locally run model/tool (including `dicom-phi-scan`/EasyOCR as a reference) for provenance, model downloads, licensing, resource use, and safe report behaviour. Compare them using only temporary, wholly synthetic DICOM, image, PDF, and Office/OpenDocument-package fixtures outside the repository; scan DICOM pixels independently from metadata. Keep the result local-only and warning-only; report only path, category, confidence, and safe position metadata—never detected text or image crops. Do not trust `BurnedInAnnotation=NO`, OCR silence, or an AI result to skip human review. GitHub’s public secret-scanning/public-monitoring features audit credentials, not PII/PHI, so they are not a substitute. See [DICOM PHI Scanner evaluation constraints](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md#dicom-phi-scanner-useful-reference-and-synthetic-only-spike).
 - [ ] **[P2]** **Spike an opt-in local PII/PHI text-review command.** Evaluate NVIDIA GLiNER PII, Fastino GLiNER2 Privacy Filter, and OpenAI Privacy Filter against a wholly synthetic corpus of documentation, log, and extracted-DICOM-tag text; compare them to the existing deterministic checks and local Presidio recognizers. Run from a dedicated PHI-tools environment, keep the result warning-only/default-off, and report only path, category, score, and safe position metadata — never matched values. See [Local PII/PHI detection options](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md#proposed-evaluation-sequence).
-- [ ] **[P3]** **Evaluate independent local PHI reviewers before choosing an optional integration.** Compare the clinical-note model `obi/deid_roberta_i2b2`, a GLiNER size variant, and—only as a schema-constrained second-pass reviewer—OpenAI `gpt-oss-20b` through LM Studio. Decide whether custom Presidio `EntityRecognizer` adapters for GLiNER, GLiNER2, and/or OpenAI Privacy Filter are justified; do not treat Presidio or an LLM as a replacement for the DICOM metadata gate or OCR/image review. See [model scope and integration details](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md).
 - [ ] **[P1]** **Privacy / PHI / PII leakage hardening (ongoing).** Local-first defense-in-depth privacy system: artifact/PHI gates, sink redaction, runtime storage consent, hooks/CI, scanner wrappers, and docs. Phases 0–7 largely done; Phase 8 verification (G5/G6) and docs integration remain open. **Plan:** [Privacy, PHI/PII, and Leakage Hardening](plans/PRIVACY_PHI_PII_LEAKAGE_HARDENING_PLAN.md). Surfaced 2026-08-11.
-
 
 ## Static analysis
 
@@ -71,7 +73,6 @@ P0 or P1, so priority alone no longer selects anything.
   [`plans/completed/`](plans/completed/); keep this item limited to active
   remediation work.
 
-
 ## Bugs / Correctness
 
 - [ ] **[P2]** **Modal dialogs accumulate for the whole session instead of being freed.** `dialog_coordinator.py` opens ~13 dialogs with the local-variable pattern `dialog = SomeDialog(..., self.main_window); dialog.exec()` — no `deleteLater()` anywhere in the module and no `WA_DeleteOnClose`. Dropping the Python reference does **not** free the widget, because the Qt parent (`main_window`) still owns it, so every open leaks one dialog for the life of the app. **Measured 2026-08-23:** opening Overlay Settings 20 times leaves 20 live `OverlaySettingsDialog` children and +24 MB RSS (~1.2 MB per open), growing linearly and unbounded. Affects real usage, not just tests — a long session that repeatedly visits Settings/Export/Overlay dialogs keeps climbing. **Fix:** set `WA_DeleteOnClose` on the throwaway dialogs (the cached ones — `histogram_dialogs`, `tag_viewer_dialog`, `about_this_file_dialog` — are deliberately reused and must be excluded), or `deleteLater()` after `exec()`. Note `mri_compare_result_dialog.py:71` and `ct_batch_result_dialog.py:105` already do this correctly and are the model. Found while fixing the xdist test-leak flake (same Qt-ownership mechanism, different code). Added 2026-08-23.
@@ -81,8 +82,6 @@ P0 or P1, so priority alone no longer selects anything.
 
 - [ ] **[P2]** **Run representative W/L preset smoke tests.** Manually load representative **US**, **CR**, and **DX** studies across their available stored bit depths, including both **MONOCHROME1** and **MONOCHROME2** images. Verify the default and Wide presets are sensible, manual Invert remains a user offset, and still/cine exports match the single-slice display. Record fixture coverage and any modality-specific findings before closing.
 
-- [ ] **[P3]** **Revisit enhanced-CT multi-frame merge bookkeeping only if it becomes visibly slow again.** The P1 post-Continue stall was fixed by making `FrameDatasetWrapper` a metadata view rather than deep-copying every non-pixel element per frame: 26.4 s -> 1.16 s full merge for the 364-frame / 182 MB enhanced CT benchmark. The remaining `series_multiframe_info` rebuild measured 575.7 ms, but first display after UI handoff was 178.1 ms and navigator work was small. Do not add deferred thumbnail/navigator scheduling complexity without a new measurement or user report — **Archived plan:** [Slow post-load first paint](plans/completed/POST_LOAD_FIRST_PAINT_PERFORMANCE_PLAN.md)
-
 ## Performance / Packaging
 
 - [ ] **[P1]** **Performance / memory / responsiveness deep dive:** profile startup, folder load, fusion (2D vs 3D), MPR build, study-index queries, and UI thread blocking; identify hot paths (redundant resampling, full-series scans, cache churn, large array copies); propose targeted optimizations with before/after measurements ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness)) — **Plan:** [Performance Deep Dive](plans/supporting/PERFORMANCE_DEEP_DIVE_PLAN.md)
@@ -91,13 +90,8 @@ P0 or P1, so priority alone no longer selects anything.
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos)) — **Plan:** [Executable size reduction](plans/supporting/EXECUTABLE_SIZE_REDUCTION_PLAN.md)
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
 - [ ] **[P2]** See if https://github.com/DCMTK/dcmtk has anything useful (looks like it is C++) or https://github.com/fo-dicom/fo-dicom (C#)
-- [ ] **[P3]** **Explore [awesome-medphys](https://github.com/jrkerns/awesome-medphys) for useful open-source tools.** Curated medical-physics tooling list; candidates to evaluate include **deidentifier** utilities and other DICOM/QA helpers that might complement or inform our PS3.15 de-identification engine, pylinac QA workflows, or import/export paths. Spike only: survey, note which tools are Python/license-compatible, and decide whether any are worth integrating vs. our existing implementations.
-
 
 ## Maintenance
-
-
-- [ ] **[P3] Deferred:** **Trial agent navigation / output-efficiency tools without adopting a stack.** Start with a user-level Serena semantic-navigation trial and, separately, an RTK CLI-output trial; use the non-gating protocol in [`HARNESS.md`](HARNESS.md#agent-tool-trial-protocol). Compare against a no-tool baseline on representative Python/PySide6 tasks and record task completion, focused-test results, elapsed time, and lost diagnostics/source detail. Do not install tools into the application `.venv`, commit shared MCP/hook configuration, or add a project dependency unless a trial demonstrates a durable benefit and its source, license, data handling, and maintenance cost have been reviewed. Consider Graphify/other graph tools only if Serena does not adequately support a demonstrated navigation need.
 
 - [ ] **[P1]** **Confirm pytest-xdist parallelization holds on CI.** Implementation is complete and merged via PR #58 (`-n auto` in `pytest.ini`, QApplication fix in `tests/conftest.py`, `_FakeMenu` monkeypatch leak fixed); local gate was 20/20 clean at `-n 4` and the PR's CI `pytest` job passed. Remaining: watch the next several `main` runs for worker crashes or coverage-combining anomalies, then close this item. Open follow-ups: the unexplained pre-fix/post-fix `-n 4` timing gap, and optional widget-cleanup hygiene for the serial path. **Plan:** [Parallelize the CI test suite](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md). Surfaced 2026-08-12.
   - **Resurface note (2026-08-22, PR #77):** CI on Ubuntu intermittently reports `worker 'gwN' crashed` mid-suite (seen on `tests/test_main_event_filter.py::test_layout_digit_hotkey_blocked_when_focus_not_allowed` and `tests/test_main_window_fullscreen.py::test_fullscreen_chrome_hide_and_restore_splitter`). Almost all tests still pass (~6286), but the dead worker drops combined coverage far below the 80% floor. Local macOS reproduction failed: serial + `-n 4` loops on those modules, all `test_main*`, and a full CI-like suite (`QT_QPA_PLATFORM=offscreen`, `--cov=src --cov-fail-under=80`) were green.
@@ -170,10 +164,8 @@ P0 or P1, so priority alone no longer selects anything.
 - [ ] **[P2]** **App-name string consistency (B8):** the window title, About box, and string literals use slightly different forms ("DICOM Viewer V3", "DICOMViewerV3", etc.). Decide on the canonical product name and do a search-and-replace pass across UI strings, docs, and metadata.
 - [ ] **[P2]** **User-selectable icon sets (F5):** allow the user to choose between icon themes (e.g. Tabler vs Material) from Settings; low priority, defer until a second icon set exists.
 - [ ] **[P2]** Make an "ultra-dark" or "black" theme as a new option - similar to current dark there but all greys get darker
-- [ ] **[P3]** **More visual-orientation variety in UI chrome:** consider broader use of font color, size, weight, and icon/border color/styling to help users orient visually (e.g. distinct section/group emphasis, status-weighted emphasis). First concrete remaining case: Phase C of the tag-tree workstream; whole-app proposals and deferrals in the investigation. Broader design-system pass remains under UX remediation / `DESIGN.md`. Surfaced 2026-08-11. **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Investigation:** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md). **Related plans:** [Phase C tier/nav](plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md), [Phase D follow-ups](plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md), [Pane & toolbar state](plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md).
 - [ ] **[P2]** **Show/hide key objects, key images, DICOM annotations, and presentation states.** Add a control (toggle/menu) to show or hide **Key Object Selection (KO)**, **key images**, **DICOM annotations**, and **Presentation States (GSPS/PR)** overlays. Make it **clearly indicated when they are shown vs hidden**, and **where each comes from** (a separate DICOM file vs the same image as the base vs an app-generated add-on). **Related:** [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md); folder/file map item below (dependency display).
 - [ ] **[P2]** **Folder / loaded-files map dialog.** Add a dialog showing a table or map of either a chosen **folder** or the **currently loaded files**, with columns for **modality, series number, accession number, number of frames** (if multiframe), and **any dependency or link between files** — e.g. when a **PR (Presentation State)** or **KO (Key Object)** is stored as a separate file but references/displays an image from another file. Should make cross-file references explicit. **Related:** show/hide KO/PR item above; [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).
-- [ ] **[P3]** **Study index — optional encryption toggle — DEFERRED (decided 2026-07-21).** A user-facing setting to migrate the PHI index to **plaintext** was judged closer to a footgun than a feature: it downgrades at-rest protection for patient names/IDs/descriptions/paths with little practical upside, and needs a non-trivial migration + irreversible-warning surface. Index stays **always SQLCipher-encrypted**. Revisit only if a concrete need appears (e.g. a platform without an OS keyring); the explicit **turn-OFF at-rest-exposure warning** wording is already drafted in the plan (Phase 1b). **Plan:** [Study index portability & encryption UI — Phase 1 (deferred)](plans/supporting/STUDY_INDEX_PORTABILITY_AND_ENCRYPTION_UI_PLAN.md)
 - [ ] **[P2]** **Study index — relative file paths:** consider storing paths relative to a user-chosen root (or index folder) so index + DICOM tree can live on a USB/removable drive; define rebind rules when drive letter or mount point changes
 - [ ] **[P2]** Make the study index encryption passphrase user-configurable (currently auto-generated and stored only in the OS credential store; user has no way to set or export it within the app itself) — **Partial:** OS credential store only (`keyring_storage.py`); no in-app passphrase UI.
 - [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
@@ -202,14 +194,6 @@ P0 or P1, so priority alone no longer selects anything.
 - [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
 - [ ] **[P2]** Allow showing DICOM tags for more than just the focused window in the left pane: support up to 4 tag panels, where each panel can be assigned either to a fixed window or to follow whichever window is currently focused
 - [ ] Allow filtering of columns in study index (some, anyway) and sorting — **Partial:** FTS5 "search all text" + per-field filters + movable columns; column filter/sort not implemented.
-
-## Deferred
-
-Archived-implementation-plan leftovers, not current Phase C work. Revisit only with new evidence.
-
-- [ ] **[P2]** **Tag-export richer formatting:** Phase B appearance gate decided **(c) none** on 2026-08-17; retain the implemented checkbox indicator glyphs and reopen header/stripe/tier chrome only after a new visual review. [Completed Phase B plan](plans/completed/TAG_TREE_GROUP_HEADER_AND_STRIPING_PLAN.md); [Phase D `D-export-visual`](plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md).
-- [ ] **[P2]** **macOS PyInstaller bundle follow-ups:** record tagged-build baselines; narrow Qt plugins only with `du` evidence and feature tests; reconsider artifact retention only if billing/measurement evidence warrants it. [Completed bundle-size plan](plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md).
-- [ ] **[P2]** **Pylinac CT CNR batch per-series PDF:** evaluate per-series PDF output separately from the shipped batch XLSX workflow. [Completed CT CNR batch plan](plans/completed/PYLINAC_CT_CNR_BATCH_XLSX_PLAN.md).
 
 ## Features (Near-Term)
 
@@ -265,76 +249,13 @@ Archived-implementation-plan leftovers, not current Phase C work. Revisit only w
     - [ ] **[P1]** Export 3D volume render as **Secondary Capture (SC) DICOM** — persist rendered RGB/grayscale frames as a derived series (not GSPS); see [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#secondary-capture-sc-image) and mirror patterns from [`mpr_dicom_export.py`](../src/core/mpr_dicom_export.py) ([plan](plans/3D_VOLUME_RENDERING_PLAN.md))
     - [ ] **[P2]** **3D viewer minimize button:** add a standard minimize control to the volume-render window (non-modal dialog should minimize to taskbar like other top-level windows)
     - [ ] **[P2]** **GPU jittering (`SetUseJittering`):** randomize ray-start offsets so wood-grain banding becomes fine noise instead of concentric rings. **GPU-path only** — no effect on Parallels/CPU fallback; needs native-GPU verification. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) T7C
-    - [ ] **[P3]** **Mesh export (OBJ / STL / PLY) from the 3D viewer:** let the user export the displayed anatomy as a 3D mesh for printing, external tooling, or teaching. **Depends on isosurface extraction** (next item): volume rendering has no polygonal geometry, so a surface must first be extracted (`vtkFlyingEdges3D` / `vtkMarchingCubes`) at a threshold before `vtkOBJWriter` / `vtkSTLWriter` / `vtkPLYWriter` can write anything — `vtkOBJExporter` on the current scene would export an empty file. Scope to consider: threshold/preset-derived surface, optional decimation + smoothing, units (mm) and LPS→mesh axis convention, and whether to offer it beyond the 3D viewer (e.g. from a segmentation/ROI). **Two caveats to resolve in the plan:** (1) an extracted surface is *visualization-derived, not a validated segmentation* — the threshold drives the geometry, so the UI must not imply clinical/dimensional fidelity; (2) **PHI risk** — a mesh from a head/face CT is re-identifiable surface geometry and carries no DICOM de-identification, so exports need an explicit warning and should follow [PHI/PII guardrails](PHI_PII_REPOSITORY_GUARDRAILS.md).
-    - [ ] **[P3]** **Isosurface rendering mode:** spike `vtkFlyingEdges3D` at a threshold value as a separate rendering-mode plan; visualization-only, with memory/performance and mesh cleanup evaluated before implementation. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) S3
-    - [ ] **[P3]** **MPR slice plane indicator in 3D:** spike showing the current 2D viewing plane as a translucent rectangle in the 3D viewport; requires signal forwarding from main window and should become a separate integration plan if feasible. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) S4
-    - [ ] **[P3]** **Dual-volume PET/CT 3D overlay:** spike dual-volume rendering separately; high complexity because it needs registration/resampling, scalar-domain/unit handling, overlay opacity, and fusion-plan alignment, not just a second `vtkVolume`. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) S4
 - [ ] **[P1]** Add ability to apply different look-up tables besides just linear (w/l), and ability to overlay LUT on histograms — **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md)
 
 ## Competitive feature gaps (vs other DICOM viewers)
 
-**Hub:** [DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) (2026-06-02). **Recommended order:** Tier A → B → C; Tier D–E mostly **Optional** / **Deferred**. Items marked **Dup** are also tracked above (Features, Data/Platform, DICOM write, etc.) — keep one checkbox authoritative when implementing.
+Moved to [`COMPETITIVE_FEATURE_BACKLOG.md`](COMPETITIVE_FEATURE_BACKLOG.md) (46 items, Tier A-E) so this file stays work that is actually in play. **Nothing was dropped** — pull an item back here when it becomes near-term.
 
-### Tier A — Workflow & interoperability (P1)
-
-- [ ] **[P1]** **PACS read-only query/retrieve:** C-FIND/C-MOVE (or WADO-RS) with saved server profiles, progress UI, and audit log; offline mode unchanged when no server configured — **Gap:** §1. **Dup:** [Data / Platform](#data--platform-future) (PACS-like).
-- [ ] **[P1]** **Hanging protocols v1:** JSON protocols, resolver, Apply dialog, optional auto-apply on open — **Gap:** §2. **Dup:** Features (hanging protocols).
-- [ ] **[P1]** **Prior comparison:** find prior studies via study index (Patient ID / accession), load into dedicated slots or side-by-side layout — **Gap:** §2. **Dup:** Features (pulling priors).
-- [ ] **[P1]** **GSPS export** for in-viewer graphic annotations — **Gap:** §5. **Dup:** [DICOM write](#dicom-write--pacs-interchange-annotations--derived-objects) (consider **P1** when scheduling Tier A).
-- [ ] **[P1]** **Synchronized crosshair 2D ↔ MPR** (same patient position / slice location across native and MPR panes) — **Gap:** §3.
-- [ ] **[P1]** **MPR measurements + slab projections:** enable ROI/measurement/W/L ROI on MPR; MIP/MinIP/AIP slab per MPR step — **Gap:** §4. **Plan:** [MPR measurements & combine slices](plans/MPR_MEASUREMENTS_ROI_TOOLS_AND_COMBINE_SLICES_PLAN.md).
-
-### Tier B — MPR / 3D / derived DICOM (P1–P2)
-
-- [ ] **[P1]** **2D↔MPR↔3D navigation polish:** extend sync to 3D plane indicator and shared focus behavior where feasible — **Gap:** §3. **Dup:** 3D spikes (MPR plane in 3D).
-- [ ] **[P2]** **Interactive oblique MPR** (drag handles / crosshairs) — **Gap:** §3. **Dup:** Features.
-- [ ] **[P1]** **Export AIP/MIP/MinIP stacks** (DICOM + images) — **Gap:** §5. **Dup:** Features (projection export). **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md).
-- [ ] **[P2]** **Save fused view as DICOM (SC)** — **Gap:** §5. **Dup:** Fusion follow-up.
-- [ ] **[P1]** **Export 3D volume render as image (PNG/JPG)** — **Gap:** §5. **Dup:** 3D visualization sub-items.
-- [ ] **[P1]** **Export 3D volume render as Secondary Capture DICOM** — **Gap:** §5. **Dup:** 3D visualization sub-items.
-- [ ] **[P2]** **PACS send (C-STORE SCU):** send derived or source series to configured node after Q/R exists — **Gap:** §1.
-- [ ] **[P2]** **DICOMweb client** (QIDO/WADO/STOW) as alternative to DIMSE for sites that require it — **Gap:** §1.
-
-### Tier C — Measurements & modality niches (P2–P3)
-
-- [ ] **[P2]** **Cobb angle** measurement tool — **Gap:** §6.
-- [ ] **[P1]** **Line profile measurement and analysis** — interactive profiles across images plus CT film beam-width FWHM/FWTM workflow. **Plan:** [Line profile and CT film beam-width analysis](plans/supporting/LINE_PROFILE_AND_CT_FILM_BEAM_WIDTH_PLAN.md).
-- [ ] **[P2]** **Manual length calibration** when pixel spacing is missing (measure known structure, set scale) — **Gap:** §6.
-- [ ] **[P2]** **3D cursor / linked localization** across panes (RadiAnt/MicroDicom-style) — **Gap:** §3, §6.
-- [ ] **[P3]** **Optional:** deviation distance measurement — **Gap:** §6.
-- [ ] **[P3]** **Optional:** US calibrated-region measurements — **Gap:** §6.
-- [ ] **[P3]** **Optional:** open/closed curve measurements — **Gap:** §6.
-- [ ] **[P3]** **Optional:** spine labeling tool — **Gap:** §6.
-- [ ] **[P2]** **Print / PDF** from 2D, MPR, and 3D views (RadiAnt 2024.2+ class) — **Gap:** §11.
-
-### Tier D — Platform & optional polish (P2–P3, often Optional)
-
-- [ ] **[P2]** **PACS inbound C-STORE** listener (optional, site-specific) — **Gap:** §1. **Optional.**
-- [ ] **[P2]** **Import encrypted ZIP** archives containing DICOM — **Gap:** §1. **Optional.**
-- [ ] **[P3]** **URL / CLI deep link** for third-party launch (`dicomviewerv3://` or documented args) — **Gap:** §11. **Optional.**
-- [ ] **[P3]** **3D VR scalpel / crop** tool (volume cutaway) — **Gap:** §11. **Optional.**
-- [ ] **[P3]** **JPEG2000** transfer syntax support — **Gap:** §9. **Optional.**
-- [ ] **[P3]** **Modular / optional-feature install profiles:** consider splitting the app into a lightweight core install with basic DICOM viewing and optional feature packs that can be selected at install time or added later on demand, such as pylinac/QA analysis, NIfTI/NRRD/MHA support, advanced 3D/VTK, DICOM networking, and structure/mesh export dependencies. **Plan:** [Modular optional-feature packaging](plans/supporting/MODULAR_OPTIONAL_FEATURE_PACKAGING_PLAN.md).
-
-### Tier E — Optional / deferred (different product class)
-
-- [ ] **[P3]** **Deferred:** DICOM **SEG** read + overlay — **Gap:** §9–10.
-- [ ] **[P3]** **Deferred:** **RT** (structure set / dose / plan) browse-only — **Gap:** §9–10.
-- [ ] **[P3]** **Deferred:** manual/semi-auto **3D segmentation** and contour editing — **Gap:** §10. **Dup:** Features (advanced ROI/contouring).
-- [ ] **[P3]** **Deferred:** **deformable registration** beyond same–frame-of-reference fusion — **Gap:** §10.
-- [ ] **[P3]** **Deferred:** **plugin / extension** architecture — **Gap:** §10.
-- [ ] **[P3]** **Deferred:** **web / zero-footprint** viewer — **Gap:** §11.
-- [ ] **[P3]** **Deferred:** **mobile (iOS)** companion app — **Gap:** §11.
-- [ ] **[P3]** **Optional:** **time–intensity curves (TIC)** e.g. breast MRI — **Gap:** §7.
-- [ ] **[P3]** **Optional:** **DSA** (digital subtraction angiography) mode — **Gap:** §7.
-- [ ] **[P3]** **Optional:** **curved MPR** — **Gap:** §3.
-- [ ] **[P3]** **Optional:** **CD/DVD DICOM** export / authoring — **Gap:** §11.
-- [ ] **[P3]** **Deferred:** general **DICOM tag editor** — **Gap:** §5. **Dup:** Features (risk-aware general tag editor).
-- [ ] **[P3]** **Optional:** **multilingual** UI — **Gap:** §11.
-- [ ] **[P3]** **Optional:** **multi-touch** gestures (Windows tablets) — **Gap:** §11.
-- [ ] **[P3]** **Deferred:** **dual-volume PET/CT 3D** overlay — **Gap:** §3. **Dup:** 3D visualization (dual-volume spike).
-- [ ] **[P3]** **Deferred:** **AI-assisted** segmentation integration — **Gap:** §10.
-- [ ] **[P3]** **Optional:** export **KO** (key object) documents — **Gap:** §5. **Dup:** DICOM write (KO).
+**Hub:** [DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md)
 
 ## Documentation
 
@@ -343,8 +264,6 @@ Archived-implementation-plan leftovers, not current Phase C work. Revisit only w
 - [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date. — **Partial:** harness + topic guides exist; `scripts/check_doc_feature_coverage.py` now gives an automated feature→doc gap report (menu/`QAction` labels vs `user-docs/` mentions, ~70% covered at last run). Remaining: triage the candidate-gap list and document or consciously skip each item.
 - [ ] **[P1]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. — **Partial:** policy documented; actual offline bundle not built in installer.
 - [ ] **[P2]** **Make `user-docs/` fully self-contained (no dev-docs links).** Currently `user-docs/` links into `dev-docs/info/` for advanced reference material (pylinac integration, DICOM GSPS/KO/SC, etc.). Evaluate whether to inline or relocate that content into `user-docs/` so the user-facing docs can be published standalone without broken links. Consider tooling to detect or prevent cross-boundary links: the existing `check_user_docs_links.py` guard, markdown linters (e.g. `markdown-link-check`, `lychee`, `mlc`), or doc-publish pipelines that fail on dangling refs. May also need a staleness check if content is duplicated — tools like `mdbook`, `mkdocs`, or custom scripts could flag when a `user-docs/` copy drifts from the `dev-docs/` source of truth. Surfaced 2026-08-11.
-- [ ] **[P3]** **README end-user polish — hero screenshot(s).** Root [`README.md`](../README.md) was rewritten for end users (short intro, packaged-release-first, capability table, linked-out developer material). Remaining human-owned step: capture and PHI-review one primary hero screenshot (optional second) using wholly synthetic studies from approved demo fixtures only; after visual PHI review, record the approved asset hash in `security/approved-media-sha256.json` and insert into the README placeholder slot. **Plan:** [README end-user polish](plans/README_END_USER_POLISH_PLAN.md). Surfaced 2026-08-20.
-
 
 ## Data / Platform (Future)
 
@@ -353,7 +272,6 @@ Archived-implementation-plan leftovers, not current Phase C work. Revisit only w
 - [ ] **[P1]** Local study database and indexing/search workflow — **Partial:** MVP plus browser, integrity/relocate, and portability workflows shipped (`LocalStudyIndexService`, SQLCipher + FTS5, index-on-open, search dialog, metadata-only CSV export/import). Encryption remains always on; plaintext migration is deferred. Remaining: relative paths plus PACS/managed-copy phases in [LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md](plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md). ([details](FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing))
 - [ ] **[P2]** **Multi-tab / multi-workspace study sessions:** consider adding tabbed workspaces so the user can keep multiple studies open in separate tabs with independent subwindow layouts, rather than all studies sharing one set of panes; each tab would own its own `current_studies` subset, subwindow_data, and display state. Would pair well with the LRU study cache (P3.4) for memory management across tabs. ([details](FUTURE_WORK_DETAIL_NOTES.md#multi-workspace--multi-tab-study-sessions))
 - [ ] **[P2]** Enhanced multi-frame IOD navigation (Tier 3): parse `PerFrameFunctionalGroupsSequence` / `SharedFunctionalGroupsSequence` to reconstruct per-frame spatial and temporal metadata; enable independent 2D-axis navigation (scroll = slice axis, Alt+scroll = secondary axis such as time or b-value) — **Partial:** enhanced multiframe detection/count in `multiframe_handler.py`; Tier 3 axis navigation not implemented. ([details](FUTURE_WORK_DETAIL_NOTES.md#differentiating-frame--vs-slice--vs-instance-)). **Related:** [Overlay position labels](plans/supporting/OVERLAY_SLICE_FRAME_POSITION_LABEL_PLAN.md), [Multi-frame instance navigation (completed)](plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md).
-
 
 ## Fusion Follow-up
 
@@ -366,7 +284,6 @@ Archived-implementation-plan leftovers, not current Phase C work. Revisit only w
 - [ ] **[P1]** Use slice sync to quick check fusion on several studies — **Partial:** slice sync exists; structured fusion QA pass not documented.
 - [ ] **[P2]** **Save fused view as DICOM (not implemented):** fusion is display-only today (`fusion_coordinator.get_fused_image` → RGB blend in `slice_display_manager`; no writer). **File → Export** DICOM path saves the **base** series instance, not the composite. **Export Screenshots** / PNG·JPG can capture the fused **picture** only. Add a product decision + implementation plan for persisting fusion: preferred default **Secondary Capture** (or **OT**) multi-slice series with fused RGB/grayscale pixels and derived-series metadata (mirror [`mpr_dicom_export.py`](../src/core/mpr_dicom_export.py)). See [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#secondary-capture-sc-image) (why GSPS/KO are wrong for fused pixels; SC vs screenshots). Optional: true-color SC vs separate SC base + overlay series; anonymize + W/L options like other exports.
 
-
 ## DICOM write / PACS interchange (annotations & derived objects)
 
 Reference: [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md) — what GSPS, KO, and SC are; read/display/write status in this app.
@@ -374,8 +291,6 @@ Reference: [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAP
 Read paths exist for **GSPS** and **KO** on load (`presentation_state_handler`, `key_object_handler` → `annotation_manager`); **no writer** today. Distinct from fused-pixel export above and from **ROI statistics** text/CSV/XLSX export.
 
 - [ ] **[P1]** **Export Grayscale Presentation State (GSPS):** persist in-viewer **graphic annotations** (ROIs, measurements, text, arrows where mappable) as a new GSPS series referencing source **SOP Instance UIDs** + **GraphicAnnotationSequence** / **DisplayedAreaSelectionSequence**; W/L in GSPS only where grayscale presentation applies. **Gap analysis:** Tier A §5 (elevated from P2 for competitive parity). **Partial (read only today):** GSPS loads on open via `presentation_state_handler.py` → `annotation_manager`; **writer** not implemented. Plan scope: which tools map to DICOM graphic types, per-slice vs one PS per series, privacy/anonymize, optional **highdicom** `pr` module ([`HIGHDICOM_OVERVIEW.md`](info/HIGHDICOM_OVERVIEW.md)). **Not** a substitute for saving fused PET/CT pixels — see [GSPS section](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#grayscale-softcopy-presentation-state-gsps).
-- [ ] **[P3]** **Export Key Object Selection (KO) document (optional):** let user save a **curated set** of key instances (e.g. current series/slices with annotations) as a KO SOP with **CurrentRequestedProcedureEvidenceSequence** / **ContentSequence** references — useful for “key images” workflows in PACS, **not** full geometry interchange (prefer GSPS for that). **Partial (read only today):** KO loads on open via `key_object_handler.py`; **writer** not implemented. Lower priority unless product asks for KO specifically — see [KO section](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#key-object-selection-ko-document).
-
 
 ## Release / Product
 
