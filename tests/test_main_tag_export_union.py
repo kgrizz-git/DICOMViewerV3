@@ -18,10 +18,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from main_test_helpers import with_test_config_manager
+from main_test_helpers import viewer_app
 from PySide6.QtCore import QObject, Signal
 
-import main as main_module
 from gui.tag_export_union_host import TagExportUnionHost
 from main_app_tag_roi import TagEditingMixin
 
@@ -112,13 +111,9 @@ def test_drain_before_reschedule_clears_worker_reference():
 @pytest.mark.qt
 def test_get_tag_export_union_snapshot_returns_host_state(tmp_path):
     """Snapshot must reflect the host generation and merged map."""
-    restore, _ = with_test_config_manager(tmp_path)
-    try:
-        app = main_module.DICOMViewerApp()
+    with viewer_app(tmp_path) as app:
         app.tag_export_union_host.get_snapshot = MagicMock(
             return_value=(3, {"Tag": "v"})
         )
         assert app.get_tag_export_union_snapshot() == (3, {"Tag": "v"})
         app.tag_export_union_host.get_snapshot.assert_called_once_with()
-    finally:
-        restore()

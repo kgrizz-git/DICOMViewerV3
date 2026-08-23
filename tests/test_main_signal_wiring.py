@@ -13,10 +13,9 @@ remaining test constructs the real app once to anchor the smoke suite.
 from __future__ import annotations
 
 import pytest
-from main_test_helpers import with_test_config_manager
+from main_test_helpers import viewer_app
 from PySide6.QtCore import QObject, Signal
 
-import main as main_module
 from gui.app_signal_wiring import (
     _wire_dialog_signals,
     _wire_file_signals,
@@ -113,19 +112,15 @@ def test_layout_changed_signal_invokes_on_layout_changed(tmp_path, monkeypatch):
 
     Constructs the real DICOMViewerApp once to anchor the smoke suite.
     """
-    restore, _ = with_test_config_manager(tmp_path)
     calls: list[str] = []
 
     def _spy(layout_mode: str) -> None:
         calls.append(layout_mode)
 
-    try:
-        app = main_module.DICOMViewerApp()
+    with viewer_app(tmp_path) as app:
         monkeypatch.setattr(app, "_on_layout_changed", _spy)
         app.multi_window_layout.layout_changed.emit("2x1")
         assert calls == ["2x1"]
-    finally:
-        restore()
 
 
 # ---- Stub-based wiring tests (no DICOMViewerApp construction) ----

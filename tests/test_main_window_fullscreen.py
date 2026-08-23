@@ -22,6 +22,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QLineEdit, QToolButton
+from qt_widget_scope import widget_scope
 
 from gui.main_app_key_event_filter import (
     _escape_may_exit_fullscreen,
@@ -40,6 +41,13 @@ def qapp():
         app = QApplication(sys.argv)
     return app
 
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_windows():
+    """Destroy windows this module's tests create (see ``qt_widget_scope``)."""
+    with widget_scope():
+        yield
 
 @pytest.mark.qt
 def test_fullscreen_chrome_hide_and_restore_splitter(qapp):

@@ -19,6 +19,8 @@ if _src not in sys.path:
 
 pytest.importorskip("PySide6")
 
+from qt_widget_scope import widget_scope
+
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 
@@ -52,6 +54,13 @@ MOUSE_MODE_ACTION_ATTRS = (
     "mouse_mode_auto_window_level_action",
 )
 
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_windows():
+    """Destroy windows this module's tests create (see ``qt_widget_scope``)."""
+    with widget_scope():
+        yield
 
 @pytest.mark.qt
 @pytest.mark.parametrize("mode", MOUSE_MODES)

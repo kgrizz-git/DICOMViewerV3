@@ -14,10 +14,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from main_test_helpers import with_test_config_manager
+from main_test_helpers import viewer_app
 from pydicom.dataset import Dataset
 
-import main as main_module
 from main_app_subwindow_management import MPRNavigationMixin
 from main_app_ui_and_files import FileOperationsMixin, UIHandlersMixin
 from qa.analysis_types import QAResult
@@ -28,16 +27,12 @@ from qa.analysis_types import QAResult
 @pytest.mark.qt
 def test_smoke_config_and_export_delegation(tmp_path, monkeypatch):
     """One real DICOMViewerApp: config isolation + export delegation wired."""
-    restore, _ = with_test_config_manager(tmp_path)
-    try:
-        app = main_module.DICOMViewerApp()
+    with viewer_app(tmp_path) as app:
         assert app.config_manager is not None
         mock_facade = MagicMock()
         monkeypatch.setattr(app, "_export_app_facade", mock_facade)
         app._open_export()
         mock_facade.open_export.assert_called_once_with()
-    finally:
-        restore()
 
 
 # ── Thin delegation harnesses (no real DICOMViewerApp) ─────────────────────

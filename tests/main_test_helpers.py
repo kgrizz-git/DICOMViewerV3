@@ -6,9 +6,12 @@ Provides a temp ConfigManager path so tests do not mutate the user's real config
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+from qt_widget_scope import widget_scope
 
 import main as main_module
 import main_app_initialization
@@ -45,3 +48,19 @@ def instantiate_app(tmp_path: Path) -> main_module.DICOMViewerApp:
         return main_module.DICOMViewerApp()
     finally:
         restore()
+
+
+@contextmanager
+def viewer_app(tmp_path: Path) -> Iterator[main_module.DICOMViewerApp]:
+    """
+    Build ``DICOMViewerApp`` with an isolated config and destroy it on exit.
+
+    Each construction creates ~30 top-level widgets; see
+    ``qt_widget_scope`` for why leaving them alive matters.
+    """
+    with widget_scope():
+        restore, _ = with_test_config_manager(tmp_path)
+        try:
+            yield main_module.DICOMViewerApp()
+        finally:
+            restore()
