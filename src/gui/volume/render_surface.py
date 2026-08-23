@@ -123,6 +123,21 @@ class VolumeRenderSurface(QWidget):
         height = max(_MIN_DIM, int(self.height() * ratio))
         return width, height
 
+    def _granted_pixel_size(self) -> tuple[int, int]:
+        """Return the size the render window actually granted.
+
+        Input mapping must agree with the readback: the Y axis is inverted
+        against the buffer height, so using a requested size the driver did not
+        grant would offset every click and drag.
+        """
+        if self._render_window is None:
+            return self._buffer_size
+        try:
+            width, height = self._render_window.GetSize()
+            return int(width), int(height)
+        except Exception:
+            return self._buffer_size
+
     def sizeHint(self) -> QSize:
         return QSize(640, 480)
 
@@ -246,7 +261,7 @@ class VolumeRenderSurface(QWidget):
             self._interactor,
             x=position.x(),
             y=position.y(),
-            height_px=self._buffer_size[1],
+            height_px=self._granted_pixel_size()[1],
             ratio=self.devicePixelRatioF() or 1.0,
             modifiers=event.modifiers(),
             key=key,
@@ -292,7 +307,7 @@ class VolumeRenderSurface(QWidget):
             self._interactor,
             x=position.x(),
             y=position.y(),
-            height_px=self._buffer_size[1],
+            height_px=self._granted_pixel_size()[1],
             ratio=self.devicePixelRatioF() or 1.0,
             modifiers=event.modifiers(),
         )

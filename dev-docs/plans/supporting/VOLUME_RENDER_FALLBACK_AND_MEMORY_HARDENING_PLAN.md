@@ -56,8 +56,14 @@ even *expected* before concluding failure.
       **Evaluate opacity against values the volume actually contains, not the scalar range
       alone:** a range endpoint pair says nothing about which values are populated, so a
       transfer function that is opaque only in a band with *no voxels* would be wrongly
-      judged visible. Drive it from a coarse histogram (or a strided sample) of occupied
-      values and return `False` when the maximum mapped opacity across those values is ~0.
+      judged visible. Drive it from a **full-coverage histogram**, not a strided sample.
+      **This helper must fail safe toward "visible".** A strided sample can miss sparse
+      opaque content — a handful of high-HU fiducials, seeds, or clips occupy very few
+      voxels — and a false `EXPECTED_BLANK` is the worse error: it suppresses a *genuine*
+      CPU fallback and leaves the user on a silently broken GPU path with a black
+      viewport. A full histogram over the volume has no such blind spot; if any
+      approximation is used instead, it must round toward "expected visible". Return
+      `False` only when the maximum mapped opacity across *all* occupied values is ~0.
       The signal must also correspond to what `check_gpu_fallback()` measures — RGB output
       — so colour/lighting that renders black must not be mistaken for a GPU failure. Put
       it in `src/core/volume_render_quality.py` (VTK-free, unit-testable) or a sibling pure
@@ -85,6 +91,10 @@ even *expected* before concluding failure.
       - a preset that *should* produce visible output but renders black (simulated GPU
         failure) → fallback still fires. Note the previous wording asked one
         all-transparent fixture to prove both, which it cannot;
+      - **sparse opaque content** (a volume that is empty except for a few high-HU
+        voxels, as with fiducials or clips) → judged *visible*, so a genuine GPU failure
+        on that volume still triggers fallback. This is the case a strided sample would
+        get wrong;
       - existing Parallels blank-frame behaviour preserved;
       - slow-but-visible preview still suppresses auto-refine via the elapsed-time gate.
 
@@ -157,6 +167,16 @@ render-status readout.
 - [ ] **Step 4:** Add a real memory guard: estimate the peak requirement up front (reuse
       `estimate_volume_megabytes()`), and above a threshold either downsample by an integer
       factor or refuse with an actionable message. This closes the `TO_DO.md:217` P2 item.
+      **Decide before allocating.** The estimate must be computed from the *source*
+      dimensions and the factor chosen **before** `prepare_volume_data()` materialises the
+      full-size float32 array or anything is handed to VTK — deciding afterwards means the
+      peak has already been paid and the guard cannot prevent the very thrash it exists to
+      stop. Downsampling should therefore be applied during, not after, the array build.
+      **Count every live buffer** in the estimate, including the retained `vtkImageData`
+      and the *additional* full-size float32 volume `vtkImageGaussianSmooth` allocates
+      whenever display smoothing sigma > 0
+      ([`src/core/volume_renderer.py:796`](../../../src/core/volume_renderer.py)) — a
+      volume that fits without smoothing can still exhaust memory with it on.
       Downsampling must be applied **before** the VTK attach, and the Advanced status
       readout must state the volume was downsampled — never silently. **Update the derived
       geometry with it:** integer decimation changes `spacing` (and, depending on the
@@ -168,7 +188,8 @@ render-status readout.
       this plan. Target: **at most one full-size float32 buffer live at peak** (~838 MB for
       the fixture), which is what the "under ~1.5 GB peak RSS" success criterion below
       implies once the int16 source and interpreter overhead are counted. The earlier
-      "≤ 2 buffers" wording was inconsistent with that number.
+      "≤ 2 buffers" wording was inconsistent with that number. **Measure both** display
+      smoothing off and sigma > 0, since the latter is the true worst case.
 - [ ] **Step 6:** Tests — in-place calibration correctness vs. the current copy-based
       result (bit-identical on a fixture); `deep=False` lifetime safety; downsample
       threshold policy as a pure unit test; existing rescale fall-back paths unchanged.
