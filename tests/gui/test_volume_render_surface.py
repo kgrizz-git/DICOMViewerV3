@@ -198,3 +198,97 @@ def test_cleanup_does_not_finalize_render_window(surface, monkeypatch):
     surface.cleanup()
 
     assert calls["finalize"] == 0
+
+
+def test_hover_without_button_is_not_forwarded(surface, monkeypatch):
+    """Plain hover must not reach the interactor.
+
+    VTK's trackball ignores hover and the crop-box widget was measured to react
+    to neither, so forwarding it is pure overhead exposed to VTK-version drift.
+    """
+    from PySide6.QtCore import QPointF
+    from PySide6.QtCore import Qt as QtNs
+    from PySide6.QtGui import QMouseEvent
+
+    moves = {"n": 0}
+    monkeypatch.setattr(
+        surface.interactor,
+        "MouseMoveEvent",
+        lambda: moves.__setitem__("n", moves["n"] + 1),
+    )
+
+    hover = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPointF(20, 20),
+        QPointF(20, 20),
+        QtNs.MouseButton.NoButton,
+        QtNs.MouseButton.NoButton,
+        QtNs.KeyboardModifier.NoModifier,
+    )
+    surface.mouseMoveEvent(hover)
+
+    assert moves["n"] == 0
+
+
+def test_drag_move_is_forwarded(surface, monkeypatch):
+    """A move with a button held must still reach the interactor."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtCore import Qt as QtNs
+    from PySide6.QtGui import QMouseEvent
+
+    moves = {"n": 0}
+    monkeypatch.setattr(
+        surface.interactor,
+        "MouseMoveEvent",
+        lambda: moves.__setitem__("n", moves["n"] + 1),
+    )
+
+    def event(kind, button):
+        return QMouseEvent(
+            kind,
+            QPointF(20, 20),
+            QPointF(20, 20),
+            button,
+            button,
+            QtNs.KeyboardModifier.NoModifier,
+        )
+
+    surface.mousePressEvent(
+        event(QMouseEvent.Type.MouseButtonPress, QtNs.MouseButton.LeftButton)
+    )
+    surface.mouseMoveEvent(
+        event(QMouseEvent.Type.MouseMove, QtNs.MouseButton.NoButton)
+    )
+    surface.mouseReleaseEvent(
+        event(QMouseEvent.Type.MouseButtonRelease, QtNs.MouseButton.LeftButton)
+    )
+    surface.mouseMoveEvent(
+        event(QMouseEvent.Type.MouseMove, QtNs.MouseButton.NoButton)
+    )
+
+    assert moves["n"] == 1
+
+
+def test_paint_fills_whole_rect_before_drawing(surface):
+    """Prevents a stale smear in the area beyond a smaller cached image.
+
+    WA_OpaquePaintEvent means Qt does not clear the background, so after a
+    resize the newly exposed region keeps whatever pixels were already there
+    until the debounced re-render lands.  Painting into a pre-stained target
+    reproduces that; ``grab()`` cannot, because it allocates a fresh pixmap.
+    """
+    from PySide6.QtGui import QColor, QImage, QPixmap
+    from PySide6.QtWidgets import QWidget
+
+    cached = QImage(4, 4, QImage.Format.Format_RGB888)
+    cached.fill(0xFFFFFF)
+    surface._image = cached
+    surface.resize(60, 40)
+
+    stained = QPixmap(60, 40)
+    stained.fill(QColor(255, 0, 0))
+    QWidget.render(surface, stained)
+
+    grabbed = stained.toImage()
+    corner = grabbed.pixelColor(grabbed.width() - 1, grabbed.height() - 1)
+    assert (corner.red(), corner.green(), corner.blue()) == (0, 0, 0)

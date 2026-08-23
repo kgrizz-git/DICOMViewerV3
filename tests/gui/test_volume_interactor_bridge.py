@@ -169,3 +169,53 @@ def test_crop_box_widget_can_attach(surface):
     box.On()
     surface.render()
     box.Off()
+
+
+def test_crop_box_change_updates_planes_and_rerenders(qapp):
+    """Crop-box drags must refresh the frame explicitly.
+
+    Previously this relied on vtkBoxWidget2 internally calling
+    Interactor->Render(); making it explicit removes the dependence on VTK
+    internals staying wired to the EndEvent blit.
+    """
+    import numpy as np
+
+    from core.volume_renderer import VolumeData, VolumeRenderer
+    from gui.volume_viewer_widget import VolumeViewerWidget
+
+    array = np.full((8, 32, 32), -1000.0, dtype=np.float32)
+    array[:, 8:24, 8:24] = 300.0
+    renderer = VolumeRenderer()
+    renderer.attach_volume(
+        VolumeData(
+            array=np.ascontiguousarray(array),
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+            direction=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+            rescale_applied=True,
+            scalar_units="HU",
+        )
+    )
+    widget = VolumeViewerWidget(renderer)
+    try:
+        widget.initialize(modality="CT")
+        widget.resize(400, 300)
+        widget.show()
+        qapp.processEvents()
+        widget._crop_cb.setChecked(True)
+        qapp.processEvents()
+        assert widget._box_widget is not None
+
+        planes: list[object] = []
+        renders = {"n": 0}
+        widget._renderer.set_cropping = lambda p: planes.append(p)
+        widget._surface.render_window.AddObserver(
+            "StartEvent", lambda *_a: renders.__setitem__("n", renders["n"] + 1)
+        )
+
+        widget._on_crop_box_changed()
+
+        assert planes, "clipping planes were not pushed to the renderer"
+        assert renders["n"] >= 1, "crop-box change did not trigger a render"
+    finally:
+        widget.cleanup()

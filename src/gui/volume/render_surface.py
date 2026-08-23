@@ -29,6 +29,7 @@ from gui.volume.interactor_bridge import (
     button_event_names,
     create_interactor,
     modifier_flags,
+    qt_key_to_vtk_keysym,
     set_event_information,
 )
 from utils.debug_flags import DEBUG_VOLUME_3D
@@ -79,6 +80,7 @@ class VolumeRenderSurface(QWidget):
         # the interactor refresh the widget too, not only explicit render()
         # calls.
         self._grabbing = False
+        self._buttons_down = 0
         self._render_window.AddObserver("EndEvent", self._on_render_end)
 
         # Debounce re-render after a resize so a drag-resize does not queue one
@@ -206,10 +208,16 @@ class VolumeRenderSurface(QWidget):
             return None
 
     def paintEvent(self, event: Any) -> None:
-        """Draw the cached frame.  Never renders — that is the whole point."""
+        """Draw the cached frame.  Never renders — that is the whole point.
+
+        The whole rect is filled first: with ``WA_OpaquePaintEvent`` set Qt does
+        not clear the background, so after a resize the area beyond the (still
+        old, smaller) cached image would show stale pixels until the debounced
+        re-render lands.
+        """
         painter = QPainter(self)
+        painter.fillRect(self.rect(), Qt.GlobalColor.black)
         if self._image is None or self._image.isNull():
-            painter.fillRect(self.rect(), Qt.GlobalColor.black)
             return
         painter.drawImage(0, 0, self._image)
 
@@ -239,6 +247,7 @@ class VolumeRenderSurface(QWidget):
             super().mousePressEvent(event)
             return
         self.setFocus(Qt.FocusReason.MouseFocusReason)
+        self._buttons_down += 1
         getattr(self._interactor, names[0])()
 
     def mouseReleaseEvent(self, event: Any) -> None:
@@ -246,10 +255,18 @@ class VolumeRenderSurface(QWidget):
         if names is None or not self._push_event_info(event):
             super().mouseReleaseEvent(event)
             return
+        self._buttons_down = max(0, self._buttons_down - 1)
         getattr(self._interactor, names[1])()
 
     def mouseMoveEvent(self, event: Any) -> None:
-        if self._push_event_info(event):
+        """Forward drags only.
+
+        Plain hover is not forwarded: VTK's trackball style ignores it and the
+        crop-box widget was measured to react to neither (no renders, no state
+        change), so forwarding it is pure overhead and leaves the cost exposed
+        to VTK-version changes.
+        """
+        if self._buttons_down and self._push_event_info(event):
             self._interactor.MouseMoveEvent()
         else:
             super().mouseMoveEvent(event)
@@ -277,14 +294,21 @@ class VolumeRenderSurface(QWidget):
         if self._cleaned_up or self._interactor is None:
             super().keyPressEvent(event)
             return
-        text = event.text()
-        key = text[0] if text else chr(0)
+        keysym = qt_key_to_vtk_keysym(event.key(), event.text())
+        if not keysym:
+            super().keyPressEvent(event)
+            return
         ctrl, shift = modifier_flags(event.modifiers())
-        self._interactor.SetEventInformation(
-            0, 0, ctrl, shift, key, 0, event.text() or None
+        # SetKeyEventInformation carries the keysym that GetKeySym() reports;
+        # SetEventInformation's char argument alone does not.
+        self._interactor.SetKeyEventInformation(
+            ctrl, shift, event.text()[:1] or chr(0), 0, keysym
         )
         self._interactor.KeyPressEvent()
-        super().keyPressEvent(event)
+        # Accept rather than chaining to super(): the key has been dispatched to
+        # VTK, and propagating it again risks double handling if an ancestor
+        # later grows a keyPressEvent.
+        event.accept()
 
     # ------------------------------------------------------------------
     # Cleanup

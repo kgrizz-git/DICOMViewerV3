@@ -3,8 +3,12 @@
 This is the pre-2026-08 rendering path.  It renders from inside ``paintEvent``,
 which deadlocks the GUI thread on native macOS (see
 ``dev-docs/plans/3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md``), so it is **not**
-the default.  It exists only so a Windows / Parallels regression found in the
-field can be worked around without a rebuild, by setting::
+the default and must never be used there.
+
+It exists for the opposite direction of risk: the 3D viewer was historically
+verified only on Windows under Parallels, so the offscreen surface is the newer,
+less-proven path *on those platforms*.  If a Windows / Parallels regression
+turns up in the field, this restores the old behaviour without a rebuild::
 
     DICOMVIEWER_3D_LEGACY_INTERACTOR=1
 

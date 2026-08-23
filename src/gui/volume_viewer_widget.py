@@ -1,9 +1,11 @@
 """
 Volume Viewer Widget
 
-QWidget wrapping a ``QVTKRenderWindowInteractor`` for 3D volume rendering
-with a control panel for preset selection, global opacity, window/level,
-and camera reset.
+QWidget hosting an offscreen VTK render surface (``gui.volume.render_surface``)
+for 3D volume rendering, with a control panel for preset selection, global
+opacity, window/level, and camera reset.  The legacy
+``QVTKRenderWindowInteractor`` surface remains available behind
+``DICOMVIEWER_3D_LEGACY_INTERACTOR``; see ``gui.volume.surface_factory``.
 
 Inputs:
     - ``VolumeRenderer`` instance (from ``core.volume_renderer``).
@@ -13,7 +15,7 @@ Outputs:
 
 Requirements:
     - PySide6
-    - VTK >= 9.3.0 (``vtkmodules.qt.QVTKRenderWindowInteractor``)
+    - VTK >= 9.3.0
 """
 
 from __future__ import annotations
@@ -95,6 +97,7 @@ from gui.volume.first_paint import (
     stop_first_paint_timers,
 )
 from gui.volume.overlay_text import build_overlay_text
+from gui.volume.shortcuts import handle_shortcut
 from utils.debug_flags import DEBUG_VOLUME_3D
 from utils.doc_urls import user_doc_url
 
@@ -1487,6 +1490,7 @@ class VolumeViewerWidget(QWidget):
             for i in range(planes.GetNumberOfPlanes()):
                 plane_list.append(planes.GetPlane(i))
             self._renderer.set_cropping(plane_list)
+            self._render()
         except Exception:
             pass
 
@@ -1580,43 +1584,11 @@ class VolumeViewerWidget(QWidget):
     # Progressive refinement
     # ------------------------------------------------------------------
 
-    _KEY_VIEW_MAP: ClassVar[dict[str, str]] = {"1": "Anterior", "2": "Posterior", "3": "Left",
-                      "4": "Right", "5": "Superior", "6": "Inferior"}
-
     def _on_key_press(self, _obj: Any = None, _event: str = "") -> None:
         """Handle keyboard shortcuts in the 3D viewport."""
         iren = self._surface.interactor if self._surface is not None else None
-        if iren is None:
-            return
-        key = iren.GetKeySym()
-        if not key:
-            return
-        kl = key.lower()
-        if kl in ("r", "space"):
-            self._renderer.set_view("Anterior")
-            self._render()
-        elif kl == "f":
-            self._renderer.get_renderer().ResetCamera()
-            self._render()
-        elif kl == "a":
-            self._auto_rotate_btn.toggle()
-        elif kl in self._KEY_VIEW_MAP:
-            self._renderer.set_view(self._KEY_VIEW_MAP[kl])
-            self._render()
-        elif kl in ("plus", "equal"):
-            new_val = min(self._opacity_spin.value() + 5.0, 100.0)
-            self._opacity_spin.setValue(new_val)
-        elif kl in ("minus",):
-            new_val = max(self._opacity_spin.value() - 5.0, 0.0)
-            self._opacity_spin.setValue(new_val)
-        elif kl == "bracketright":
-            idx = self._preset_combo.currentIndex() + 1
-            if idx < self._preset_combo.count():
-                self._preset_combo.setCurrentIndex(idx)
-        elif kl == "bracketleft":
-            idx = self._preset_combo.currentIndex() - 1
-            if idx >= 0:
-                self._preset_combo.setCurrentIndex(idx)
+        if iren is not None:
+            handle_shortcut(self, iren.GetKeySym())
 
     def _on_interaction_start(self, _obj: Any = None, _event: str = "") -> None:
         """Switch to coarse sampling during mouse interaction for responsiveness."""

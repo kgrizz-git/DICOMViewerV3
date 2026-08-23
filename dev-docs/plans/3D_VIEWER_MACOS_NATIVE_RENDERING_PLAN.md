@@ -329,7 +329,13 @@ black, because the water/acrylic body is fully transparent at that preset.
       usable.
 - [ ] Windows native: full 3D smoke per `dev-docs/TO_DO.md:102`.
 - [ ] Windows under Parallels: full 3D smoke — **no regression** vs. current behavior.
-- [ ] Open / close the dialog 5× consecutively — no leak, no abort, no orphaned timers.
+- [x] Open / close the dialog 5× consecutively — no leak, no abort, no orphaned timers.
+      Automated: `tmp/spike/phase3_openclose.py`, peak RSS flat across cycles.
+- [ ] **Interactive smoke on native macOS.** CI does not exercise the offscreen path on
+      macOS, and the freeze was only ever *diagnosed* there. Before archiving, drive the
+      real UI by hand: rotate / pan / zoom, every keyboard shortcut (`R`, `Space`, `F`,
+      `A`, `1`–`6`, `+`/`-`, `[`/`]`), crop-box drag, blend mode, standard views,
+      auto-rotate, and screenshot export.
 - [ ] Record results (platform, GPU, dims, timings) here. **No PHI.**
 
 ---
@@ -352,7 +358,20 @@ Found during the first real-UI check:
    (`gui/volume/control_panel.py`), measuring **6.7:1** on the same background while
    still reading as de-emphasised. A `PaletteChange` handler recolours them on a live
    theme flip, matching the existing pattern in `gui/metadata_panel.py:541`.
-3. **Stale frame after resize (introduced by Phase 1).** `resizeEvent` resized the
+3. **Keyboard shortcuts silently broken (introduced by Phase 3).** `_on_key_press` matches
+   VTK keysym names (`"plus"`, `"bracketright"`, `"space"`), which the native interactor
+   used to supply. Manual forwarding passed `event.text()` — the literal character — so
+   `+`/`-`/`=`, `[`/`]`, and `Space` all became no-ops while `r`/`f`/`a`/`1`–`6` kept
+   working by coincidence (they are single characters). Fixed with
+   `qt_key_to_vtk_keysym()` in `interactor_bridge.py` plus
+   `SetKeyEventInformation()`, which is what actually populates `GetKeySym()`.
+   Found by an external code review, not by the test suite — no test covered the
+   forwarding path end to end. `tests/gui/test_volume_shortcuts.py` now does.
+4. **Preset stepping could land on a heading row.** `[`/`]` stepped by ±1 into the
+   "— CT —" / "— MR —" separator rows, where `_on_preset_changed` early-returns, leaving
+   the combo showing a heading with no preset applied. `preset_nav.preset_step_index()`
+   now skips non-preset rows.
+5. **Stale frame after resize (introduced by Phase 1).** `resizeEvent` resized the
    offscreen buffer but never re-rendered, so the widget kept painting an image of the old
    size and newly exposed area showed stale content. Now schedules a debounced re-render;
    rendering still never happens inline, so a drag-resize cannot queue one volume render
