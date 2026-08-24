@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from qt_widget_scope import widget_scope
 
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
@@ -10,6 +11,13 @@ from utils.config_manager import ConfigManager
 
 def _clean_text(text: str) -> str:
     return text.replace("&", "")
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_windows():
+    """Destroy windows this module's tests create (see ``qt_widget_scope``)."""
+    with widget_scope():
+        yield
 
 
 @pytest.mark.qt
