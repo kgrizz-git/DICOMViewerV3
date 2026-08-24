@@ -25,7 +25,7 @@ class MeasurementConfigMixin:
 
     def get_measurement_font_size(self) -> int:
         """Get measurement text font size."""
-        return self._config().get("measurement_font_size", 12)
+        return self._config().get("measurement_font_size", 13)
 
     def set_measurement_font_size(self, size: int) -> None:
         """Set measurement text font size."""

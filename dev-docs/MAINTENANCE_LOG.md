@@ -6,6 +6,19 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-24
 
+- **First-run visual defaults and README showcase:** New installations now use
+  larger overlay/annotation text, medium overlay weight, violet accent,
+  visible red scale markers and direction labels, and compact icon-plus-label
+  toolbar buttons. Stored preferences continue to win without a config-file
+  rewrite. The main splitter has an explicit 8 px Qt hit target while keeping
+  a 1 px rest-state hairline; the labelled toolbar has a 1240 px size hint at
+  the 1280 px target, protected by a Qt regression test. The README now shows
+  two human-approved synthetic-demo workflows; their final PNG hashes are
+  pinned in the approved-media manifest. The artifact gate now avoids generic
+  text scanning of arbitrary manifest hashes while retaining its structured
+  path-and-digest validation, fixing a pre-existing false positive on a
+  previously approved media filename.
+
 - **pytest CI hang fixed:** Two manually cancelled PR #82 `pytest` attempts reached 98–99% and then made no progress for 32–40 minutes. Debug logs placed `test_main_privacy_lifecycle.py::test_main_installs_privacy_boundary_before_application_construction` on the same xdist worker 85 seconds before `test_main_window_fullscreen.py::test_fullscreen_chrome_hide_and_restore_splitter` stalled. The former deliberately calls `main()`, which installs the process-global `sys.excepthook`, but did not restore it. A later Qt timer exception during scoped-widget cleanup was consequently routed to `main.exception_hook`; its modal `QMessageBox.critical()` cannot be dismissed in an offscreen worker and nested its event loop indefinitely. The test now scopes and verifies restoration of `sys.excepthook`. The exact CI-style native macOS command (`QT_QPA_PLATFORM=offscreen`, `-n 4`, coverage XML, 80% floor) completed in 54.53s: 6365 passed, 15 skipped, 81.88% coverage. Await the replacement GitHub run before closing the active xdist follow-up.
 
 ## 2026-08-23

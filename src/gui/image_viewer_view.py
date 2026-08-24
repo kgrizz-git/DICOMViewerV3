@@ -221,7 +221,7 @@ class ImageViewerViewMixin:
             return
 
         viewport_rect = self.viewport().rect()
-        major_tick_len_px = 14.0
+        major_tick_len_px = 18.0
         minor_tick_len_px = 8.0
 
         pen = QPen(QColor(self._scale_markers_color[0], self._scale_markers_color[1], self._scale_markers_color[2], 220))

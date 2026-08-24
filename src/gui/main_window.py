@@ -422,11 +422,11 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-
         # Splitter for resizable panels
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        # QSS draws the hairline; Qt supplies the reliable drag target.
+        self.splitter.setHandleWidth(8)
         main_layout.addWidget(self.splitter)
-
         # Left panel (for metadata, series list, etc.) - Make scrollable
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)

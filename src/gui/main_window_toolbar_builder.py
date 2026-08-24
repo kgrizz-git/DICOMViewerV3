@@ -38,7 +38,7 @@ Requirements:
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -66,6 +66,9 @@ _LABEL_STYLE_MAP = {
 # center in the main area (not over the dropdown).
 _SPLIT_TOOLBUTTON_OBJECT_NAME = "toolbar_menu_split_button"
 _SPLIT_TOOLBUTTON_WIDTH_TEXT_UNDER = 52
+# The standard cells stay readable but fit the full labelled toolbar at 1280 px.
+_TEXT_UNDER_STANDARD_BUTTON_WIDTH = 38
+_TEXT_UNDER_ICON_SIZE = 20
 # Narrow strip + tight padding-right (no extra gap before the arrow).
 _SPLIT_MENU_BUTTON_STRIP_PX = 10
 _SPLIT_CONTENT_SHIFT_LEFT_PX = 1
@@ -74,12 +77,19 @@ _SPLIT_CONTENT_SHIFT_LEFT_PX = 1
 def _split_toolbutton_text_under_stylesheet() -> str:
     """QSS for Open / W/L split buttons when labels show under icons."""
     w = _SPLIT_TOOLBUTTON_WIDTH_TEXT_UNDER
+    standard_w = _TEXT_UNDER_STANDARD_BUTTON_WIDTH
     menu_w = _SPLIT_MENU_BUTTON_STRIP_PX
     shift = _SPLIT_CONTENT_SHIFT_LEFT_PX
     name = _SPLIT_TOOLBUTTON_OBJECT_NAME
     # padding-right matches menu strip width; margin-left centers icon in the main cell.
     return (
-        "QToolBar QToolButton { font-size: 7pt; }"
+        "QToolBar QToolButton {"
+        " font-size: 7pt;"
+        " padding: 0px;"
+        " margin: 0px;"
+        f" min-width: {standard_w}px;"
+        f" max-width: {standard_w}px;"
+        " }"
         f"QToolBar QToolButton#{name} {{"
         f" min-width: {w}px;"
         f" max-width: {w}px;"
@@ -214,8 +224,10 @@ def build_main_toolbar(main_window) -> None:
             _apply_split_toolbutton_layout(wl_btn, text_under_icon=text_under)
         # Small condensed font when text is visible under icons.
         if text_under:
+            tb.setIconSize(QSize(_TEXT_UNDER_ICON_SIZE, _TEXT_UNDER_ICON_SIZE))
             tb.setStyleSheet(_split_toolbutton_text_under_stylesheet())
         else:
+            tb.setIconSize(main_window._toolbar_default_icon_size)
             tb.setStyleSheet("")
 
     main_window.apply_toolbar_label_style = _apply_label_style
@@ -225,6 +237,7 @@ def build_main_toolbar(main_window) -> None:
     toolbar.setMovable(False)
     toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)  # default; overridden below
     main_window.addToolBar(toolbar)
+    main_window._toolbar_default_icon_size = toolbar.iconSize()
 
     # ── Open (whole button opens the Open Folder / Open File menu) ────────
     open_btn = QToolButton(main_window)
@@ -595,7 +608,7 @@ def build_main_toolbar(main_window) -> None:
     saved_style = (
         main_window.config_manager.get_toolbar_label_style()
         if main_window.config_manager
-        else "icon_only"
+        else "text_under_icon"
     )
     _apply_label_style(saved_style)
 

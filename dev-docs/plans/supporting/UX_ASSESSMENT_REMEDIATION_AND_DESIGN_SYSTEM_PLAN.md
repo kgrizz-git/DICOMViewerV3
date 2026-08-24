@@ -49,10 +49,10 @@ Goal: produce `DESIGN.md` at the repo root with a living specification for color
 
 *Done 2026-05-17.*
 - Dark theme fully rewritten to modern deep palette (`#1e1e1e` window / `#252525` panels / `#141414` inputs / `#111111` navigator / `#363636` borders / `#e0e0e0` text / `#5a5a5a` disabled).
-- Gradient hairline splitter applied to both themes (1 px visual via `qlineargradient` stops 0.399–0.601; full fill on hover; 5 px hit zone preserved).
+- Gradient hairline splitter applied to both themes (1 px visual via `qlineargradient`; full fill on hover; explicit 8 px Qt hit zone).
 - Focus border wired to accent preset via `get_focus_border_color()` in `style_constants.py` (merged from `claude/naughty-leakey-8408fc`).
 
-**Goal:** make the dark theme feel more modern (deeper backgrounds, slimmer borders, softer text) and align the splitter visual in both themes so it reads as a 1 px separator at rest but expands to 5 px on hover.
+**Goal:** make the dark theme feel more modern (deeper backgrounds, slimmer borders, softer text) and align the splitter visual in both themes so it reads as a 1 px separator at rest but expands across its 8 px hit zone on hover.
 
 #### Part 1 — Dark theme palette (`dark.qss`)
 
@@ -73,27 +73,27 @@ Verify sufficient contrast at each surface boundary after the change: bg-window/
 
 #### Part 2 — Hairline splitter (both themes)
 
-Visual borders in the UI are 1 px. The splitter *hit zone* must stay at 5 px to be draggable, but the visual indicator should match the 1 px convention at rest. Apply to `dark.qss` **and** `light.qss`:
+Visual borders in the UI are 1 px. The splitter *hit zone* must be 8 px to be reliably draggable, but the visual indicator should match the 1 px convention at rest. Apply to `dark.qss` **and** `light.qss`:
 
 ```css
 /* Dark theme example — same pattern for light, substituting --border colour */
 QSplitter::handle:horizontal {
-    width: 5px;
-    background-color: transparent;
-    border-left: 1px solid #363636;
+    width: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0.437 transparent, stop:0.438 #363636,
+        stop:0.562 #363636, stop:0.563 transparent);
 }
 QSplitter::handle:horizontal:hover {
     background-color: #363636;
-    border-left: none;
 }
 QSplitter::handle:vertical {
-    height: 5px;
-    background-color: transparent;
-    border-top: 1px solid #363636;
+    height: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0.437 transparent, stop:0.438 #363636,
+        stop:0.562 #363636, stop:0.563 transparent);
 }
 QSplitter::handle:vertical:hover {
     background-color: #363636;
-    border-top: none;
 }
 ```
 
@@ -140,7 +140,7 @@ All of these can be done with text buttons. Doing this first means the toolbar i
 
 #### B4 — Widen splitter handles [x]
 
-*Done 2026-05-15.*  Splitter handles widened to 5 px in both `dark.qss` and `light.qss`; hover colour added (`#6a6a6a` dark / `#a0a0a0` light).  
+*Done 2026-05-15; refined 2026-08-24.* Splitter handles were initially styled as 5 px in both themes. They now use an explicit Qt 8 px hit zone plus matching QSS, retaining the 1 px rest-state hairline and full-width hover state.
 *Deferred:* grip-dot visual (2 × 3 dots via `paintEvent` or SVG) — cosmetic; can be added without changing handle hit-zone size.
 
 #### B5 — Fix "overlay mode_modality" raw identifier [x]
@@ -494,9 +494,13 @@ This is optional — if the candidate review in F4 finds one style that clearly 
 - **Overlay**: cycles 3 states (detailed / minimal / hidden) — not a binary toggle, no icon swap needed.
 - Theme refresh (`_refresh_icons`) re-renders all toggled-state icons in the new colour then re-applies the active state via `_update_privacy_action()`.
 
-### G5 — Verify toolbar fits single row [ ]
+### G5 — Verify toolbar fits single row [x]
 
-After icons are applied, confirm toolbar fits in one row at 1280 px width. Adjust button set or icon size if needed (recheck from E1 decisions).
+*Done 2026-08-24.* The new first-run `text_under_icon` mode uses 20 px icons
+and compact 38 px standard button cells (with readable 7 pt labels); its Qt
+size hint is 1240 px at the 1280 px target. A regression test keeps the full
+toolbar on one row. Existing users who select icon-only or text-only retain
+their platform default icon size.
 
 ---
 

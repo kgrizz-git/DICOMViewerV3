@@ -24,7 +24,7 @@ class ROIConfigMixin:
 
     def get_roi_font_size(self) -> int:
         """Get ROI statistics overlay font size."""
-        return self._config().get("roi_font_size", 12)
+        return self._config().get("roi_font_size", 13)
 
     def set_roi_font_size(self, size: int) -> None:
         """Set ROI statistics overlay font size."""

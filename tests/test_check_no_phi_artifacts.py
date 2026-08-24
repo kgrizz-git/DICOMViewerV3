@@ -106,6 +106,31 @@ def _approve_reviewable_asset(repo: Path, path: str) -> None:
     )
 
 
+def test_media_manifest_hashes_are_not_generic_content_scanned(repo: Path) -> None:
+    """Validated media paths/digests must not trip a random name-token match."""
+    manifest = repo / phi.APPROVED_MEDIA_MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "files": {
+                    "resources/images/checkbox_checkmark_white.png": (
+                        "8ac918c18d03d8aa6de91079e87eea59"
+                        "e24eaf641f8371c0988b826d55b8d8e9"
+                    )
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True
+    )
+
+    assert phi.check_contents([phi.APPROVED_MEDIA_MANIFEST], repo) == []
+    assert phi.check_approval_manifests(repo) == []
+
+
 @pytest.mark.parametrize(
     "path",
     [

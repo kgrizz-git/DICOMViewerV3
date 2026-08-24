@@ -50,6 +50,23 @@ def _destroy_leaked_windows():
         yield
 
 @pytest.mark.qt
+def test_main_splitter_has_an_eight_pixel_hit_zone(qapp, tmp_path):
+    """The target size is explicit; QSS alone does not change every native handle."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+
+    assert w.splitter.handleWidth() == 8
+
+
+@pytest.mark.qt
+def test_default_labelled_toolbar_fits_at_1280_pixels(qapp, tmp_path):
+    """The first-run icon-plus-label toolbar must not need a hidden overflow row."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+
+    assert w.main_toolbar is not None
+    assert w.main_toolbar.sizeHint().width() <= 1280
+
+
+@pytest.mark.qt
 def test_fullscreen_chrome_hide_and_restore_splitter(qapp):
     """Collapsing side panes for fullscreen uses total width in center; restore brings back sizes."""
     cm = ConfigManager()

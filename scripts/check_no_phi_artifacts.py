@@ -578,7 +578,7 @@ def check_contents(paths: list[str], root: Path) -> list[str]:
     approved = _approved_text_exceptions(root)
     approved_occurrences = _approved_text_occurrences(root)
     for path in paths:
-        if (
+        if path == APPROVED_MEDIA_MANIFEST or (
             Path(path).suffix.lower() not in DATA_SUFFIXES
             and path not in TEXT_CONFIG_FILENAMES
         ):

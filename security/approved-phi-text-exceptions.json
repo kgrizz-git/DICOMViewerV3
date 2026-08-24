@@ -22,9 +22,11 @@
     {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "5a299135d526ac484c1e43ca9a4b49f462f666aace4384e2414c1303392f81fc"},
     {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "95633d52e8d15843f20e834ed5ee8b982c8b1d044695c7d61c822653b94c65d6"},
     {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "5b9360719b865efd64953c0a3142887f05717b279eb93285878da4341cdf1b7e"},
+    {"path": "CHANGELOG.md", "rule": "patient-name-in-content", "sha256": "3032457ac5bcbde972a97d62bfa5904ce3abb1c37b05c2fa54ea04f543e7f9a7"},
     {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "04ee9a6d15bb070f2dfce9cf4c41209bcbce6b086c537f17fc58186414ddf0ee"},
     {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "61750ce71052d7bfc2ea41436a0e8de7a2183cb567886ee000273dcfea9f2bee"},
     {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "6f46456e5520419c75e056112aa60451bde0616dc6300c0529b486b25cae44b3"},
-    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "ca72891637a58d04040bb6fe79602ae411675d12a18f4897e29d16b919a82125"}
+    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "ca72891637a58d04040bb6fe79602ae411675d12a18f4897e29d16b919a82125"},
+    {"path": "DESIGN.md", "rule": "patient-name-in-content", "sha256": "07a7316d490a9c50ea11ce8c9944f6efeead58d6f00adc68fed964e5c089939f"}
   ]
 }

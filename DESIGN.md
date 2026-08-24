@@ -163,9 +163,9 @@ The light theme is intentionally conventional — neutral grays, no tinting. The
 |---|---|---|
 | Slider groove height | 4 px | Horizontal and vertical |
 | Slider handle diameter | 12 px | Pill-shaped, accent-coloured |
-| Splitter — hit zone | 5 px wide/tall | Must stay ≥ 5 px so it can be grabbed reliably |
+| Splitter — hit zone | 8 px wide/tall | Explicitly set in Qt so it remains easy to grab across platform styles |
 | Splitter — visual at rest | 1 px centred line, `--border` colour | Hit zone is transparent; only the hairline is drawn |
-| Splitter — visual on hover | Full 5 px fill, `--border` colour | Expands to fill hit zone — clear "grab me" signal |
+| Splitter — visual on hover | Full 8 px fill, `--border` colour | Expands to fill hit zone — clear "grab me" signal |
 | QGroupBox border | 1 px `--border`, 4 px radius | Title text in `--fg-secondary` |
 | Metadata group header fill | Fixed `#0B0B0C` (dark) / `#F3F3F3` (light); bold at the tree font size (`GROUP_HEADER_FONT_SCALE = 1`) | Separates headings from window chrome without a new hue |
 | Metadata group header rules | 1 px top hairline; 1 px bottom hairline at 65% of its token opacity | Full-row lines including the indent gutter |
@@ -187,8 +187,8 @@ The accent colour is user-selectable via **Settings → Accent colour**. QSS use
 
 | ID | Label | `{accent}` | `{accent_light}` | `{accent_dark}` | Notes |
 |---|---|---|---|---|---|
-| `steel-blue` | Steel Blue | `#4285da` | `#5a9de5` | `#1a5da5` | **Default** |
-| `violet` | Violet | `#7c4dff` | `#9e72ff` | `#5530cc` | |
+| `steel-blue` | Steel Blue | `#4285da` | `#5a9de5` | `#1a5da5` | |
+| `violet` | Violet | `#7c4dff` | `#9e72ff` | `#5530cc` | **Default for new installations** |
 | `navy` | Navy | `#1565c0` | `#2979ff` | `#0d47a1` | Clearly darker blue |
 | `garnet` | Garnet | `#a0303f` | `#c94050` | `#6e1f2b` | Dark wine-red; distinct from `--danger #c0392b` |
 

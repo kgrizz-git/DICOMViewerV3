@@ -25,6 +25,8 @@
     "resources/images/Gemini_Generated_Image_dvv6ldvv6ldvv6ld_edit-removebg-preview.png": "349a79b11bfb295ce03cac82660ea03871cd0a306d07d4cb1f48b41568567f84",
     "resources/images/checkbox_checkmark_black.png": "5dcb676944d1938aeb0a556499c2936c47b2d70c7483859204a39a019d2445b4",
     "resources/images/checkbox_checkmark_white.png": "8ac918c18d03d8aa6de91079e87eea59e24eaf641f8371c0988b826d55b8d8e9",
+    "resources/readme-screenshots/mpr-roi-workspace.png": "749f4840ef58b284e75193ff47fcb20752609d35f420fa6e09d57fd498171744",
+    "resources/readme-screenshots/three-dimensional-volume-rendering.png": "5e3fdf243723e5995f671b2c436b4ebe9324eb8332cd9f3c182513b68caafcd2",
     "src/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/fixtures/dicom_decoder/synthetic_monochrome_jpeg2000_lossless_16_bit.dcm": "3f1f3e59fa4e3851802409836202c98478cdf2a4ee3c5d8342e53b5af5eb521e",

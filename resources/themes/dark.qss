@@ -344,18 +344,18 @@
                     border-top: 1px solid #363636;
                 }
 
-                /* Splitter handles — 5 px hit zone, 1 px visual at rest, full fill on hover */
+                /* Splitter handles — 8 px hit zone, 1 px visual at rest, full fill on hover */
                 QSplitter::handle {
                     background-color: transparent;
                 }
 
                 QSplitter::handle:horizontal {
-                    width: 5px;
+                    width: 8px;
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0.399 transparent,
-                        stop:0.4   #363636,
-                        stop:0.6   #363636,
-                        stop:0.601 transparent);
+                        stop:0.437 transparent,
+                        stop:0.438 #363636,
+                        stop:0.562 #363636,
+                        stop:0.563 transparent);
                 }
 
                 QSplitter::handle:horizontal:hover {
@@ -363,12 +363,12 @@
                 }
 
                 QSplitter::handle:vertical {
-                    height: 5px;
+                    height: 8px;
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0.399 transparent,
-                        stop:0.4   #363636,
-                        stop:0.6   #363636,
-                        stop:0.601 transparent);
+                        stop:0.437 transparent,
+                        stop:0.438 #363636,
+                        stop:0.562 #363636,
+                        stop:0.563 transparent);
                 }
 
                 QSplitter::handle:vertical:hover {
