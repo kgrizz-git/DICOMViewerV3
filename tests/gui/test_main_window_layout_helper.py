@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
+from qt_widget_scope import widget_scope
 
 from gui.main_window_layout_helper import (
     MainWindowPanels,
@@ -30,6 +31,13 @@ class MockMainWindow(QWidget):
         self.left_panel = QWidget()
         self.right_panel = QWidget()
         self.set_series_navigator = MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_widgets():
+    """Destroy this module's parentless QWidget fixtures and test doubles."""
+    with widget_scope():
+        yield
 
 
 @pytest.fixture
