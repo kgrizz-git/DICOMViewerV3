@@ -323,7 +323,7 @@
       "purpose": "Approved token-authenticated source analysis after the CI privacy gate.",
       "install_scope": "pinned GitHub Action",
       "install_reference": "dev-docs/CONTRIBUTING.md",
-      "tested_version": "SonarSource/sonarqube-scan-action v8.2.1 commit-pinned",
+      "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
       "enforcement": [
         "privacy-gated CI blocking"
       ],
