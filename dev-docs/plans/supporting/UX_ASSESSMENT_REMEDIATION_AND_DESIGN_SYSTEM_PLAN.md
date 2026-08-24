@@ -500,8 +500,9 @@ This is optional — if the candidate review in F4 finds one style that clearly 
 mode uses 20 px icons and a 38 px minimum standard button width with readable
 7 pt labels. Buttons may expand to their Qt size hint so labels such as
 Crosshair, Navigator, and Text Size remain fully readable; the full toolbar's
-current Qt size hint is 1348 px. Existing users who select icon-only or
-text-only retain their platform default icon size.
+uncompressed Qt size hint is 1348 px and it remains one row at the 1280 px
+target. Existing users who select icon-only or text-only retain their platform
+default icon size.
 
 ---
 
@@ -512,7 +513,8 @@ text-only retain their platform default icon size.
 3. **E1 finalized** (toolbar button list) before F2 folder structure is created.
 4. **F4 complete** (icon selections documented in DESIGN.md) before G2 begins.
 5. All P0 items (B2–B8, G2) resolved and tested in both dark and light themes.
-6. Toolbar fits single row at 1280 px (screenshot evidence).
+6. Full `text_under_icon` toolbar remains one row at 1280 px; its verified
+   uncompressed Qt size hint is 1348 px (Qt regression test).
 7. No duplicate shortcut bindings in `DESIGN.md § 6`.
 8. SR Dose table renders without truncation at default dialog width (screenshot evidence).
 9. QSS lint pass: no remaining literal color values outside the token definitions.

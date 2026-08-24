@@ -634,8 +634,7 @@ def _approved_text_exceptions(root: Path) -> dict[str, object]:
         return {}
     if not isinstance(payload, dict):
         return {}
-    files = payload.get("files", {})
-    return files if isinstance(files, dict) else {}
+    return payload.get("files", {}) if isinstance(payload.get("files", {}), dict) else {}
 
 
 def _is_approved_text_exception(
@@ -692,22 +691,23 @@ def _is_approved_text_occurrence(
 
 
 def _approved_media(root: Path) -> dict[str, str]:
-    manifest = root / APPROVED_MEDIA_MANIFEST
     try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload = json.loads((root / APPROVED_MEDIA_MANIFEST).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    files = payload.get("files", {})
-    return files if isinstance(files, dict) else {}
+    return payload.get("files", {}) if isinstance(payload.get("files", {}), dict) else {}
+
+
+def _has_invalid_image_trees(trees: object) -> bool:
+    return not isinstance(trees, dict) or any(
+        not isinstance(directory, str) or _path_reasons(directory) or not isinstance(expected_hash, str) or not SHA256_PATTERN.fullmatch(expected_hash)
+        for directory, expected_hash in trees.items())
 
 
 def check_approval_manifests(root: Path) -> list[str]:
     """Fail closed when a reviewed-asset manifest is malformed or names risky paths."""
     problems: list[str] = []
-    manifest_paths = (APPROVED_MEDIA_MANIFEST, APPROVED_TEXT_EXCEPTIONS_MANIFEST)
-    if not any((root / relpath).exists() for relpath in manifest_paths):
-        return []
-    for relpath in manifest_paths:
+    for relpath in (APPROVED_MEDIA_MANIFEST, APPROVED_TEXT_EXCEPTIONS_MANIFEST):
         if not (root / relpath).exists():
             continue
         try:
@@ -726,9 +726,10 @@ def check_approval_manifests(root: Path) -> list[str]:
                 problems.append(f"{relpath}: approval manifest contains an unknown field")
             if payload.get("purpose") != APPROVED_MEDIA_MANIFEST_PURPOSE:
                 problems.append(f"{relpath}: approval manifest has an invalid purpose")
-        entries = payload.get("files", {})
-        assert isinstance(entries, dict)
-        for approved_path, entry in entries.items():
+            image_trees = payload.get("image_trees", {})
+            if _has_invalid_image_trees(image_trees):
+                problems.append(f"{relpath}: approval manifest has an invalid image tree")
+        for approved_path, entry in payload.get("files", {}).items():
             if not isinstance(approved_path, str) or _path_reasons(approved_path):
                 problems.append(f"{relpath}: approval manifest contains an unsafe path")
                 continue
@@ -1110,8 +1111,7 @@ def check_reviewable_files(paths: list[str], root: Path) -> list[str]:
         manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         manifest_payload = {}
-    if not isinstance(manifest_payload, dict):
-        manifest_payload = {}
+    manifest_payload = manifest_payload if isinstance(manifest_payload, dict) else {}
     approved = _approved_media(root)
     approved_trees = _approved_image_trees(manifest_payload)
     tree_digests: dict[str, str] = {}

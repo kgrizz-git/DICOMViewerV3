@@ -40,6 +40,8 @@ showcase of the approved synthetic-demo workflows.
 
 ## Completion
 
-Completed 2026-08-24. The overlapping first-run-default, scale-marker,
-splitter, and 1280 px toolbar-fit items have been removed from `TO_DO.md`;
-the broader UX and documentation backlog remains open.
+Completed 2026-08-24 after the Qt regression test verified that the full
+`text_under_icon` toolbar remains one row at 1280 px (1348 px uncompressed
+size hint). The overlapping first-run-default, scale-marker, splitter, and
+toolbar items have been removed from `TO_DO.md`; the broader UX and
+documentation backlog remains open.

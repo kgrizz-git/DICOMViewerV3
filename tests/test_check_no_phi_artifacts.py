@@ -138,25 +138,24 @@ def test_media_manifest_hashes_are_not_generic_content_scanned(repo: Path) -> No
     assert phi.check_approval_manifests(repo) == []
 
 
-def test_unknown_media_manifest_field_is_not_exempt_from_content_scanning(
-    repo: Path,
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"PatientName": "DOE^JANE"},
+        {"image_trees": {"resources/icons": {"PatientName": "DOE^JANE"}}},
+    ],
+)
+def test_invalid_media_manifest_is_not_exempt_from_content_scanning(
+    repo: Path, extra: dict[str, object]
 ) -> None:
-    """Only the validated hash schema can bypass generic PHI/PII matching."""
+    """Only a fully validated hash schema can bypass generic PHI/PII matching."""
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text(
-        json.dumps(
-            {
-                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
-                "files": {},
-                "PatientName": "DOE^JANE",
-            }
-        ),
+        json.dumps({"purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE, "files": {}, **extra}),
         encoding="utf-8",
     )
-    subprocess.run(
-        ["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True
-    )
+    subprocess.run(["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True)
 
     assert phi.check_approval_manifests(repo)
     assert phi.check_contents([phi.APPROVED_MEDIA_MANIFEST], repo)

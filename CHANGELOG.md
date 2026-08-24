@@ -10,10 +10,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **First-run visual defaults and workspace ergonomics:** New installations
   start with larger overlay/annotation text, medium overlay weight, violet
   accent, red scale markers and direction labels enabled, plus a compact
-  icon-plus-label toolbar that fits at 1280 px. Existing stored preferences
-  are preserved. Splitter handles now have an 8 px hit target while retaining
-  a 1 px resting hairline. The README includes two approved synthetic-demo
-  workflow screenshots. **Semantic versioning note: patch.**
+  icon-plus-label toolbar that remains one row at 1280 px (1348 px uncompressed
+  Qt size hint). Existing stored preferences are preserved. Splitter handles
+  now have an 8 px hit target while retaining a 1 px resting hairline. The
+  README includes two approved synthetic-demo workflow screenshots.
+  **Semantic versioning note: patch.**
 - **Build Executables concurrency:** Manual publish and tag-push runs for the same release tag now share one concurrency group (`build-vX.Y.Z` via `github.ref_name` on tag pushes), so they serialize instead of racing the same GitHub Release assets. **Semantic versioning note: patch.**
 - **UI-triggered releases (Build Executables):** Manual `workflow_dispatch` can publish a GitHub Release from a user-supplied `release_tag_name` (`publish_to_release`); artifact upload is **skipped** on those runs only. Tag pushes keep 30-day Actions artifacts. Windows release payloads are a single **`DICOMViewerV3-*-Windows.zip`** (manual publish and tag push). Pre-release tags (`vX.Y.Z-…`) derive **prerelease** metadata. Release titles are set explicitly to **`Release vX.Y.Z`** (or the supplied tag) on every publish leg. Release asset rotation documented in `RELEASING.md` / `BUILDING_EXECUTABLES.md`. **`PYINSTALLER_MACOS_SLIM`** retired (D1): same-commit macOS A/B measured **0 MB saved** (1,178,268 KB both builds). **Semantic versioning note: patch.**
 - **PyInstaller security floor:** `requirements-build.txt` requires
