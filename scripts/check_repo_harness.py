@@ -94,7 +94,7 @@ FORBIDDEN_NETWORK_VERIFICATION_FLAGS = ("--only-verified",)
 APPROVED_SONARQUBE_CLOUD_WORKFLOW = ".github/workflows/ci.yml"
 APPROVED_SONARQUBE_CLOUD_ACTION = (
     "sonarsource/sonarqube-scan-action@"
-    "7006c4492b2e0ee0f816d36501671557c97f5995"
+    "22918119ff8e1ca75a623e15c8296b6ea4fbe28f"
 )
 
 # Shared by launch.bat / launch.command / scripts/scan-security.ps1.

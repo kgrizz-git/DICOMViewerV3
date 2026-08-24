@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-08-07",
+  "last_verified": "2026-08-24",
   "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
   "policy": {
     "default_data_handling": "local-only",
@@ -39,7 +39,7 @@
       "purpose": "Offline local and blocking CI secret-pattern scan without provider verification.",
       "install_scope": "system executable and pinned GitHub Action",
       "install_reference": "scripts/install-trufflehog-v3.ps1",
-      "tested_version": "local 3.95.9; CI 3.95.8",
+      "tested_version": "local 3.95.9; CI 3.97.0",
       "enforcement": [
         "pre-push blocking",
         "CI blocking"
@@ -75,7 +75,7 @@
       "purpose": "Python security static analysis using community rules.",
       "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
-      "tested_version": "1.169.0",
+      "tested_version": "1.173.0",
       "enforcement": [
         "pre-push blocking",
         "CI blocking"
@@ -323,7 +323,7 @@
       "purpose": "Approved token-authenticated source analysis after the CI privacy gate.",
       "install_scope": "pinned GitHub Action",
       "install_reference": "dev-docs/CONTRIBUTING.md",
-      "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
+      "tested_version": "SonarSource/sonarqube-scan-action v8.2.1 commit-pinned",
       "enforcement": [
         "privacy-gated CI blocking"
       ],
