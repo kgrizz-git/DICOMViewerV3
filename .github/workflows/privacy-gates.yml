@@ -114,20 +114,20 @@ jobs:
 
       - name: Run TruffleHog secret scanner
         if: steps.trufflehog_range.outputs.should_scan == 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
-        uses: trufflesecurity/trufflehog@bcfcf73aaf4759d4dadc2783177c245a02792318 # v3.97.0
+        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
         with:
           path: ./
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
           head: ${{ steps.trufflehog_range.outputs.head_sha }}
-          version: "3.97.0"
+          version: "3.95.8"
           extra_args: --no-verification
 
       - name: Run TruffleHog full-tree scanner for initial/new-ref push
         if: steps.trufflehog_range.outputs.tree_scan == 'true'
-        uses: trufflesecurity/trufflehog@bcfcf73aaf4759d4dadc2783177c245a02792318 # v3.97.0
+        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
         with:
           path: ./
-          version: "3.97.0"
+          version: "3.95.8"
           extra_args: --no-verification
 
       - name: TruffleHog skipped

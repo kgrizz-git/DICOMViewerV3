@@ -39,7 +39,7 @@
       "purpose": "Offline local and blocking CI secret-pattern scan without provider verification.",
       "install_scope": "system executable and pinned GitHub Action",
       "install_reference": "scripts/install-trufflehog-v3.ps1",
-      "tested_version": "local 3.95.9; CI 3.97.0",
+      "tested_version": "local 3.95.9; CI 3.95.8",
       "enforcement": [
         "pre-push blocking",
         "CI blocking"
