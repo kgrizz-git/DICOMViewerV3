@@ -167,7 +167,7 @@
       "purpose": "Local NLP entity recognition for staged image OCR text.",
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
-      "tested_version": "2.2.363",
+      "tested_version": "2.2.364",
       "enforcement": [
         "conditional staged advisory",
         "manual advisory"
@@ -184,7 +184,7 @@
       "purpose": "Provides the isolated image-privacy toolchain without writing redacted derivatives into the repository.",
       "install_scope": "isolated PHI tools venv",
       "install_reference": "requirements-phi-tools.txt",
-      "tested_version": "0.0.59",
+      "tested_version": "0.0.60",
       "enforcement": [
         "manual advisory support"
       ],
