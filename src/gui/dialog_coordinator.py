@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 from pydicom.dataset import Dataset
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox
 
@@ -479,6 +479,9 @@ class DialogCoordinator:
             main_window=self.main_window,
             open_tag_viewer_callback=open_tag_viewer_callback,
         )
+        # Modeless and not cached, so it must clean itself up on close;
+        # otherwise one browser leaks per SR opened.
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()

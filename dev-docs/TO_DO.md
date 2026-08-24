@@ -23,11 +23,10 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 > before starting anything else. An empty-ish queue is the moment to choose
 > deliberately, not to grab whatever is nearest.
 
-1. **Modal dialogs accumulate for the whole session** — measured, affects real usage, small and fully specified — [Bugs / Correctness](#bugs--correctness)
-2. **Blank-frame GPU-fallback false positive** — user-visible in the 3D viewer today, plan already written — [Features (Near-Term)](#features-near-term)
-3. **Finish the Qt test-leak sweep** — ~25 direct `MainWindow(...)` sites still leak — [Maintenance](#maintenance)
-4. **Volume build memory amplification (~8x measured)** — pairs naturally with #2, same plan — [Features (Near-Term)](#features-near-term)
-5. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
+1. **Blank-frame GPU-fallback false positive** — user-visible in the 3D viewer today, plan already written — [Features (Near-Term)](#features-near-term)
+2. **Finish the Qt test-leak sweep** — ~25 direct `MainWindow(...)` sites still leak — [Maintenance](#maintenance)
+3. **Volume build memory amplification (~8x measured)** — pairs naturally with #2, same plan — [Features (Near-Term)](#features-near-term)
+4. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -75,7 +74,6 @@ Release blockers (license compliance, versioned executables) live in
 
 ## Bugs / Correctness
 
-- [ ] **[P2]** **Modal dialogs accumulate for the whole session instead of being freed.** `dialog_coordinator.py` opens ~13 dialogs with the local-variable pattern `dialog = SomeDialog(..., self.main_window); dialog.exec()` — no `deleteLater()` anywhere in the module and no `WA_DeleteOnClose`. Dropping the Python reference does **not** free the widget, because the Qt parent (`main_window`) still owns it, so every open leaks one dialog for the life of the app. **Measured 2026-08-23:** opening Overlay Settings 20 times leaves 20 live `OverlaySettingsDialog` children and +24 MB RSS (~1.2 MB per open), growing linearly and unbounded. Affects real usage, not just tests — a long session that repeatedly visits Settings/Export/Overlay dialogs keeps climbing. **Fix:** set `WA_DeleteOnClose` on the throwaway dialogs (the cached ones — `histogram_dialogs`, `tag_viewer_dialog`, `about_this_file_dialog` — are deliberately reused and must be excluded), or `deleteLater()` after `exec()`. Note `mri_compare_result_dialog.py:71` and `ct_batch_result_dialog.py:105` already do this correctly and are the model. Found while fixing the xdist test-leak flake (same Qt-ownership mechanism, different code). Added 2026-08-23.
 
 <!-- OverlayConfigDialog findings — corrected 2026-07-10 after reviewer pushback on original #1/#2/#4. See tmp/overlay-config-dialog-test-review-2026-07-10.md -->
 - [ ] **[P2]** **MONOCHROME1 for MPR and on-screen projection panes (follow-up to the on-screen viewer fix).** MPR panes render via `mpr_view_math.array_to_pil` (`mpr_view_math.py:87-94`) and on-screen projections via `slice_display_pixels.create_slice_projection_pil_image` (`slice_display_manager.py` ~line 359); neither routes through `render_grayscale_image`, so the core-routed MONOCHROME1 inversion does **not** reach them. The single-slice viewer fix shipped 2026-08-16; extend `mpr_view_math` + `slice_display_pixels` projection path (and the export-projection path) so MPR/projection polarity matches the corrected slice view. Tracked from [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md) §Follow-up.

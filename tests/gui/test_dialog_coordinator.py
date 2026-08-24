@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from pydicom.dataset import Dataset
+from PySide6.QtCore import QEvent
 
 from gui.dialog_coordinator import DialogCoordinator
 
@@ -341,3 +342,56 @@ def test_about_this_file_and_sr_browser(mock_coordinator_setup) -> None:
     ) as mock_sr_cls:
         coord.open_structured_report_browser(ds, get_privacy_enabled=priv_cb)
         mock_sr_cls.return_value.show.assert_called_once()
+
+
+@pytest.mark.qt
+def test_structured_report_browser_is_destroyed_on_close(qapp) -> None:
+    """
+    The SR browser is modeless and uncached, so it must delete itself on close.
+
+    Without ``WA_DeleteOnClose`` the Qt parent keeps every browser alive after
+    the user closes it, leaking one per SR opened for the life of the session.
+    A real ``QDialog`` subclass is used rather than a mock: a mock would accept
+    ``setAttribute`` and prove nothing about the actual lifetime.
+    """
+    from pydicom.dataset import Dataset
+    from PySide6.QtWidgets import QDialog, QWidget
+    from qt_widget_scope import widget_scope
+
+    class _FakeSRBrowser(QDialog):
+        def __init__(self, parent, dataset, **kwargs):
+            super().__init__(parent)
+
+    def _flush() -> None:
+        qapp.processEvents()
+        qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        qapp.processEvents()
+
+    # The parent is itself a top-level widget, so it has to be cleaned up on
+    # both the passing and failing path -- otherwise this test leaks exactly
+    # the way the code under test used to.
+    with widget_scope():
+        parent = QWidget()
+        coord = DialogCoordinator(
+            config_manager=MagicMock(),
+            main_window=parent,
+            get_current_studies=MagicMock(return_value={}),
+        )
+
+        with patch(
+            "gui.dialogs.structured_report_browser_dialog.StructuredReportBrowserDialog",
+            _FakeSRBrowser,
+        ):
+            for _ in range(3):
+                coord.open_structured_report_browser(
+                    Dataset(), get_privacy_enabled=lambda: False
+                )
+                for browser in parent.findChildren(_FakeSRBrowser):
+                    browser.close()
+                _flush()
+
+        survivors = parent.findChildren(_FakeSRBrowser)
+
+    assert survivors == [], (
+        "closed SR browsers are still alive; WA_DeleteOnClose was not applied"
+    )
