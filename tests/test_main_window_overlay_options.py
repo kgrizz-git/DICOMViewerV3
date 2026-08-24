@@ -19,10 +19,19 @@ if _src not in sys.path:
 
 pytest.importorskip("PySide6")
 
+from qt_widget_scope import widget_scope
+
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
 
 _DEFAULT_3D_TIP = "Open 3D Volume Render of current series"
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_windows():
+    """Destroy windows this module's tests create (see ``qt_widget_scope``)."""
+    with widget_scope():
+        yield
 
 
 @pytest.fixture

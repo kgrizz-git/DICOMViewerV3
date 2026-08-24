@@ -132,6 +132,7 @@ def test_explicit_startup_installs_once_and_protects_logs_and_streams(
 def test_main_installs_privacy_boundary_before_application_construction(monkeypatch) -> None:
     main_module = importlib.import_module("main")
     events: list[str] = []
+    original_excepthook = sys.excepthook
 
     class _Application:
         def __init__(self) -> None:
@@ -141,12 +142,21 @@ def test_main_installs_privacy_boundary_before_application_construction(monkeypa
             events.append("run")
             return 0
 
-    monkeypatch.setattr(
-        main_module,
-        "install_application_privacy_boundaries",
-        lambda: events.append("privacy"),
-    )
-    monkeypatch.setattr(main_module, "DICOMViewerApp", _Application)
+    # ``main()`` deliberately installs a process-wide exception hook.  Scope
+    # that mutation to this test: otherwise a later Qt timer exception opens a
+    # modal QMessageBox through ``main.exception_hook`` and can deadlock an
+    # offscreen xdist worker.
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            main_module,
+            "install_application_privacy_boundaries",
+            lambda: events.append("privacy"),
+        )
+        scoped.setattr(main_module, "DICOMViewerApp", _Application)
+        scoped.setattr(sys, "excepthook", original_excepthook)
 
-    assert main_module.main() == 0
-    assert events == ["privacy", "construct", "run"]
+        assert main_module.main() == 0
+        assert events == ["privacy", "construct", "run"]
+        assert sys.excepthook is main_module.exception_hook
+
+    assert sys.excepthook is original_excepthook

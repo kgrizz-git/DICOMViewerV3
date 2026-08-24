@@ -33,6 +33,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QObject, QPoint
 from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtWidgets import QMenu
+from qt_widget_scope import widget_scope
 
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
@@ -53,6 +54,13 @@ def _enabled_recent_actions(menu: QMenu) -> list:
 @pytest.fixture
 def config_manager(tmp_path):
     return ConfigManager(config_dir=tmp_path / "config")
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_windows():
+    """Destroy windows this module's tests create (see ``qt_widget_scope``)."""
+    with widget_scope():
+        yield
 
 
 @pytest.fixture

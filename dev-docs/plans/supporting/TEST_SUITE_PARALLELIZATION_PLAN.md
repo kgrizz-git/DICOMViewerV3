@@ -1,9 +1,10 @@
 # Plan: Parallelize the CI test suite (pytest-xdist)
 
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-24
 **Status:** Supporting — **Phases 1–3 complete** (20/20 local gate). Phase 4 dropped
-after measurement. Two CI perf gates needed rebudgeting for parallel execution
-(see *Perf budgets under parallelism*); PR #58 awaiting a green run to confirm.
+after measurement. A later PR #82 CI hang was traced to a separate global
+exception-hook test leak and fixed locally; await its replacement CI run before
+closing the broader xdist follow-up.
 **Area:** CI / test harness
 
 ---
@@ -26,6 +27,39 @@ Two later CI runs then failed on **perf-budget gates**, not on parallelism
 correctness: no worker crashes, no lost tests. Those budgets were sized from
 dev-host timings and had to be rebudgeted for parallel CI — see
 *Perf budgets under parallelism* below.
+
+## Follow-up: global exception-hook leak (2026-08-24)
+
+This is separate from the original `QCoreApplication` poisoning and from the
+sandbox-only VTK graphics limitation. Two PR #82 `pytest` attempts reached
+98–99% and stopped producing output for 32–40 minutes. GitHub debug logs showed
+that the same `gw2` worker ran
+`test_main_privacy_lifecycle.py::test_main_installs_privacy_boundary_before_application_construction`,
+then 85 seconds later started
+`test_main_window_fullscreen.py::test_fullscreen_chrome_hide_and_restore_splitter`,
+where it hung.
+
+The privacy-lifecycle test intentionally invokes `main()`, but `main()` assigns
+the process-global `sys.excepthook` to `main.exception_hook`. The test had not
+restored that mutation. During a later `widget_scope()` cleanup,
+`qapp.processEvents()` delivered a timer exception; PySide dispatched it to the
+leaked hook, whose `QMessageBox.critical()` entered a modal event loop that an
+offscreen worker cannot dismiss. The corrected test scopes the mutation with
+`monkeypatch.context()` and asserts that the original hook is restored.
+
+The exact CI-shaped native macOS invocation passed after the repair:
+
+```bash
+QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 \
+  python -m pytest -n 4 tests --cov=src --cov-report=term \
+    --cov-report=xml:coverage.xml --cov-fail-under=80 -q
+# 6365 passed, 15 skipped; 81.88% coverage; 54.53s
+```
+
+This is a test-state leak, not a GitHub runner or VTK defect. Keep the active
+backlog item open only for replacement-CI confirmation and the existing broader
+stability watch; do not add targeted serialization or a retry to mask this
+specific failure.
 
 ---
 

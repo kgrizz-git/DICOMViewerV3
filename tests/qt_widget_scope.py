@@ -54,7 +54,12 @@ def destroy_widgets(widgets: list[Any]) -> None:
 @contextmanager
 def widget_scope() -> Iterator[None]:
     """Destroy any top-level widget created inside the block."""
-    before = {id(w) for w in top_level_widgets()}
+    # Retain the wrappers as well as their identities until teardown.  Without
+    # the strong references, CPython can reclaim a wrapper during the scope and
+    # reuse its ``id`` for a newly created widget, causing that widget to be
+    # mistaken for a pre-existing one and left alive.
+    before_widgets = top_level_widgets()
+    before = {id(widget) for widget in before_widgets}
     try:
         yield
     finally:

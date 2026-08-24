@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 
 import pytest
+from qt_widget_scope import widget_scope
 
 import gui.qa_app_facade as facade_mod
 from gui.qa_app_facade import QAAppFacade
@@ -40,6 +41,13 @@ def _preferred_planar_sample() -> Path:
         if candidate.exists():
             return candidate
     return _SYNTHETIC_PLANAR
+
+
+@pytest.fixture(autouse=True)
+def _destroy_leaked_widgets():
+    """Destroy the parentless QWidget test double created by this module."""
+    with widget_scope():
+        yield
 
 
 def _make_main_window():
