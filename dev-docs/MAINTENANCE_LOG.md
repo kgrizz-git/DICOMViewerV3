@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-08-24
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-24
+
+- **pytest CI hang fixed:** Two manually cancelled PR #82 `pytest` attempts reached 98–99% and then made no progress for 32–40 minutes. Debug logs placed `test_main_privacy_lifecycle.py::test_main_installs_privacy_boundary_before_application_construction` on the same xdist worker 85 seconds before `test_main_window_fullscreen.py::test_fullscreen_chrome_hide_and_restore_splitter` stalled. The former deliberately calls `main()`, which installs the process-global `sys.excepthook`, but did not restore it. A later Qt timer exception during scoped-widget cleanup was consequently routed to `main.exception_hook`; its modal `QMessageBox.critical()` cannot be dismissed in an offscreen worker and nested its event loop indefinitely. The test now scopes and verifies restoration of `sys.excepthook`. The exact CI-style native macOS command (`QT_QPA_PLATFORM=offscreen`, `-n 4`, coverage XML, 80% floor) completed in 54.53s: 6365 passed, 15 skipped, 81.88% coverage. Await the replacement GitHub run before closing the active xdist follow-up.
 
 ## 2026-08-23
 
