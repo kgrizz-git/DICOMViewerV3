@@ -46,6 +46,20 @@ test needs its `qtbot` interaction helpers or its signal-waiting diagnostics
 often enough to justify a maintained dependency; then use its documented
 `qapp`/`qtbot` lifecycle rather than creating applications manually.
 
+## VTK rendering on macOS
+
+`QT_QPA_PLATFORM=offscreen` is sufficient for ordinary Qt widget tests, but it
+does not supply the native OpenGL context required by VTK's macOS Cocoa render
+window. The installed VTK build has no usable EGL or OSMesa fallback on macOS,
+so real `vtkRenderWindow` / `VolumeRenderSurface` tests can segfault in a
+sandboxed environment at interactor initialization. This is an execution
+environment limitation, not an xdist or widget-lifetime failure.
+
+Run real VTK rendering tests with native macOS graphics access, or on a Linux
+runner with a supported EGL/OSMesa setup. Keep VTK-free behavior covered by
+ordinary unit tests and mocks; do not skip or weaken real-VTK assertions merely
+because the sandbox cannot provide a graphics context.
+
 References: [pytest-qt introduction](https://pytest-qt.readthedocs.io/en/master/intro.html)
 and [qapp fixture reference](https://pytest-qt.readthedocs.io/en/latest/reference.html).
 
