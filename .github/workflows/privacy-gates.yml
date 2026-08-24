@@ -119,7 +119,7 @@ jobs:
           path: ./
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
           head: ${{ steps.trufflehog_range.outputs.head_sha }}
-          version: "3.95.8"
+          version: "3.97.0"
           extra_args: --no-verification
 
       - name: Run TruffleHog full-tree scanner for initial/new-ref push
@@ -127,7 +127,7 @@ jobs:
         uses: trufflesecurity/trufflehog@bcfcf73aaf4759d4dadc2783177c245a02792318 # v3.97.0
         with:
           path: ./
-          version: "3.95.8"
+          version: "3.97.0"
           extra_args: --no-verification
 
       - name: TruffleHog skipped
