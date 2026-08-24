@@ -66,7 +66,7 @@ _LABEL_STYLE_MAP = {
 # center in the main area (not over the dropdown).
 _SPLIT_TOOLBUTTON_OBJECT_NAME = "toolbar_menu_split_button"
 _SPLIT_TOOLBUTTON_WIDTH_TEXT_UNDER = 52
-# The standard cells stay readable but fit the full labelled toolbar at 1280 px.
+# Standard cells stay compact while longer labels retain their natural width.
 _TEXT_UNDER_STANDARD_BUTTON_WIDTH = 38
 _TEXT_UNDER_ICON_SIZE = 20
 # Narrow strip + tight padding-right (no extra gap before the arrow).
@@ -88,7 +88,6 @@ def _split_toolbutton_text_under_stylesheet() -> str:
         " padding: 0px;"
         " margin: 0px;"
         f" min-width: {standard_w}px;"
-        f" max-width: {standard_w}px;"
         " }"
         f"QToolBar QToolButton#{name} {{"
         f" min-width: {w}px;"

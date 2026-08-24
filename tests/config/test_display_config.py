@@ -60,7 +60,10 @@ class TestSmoothImageWhenZoomed:
 
 class TestAccent:
     def test_default_is_violet(self, tmp_path):
-        assert _cm(tmp_path).get_accent() == "violet"
+        cm = _cm(tmp_path)
+        cm.config.pop("accent")
+
+        assert cm.get_accent() == "violet"
 
     def test_set_valid_accent(self, tmp_path):
         cm = _cm(tmp_path)
@@ -85,7 +88,18 @@ class TestFirstRunVisualDefaults:
 
     def test_defaults_make_the_initial_ui_more_legible(self, tmp_path):
         cm = _cm(tmp_path)
+        for key in (
+            "accent",
+            "show_scale_markers",
+            "show_direction_labels",
+            "scale_markers_color_r",
+            "scale_markers_color_g",
+            "scale_markers_color_b",
+            "toolbar_label_style",
+        ):
+            cm.config.pop(key)
 
+        assert cm.get_accent() == "violet"
         assert cm.get_show_scale_markers() is True
         assert cm.get_show_direction_labels() is True
         assert cm.get_scale_markers_color() == (255, 0, 0)

@@ -1,7 +1,7 @@
 # UX Assessment Remediation & Design System Plan
 
 **Created:** 2026-05-03  
-**Updated:** 2026-05-17  
+**Updated:** 2026-08-24
 **Source:** [ux-summary.md](../../dev-docs/ux-assessments/ux-summary.md) · [ux-assessment-overall-2026-04-30.md](../../dev-docs/ux-assessments/ux-assessment-overall-2026-04-30.md)  
 **Design reference:** [DESIGN.md](../../DESIGN.md)  
 **TO_DO section:** UX / Workflow
@@ -37,10 +37,10 @@ Goal: produce `DESIGN.md` at the repo root with a living specification for color
 ### A5 — Accent colour system [x]
 
 *Done 2026-05-17.*
-- Created `src/gui/accent_presets.py` with 4 presets: Steel Blue (default), Violet, Navy, Garnet.
+- Created `src/gui/accent_presets.py` with 4 presets: Steel Blue, Violet (default for new installations), Navy, Garnet.
 - Both QSS files are fully templatized with `{accent}`, `{accent_light}`, `{accent_dark}` placeholders.
 - `get_theme_stylesheet()` in `main_window_theme.py` resolves the preset at load time.
-- `ConfigManager` persists the selected preset id as `"accent"` (default `"steel-blue"`).
+- `ConfigManager` persists the selected preset id as `"accent"` (default `"violet"`).
 - Settings dialog (`settings_dialog.py`) exposes a combo box with a live colour swatch.
 - `_on_settings_applied` in `main.py` calls `_apply_theme()` so changes are live on OK.
 - Documented in `DESIGN.md §2.4`.
@@ -494,13 +494,14 @@ This is optional — if the candidate review in F4 finds one style that clearly 
 - **Overlay**: cycles 3 states (detailed / minimal / hidden) — not a binary toggle, no icon swap needed.
 - Theme refresh (`_refresh_icons`) re-renders all toggled-state icons in the new colour then re-applies the active state via `_update_privacy_action()`.
 
-### G5 — Verify toolbar fits single row [x]
+### G5 — Preserve toolbar label readability [x]
 
-*Done 2026-08-24.* The new first-run `text_under_icon` mode uses 20 px icons
-and compact 38 px standard button cells (with readable 7 pt labels); its Qt
-size hint is 1240 px at the 1280 px target. A regression test keeps the full
-toolbar on one row. Existing users who select icon-only or text-only retain
-their platform default icon size.
+*Done 2026-08-24; refined after review.* The new first-run `text_under_icon`
+mode uses 20 px icons and a 38 px minimum standard button width with readable
+7 pt labels. Buttons may expand to their Qt size hint so labels such as
+Crosshair, Navigator, and Text Size remain fully readable; the full toolbar's
+current Qt size hint is 1348 px. Existing users who select icon-only or
+text-only retain their platform default icon size.
 
 ---
 

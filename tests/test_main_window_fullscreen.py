@@ -58,12 +58,25 @@ def test_main_splitter_has_an_eight_pixel_hit_zone(qapp, tmp_path):
 
 
 @pytest.mark.qt
-def test_default_labelled_toolbar_fits_at_1280_pixels(qapp, tmp_path):
-    """The first-run icon-plus-label toolbar must not need a hidden overflow row."""
+def test_default_labelled_toolbar_keeps_long_labels_visible(qapp, tmp_path):
+    """First-run toolbar labels must retain enough width for their text."""
     w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
 
     assert w.main_toolbar is not None
-    assert w.main_toolbar.sizeHint().width() <= 1280
+    for action in (
+        w.mouse_mode_crosshair_action,
+        w.series_navigator_action,
+    ):
+        button = w.main_toolbar.widgetForAction(action)
+        assert isinstance(button, QToolButton)
+        assert button.sizeHint().width() >= button.fontMetrics().horizontalAdvance(
+            action.text()
+        )
+
+    text_size_button = w._overlay_font_size_toolbar_btn
+    assert text_size_button.sizeHint().width() >= text_size_button.fontMetrics().horizontalAdvance(
+        text_size_button.text()
+    )
 
 
 @pytest.mark.qt

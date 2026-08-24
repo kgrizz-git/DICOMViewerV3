@@ -323,9 +323,9 @@ and is not bundled in Phase C.
 
 | Component | Specification |
 |---|---|
-| Splitter hit zone | 5 px wide/tall — interactive width, not visual width |
+| Splitter hit zone | 8 px wide/tall — interactive width, not visual width |
 | Splitter visual at rest | 1 px centred `--border` line; rest of hit zone transparent |
-| Splitter visual on hover | Full 5 px fill at `--border` colour |
+| Splitter visual on hover | Full 8 px fill at `--border` colour |
 | Toolbar icon size | 20 × 20 px |
 | Toolbar button padding | 4 px all sides |
 | ROI resize handle | 8 × 8 px filled square (`HANDLE_HALF = 4.0` in `roi_manager.py`); currently hardcoded cyan — goal: `--accent` |

@@ -102,7 +102,13 @@ def _approve_reviewable_asset(repo: Path, path: str) -> None:
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text(
-        json.dumps({"files": {path: phi._sha256(repo / path)}}), encoding="utf-8"
+        json.dumps(
+            {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
+                "files": {path: phi._sha256(repo / path)},
+            }
+        ),
+        encoding="utf-8",
     )
 
 
@@ -113,6 +119,7 @@ def test_media_manifest_hashes_are_not_generic_content_scanned(repo: Path) -> No
     manifest.write_text(
         json.dumps(
             {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
                 "files": {
                     "resources/images/checkbox_checkmark_white.png": (
                         "8ac918c18d03d8aa6de91079e87eea59"
@@ -129,6 +136,31 @@ def test_media_manifest_hashes_are_not_generic_content_scanned(repo: Path) -> No
 
     assert phi.check_contents([phi.APPROVED_MEDIA_MANIFEST], repo) == []
     assert phi.check_approval_manifests(repo) == []
+
+
+def test_unknown_media_manifest_field_is_not_exempt_from_content_scanning(
+    repo: Path,
+) -> None:
+    """Only the validated hash schema can bypass generic PHI/PII matching."""
+    manifest = repo / phi.APPROVED_MEDIA_MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
+                "files": {},
+                "PatientName": "DOE^JANE",
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True
+    )
+
+    assert phi.check_approval_manifests(repo)
+    assert phi.check_contents([phi.APPROVED_MEDIA_MANIFEST], repo)
+    assert _run(repo) == 1
 
 
 @pytest.mark.parametrize(
@@ -364,7 +396,13 @@ def test_blocks_an_added_image_in_an_approved_image_tree(repo):
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True)
     manifest.write_text(
-        json.dumps({"image_trees": {"resources/icons": digest}}), encoding="utf-8"
+        json.dumps(
+            {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
+                "image_trees": {"resources/icons": digest},
+            }
+        ),
+        encoding="utf-8",
     )
 
     assert _run(repo) == 0
