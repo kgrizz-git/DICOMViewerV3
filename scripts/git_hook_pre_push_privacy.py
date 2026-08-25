@@ -67,7 +67,7 @@ def parse_updates(stdin_text: str) -> tuple[list[RefUpdate], Counter[str]]:
     """Parse pre-push stdin, returning only fixed categories for malformed input."""
     updates: list[RefUpdate] = []
     violations: Counter[str] = Counter()
-    for line in stdin_text.splitlines():
+    for line in filter(str.strip, stdin_text.splitlines()):
         fields = line.split()
         if len(fields) != 4:
             violations["malformed ref update"] += 1

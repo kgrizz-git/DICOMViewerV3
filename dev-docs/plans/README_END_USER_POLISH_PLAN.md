@@ -1,8 +1,8 @@
 # README end-user polish plan
 
 **Date:** 2026-08-20  
-**Status:** In progress — README rewrite done; screenshot capture left for a human.  
-**Last updated:** 2026-08-21  
+**Status:** Complete
+**Last updated:** 2026-08-24
 **Priority:** P3 (docs / first impression)  
 **Branch suggestion:** `docs/readme-end-user-polish`  
 **Related:** [`README.md`](../../README.md), [`user-docs/USER_GUIDE.md`](../../user-docs/USER_GUIDE.md), [`dev-docs/CONTRIBUTING.md`](../CONTRIBUTING.md), [`AGENTS.md`](../../AGENTS.md)
@@ -51,10 +51,10 @@ Rules:
 
 Checklist additions for screenshots:
 
-- [ ] Capture candidate PNG(s) locally (owner: human); keep drafts out of git until reviewed.
-- [ ] Confirm no PHI / PII / local paths / identifiable anatomy context in pixels or window chrome.
-- [ ] Choose final path + filenames; embed only after manifest update.
-- [ ] Add short alt text / captions in the README.
+- [x] Capture candidate PNG(s) locally (owner: human); keep drafts out of git until reviewed.
+- [x] Confirm no PHI / PII / local paths / identifiable anatomy context in pixels or window chrome.
+- [x] Choose final path + filenames; embed only after manifest update.
+- [x] Add short alt text / captions in the README.
 
 ## Non-goals
 
@@ -84,7 +84,7 @@ Checklist additions for screenshots:
 - [x] Run `python scripts/check_user_docs_links.py` after edits (covers
       `user-docs/`, root `README.md`, and `dev-docs/README.md`).
 - [x] Changelog entry (docs-only; patch note) when the rewrite lands.
-- [ ] **Human:** capture and PHI-review hero screenshot(s) (1 primary, optional second), add to `security/approved-media-sha256.json`, and insert into the README slot marked by the placeholder comment.
+- [x] **Human-reviewed screenshots:** selected a synthetic multi-pane/MPR workflow and a synthetic 3D workflow, recorded their exact hashes in `security/approved-media-sha256.json`, and embedded them with concise alt text/captions. — 2026-08-24
 
 ## Success criteria
 

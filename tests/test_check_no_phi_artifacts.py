@@ -102,8 +102,63 @@ def _approve_reviewable_asset(repo: Path, path: str) -> None:
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text(
-        json.dumps({"files": {path: phi._sha256(repo / path)}}), encoding="utf-8"
+        json.dumps(
+            {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
+                "files": {path: phi._sha256(repo / path)},
+            }
+        ),
+        encoding="utf-8",
     )
+
+
+def test_media_manifest_hashes_are_not_generic_content_scanned(repo: Path) -> None:
+    """Validated media paths/digests must not trip a random name-token match."""
+    manifest = repo / phi.APPROVED_MEDIA_MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
+                "files": {
+                    "resources/images/checkbox_checkmark_white.png": (
+                        "8ac918c18d03d8aa6de91079e87eea59"
+                        "e24eaf641f8371c0988b826d55b8d8e9"
+                    )
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True
+    )
+
+    assert phi.check_contents([phi.APPROVED_MEDIA_MANIFEST], repo) == []
+    assert phi.check_approval_manifests(repo) == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"PatientName": "DOE^JANE"},
+        {"image_trees": {"resources/icons": {"PatientName": "DOE^JANE"}}},
+        {"files": {"resources/icons": {"sha256": "0" * 64, "PatientName": "DOE^JANE"}}},
+        None,
+    ],
+)
+def test_invalid_media_manifest_is_not_exempt_from_content_scanning(repo: Path, extra: dict[str, object] | None) -> None:
+    """Only a fully validated hash schema can bypass generic PHI/PII matching."""
+    manifest = repo / phi.APPROVED_MEDIA_MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    payload = [] if extra is None else {"purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE, "files": {}, **extra}
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    subprocess.run(["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True)
+
+    assert phi.check_reviewable_files([phi.APPROVED_MEDIA_MANIFEST], repo) == []
+    assert phi.check_approval_manifests(repo)
+    assert phi.check_contents([phi.APPROVED_MEDIA_MANIFEST], repo) or extra is None
+    assert _run(repo) == 1
 
 
 @pytest.mark.parametrize(
@@ -339,7 +394,13 @@ def test_blocks_an_added_image_in_an_approved_image_tree(repo):
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True)
     manifest.write_text(
-        json.dumps({"image_trees": {"resources/icons": digest}}), encoding="utf-8"
+        json.dumps(
+            {
+                "purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE,
+                "image_trees": {"resources/icons": digest},
+            }
+        ),
+        encoding="utf-8",
     )
 
     assert _run(repo) == 0

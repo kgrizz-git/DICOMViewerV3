@@ -46,7 +46,7 @@ class AnnotationConfigMixin:
 
     def get_text_annotation_font_size(self) -> int:
         """Get text annotation font size."""
-        return self._config().get("text_annotation_font_size", 12)
+        return self._config().get("text_annotation_font_size", 13)
 
     def set_text_annotation_font_size(self, size: int) -> None:
         """Set text annotation font size."""

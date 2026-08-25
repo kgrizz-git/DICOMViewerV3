@@ -17,7 +17,7 @@ def _cm(tmp_path: Path) -> ConfigManager:
 
 class TestROIFontSize:
     def test_default(self, tmp_path):
-        assert _cm(tmp_path).get_roi_font_size() == 12
+        assert _cm(tmp_path).get_roi_font_size() == 13
 
     def test_set_and_get(self, tmp_path):
         cm = _cm(tmp_path)
@@ -27,7 +27,7 @@ class TestROIFontSize:
     def test_zero_ignored(self, tmp_path):
         cm = _cm(tmp_path)
         cm.set_roi_font_size(0)
-        assert cm.get_roi_font_size() == 12
+        assert cm.get_roi_font_size() == 13
 
 
 class TestROIFontColor:

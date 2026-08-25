@@ -1,6 +1,6 @@
 {
   "files": {
-    "scripts/check_no_phi_artifacts.py": 1219,
+    "scripts/check_no_phi_artifacts.py": 1217,
     "scripts/privacy_checks/ast_rules.py": 822,
     "src/core/dicom_organizer.py": 878,
     "src/core/fusion_handler.py": 863,
@@ -40,7 +40,6 @@
     "tests/fusion_audit_quantitative_verification.py": 778
   },
   "functions": {
-    "scripts/check_no_phi_artifacts.py::check_approval_manifests": 22,
     "scripts/check_no_phi_artifacts.py::check_reviewable_files": 26,
     "scripts/check_security_tool_inventory.py::validate_inventory": 35,
     "scripts/decoder_corpus_report.py::main": 23,

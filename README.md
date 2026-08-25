@@ -6,10 +6,13 @@ or folders, review them with multi-window viewing and clinical measurement
 tools, and export images or derived DICOM — all on your own machine. It is not
 a PACS server or archive.
 
-<!-- Hero screenshot: intentionally not included yet. Screenshots are
-     human-captured and pass PHI review before being committed and added to
-     security/approved-media-sha256.json. Insert one primary image (optional
-     second) directly below this line once approved. -->
+![A multi-pane workspace showing a CT phantom, coronal reconstruction, slab projection, and ROI statistics.](resources/readme-screenshots/mpr-roi-workspace.png)
+
+*Multi-pane review with MPR, slab projection, and ROI measurements.*
+
+![3D volume-rendering workspace with a CT soft-tissue preset and interactive display controls.](resources/readme-screenshots/three-dimensional-volume-rendering.png)
+
+*Optional 3D volume rendering keeps presets and display controls in one focused workspace.*
 
 ## Get the app
 
@@ -18,7 +21,7 @@ Download a packaged release for your platform from the
 the installer or bundle. Inside the app, **Help → Quick Start Guide** gives a
 short orientation and **Help → Documentation** opens the full user guide.
 
-## What you can do
+## Highlights
 
 | Area | Capabilities |
 | --- | --- |

@@ -94,7 +94,7 @@ class OverlayConfigMixin:
         Returns:
             Font size in points
         """
-        return self._config().get("overlay_font_size", 10)
+        return self._config().get("overlay_font_size", 11)
 
     def set_overlay_font_size(self, size: int) -> None:
         """
@@ -149,7 +149,7 @@ class OverlayConfigMixin:
     def get_overlay_font_variant(self) -> str:
         """Get overlay font variant (e.g. "Bold", "Regular")."""
         family = self.get_overlay_font_family()
-        variant = self._config().get("overlay_font_variant", "Bold")
+        variant = self._config().get("overlay_font_variant", "Medium")
         _, variant = resolve_font(family, variant)
         return variant
 

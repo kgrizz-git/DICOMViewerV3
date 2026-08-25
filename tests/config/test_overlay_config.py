@@ -63,7 +63,7 @@ class TestOverlayCustomFields:
 
 class TestOverlayFontSize:
     def test_default(self, tmp_path):
-        assert _cm(tmp_path).get_overlay_font_size() == 10
+        assert _cm(tmp_path).get_overlay_font_size() == 11
 
     def test_set_positive(self, tmp_path):
         cm = _cm(tmp_path)
@@ -73,7 +73,7 @@ class TestOverlayFontSize:
     def test_zero_ignored(self, tmp_path):
         cm = _cm(tmp_path)
         cm.set_overlay_font_size(0)
-        assert cm.get_overlay_font_size() == 10
+        assert cm.get_overlay_font_size() == 11
 
 
 class TestOverlayFontColor:

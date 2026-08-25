@@ -56,6 +56,11 @@ def test_initial_push_zero_oid_covers_all_reachable_commits(tmp_path: Path) -> N
     assert first != _git(repo, "rev-parse", "HEAD")
 
 
+def test_parse_updates_ignores_blank_records() -> None:
+    """A no-op update stream has no metadata to inspect or block."""
+    assert pre_push.parse_updates("\n\n") == ([], {})
+
+
 def test_nonzero_base_checks_only_new_commits(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, email="legacy@example.test")
     base = _git(repo, "rev-parse", "HEAD")
