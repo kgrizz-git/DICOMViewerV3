@@ -6,6 +6,13 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-24
 
+- **Approved-media manifest hardening:** The artifact gate now validates the
+  complete approved-media schema before exempting it from generic content
+  scanning: object root, allowed top-level fields, exact purpose, file and
+  image-tree paths, SHA-256 digests, and media-entry keys. Malformed manifests
+  fail closed without crashing; regression tests cover PHI-like content in
+  unknown fields and nested image-tree entries.
+
 - **First-run visual defaults and README showcase:** New installations now use
   larger overlay/annotation text, medium overlay weight, violet accent,
   visible red scale markers and direction labels, and compact icon-plus-label
