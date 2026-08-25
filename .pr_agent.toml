@@ -1,4 +1,5 @@
 # Keep Qodo available for explicit PR-comment commands, without automatic reviews.
+# This comment exists only in the disposable PR used to verify that policy.
 [github_app]
 pr_commands = []
 
