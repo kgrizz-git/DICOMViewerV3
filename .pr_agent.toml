@@ -1,0 +1,7 @@
+# Keep Qodo available for explicit PR-comment commands, without automatic reviews.
+[github_app]
+pr_commands = []
+
+# Do not post automated analysis when a GitHub Actions check fails.
+[checks]
+enable_auto_checks_feedback = false
