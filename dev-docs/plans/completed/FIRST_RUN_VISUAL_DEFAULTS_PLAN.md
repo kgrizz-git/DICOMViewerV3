@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Last updated:** 2026-08-24
-**Related:** [active backlog](../TO_DO.md), [design specification](../../DESIGN.md), [README polish plan](../README_END_USER_POLISH_PLAN.md)
+**Related:** [active backlog](../../TO_DO.md), [design specification](../../../DESIGN.md), [README polish plan](../../README_END_USER_POLISH_PLAN.md)
 
 ## Goal
 
