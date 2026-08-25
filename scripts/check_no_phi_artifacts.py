@@ -695,7 +695,7 @@ def _approved_media(root: Path) -> dict[str, str]:
         payload = json.loads((root / APPROVED_MEDIA_MANIFEST).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    return payload.get("files", {}) if isinstance(payload.get("files", {}), dict) else {}
+    return payload.get("files", {}) if isinstance(payload, dict) and isinstance(payload.get("files", {}), dict) else {}
 
 
 def _has_invalid_image_trees(trees: object) -> bool:
