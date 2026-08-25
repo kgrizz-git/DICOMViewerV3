@@ -143,6 +143,7 @@ def test_media_manifest_hashes_are_not_generic_content_scanned(repo: Path) -> No
     [
         {"PatientName": "DOE^JANE"},
         {"image_trees": {"resources/icons": {"PatientName": "DOE^JANE"}}},
+        {"files": {"resources/icons": {"sha256": "0" * 64, "PatientName": "DOE^JANE"}}},
         None,
     ],
 )
@@ -151,10 +152,7 @@ def test_invalid_media_manifest_is_not_exempt_from_content_scanning(repo: Path, 
     manifest = repo / phi.APPROVED_MEDIA_MANIFEST
     manifest.parent.mkdir(parents=True, exist_ok=True)
     payload = [] if extra is None else {"purpose": phi.APPROVED_MEDIA_MANIFEST_PURPOSE, "files": {}, **extra}
-    manifest.write_text(
-        json.dumps(payload),
-        encoding="utf-8",
-    )
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
     subprocess.run(["git", "add", phi.APPROVED_MEDIA_MANIFEST], cwd=repo, check=True)
 
     assert phi.check_reviewable_files([phi.APPROVED_MEDIA_MANIFEST], repo) == []

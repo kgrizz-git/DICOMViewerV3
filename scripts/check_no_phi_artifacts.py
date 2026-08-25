@@ -699,9 +699,7 @@ def _approved_media(root: Path) -> dict[str, str]:
 
 
 def _has_invalid_image_trees(trees: object) -> bool:
-    return not isinstance(trees, dict) or any(
-        not isinstance(directory, str) or _path_reasons(directory) or not isinstance(expected_hash, str) or not SHA256_PATTERN.fullmatch(expected_hash)
-        for directory, expected_hash in trees.items())
+    return not isinstance(trees, dict) or any(not isinstance(directory, str) or _path_reasons(directory) or not isinstance(expected_hash, str) or not SHA256_PATTERN.fullmatch(expected_hash) for directory, expected_hash in trees.items())
 
 
 def check_approval_manifests(root: Path) -> list[str]:
@@ -734,8 +732,8 @@ def check_approval_manifests(root: Path) -> list[str]:
                 problems.append(f"{relpath}: approval manifest contains an unsafe path")
                 continue
             expected_hash = entry if isinstance(entry, str) else entry.get("sha256") if isinstance(entry, dict) else None
-            if not isinstance(expected_hash, str) or not SHA256_PATTERN.fullmatch(expected_hash):
-                problems.append(f"{relpath}: approval manifest contains an invalid digest")
+            if (relpath == APPROVED_MEDIA_MANIFEST and isinstance(entry, dict) and set(entry) - {"sha256"}) or not isinstance(expected_hash, str) or not SHA256_PATTERN.fullmatch(expected_hash):
+                problems.append(f"{relpath}: approval manifest contains an invalid digest or entry")
     return list(dict.fromkeys(problems))
 
 
