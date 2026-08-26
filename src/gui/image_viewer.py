@@ -2,7 +2,8 @@
 Image Viewer Widget
 
 Coordinates display and interaction via `ImageViewerInputMixin`, `ImageViewerViewMixin`,
-and `image_viewer_context_menu` (Phase 3). Behavior matches the pre-split implementation.
+and `image_viewer_context_menu` / `image_viewer_item_context_menu` (Phase 3). Behavior
+matches the pre-split implementation.
 
 Requirements: PySide6, PIL, numpy.
 """

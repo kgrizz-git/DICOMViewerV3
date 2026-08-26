@@ -390,6 +390,8 @@ def build_menu_bar(main_window) -> None:
     reset_orient_act.triggered.connect(main_window.orientation_reset_requested.emit)
     orientation_menu.addAction(reset_orient_act)
 
+    view_menu.setToolTipsVisible(True)
+
     main_window.smooth_when_zoomed_action = QAction("Image Smoothing", main_window)
     main_window.smooth_when_zoomed_action.setCheckable(True)
     main_window.smooth_when_zoomed_action.setToolTip(

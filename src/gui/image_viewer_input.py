@@ -397,7 +397,9 @@ class ImageViewerInputMixin:
             # All other modes: classify the item under the cursor and dispatch.
             self._handle_left_button_press(event)
         elif event.button() == Qt.MouseButton.RightButton:
-            from gui.image_viewer_context_menu import handle_mouse_press_right_button
+            from gui.image_viewer_item_context_menu import (
+                handle_mouse_press_right_button,
+            )
             handle_mouse_press_right_button(self, event)
             return
 
@@ -710,7 +712,7 @@ class ImageViewerInputMixin:
         self.crosshair_clicked.emit(scene_pos, pixel_value_str, x, y, z)
 
     def _toggle_statistic(self, roi, stat_name: str, checked: bool) -> None:
-        from gui.image_viewer_context_menu import toggle_roi_statistic
+        from gui.image_viewer_item_context_menu import toggle_roi_statistic
         toggle_roi_statistic(self, roi, stat_name, checked)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:

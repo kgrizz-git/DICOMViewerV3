@@ -328,7 +328,7 @@ class TestMousePressEvent:
         v = _InputHarness()
         called: list[str] = []
         monkeypatch.setattr(
-            "gui.image_viewer_context_menu.handle_mouse_press_right_button",
+            "gui.image_viewer_item_context_menu.handle_mouse_press_right_button",
             lambda viewer, event: called.append("context"),
         )
         e = _make_real_mouse_event(button=Qt.MouseButton.RightButton)
