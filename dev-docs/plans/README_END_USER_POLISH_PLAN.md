@@ -1,8 +1,8 @@
 # README end-user polish plan
 
 **Date:** 2026-08-20  
-**Status:** Complete
-**Last updated:** 2026-08-24
+**Status:** Complete (follow-up gallery expansion 2026-08-25; fusion/slab shots still open in TO_DO)
+**Last updated:** 2026-08-25
 **Priority:** P3 (docs / first impression)  
 **Branch suggestion:** `docs/readme-end-user-polish`  
 **Related:** [`README.md`](../../README.md), [`user-docs/USER_GUIDE.md`](../../user-docs/USER_GUIDE.md), [`dev-docs/CONTRIBUTING.md`](../CONTRIBUTING.md), [`AGENTS.md`](../../AGENTS.md)

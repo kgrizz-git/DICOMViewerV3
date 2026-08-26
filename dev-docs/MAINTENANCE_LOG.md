@@ -1,8 +1,17 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-08-25
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-25
+
+- **README feature gallery + approved-media update:** Expanded root `README.md`
+  Highlights and added a constrained-width gallery (ROI/MPR hero, 3D,
+  annotation customization, histogram, tag editor, tag export, automated QA
+  menu). Resized PNGs under `resources/readme-screenshots/` and refreshed their
+  SHA-256 pins in `security/approved-media-sha256.json`. Fusion and slab/MIP
+  screenshot follow-up tracked in `TO_DO.md`.
 
 ## 2026-08-24
 
