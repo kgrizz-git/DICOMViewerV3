@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-08-25
 
 ---
 
@@ -256,6 +256,7 @@ Moved to [`COMPETITIVE_FEATURE_BACKLOG.md`](COMPETITIVE_FEATURE_BACKLOG.md) (46 
 
 ## Documentation
 
+- [ ] **[P2]** **README feature screenshots — fusion and slab/MIP:** capture PHI-reviewed QC-phantom screenshots of (1) PET/SPECT–CT or MR fusion with opacity/alignment controls visible and (2) slab / intensity projection (AIP, MIP, or MinIP) in the multi-pane or MPR workspace; resize for README display, admit hashes in [`security/approved-media-sha256.json`](../security/approved-media-sha256.json), and add them to the root [`README.md`](../README.md) feature gallery. Text already mentions fusion and slab projections; images are the gap. Surfaced 2026-08-25.
 - [ ] **[P1]** **User-facing documentation — completeness, navigability, and discoverability:** improve end-user docs under [`user-docs/`](../user-docs/) so shipped features are covered, easy to find, and linked from obvious entry points. **Completeness:** close gaps vs current UI (menus, shortcuts, Settings, study index, fusion, 3D, SR, export, QA); keep topic guides (`USER_GUIDE.md`, `USER_GUIDE_MPR.md`, `USER_GUIDE_3D.md`, `USER_GUIDE_QA_PYLINAC.md`, `CONFIGURATION.md`, etc.) aligned when features change. **Navigability:** clear hub/TOC, consistent headings, cross-links between hub and topic guides, working in-app **Help** paths where they exist. **Discoverability:** surface docs from the app (Help menu, 3D **Help…**, About/links), bundled Quick Guide parity, and searchable structure; run `python scripts/check_user_docs_links.py` after edits. **Partial:** Phases 1–3 of [DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md) shipped; ongoing drift and missing topics remain. **Related:** structure/discoverability item below, documentation audit, offline bundle, [doc-assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md).
 - [ ] **[P1]** Documentation structure, Quick Guide alignment, settings reference, and discoverability — **Partial:** [DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md) Phases 1–3 complete; keep aligned as features ship. ([assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md)).
 - [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date. — **Partial:** harness + topic guides exist; `scripts/check_doc_feature_coverage.py` now gives an automated feature→doc gap report (menu/`QAction` labels vs `user-docs/` mentions, ~70% covered at last run). Remaining: triage the candidate-gap list and document or consciously skip each item.
