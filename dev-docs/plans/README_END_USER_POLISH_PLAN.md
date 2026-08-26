@@ -20,34 +20,54 @@ The current README opens with a solid product blurb, then mixes packaged-release
 Aim for roughly this order and length:
 
 1. **Title + one short paragraph** — what it is, platforms, who it is for (local study review; not a PACS server pitch).
-2. **Hero screenshot(s)** — one primary product image near the top (optional second for a key workflow). Keep the caption short; do not turn the README into a gallery.
+2. **Hero screenshot** — one primary product image near the top, constrained display width, short caption.
 3. **Get the app** — packaged release first (download + Help → Quick Start / Documentation). One or two sentences only.
 4. **What you can do** — compact capability list or small table (viewing, tools, export, optional QA). No dependency deep-dives.
-5. **Docs for users** — links to user guide, configuration, changelog.
-6. **Run from source** (later / secondary) — short “for developers and contributors” section: launcher names, link to `DEVELOPER_SETUP` / `CONTRIBUTING` for Python/venv detail instead of duplicating long install blocks.
-7. **Contributing / project layout** — brief, at the bottom; point to `dev-docs/` rather than restating architecture.
+5. **Feature gallery** (optional follow-up) — a small, captioned set of additional screenshots so distinct workflows are visible without turning the README into a second user guide. Prefer HTML width constraints over full-bleed assets.
+6. **Docs for users** — links to user guide, configuration, changelog.
+7. **Run from source** (later / secondary) — short “for developers and contributors” section: launcher names, link to `DEVELOPER_SETUP` / `CONTRIBUTING` for Python/venv detail instead of duplicating long install blocks.
+8. **Contributing / project layout** — brief, at the bottom; point to `dev-docs/` rather than restating architecture.
+
+> **Superseded (v1 polish, 2026-08-20):** the original draft capped README images at
+> **1–2** and treated a multi-image gallery as a non-goal. That guidance applied
+> to the first end-user rewrite only.
 
 ## Screenshots (human-owned)
 
 Agents can wire Markdown and folder layout, but **capture, visual PHI review, and approved-media admission are human steps**. Do not invent or commit clinical-looking bitmaps without that review.
 
-Suggested set (keep small):
+### Shipped set (2026-08-24 / 2026-08-25)
 
 | Asset | Purpose |
 | --- | --- |
-| Main viewer (1×1 or 2×2) | Primary README hero — study open, overlays readable, no clutter |
-| Optional: MPR or fusion | One secondary image only if it earns its place |
+| `mpr-roi-workspace.png` | Hero — multi-pane ROI / MPR / cine / tag sidebar |
+| `three-dimensional-volume-rendering.png` | Optional 3D volume rendering |
+| `annotation-customization.png` | ROI / measurement / annotation appearance settings |
+| `pixel-histogram.png` | Pixel-value histogram with viewer chrome |
+| `dicom-tag-editor.png` | Tag viewer / editor dialog |
+| `export-dicom-tags.png` | Tag export dialog |
+| `automated-qa-menu.png` | Automated ACR CT / MRI / NM QC (pylinac) menu |
 
-Rules:
+Seven approved screenshots total (one hero + six gallery tiles), resized for
+display and hash-pinned under `resources/readme-screenshots/`.
 
-- Use **wholly synthetic studies from approved demo fixtures** only. Never real
-  patient pixels, real clinical studies, or burned-in identifiers. After human
-  visual PHI review, record the approved asset hash in
+### Still open
+
+- Fusion and slab / intensity-projection (AIP, MIP, MinIP) screenshots — tracked
+  in [`TO_DO.md`](../TO_DO.md) (**README feature screenshots — fusion and
+  slab/MIP**). Text already mentions those capabilities; images are the gap.
+
+Rules (still in force):
+
+- Use **wholly synthetic / QC-phantom studies** only. Never real patient pixels,
+  real clinical studies, or burned-in identifiers. After human visual PHI
+  review, record the approved asset hash in
   [`security/approved-media-sha256.json`](../../security/approved-media-sha256.json).
 - Prefer a dark or light theme that matches current UI; crop chrome that adds noise.
 - Draft locally under gitignored `resources/screenshots-ignored/` (or `tmp/`) until review is done.
 - Before committing tracked images (e.g. under `resources/` or `docs/media/`), follow [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md): human visual review (+ OCR if useful), then update the approved-media manifest. A clean advisory scanner is not permission to update the manifest.
-- Cap at **1–2** images in the README so the page stays short.
+- Keep the gallery curated: each image must earn a distinct feature story;
+  constrain display width; do not dump every candidate from a capture folder.
 
 Checklist additions for screenshots:
 
@@ -55,6 +75,9 @@ Checklist additions for screenshots:
 - [x] Confirm no PHI / PII / local paths / identifiable anatomy context in pixels or window chrome.
 - [x] Choose final path + filenames; embed only after manifest update.
 - [x] Add short alt text / captions in the README.
+- [x] **2026-08-25 gallery expansion:** seven constrained-width screenshots in
+      README (hero + feature gallery); hashes in approved-media manifest.
+- [ ] Fusion + slab/MIP gallery shots (see TO_DO).
 
 ## Non-goals
 
@@ -62,7 +85,9 @@ Checklist additions for screenshots:
 - Moving or rewriting the full user-docs tree in this pass.
 - Changing launcher behavior (handled separately: prefer `.venv`).
 - Marketing fluff, badges walls, or long technology-stack essays upfront.
-- A large screenshot gallery or animated media in v1 of this polish.
+- Animated media, or an unbounded screenshot dump.
+- ~~A large screenshot gallery in v1 of this polish~~ — **superseded 2026-08-25**
+  by the shipped seven-image hero + feature gallery (still curated, not open-ended).
 
 ## Principles
 
@@ -84,7 +109,10 @@ Checklist additions for screenshots:
 - [x] Run `python scripts/check_user_docs_links.py` after edits (covers
       `user-docs/`, root `README.md`, and `dev-docs/README.md`).
 - [x] Changelog entry (docs-only; patch note) when the rewrite lands.
-- [x] **Human-reviewed screenshots:** selected a synthetic multi-pane/MPR workflow and a synthetic 3D workflow, recorded their exact hashes in `security/approved-media-sha256.json`, and embedded them with concise alt text/captions. — 2026-08-24
+- [x] **Human-reviewed screenshots:** initial synthetic multi-pane/MPR and 3D
+      workflows (2026-08-24), then seven-image hero + feature gallery
+      (2026-08-25); hashes in `security/approved-media-sha256.json` with
+      concise alt text/captions. Fusion/slab shots remain open in TO_DO.
 
 ## Success criteria
 
