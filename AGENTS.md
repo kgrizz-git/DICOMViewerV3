@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-26
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -120,6 +120,6 @@ Workflows on **main** / **develop**: tests, Semgrep, Grype, debug flags, user-do
 
 ## View and display (agent-relevant defaults)
 
-- **Image smoothing:** off by default; View menu + context menu; persisted.
+- **Image smoothing:** on by default for new or missing configs; View menu + context menu; persisted. During zoom/pan the image uses fast scaling, then smooths after a short idle delay.
 - **Panes / navigator:** View menu + context menu; **N** toggles series navigator.
 - **Multi-window:** 1×1 focused; 1×2 / 2×1 by row/column; double-click expand/revert; **Swap** in 2×2 only.

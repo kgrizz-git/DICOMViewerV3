@@ -686,7 +686,7 @@ class TestToggleStatistic:
         v = _InputHarness()
         called: list = []
         monkeypatch.setattr(
-            "gui.image_viewer_context_menu.toggle_roi_statistic",
+            "gui.image_viewer_item_context_menu.toggle_roi_statistic",
             lambda viewer, roi, stat, checked: called.append((roi, stat, checked)),
         )
         v._toggle_statistic("roi", "mean", True)

@@ -1,6 +1,6 @@
 # Configuration and preferences
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-08-26
 
 This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features).
 
@@ -86,6 +86,12 @@ For key-level detail, developers can inspect **`src/utils/config_manager.py`** (
 ## View menu and related dialogs
 
 Many visual and interaction options open dedicated dialogs (persisted in config). Use the **View** menu and image **right-click** menus in the running app; narrative documentation is in **[USER_GUIDE.md](USER_GUIDE.md)** (for example corner overlays, themes, layout, scroll-wheel mode).
+
+### Image smoothing
+
+**View → Image Smoothing** (also available from the image right-click menu) is enabled by default for a new profile or when an older profile has no saved smoothing preference. Your choice is then saved between launches.
+
+Smoothing affects the on-screen image when it is scaled. While you are actively zooming or panning, the viewer temporarily uses fast, blocky scaling for responsiveness; after a brief idle delay (about 300 ms), it returns to smooth scaling when the option is enabled. It does not modify the source DICOM data.
 
 The in-window slice/frame slider is controlled from **View → In-Window Slice/Frame Slider**. Use **Show In-Window Slice/Frame Slider** to show or hide it, then use **Placement** and **Direction** to choose the edge and whether the first slice/frame appears at the left/bottom edge or the right/top edge.
 
