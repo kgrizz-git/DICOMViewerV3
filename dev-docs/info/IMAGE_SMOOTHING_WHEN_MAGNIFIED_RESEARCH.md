@@ -146,7 +146,7 @@ If the pipeline ever draws by first resizing a **PIL Image** or numpy array and 
 
 The approach recommended in this document has been implemented. Implementation covers:
 
-- **Config**: Persisted setting `smooth_image_when_zoomed` (default off), with get/set API.
+- **Config**: Persisted setting `smooth_image_when_zoomed`, enabled by default for new or missing configs while preserving a user's saved off setting, with get/set API.
 - **Two-tier behavior**: When smoothing is on, the view uses fast transformation during zoom/pan/scroll and smooth transformation after an idle delay (~300 ms); when off, always fast.
 - **UI**: Checkable "Smooth when zoomed" in the View menu and in the image viewer context menu; state synced across all subwindows and persisted.
 - **Magnifier**: Uses the same setting when scaling the extracted region (smooth vs fast).

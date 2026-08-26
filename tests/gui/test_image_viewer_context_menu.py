@@ -317,6 +317,7 @@ def test_show_image_background_context_menu_on_right_release_builds_full_menu(mo
     assert "Combine Slices…" in submenu_labels
     assert "Scroll Wheel Mode" in submenu_labels
     assert "Slice Sync" in submenu_labels
+    assert "does not modify DICOM data" in _require_action(root, "Image Smoothing").tooltip
 
     assign_menu = _require_submenu(root, "Assign Series to Focused Window")
     assert [action.text for action in assign_menu.actions] == ["Series 1"]

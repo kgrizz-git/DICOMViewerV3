@@ -512,10 +512,8 @@ def _add_display_section(viewer: Any, context_menu: QMenu) -> None:
     """Overlay/privacy/smoothing/markers/labels/slice-sync/location-lines/panes."""
     # ── Display ───────────────────────────────────────────────────────
     context_menu.addSeparator()
-
     toggle_overlay_action = context_menu.addAction("Toggle Overlay Detail (Space)")
     toggle_overlay_action.triggered.connect(viewer.toggle_overlay_requested.emit)
-
     privacy_view_action = context_menu.addAction("Privacy View (Ctrl+P)")
     privacy_view_action.setCheckable(True)
     privacy_view_action.setChecked(viewer._privacy_view_enabled)
@@ -523,9 +521,11 @@ def _add_display_section(viewer: Any, context_menu: QMenu) -> None:
 
     smooth_when_zoomed_action = context_menu.addAction("Image Smoothing")
     smooth_when_zoomed_action.setCheckable(True)
+    smooth_when_zoomed_action.setToolTip(
+        "Smooths the displayed image after zooming or panning stops; does not modify DICOM data."
+    )
     smooth_when_zoomed_action.setChecked(viewer._smooth_when_zoomed)
     smooth_when_zoomed_action.triggered.connect(lambda checked: viewer.smooth_when_zoomed_toggled.emit(checked))
-
     scale_markers_action = context_menu.addAction("Show Scale Markers")
     scale_markers_action.setCheckable(True)
     scale_markers_action.setChecked(viewer._show_scale_markers)
