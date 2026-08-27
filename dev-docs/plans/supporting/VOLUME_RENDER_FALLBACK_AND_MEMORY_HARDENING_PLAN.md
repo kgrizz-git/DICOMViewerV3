@@ -1,7 +1,8 @@
 # Plan: Fix the blank-frame GPU-fallback false positive and the volume build memory amplification
 
 **Date:** 2026-08-22
-**Status:** Supporting — both defects confirmed by measurement, implementation not started
+**Last updated:** 2026-08-26
+**Status:** Supporting — implementation complete; native-GPU/Parallels manual verification remains
 **Priority:** P1 (Task A — silent quality degradation), P2 (Task B — memory)
 **Area:** 3D Volume Rendering — renderer correctness and build-path memory
 **Branch suggestion:** `fix/volume-render-fallback-and-memory`
@@ -52,7 +53,7 @@ Any bone-free CT (QC phantoms, water phantoms, pure soft-tissue crops) hits this
 Do not treat "black frame" as sufficient evidence. Establish whether a non-blank frame was
 even *expected* before concluding failure.
 
-- [ ] **Step 1:** Add a pure helper — `frame_expected_nonblank(opacity_tf, occupancy) -> bool`.
+- [x] **Step 1:** Add a pure helper — `frame_expected_nonblank(opacity_tf, occupancy) -> bool`.
       **Evaluate opacity against values the volume actually contains, not the scalar range
       alone:** a range endpoint pair says nothing about which values are populated, so a
       transfer function that is opaque only in a band with *no voxels* would be wrongly
@@ -69,22 +70,22 @@ even *expected* before concluding failure.
       it in `src/core/volume_render_quality.py` (VTK-free, unit-testable) or a sibling pure
       module. Computing the histogram on the background build thread avoids a GUI-thread
       cost; note the volume can be large.
-- [ ] **Step 2:** Return a **three-way outcome** from `check_gpu_fallback()`, not a bool:
+- [x] **Step 2:** Return a **three-way outcome** from `check_gpu_fallback()`, not a bool:
       `FELL_BACK` / `GPU_OK_VISIBLE` / `EXPECTED_BLANK`. A bare `False` collapses "the GPU
       rendered fine" and "nothing was supposed to be visible", which are different states
       and need different UI and refinement rules. On `EXPECTED_BLANK`, do not switch to CPU
       — the render is correct and there is nothing to fall back from.
-- [ ] **Step 3:** Do **not** latch `_gpu_fallback_done` on `EXPECTED_BLANK`, so a later
+- [x] **Step 3:** Do **not** latch `_gpu_fallback_done` on `EXPECTED_BLANK`, so a later
       preset change can still probe once for a genuine GPU failure.
-- [ ] **Step 4:** Drive `run_first_preview()` from the outcome: suppress auto-refine only
+- [x] **Step 4:** Drive `run_first_preview()` from the outcome: suppress auto-refine only
       on `FELL_BACK`. **Keep the existing elapsed-time suppression** for a slow but visible
       preview — that gate is independent of blankness and must not be lost. On
       `EXPECTED_BLANK` a fast preview should refine normally.
-- [ ] **Step 5:** Consider a distinct, honest user message for the
+- [x] **Step 5:** Use a distinct, honest user message for the
       expected-blank case (e.g. "Nothing is visible with this preset — try CT Soft Tissue")
       instead of the hardware-performance warning. Keep it non-modal, reusing
       `set_render_feedback()`.
-- [ ] **Step 6:** Tests, with fixtures chosen so the two black-frame causes are actually
+- [x] **Step 6:** Tests, with fixtures chosen so the two black-frame causes are actually
       distinguishable:
       - all-transparent transfer function (bone-free phantom + CT Bone) → **no** fallback,
         detail not pinned, `EXPECTED_BLANK`;
@@ -103,6 +104,10 @@ even *expected* before concluding failure.
 - A bone-free CT phantom under CT Bone stays on the GPU path and keeps its Auto detail.
 - Real GPU failures on Parallels / virtual GPUs still fall back to CPU ray casting.
 - No user-facing message blames hardware for a transfer-function outcome.
+
+`EXPECTED_BLANK` probes are now transfer-function-dirty: unchanged blank frames return the
+cached classification without another GPU-to-CPU RGB readback; the next preset, W/L,
+threshold, or opacity change causes exactly one fresh probe.
 
 ---
 
@@ -144,8 +149,8 @@ render-status readout.
 
 ### Fix
 
-- [ ] **Step 1:** Eliminate the `_calibrate_volume_array()` copy. The array it receives was
-      just created by `ascontiguousarray(..., dtype=np.float32)` and is uniquely owned, so
+- [x] **Step 1:** Eliminate the `_calibrate_volume_array()` copy. The array it receives is
+      a fresh, explicitly owned float32 copy made from the selected SimpleITK view, so
       per-slice rescale can be applied **in place**. Guard this with an explicit ownership
       contract: `prepare_volume_data()` must document that it hands over a fresh, owned
       array, and `_calibrate_volume_array()` must assert `arr.flags.owndata` before
@@ -155,16 +160,16 @@ render-status readout.
       pass, and only mutate once all inputs are known good. Preserve the existing
       early-return semantics exactly (mixed units, non-finite slope/intercept, zero slope →
       fall back to raw, **unmutated**).
-- [ ] **Step 2:** Drop the `numpy_to_vtk(deep=True)` copy in favour of `deep=False`,
+- [x] **Step 2:** Drop the `numpy_to_vtk(deep=True)` copy in favour of `deep=False`,
       retaining a strong reference to the backing numpy array for the lifetime of the
       `vtkImageData`. **This is the riskiest step** — a dangling reference is a
       use-after-free, not a wrong picture. Store the array on the renderer alongside
       `_vtk_image`, clear both together in `cleanup()`, and add a test that renders after
       dropping every other reference to `VolumeData`.
-- [ ] **Step 3:** Release the int16 intermediate and the `sitk_image` as soon as the
+- [x] **Step 3:** Release the int16 intermediate and the `sitk_image` as soon as the
       float32 array exists, where `MprVolume`'s other consumers permit it. Audit
       `MprVolume.sitk_image` users before changing retention.
-- [ ] **Step 4:** Add a real memory guard: estimate the peak requirement up front (reuse
+- [x] **Step 4:** Add a real memory guard: estimate the peak requirement up front (reuse
       `estimate_volume_megabytes()`), and above a threshold either downsample by an integer
       factor or refuse with an actionable message. This closes the `TO_DO.md:217` P2 item.
       **Decide before allocating.** The estimate must be computed from the *source*
@@ -183,23 +188,40 @@ render-status readout.
       sampling convention, `origin`), so `VolumeData.spacing`/`origin`/`direction` must be
       recomputed and volume bounds plus crop-box placement re-derived. Shrinking only the
       voxel array would silently rescale the anatomy and break measurements in physical
-      coordinates.
-- [ ] **Step 5:** Re-measure with the same `ru_maxrss` harness and record before/after in
+      coordinates. **Decision (2026-08-26):** automatically downsample. The pure policy
+      uses `min(2.5 GiB, 20% of currently available RAM)`, with a 512 MiB conservative
+      floor when availability cannot be detected. It counts unchanged source buffers plus
+      the renderer and possible smoothing buffer, picks the smallest fitting uniform
+      integer factor, and reports the factor in the dialog and Advanced status.
+- [x] **Step 5:** Re-measure with the same `ru_maxrss` harness and record before/after in
       this plan. Target: **at most one full-size float32 buffer live at peak** (~838 MB for
       the fixture), which is what the "under ~1.5 GB peak RSS" success criterion below
       implies once the int16 source and interpreter overhead are counted. The earlier
       "≤ 2 buffers" wording was inconsistent with that number. **Measure both** display
       smoothing off and sigma > 0, since the latter is the true worst case.
-- [ ] **Step 6:** Tests — in-place calibration correctness vs. the current copy-based
+
+      **2026-08-26 synthetic measurement** (zero-valued `sitk.Image`, 512×512×800
+      float32, macOS `ru_maxrss`; guard chose factor 2):
+
+      ```text
+      source: 1033 MiB
+      after prepare_volume_data: 1135 MiB
+      after shallow VTK attach: 1137 MiB
+      after display smoothing at sigma 1.0: 1438 MiB
+      historical pre-fix baseline after prepare/attach: 3274–3276 MiB
+      ```
+
+      This is below the ~1.5 GiB target.
+- [x] **Step 6:** Tests — in-place calibration correctness vs. the current copy-based
       result (bit-identical on a fixture); `deep=False` lifetime safety; downsample
       threshold policy as a pure unit test; existing rescale fall-back paths unchanged.
 
 ### Success criteria
 
-- Peak RSS for the 800-slice fixture drops from ~3.3 GB to under ~1.5 GB.
-- Calibrated voxel values are bit-identical to today's output.
-- Oversized volumes downsample or refuse with a clear message rather than swap-thrashing.
-- No use-after-free under `deep=False` (test renders with all other references dropped).
+- [x] Peak RSS for the 800-slice fixture drops from ~3.3 GB to under ~1.5 GB.
+- [x] Calibrated voxel values are bit-identical to today's output.
+- [x] Oversized volumes downsample or refuse with a clear message rather than swap-thrashing.
+- [x] No use-after-free under `deep=False` (test renders with all other references dropped).
 
 ---
 
@@ -231,8 +253,11 @@ render-status readout.
 
 ## Verification gate
 
-- [ ] Bone-free CT phantom + CT Bone preset: GPU path retained, Auto detail retained,
+- [x] Bone-free CT phantom + CT Bone preset: GPU path retained, Auto detail retained,
       no hardware-blaming message.
 - [ ] Windows under Parallels: genuine blank-frame GPU failure still falls back to CPU.
-- [ ] 800-slice fixture: before/after peak RSS recorded here.
-- [ ] Full pytest suite green.
+- [x] 800-slice fixture: before/after peak RSS recorded here.
+- [x] Serial non-native pytest scope green (2026-08-26, exit 0; native VTK GUI
+      modules are excluded because this sandbox cannot create a macOS Cocoa
+      OpenGL context).
+- [x] Basic native-macOS 3D-view smoke (user-confirmed 2026-08-26).

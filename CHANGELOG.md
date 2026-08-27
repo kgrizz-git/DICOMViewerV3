@@ -70,6 +70,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   versioning note: patch.**
 
 ### Fixed
+- **3D volume blank-frame and memory handling:** A legitimately empty 3D view
+  (for example CT Bone on a bone-free scan) now remains on the GPU path instead
+  of being misclassified as a GPU failure and locked to Fast CPU rendering.
+  Genuine blank-frame failures still fall back safely. Very large volumes now
+  automatically downsample before their renderer array is allocated using a
+  budget based on available RAM (20%, capped at 2.5 GiB); the 3D dialog and
+  Advanced status clearly disclose the factor and preserved physical scale.
+  **Semantic versioning note: patch.**
 - **PySide6 6.11.2 tree typing (CI):** Fresh CI installs can resolve
   PySide6 6.11.2, whose stubs type ``QTreeWidgetItem.child()`` and
   ``parent()`` as optional. Export and metadata tree walks now use a shared

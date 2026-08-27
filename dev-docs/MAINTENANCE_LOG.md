@@ -1,8 +1,25 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-25
+**Last updated:** 2026-08-27
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-26
+
+- **3D volume fallback and memory hardening:** Replaced the blank-frame
+  boolean with a transfer-function/occupancy-aware three-way outcome, keeping
+  legitimately blank CT Bone views on GPU while retaining real CPU fallback.
+  Expected-blank probes are transfer-function-dirty rather than reading back
+  the framebuffer every render. Eliminated calibration and VTK deep copies,
+  retained the shallow VTK NumPy backing safely, and added a pre-allocation
+  uniform downsampling guard based on available RAM (20%, capped at 2.5 GiB).
+  It preserves patient-space geometry and visibly reports its factor. Synthetic
+  512×512×800 measurement with smoothing: 1438 MiB peak RSS (baseline
+  3274–3276 MiB). The focused 68-test suite and the serial non-native pytest
+  scope both passed (the latter exited 0). A basic native-macOS 3D-view smoke
+  was user-confirmed; Windows/Parallels GPU-fallback checks remain tracked in
+  the supporting plan because the sandbox cannot create a macOS Cocoa OpenGL
+  context.
 
 ## 2026-08-25
 
