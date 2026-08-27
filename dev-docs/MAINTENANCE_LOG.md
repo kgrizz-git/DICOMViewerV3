@@ -1,6 +1,6 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-27
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 

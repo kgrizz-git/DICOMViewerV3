@@ -427,6 +427,13 @@ def test_tag_and_vr_columns_use_monospace_family(qapp) -> None:
     assert row.font(2).families() == mono.families()
 
 
+def test_metadata_tag_mono_font_preserves_pixel_size(qapp) -> None:
+    base = QFont()
+    base.setPixelSize(14)
+
+    assert metadata_tag_mono_font(base).pixelSize() == 14
+
+
 def test_empty_value_uses_disabled_foreground(qapp) -> None:
     panel = MetadataPanel()
     panel.set_dataset(_dataset_with_empty_value_tag())

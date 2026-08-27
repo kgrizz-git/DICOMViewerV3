@@ -123,8 +123,9 @@ def should_auto_refine(*, preview_elapsed_ms: float, gpu_fallback_used: bool) ->
 def default_render_budget_bytes(available_bytes: int) -> int:
     """Return the render budget for a given amount of available RAM.
 
-    Policy: ``min(2.5 GiB, 20% of available)``, clamped to a 512 MiB floor.
-    Pure and deterministic — the caller is responsible for supplying the
+    Policy: ``min(2.5 GiB, 20% of available)``, clamped to a 512 MiB floor
+    only when availability is unknown. A known positive value below that floor
+    is never exceeded. Pure and deterministic — the caller is responsible for supplying the
     platform's "available RAM" number (e.g. from ``os.sysconf``/``GlobalMemoryStatusEx``
     or ``psutil``), keeping this helper free of any OS probing.
     """
@@ -134,7 +135,7 @@ def default_render_budget_bytes(available_bytes: int) -> int:
     if budget > MAX_BUDGET_BYTES:
         budget = MAX_BUDGET_BYTES
     if budget < MIN_DOWNSAMPLE_BUDGET_BYTES:
-        budget = MIN_DOWNSAMPLE_BUDGET_BYTES
+        budget = min(MIN_DOWNSAMPLE_BUDGET_BYTES, available_bytes)
     return budget
 
 

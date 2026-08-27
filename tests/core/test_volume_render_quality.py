@@ -235,9 +235,10 @@ def test_budget_under_cap_uses_fraction() -> None:
     assert default_render_budget_bytes(int(4 * GIBIBYTE)) == expected
 
 
-def test_budget_never_below_minimum() -> None:
-    # 100 MiB available → 20% = 20 MiB, clamped up to the 512 MiB floor.
-    assert default_render_budget_bytes(100 * MEBIBYTE) == MIN_DOWNSAMPLE_BUDGET_BYTES
+def test_budget_never_exceeds_known_available_memory() -> None:
+    # 100 MiB available → 20% = 20 MiB, but the 512 MiB fallback floor must
+    # not claim more memory than the OS reported as available.
+    assert default_render_budget_bytes(100 * MEBIBYTE) == 100 * MEBIBYTE
 
 
 def test_budget_zero_or_negative_available_falls_back_to_minimum() -> None:

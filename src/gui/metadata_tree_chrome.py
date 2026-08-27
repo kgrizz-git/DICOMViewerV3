@@ -82,7 +82,9 @@ _FILTER_HIGHLIGHT_CACHE_MAX = 256
 def metadata_tag_mono_font(base: QFont) -> QFont:
     """Return the platform's installed fixed-width font for Tag and VR columns."""
     font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-    if base.pointSizeF() > 0:
+    if base.pixelSize() > 0:
+        font.setPixelSize(base.pixelSize())
+    elif base.pointSizeF() > 0:
         font.setPointSizeF(base.pointSizeF())
     font.setWeight(base.weight())
     font.setItalic(base.italic())

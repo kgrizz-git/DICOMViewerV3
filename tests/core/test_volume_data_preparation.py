@@ -36,7 +36,7 @@ def test_volume_renderer_keeps_data_preparation_compatibility_facade() -> None:
 def test_volume_data_preparation_has_no_direct_vtk_import() -> None:
     """Preparation stays usable off the GUI/VTK thread and import boundary."""
     source = Path(volume_data_preparation.__file__).read_text(encoding="utf-8")
-    imports = ast.parse(source).body
+    imports = ast.walk(ast.parse(source))
     imported_modules = [
         alias.name
         for node in imports

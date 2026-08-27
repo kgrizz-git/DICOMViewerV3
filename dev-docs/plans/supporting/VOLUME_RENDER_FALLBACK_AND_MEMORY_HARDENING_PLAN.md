@@ -201,10 +201,17 @@ render-status readout.
       smoothing off and sigma > 0, since the latter is the true worst case.
 
       **2026-08-26 synthetic measurement** (zero-valued `sitk.Image`, 512×512×800
-      float32, macOS `ru_maxrss`; guard chose factor 2): source 1033 MiB; after
-      `prepare_volume_data` 1135 MiB; after shallow VTK attach 1137 MiB; after display
-      smoothing at sigma 1.0 1438 MiB. This is below the ~1.5 GiB target. The historical
-      pre-fix baseline on the same dimensions was 3274–3276 MiB after prepare/attach.
+      float32, macOS `ru_maxrss`; guard chose factor 2):
+
+      ```text
+      source: 1033 MiB
+      after prepare_volume_data: 1135 MiB
+      after shallow VTK attach: 1137 MiB
+      after display smoothing at sigma 1.0: 1438 MiB
+      historical pre-fix baseline after prepare/attach: 3274–3276 MiB
+      ```
+
+      This is below the ~1.5 GiB target.
 - [x] **Step 6:** Tests — in-place calibration correctness vs. the current copy-based
       result (bit-identical on a fixture); `deep=False` lifetime safety; downsample
       threshold policy as a pure unit test; existing rescale fall-back paths unchanged.
