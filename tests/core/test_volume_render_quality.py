@@ -308,6 +308,18 @@ def test_downsampled_size_uses_ceil_not_floor() -> None:
     assert forced >= 2
 
 
+def test_downsample_search_continues_through_temporary_ceil_plateau() -> None:
+    # Factors 10 and 11 both retain 10 voxels per axis, but factor 12 retains
+    # 9. The 10^3 candidate exceeds this tight known-memory budget while 9^3
+    # fits, so a search must continue beyond the temporary plateau.
+    assert compute_auto_downsample_factor(
+        (100, 100, 100),
+        available_bytes=800_000,
+        bytes_per_voxel=1_000,
+        overhead_factor=1.0,
+    ) == 12
+
+
 def test_anisotropic_volume_respects_min_dim() -> None:
     # Tall thin volume whose native peak (16*512*512*4*2 = 32 MiB) fits even
     # the 512 MiB floor budget — so factor 1 is returned and the thin axis is

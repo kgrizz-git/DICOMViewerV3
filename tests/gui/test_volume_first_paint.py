@@ -115,6 +115,9 @@ def test_expected_blank_preview_refines_without_hardware_warning(qapp) -> None:
     assert widget._refine_timer.isActive() is True
     assert "nothing is visible" in widget._render_feedback_label.text().lower()
 
+    refine_detail(widget)
+    assert "nothing is visible" in widget._render_feedback_label.text().lower()
+
 
 def test_interactive_gpu_fallback_updates_status_only_after_cpu_fallback() -> None:
     calls: list[object] = []
@@ -135,3 +138,25 @@ def test_interactive_gpu_fallback_updates_status_only_after_cpu_fallback() -> No
     check_interactive_gpu_fallback(widget)
 
     assert calls == [window, "status"]
+
+
+@pytest.mark.qt
+def test_visible_interactive_render_clears_expected_blank_guidance(qapp) -> None:
+    class _VisibleRenderer:
+        def check_gpu_fallback(self, _window) -> GpuFallbackOutcome:
+            return GpuFallbackOutcome.GPU_OK_VISIBLE
+
+    feedback = QLabel("Nothing is visible with this preset")
+    widget = SimpleNamespace(
+        _first_paint_complete=True,
+        _vtk_render_window=object(),
+        _renderer=_VisibleRenderer(),
+        _expected_blank_guidance=True,
+        _render_feedback_label=feedback,
+        _update_render_status=lambda: None,
+    )
+
+    check_interactive_gpu_fallback(widget)
+
+    assert widget._expected_blank_guidance is False
+    assert feedback.text() == ""

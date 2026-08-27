@@ -241,29 +241,21 @@ def compute_auto_downsample_factor(
     if native_peak + fixed_bytes <= budget:
         return 1
 
-    # Native does not fit. Walk upward and return on the *first* factor whose
-    # peak fits — that is the smallest factor that fits. Track the deepest
-    # reachable factor so that, if nothing fits even at min_dim, we return a
-    # best-effort maximum rather than the non-fitting 1.
-    factor = 1
-    best = 1
-    while True:
-        next_factor = factor + 1
-        candidate = _downsampled_dims(dims, next_factor, min_dim)
-        current = _downsampled_dims(dims, factor, min_dim)
-        if candidate == current:
-            # All dimensions clamped at min_dim — no further reduction.
-            break
+    # Native does not fit. Walk every possible factor until the largest source
+    # dimension reaches min_dim. Adjacent ceil-divided dimensions can plateau
+    # temporarily (for example ceil(100 / 10) == ceil(100 / 11)), so equality
+    # between candidates is not a safe termination condition.
+    max_factor = max(math.ceil(dimension / min_dim) for dimension in dims)
+    for factor in range(2, max_factor + 1):
+        candidate = _downsampled_dims(dims, factor, min_dim)
         candidate_peak = estimate_render_peak_bytes(
             candidate,
             bytes_per_voxel=bytes_per_voxel,
             overhead_factor=overhead_factor,
         )
         if candidate_peak + fixed_bytes <= budget:
-            return next_factor
-        factor = next_factor
-        best = next_factor
-    return best
+            return factor
+    return max_factor
 
 
 # ---------------------------------------------------------------------------
