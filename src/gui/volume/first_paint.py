@@ -97,8 +97,12 @@ def run_first_preview(widget: Any) -> None:
         widget._auto_refine_suppressed = True
         set_render_feedback(
             widget,
-            "3D preview shown at Fast detail. Higher Auto detail may be slow; "
-            "choose a detail level manually to apply it.",
+            _EXPECTED_BLANK_GUIDANCE
+            if widget._expected_blank_guidance
+            else (
+                "3D preview shown at Fast detail. Higher Auto detail may be slow; "
+                "choose a detail level manually to apply it."
+            ),
         )
 
 

@@ -119,6 +119,22 @@ def test_expected_blank_preview_refines_without_hardware_warning(qapp) -> None:
     assert "nothing is visible" in widget._render_feedback_label.text().lower()
 
 
+@pytest.mark.qt
+def test_slow_expected_blank_preview_keeps_preset_guidance(monkeypatch, qapp) -> None:
+    class _ExpectedBlankRenderer(_Renderer):
+        def check_gpu_fallback(self, _window, *, probe_quality=None) -> GpuFallbackOutcome:
+            assert probe_quality == "Fast"
+            return GpuFallbackOutcome.EXPECTED_BLANK
+
+    monkeypatch.setattr("gui.volume.first_paint.should_auto_refine", lambda **_kwargs: False)
+    widget = _widget(_ExpectedBlankRenderer(), _RenderWindow())
+
+    run_first_preview(widget)
+
+    assert widget._auto_refine_suppressed is True
+    assert "nothing is visible" in widget._render_feedback_label.text().lower()
+
+
 def test_interactive_gpu_fallback_updates_status_only_after_cpu_fallback() -> None:
     calls: list[object] = []
 
