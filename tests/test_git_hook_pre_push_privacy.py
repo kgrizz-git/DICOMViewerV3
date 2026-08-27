@@ -41,6 +41,11 @@ def _line(repo: Path, old_oid: str = ZERO_OID, ref: str = "refs/heads/main") -> 
     return f"{ref} {_git(repo, 'rev-parse', 'HEAD')} {ref} {old_oid}\n"
 
 
+def _deletion_line(repo: Path, ref: str = "refs/heads/retired-branch") -> str:
+    """Build Git's pre-push stdin representation of a branch deletion."""
+    return f"(delete) {ZERO_OID} {ref} {_git(repo, 'rev-parse', 'HEAD')}\n"
+
+
 def test_initial_push_zero_oid_covers_all_reachable_commits(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     first = _git(repo, "rev-parse", "HEAD")
@@ -59,6 +64,38 @@ def test_initial_push_zero_oid_covers_all_reachable_commits(tmp_path: Path) -> N
 def test_parse_updates_ignores_blank_records() -> None:
     """A no-op update stream has no metadata to inspect or block."""
     assert pre_push.parse_updates("\n\n") == ([], {})
+
+
+def test_deletion_update_validates_remote_ref_but_not_git_delete_marker(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+
+    assert pre_push.validate_push(repo, _deletion_line(repo)) == {}
+
+
+def test_deletion_update_blocks_sensitive_remote_ref_without_echoing_value(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    marker = "SentinelRef9876"
+    ref = f"refs/heads/mrn-{marker}"
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(_deletion_line(repo, ref)))
+
+    assert pre_push.main(["--root", str(repo)]) == 1
+    stderr = capsys.readouterr().err
+    assert "patient or study identifier in ref" in stderr
+    assert marker not in stderr
+
+
+def test_malformed_deletion_update_is_blocked(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    malformed = (
+        f"refs/heads/not-a-deletion {ZERO_OID} refs/heads/retired-branch "
+        f"{_git(repo, 'rev-parse', 'HEAD')}\n"
+    )
+
+    assert pre_push.validate_push(repo, malformed) == {"malformed deletion update": 1}
 
 
 def test_nonzero_base_checks_only_new_commits(tmp_path: Path) -> None:
