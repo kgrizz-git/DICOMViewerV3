@@ -31,7 +31,8 @@ import logging
 from typing import Any
 
 from pydicom.dataset import Dataset
-from PySide6.QtCore import QByteArray, Qt, QThread, Signal
+from PySide6.QtCore import QByteArray, QRect, QSize, Qt, QThread, Signal
+from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -42,10 +43,42 @@ from PySide6.QtWidgets import (
 )
 
 _SETTINGS_GEOMETRY_KEY = "volume_render_dialog/geometry"
+_INITIAL_DIALOG_SCREEN_WIDTH_FRACTION = 0.50
+_INITIAL_DIALOG_MIN_SIDE = 480
+_INITIAL_DIALOG_MAX_SIDE = 1440
 
 from utils.debug_flags import DEBUG_VOLUME_3D
 
 _log = logging.getLogger(__name__)
+
+
+def _initial_dialog_size_for_screen(available_geometry: QRect | None) -> QSize:
+    """Return a square first-launch size based on the selected screen's width."""
+    if (
+        available_geometry is None
+        or available_geometry.width() <= 0
+        or available_geometry.height() <= 0
+    ):
+        return QSize(800, 800)
+
+    side = min(
+        available_geometry.width(),
+        available_geometry.height(),
+        _INITIAL_DIALOG_MAX_SIDE,
+        max(
+            _INITIAL_DIALOG_MIN_SIDE,
+            round(available_geometry.width() * _INITIAL_DIALOG_SCREEN_WIDTH_FRACTION),
+        ),
+    )
+    return QSize(side, side)
+
+
+def _initial_dialog_size() -> QSize:
+    """Size a new top-level dialog for the screen under the pointer."""
+    screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+    return _initial_dialog_size_for_screen(
+        screen.availableGeometry() if screen is not None else None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -61,12 +94,15 @@ class _VolumeBuilderWorker(QThread):
     only needs to perform the fast VTK-attach step.
 
     Signals:
-        build_finished (object, object): Emitted with ``(MprVolume, VolumeData)``
-            on success.  Named to avoid shadowing ``QThread.finished``.
+        build_finished (object): Emitted with ``VolumeData`` on success.  The
+            temporary ``MprVolume`` is deliberately not retained after its
+            float32 renderer input has been prepared, releasing its separate
+            SimpleITK-backed source buffer before the VTK viewport opens.
+            Named to avoid shadowing ``QThread.finished``.
         error (str): Emitted with a human-readable error message on failure.
     """
 
-    build_finished = Signal(object, object)
+    build_finished = Signal(object)
     error = Signal(str)
 
     def __init__(self, datasets: list[Dataset]) -> None:
@@ -97,7 +133,10 @@ class _VolumeBuilderWorker(QThread):
             )
             if self._cancelled:
                 return
-            self.build_finished.emit(volume, volume_data)
+            # No MPR consumer shares this short-lived volume-render build.
+            # Emitting only VolumeData lets ``volume`` (and its sitk_image)
+            # be released as soon as this worker returns.
+            self.build_finished.emit(volume_data)
         except Exception:
             msg = "Failed to build 3D volume; details withheld"
             _log.error(msg)
@@ -146,8 +185,8 @@ class VolumeRenderDialog(QDialog):
         self.setModal(False)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
-        # Restore remembered geometry if available; otherwise use a sensible
-        # default that fits comfortably on a 1280\u00d7720 display.
+        # Restore remembered geometry if available; otherwise start square at
+        # half the active screen's width.
         restored = False
         if self._config_manager is not None and hasattr(
             self._config_manager, "get"
@@ -160,7 +199,7 @@ class VolumeRenderDialog(QDialog):
                 except Exception:
                     pass
         if not restored:
-            self.resize(900, 650)
+            self.resize(_initial_dialog_size())
 
         self._setup_ui()
         self._start_build()
@@ -217,7 +256,7 @@ class VolumeRenderDialog(QDialog):
             worker.wait()
         self._worker = None
 
-    def _on_build_finished(self, volume: Any, volume_data: Any) -> None:
+    def _on_build_finished(self, volume_data: Any) -> None:
         """Handle successful volume construction.
 
         ``volume_data`` is a :class:`VolumeData` prepared on the background
@@ -226,13 +265,32 @@ class VolumeRenderDialog(QDialog):
         """
         self._release_worker()
         if DEBUG_VOLUME_3D:
-            print(f"[DEBUG-VOLUME-3D] Volume build finished — sitk_image size: {volume.sitk_image.GetSize()}")
+            print(
+                "[DEBUG-VOLUME-3D] Volume build finished — "
+                f"array shape: {getattr(getattr(volume_data, 'array', None), 'shape', None)!r}"
+            )
 
         # Remove progress indicator.
         if self._progress_container is not None:
             self._progress_container.setParent(None)
             self._progress_container.deleteLater()
         self._progress_container = None
+
+        downsample_factor = max(
+            1, int(getattr(volume_data, "downsample_factor", 1))
+        )
+        if downsample_factor > 1:
+            downsample_notice = QLabel(
+                "Large-volume protection: this 3D view was downsampled "
+                f"{downsample_factor}× in each dimension to fit the available "
+                "memory budget. Physical scale is preserved; fine detail may be reduced.",
+                self,
+            )
+            downsample_notice.setStyleSheet(
+                "background-color: #665500; color: #FFD700; padding: 6px; font-size: 12px;"
+            )
+            downsample_notice.setWordWrap(True)
+            self._layout.addWidget(downsample_notice)
 
         # Show warning banner for non-spatial multiframe datasets.
         if self._datasets and hasattr(self._datasets[0], '_original_dataset'):

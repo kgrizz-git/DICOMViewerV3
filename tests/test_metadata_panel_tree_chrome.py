@@ -422,13 +422,9 @@ def test_tag_and_vr_columns_use_monospace_family(qapp) -> None:
     header.setExpanded(True)
     row = header.child(0)
     mono = metadata_tag_mono_font(panel.tree_widget.font())
-    expected = mono.families()[0].lower()
-    assert expected in row.font(0).family().lower() or row.font(0).families()[0].lower() in (
-        "consolas",
-        "menlo",
-        "monospace",
-    )
-    assert row.font(2).families()[0].lower() in ("consolas", "menlo", "monospace")
+    assert mono.families()
+    assert row.font(0).families() == mono.families()
+    assert row.font(2).families() == mono.families()
 
 
 def test_empty_value_uses_disabled_foreground(qapp) -> None:

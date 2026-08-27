@@ -29,6 +29,7 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QFontDatabase,
     QFontMetrics,
     QPainter,
     QPalette,
@@ -75,15 +76,16 @@ TIER_BAR_WIDTH = 3
 SEQUENCE_BAR_STRENGTH = 0.42
 ITEM_BAR_STRENGTH = 0.22
 
-MONO_FONT_FAMILIES = ("Consolas", "Menlo", "monospace")
-
 _FILTER_HIGHLIGHT_CACHE_MAX = 256
 
 
 def metadata_tag_mono_font(base: QFont) -> QFont:
-    """Return a platform monospace fallback for Tag and VR columns."""
-    font = QFont(base)
-    font.setFamilies(list(MONO_FONT_FAMILIES))
+    """Return the platform's installed fixed-width font for Tag and VR columns."""
+    font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    if base.pointSizeF() > 0:
+        font.setPointSizeF(base.pointSizeF())
+    font.setWeight(base.weight())
+    font.setItalic(base.italic())
     return font
 
 

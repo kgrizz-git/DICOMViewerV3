@@ -12,6 +12,7 @@ from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+import core.volume_data_preparation as volume_data_preparation
 from core.mpr_builder import MprBuilder
 from core.mpr_volume import MprVolume
 from core.volume_renderer import VolumeRenderer
@@ -219,3 +220,269 @@ def test_mpr_volume_remains_raw_and_mpr_rescale_still_applies_once() -> None:
     result = worker._build()
 
     np.testing.assert_allclose(result.apply_rescale(np.array([[1024.0]], dtype=np.float32)), [[0.0]])
+
+
+def test_prepare_volume_data_downsamples_view_before_float32_allocation(monkeypatch) -> None:
+    """The memory guard must stride the SimpleITK view before its owned copy.
+
+    In particular, calling ``GetArrayFromImage`` first would allocate a full
+    renderer-sized array before the guard had any effect.  This test makes that
+    old path raise and verifies both the retained voxels and physical geometry.
+    """
+    source = np.arange(3 * 4 * 6, dtype=np.int16).reshape(3, 4, 6)
+    calls: list[str] = []
+
+    class _Image:
+        def GetSize(self):
+            calls.append("size")
+            return (6, 4, 3)  # SimpleITK x, y, z order
+
+        def GetSpacing(self):
+            return (0.5, 1.5, 3.0)
+
+        def GetOrigin(self):
+            return (10.0, 20.0, 30.0)
+
+        def GetDirection(self):
+            return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+
+    class _Sitk:
+        @staticmethod
+        def GetArrayViewFromImage(_image):
+            assert calls == ["size"]
+            calls.append("view")
+            return source
+
+        @staticmethod
+        def GetArrayFromImage(_image):
+            raise AssertionError("memory guard must not copy the full source array")
+
+    monkeypatch.setattr(volume_data_preparation, "sitk", _Sitk)
+    monkeypatch.setattr(
+        volume_data_preparation,
+        "compute_auto_downsample_factor",
+        lambda *_args, **_kwargs: 2,
+    )
+    monkeypatch.setattr(
+        volume_data_preparation,
+        "_available_system_memory_bytes",
+        lambda: 8,
+    )
+
+    prepared = VolumeRenderer.prepare_volume_data(_Image())
+
+    np.testing.assert_array_equal(prepared.array, source[::2, ::2, ::2])
+    assert prepared.array.flags.owndata
+    assert prepared.array.flags.c_contiguous
+    assert prepared.source_dimensions == (6, 4, 3)
+    assert prepared.downsample_factor == 2
+    assert prepared.spacing == (1.0, 3.0, 6.0)
+    assert prepared.origin == (10.0, 20.0, 30.0)
+    assert prepared.direction == (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    assert prepared.estimated_peak_bytes is not None
+    assert calls == ["size", "view"]
+
+
+# ---------------------------------------------------------------------------
+# Task B Step 1 — in-place calibration ownership contract and fallback safety
+# ---------------------------------------------------------------------------
+
+def test_calibrate_volume_array_ownership_contract_asserts_owndata() -> None:
+    """_calibrate_volume_array must reject non-owned (view) arrays.
+
+    The early-return on ``not source_datasets`` fires before the asserts, so
+    we pass a matching-length dummy dataset list to reach the ownership check.
+    """
+    import pytest
+
+    arr = np.ones((2, 3, 3), dtype=np.float32)
+    view = arr[0:2]  # a view — owndata is False
+    assert not view.flags.owndata
+
+    from core.volume_renderer import _calibrate_volume_array
+
+    # Dummy datasets matching the slice count so we reach the asserts.
+    dummy_ds = [object() for _ in range(view.shape[0])]
+
+    with pytest.raises(AssertionError):
+        _calibrate_volume_array(view, source_datasets=dummy_ds)
+
+
+def test_calibrate_volume_array_ownership_contract_asserts_float32() -> None:
+    """_calibrate_volume_array must reject non-float32 arrays."""
+    import pytest
+
+    arr = np.ones((2, 3, 3), dtype=np.float64)  # owned but wrong dtype
+    assert arr.flags.owndata
+
+    from core.volume_renderer import _calibrate_volume_array
+
+    dummy_ds = [object() for _ in range(arr.shape[0])]
+
+    with pytest.raises(AssertionError):
+        _calibrate_volume_array(arr, source_datasets=dummy_ds)
+
+
+def test_calibrate_volume_array_mutates_in_place_no_extra_copy() -> None:
+    """In-place calibration must not allocate a second full-size float32 buffer."""
+    study_uid = generate_uid()
+    series_uid = generate_uid()
+    datasets = [
+        _make_ct_dataset(
+            np.full((4, 4), 1000, dtype=np.uint16),
+            z=float(i), slope=1.0, intercept=-1024.0,
+            instance_number=i + 1, study_uid=study_uid, series_uid=series_uid,
+        )
+        for i in range(3)
+    ]
+    volume = MprVolume.from_datasets(datasets)
+    vd = VolumeRenderer.prepare_volume_data(
+        volume.sitk_image,
+        source_datasets=volume.source_datasets,
+        apply_rescale=True,
+    )
+    # The returned array must be owned and contiguous — no lingering copy.
+    assert vd.array.flags.owndata
+    assert vd.array.flags.c_contiguous
+    assert vd.array.dtype == np.float32
+    assert vd.rescale_applied is True
+    np.testing.assert_allclose(vd.array[:, 0, 0], [-24.0, -24.0, -24.0])
+
+
+def test_calibrate_in_place_fallback_does_not_return_partial_mutation() -> None:
+    """When calibration would overflow float32, fallback returns raw unmutated.
+
+    The preflight overflow guard must catch the case *before* any slice is
+    mutated, so the returned array equals the original raw values exactly —
+    no partial mutation, no leftover inf.
+    """
+    study_uid = generate_uid()
+    series_uid = generate_uid()
+    # slope=1e38 * 65535 overflows float32 to inf.  The preflight bound
+    # (max(|lo|,|hi|) * |slope| + |intercept| >= f32_max) must catch this.
+    datasets = [
+        _make_ct_dataset(
+            np.full((2, 2), 65535, dtype=np.uint16),
+            z=float(i), slope=1e38, intercept=0.0,
+            instance_number=i + 1, study_uid=study_uid, series_uid=series_uid,
+        )
+        for i in range(3)
+    ]
+    volume = MprVolume.from_datasets(datasets)
+    raw_values = sitk.GetArrayFromImage(volume.sitk_image).copy()
+
+    vd = VolumeRenderer.prepare_volume_data(
+        volume.sitk_image,
+        source_datasets=volume.source_datasets,
+        apply_rescale=True,
+    )
+    assert vd.rescale_applied is False
+    assert vd.scalar_units is None
+    # The returned array must equal the original raw values — no partial
+    # mutation, no leftover inf.
+    np.testing.assert_allclose(vd.array, raw_values)
+    assert np.all(np.isfinite(vd.array))
+
+
+def test_calibrate_overflow_with_finite_raw_and_extreme_slope() -> None:
+    """Regression: finite raw values + extreme-but-finite slope → raw fallback.
+
+    Uses the largest finite float32 slope that still overflows when multiplied
+    by a realistic pixel value.  Guards against a regression where the overflow
+    guard is removed and the inverse-transform fallback silently returns inf.
+    """
+    study_uid = generate_uid()
+    series_uid = generate_uid()
+    # np.finfo(np.float32).max ≈ 3.4e38; slope just below that, times a
+    # realistic pixel value (4095), overflows to inf.
+    slope = np.finfo(np.float32).max / 2.0  # ~1.7e38, finite
+    datasets = [
+        _make_ct_dataset(
+            np.full((2, 2), 4095, dtype=np.uint16),
+            z=float(i), slope=float(slope), intercept=0.0,
+            instance_number=i + 1, study_uid=study_uid, series_uid=series_uid,
+        )
+        for i in range(3)
+    ]
+    volume = MprVolume.from_datasets(datasets)
+    raw_values = sitk.GetArrayFromImage(volume.sitk_image).copy()
+
+    vd = VolumeRenderer.prepare_volume_data(
+        volume.sitk_image,
+        source_datasets=volume.source_datasets,
+        apply_rescale=True,
+    )
+    assert vd.rescale_applied is False
+    assert vd.scalar_units is None
+    np.testing.assert_allclose(vd.array, raw_values)
+    assert np.all(np.isfinite(vd.array))
+
+
+def test_calibrate_preflight_catches_bad_slice_before_any_mutation() -> None:
+    """A bad slice must cause fallback before any slice is mutated.
+
+    The preflight pass validates every slice's metadata before mutation, so a
+    single bad slice (here: zero slope on slice 1) means *no* slice is touched.
+    """
+    study_uid = generate_uid()
+    series_uid = generate_uid()
+    datasets = [
+        _make_ct_dataset(
+            np.full((2, 2), 500, dtype=np.uint16),
+            z=0.0, slope=1.0, intercept=-1024.0,
+            instance_number=1, study_uid=study_uid, series_uid=series_uid,
+        ),
+        _make_ct_dataset(
+            np.full((2, 2), 500, dtype=np.uint16),
+            z=1.0, slope=0.0, intercept=0.0,  # zero slope → invalid
+            instance_number=2, study_uid=study_uid, series_uid=series_uid,
+        ),
+        _make_ct_dataset(
+            np.full((2, 2), 500, dtype=np.uint16),
+            z=2.0, slope=1.0, intercept=-1024.0,
+            instance_number=3, study_uid=study_uid, series_uid=series_uid,
+        ),
+    ]
+    volume = MprVolume.from_datasets(datasets)
+    raw_values = sitk.GetArrayFromImage(volume.sitk_image).copy()
+
+    vd = VolumeRenderer.prepare_volume_data(
+        volume.sitk_image,
+        source_datasets=volume.source_datasets,
+        apply_rescale=True,
+    )
+    assert vd.rescale_applied is False
+    # No slice should have been mutated — the returned array equals raw.
+    np.testing.assert_allclose(vd.array, raw_values)
+
+
+def test_calibrate_values_bit_identical_to_legacy_copy_path() -> None:
+    """In-place calibration must produce bit-identical values to the old copy path.
+
+    This guards against regressions: the mathematical result must be identical
+    whether we mutate in place or copy-then-mutate.
+    """
+    study_uid = generate_uid()
+    series_uid = generate_uid()
+    datasets = [
+        _make_ct_dataset(
+            np.full((3, 3), 1024 + i * 50, dtype=np.uint16),
+            z=float(i), slope=1.5, intercept=-200.0,
+            instance_number=i + 1, study_uid=study_uid, series_uid=series_uid,
+        )
+        for i in range(4)
+    ]
+    volume = MprVolume.from_datasets(datasets)
+    raw = sitk.GetArrayFromImage(volume.sitk_image)
+
+    vd = VolumeRenderer.prepare_volume_data(
+        volume.sitk_image,
+        source_datasets=volume.source_datasets,
+        apply_rescale=True,
+    )
+    assert vd.rescale_applied is True
+    # Match the previous copy-then-mutate path operation for operation.
+    expected = np.ascontiguousarray(raw, dtype=np.float32).copy()
+    for z_index in range(expected.shape[0]):
+        expected[z_index] = expected[z_index] * 1.5 + (-200.0)
+    np.testing.assert_array_equal(vd.array, expected)

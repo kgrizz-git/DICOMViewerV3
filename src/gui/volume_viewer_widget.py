@@ -92,11 +92,13 @@ from gui.volume.first_paint import (
     apply_interaction_detail,
     build_render_feedback_label,
     cancel_pending_refine,
+    render_interactive_frame,
     schedule_first_preview,
     setup_first_paint_state,
     stop_first_paint_timers,
 )
 from gui.volume.overlay_text import build_overlay_text
+from gui.volume.render_status import memory_guard_status_lines
 from gui.volume.shortcuts import handle_shortcut
 from utils.debug_flags import DEBUG_VOLUME_3D
 from utils.doc_urls import user_doc_url
@@ -113,8 +115,6 @@ _OVERLAY_LABEL_STYLE = (
     "font-family: 'Courier New', monospace; "
     "font-size: 11px;"
 )
-
-
 
 _TITLE_SAVE_PRESET = "Save Preset"
 
@@ -1571,6 +1571,7 @@ class VolumeViewerWidget(QWidget):
                     voxels = dims[0] * dims[1] * dims[2]
                     mb = estimate_volume_megabytes(dims)
                     parts.append(f"Memory: ~{mb:.0f} MB ({voxels:,} voxels)")
+                    parts.extend(memory_guard_status_lines(self._renderer))
                     if mb > 512:
                         parts.append("⚠ Large volume — consider Fast quality")
             sd = getattr(self._renderer, "_mapper", None)
@@ -1607,8 +1608,7 @@ class VolumeViewerWidget(QWidget):
 
     def _render(self) -> None:
         """Trigger a VTK render update."""
-        if self._initialized and self._surface is not None:
-            self._surface.render_frame()
+        render_interactive_frame(self)
 
     # ------------------------------------------------------------------
     # Cleanup
