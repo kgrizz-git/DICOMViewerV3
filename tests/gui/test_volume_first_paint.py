@@ -133,6 +133,7 @@ def test_slow_expected_blank_preview_keeps_preset_guidance(monkeypatch, qapp) ->
 
     assert widget._auto_refine_suppressed is True
     assert "nothing is visible" in widget._render_feedback_label.text().lower()
+    assert "choose a detail level manually" in widget._render_feedback_label.text()
 
 
 def test_interactive_gpu_fallback_updates_status_only_after_cpu_fallback() -> None:

@@ -17,6 +17,10 @@ from core.volume_render_quality import (
 _EXPECTED_BLANK_GUIDANCE = (
     "Nothing is visible with this preset — try CT Soft Tissue or another preset."
 )
+_MANUAL_DETAIL_GUIDANCE = (
+    "3D preview shown at Fast detail. Higher Auto detail may be slow; "
+    "choose a detail level manually to apply it."
+)
 
 
 def setup_first_paint_state(widget: Any) -> None:
@@ -97,12 +101,9 @@ def run_first_preview(widget: Any) -> None:
         widget._auto_refine_suppressed = True
         set_render_feedback(
             widget,
-            _EXPECTED_BLANK_GUIDANCE
+            f"{_EXPECTED_BLANK_GUIDANCE} {_MANUAL_DETAIL_GUIDANCE}"
             if widget._expected_blank_guidance
-            else (
-                "3D preview shown at Fast detail. Higher Auto detail may be slow; "
-                "choose a detail level manually to apply it."
-            ),
+            else _MANUAL_DETAIL_GUIDANCE,
         )
 
 
