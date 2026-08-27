@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-27
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -92,8 +92,8 @@ use `find` and the platform's available text-search tool rather than assuming
   values into chat, commits, issues, or reports — see
   [`SECURITY_TOOLS_CLI_GUIDE.md`](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md).
 - **Debug flags:** Before adding `print` tracing, read [`src/utils/debug_flags.py`](src/utils/debug_flags.py) and gate behind an existing or new `DEBUG_*` constant (default **`False`**). Each flag documents which modules it affects. Revert flags to **`False`** before commit — CI **debug-flags-check** fails on any `True`. Do not use `DEBUG_AGENT_LOG` in release builds (writes `debug-088dbc.log`).
-- **Long-running commands:** use ~10 minute timeouts for full `pytest` or `pyright src/`.
-- **Git hooks:** Never use `git commit --no-verify` without explicit user permission. Git hooks (line complexity, PHI checks, ruff linting, etc.) are important quality gates. If hooks fail, fix the underlying issues rather than bypassing them.
+- **Long-running commands:** use ~10 minute timeouts for full `pytest` or `pyright src/`. Whole-repository pre-push privacy, PHI, secret, and type-analysis gates may take several minutes with little or no output; treat them as running until their completion status is known, give a progress update, and wait/poll rather than inferring failure.
+- **Git hooks:** Never use `--no-verify`, disable or edit a hook to skip checks, or use an equivalent workaround for any commit, push, or verification gate unless the user gives explicit, specific approval to bypass that exact gate after its risk has been explained. A general request to commit, push, update a PR, or finish work is not approval. Git hooks (line complexity, PHI checks, ruff linting, etc.) are important quality gates. If hooks fail, fix the underlying issues or report the blocker rather than bypassing them.
 
 ## Optional delegation
 
