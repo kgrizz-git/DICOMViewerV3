@@ -1,6 +1,13 @@
 # Clean GitHub Repository Recreation Runbook
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-08-27
+
+**Status (2026-08-27):** Contingency procedure only. Gate **G6** from the
+privacy hardening plan is **closed (2026-07-13)** — published `origin/main`
+history was reset to a reviewed snapshot root commit; ongoing work continues on
+that lineage from **2026-07-14** onward. Pre-snapshot GitHub commits and the
+local `old-main` archive (672 commits) are not on today's remote. Use this
+runbook only if a future deliberate clean-history recreation is required.
 
 This runbook prepares a destructive repository replacement but does not
 authorize or perform it. The objective is a private GitHub repository whose
@@ -8,7 +15,7 @@ published history begins with one reviewed snapshot commit and contains no
 legacy refs, Dependabot branches, personal commit email, local scanner state,
 or local-only DICOM/QC data.
 
-## Verified current state
+## Verified current state (2026-07-16 — historical snapshot)
 
 - Local `main` and local `old-main` are unrelated histories and share zero
   commits.

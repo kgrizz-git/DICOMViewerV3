@@ -42,6 +42,11 @@ Success means:
 
 ### Phase 1 - Canonical QA result serialization
 
+**Note (2026-08-28):** ACR CT/MRI flattening, full CSV/XLSX, batch CT CSV, and MRI
+multi-series batch are scoped first in
+[PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md).
+Reuse its `qa_result_flatten` module when implementing T1–T2 here for other analysis types.
+
 - [ ] (T1) Define a reusable `qa.result_serialization` module that converts `QAResult` and `MRIBatchResult` into a stable normalized dict plus flattened tabular rows. (owner: coder, parallel-safe: no, stream: none, after: none)
 - [ ] (T2) Refactor GUI JSON export to use the shared serializer without changing existing schema fields except for documented additive fields. (owner: coder, parallel-safe: no, stream: none, after: T1)
 - [ ] (T3) Add tests for single-run ACR CT/MRI, MRI compare mode, nuclear QA, failed runs, warnings, and missing pylinac results. (owner: tester, parallel-safe: yes, stream: A, after: T1)
