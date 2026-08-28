@@ -1,10 +1,10 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-08-28
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
-## 2026-08-27
+## 2026-08-28
 
 - **Privacy hardening plan disposition:** Marked G6 closed (**2026-07-13**
   snapshot root on `origin/main`; development from **2026-07-14** on this

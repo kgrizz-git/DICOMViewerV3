@@ -250,7 +250,7 @@ Run **`python scripts/check_user_docs_links.py`** after `user-docs/` edits.
 
 ---
 
-```
+```text
 run_acr_ct_analysis / run_acr_mri_large_analysis
   (when embed_module_images_in_xlsx: analyzer.save_images(dir) → analyzed_module_images)
         │

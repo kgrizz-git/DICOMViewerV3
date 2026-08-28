@@ -15,14 +15,19 @@ published history begins with one reviewed snapshot commit and contains no
 legacy refs, Dependabot branches, personal commit email, local scanner state,
 or local-only DICOM/QC data.
 
-## Verified current state (2026-07-16 — historical snapshot)
+## Verified pre-reset state (2026-07-16 audit snapshot — not current)
+
+**Post-reset (current):** Published `origin/main` since **2026-07-13** is a single
+reviewed snapshot root commit; day-to-day history on this lineage begins
+**2026-07-14**. The counts below describe GitHub **before** that reset.
 
 - Local `main` and local `old-main` are unrelated histories and share zero
   commits.
 - `old-main` contains 672 commits. All 672 are local-only; none are reachable
   from any refreshed `origin/*` ref.
-- The current GitHub repository contains 25 unique commits: 14 on `main` and 11
-  additional commits reachable only from 11 Dependabot branches.
+- The GitHub repository **before the 2026-07-13 reset** contained 25 unique
+  commits: 14 on `main` and 11 additional commits reachable only from 11
+  Dependabot branches.
 - The remote is private, uses `main`, has Issues and Projects enabled, and has
   no Actions/Dependabot secrets, Actions variables, environments, or webhooks.
 - GitHub reported that rulesets and classic branch protection for this private

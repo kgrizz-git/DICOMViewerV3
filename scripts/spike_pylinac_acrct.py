@@ -4,7 +4,9 @@ Stage 1 pylinac spike script for ACR CT datasets.
 Usage:
     python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder"
     python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder" \\
-        --dump-json tests/fixtures/qa/acr_ct_results_data.json
+        --dump-json tmp/acr_ct_results_data.json
+
+Copy reviewed dumps into tests/fixtures/qa/ before commit (see tests/fixtures/qa/README.md).
 
 This script is intentionally minimal and runs outside the Qt app so dependency
 and API compatibility can be validated before wiring deeper UI flows.
@@ -101,7 +103,7 @@ def main() -> int:
                 source_root=_SRC_ROOT.parent,
             )
             written = write_redacted_results_dump(analyzer, dump_path)
-            print(f"Wrote redacted results_data dump: {written}")
+            print_redacted(f"Wrote redacted results_data dump: {written}")
         except Exception as exc:
             print_redacted(f"JSON dump failed: {exc}")
             return 6

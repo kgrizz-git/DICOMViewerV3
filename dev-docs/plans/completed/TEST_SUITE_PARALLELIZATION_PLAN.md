@@ -1,6 +1,6 @@
 # Plan: Parallelize the CI test suite (pytest-xdist)
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-08-28
 **Status:** Completed — Phases 1–3 shipped (PR #58); widget-scope and exception-hook fixes (PRs #79, #82). CI on `main` green for **15 consecutive runs** through PR #92 (2026-08-28) with `-n auto` and coverage ≥80%. Phase 4 dropped after measurement. Closed in [`TO_DO.md`](../../TO_DO.md); recorded in [`MAINTENANCE_LOG.md`](../../MAINTENANCE_LOG.md).
 **Area:** CI / test harness
 

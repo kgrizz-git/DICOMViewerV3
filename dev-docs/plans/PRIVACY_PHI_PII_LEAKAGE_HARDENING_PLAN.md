@@ -144,9 +144,8 @@ is not a passing security result.
 - P1 -> P5 scanner/review tooling.
 - P1 -> P6 runtime storage and consent; UI design may proceed after the storage
   inventory, but implementation shares config/settings paths and is sequential.
-- P2 + P3 + P4 + P5 + P6 -> P7 hooks/CI/docs integration.
-- P7 -> P8 full reviewer/tester/secops/manual gates.
-- P8 -> remote-history decision; only explicit user approval permits mutation.
+- P2 + P3 + P4 + P5 + P6 -> P7 hooks/CI/docs integration (**mandatory lanes shipped**).
+- **P8 / remote-history (historical — closed):** G6 executed **2026-07-13** (snapshot reset on `origin/main`). Disposition **2026-08-27:** development continues on that lineage; no separate secops sign-off (maintainer + agents). Remaining Phase 8 checkboxes are **P2 optional** (see disposition above); [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](../REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md) is contingency only.
 
 ### Verification gates
 
@@ -516,7 +515,8 @@ These are gates, not blockers to Phases 1-5:
 ## Completion notes
 
 Fill this section only with verified task IDs, commands, results, assessment
-paths, manual-smoke evidence, and the user's final remote-history decision.
+paths, manual-smoke evidence, and (when applicable) historical **G6**
+remote-history closure evidence (executed **2026-07-13**; see disposition above).
 
 **Ready for orchestrator to assign coder after Gate G0.**
 
