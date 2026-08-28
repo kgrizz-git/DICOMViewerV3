@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.check_no_phi_artifacts import local_identities, path_reasons
 
 OBJECT_ID = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.I)
+DELETION_MARKER = "(delete)"
 SENSITIVE_REF = re.compile(
     r"(?:^|[/_.-])(?:mrn|patientid|patientname|accession(?:number)?|"
     r"studyid|accountnumber)[_.:=#-]+[A-Za-z0-9^-]{4,}",
@@ -75,6 +76,9 @@ def parse_updates(stdin_text: str) -> tuple[list[RefUpdate], Counter[str]]:
         local_ref, local_oid, remote_ref, remote_oid = fields
         if not OBJECT_ID.fullmatch(local_oid) or not OBJECT_ID.fullmatch(remote_oid):
             violations["invalid object ID"] += 1
+            continue
+        if _is_zero_oid(local_oid) != (local_ref == DELETION_MARKER):
+            violations["malformed deletion update"] += 1
             continue
         updates.append(RefUpdate(local_ref, local_oid, remote_ref, remote_oid))
     return updates, violations
@@ -146,7 +150,12 @@ def validate_push(
 
     inspected_commits: set[str] = set()
     for update in updates:
-        for ref_name in (update.local_ref, update.remote_ref):
+        ref_names = (
+            (update.remote_ref,)
+            if _is_zero_oid(update.local_oid)
+            else (update.local_ref, update.remote_ref)
+        )
+        for ref_name in ref_names:
             for category in _ref_categories(root, ref_name, identities):
                 violations[category] += 1
         commits, error = _commit_oids(root, update, remote_name)
