@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-28
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -60,6 +60,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | KO/PR objects and embedded overlays | [`info/KO_PR_OVERLAYS_EXPLANATION.md`](info/KO_PR_OVERLAYS_EXPLANATION.md) |
 | Competitive feature gaps (vs RadiAnt, Horos, OHIF, etc.) | [`COMPETITIVE_FEATURE_BACKLOG.md`](COMPETITIVE_FEATURE_BACKLOG.md) (backlog) · [`info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md`](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md) (analysis) |
 | Optional local PII/PHI models, scanners, and Presidio integration | [`info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md`](info/LOCAL_PHI_PII_DETECTION_MODEL_OPTIONS.md) |
+| ACR MRI phantom QA metrics vs pylinac gaps (SNR, accreditation tests) | [`info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md`](info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) |
 
 ## Assessments and templates
 

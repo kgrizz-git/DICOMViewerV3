@@ -6,6 +6,10 @@
 **Branch suggestion:** `feature/pylinac-acr-full-metrics-export-mri-batch`
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
 
+**Related (investigation):**
+
+- [ACR MRI phantom QA metrics and pylinac gaps](../../info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) — accreditation tests, QC manual metrics, SNR definitions, pylinac gap table (**Phase 6**)
+
 **Related (completed):**
 
 - [Pylinac CT CNR, batch, and XLSX](../completed/PYLINAC_CT_CNR_BATCH_XLSX_PLAN.md) — F1 CNR intermediates, F2 CT multi-series batch, F3 XLSX (Summary/Detail/Images; CNR-centric Summary)
@@ -22,12 +26,12 @@
 
 Physicists can export **everything pylinac exposes** for **ACR CT** and **ACR MRI Large** runs — single or batch — as **CSV and XLSX**, without digging through JSON. **Multi-series MRI batch** matches the existing CT batch UX.
 
-**Definition of “full”:** flatten `result.raw_pylinac` (full `results_data(as_dict=True)` tree stored at analysis time) plus necessary **live-analyzer harvest** where dict output is incomplete (CT CNR / F1 precedent). Omit any family pylinac does not populate — do not fabricate SNR, PSG, or other columns.
+**Definition of “full”:** flatten `result.raw_pylinac` (full `results_data(as_dict=True)` tree stored at analysis time) plus necessary **live-analyzer harvest** where dict output is incomplete (CT CNR / F1 precedent; **MRI SNR** in Phase 6). Omit any family pylinac does not populate — do not fabricate PSG or other columns; **MRI SNR** is the one planned viewer-computed exception (not in pylinac).
 
 Success means:
 
 1. **Canonical metric rows** — one stable flattened row model per run (provenance + every pylinac-exposed scalar/list metric), shared by CSV, XLSX Detail, and future CLI/DB.
-2. **Pylinac-exposed ACR coverage** — not only CNR intermediates; include uniformity, low-contrast detectability/score, relative MTF / spatial resolution, slice thickness / slice position (MRI; pylinac 3.43.2 `ACRCT` analyzes no thickness module), HU linearity / material ROIs, and modality-specific fields (e.g. MRI PSG) **when present** in `raw_pylinac` or live harvest; SNR is **verified absent** in pylinac 3.43.2 for both modalities and PSG on CT is **expected absent** — omit unless Phase 0 proves otherwise.
+2. **Pylinac-exposed ACR coverage** — not only CNR intermediates; include uniformity, low-contrast detectability/score, relative MTF / spatial resolution, slice thickness / slice position (MRI; pylinac 3.43.2 `ACRCT` analyzes no thickness module), HU linearity / material ROIs, and modality-specific fields (e.g. MRI PSG) **when present** in `raw_pylinac` or live harvest; **MRI SNR** added in **Phase 6** (viewer-computed; absent in pylinac); **CT SNR** and **CT PSG** remain **expected absent**.
 3. **Batch CT** — **Export CSV…** on the batch summary dialog (today: XLSX + JSON only).
 4. **Batch MRI** — **Tools → Automated QA → ACR MRI Batch (pylinac)…** — checkbox series list + **Add folder…**, shared MRI options, serial N-of-M progress, cooperative cancel, per-series error isolation; result dialog with **Export CSV / JSON / XLSX**.
 5. **Single-run parity** — ACR CT and MRI save dialogs export the **same pylinac-exposed metric set** in CSV/XLSX; JSON unchanged (`raw_pylinac` already carries full dict — flatten is **export-layer only**, no `metrics_flat` in JSON).
@@ -78,7 +82,7 @@ Extract when present; omit column/row when module failed or pylinac version omit
 |--------|----------|----------------|------------|
 | Geometric / slice | Slice thickness/position, phantom roll | `raw_pylinac` `slice1` / `slice11` / `geometric_distortion_module` | Verify R0-2 |
 | Uniformity | PIU, uniformity ROI stats | `uniformity_module` (incl. `piu`) | Verify R0-2 |
-| SNR | SNR per pylinac module | — | **Absent (both modalities)** — verified no `snr` field in installed pylinac 3.43.2 `acr.py`; re-confirm on dumps in R0-2; do not fabricate SNR columns |
+| SNR | SNR (viewer-computed) | — | **Absent in pylinac** — **Phase 6** viewer harvest; see [ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](../../info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) |
 | PSG | Percent signal ghosting | `uniformity_module.psg` / `ghosting_ratio` (dict-present in 3.43.2) | Verify R0-2 |
 | Low contrast | Score, detectability, per-slice LC metrics | `low_contrast_multi_slice_module`, existing `_extract_lc_score` | Verify R0-2 |
 | MTF | Row/column rMTF % → lp/mm grid (10–90% step) | `slice1.row_mtf` / `col_mtf` outputs (`lpmm_to_rmtf`-style grids) | Verify R0-2; Summary MTF@50% only |
@@ -146,6 +150,7 @@ publish_pdf()  →  save_images(to_stream=True)  →  plot_images()  →  one fi
 | **OQ-7** | MRI batch **echo_number** / compare options: one shared dialog (like CT options) — include compare toggle? | Compare stays on single-run menu; batch bypasses `compare_request` | _Locked: no compare in batch_ |
 | **OQ-8** | Add `metrics_flat` to JSON export or keep flatten export-layer-only? | `raw_pylinac` already carries data | **Export-layer-only** — no JSON schema churn |
 | **OQ-9** | Embed **PDF-parity module images** in XLSX Images sheet? | `save_images()` vs composite; workbook size | **Yes, default on** — persisted `acr_qa_embed_module_images_in_xlsx`; user can disable in ACR CT/MRI options (single + batch) |
+| **OQ-10** | **MRI SNR** noise term: apply NEMA **0.655** Rayleigh correction on background σ? | PMC8321175 / NEMA MS 1 vs proposed central-80%/freq-encode σ ratio | **Resolve in Phase 6 R6-1/R6-2** — default **no 0.655** in v1; export key **`mri_snr`** labeled **uncorrected** in user guide (≠ NEMA SNR) |
 
 ## Tests to add (required before merge)
 
@@ -208,7 +213,8 @@ All new tests under `tests/qa/` unless noted. Use **committed redacted `results_
 
 | File | Update |
 |------|--------|
-| **`dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`** | Document canonical flatten keys, batch MRI flow, export surfaces (CSV wide vs metric/value), JSON vs export-layer flatten, **module image embed toggle** |
+| **`dev-docs/info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md`** | **New** — ACR MRI QA metric reference + pylinac gap table (Phase 6 SNR) |
+| **`dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`** | Document canonical flatten keys, batch MRI flow, export surfaces (CSV wide vs metric/value), JSON vs export-layer flatten, **module image embed toggle**, **MRI SNR (Phase 6)** |
 | **`dev-docs/info/PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md`** | MTF grid / metric extraction notes if live harvest added |
 | **`dev-docs/info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md`** | Cross-link metric families now exported |
 | **`dev-docs/plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`** | Metric registry appendix (Phase 0 output); mark open questions decided |
@@ -310,7 +316,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [ ] **(P1-I1)** `QARequest` / `QAResult`: `embed_module_images_in_xlsx`, `module_images_out_dir`, `analyzed_module_images`; runners call `save_images()` when enabled. (owner: coder)
 - [ ] **(P1-I2)** Config + dialogs: `acr_qa_embed_module_images_in_xlsx` (default **True**); checkbox on ACR CT/MRI options + batch options; profile/JSON `inputs` audit field. (owner: coder)
 - [ ] **(P1-I3)** Facade/worker temp-dir lifecycle for module image dirs (CT single, CT batch, MRI single, MRI batch). (owner: coder, after: P1-I1)
-- [ ] **(P1-X1)** Extend `build_qa_workbook` Summary sheet with modality-aware key columns (CNR, uniformity, PSG/LC score where present, MTF@50% row+col, slice thickness/position on MRI only — best-effort; omit SNR and CT slice-thickness columns unless Phase 0 finds fields). (owner: coder, after: P1-F1)
+- [ ] **(P1-X1)** Extend `build_qa_workbook` Summary sheet with modality-aware key columns (CNR, uniformity, PSG/LC score where present, MTF@50% row+col, slice thickness/position on MRI only — best-effort; omit **CT** slice-thickness and **CT SNR** unless Phase 0 finds fields; add **`mri_snr`** Summary column when Phase 6 harvest ships). (owner: coder, after: P1-F1)
 - [ ] **(P1-X2)** Detail sheet uses full flatten (replaces metrics-only flatten). (owner: coder, after: P1-F1)
 - [ ] **(P1-X3)** Images sheet: multi-module embed from `analyzed_module_images`; graceful skip when toggle off / no Pillow. (owner: coder, after: P1-I1, P1-X2)
 - [ ] **(P1-X4)** Tests: Images sheet module count + toggle off skips sheet; paths not in JSON/CSV. (owner: tester, after: P1-X3)
@@ -336,6 +342,44 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [ ] **(P1-D4)** `CHANGELOG.md` **minor** when shipped. (owner: orchestrator)
 - [ ] **(P1-D5)** `check_user_docs_links.py` + move plan to `completed/`; trim `TO_DO.md`. (owner: orchestrator)
 
+### Phase 6 — Viewer-computed MRI SNR (extension slice)
+
+**Goal:** Export a defensible **ACR-style SNR** for MRI Large runs even though pylinac does not compute it. SNR is **not** one of the seven ACR accreditation phantom tests, but it is required in the **ACR MRI QC Manual** (weekly/annual) and is commonly reported alongside PIU/PSG.
+
+**Canonical formula (initial — validate in R6-2):**
+
+```text
+SNR = mean(signal in central 80% of uniformity flood ROI)
+      / mean(σ in two background ROIs along frequency-encode axis)
+```
+
+- **Signal:** central **80%** area of the uniformity module flood (slice 7 equivalent) — tighter than pylinac’s full Center circle used for PIU/PSG.
+- **Noise:** average of pixel **standard deviations** in the two **ghost-free** background rectangles on the **frequency-encode axis** — select the pair on that axis from pylinac `ghost_rois` (**Left/Right** when frequency encode is image columns; **Top/Bottom** when frequency encode is image rows). **Do not hard-code Left/Right** without `InPlanePhaseEncodingDirection` / orientation. **Fallback when DICOM tags missing:** assume phase encode = ROW, frequency encode = COL (PMC8321175 §2.2 default) → **Left/Right** for noise. Same ROI family as PSG §6, but use **σ** not mean intensity.
+- **Encode direction:** read DICOM (`InPlanePhaseEncodingDirection`, orientation) before selecting axes; document fallback above in R6-3.
+- **Slice:** uniformity module slice (same as PIU/PSG).
+
+**References:** [ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](../../info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) (definitions, links, pylinac gap table).
+
+| ID | Task | Deliverable |
+|----|------|-------------|
+| **R6-1** | Literature + site review | Confirm formula vs NEMA MS 1 single-image and PMC8321175 variants; pick **one** canonical export key `mri_snr` |
+| **R6-2** | Local phantom validation | Compare viewer SNR vs manual ROI on one gitignored ACR MRI series; record in investigation doc |
+| **R6-3** | DICOM encode-direction helper | Qt-free helper: map phase vs frequency image axis; return which `ghost_rois` pair is ghost-free (freq-encode). **Fallback:** phase=ROW / freq=COL when tags missing |
+| **R6-4** | Runner harvest | `_extract_mri_snr_acr_style(analyzer)` in `pylinac_acr_mri.py` → `metrics.mri_snr` (+ optional intermediates: `mri_snr_signal_mean`, `mri_snr_noise_mean`). Noise ROIs = freq-encode pair from R6-3, not fixed Left/Right |
+| **R6-5** | Export | Include in flatten Summary column + Detail rows; user guide must state **`mri_snr` is uncorrected ACR-style ratio** (not NEMA MS 1 SNR — differs by ~0.655× if NEMA air-ROI method used) |
+| **R6-6** | Tests | Unit tests with mocked uniformity module ROIs / synthetic pixel arrays; optional golden values from R6-2 (gitignored notes, not PHI fixtures) |
+
+**Open question OQ-10:** Export **NEMA 0.655 Rayleigh correction** on noise σ or raw σ? Default: **no 0.655** in v1 (match proposed ratio above); note in export metadata / user guide.
+
+**Out of scope for Phase 6:** SNR uniformity (SNRU), slice-6 SNR / slice-6÷7 SNRU ratio, two-image difference SNR, NEMA air-ROI SNR with 0.655 correction, CT SNR, legacy 1999 nickel-vial SNR.
+
+- [ ] **(P6-R1)** Complete R6-1/R6-2; lock OQ-10. (owner: coder + physicist reviewer)
+- [ ] **(P6-H1)** Implement R6-3/R6-4 harvest. (owner: coder, after: P6-R1, Phase 1 flatten exists)
+- [ ] **(P6-E1)** R6-5 export + docs. (owner: coder + docs, after: P6-H1)
+- [ ] **(P6-T1)** R6-6 tests. (owner: tester, after: P6-H1)
+
+**Dependency:** Phase 6 can land **after Phase 2** (flatten + XLSX) or in parallel with Phase 4; does not block Phase 0–5 accreditation-metric export.
+
 ---
 
 ## Metric registry appendix
@@ -356,7 +400,7 @@ _(pending Phase 0)_
 |-----|----------|--------|------------------------|
 | `low_contrast_cnr` | CT | live analyzer | background σ not in `results_data` (shipped F1) |
 | `psg` | MRI | `uniformity_module` dict | expected dict-complete (`psg`, `ghosting_ratio`); harvest only if dump proves gap |
-| _snr_ | _both_ | — | **No live harvest planned** — absent in pylinac 3.43.2 `acr.py`; omit unless R0-2/R0-3 find a field |
+| _snr_ | MRI | viewer harvest (Phase 6) | pylinac 3.43.2 has no SNR; see [ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](../../info/ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) |
 | _…_ | | | |
 
 ---
@@ -393,7 +437,7 @@ _(pending Phase 0)_
 | `src/qa/qa_result_flatten.py` | **New** — canonical flatten (or extend `qa_export.flatten_metrics`) |
 | `src/qa/qa_export.py` | CSV builders use flatten; wire `neutralize_spreadsheet_value` |
 | `src/qa/qa_xlsx_export.py` | Summary + Detail + multi-module Images sheet |
-| `src/qa/pylinac_acr_ct.py` / `pylinac_acr_mri.py` | Optional extra `metrics.*` harvest; `save_images()` when `embed_module_images_in_xlsx` |
+| `src/qa/pylinac_acr_ct.py` / `pylinac_acr_mri.py` | Optional extra `metrics.*` harvest; `save_images()` when `embed_module_images_in_xlsx`; **Phase 6:** `_extract_mri_snr_acr_style` on MRI runner |
 | `src/qa/worker.py` | `QAMRIBatchWorker`; module image temp dirs per series |
 | `src/qa/analysis_types.py` | **`ACRMBatchResult` (new)**; `QARequest`/`QAResult` module image fields |
 | `src/utils/config/qa_pylinac_config.py` | **`acr_qa_embed_module_images_in_xlsx`** (default True) |
@@ -438,18 +482,39 @@ _(pending Phase 0)_
 **Changes made:**
 
 - Corrected **ACR CT metric catalog** against pylinac 3.43.2 (`ACRCT` has no slice-thickness module; geometry is top-level `phantom_roll_deg` / `origin_slice`; HU via `ct_module`).
-- Marked **SNR absent** for both modalities in installed `acr.py`; MRI **PSG dict-present** via `uniformity_module`.
+- Marked **CT SNR absent** in installed `acr.py`; **MRI SNR** planned as **Phase 6** viewer harvest (see investigation doc); MRI **PSG dict-present** via `uniformity_module`.
 - Fixed existing CT batch dialog path → **`ct_batch_select_dialog.py`**; pointed MRI batch tests at **`tests/test_ct_batch_select_dialog.py`** / **`tests/test_qa_ct_batch_worker.py`**.
 - Clarified **merge rule** (top-level curated keys, F1 `low_contrast_cnr` contract, no literal `metrics.` prefix).
 - **R0-8/R0-9:** `SafeCsvWriter`, openpyxl `=` formula risk, staged PHI gate on fixture dumps.
-- **P1-X1** Summary columns gated (no CT slice thickness / SNR unless Phase 0 finds fields).
-- **Success criterion 2 tightened** — SNR absent both modalities (verified 3.43.2 `acr.py`); CT slice thickness absent.
+- **P1-X1** Summary columns gated (no CT slice thickness / CT SNR unless Phase 0 finds fields); **`mri_snr`** when Phase 6 lands.
+- **Success criterion 2** — pylinac-exposed metrics + **Phase 6 MRI SNR**; CT SNR absent; CT slice thickness absent on `ACRCT`.
 - **Phase 0 dump hygiene** — numeric metrics only (no pixel data, no absolute paths); spike test rejects absolute paths; staged artifact gate required on the dump commit.
 - **Temp-dir lifecycle** — module-image `TemporaryDirectory` held open until after `workbook.save()`, cleaned in `finally` (single-run and batch).
 - **OQ-2 / OQ-5 precision** — compare-mode `MRIBatchResult` grounding (`run_configs: list[LcRunConfig]`, `run_acr_mri_large_batch`); curated `result.metrics` overlay stays top-level per the F1 contract.
 - _Process note:_ this grounding review ran in a shared working tree alongside a parallel reviewer pass over the same revision; the combined edits were captured together in commit `cde3bdd` and this follow-up commit.
 
 **Deferred / out of scope (confirmed):** batch PDF, CLI/DB, CatPhan/nuclear, compare-mode schema changes.
+
+### Review notes — Kilo Hy3 Free (2026-08-28)
+
+**Verdict:** Approve with edits — incorporated below.
+
+| Reviewer | Outcome |
+|----------|---------|
+| **Kilo `tencent/hy3:free`** (plan mode) | Grounded against pylinac 3.43.2 `acr.py` + [PMC8321175](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) |
+
+**Confirmed:** seven accreditation tests; SNR not an accreditation test; pylinac gap table (PIU, PSG, MTF, no SNR); PSG ghost ROI geometry; Phase 6 tasks/deps; OQ-10 default; cross-links.
+
+**Edits incorporated:**
+
+- Geometric accuracy limit → **±2 mm** (PMC Table 1)
+- PIU row split: **ACR 87.5/82** vs pylinac **`piu_passed` 85/80**
+- PSG formula aligned to pylinac **`|(L+R)−(T+B)|`**
+- R6-3/R6-4: **freq-encode axis selection** + DICOM fallback (phase=ROW / freq=COL)
+- R6-5 / OQ-10: **`mri_snr` uncorrected** labeling (not NEMA SNR)
+- SNR limits, SNRU slice-6 pointer, freq-encode noise rationale in investigation doc
+
+**SNR formula recommendation (reviewer):** ship proposed central-80% / freq-encode σ ratio as default; no 0.655 in v1; NEMA air-ROI variant deferred.
 
 ---
 

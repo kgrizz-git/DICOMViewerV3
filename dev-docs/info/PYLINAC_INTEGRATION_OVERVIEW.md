@@ -12,7 +12,8 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 **Pylinac reference notes (project docs):**
 
-- [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.43.2** (project pin).
+- [Pylinac MRI low-contrast detectability](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.43.2** (project pin).
+- [ACR MRI phantom QA metrics and pylinac gaps](ACR_MRI_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) — **ACR accreditation + QC manual** metric definitions, links, and what pylinac does **not** compute (incl. **SNR** / Phase 6).
 - [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — **Living tracker**: how we customize, extend, or wrap pylinac (config, runners, subclasses); persist vs per-run `analyze()` kwargs.
 - [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md) — **CatPhan / Quart CT** and **`pylinac.nuclear`** (IAEA/NMQC-style NM/SPECT): tests performed, expected DICOM inputs, demo ZIPs / external sample data.
 
