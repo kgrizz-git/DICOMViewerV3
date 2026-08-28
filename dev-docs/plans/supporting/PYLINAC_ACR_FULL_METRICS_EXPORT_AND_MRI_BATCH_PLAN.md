@@ -27,7 +27,7 @@ Physicists can export **everything pylinac exposes** for **ACR CT** and **ACR MR
 Success means:
 
 1. **Canonical metric rows** — one stable flattened row model per run (provenance + every pylinac-exposed scalar/list metric), shared by CSV, XLSX Detail, and future CLI/DB.
-2. **Pylinac-exposed ACR coverage** — not only CNR intermediates; include uniformity, low-contrast detectability/score, relative MTF / spatial resolution, slice thickness, slice position / geometry, HU linearity / material ROIs, and modality-specific fields (e.g. MRI SNR/PSG) **when present** in `raw_pylinac` or live harvest; SNR on CT and PSG on CT are **expected absent** unless Phase 0 proves otherwise.
+2. **Pylinac-exposed ACR coverage** — not only CNR intermediates; include uniformity, low-contrast detectability/score, relative MTF / spatial resolution, slice thickness / slice position (MRI; pylinac 3.43.2 `ACRCT` analyzes no thickness module), HU linearity / material ROIs, and modality-specific fields (e.g. MRI PSG) **when present** in `raw_pylinac` or live harvest; SNR is **verified absent** in pylinac 3.43.2 for both modalities and PSG on CT is **expected absent** — omit unless Phase 0 proves otherwise.
 3. **Batch CT** — **Export CSV…** on the batch summary dialog (today: XLSX + JSON only).
 4. **Batch MRI** — **Tools → Automated QA → ACR MRI Batch (pylinac)…** — checkbox series list + **Add folder…**, shared MRI options, serial N-of-M progress, cooperative cancel, per-series error isolation; result dialog with **Export CSV / JSON / XLSX**.
 5. **Single-run parity** — ACR CT and MRI save dialogs export the **same pylinac-exposed metric set** in CSV/XLSX; JSON unchanged (`raw_pylinac` already carries full dict — flatten is **export-layer only**, no `metrics_flat` in JSON).
@@ -443,6 +443,11 @@ _(pending Phase 0)_
 - Clarified **merge rule** (top-level curated keys, F1 `low_contrast_cnr` contract, no literal `metrics.` prefix).
 - **R0-8/R0-9:** `SafeCsvWriter`, openpyxl `=` formula risk, staged PHI gate on fixture dumps.
 - **P1-X1** Summary columns gated (no CT slice thickness / SNR unless Phase 0 finds fields).
+- **Success criterion 2 tightened** — SNR absent both modalities (verified 3.43.2 `acr.py`); CT slice thickness absent.
+- **Phase 0 dump hygiene** — numeric metrics only (no pixel data, no absolute paths); spike test rejects absolute paths; staged artifact gate required on the dump commit.
+- **Temp-dir lifecycle** — module-image `TemporaryDirectory` held open until after `workbook.save()`, cleaned in `finally` (single-run and batch).
+- **OQ-2 / OQ-5 precision** — compare-mode `MRIBatchResult` grounding (`run_configs: list[LcRunConfig]`, `run_acr_mri_large_batch`); curated `result.metrics` overlay stays top-level per the F1 contract.
+- _Process note:_ this grounding review ran in a shared working tree alongside a parallel reviewer pass over the same revision; the combined edits were captured together in commit `cde3bdd` and this follow-up commit.
 
 **Deferred / out of scope (confirmed):** batch PDF, CLI/DB, CatPhan/nuclear, compare-mode schema changes.
 
