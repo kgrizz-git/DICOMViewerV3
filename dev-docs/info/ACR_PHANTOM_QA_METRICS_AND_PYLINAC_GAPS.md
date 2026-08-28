@@ -1,8 +1,8 @@
-# ACR MRI phantom QA metrics — references and pylinac gaps
+# ACR phantom QA metrics — references and pylinac gaps
 
 **Last updated:** 2026-08-28  
-**Purpose:** Tabulate what physicists are asked to measure on the **ACR MRI accreditation phantom** (Large / Medium), how those quantities are defined in primary references, what **pylinac 3.43.2** (`ACRMRILarge`) already computes, and what remains **viewer-native** work (starting with **SNR**).  
-**Related:** [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) (Phase 6), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md), [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md).
+**Purpose:** Tabulate what physicists are asked to measure on **ACR CT** and **ACR MRI** accreditation phantoms, how those quantities are defined in primary references, what **pylinac 3.43.2** already computes, and what remains **viewer-native** work (MRI **SNR**, direct resolution reads, etc.).  
+**Related:** [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) (Phases 0–6), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md), [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) (MTF rMTF grid), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (**C2**, **C24**).
 
 ---
 
@@ -56,6 +56,8 @@ These are the **quantitative tests** in the current **Phantom Test Guidance** us
 | **Two-image difference** | SNR ≈ **√2 × S̄ / σ_diff** (often written 1.41×) | Requires two identical acquisitions; σ from subtracted image inside same ROI | NEMA / PMC8321175 |
 | **ACR-style central / background (LCD papers)** | SNR = **mean(central uniform ROI) / σ(background)** | Slice **7** central portion vs background σ; used as LCD covariate | [PMC12257337](https://pmc.ncbi.nlm.nih.gov/articles/PMC12257337/) |
 | **Proposed viewer formula (this project)** | SNR = **mean(central 80% of uniformity flood) / mean(σ in two ghost-free background ROIs on the frequency-encode axis)** | Noise ROIs = the pair on the **frequency-encode** axis (ghost-free, lower structured/ghost contamination than phase-encode ROIs). When frequency encode is image **columns**, use pylinac **Left/Right**; when frequency encode is image **rows**, use **Top/Bottom**. Aligns with PSG ROI geometry but averages **σ** instead of means | Maintainer spec — Phase 6 plan; literature ancestor [PMC8321175 Eq. 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (`S̄ / mean(σ_L, σ_R)` on slice 7) |
+
+**Central 80% signal ROI (Phase 6):** same center as pylinac’s Center flood circle; **radius = R_center × √0.80** (equivalent area fraction 0.80). Pixel mean inside that circle is the signal term.
 
 **Phase/frequency encode:** PSG guidance places ghost-sensitive ROIs along **phase encode** (top/bottom) vs ghost-free controls along **frequency encode** (left/right) when frequency encode is left–right. DICOM tags such as **`InPlanePhaseEncodingDirection`** (0018,1312) and the image orientation matrix determine which image axis is phase vs frequency. **Rule:** always pick the **ghost-free (frequency-encode) pair** for noise — never hard-code Left/Right without checking encode direction. **Fallback when tags are missing (R6-3):** assume **phase encode = ROW** / **frequency encode = COL** (ACR default in [PMC8321175 §2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)) → noise from **Left/Right** ghost ROIs.
 
@@ -111,19 +113,24 @@ pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 
 ## Direct resolution reads — investigation avenues (deferred)
 
-ACR accreditation test **#2 (MRI)** and the CT spatial-resolution module ask for a **human visibility** read (smallest resolved hole pair or line-pair group), not an interpolated **rMTF@50%** alone. pylinac today exports **relative** MTF grids (`row_mtf_lp_mm`, `col_mtf_lp_mm` on MRI; CT spatial-resolution module similarly). Possible viewer extensions to explore **after** the active pylinac export plan — none are committed yet:
+ACR accreditation **MRI test #2** (hole pairs) and the **CT spatial-resolution module** (line-pair / bar visibility) ask for a **human visibility** read, not interpolated **rMTF@50%** alone. pylinac exports **relative** MTF grids today ([PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — MRI 10–90% rMTF step). Extensions below are **after** the active export plan; catalog overlap with [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) **C2** (MRI high-contrast) and **C24** (spatial resolution).
 
-| Avenue | CT line pairs / bars | MRI hole pairs (slice 1) | Notes |
-|--------|----------------------|---------------------------|-------|
-| **Absolute MTF** | Derive lp·mm⁻¹ from known insert spacing / phantom geometry instead of only relative rMTF percentiles | Same if hole spacing is known and ROI alignment is stable | May reduce dependence on extrapolated rMTF warnings; needs validation vs pylinac’s current `relative_resolution` path |
-| **Pattern ROI σ (modulation proxy)** | σ (or CV) in ROIs on each line-pair/bar group vs adjacent background | σ in **bands across rows or columns** through hole patterns (orientation-dependent); optional normalization (e.g. ÷ local plateau mean or max bit value) | Rough “contrast/noise” on the pattern; may correlate with visibility but is not a literal ACR read |
-| **Line profiles** | Profile across bar direction; measure **plateau-to-valley** depth or modulation index per insert | Profile across hole row/column; valley depth between peaks | Closer to perceptual “can you see the gap”; threshold TBD |
-| **User calibration routine** | Show stepped synthetic or archived crops with **known** metric values; user answers **yes/no** “can you resolve?” per step | Same for hole-pair crops at 0.9 / 1.0 / 1.1 mm equivalents | Maps automated metric → site-specific visibility cutoff; complements configurable MTF interpret UI ([`TO_DO.md`](../TO_DO.md) MTF item) |
+| Avenue | Value | Effort | False-automation risk | Depends on | Ship vs spike | Kill criteria |
+|--------|-------|--------|----------------------|------------|---------------|---------------|
+| **MTF interpret UI** (site rMTF cutoff → lp/mm) | **High** | Low | Low | Ph0–5 export / rMTF in CSV | **Ship** (first) | Physicists ignore UI; keep Detail grid only |
+| **Assisted visual scoring** (crops + user yes/no; smallest resolved hole/line group) | **High** | Low–med | **Low** (human read) | pylinac module images / slice 1 | **Ship** (second) | Duplicates PDF-only workflow with no export benefit |
+| **Line profiles** (plateau-to-valley / modulation) | Med | Med | Med | Line profile tool ([LINE_PROFILE plan](../plans/supporting/LINE_PROFILE_AND_CT_FILM_BEAM_WIDTH_PLAN.md)) | **Spike** | No stable valley metric vs visual read |
+| **Pattern ROI σ** | Low | Low | **High** (mixes noise + modulation + alignment) | — | **Drop** unless paired with Rose/modulation model | Cannot correlate with physicist reads on 2+ sites |
+| **Absolute MTF** | Med–high | High | Med | pylinac geometry / spike vs internals | **Spike last** | rMTF@50% + interpret UI sufficient |
+| **User calibration stepping** | Med (with interpret UI) | Med | Med | MTF interpret + optional crops | **Fold into interpret UI** (persist cutoff) | Full psychometric wizard unused |
 
-**Relationship to existing backlog:** [TO_DO — ACR direct spatial-resolution reads](../TO_DO.md); MTF visibility-cutoff configuration (separate item). CT **line-pair** and MRI **hole-pair** reads may share profile/σ machinery but differ in ROI geometry.
+**Modality note:** CT line-pair and MRI hole-pair **geometry differs** — share profile/UX patterns, not ROI code, until both are validated.
+
+**Deferred roadmap (Grok 4.6 + maintainer):** (1) MTF interpret UI after export plan → (2) assisted visual scoring → (3) SNRU slice 6÷7 after Phase 6 `mri_snr` → (4) line-profile / absolute-MTF spikes. See [FUTURE_WORK_DETAIL_NOTES.md](../FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results).
 
 ---
 
-## Phase 6 pointer
+## Phase 6+ pointer (SNR / SNRU)
 
-Implementation tracking lives in [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6 — Viewer-computed MRI SNR**. Investigation items (R6-*) should be checked off there before coding.
+- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there.
+- **SNRU** (slice 6÷7 ratio, optional) — **Phase 6+** in the same plan; after `mri_snr` ships; no default pass/fail in v1.

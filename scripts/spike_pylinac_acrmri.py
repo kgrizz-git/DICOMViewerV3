@@ -1,13 +1,13 @@
 """
-Stage 1 pylinac spike script for ACR CT datasets.
+Stage 1 pylinac spike script for ACR MRI Large datasets.
 
 Usage:
-    python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder"
-    python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder" \\
-        --dump-json tests/fixtures/qa/acr_ct_results_data.json
+    python scripts/spike_pylinac_acrmri.py --folder "/path/to/acr_mri_folder"
+    python scripts/spike_pylinac_acrmri.py --folder "/path/to/acr_mri_folder" \\
+        --dump-json tests/fixtures/qa/acr_mri_results_data.json
 
-This script is intentionally minimal and runs outside the Qt app so dependency
-and API compatibility can be validated before wiring deeper UI flows.
+Runs outside the Qt app. Use ``--dump-json`` to emit a redacted ``results_data``
+fixture for Phase 0 (maintainer-only; requires local gitignored phantom data).
 """
 
 from __future__ import annotations
@@ -15,20 +15,17 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
 
 try:
     from scripts.privacy_console import print_redacted
-    from scripts.pylinac_spike_common import redact_paths_in_value, results_data_as_dict
+    from scripts.pylinac_spike_common import write_redacted_results_dump
 except ModuleNotFoundError:
     import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
     import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
 
     print_redacted = privacy_console.print_redacted
-    redact_paths_in_value = pylinac_spike_common.redact_paths_in_value
-    results_data_as_dict = pylinac_spike_common.results_data_as_dict
+    write_redacted_results_dump = pylinac_spike_common.write_redacted_results_dump
 
-# Match the GUI runner: use viewer subclass (relaxed image index bounds).
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
@@ -39,20 +36,9 @@ from utils.privacy.safe_storage import (
 )
 
 
-def _jsonable(value: Any) -> Any:
-    """Convert pylinac output to JSON-friendly values (console preview)."""
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
-    if isinstance(value, dict):
-        return {str(k): _jsonable(v) for k, v in value.items()}
-    return str(value)
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run an ACRCT pylinac spike.")
-    parser.add_argument("--folder", required=True, help="Folder containing ACR CT DICOM files.")
+    parser = argparse.ArgumentParser(description="Run an ACR MRI Large pylinac spike.")
+    parser.add_argument("--folder", required=True, help="Folder containing ACR MRI DICOM files.")
     parser.add_argument("--pdf-out", default="", help="Optional output PDF report path.")
     parser.add_argument(
         "--dump-json",
@@ -70,31 +56,23 @@ def main() -> int:
         import pylinac  # pyright: ignore[reportMissingTypeStubs]
 
         from qa.pylinac_extent_subclasses import (  # type: ignore[import-not-found]
-            ACRCTForViewer,
+            ACRMRILargeForViewer,
         )
     except Exception as exc:
         print_redacted(f"Failed to import pylinac / viewer subclass: {exc}")
         return 3
 
-    print_redacted(f"Running ACRCTForViewer on: {folder}")
+    print_redacted(f"Running ACRMRILargeForViewer on: {folder}")
     print(f"pylinac version: {getattr(pylinac, '__version__', 'unknown')}")
 
     try:
-        analyzer = ACRCTForViewer.from_folder(str(folder))  # pyright: ignore[reportAttributeAccessIssue]
+        analyzer = ACRMRILargeForViewer.from_folder(str(folder))  # pyright: ignore[reportAttributeAccessIssue]
         analyzer.analyze()
-        payload = redact_paths_in_value(results_data_as_dict(analyzer))
-        print_redacted(_jsonable(payload))
     except Exception as exc:
         print_redacted(f"Analysis failed: {exc}")
         return 4
 
     if args.dump_json:
-        try:
-            from scripts.pylinac_spike_common import write_redacted_results_dump
-        except ModuleNotFoundError:
-            import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
-
-            write_redacted_results_dump = pylinac_spike_common.write_redacted_results_dump
         try:
             dump_path = assert_safe_internal_path(
                 Path(args.dump_json),
