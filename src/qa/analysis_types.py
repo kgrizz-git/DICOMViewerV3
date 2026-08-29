@@ -10,6 +10,7 @@ Exports:
     MRICompareRequest    -- batch of up to 3 LcRunConfig rows from the dialog
     MRIBatchResult       -- collected QAResult objects for a compare-mode run
     CTBatchResult        -- collected QAResult objects for a batch ACR CT run
+    ACRMBatchResult      -- collected QAResult objects for a batch ACR MRI run
     QARequest            -- input payload for a single QA analysis run
     QAResult             -- normalized output payload for a single QA run
     NuclearOptions       -- base for per-class pylinac.nuclear option payloads
@@ -610,6 +611,28 @@ class CTBatchResult:
     MRIBatchResult (one run per LcRunConfig with a single CT options set),
     there is no per-series config analogue -- one set of CT options applies
     to every series in the batch.
+
+    Fields:
+        run_results: One QAResult per selected series, in selection order.
+        run_labels: User-facing series label per result (built on the GUI
+            thread by the selection dialog; the worker never touches the
+            organizer, so labels ride in rather than being derived).
+    """
+
+    run_results: list[QAResult] = field(default_factory=list)
+    run_labels: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ACRMBatchResult:
+    """
+    Result container for a multi-series ACR MRI Large batch run.
+
+    This is **not** the compare-mode ``MRIBatchResult`` (which carries
+    ``run_configs: list[LcRunConfig]`` and drives ``run_acr_mri_large_batch``).
+    ``ACRMBatchResult`` mirrors ``CTBatchResult``: one ``QAResult`` per selected
+    series plus a parallel display label, with no per-series config analogue --
+    one set of MRI options applies to every series in the batch.
 
     Fields:
         run_results: One QAResult per selected series, in selection order.

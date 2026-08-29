@@ -7,6 +7,13 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **ACR MRI batch worker plumbing (P4-M1):** Added `ACRMBatchResult` (mirrors
+  `CTBatchResult`; not compare-mode `MRIBatchResult`) and `QAMRIBatchWorker`
+  (serial per-series `run_acr_mri_large_analysis`, cooperative cancel,
+  per-series error isolation, worker-owned `image_temp_dir` + optional
+  `module_images_temp_dir` with per-series uuid subdirs). Internal plumbing
+  only — no user-visible change until the MRI batch UI lands (P4-M3/M4).
+  **Semantic versioning note: patch.**
 - **ACR QA XLSX Summary modality-aware columns (P2-X1):** The XLSX Summary
   sheet now appends seven modality-aware key columns pulled from the canonical
   flatten (PIU, PSG, LC score, MTF@50% row/col, slice thickness, slice shift).

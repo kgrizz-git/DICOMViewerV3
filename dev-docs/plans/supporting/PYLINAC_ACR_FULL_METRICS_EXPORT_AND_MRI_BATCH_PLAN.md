@@ -303,7 +303,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [x] **(R0-3)** Live-analyzer gap table (dict vs harvest) — **filled from source** (see appendix §Live harvest; CT only needs `low_contrast_cnr` live harvest; MRI PSG/SNR/MTF confirmed dict-complete except SNR = Phase 6). (owner: coder)
 - [x] **(R0-4)** Confirm **OQ-1** — **CT PSG absent** in pylinac 3.43.2: `ACRCTResult` has no `psg`/`ghosting_ratio`/`ghost_rois` fields; `ACRCT` has no `uniformity_module.ghost_rois`. PSG is MRI-only (`MRUniformityModuleOutput.psg` + `ghosting_ratio` present). (owner: coder)
 - [ ] **(R0-5)** Resolve **OQ-4**, **OQ-5** (Summary vs Detail flatten strategy). (owner: coder + reviewer)
-- [ ] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder)
+- [x] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder) — **landed**: `ACRMBatchResult` added to `src/qa/analysis_types.py`, mirroring `CTBatchResult` (`run_results` + `run_labels` only); docstring states it is **not** compare-mode `MRIBatchResult`.
 - [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P1-F3 interim:** two bands (provenance insertion order → remaining keys `str`-sorted). Curated top-level scalars interleave alphabetically with dotted `raw_pylinac` leaves rather than a third "family" band. Revisit after R0-1/R0-2 dumps if a fixed enumerated header is needed.
 - [x] **(R0-8)** Document formula-injection wiring for Phase 1 — `qa_export.build_metrics_csv` uses bare `csv.writer`; Phase 1 (P1-F2) must wrap with `SafeCsvWriter` from `src/core/spreadsheet_safety.py` and apply `neutralize_spreadsheet_value` to every cell. XLSX: openpyxl writes leading-`=` strings as live formulas on open — same neutralization applies to Series/Run labels and warnings in XLSX cells. (owner: coder) — **landed**: CSV wired in P1-F2; XLSX Summary, Detail, and Images Series/Run labels neutralized in P2-X2.
 - [ ] **(R0-9)** Commit redacted dumps; assert no PHI paths. (owner: maintainer, after: R0-1, R0-2)
@@ -335,7 +335,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 
 ### Phase 4 — Multi-series MRI batch
 
-- [ ] **(P4-M1)** Add `QAMRIBatchWorker` (serial `run_acr_mri_large_analysis` per series); `ACRMBatchResult`. (owner: coder)
+- [x] **(P4-M1)** Add `QAMRIBatchWorker` (serial `run_acr_mri_large_analysis` per series); `ACRMBatchResult`. (owner: coder) — **landed**: `ACRMBatchResult` in `src/qa/analysis_types.py` (mirrors `CTBatchResult`; docstring clarifies it is **not** compare-mode `MRIBatchResult`); `QAMRIBatchWorker` in `src/qa/worker.py` (serial per-series, cooperative cancel, per-series error isolation, `series_completed` + `batch_result_ready`, worker-owned `image_temp_dir` + optional `module_images_temp_dir` with per-series uuid subdirs). Tests in `tests/test_qa_mri_batch_worker.py`.
 - [ ] **(P4-M2)** `acr_mri_series_selection_dialog` — loaded MR series + Add folder; shared options from existing MRI dialog. (owner: coder)
 - [ ] **(P4-M3)** Menu: **ACR MRI Batch (pylinac)…**; progress N-of-M; cancel semantics match CT. (owner: coder, after: P4-M1, P4-M2)
 - [ ] **(P4-M4)** `mri_batch_result_dialog` — table per series; Export CSV / JSON / XLSX; module Images per **OQ-9**. (owner: coder, after: P4-M3, P1-F3, P2-X3)

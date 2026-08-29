@@ -5,6 +5,7 @@ Classes:
     QAAnalysisWorker  -- single-run worker; emits result_ready(QAResult)
     QABatchWorker     -- compare-mode worker; emits batch_result_ready(MRIBatchResult)
     QACTBatchWorker   -- multi-series ACR CT worker; emits batch_result_ready(CTBatchResult)
+    QAMRIBatchWorker  -- multi-series ACR MRI worker; emits batch_result_ready(ACRMBatchResult)
 
 Both QAAnalysisWorker/QABatchWorker accept a QARequest as their base payload.
 QABatchWorker also receives an MRICompareRequest and uses
@@ -38,6 +39,7 @@ warnings.filterwarnings("ignore", category=UserWarning, message=r".*Starting a M
 from PySide6.QtCore import QThread, Signal
 
 from qa.analysis_types import (
+    ACRMBatchResult,
     CTBatchResult,
     MRICompareRequest,
     QARequest,
@@ -290,4 +292,143 @@ class QACTBatchWorker(QThread):
             run_labels.append(label)
             self.series_completed.emit(index + 1, total, result)
         batch = CTBatchResult(run_results=run_results, run_labels=run_labels)
+        self.batch_result_ready.emit(batch)
+
+
+class QAMRIBatchWorker(QThread):
+    """
+    Runs a multi-series ACR MRI Large (pylinac) batch, one series at a time.
+
+    Serial execution: see QACTBatchWorker docstring (matplotlib global pyplot
+    state + GIL-bound thread parallelism make process-based parallelism the only
+    safe concurrency, which multiplies peak RAM and adds packaging/cancellation
+    complexity that outweighs the wall-clock win at typical batch sizes).
+
+    Does NOT hold an ``organizer`` reference -- it runs off the GUI thread;
+    the selection dialog resolves display labels on the GUI thread and passes
+    them in, parallel to ``requests``.
+
+    Batch image temp-dir ownership: this worker owns a single
+    ``tempfile.TemporaryDirectory`` for the whole batch (created in
+    ``__init__``, mirroring how the single-run facade owns its temp dir until
+    after ``workbook.save()``). Before running each request, the worker assigns
+    it a unique PNG path inside that directory via
+    ``request.analyzed_image_out_path`` so ``run_acr_mri_large_analysis`` can
+    save the analyzed image. The directory is exposed as ``self.image_temp_dir``
+    and is intentionally NOT cleaned up by this worker -- the facade must keep
+    it alive until the batch result dialog's XLSX export has run, then call
+    ``image_temp_dir.cleanup()``.
+
+    When any request has ``embed_module_images_in_xlsx`` True, the worker also
+    creates a sibling ``module_images_temp_dir`` (prefix
+    ``qa-mri-batch-module-images-``) and assigns each cloned request a
+    **per-series subdirectory** so pylinac's fixed ``slice 1.png`` / etc. names
+    cannot overwrite another series. The facade cleans up
+    ``module_images_temp_dir`` alongside ``image_temp_dir`` when the batch
+    result dialog is destroyed. When no request requests embed, no
+    module-images dir is created.
+
+    Signals:
+        series_completed(int done, int total, object QAResult): emitted after
+            each series finishes (success or failure), to drive N-of-M
+            progress.
+        batch_result_ready(object ACRMBatchResult): emitted once, after all
+            series finish or the batch is cancelled (partial result).
+    """
+
+    series_completed = Signal(int, int, object)  # done, total, QAResult
+    batch_result_ready = Signal(object)  # ACRMBatchResult
+
+    def __init__(
+        self,
+        requests: list[QARequest],
+        series_labels: list[str],
+        *,
+        app_version: str = "",
+    ) -> None:
+        """
+        Args:
+            requests: One QARequest per selected series (analysis_type
+                "acr_mri_large"), in selection order.
+            series_labels: Display label per request, parallel to
+                ``requests``. Built on the GUI thread (organizer access) by
+                the selection dialog; appended to ``ACRMBatchResult.run_labels``
+                only when the corresponding result is collected.
+            app_version: Reserved for parity with QABatchWorker; unused today
+                (ACR MRI batch has no combined-PDF/summary-PDF step).
+        """
+        super().__init__()
+        if len(series_labels) != len(requests):
+            raise ValueError("series_labels must be parallel to requests (same length)")
+        self.requests = requests
+        self.series_labels = series_labels
+        self.app_version = app_version
+        self._cancelled = False
+        # Worker-owned temp dir for analyzed-image PNGs (see class docstring).
+        # The facade is responsible for calling cleanup() once the batch
+        # result has been consumed (result dialog shown + XLSX export done).
+        self.image_temp_dir = tempfile.TemporaryDirectory(prefix="qa-mri-batch-image-")
+        # Module-images temp dir for per-module PNGs. Created when any
+        # request requests embed; None when embed is off for all requests.
+        if any(getattr(req, "embed_module_images_in_xlsx", True) for req in requests):
+            self.module_images_temp_dir: tempfile.TemporaryDirectory[str] | None = (
+                tempfile.TemporaryDirectory(prefix="qa-mri-batch-module-images-")
+            )
+        else:
+            self.module_images_temp_dir = None
+
+    def cancel(self) -> None:
+        """Request cooperative cancellation; checked between series."""
+        self._cancelled = True
+
+    def run(self) -> None:
+        total = len(self.requests)
+        run_results: list[QAResult] = []
+        run_labels: list[str] = []
+        for index, (request, label) in enumerate(
+            zip(self.requests, self.series_labels, strict=True)
+        ):
+            if self._cancelled:
+                # Cooperative cancellation: skip remaining series, emit the
+                # partial batch collected so far.
+                break
+            module_out: str | None = None
+            if self.module_images_temp_dir is not None:
+                module_out = os.path.join(
+                    self.module_images_temp_dir.name, uuid.uuid4().hex
+                )
+                os.makedirs(module_out, exist_ok=True)
+            cloned_request = dataclasses.replace(
+                request,
+                analyzed_image_out_path=os.path.join(
+                    self.image_temp_dir.name, f"{uuid.uuid4().hex}.png"
+                ),
+                module_images_out_dir=module_out,
+            )
+            try:
+                result = run_acr_mri_large_analysis(cloned_request)
+            except Exception as exc:
+                # Per-series error isolation: a failure here (e.g. a
+                # malformed request) must not abort the rest of the batch.
+                result = QAResult(
+                    success=False,
+                    analysis_type=request.analysis_type,
+                    errors=[f"ACR MRI batch series failed: {exc}"],
+                    study_uid=request.study_uid,
+                    series_uid=request.series_uid,
+                    modality=request.modality,
+                    pylinac_analysis_profile=build_pylinac_analysis_profile(
+                        request, engine="(batch series error)"
+                    ),
+                )
+            if request.preflight_warnings:
+                merged = list(request.preflight_warnings)
+                for w in result.warnings:
+                    if w and w not in merged:
+                        merged.append(w)
+                result.warnings = merged
+            run_results.append(result)
+            run_labels.append(label)
+            self.series_completed.emit(index + 1, total, result)
+        batch = ACRMBatchResult(run_results=run_results, run_labels=run_labels)
         self.batch_result_ready.emit(batch)
