@@ -599,6 +599,10 @@ class FileOperationsMixin:
         """Open the Stage 1 ACR MRI Large (pylinac) analysis flow (menu / signal slot)."""
         dialog_actions.open_acr_mri_phantom_analysis(self)
 
+    def _open_acr_mri_batch_analysis(self) -> None:
+        """Open the multi-series ACR MRI Large (pylinac) batch flow (menu / signal slot)."""
+        dialog_actions.open_acr_mri_batch_analysis(self)
+
     def _open_nuclear_qc_analysis(self) -> None:
         """Open the nuclear-medicine QC (pylinac.nuclear) flow (menu / signal slot)."""
         dialog_actions.open_nuclear_qc_analysis(self)

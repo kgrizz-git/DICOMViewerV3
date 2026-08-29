@@ -574,6 +574,13 @@ def open_acr_mri_phantom_analysis(app: DICOMViewerApp) -> None:
     app._qa_app_facade.open_acr_mri_phantom_analysis()
 
 
+def open_acr_mri_batch_analysis(app: DICOMViewerApp) -> None:
+    """Open the multi-series ACR MRI Large (pylinac) batch flow (menu / signal slot)."""
+    from gui.qa_mri_batch_flow import open_acr_mri_batch_analysis as _open
+
+    _open(app)
+
+
 def open_nuclear_qc_analysis(app: DICOMViewerApp) -> None:
     """Open the nuclear-medicine QC (pylinac.nuclear) flow (menu / signal slot)."""
     app._qa_app_facade.open_nuclear_qc_analysis()

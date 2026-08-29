@@ -11,6 +11,7 @@ The viewer can run **automated ACR phantom analysis** using the **pylinac** libr
 | **Tools → Automated QA** | **ACR CT Phantom (pylinac)…** |
 | **Tools → Automated QA** | **ACR CT Batch (pylinac)…** |
 | **Tools → Automated QA** | **ACR MRI Phantom (pylinac)…** |
+| **Tools → Automated QA** | **ACR MRI Batch (pylinac)…** |
 | **Tools → Automated QA** | **Nuclear Medicine QC (pylinac)…** |
 
 ## Inputs

@@ -7,6 +7,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **ACR MRI batch analysis (P4-M3):** New **Tools → Automated QA → ACR MRI Batch (pylinac)…** runs one shared MRI options set over **multiple selected MR series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); a minimal non-modal summary shows one label + success/fail per series. ``compare_request`` from the MRI options dialog is ignored in batch (OQ-7). Export buttons land in P4-M4. **Semantic versioning note: minor.**
 - **ACR MRI batch series selection (P4-M2):** Added
   `acr_mri_series_selection_dialog` with `prompt_mri_batch_series_selection`
   (loaded MR series checkbox list + "Add folder...", returns parallel

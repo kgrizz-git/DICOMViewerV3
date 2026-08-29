@@ -691,6 +691,11 @@ def build_menu_bar(main_window) -> None:
     acr_mri_phantom_action.triggered.connect(main_window.acr_mri_phantom_requested.emit)
     automated_qa_menu.addAction(acr_mri_phantom_action)
 
+    acr_mri_batch_action = QAction("ACR MRI Batch (pylinac)...", main_window)
+    acr_mri_batch_action.setToolTip("Run ACR MRI phantom analysis over multiple selected series via pylinac")
+    acr_mri_batch_action.triggered.connect(main_window.acr_mri_batch_requested.emit)
+    automated_qa_menu.addAction(acr_mri_batch_action)
+
     nuclear_qc_action = QAction("Nuclear Medicine QC (pylinac)...", main_window)
     nuclear_qc_action.setToolTip("Run nuclear-medicine QC (PlanarUniformity) via pylinac.nuclear")
     nuclear_qc_action.triggered.connect(main_window.nuclear_qc_requested.emit)
