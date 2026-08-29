@@ -44,7 +44,10 @@ from gui.qa_ct_batch_export import (
     save_ct_batch_json,
     save_ct_batch_xlsx,
 )
-from gui.qa_module_image_tempdir import assign_module_images_out_dir
+from gui.qa_module_image_tempdir import (
+    assign_module_images_out_dir,
+    cleanup_batch_worker_temp_dirs,
+)
 from qa.analysis_types import (
     CTBatchResult,
     MRIBatchResult,
@@ -757,9 +760,7 @@ class QAAppFacade:
         """
         app = self._app
         if not batch.run_results:
-            worker.image_temp_dir.cleanup()
-            if getattr(worker, "module_images_temp_dir", None) is not None:
-                worker.module_images_temp_dir.cleanup()
+            cleanup_batch_worker_temp_dirs(worker)
             return
 
         if app._ct_batch_result_dialog is not None:
@@ -768,9 +769,7 @@ class QAAppFacade:
 
         def on_dialog_destroyed(*_args: Any) -> None:
             app._ct_batch_result_dialog = None
-            worker.image_temp_dir.cleanup()
-            if getattr(worker, "module_images_temp_dir", None) is not None:
-                worker.module_images_temp_dir.cleanup()
+            cleanup_batch_worker_temp_dirs(worker)
 
         dialog = create_ct_batch_result_dialog(
             app.main_window,
