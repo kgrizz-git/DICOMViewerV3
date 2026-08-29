@@ -404,7 +404,7 @@ class ViewStateManager:
                     self.rescale_slope, self.rescale_intercept
                 )
         elif not reset_use_rescaled_values and self.use_rescaled_values:
-            if self.rescale_slope is not None and self.rescale_intercept is not None:
+            if is_usable_rescale_slope(self.rescale_slope) and self.rescale_intercept is not None:
                 return self.dicom_processor.convert_window_level_raw_to_rescaled(
                     reset_window_center, reset_window_width,
                     self.rescale_slope, self.rescale_intercept
@@ -464,7 +464,7 @@ class ViewStateManager:
                     wc, ww, self.rescale_slope, self.rescale_intercept
                 )
         elif not is_rescaled and use_rescaled:
-            if self.rescale_slope is not None and self.rescale_intercept is not None:
+            if is_usable_rescale_slope(self.rescale_slope) and self.rescale_intercept is not None:
                 return self.dicom_processor.convert_window_level_raw_to_rescaled(
                     wc, ww, self.rescale_slope, self.rescale_intercept
                 )
@@ -669,7 +669,7 @@ class ViewStateManager:
                     preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
                 )
         elif not preset_is_rescaled and self.use_rescaled_values:
-            if self.rescale_slope is not None and self.rescale_intercept is not None:
+            if is_usable_rescale_slope(self.rescale_slope) and self.rescale_intercept is not None:
                 return self.dicom_processor.convert_window_level_raw_to_rescaled(
                     preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
                 )

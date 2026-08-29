@@ -59,7 +59,7 @@ def apply_window_level_preset(app: Any, preset_index: int) -> None:
                 wc, ww, rescale_slope, rescale_intercept
             )
     elif not is_rescaled and use_rescaled_values:
-        if rescale_slope is not None and rescale_intercept is not None:
+        if is_usable_rescale_slope(rescale_slope) and rescale_intercept is not None:
             wc, ww = app.dicom_processor.convert_window_level_raw_to_rescaled(
                 wc, ww, rescale_slope, rescale_intercept
             )

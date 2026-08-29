@@ -9,9 +9,10 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Fixed
 - **Volume rescale slope guard (Sonar S1244):** Centralize exact-zero
   `RescaleSlope` checks in `is_usable_rescale_slope()` and use it for 3D
-  volume calibration preflight and shared W/L rescale paths, clearing the
+  volume calibration preflight and shared W/L rescale paths, targeting the
   SonarCloud new-code reliability gate without introducing a near-zero
-  epsilon. **Semantic versioning note: patch.**
+  epsilon (gate clearance pending post-merge confirmation).
+  **Semantic versioning note: patch.**
 
 ### Changed
 - **README feature showcase:** Root `README.md` expands the Highlights table

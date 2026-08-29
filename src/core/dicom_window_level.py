@@ -270,7 +270,11 @@ def resolve_window_level_and_rescale(
         apply_rescale, rescale_slope, rescale_intercept,
     )
 
-    out_slope, out_intercept = (rescale_slope, rescale_intercept) if apply_rescale else (None, None)
+    out_slope, out_intercept = (
+        (rescale_slope, rescale_intercept)
+        if apply_rescale and is_usable_rescale_slope(rescale_slope)
+        else (None, None)
+    )
     return window_center, window_width, out_slope, out_intercept
 
 

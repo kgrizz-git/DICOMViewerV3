@@ -202,9 +202,7 @@ def _preset_values_differ_after_viewer_conversion(
     """True when stored C/W differ from viewer-space display (conversion applies)."""
     if preset.is_rescaled == use_rescaled:
         return False
-    if preset.is_rescaled and not use_rescaled:
-        return _has_usable_rescale(rescale_slope, rescale_intercept)
-    return rescale_slope is not None and rescale_intercept is not None
+    return _has_usable_rescale(rescale_slope, rescale_intercept)
 
 
 def format_preset_display_values(
@@ -227,7 +225,8 @@ def format_preset_display_values(
                 wc, ww, rescale_slope, rescale_intercept
             )
     elif not preset.is_rescaled and use_rescaled:
-        if rescale_slope is not None and rescale_intercept is not None:
+        if _has_usable_rescale(rescale_slope, rescale_intercept):
+            assert rescale_slope is not None and rescale_intercept is not None
             wc, ww = convert_window_level_raw_to_rescaled(
                 wc, ww, rescale_slope, rescale_intercept
             )

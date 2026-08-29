@@ -36,7 +36,7 @@ def apply_window_level_rescale_conversion(
                 wc, ww, rescale_slope, rescale_intercept
             )
     elif not is_rescaled and use_rescaled_values:
-        if rescale_slope is not None and rescale_intercept is not None:
+        if is_usable_rescale_slope(rescale_slope) and rescale_intercept is not None:
             return dicom_processor.convert_window_level_raw_to_rescaled(
                 wc, ww, rescale_slope, rescale_intercept
             )
