@@ -293,7 +293,7 @@ def test_empty_batch_cleans_temps_immediately(qapp, monkeypatch) -> None:
     monkeypatch.setattr(flow_mod, "QAMRIBatchWorker", lambda *a, **kw: worker)
     # Let the real summary function run; mock only the dialog builder.
     monkeypatch.setattr(
-        flow_mod, "_create_mri_batch_result_dialog", lambda *a, **k: MagicMock()
+        flow_mod, "create_mri_batch_result_dialog", lambda *a, **k: MagicMock()
     )
 
     _start_acr_mri_series_batch_worker(app, [], [])

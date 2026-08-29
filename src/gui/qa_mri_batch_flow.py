@@ -32,18 +32,18 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QDialog,
-    QDialogButtonBox,
-    QLabel,
-    QProgressDialog,
-    QVBoxLayout,
-)
+from PySide6.QtWidgets import QProgressDialog
 
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
 from gui.dialogs.acr_mri_series_selection_dialog import (
     prompt_mri_batch_series_selection,
     stamp_mri_batch_options,
+)
+from gui.dialogs.mri_batch_result_dialog import create_mri_batch_result_dialog
+from gui.qa_mri_batch_export import (
+    save_mri_batch_csv,
+    save_mri_batch_json,
+    save_mri_batch_xlsx,
 )
 from qa.analysis_types import ACRMBatchResult
 from qa.worker import QAMRIBatchWorker
@@ -199,46 +199,15 @@ def _show_acr_mri_batch_summary(
         app._mri_batch_result_dialog = None
         _cleanup_batch_temp_dirs(worker)
 
-    dialog = _create_mri_batch_result_dialog(
+    dialog = create_mri_batch_result_dialog(
         app.main_window,
         batch,
+        on_save_xlsx_clicked=lambda: save_mri_batch_xlsx(app, batch),
+        on_save_json_clicked=lambda: save_mri_batch_json(app, batch),
+        on_save_csv_clicked=lambda: save_mri_batch_csv(app, batch),
         on_destroyed=on_dialog_destroyed,
     )
     app._mri_batch_result_dialog = dialog
     dialog.activateWindow()
     dialog.raise_()
     dialog.show()
-
-
-def _create_mri_batch_result_dialog(
-    parent: Any,
-    batch: ACRMBatchResult,
-    *,
-    on_destroyed: Any,
-) -> QDialog:
-    """
-    Build a minimal non-modal MRI batch summary dialog: one row per series
-    with the display label and success/fail status. Export buttons land in
-    P4-M4; this scaffold keeps temp dirs alive until ``on_destroyed``.
-    """
-    dialog = QDialog(parent)
-    dialog.setWindowTitle("ACR MRI Phantom Analysis — Batch Summary")
-    dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-    dialog.setMinimumWidth(480)
-    dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-    dialog.destroyed.connect(on_destroyed)
-
-    layout = QVBoxLayout(dialog)
-    layout.addWidget(QLabel("ACR MRI batch complete. One row per series:"))
-
-    for label, result in zip(batch.run_labels, batch.run_results, strict=True):
-        status = "Success" if result.success else "Failed"
-        row = QLabel(f"  {label}: {status}")
-        layout.addWidget(row)
-
-    layout.addStretch()
-    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-    buttons.rejected.connect(dialog.reject)
-    layout.addWidget(buttons)
-
-    return dialog
