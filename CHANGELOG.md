@@ -7,6 +7,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **ACR QA XLSX Summary modality-aware columns (P2-X1):** The XLSX Summary
+  sheet now appends seven modality-aware key columns pulled from the canonical
+  flatten (PIU, PSG, LC score, MTF@50% row/col, slice thickness, slice shift).
+  Each is best-effort: a column stays blank when its flatten key is absent for
+  the run, so CT and MRI rows share one header with blanks where a metric does
+  not apply. Numeric cells stay numbers; CT slice thickness, CT SNR, and
+  ``mri_snr`` are excluded by design (``mri_snr`` lands with Phase 6).
+  **Semantic versioning note: minor.**
 - **ACR QA embed-module-images toggle (P2-I2):** ACR CT, ACR MRI, and CT batch
   options dialogs now expose an **Embed module images in XLSX** checkbox
   (default **on**) for PDF-parity module PNGs on the XLSX Images sheet. The
