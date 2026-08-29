@@ -13,6 +13,7 @@ from qa.pylinac_mri_echo import (
     highest_echo_number_from_paths,
     resolve_mri_analyze_echo_number,
     stamp_analyzed_echo_on_profile,
+    stamp_resolved_echo_on_profile,
 )
 
 
@@ -122,3 +123,13 @@ def test_stamp_analyzed_echo_on_profile_records_auto_highest() -> None:
     assert profile["echo_number"] == 2
     assert profile["echo_number_requested"] is None
     assert profile["echo_number_auto_highest"] is True
+
+
+def test_stamp_resolved_echo_on_profile_uses_explicit_request() -> None:
+    profile: dict[str, object] = {}
+    request = QARequest(analysis_type="acr_mri_large", echo_number=3)
+    analyzed = stamp_resolved_echo_on_profile(profile, request)
+    assert analyzed == 3
+    assert profile["echo_number"] == 3
+    assert profile["echo_number_requested"] == 3
+    assert profile["echo_number_auto_highest"] is False

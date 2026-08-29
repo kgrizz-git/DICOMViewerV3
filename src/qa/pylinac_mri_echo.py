@@ -126,6 +126,19 @@ def stamp_analyzed_echo_on_profile(
     profile["echo_number_auto_highest"] = request.echo_number is None
 
 
+def stamp_resolved_echo_on_profile(
+    profile: dict[str, Any], request: QARequest
+) -> int | None:
+    """Resolve echo from the request and stamp requested vs analyzed on *profile*.
+
+    Call this as soon as the audit profile exists so early returns (missing
+    pylinac, invalid source, worker isolation) still record echo provenance.
+    """
+    analyzed_echo = resolve_mri_analyze_echo_number(request)
+    stamp_analyzed_echo_on_profile(profile, request, analyzed_echo)
+    return analyzed_echo
+
+
 def overlay_analyzed_echo_metrics(
     metrics: dict[str, Any],
     request: QARequest,

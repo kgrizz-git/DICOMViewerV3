@@ -35,6 +35,7 @@ from qa.pylinac_mri_echo import (
     overlay_analyzed_echo_metrics,
     resolve_mri_analyze_echo_number,
     stamp_analyzed_echo_on_profile,
+    stamp_resolved_echo_on_profile,
 )
 from qa.pylinac_mri_pdf import (
     _build_mri_notes_lines,
@@ -77,6 +78,10 @@ def _image_count(analyzer: Any, request: QARequest) -> int:
 
 
 def _missing_pylinac_result(request: QARequest) -> QAResult:
+    profile = build_pylinac_analysis_profile(
+        request, engine="(pylinac not installed)"
+    )
+    stamp_resolved_echo_on_profile(profile, request)
     return QAResult(
         success=False,
         analysis_type=request.analysis_type,
@@ -87,9 +92,7 @@ def _missing_pylinac_result(request: QARequest) -> QAResult:
         series_uid=request.series_uid,
         modality=request.modality,
         num_images=len(request.dicom_paths),
-        pylinac_analysis_profile=build_pylinac_analysis_profile(
-            request, engine="(pylinac not installed)"
-        ),
+        pylinac_analysis_profile=profile,
     )
 
 
@@ -257,6 +260,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
     mri_cls = ACRMRILarge if vanilla else ACRMRILargeForViewer
     engine = "ACRMRILarge" if vanilla else "ACRMRILargeForViewer"
     profile = build_pylinac_analysis_profile(request, engine=engine)
+    analyzed_echo = stamp_resolved_echo_on_profile(profile, request)
 
     lc_method = str(
         getattr(request, "low_contrast_method", DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD)
@@ -298,8 +302,6 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
                 pylinac_analysis_profile=profile,
             )
 
-        analyzed_echo = resolve_mri_analyze_echo_number(request)
-        stamp_analyzed_echo_on_profile(profile, request, analyzed_echo)
         analyze_kwargs = _build_mri_analyze_kwargs(
             analyzer,
             request,

@@ -46,6 +46,12 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: minor.**
 
 ### Fixed
+- **MRI analysis profile keeps echo provenance on early failure:** The ACR MRI
+  Large runner now stamps requested vs analyzed echo on
+  ``pylinac_analysis_profile`` before constructing the analyzer, so invalid
+  source, missing-pylinac, and worker isolation failures still record
+  ``echo_number`` / ``echo_number_requested`` / ``echo_number_auto_highest``.
+  **Semantic versioning note: patch.**
 - **MRI batch JSON export now appends ``.json``:** ``save_mri_batch_json`` now
   matches XLSX/CSV path normalization — a selected path with no ``.json``
   suffix gets one appended; an explicit ``.json`` is left unchanged.

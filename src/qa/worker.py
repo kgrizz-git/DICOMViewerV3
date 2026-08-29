@@ -46,6 +46,7 @@ from qa.analysis_types import (
     QAResult,
     build_pylinac_analysis_profile,
 )
+from qa.pylinac_mri_echo import stamp_resolved_echo_on_profile
 from qa.pylinac_runner import (
     NUCLEAR_ANALYSIS_TYPES,
     run_acr_ct_analysis,
@@ -410,6 +411,10 @@ class QAMRIBatchWorker(QThread):
             except Exception as exc:
                 # Per-series error isolation: a failure here (e.g. a
                 # malformed request) must not abort the rest of the batch.
+                profile = build_pylinac_analysis_profile(
+                    request, engine="(batch series error)"
+                )
+                stamp_resolved_echo_on_profile(profile, request)
                 result = QAResult(
                     success=False,
                     analysis_type=request.analysis_type,
@@ -417,9 +422,7 @@ class QAMRIBatchWorker(QThread):
                     study_uid=request.study_uid,
                     series_uid=request.series_uid,
                     modality=request.modality,
-                    pylinac_analysis_profile=build_pylinac_analysis_profile(
-                        request, engine="(batch series error)"
-                    ),
+                    pylinac_analysis_profile=profile,
                 )
             if request.preflight_warnings:
                 merged = list(request.preflight_warnings)

@@ -341,6 +341,9 @@ def test_run_analysis_returns_validation_failure_before_fake_analysis(monkeypatc
     assert result.errors == ["No DICOM paths or folder were provided."]
     assert result.num_images == 0
     assert result.pylinac_version == "test-version"
+    assert result.pylinac_analysis_profile["echo_number"] == 2
+    assert result.pylinac_analysis_profile["echo_number_requested"] == 2
+    assert result.pylinac_analysis_profile["echo_number_auto_highest"] is False
 
 
 def test_run_analysis_returns_normalized_failure_when_analysis_raises(monkeypatch) -> None:
@@ -352,6 +355,8 @@ def test_run_analysis_returns_normalized_failure_when_analysis_raises(monkeypatc
     assert result.num_images == 2
     assert result.errors == ["ACR MRI Large analysis failed: synthetic analysis failure"]
     assert result.pylinac_analysis_profile["engine"] == "ACRMRILargeForViewer"
+    assert result.pylinac_analysis_profile["echo_number"] == 2
+    assert result.pylinac_analysis_profile["echo_number_auto_highest"] is False
 
 
 def test_run_analysis_keeps_success_when_optional_pdf_publish_fails(monkeypatch) -> None:
@@ -375,6 +380,7 @@ def test_run_batch_returns_one_missing_dependency_result_per_config(monkeypatch)
     assert all(result.success is False for result in batch.run_results)
     assert all(result.num_images == 2 for result in batch.run_results)
     assert all("pylinac is not installed" in result.errors[0] for result in batch.run_results)
+    assert all(result.pylinac_analysis_profile["echo_number"] == 2 for result in batch.run_results)
 
 
 def test_run_batch_preserves_run_order_and_propagates_each_config(monkeypatch) -> None:
