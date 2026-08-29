@@ -10,15 +10,36 @@ Inputs:
 Outputs:
     - (rescale_slope, rescale_intercept, rescale_type) tuples
     - Inferred rescale type string
+    - Usable-slope predicate for exact-zero RescaleSlope checks
 
 Requirements:
     - pydicom
 """
+from __future__ import annotations
+
+import math
+
 from pydicom.dataset import Dataset
 
 from utils.privacy.console import print_redacted
 
 _DISPLAY_NONE_RESCALE_TYPES = {"UNSPECIFIED", "US"}
+
+
+def is_usable_rescale_slope(slope: float | None) -> bool:
+    """Return True when RescaleSlope can drive a linear pixel transform.
+
+    RescaleSlope is DICOM DS-VR (decimal string, exact parse). An exact
+    comparison against ``0.0`` is deliberate — DICOM defines no epsilon below
+    which a slope is "zero". ``None``, non-finite, and exact ``0.0``
+    disqualify calibration / W/L remapping.
+    """
+    if slope is None:
+        return False
+    value = float(slope)
+    if not math.isfinite(value):
+        return False
+    return value != 0.0  # NOSONAR(S1244)
 
 
 def _normalize_explicit_rescale_type(rescale_type: str | None) -> str | None:
