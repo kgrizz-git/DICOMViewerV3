@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
 **Last updated:** 2026-08-29
-**Status:** Active — **Phases 1–6 shipped**; golden `results_data` dumps landed 2026-08-29 (R0-1/R0-2/R0-9, P1-F4). Remaining: **P0-GATE** reviewer sign-off, archive after two PRs (**P5-D5**)
+**Status:** Active — **Phases 0–6 shipped** (P0-GATE signed 2026-08-29). Remaining: archive after two PRs (**P5-D5**)
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -147,12 +147,12 @@ publish_pdf()  →  save_images(to_stream=True)  →  plot_images()  →  one fi
 |----|----------|-----------------|----------|
 | **OQ-1** | Does **ACR CT** expose **percent signal ghosting (PSG)** in pylinac 3.43.2, or only MRI? | Ghosting is MRI-only; omit CT PSG columns unless R0-3 finds a field | **Absent on CT** (confirm in R0-4) |
 | **OQ-2** | Batch result type for multi-series MRI? | `MRIBatchResult` is **compare-mode** (carries `run_configs: list[LcRunConfig]`; drives `run_acr_mri_large_batch`); do not overload | **New `ACRMBatchResult`** mirroring `CTBatchResult` (`run_results` + `run_labels`) |
-| **OQ-3** | **Wide batch CSV**: fixed column order vs sparse (only populated metrics)? | Fixed order + empty cells for Excel ergonomics | **Fixed column order** (provenance → families → overflow) |
-| **OQ-4** | **Summary sheet**: which metrics are mandatory columns vs Detail-only? | Gate each column on R0-3 presence; add modality discriminator; MTF@50% row+col only in Summary (not 10–90% grid) | **Hybrid allowlist** — see R0-5 |
-| **OQ-5** | Flatten **`raw_pylinac`** nested dicts/lists into dotted keys for **all** leaves, or curated allowlist per modality? | | **Hybrid**: curated Summary + full `raw_pylinac` walk in Detail; overlay the curated `result.metrics` entries on top (see merge rule) |
+| **OQ-3** | **Wide batch CSV**: fixed column order vs sparse (only populated metrics)? | Fixed order + empty cells for Excel ergonomics | **Locked P0-GATE 2026-08-29:** two-band interim — provenance columns first, then remaining metric columns A–Z. Each metric is its own column. Revisit a third “family” band only if Excel use needs it. |
+| **OQ-4** | **Summary sheet**: which metrics are mandatory columns vs Detail-only? | Gate each column on R0-3 presence; add modality discriminator; MTF@50% row+col only in Summary (not 10–90% grid) | **Locked P0-GATE 2026-08-29:** hybrid allowlist (PIU, PSG, LC score, MTF@50% row/col, MRI slice thickness/shift, `mri_snr`). **No CT SNR.** Pylinac ACR CT has no measured-thickness module; **TO_DO** tracks exporting nominal DICOM `SliceThickness` (not a ramp measurement). |
+| **OQ-5** | Flatten **`raw_pylinac`** nested dicts/lists into dotted keys for **all** leaves, or curated allowlist per modality? | | **Locked P0-GATE 2026-08-29 (v1; revisit if Detail keys confuse):** curated Summary + full `raw_pylinac` walk in Detail; overlay curated `result.metrics` (metrics wins). |
 | **OQ-6** | MRI batch **PDF**: optional per-series path like single-run, or batch JSON/XLSX only (match CT batch)? | CT batch has no batch PDF | **No batch PDF** for MRI |
-| **OQ-7** | MRI batch **echo_number** / compare options: one shared dialog (like CT options) — include compare toggle? | Compare stays on single-run menu; batch bypasses `compare_request` | _Locked: no compare in batch_ |
-| **OQ-8** | Add `metrics_flat` to JSON export or keep flatten export-layer-only? | `raw_pylinac` already carries data | **Export-layer-only** — no JSON schema churn |
+| **OQ-7** | MRI batch **echo_number** / compare options: one shared dialog (like CT options) — include compare toggle? | Compare stays on single-run menu; batch bypasses `compare_request` | **Locked: no compare in batch** (P0-GATE: ok for now) |
+| **OQ-8** | Add `metrics_flat` to JSON export or keep flatten export-layer-only? | `raw_pylinac` already carries data | **Locked P0-GATE 2026-08-29 (v1; revisit if a consumer needs flat JSON):** export-layer only — JSON keeps nested `raw_pylinac`; CSV/XLSX get the flat columns. |
 | **OQ-9** | Embed **PDF-parity module images** in XLSX Images sheet? | `save_images()` vs composite; workbook size | **Yes, default on** — persisted `acr_qa_embed_module_images_in_xlsx`; user can disable in ACR CT/MRI options (single + batch) |
 | **OQ-10** | **MRI SNR** noise term: apply NEMA **0.655** Rayleigh correction on background σ? | PMC8321175 / NEMA MS 1 vs ACR-style uncorrected **S̄ / σ_bkg** (~80% phantom diameter on the uniformity slice) | **Locked: no 0.655 in v1** — export key **`mri_snr`** is **uncorrected** ACR-style ratio (≠ NEMA SNR); document in user guide |
 
@@ -302,14 +302,14 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [x] **(R0-2)** MRI `results_data(as_dict=True)` key dump → appendix §MRI + committed `tests/fixtures/qa/acr_mri_results_data.json`. (owner: maintainer) — **2026-08-29** from `deid-phantoms/mr/series-005/` (T1; 1 mm extent)
 - [x] **(R0-3)** Live-analyzer gap table (dict vs harvest) — **filled from source** (see appendix §Live harvest; CT only needs `low_contrast_cnr` live harvest; MRI PSG/SNR/MTF confirmed dict-complete except SNR = Phase 6). (owner: coder)
 - [x] **(R0-4)** Confirm **OQ-1** — **CT PSG absent** in pylinac 3.43.2: `ACRCTResult` has no `psg`/`ghosting_ratio`/`ghost_rois` fields; `ACRCT` has no `uniformity_module.ghost_rois`. PSG is MRI-only (`MRUniformityModuleOutput.psg` + `ghosting_ratio` present). (owner: coder)
-- [ ] **(R0-5)** Resolve **OQ-4**, **OQ-5** (Summary vs Detail flatten strategy). (owner: coder + reviewer)
+- [x] **(R0-5)** Resolve **OQ-4**, **OQ-5** (Summary vs Detail flatten strategy). (owner: coder + reviewer) — **P0-GATE 2026-08-29:** hybrid Summary allowlist; Detail = full dotted walk; no CT SNR; CT measured thickness still absent (see TO_DO for DICOM `SliceThickness`).
 - [x] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder) — **landed**: `ACRMBatchResult` added to `src/qa/analysis_types.py`, mirroring `CTBatchResult` (`run_results` + `run_labels` only); docstring states it is **not** compare-mode `MRIBatchResult`.
-- [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P1-F3 interim:** two bands (provenance insertion order → remaining keys `str`-sorted). Curated top-level scalars interleave alphabetically with dotted `raw_pylinac` leaves rather than a third "family" band. Dumps landed 2026-08-29; still using the two-band interim unless a fixed enumerated header is needed.
+- [x] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P0-GATE 2026-08-29:** keep two-band interim (provenance insertion order → remaining keys `str`-sorted). Each metric is its own column. No third family band unless Excel use requires it.
 - [x] **(R0-8)** Document formula-injection wiring for Phase 1 — `qa_export.build_metrics_csv` uses bare `csv.writer`; Phase 1 (P1-F2) must wrap with `SafeCsvWriter` from `src/core/spreadsheet_safety.py` and apply `neutralize_spreadsheet_value` to every cell. XLSX: openpyxl writes leading-`=` strings as live formulas on open — same neutralization applies to Series/Run labels and warnings in XLSX cells. (owner: coder) — **landed**: CSV wired in P1-F2; XLSX Summary, Detail, and Images Series/Run labels neutralized in P2-X2.
 - [x] **(R0-9)** Commit redacted dumps; assert no PHI paths. (owner: maintainer, after: R0-1, R0-2) — hygiene + family tests in `tests/qa/test_pylinac_results_data_spike.py`
 - [x] **(R0-10)** Document module figure names per modality from `plot_images()` source — see appendix §Figure names. **OQ-9 locked**: embed via `save_images(directory=…)` when toggle on. (owner: coder)
 - [x] **(P0-T1)** Add `tests/qa/test_pylinac_results_data_spike.py` (loads committed dumps). (owner: tester, after: R0-9)
-- [ ] **(P0-GATE)** Reviewer signs off appendix + **OQ-1–OQ-10** before claiming Phase 0 complete. (owner: reviewer) — **does not block** starting Ph1–5 code
+- [x] **(P0-GATE)** Reviewer signs off appendix + **OQ-1–OQ-10** before claiming Phase 0 complete. (owner: reviewer) — **signed 2026-08-29.** OQ-5/OQ-8 locked for v1 with revisit-if-wrong. CT SNR stays omitted. CT image thickness (DICOM `SliceThickness`) tracked in `TO_DO.md`, not this plan’s v1 Summary.
 
 ### Phase 1 — Canonical flattening (`qa_result_flatten.py` — **locked new module**)
 
@@ -526,8 +526,8 @@ From pylinac 3.43.2 `acr.py` source:
 
 ## Verification gates
 
-- **G0:** Phase 0 appendix complete on committed dumps; **OQ-1–OQ-10** locked (OQ-10 already decided).
-- **G1:** Reviewer approves metric key naming convention before GUI wiring.
+- **G0:** Phase 0 appendix complete on committed dumps; **OQ-1–OQ-10** locked. **Met 2026-08-29** (P0-GATE).
+- **G1:** Reviewer approves metric key naming convention before GUI wiring. **Met 2026-08-29** with P0-GATE (dotted `raw_pylinac` paths in the appendix).
 - **G2:** Fixture tests prove CT + MRI flatten includes ≥1 value from each **present** target family using committed `results_data` dumps (not live `analyze()`). **Met 2026-08-29** in `tests/qa/test_pylinac_results_data_spike.py`.
 - **G3:** Manual smoke on one local CT + one local MRI phantom (optional): single-run export, CT batch CSV, MRI batch export; **optional G3b:** XLSX Images module set matches PDF figure count when embed on.
 

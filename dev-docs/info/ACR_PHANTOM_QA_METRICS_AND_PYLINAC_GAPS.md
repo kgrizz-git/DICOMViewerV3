@@ -108,6 +108,7 @@ pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 | Gap | Priority for DICOM Viewer V3 | Planned handling |
 |-----|------------------------------|------------------|
 | **MRI SNR** (ACR-style uncorrected ratio; NEMA adds 0.655) | **High** — user request | **Phase 6 shipped** — live harvest in `run_acr_mri_large_analysis`; export in flatten/CSV/XLSX |
+| **CT image thickness** (pylinac `ACRCT` has no ramp module) | Low (P2) | **No CT SNR.** Nominal DICOM `SliceThickness` harvest tracked in `TO_DO.md`; ACR Module 1 ramp measurement remains catalog **C6**. |
 | **SNR uniformity (SNRU)** | Low | Defer — slice-6/slice-7 ratio per PMC8321175 after slice-7 `mri_snr` ships |
 | **Visual high-contrast resolution** (hole-pair / line-pair read) | Low | pylinac **rMTF** is interim automated substitute; see **§Direct resolution reads** for investigation avenues |
 | **Weekly QC** (center frequency, TX gain, artifact form) | Out of scope | Not image-export metrics |
