@@ -15,6 +15,18 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch.**
 
 ### Changed
+- **ACR QA XLSX Images sheet multi-module embed (P2-X3):** The XLSX
+  Images sheet now embeds per-module PNGs from
+  ``QAResult.analyzed_module_images`` (module label → absolute path), in
+  stable key order, each preceded by its module label — stacked vertically
+  per run. Series/Run and module labels are formula-injection neutralized.
+  When a run has no module images, the legacy composite
+  ``analyzed_image_path`` is still embedded (backward compat). When the
+  sheet exists because some run has an embeddable image, a run with
+  nothing embeddable still gets a ``(no analyzed image for this run)``
+  placeholder. The sheet is skipped (with a Summary note) when Pillow is
+  unavailable or no run yields an embeddable image.
+  **Semantic versioning note: minor.**
 - **ACR QA module-image temp-dir lifecycle (P2-I3):** The facade/worker now
   owns the per-module image temp dir for the embed-on path: CT single nests
   the module dir under the composite image temp dir (single cleanup in

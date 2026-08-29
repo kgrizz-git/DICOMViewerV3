@@ -139,6 +139,52 @@ def _append_note(ws: Worksheet, note: str) -> None:
     ws.append([note])
 
 
+def _module_images(result: QAResult) -> list[tuple[str, str]]:
+    """
+    Sorted (module label, absolute path) pairs for a run's per-module images.
+
+    Reads ``analyzed_module_images`` (module label → abs PNG path), drops any
+    path that is not a file on disk, and returns the pairs in stable ``str``
+    key order. An empty dict (embed off / save failed) yields an empty list.
+    A non-empty dict whose paths are all missing on disk also yields an empty
+    list, so :func:`_embeddable_images` can fall back to the legacy composite.
+    """
+    module_images = getattr(result, "analyzed_module_images", None) or {}
+    pairs = [
+        (str(label), path)
+        for label, path in module_images.items()
+        if path and os.path.isfile(path)
+    ]
+    pairs.sort(key=lambda pair: pair[0])
+    return pairs
+
+
+def _composite_image_path(result: QAResult) -> str | None:
+    """Absolute composite PNG path when the file exists on disk, else None."""
+    path = getattr(result, "analyzed_image_path", None)
+    return path if path and os.path.isfile(path) else None
+
+
+def _embeddable_images(result: QAResult) -> list[tuple[str, str]]:
+    """
+    Image list for one run: per-module PNGs first, else legacy composite.
+
+    Returns ``(module_label, abs_path)`` pairs. Composite fallback uses an
+    empty module label so the Images sheet does not emit a second label row
+    between the Series/Run ID and the image (same layout as the pre-P2-X3
+    one-image-per-run sheet). An empty list means this run has nothing
+    embeddable — the caller writes a per-run placeholder when the sheet
+    exists, or skips the sheet when every run is empty.
+    """
+    module_imgs = _module_images(result)
+    if module_imgs:
+        return module_imgs
+    composite = _composite_image_path(result)
+    if composite is not None:
+        return [("", composite)]
+    return []
+
+
 def _build_images_sheet(
     wb: Workbook,
     summary_ws: Worksheet,
@@ -146,28 +192,28 @@ def _build_images_sheet(
     row_labels: list[str | None],
 ) -> None:
     """
-    One embedded PNG per run, stacked vertically, each preceded by its
-    Series/Run ID label cell.
+    Per-module embedded PNGs, stacked vertically, from ``analyzed_module_images``.
 
-    Degrades gracefully: if Pillow is unavailable, or none of the runs have
-    an analyzed-image path on disk, the Images sheet is skipped entirely and
-    a note cell is appended to the Summary sheet instead -- the rest of the
-    workbook (Summary, Detail) still writes.
+    Per run: a Series/Run ID label row, then for each module a label row
+    followed by its embedded image. When a run has no module images but carries
+    a legacy ``analyzed_image_path`` (composite), that single image is embedded
+    as today (backward compat). When the sheet exists because *some* run has
+    an embeddable image, runs with nothing embeddable still get a
+    ``(no analyzed image for this run)`` placeholder so batch row identity
+    is preserved. Degrades gracefully: if Pillow is unavailable, or none of
+    the runs yield an embeddable image from either source, the Images sheet
+    is skipped entirely and a note cell is appended to the Summary sheet
+    instead -- the rest of the workbook (Summary, Detail) still writes.
     """
     if not _PILLOW_AVAILABLE:
         _append_note(summary_ws, "Images sheet skipped: Pillow is not available for image embedding.")
         return
 
-    def _has_image(result: QAResult) -> bool:
-        path = getattr(result, "analyzed_image_path", None)
-        return bool(path) and os.path.isfile(path)
-
-    available = [
-        (result, label)
+    plans = [
+        (result, label, _embeddable_images(result))
         for result, label in zip(results, row_labels, strict=True)
-        if _has_image(result)
     ]
-    if not available:
+    if not any(image_list for _, _, image_list in plans):
         _append_note(summary_ws, "Images sheet skipped: no analyzed images were available.")
         return
 
@@ -175,11 +221,17 @@ def _build_images_sheet(
 
     ws = wb.create_sheet("Images")
     row = 1
-    for result, label in zip(results, row_labels, strict=True):
+    for result, label, image_list in plans:
         ws.cell(row=row, column=1, value=_xlsx_cell(_row_label(result, label)))
         row += 1
-        path = getattr(result, "analyzed_image_path", None)
-        if path and os.path.isfile(path):
+        if not image_list:
+            ws.cell(row=row, column=1, value="(no analyzed image for this run)")
+            row += 2
+            continue
+        for module_label, path in image_list:
+            if module_label:
+                ws.cell(row=row, column=1, value=_xlsx_cell(module_label))
+                row += 1
             try:
                 image = XLImage(path)
                 image.width = 480
@@ -189,9 +241,6 @@ def _build_images_sheet(
             except Exception:
                 ws.cell(row=row, column=1, value="(image could not be embedded)")
                 row += 2
-        else:
-            ws.cell(row=row, column=1, value="(no analyzed image for this run)")
-            row += 2
 
 
 def build_qa_workbook(
@@ -220,9 +269,14 @@ def build_qa_workbook(
             background mean/std, CNR, status, warnings (see F1's canonical
             ``metrics["low_contrast_cnr"]`` shape).
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
-        Images -- one embedded analyzed-image PNG per run, or a note cell on
-            Summary when Pillow/images are unavailable. Series/Run labels on
-            every sheet are formula-injection neutralized.
+        Images -- per-module embedded PNGs from ``analyzed_module_images``
+            (stable key sort), each preceded by its module label, stacked
+            vertically per run; falls back to the legacy composite
+            ``analyzed_image_path`` when a run has no module images. When the
+            sheet exists, a run with nothing embeddable still gets a
+            placeholder row. Skipped (with a Summary note) when Pillow is
+            unavailable or no run yields an embeddable image. Series/Run and
+            module labels on every sheet are formula-injection neutralized.
     """
     if labels is not None and len(labels) != len(results):
         raise ValueError("labels must be parallel to results (same length)")
