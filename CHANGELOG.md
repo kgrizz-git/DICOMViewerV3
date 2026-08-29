@@ -7,6 +7,16 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **ACR MRI batch series selection (P4-M2):** Added
+  `acr_mri_series_selection_dialog` with `prompt_mri_batch_series_selection`
+  (loaded MR series checkbox list + "Add folder...", returns parallel
+  `(requests, labels)`) and `stamp_mri_batch_options` helper that applies
+  shared MRI options (echo, check_uid, origin_slice, scan extent, vanilla,
+  embed, low-contrast tuning) to each request via `dataclasses.replace`.
+  Mirrors the CT batch selection dialog; shared options come from the existing
+  `prompt_acr_mri_options` dialog (no compare-mode wiring). Internal plumbing
+  only — no user-visible change until the MRI batch menu lands (P4-M3).
+  **Semantic versioning note: patch.**
 - **ACR MRI batch worker plumbing (P4-M1):** Added `ACRMBatchResult` (mirrors
   `CTBatchResult`; not compare-mode `MRIBatchResult`) and `QAMRIBatchWorker`
   (serial per-series `run_acr_mri_large_analysis`, cooperative cancel,
