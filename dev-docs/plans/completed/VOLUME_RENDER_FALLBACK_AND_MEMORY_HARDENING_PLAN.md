@@ -1,8 +1,8 @@
 # Plan: Fix the blank-frame GPU-fallback false positive and the volume build memory amplification
 
 **Date:** 2026-08-22
-**Last updated:** 2026-08-26
-**Status:** Supporting — implementation complete; native-GPU/Parallels manual verification remains
+**Last updated:** 2026-08-27
+**Status:** Completed (implementation merged 2026-08-26). Remaining manual verification is tracked in [`TO_DO.md`](../TO_DO.md) → **Manual Smoke Checks**.
 **Priority:** P1 (Task A — silent quality degradation), P2 (Task B — memory)
 **Area:** 3D Volume Rendering — renderer correctness and build-path memory
 **Branch suggestion:** `fix/volume-render-fallback-and-memory`

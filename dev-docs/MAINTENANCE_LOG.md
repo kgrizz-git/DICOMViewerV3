@@ -1,8 +1,31 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-08-28
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-28
+
+- **Privacy hardening plan disposition:** Marked G6 closed (**2026-07-13**
+  snapshot root on `origin/main`; development from **2026-07-14** on this
+  lineage). PRIV-V1–V3 satisfied by routine CI/hooks; demoted Phase 8 tail to
+  P2 optional. Review is maintainer + agents only.
+- **Backlog — Manual Smoke Checks section:** Added a dedicated [`TO_DO.md`](TO_DO.md)
+  section for human verification after merged implementation work, with workflow
+  guidance, a single **Next up** pointer, and a rule that slot 1 stays manual
+  smokes while any remain open. Consolidated volume-render, post-load first-paint,
+  and W/L preset smokes; removed duplicate 3D sub-bullets and closed the
+  refactor-extraction smoke block (all confirmed 2026-06).
+- **Pylinac ACR export slice plan:** Added
+  [`PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`](plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md)
+  (full metrics CSV/XLSX, batch CT CSV, multi-series MRI batch); linked from
+  `TO_DO.md` Next up.
+- **pytest-xdist parallelization — closed:** Fifteen consecutive green CI runs on
+  `main` (PRs #79–#92, 2026-08-23 through 2026-08-28) with `-n auto` and the
+  80% coverage floor. Archived
+  [`TEST_SUITE_PARALLELIZATION_PLAN.md`](plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md)
+  and removed the long Maintenance follow-up from `TO_DO.md`. Optional future
+  runtime work stays under [CI test runtime and coverage integrity](plans/CI_TEST_RUNTIME_AND_COVERAGE_INTEGRITY_PLAN.md).
 
 ## 2026-08-26
 
@@ -17,9 +40,9 @@ This file records development and repository-maintenance history that is useful 
   512×512×800 measurement with smoothing: 1438 MiB peak RSS (baseline
   3274–3276 MiB). The focused 68-test suite and the serial non-native pytest
   scope both passed (the latter exited 0). A basic native-macOS 3D-view smoke
-  was user-confirmed; Windows/Parallels GPU-fallback checks remain tracked in
-  the supporting plan because the sandbox cannot create a macOS Cocoa OpenGL
-  context.
+  was user-confirmed; Windows/Parallels GPU-fallback checks remain in
+  [`TO_DO.md`](TO_DO.md) → **Manual Smoke Checks** (plan archived to
+  [`completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md`](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)).
 
 ## 2026-08-25
 
@@ -205,7 +228,7 @@ This file records development and repository-maintenance history that is useful 
   planned module-scoped app fixture was therefore dropped as both ineffective
   and a shared-state hazard.
 
-  **Plan:** [Parallelize the CI test suite](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md).
+  **Plan:** [Parallelize the CI test suite](plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md) (closed 2026-08-27).
 
 ## 2026-08-10
 
