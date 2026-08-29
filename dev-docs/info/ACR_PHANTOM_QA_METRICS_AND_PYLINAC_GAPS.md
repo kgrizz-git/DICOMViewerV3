@@ -38,6 +38,8 @@ These are the **quantitative tests** in the current **Phantom Test Guidance** us
 
 **Note on slice numbering:** Guidance uses **ACR T1 axial series** slice indices (slice 7 = **uniformity slice**, also used for PSG). pylinac maps modules by **stack offset** from the HU/origin slice; verify alignment on real data in Phase 0. Do not call this a “flood” — that term is nuclear-medicine usage, not ACR MRI phantom testing.
 
+**Follow-up (not v1):** consider a viewer-side **ACR-procedure PIU** (slice 7 large circular ROI, ~1 cm² high/low, ACR formula and **87.5%/82%** limits) as a separate metric from pylinac `uniformity_module.piu`. Tracked in [TO_DO.md](../TO_DO.md) under Features (Near-Term) / pylinac ACR. Do not confuse PIU with **`mri_snr`**.
+
 ---
 
 ## SNR and SNR uniformity — not accreditation tests, but routine QC
