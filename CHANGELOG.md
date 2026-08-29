@@ -30,12 +30,13 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   only — no user-visible change until the MRI batch UI lands (P4-M3/M4).
   **Semantic versioning note: patch.**
 - **ACR QA XLSX Summary modality-aware columns (P2-X1):** The XLSX Summary
-  sheet now appends seven modality-aware key columns pulled from the canonical
-  flatten (PIU, PSG, LC score, MTF@50% row/col, slice thickness, slice shift).
-  Each is best-effort: a column stays blank when its flatten key is absent for
-  the run, so CT and MRI rows share one header with blanks where a metric does
-  not apply. Numeric cells stay numbers; CT slice thickness, CT SNR, and
-  ``mri_snr`` are excluded by design (``mri_snr`` lands with Phase 6).
+  sheet now appends eight modality-aware key columns pulled from the canonical
+  flatten (PIU, PSG, LC score, MTF@50% row/col, slice thickness, slice shift,
+  and a reserved **MRI SNR** column). Each is best-effort: a column stays
+  blank when its flatten key is absent for the run, so CT and MRI rows share
+  one header with blanks where a metric does not apply. Numeric cells stay
+  numbers; CT slice thickness and CT SNR are excluded by design. ``MRI SNR``
+  is present in the header but stays blank until Phase 6 harvests ``mri_snr``.
   **Semantic versioning note: minor.**
 - **ACR QA embed-module-images toggle (P2-I2):** ACR CT, ACR MRI, and CT batch
   options dialogs now expose an **Embed module images in XLSX** checkbox
@@ -45,6 +46,21 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: minor.**
 
 ### Fixed
+- **MRI batch JSON export now appends ``.json``:** ``save_mri_batch_json`` now
+  matches XLSX/CSV path normalization — a selected path with no ``.json``
+  suffix gets one appended; an explicit ``.json`` is left unchanged.
+  **Semantic versioning note: patch.**
+- **MRI batch result dialog slot survives deferred destroy:** Closing a prior
+  MRI batch summary no longer nulls ``app._mri_batch_result_dialog`` before
+  the replacement is assigned. The ``destroyed`` callback clears the slot only
+  when it still references the dialog being destroyed, so ``WA_DeleteOnClose``
+  cannot wipe a newer dialog.
+  **Semantic versioning note: patch.**
+- **XLSX Summary extras are formula-injection neutralized:** Mapped Summary
+  values (PIU, PSG, and the other extra columns) now pass through
+  ``_xlsx_cell`` before the row is written, so strings that begin with
+  ``= + - @`` are stored as literal text rather than live formulas.
+  **Semantic versioning note: patch.**
 - **ACR MRI SNR used the ghosted ROI pair when phase-encode was COL:** Frequency-encode (ghost-free) noise ROIs are **Left/Right** when ``InPlanePhaseEncodingDirection`` is **COL** (vertical PE; ghosts Top/Bottom) and **Top/Bottom** when it is **ROW**. The harvest had those swapped, so COL series (typical ACR axial) used the noisier Top/Bottom boxes. A warning is added if the tag-selected pair has higher σ than the other pair. **Semantic versioning note: patch.**
 - **Standard-share de-id strips performed-station tags:** PS3.15 Standard share now removes **Performed Station Name** ``(0040,0242)`` and **Performed Station AE Title** ``(0040,0241)`` with the other device/station identifiers (previously ``StationName`` was stripped but performed-station tags could remain). Research/retain-device still keeps them. **Semantic versioning note: patch.**
 - **ACR QA embed-off now skips the XLSX Images sheet (P2-X4):** Unchecking **Embed module images in XLSX** on the ACR CT/MRI options dialog now correctly skips the XLSX Images sheet (Summary note only), matching the missing-Pillow degradation. Previously the runner still saved the legacy composite image, so the workbook's composite fallback recreated the Images sheet even when the toggle was off. `save_composite_analyzed_image` now skips when `embed_module_images_in_xlsx` is False (the composite's only purpose is embedding). **Semantic versioning note: patch.**

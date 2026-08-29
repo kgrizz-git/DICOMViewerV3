@@ -191,13 +191,9 @@ def _show_acr_mri_batch_summary(
         _cleanup_batch_temp_dirs(worker)
         return
 
-    if app._mri_batch_result_dialog is not None:
-        app._mri_batch_result_dialog.close()
-        app._mri_batch_result_dialog = None
-
-    def on_dialog_destroyed(*_args: Any) -> None:
-        app._mri_batch_result_dialog = None
-        _cleanup_batch_temp_dirs(worker)
+    previous = app._mri_batch_result_dialog
+    if previous is not None:
+        previous.close()
 
     dialog = create_mri_batch_result_dialog(
         app.main_window,
@@ -205,8 +201,16 @@ def _show_acr_mri_batch_summary(
         on_save_xlsx_clicked=lambda: save_mri_batch_xlsx(app, batch),
         on_save_json_clicked=lambda: save_mri_batch_json(app, batch),
         on_save_csv_clicked=lambda: save_mri_batch_csv(app, batch),
-        on_destroyed=on_dialog_destroyed,
     )
+
+    def on_dialog_destroyed(*_args: Any) -> None:
+        # WA_DeleteOnClose can defer this callback until after a replacement
+        # dialog is already in the slot; only clear when it still points here.
+        if app._mri_batch_result_dialog is dialog:
+            app._mri_batch_result_dialog = None
+        _cleanup_batch_temp_dirs(worker)
+
+    dialog.destroyed.connect(on_dialog_destroyed)
     app._mri_batch_result_dialog = dialog
     dialog.activateWindow()
     dialog.raise_()

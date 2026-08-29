@@ -62,6 +62,7 @@ _SUMMARY_HEADERS = (
 # flatten key; a column stays blank when its key is absent for a run (CT rows
 # leave the MRI-only fields blank and vice versa — shared header, best-effort
 # fill). Locked gaps (CT slice thickness, CT SNR) are intentionally excluded.
+# ``MRI SNR`` maps ``mri_snr`` (viewer-harvested uncorrected ACR-style ratio).
 _SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("PIU (%)", "uniformity_module.piu"),
     ("PSG", "uniformity_module.psg"),
@@ -119,8 +120,9 @@ def _summary_extra_values(result: QAResult) -> list[Any]:
     Reads ``build_metric_rows(result)`` once and looks up each key in
     ``_SUMMARY_KEY_COLUMNS``; missing keys degrade to a blank cell. Numeric
     scalars (PIU, PSG, MTF, thickness, shift, LC score) stay numbers so the
-    Summary sheet stays sortable/filterable — only the caller neutralizes the
-    string cells (Series/Run, status, warnings).
+    Summary sheet stays sortable/filterable. The caller applies ``_xlsx_cell``
+    to every extra value so formula-like mapped strings are stored as
+    neutralized text; numeric scalars pass through unchanged.
     """
     flat = dict(build_metric_rows(result))
     return [flat.get(key) for _, key in _SUMMARY_KEY_COLUMNS]
@@ -134,7 +136,7 @@ def _build_summary_sheet(
         obj_mean, bg_mean, bg_std, cnr = _cnr_summary_values(result)
         status = "success" if result.success else "failed"
         warnings_text = "; ".join(result.warnings or [])
-        extra = _summary_extra_values(result)
+        extra = [_xlsx_cell(value) for value in _summary_extra_values(result)]
         ws.append(
             [
                 _xlsx_cell(_row_label(result, label)),
@@ -313,7 +315,8 @@ def build_qa_workbook(
             is absent for the run, so CT and MRI rows share one header with
             blanks where a metric does not apply (CT slice thickness and CT SNR
             are excluded by design). ``MRI SNR`` is the viewer-harvested
-            uncorrected ACR-style ratio (``mri_snr``), not NEMA MS 1.
+            uncorrected ACR-style ratio (``mri_snr``), not NEMA MS 1. Extra
+            mapped values pass through ``_xlsx_cell``.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- per-module embedded PNGs from ``analyzed_module_images``
             (stable key sort), each preceded by its module label, stacked

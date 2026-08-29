@@ -85,6 +85,20 @@ def test_export_mri_batch_json_writes_document_array(tmp_path) -> None:
     app.main_window.update_status.assert_called_once_with(f"Saved QA batch JSON: {output}")
 
 
+def test_export_mri_batch_json_appends_extension(tmp_path) -> None:
+    """A path with no suffix gets ``.json``; an explicit ``.json`` is preserved."""
+    output = tmp_path / "no-ext"
+    app = _app(str(output))
+    save_mri_batch_json(app, _batch())
+    assert (tmp_path / "no-ext.json").is_file()
+
+    already = tmp_path / "already.json"
+    app_with_suffix = _app(str(already))
+    save_mri_batch_json(app_with_suffix, _batch())
+    assert already.is_file()
+    assert not (tmp_path / "already.json.json").exists()
+
+
 def test_export_mri_batch_json_cancels_when_no_path() -> None:
     app = _app("")
     save_mri_batch_json(app, _batch())

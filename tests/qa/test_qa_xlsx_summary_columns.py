@@ -3,9 +3,11 @@ Tests for P2-X1 — modality-aware key columns on the XLSX Summary sheet.
 
 The Summary sheet keeps its original 7 columns, then appends modality-aware
 columns pulled from the canonical flatten (``build_metric_rows``): PIU, PSG,
-LC score, MTF@50% row/col, slice thickness, slice shift. Each is best-effort:
-a column stays blank when its flatten key is absent for the run, so CT and MRI
-rows share one header with blanks where a metric does not apply.
+LC score, MTF@50% row/col, slice thickness, slice shift, and MRI SNR. Each is
+best-effort: a column stays blank when its flatten key is absent for the run,
+so CT and MRI rows share one header with blanks where a metric does not apply.
+The synthetic MRI fixture plants ``metrics["mri_snr"] = 87.5`` so the harvest
+column is asserted filled; CT rows leave it blank.
 """
 
 from __future__ import annotations
@@ -47,7 +49,7 @@ def _ct_result() -> QAResult:
 
 
 def _mri_result() -> QAResult:
-    """Synthetic ACR MRI run: has PIU, PSG, LC score, MTF@50%, thickness, shift."""
+    """Synthetic ACR MRI run: PIU, PSG, LC score, MTF, thickness, shift, planted SNR."""
     return QAResult(
         success=True,
         analysis_type="acr_mri_large",
@@ -124,21 +126,22 @@ def test_summary_header_tuple_is_locked() -> None:
 
 
 def test_ct_row_fills_ct_relevant_columns_only() -> None:
-    """CT row: LC score fills; PIU/PSG/MTF/thickness/shift stay blank."""
+    """CT row: LC score fills; PIU/PSG/MTF/thickness/shift/MRI SNR stay blank."""
     result = _ct_result()
     wb = build_qa_workbook([result], labels=["CT-1"])
     row = [c.value for c in wb["Summary"][2]]
     # Original columns present.
     assert row[0] == "CT-1"
     assert row[4] == 4.25  # CNR stays numeric
-    # LC Score (index 9) fills; PIU/PSG (7,8) and the MRI-only MTF/thickness/shift (10-13) stay blank.
+    # LC Score (index 9) fills; PIU/PSG (7,8), MRI-only MTF/thickness/shift (10-13),
+    # and reserved MRI SNR (14) stay blank.
     assert row[9] == 1
     for idx in (7, 8, 10, 11, 12, 13, 14):
         assert row[idx] in (None, ""), f"column {idx} ({_SUMMARY_HEADERS[idx]}) should be blank for CT"
 
 
 def test_mri_row_fills_mri_relevant_columns() -> None:
-    """MRI row: PIU/PSG/MTF/thickness/shift fill; LC score fills too."""
+    """MRI row: PIU/PSG/MTF/thickness/shift/SNR fill from the synthetic fixture."""
     result = _mri_result()
     wb = build_qa_workbook([result], labels=["MRI-1"])
     row = [c.value for c in wb["Summary"][2]]
@@ -149,7 +152,7 @@ def test_mri_row_fills_mri_relevant_columns() -> None:
     assert row[11] == 0.98  # MTF@50% Col
     assert row[12] == 5.1  # Slice Thickness
     assert row[13] == 0.25  # Slice Shift
-    assert row[14] == 87.5  # MRI SNR
+    assert row[14] == 87.5  # MRI SNR (synthetic fixture, not a phantom measurement)
 
 
 def test_missing_keys_stay_blank() -> None:
@@ -175,6 +178,14 @@ def test_formula_like_series_label_still_neutralized() -> None:
     assert wb["Summary"].cell(row=2, column=1).value == "'=Run1"
 
 
+def test_formula_like_extra_summary_value_is_neutralized() -> None:
+    """Mapped Summary extras beginning with formula triggers are stored as text."""
+    result = _mri_result()
+    result.raw_pylinac["uniformity_module"]["piu"] = "=1+1"
+    wb = build_qa_workbook([result], labels=["MRI-1"])
+    assert wb["Summary"].cell(row=2, column=8).value == "'=1+1"
+
+
 def test_cnr_numeric_cells_still_numbers() -> None:
     """CNR and the new numeric columns must remain numbers, not strings."""
     # Use the CT run (which carries low_contrast_cnr) to assert CNR stays numeric.
@@ -198,13 +209,14 @@ def test_mixed_ct_and_mri_batch_share_header() -> None:
     ct_row = [c.value for c in wb["Summary"][2]]
     mri_row = [c.value for c in wb["Summary"][3]]
 
-    # CT: blank PIU/PSG/MTF/thickness/shift; fills LC score.
+    # CT: blank PIU/PSG/MTF/thickness/shift/MRI SNR; fills LC score.
     assert ct_row[7] in (None, "")
     assert ct_row[8] in (None, "")
     assert ct_row[9] == 1
     assert ct_row[10] in (None, "")
+    assert ct_row[14] in (None, "")
 
-    # MRI: fills everything.
+    # MRI: fills harvested fields including synthetic MRI SNR.
     assert mri_row[7] == 99.1
     assert mri_row[8] == 0.42
     assert mri_row[9] == 34
@@ -213,4 +225,3 @@ def test_mixed_ct_and_mri_batch_share_header() -> None:
     assert mri_row[12] == 5.1
     assert mri_row[13] == 0.25
     assert mri_row[14] == 87.5
-    assert ct_row[14] in (None, "")

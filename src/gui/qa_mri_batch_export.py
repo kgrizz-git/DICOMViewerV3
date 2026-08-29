@@ -82,6 +82,8 @@ def save_mri_batch_json(app: Any, batch: ACRMBatchResult) -> None:
     )
     if not json_path:
         return
+    if not json_path.lower().endswith(".json"):
+        json_path = f"{json_path}.json"
     payload = [
         build_single_run_document(
             result, app_version=APP_VERSION, inputs={"series_label": label}
