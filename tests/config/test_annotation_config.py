@@ -30,7 +30,7 @@ class TestTextAnnotation:
         assert cm.get_text_annotation_color() == (255, 255, 0)
 
     def test_default_font_size(self, tmp_path):
-        assert _cm(tmp_path).get_text_annotation_font_size() == 12
+        assert _cm(tmp_path).get_text_annotation_font_size() == 13
 
     def test_set_font_size(self, tmp_path):
         cm = _cm(tmp_path)
@@ -40,7 +40,7 @@ class TestTextAnnotation:
     def test_zero_font_size_ignored(self, tmp_path):
         cm = _cm(tmp_path)
         cm.set_text_annotation_font_size(0)
-        assert cm.get_text_annotation_font_size() == 12
+        assert cm.get_text_annotation_font_size() == 13
 
 
 class TestArrowAnnotation:

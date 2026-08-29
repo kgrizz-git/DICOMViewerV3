@@ -7,11 +7,15 @@ from unittest.mock import MagicMock
 
 import pytest
 from pydicom.dataset import Dataset
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
+from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QWidget
 
-from gui.dialogs.volume_render_dialog import VolumeRenderDialog, _VolumeBuilderWorker
+from gui.dialogs.volume_render_dialog import (
+    VolumeRenderDialog,
+    _initial_dialog_size_for_screen,
+    _VolumeBuilderWorker,
+)
 
 
 def _dialog(monkeypatch, qapp, datasets=None, config_manager=None) -> VolumeRenderDialog:
@@ -26,18 +30,34 @@ def _dialog(monkeypatch, qapp, datasets=None, config_manager=None) -> VolumeRend
 
 @pytest.mark.qt
 def test_initial_ui_uses_title_default_geometry_and_progress_widget(qapp, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "gui.dialogs.volume_render_dialog._initial_dialog_size",
+        lambda: QSize(1200, 850),
+    )
     dialog = _dialog(monkeypatch, qapp)
 
     try:
         assert dialog.windowTitle() == "3D Volume Render — Synthetic series"
         assert dialog.isModal() is False
-        assert dialog.size().width() == 900
-        assert dialog.size().height() == 650
+        assert dialog.size() == QSize(1200, 850)
         assert dialog._progress_label.text() == "Building 3D volume…"
         assert dialog._progress_bar.minimum() == 0
         assert dialog._progress_bar.maximum() == 0
     finally:
         dialog.close()
+
+
+@pytest.mark.parametrize(
+    ("available", "expected"),
+    [
+        (QRect(0, 0, 1512, 982), QSize(756, 756)),
+        (QRect(0, 0, 3440, 1440), QSize(1440, 1440)),
+        (QRect(0, 0, 800, 600), QSize(480, 480)),
+        (None, QSize(800, 800)),
+    ],
+)
+def test_initial_dialog_size_uses_screen_fraction_and_bounds(available, expected) -> None:
+    assert _initial_dialog_size_for_screen(available) == expected
 
 
 @pytest.mark.qt
@@ -92,8 +112,8 @@ def test_volume_builder_worker_emits_prepared_volume_data(qapp, monkeypatch) -> 
     worker = _VolumeBuilderWorker([Dataset()])
     volume = SimpleNamespace(sitk_image="synthetic-image", source_datasets=["source"])
     prepared = SimpleNamespace()
-    emitted: list[tuple[object, object]] = []
-    worker.build_finished.connect(lambda built, data: emitted.append((built, data)))
+    emitted: list[object] = []
+    worker.build_finished.connect(emitted.append)
     import core.mpr_volume
     import core.volume_renderer
 
@@ -108,7 +128,7 @@ def test_volume_builder_worker_emits_prepared_volume_data(qapp, monkeypatch) -> 
     prepare.assert_called_once_with(
         "synthetic-image", source_datasets=["source"], apply_rescale=True
     )
-    assert emitted == [(volume, prepared)]
+    assert emitted == [prepared]
 
 
 @pytest.mark.qt
@@ -162,10 +182,10 @@ def test_finished_build_replaces_progress_and_initializes_viewer(qapp, monkeypat
 
     monkeypatch.setattr(core.volume_renderer, "VolumeRenderer", _Renderer)
     monkeypatch.setattr(gui.volume_viewer_widget, "VolumeViewerWidget", _Viewer)
-    volume_data = SimpleNamespace(rescale_applied=True)
+    volume_data = SimpleNamespace(rescale_applied=True, downsample_factor=2)
 
     try:
-        dialog._on_build_finished(SimpleNamespace(), volume_data)
+        dialog._on_build_finished(volume_data)
 
         worker.wait.assert_called_once_with()
         assert dialog._progress_container is None
@@ -175,6 +195,12 @@ def test_finished_build_replaces_progress_and_initializes_viewer(qapp, monkeypat
             "modality": "CT",
             "rescale_applied": True,
         }
+        notices = [
+            dialog._layout.itemAt(index).widget().text()
+            for index in range(dialog._layout.count())
+            if isinstance(dialog._layout.itemAt(index).widget(), QLabel)
+        ]
+        assert any("downsampled 2×" in text for text in notices)
     finally:
         dialog.close()
 
@@ -212,7 +238,7 @@ def test_finished_build_warns_when_frames_are_not_spatial(qapp, monkeypatch) -> 
     monkeypatch.setattr(gui.volume_viewer_widget, "VolumeViewerWidget", _Viewer)
 
     try:
-        dialog._on_build_finished(SimpleNamespace(), SimpleNamespace(rescale_applied=False))
+        dialog._on_build_finished(SimpleNamespace(rescale_applied=False))
 
         warnings = [
             dialog._layout.itemAt(index).widget().text()

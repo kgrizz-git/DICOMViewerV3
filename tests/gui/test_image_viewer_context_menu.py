@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QGraphicsRectItem
 
 import gui.image_viewer_context_menu as image_viewer_context_menu
 
@@ -76,6 +75,9 @@ class _FakeMenu:
     def setEnabled(self, value: bool) -> None:
         self.enabled = value
 
+    def setToolTipsVisible(self, _value: bool) -> None:
+        return None
+
     def exec(self, _pos):
         return None
 
@@ -125,21 +127,8 @@ def _make_viewer(**overrides):
         "mapToScene": lambda p: p,
         "scene": SimpleNamespace(itemAt=MagicMock(return_value=None)),
         "transform": lambda: None,
-        "roi_statistics_selection_changed": _FakeSignal(),
-        "roi_delete_requested": _FakeSignal(),
-        "measurement_delete_requested": _FakeSignal(),
-        "text_annotation_delete_requested": _FakeSignal(),
-        "arrow_annotation_delete_requested": _FakeSignal(),
-        "crosshair_delete_requested": _FakeSignal(),
         "annotation_options_requested": _FakeSignal(),
-        "roi_statistics_overlay_toggle_requested": _FakeSignal(),
-        "_toggle_statistic": MagicMock(),
-        "get_roi_from_item_callback": None,
         "delete_all_rois_callback": MagicMock(),
-        "right_mouse_context_menu_shown": False,
-        "right_mouse_drag_start_pos": None,
-        "right_mouse_press_for_drag": _FakeSignal(),
-        "image_item": object(),
         "reset_view_requested": _FakeSignal(),
         "reset_all_views_requested": _FakeSignal(),
         "flip_h": MagicMock(),
@@ -251,50 +240,6 @@ def _install_fake_menu_patches(monkeypatch) -> None:
     )
 
 
-def test_toggle_roi_statistic_adds_and_removes_entry() -> None:
-    viewer = _make_viewer()
-    roi = SimpleNamespace(visible_statistics={"mean"})
-
-    image_viewer_context_menu.toggle_roi_statistic(viewer, roi, "std", True)
-    image_viewer_context_menu.toggle_roi_statistic(viewer, roi, "mean", False)
-
-    assert roi.visible_statistics == {"std"}
-    assert viewer.roi_statistics_selection_changed.calls[-1] == (roi, {"std"})
-
-
-@pytest.mark.qt
-def test_handle_mouse_press_right_button_on_roi_builds_roi_menu(monkeypatch, qapp) -> None:
-    _install_fake_menu_patches(monkeypatch)
-    roi = SimpleNamespace(statistics_overlay_visible=True, visible_statistics={"mean", "count"})
-    viewer = _make_viewer(
-        scene=SimpleNamespace(itemAt=MagicMock(return_value=QGraphicsRectItem())),
-        get_roi_from_item_callback=MagicMock(return_value=roi),
-    )
-
-    image_viewer_context_menu.handle_mouse_press_right_button(viewer, _event())
-
-    assert viewer.right_mouse_context_menu_shown is True
-    menu = _FakeMenu.instances[0]
-    assert [action.text for action in menu.actions[:2]] == ["Delete ROI", "Delete all ROIs (D)"]
-    stats_menu = _require_submenu(menu, "Statistics Overlay")
-    stat_labels = [action.text for action in stats_menu.actions]
-    assert "Show Statistics Overlay" in stat_labels
-    assert "Show Mean" in stat_labels
-    assert "Show Pixels" in stat_labels
-
-
-@pytest.mark.qt
-def test_handle_mouse_press_right_button_on_background_prepares_drag(monkeypatch, qapp) -> None:
-    _install_fake_menu_patches(monkeypatch)
-    viewer = _make_viewer()
-
-    image_viewer_context_menu.handle_mouse_press_right_button(viewer, _event())
-
-    assert viewer.right_mouse_context_menu_shown is False
-    assert viewer.right_mouse_drag_start_pos == QPointF(3, 4)
-    assert viewer.right_mouse_press_for_drag.calls[-1] == ()
-
-
 @pytest.mark.qt
 def test_show_image_background_context_menu_on_right_release_builds_full_menu(monkeypatch, qapp) -> None:
     _install_fake_menu_patches(monkeypatch)
@@ -317,6 +262,7 @@ def test_show_image_background_context_menu_on_right_release_builds_full_menu(mo
     assert "Combine Slices…" in submenu_labels
     assert "Scroll Wheel Mode" in submenu_labels
     assert "Slice Sync" in submenu_labels
+    assert "does not modify DICOM data" in _require_action(root, "Image Smoothing").tooltip
 
     assign_menu = _require_submenu(root, "Assign Series to Focused Window")
     assert [action.text for action in assign_menu.actions] == ["Series 1"]

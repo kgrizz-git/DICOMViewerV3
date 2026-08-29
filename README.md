@@ -6,10 +6,11 @@ or folders, review them with multi-window viewing and clinical measurement
 tools, and export images or derived DICOM — all on your own machine. It is not
 a PACS server or archive.
 
-<!-- Hero screenshot: intentionally not included yet. Screenshots are
-     human-captured and pass PHI review before being committed and added to
-     security/approved-media-sha256.json. Insert one primary image (optional
-     second) directly below this line once approved. -->
+<p align="center">
+  <img src="resources/readme-screenshots/mpr-roi-workspace.png" width="720" alt="Multi-pane workspace with ROI statistics on a CT QC phantom, coronal MPR, cine controls, and a collapsible DICOM tag sidebar.">
+</p>
+
+<p align="center"><em>Multi-pane review with ROIs, MPR, cine playback, and an integrated tag viewer.</em></p>
 
 ## Get the app
 
@@ -18,19 +19,58 @@ Download a packaged release for your platform from the
 the installer or bundle. Inside the app, **Help → Quick Start Guide** gives a
 short orientation and **Help → Documentation** opens the full user guide.
 
-## What you can do
+## Highlights
 
 | Area | Capabilities |
 | --- | --- |
-| Viewing | Multi-pane layouts, window/level presets, slice navigation, cine playback, series navigator, configurable overlays. |
-| Reconstruction | MPR and slab projections; optional volume rendering. |
-| Clinical tools | ROIs, distance/angle measurements, text and arrow annotations, metadata inspection and tag editing. |
+| Viewing | Multi-pane layouts, window/level presets, slice navigation, cine playback, series navigator, configurable overlays, themes and settings. |
+| Reconstruction | Create and export MPRs; slab / intensity projections (AIP, MIP, MinIP); optional 3D volume rendering with presets and display controls. |
+| Clinical tools | ROIs with live statistics, distance/angle measurements, text and arrow annotations, pixel histogram, collapsible tag viewer, and DICOM tag editing. |
 | Fusion | PET/SPECT overlays on CT or MR with opacity, alignment, and display controls. |
-| Export | Images, screenshots, cine video, derived DICOM, tags, and structured reports. |
-| QA (optional) | ACR CT/MRI and nuclear-medicine phantom workflows. |
+| Export | Images and screenshots, cine video, derived DICOM (including MPR), tags, ROI statistics, and structured reports. |
+| QA (optional) | Automated ACR CT, ACR MRI, and nuclear-medicine phantom workflows powered by [pylinac](https://pylinac.readthedocs.io/). |
 
 Studies opened locally are indexed into an encrypted local study database so
 you can find and reopen them quickly.
+
+## Feature gallery
+
+Screenshots below use QC phantom studies (no patient PHI). Display width is
+constrained for readability; full assets live under
+`resources/readme-screenshots/`.
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src="resources/readme-screenshots/three-dimensional-volume-rendering.png" width="480" alt="3D volume-rendering workspace with a CT soft-tissue preset and interactive display controls."><br>
+      <em>Optional 3D volume rendering with presets and display controls.</em>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src="resources/readme-screenshots/annotation-customization.png" width="480" alt="Annotation options and color picker for ROI, measurement, text, and arrow styling."><br>
+      <em>Customize ROI, measurement, and annotation appearance.</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src="resources/readme-screenshots/pixel-histogram.png" width="480" alt="Main viewer with pixel-value histogram overlay, cine controls, and DICOM tag sidebar."><br>
+      <em>Pixel-value histogram alongside cine and tag inspection.</em>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src="resources/readme-screenshots/dicom-tag-editor.png" width="480" alt="DICOM Tag Viewer/Editor dialog with searchable hierarchical tag groups."><br>
+      <em>Search, inspect, and edit DICOM tags.</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src="resources/readme-screenshots/export-dicom-tags.png" width="480" alt="Export DICOM Tags dialog with series selection and tag filter presets."><br>
+      <em>Export selected DICOM tags with presets and filters.</em>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src="resources/readme-screenshots/automated-qa-menu.png" width="480" alt="Automated QA menu listing ACR CT Batch, ACR MRI Phantom, and Nuclear Medicine QC pylinac workflows."><br>
+      <em>Automated CT, MR, and nuclear-medicine QC with pylinac.</em>
+    </td>
+  </tr>
+</table>
 
 ## Documentation for users
 

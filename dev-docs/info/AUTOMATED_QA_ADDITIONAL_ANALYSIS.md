@@ -320,7 +320,7 @@ Because MAP scoring is **defined as a visual judgment**, any algorithm is an **a
 
 This section ties together **every substantive test or workflow** referenced above: what it is trying to measure, and a concrete **automation strategy** suitable for this application stack (NumPy-friendly ROIs, optional OpenCV/scikit-image later).
 
-**Note:** For ACR MRI tests that pylinac already automates on the **Large** phantom (geometric accuracy, slice thickness, slice position, uniformity, ghosting, low-contrast detectability on slices 8–11, high-contrast ROI/MTF summaries), the default integration strategy remains **delegate to pylinac**—see [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md). The catalog below emphasizes **gaps, supplements, and native primitives**.
+**Note:** For ACR MRI tests that pylinac already automates on the **Large** phantom (geometric accuracy, slice thickness, slice position, uniformity, ghosting, low-contrast detectability on slices 8–11, high-contrast ROI/MTF summaries), the default integration strategy remains **delegate to pylinac**—see [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md). **Gap reference (SNR, direct resolution reads):** [ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md). The catalog below emphasizes **gaps, supplements, and native primitives**.
 
 | ID | Test / workflow | What it measures | Proposed automation approach |
 |----|-----------------|------------------|------------------------------|

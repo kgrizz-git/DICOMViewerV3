@@ -59,7 +59,7 @@ class DisplayConfigMixin:
             Preset ID string (e.g. ``"steel-blue"``).  Falls back to the
             default preset if the stored value is not recognised.
         """
-        return self._config().get("accent", "steel-blue")
+        return self._config().get("accent", "violet")
 
     def set_accent(self, accent_id: str) -> None:
         """
@@ -99,7 +99,7 @@ class DisplayConfigMixin:
         Returns:
             True if scale markers are enabled, False otherwise
         """
-        return self._config().get("show_scale_markers", False)
+        return self._config().get("show_scale_markers", True)
 
     def set_show_scale_markers(self, enabled: bool) -> None:
         """
@@ -118,7 +118,7 @@ class DisplayConfigMixin:
         Returns:
             True if direction labels are enabled, False otherwise
         """
-        return self._config().get("show_direction_labels", False)
+        return self._config().get("show_direction_labels", True)
 
     def set_show_direction_labels(self, enabled: bool) -> None:
         """
@@ -150,7 +150,7 @@ class DisplayConfigMixin:
             Tuple of (r, g, b) values (0-255)
         """
         r = self._config().get("scale_markers_color_r", 255)
-        g = self._config().get("scale_markers_color_g", 255)
+        g = self._config().get("scale_markers_color_g", 0)
         b = self._config().get("scale_markers_color_b", 0)
         return (r, g, b)
 
@@ -381,9 +381,9 @@ class DisplayConfigMixin:
 
         Returns:
             One of ``"icon_only"``, ``"text_under_icon"``, or ``"text_only"``.
-            Default is ``"icon_only"``.
+            Default is ``"text_under_icon"``.
         """
-        return self._config().get("toolbar_label_style", "icon_only")
+        return self._config().get("toolbar_label_style", "text_under_icon")
 
     def set_toolbar_label_style(self, style: str) -> None:
         """

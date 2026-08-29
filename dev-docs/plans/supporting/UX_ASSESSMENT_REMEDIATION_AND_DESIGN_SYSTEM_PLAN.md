@@ -1,7 +1,7 @@
 # UX Assessment Remediation & Design System Plan
 
 **Created:** 2026-05-03  
-**Updated:** 2026-05-17  
+**Updated:** 2026-08-24
 **Source:** [ux-summary.md](../../dev-docs/ux-assessments/ux-summary.md) · [ux-assessment-overall-2026-04-30.md](../../dev-docs/ux-assessments/ux-assessment-overall-2026-04-30.md)  
 **Design reference:** [DESIGN.md](../../DESIGN.md)  
 **TO_DO section:** UX / Workflow
@@ -37,10 +37,10 @@ Goal: produce `DESIGN.md` at the repo root with a living specification for color
 ### A5 — Accent colour system [x]
 
 *Done 2026-05-17.*
-- Created `src/gui/accent_presets.py` with 4 presets: Steel Blue (default), Violet, Navy, Garnet.
+- Created `src/gui/accent_presets.py` with 4 presets: Steel Blue, Violet (default for new installations), Navy, Garnet.
 - Both QSS files are fully templatized with `{accent}`, `{accent_light}`, `{accent_dark}` placeholders.
 - `get_theme_stylesheet()` in `main_window_theme.py` resolves the preset at load time.
-- `ConfigManager` persists the selected preset id as `"accent"` (default `"steel-blue"`).
+- `ConfigManager` persists the selected preset id as `"accent"` (default `"violet"`).
 - Settings dialog (`settings_dialog.py`) exposes a combo box with a live colour swatch.
 - `_on_settings_applied` in `main.py` calls `_apply_theme()` so changes are live on OK.
 - Documented in `DESIGN.md §2.4`.
@@ -49,10 +49,10 @@ Goal: produce `DESIGN.md` at the repo root with a living specification for color
 
 *Done 2026-05-17.*
 - Dark theme fully rewritten to modern deep palette (`#1e1e1e` window / `#252525` panels / `#141414` inputs / `#111111` navigator / `#363636` borders / `#e0e0e0` text / `#5a5a5a` disabled).
-- Gradient hairline splitter applied to both themes (1 px visual via `qlineargradient` stops 0.399–0.601; full fill on hover; 5 px hit zone preserved).
+- Gradient hairline splitter applied to both themes (1 px visual via `qlineargradient`; full fill on hover; explicit 8 px Qt hit zone).
 - Focus border wired to accent preset via `get_focus_border_color()` in `style_constants.py` (merged from `claude/naughty-leakey-8408fc`).
 
-**Goal:** make the dark theme feel more modern (deeper backgrounds, slimmer borders, softer text) and align the splitter visual in both themes so it reads as a 1 px separator at rest but expands to 5 px on hover.
+**Goal:** make the dark theme feel more modern (deeper backgrounds, slimmer borders, softer text) and align the splitter visual in both themes so it reads as a 1 px separator at rest but expands across its 8 px hit zone on hover.
 
 #### Part 1 — Dark theme palette (`dark.qss`)
 
@@ -73,27 +73,27 @@ Verify sufficient contrast at each surface boundary after the change: bg-window/
 
 #### Part 2 — Hairline splitter (both themes)
 
-Visual borders in the UI are 1 px. The splitter *hit zone* must stay at 5 px to be draggable, but the visual indicator should match the 1 px convention at rest. Apply to `dark.qss` **and** `light.qss`:
+Visual borders in the UI are 1 px. The splitter *hit zone* must be 8 px to be reliably draggable, but the visual indicator should match the 1 px convention at rest. Apply to `dark.qss` **and** `light.qss`:
 
 ```css
 /* Dark theme example — same pattern for light, substituting --border colour */
 QSplitter::handle:horizontal {
-    width: 5px;
-    background-color: transparent;
-    border-left: 1px solid #363636;
+    width: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0.437 transparent, stop:0.438 #363636,
+        stop:0.562 #363636, stop:0.563 transparent);
 }
 QSplitter::handle:horizontal:hover {
     background-color: #363636;
-    border-left: none;
 }
 QSplitter::handle:vertical {
-    height: 5px;
-    background-color: transparent;
-    border-top: 1px solid #363636;
+    height: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0.437 transparent, stop:0.438 #363636,
+        stop:0.562 #363636, stop:0.563 transparent);
 }
 QSplitter::handle:vertical:hover {
     background-color: #363636;
-    border-top: none;
 }
 ```
 
@@ -140,7 +140,7 @@ All of these can be done with text buttons. Doing this first means the toolbar i
 
 #### B4 — Widen splitter handles [x]
 
-*Done 2026-05-15.*  Splitter handles widened to 5 px in both `dark.qss` and `light.qss`; hover colour added (`#6a6a6a` dark / `#a0a0a0` light).  
+*Done 2026-05-15; refined 2026-08-24.* Splitter handles were initially styled as 5 px in both themes. They now use an explicit Qt 8 px hit zone plus matching QSS, retaining the 1 px rest-state hairline and full-width hover state.
 *Deferred:* grip-dot visual (2 × 3 dots via `paintEvent` or SVG) — cosmetic; can be added without changing handle hit-zone size.
 
 #### B5 — Fix "overlay mode_modality" raw identifier [x]
@@ -494,9 +494,15 @@ This is optional — if the candidate review in F4 finds one style that clearly 
 - **Overlay**: cycles 3 states (detailed / minimal / hidden) — not a binary toggle, no icon swap needed.
 - Theme refresh (`_refresh_icons`) re-renders all toggled-state icons in the new colour then re-applies the active state via `_update_privacy_action()`.
 
-### G5 — Verify toolbar fits single row [ ]
+### G5 — Preserve toolbar label readability [x]
 
-After icons are applied, confirm toolbar fits in one row at 1280 px width. Adjust button set or icon size if needed (recheck from E1 decisions).
+*Done 2026-08-24; refined after review.* The new first-run `text_under_icon`
+mode uses 20 px icons and a 38 px minimum standard button width with readable
+7 pt labels. Buttons may expand to their Qt size hint so labels such as
+Crosshair, Navigator, and Text Size remain fully readable; the full toolbar's
+uncompressed Qt size hint is 1348 px and it remains one row at the 1280 px
+target. Existing users who select icon-only or text-only retain their platform
+default icon size.
 
 ---
 
@@ -507,7 +513,8 @@ After icons are applied, confirm toolbar fits in one row at 1280 px width. Adjus
 3. **E1 finalized** (toolbar button list) before F2 folder structure is created.
 4. **F4 complete** (icon selections documented in DESIGN.md) before G2 begins.
 5. All P0 items (B2–B8, G2) resolved and tested in both dark and light themes.
-6. Toolbar fits single row at 1280 px (screenshot evidence).
+6. Full `text_under_icon` toolbar remains one row at 1280 px; its verified
+   uncompressed Qt size hint is 1348 px (Qt regression test).
 7. No duplicate shortcut bindings in `DESIGN.md § 6`.
 8. SR Dose table renders without truncation at default dialog width (screenshot evidence).
 9. QSS lint pass: no remaining literal color values outside the token definitions.

@@ -71,7 +71,7 @@ class TestMetadataUIConfigMixin:
 class TestMeasurementConfigMixin:
     def test_font_size_defaults_and_set(self):
         host = _make_host(MeasurementConfigMixin)
-        assert host.get_measurement_font_size() == 12
+        assert host.get_measurement_font_size() == 13
         host.set_measurement_font_size(16)
         assert host.get_measurement_font_size() == 16
 
@@ -79,7 +79,7 @@ class TestMeasurementConfigMixin:
         host = _make_host(MeasurementConfigMixin)
         host.set_measurement_font_size(0)
         host.set_measurement_font_size(-5)
-        assert host.get_measurement_font_size() == 12
+        assert host.get_measurement_font_size() == 13
         assert host.save_calls == 0
 
     def test_font_color_defaults_and_set(self):

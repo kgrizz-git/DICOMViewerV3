@@ -1,7 +1,10 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-27
+
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
+
+Pending plan-complete smokes are inventoried in [`../TO_DO.md`](../TO_DO.md) → **Manual Smoke Checks**; use this checklist for the general launch/load/interaction prelude.
 
 Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator changes when automated tests pass but behavior needs human or browser-agent eyes.
 

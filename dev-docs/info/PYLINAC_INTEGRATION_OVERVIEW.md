@@ -10,9 +10,17 @@ This document outlines how **pylinac** could be integrated into DICOM Viewer V3 
 
 **What is already in the codebase vs planned:** see [Integration status (pylinac in DICOMViewerV3)](#integration-status-pylinac-in-dicomviewerv3) (living section—update it as integration progresses).
 
+**Pylinac ACR hub (read in this order):**
+
+1. [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) — **implementation** (Phases 0–6 export, batch, SNR).
+2. [ACR phantom QA metrics and pylinac gaps](ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) — **physics reference** + what pylinac does not compute; deferred MTF/resolution roadmap.
+3. [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — low-contrast algorithm detail.
+4. [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — MTF rMTF grid, subclasses, extension tracker.
+
 **Pylinac reference notes (project docs):**
 
-- [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.43.2** (project pin).
+- [Pylinac MRI low-contrast detectability](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md) — ACR MRI Large **low-contrast detectability** (algorithm, scoring, PDF/figure circle colors); aligned with **pylinac 3.43.2** (project pin).
+- [ACR phantom QA metrics and pylinac gaps](ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) — **ACR accreditation + QC manual** metrics, links, pylinac gaps (**SNR** Phase 6; deferred resolution reads).
 - [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) — **Living tracker**: how we customize, extend, or wrap pylinac (config, runners, subclasses); persist vs per-run `analyze()` kwargs.
 - [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md) — **CatPhan / Quart CT** and **`pylinac.nuclear`** (IAEA/NMQC-style NM/SPECT): tests performed, expected DICOM inputs, demo ZIPs / external sample data.
 

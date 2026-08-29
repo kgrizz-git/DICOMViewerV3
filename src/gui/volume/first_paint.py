@@ -8,7 +8,19 @@ from typing import Any
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
-from core.volume_render_quality import auto_detail_cap_index, should_auto_refine
+from core.volume_render_quality import (
+    GpuFallbackOutcome,
+    auto_detail_cap_index,
+    should_auto_refine,
+)
+
+_EXPECTED_BLANK_GUIDANCE = (
+    "Nothing is visible with this preset — try CT Soft Tissue or another preset."
+)
+_MANUAL_DETAIL_GUIDANCE = (
+    "3D preview shown at Fast detail. Higher Auto detail may be slow; "
+    "choose a detail level manually to apply it."
+)
 
 
 def setup_first_paint_state(widget: Any) -> None:
@@ -16,6 +28,7 @@ def setup_first_paint_state(widget: Any) -> None:
     widget._cleaned_up = False
     widget._first_paint_pending = False
     widget._first_paint_complete = False
+    widget._expected_blank_guidance = False
     widget._auto_refine_suppressed = False
     widget._auto_detail_capped = False
     widget._preview_timer = QTimer(widget)
@@ -58,11 +71,11 @@ def run_first_preview(widget: Any) -> None:
         return
     set_render_feedback(widget, "Rendering 3D preview…")
     started = perf_counter()
-    fallback_used = False
+    fallback_outcome = GpuFallbackOutcome.GPU_OK_VISIBLE
     QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
         widget._vtk_render_window.Render()
-        fallback_used = widget._renderer.check_gpu_fallback(
+        fallback_outcome = widget._renderer.check_gpu_fallback(
             widget._vtk_render_window, probe_quality="Fast"
         )
     finally:
@@ -71,19 +84,51 @@ def run_first_preview(widget: Any) -> None:
     elapsed_ms = (perf_counter() - started) * 1000.0
     widget._first_paint_pending = False
     widget._first_paint_complete = True
+    widget._expected_blank_guidance = (
+        fallback_outcome is GpuFallbackOutcome.EXPECTED_BLANK
+    )
     widget._update_render_status()
     if should_auto_refine(
-        preview_elapsed_ms=elapsed_ms, gpu_fallback_used=fallback_used
+        preview_elapsed_ms=elapsed_ms,
+        gpu_fallback_used=fallback_outcome is GpuFallbackOutcome.FELL_BACK,
     ):
-        set_render_feedback(widget, "3D preview ready — refining detail…")
+        if widget._expected_blank_guidance:
+            set_render_feedback(widget, _EXPECTED_BLANK_GUIDANCE)
+        else:
+            set_render_feedback(widget, "3D preview ready — refining detail…")
         widget._refine_timer.start()
     else:
         widget._auto_refine_suppressed = True
         set_render_feedback(
             widget,
-            "3D preview shown at Fast detail. Higher Auto detail may be slow; "
-            "choose a detail level manually to apply it.",
+            f"{_EXPECTED_BLANK_GUIDANCE} {_MANUAL_DETAIL_GUIDANCE}"
+            if widget._expected_blank_guidance
+            else _MANUAL_DETAIL_GUIDANCE,
         )
+
+
+def check_interactive_gpu_fallback(widget: Any) -> None:
+    """Re-probe an expected-blank frame after an interactive render.
+
+    The renderer latches visible and CPU-fallback outcomes, so this stays a
+    cheap no-op except after an expected-blank preview whose transfer function
+    may have changed.
+    """
+    if not widget._first_paint_complete or widget._vtk_render_window is None:
+        return
+    outcome = widget._renderer.check_gpu_fallback(widget._vtk_render_window)
+    if outcome is not GpuFallbackOutcome.EXPECTED_BLANK:
+        widget._expected_blank_guidance = False
+        set_render_feedback(widget, "")
+    if outcome is GpuFallbackOutcome.FELL_BACK:
+        widget._update_render_status()
+
+
+def render_interactive_frame(widget: Any) -> None:
+    """Render an interactive frame and perform its conditional fallback probe."""
+    if widget._initialized and widget._surface is not None:
+        widget._surface.render_frame()
+        check_interactive_gpu_fallback(widget)
 
 
 def refine_detail(widget: Any) -> None:
@@ -102,7 +147,10 @@ def refine_detail(widget: Any) -> None:
         widget._vtk_render_window.Render()
     finally:
         QApplication.restoreOverrideCursor()
-    set_render_feedback(widget, "")
+    set_render_feedback(
+        widget,
+        _EXPECTED_BLANK_GUIDANCE if widget._expected_blank_guidance else "",
+    )
     widget._update_render_status()
 
 

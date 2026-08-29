@@ -21,11 +21,16 @@ Requirements:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
+from core.volume_data_preparation import (
+    VolumeData,
+    _calibrate_volume_array,
+    prepare_volume_data,
+)
+from core.volume_render_quality import GpuFallbackOutcome, frame_expected_nonblank
 from utils.debug_flags import DEBUG_VOLUME_3D
 
 _log = logging.getLogger(__name__)
@@ -53,18 +58,6 @@ if vtk_available:
         vtk_mod.vtkOutputWindow.SetInstance(vtk_mod.vtkOutputWindow())
     except AttributeError:
         pass  # Older VTK build without this API
-
-# SimpleITK is also needed for array extraction.
-sitk: Any = None
-sitk_available: bool = False
-try:
-    import SimpleITK as _sitk
-
-    sitk = _sitk
-    sitk_available = True
-except ImportError:
-    pass
-
 
 # ---------------------------------------------------------------------------
 # Transfer-function presets — defined in volume_render_presets.py, re-exported
@@ -117,77 +110,9 @@ _PRESET_REEXPORTS = (
     STEEP_PRESET_THRESHOLD,
     is_steep_preset,
     preset_steepness,
+    _calibrate_volume_array,
 )
 del _PRESET_REEXPORTS
-
-
-@dataclass
-class VolumeData:
-    """Thread-safe container for prepared volume data (numpy arrays + spatial metadata)."""
-
-    array: np.ndarray  # contiguous float32, shape (depth, height, width)
-    spacing: tuple[float, ...]  # (sx, sy, sz)
-    origin: tuple[float, ...]  # (ox, oy, oz)
-    direction: tuple[float, ...]  # 9 floats (3x3 direction cosine matrix)
-    rescale_applied: bool = False  # True when DICOM rescale slope/intercept were applied
-    scalar_units: str | None = None  # e.g. "HU" for calibrated CT
-
-
-def _calibrate_volume_array(
-    arr: np.ndarray,
-    source_datasets: list[Any] | None,
-) -> tuple[np.ndarray, bool, str | None]:
-    """Apply per-slice DICOM rescale only when every slice has sane metadata."""
-    if not source_datasets or len(source_datasets) != arr.shape[0]:
-        return arr, False, None
-
-    from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
-
-    params: list[tuple[float, float, str | None]] = []
-    units: set[str] = set()
-    for dataset in source_datasets:
-        slope, intercept, rescale_type = get_rescale_parameters(dataset)
-        if slope is None or intercept is None:
-            return arr, False, None
-        if not np.isfinite(slope) or not np.isfinite(intercept):
-            return arr, False, None
-        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-        if slope == 0.0:  # NOSONAR(S1244)
-            return arr, False, None
-
-        scalar_units = infer_rescale_type(dataset, slope, intercept, rescale_type)
-        if scalar_units:
-            units.add(str(scalar_units))
-        params.append((float(slope), float(intercept), scalar_units))
-
-    # If slices report conflicting rescale-unit semantics (e.g. one "HU",
-    # another "US"), the calibrated values are numerically valid but the
-    # unit label is ambiguous.  Fall back to raw so the UI doesn't claim a
-    # specific unit it can't guarantee.
-    if len(units) > 1:
-        _log.info(
-            "Mixed rescale units across slices (%s); falling back to raw values.",
-            units,
-        )
-        return arr, False, None
-
-    calibrated = arr.copy()
-    for z_index, (slope, intercept, _scalar_units) in enumerate(params):
-        calibrated[z_index] = calibrated[z_index] * slope + intercept
-
-    # Guard against NaN/Inf that can arise from corrupted pixel data or
-    # extreme slope/intercept values.  VTK volume rendering produces
-    # unpredictable blank or garbage frames when the input contains
-    # non-finite values.
-    if not np.all(np.isfinite(calibrated)):
-        _log.warning(
-            "Calibrated volume contains NaN or Inf values; "
-            "falling back to raw stored values."
-        )
-        return arr, False, None
-
-    resolved_units = next(iter(units)) if len(units) == 1 else None
-    return np.ascontiguousarray(calibrated, dtype=np.float32), True, resolved_units
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +241,11 @@ class VolumeRenderer(VolumeRendererQualityMixin):
     """
 
     QUALITY_MODES = QUALITY_MODES
+    # Compatibility façade: callers have historically used the renderer class
+    # as the background-data preparation entry point.  Keep an unwrapped
+    # staticmethod so class-level monkeypatches and instance calls retain their
+    # existing descriptor semantics.
+    prepare_volume_data = staticmethod(prepare_volume_data)
 
     def __init__(self) -> None:
         if not vtk_available:
@@ -325,12 +255,27 @@ class VolumeRenderer(VolumeRendererQualityMixin):
             )
 
         self._vtk_image: Any = None
+        # ``numpy_to_vtk(..., deep=False)`` borrows this buffer.  Keep the
+        # exact flattened array alive for as long as VTK can read its scalars;
+        # dropping it early is a use-after-free, not a harmless stale image.
+        self._vtk_numpy_backing: np.ndarray | None = None
         self._renderer: Any = vtk_mod.vtkRenderer()
         self._volume: Any = None
         # Prefer GPU-accelerated mapper; fall back to CPU ray caster on
         # systems where vtkSmartVolumeMapper is unavailable or broken
         # (e.g. Parallels virtual GPU on macOS).
         self._gpu_fallback_done = False
+        self._gpu_fallback_outcome: GpuFallbackOutcome | None = None
+        # A black frame that is expected for the active transfer function is
+        # not terminal: the next transfer-function change needs one fresh
+        # probe.  Keep that work dirty-state-driven so an unchanged blank
+        # volume does not read back the whole RGB framebuffer on every drag.
+        self._gpu_fallback_probe_dirty = True
+        self._scalar_occupancy: list[tuple[float, float, int]] | None = None
+        self._source_dimensions: tuple[int, int, int] | None = None
+        self._downsample_factor: int = 1
+        self._memory_budget_bytes: int | None = None
+        self._estimated_peak_bytes: int | None = None
         try:
             self._mapper: Any = vtk_mod.vtkSmartVolumeMapper()
             self._mapper.SetRequestedRenderModeToDefault()
@@ -349,6 +294,8 @@ class VolumeRenderer(VolumeRendererQualityMixin):
         self._gradient_opacity: Any = vtk_mod.vtkPiecewiseFunction()
 
         self._current_preset: TransferFunctionPreset | None = None
+        self._effective_scalar_opacity: list[tuple[float, float]] | None = None
+        self._effective_color_tf: list[tuple[float, float, float, float]] | None = None
         self._global_opacity: float = 1.0
         self._opacity_gamma: float = 1.0  # opacity-response (curve shape) exponent
         self._quality_sample_distance: float = 1.0  # static-render distance
@@ -397,49 +344,6 @@ class VolumeRenderer(VolumeRendererQualityMixin):
     # Public API
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def prepare_volume_data(
-        sitk_image: Any,
-        *,
-        source_datasets: list[Any] | None = None,
-        apply_rescale: bool = False,
-    ) -> VolumeData:
-        """
-        Extract and prepare numpy array from a SimpleITK image.
-
-        Thread-safe -- performs only numpy operations, no VTK API calls.
-        Can be called from a background thread.
-
-        Args:
-            sitk_image: SimpleITK image to convert to a renderer-ready array.
-            source_datasets: DICOM datasets in the same z-order as ``sitk_image``.
-            apply_rescale: When ``True``, apply DICOM rescale slope/intercept
-                to the returned 3D renderer array if every source slice has
-                complete, finite, non-zero rescale metadata.
-        """
-        if not sitk_available:
-            raise RuntimeError("SimpleITK is required to convert volumes.")
-        arr = sitk.GetArrayFromImage(sitk_image)  # shape: (z, y, x)
-        arr = np.ascontiguousarray(arr, dtype=np.float32)
-        rescale_applied = False
-        scalar_units: str | None = None
-        if apply_rescale:
-            arr, rescale_applied, scalar_units = _calibrate_volume_array(
-                arr,
-                source_datasets,
-            )
-        spacing = sitk_image.GetSpacing()
-        origin = sitk_image.GetOrigin()
-        direction = sitk_image.GetDirection()
-        return VolumeData(
-            array=arr,
-            spacing=tuple(spacing),
-            origin=tuple(origin),
-            direction=tuple(direction),
-            rescale_applied=rescale_applied,
-            scalar_units=scalar_units,
-        )
-
     def attach_volume(self, volume_data: VolumeData) -> None:
         """
         Create VTK objects from prepared volume data and attach to the mapper.
@@ -449,6 +353,14 @@ class VolumeRenderer(VolumeRendererQualityMixin):
         from vtkmodules.util import numpy_support
 
         arr = volume_data.array
+        self._scalar_occupancy = volume_data.scalar_occupancy
+        self._source_dimensions = volume_data.source_dimensions
+        self._downsample_factor = max(1, int(volume_data.downsample_factor))
+        self._memory_budget_bytes = volume_data.memory_budget_bytes
+        self._estimated_peak_bytes = volume_data.estimated_peak_bytes
+        self._gpu_fallback_done = False
+        self._gpu_fallback_outcome = None
+        self._gpu_fallback_probe_dirty = True
         depth, height, width = arr.shape
         if DEBUG_VOLUME_3D:
             print(
@@ -459,7 +371,7 @@ class VolumeRenderer(VolumeRendererQualityMixin):
         flat = arr.ravel()
         vtk_data_array = numpy_support.numpy_to_vtk(
             num_array=flat,
-            deep=True,
+            deep=False,
             array_type=vtk_mod.VTK_FLOAT,
         )
         vtk_data_array.SetNumberOfComponents(1)
@@ -481,6 +393,10 @@ class VolumeRenderer(VolumeRendererQualityMixin):
             )
 
         vtk_image.GetPointData().SetScalars(vtk_data_array)
+        # VTK's shallow conversion does not retain a Python reference to the
+        # NumPy source.  The renderer owns it for exactly the lifetime of its
+        # VTK input and clears it alongside the VTK image in ``cleanup()``.
+        self._vtk_numpy_backing = flat
         self._vtk_image = vtk_image
         self._vtk_image_original = vtk_image  # keep raw for re-smoothing
         self._mapper.SetInputData(vtk_image)
@@ -923,38 +839,55 @@ class VolumeRenderer(VolumeRendererQualityMixin):
 
     def check_gpu_fallback(
         self, render_window: Any, *, probe_quality: str | None = None
-    ) -> bool:
-        """Check if GPU rendering produced a blank frame and fall back to CPU.
+    ) -> GpuFallbackOutcome:
+        """Classify a blank frame and fall back to CPU only when warranted.
 
-        Call once after the first Render(). Reads back pixels from the render
-        window; if the image is entirely black (GPU silently failed, common on
-        Parallels / virtual GPUs), switches the mapper to CPU ray-cast mode
-        and re-renders.  ``probe_quality`` applies only to that CPU fallback
-        render and does not change the selected target detail.
+        Call after a render.  A black RGB frame can be a genuine virtual-GPU
+        failure, or a correct result of the active transfer function (for
+        example, CT Bone on a water phantom).  The bounded full-coverage
+        scalar histogram prepared on the background thread distinguishes those
+        cases without a lossy strided voxel sample.
 
-        Returns ``True`` if a fallback was triggered.
+        ``probe_quality`` applies only to a real CPU fallback render and does
+        not change the selected target detail.  ``EXPECTED_BLANK`` deliberately
+        does not latch the check: after a later preset change we can still
+        detect a genuine GPU failure.
         """
         if self._gpu_fallback_done:
-            return False
-        self._gpu_fallback_done = True
+            return self._gpu_fallback_outcome or GpuFallbackOutcome.GPU_OK_VISIBLE
+        if not self._gpu_fallback_probe_dirty:
+            # The only non-latched outcome is EXPECTED_BLANK.  Returning the
+            # cached classification here avoids a GPU-to-CPU RGB readback on
+            # every render until a transfer-function change makes a new probe
+            # meaningful.
+            return self._gpu_fallback_outcome or GpuFallbackOutcome.GPU_OK_VISIBLE
 
         # Only applies to vtkSmartVolumeMapper.
         mapper_class = self._mapper.GetClassName()
         if "Smart" not in mapper_class:
-            return False
+            self._gpu_fallback_done = True
+            self._gpu_fallback_outcome = GpuFallbackOutcome.GPU_OK_VISIBLE
+            return self._gpu_fallback_outcome
 
         # Check what mode was actually used.
         if not hasattr(self._mapper, "GetLastUsedRenderMode"):
-            return False
+            self._gpu_fallback_done = True
+            self._gpu_fallback_outcome = GpuFallbackOutcome.GPU_OK_VISIBLE
+            return self._gpu_fallback_outcome
         mode = self._mapper.GetLastUsedRenderMode()
         # mode 1 = CPU ray cast — already on CPU, nothing to fix.
         if mode == 1:
             if DEBUG_VOLUME_3D:
                 print("[DEBUG-VOLUME-3D] GPU fallback check: already on CPU ray cast, skipping.")
-            return False
+            self._gpu_fallback_done = True
+            self._gpu_fallback_outcome = GpuFallbackOutcome.GPU_OK_VISIBLE
+            return self._gpu_fallback_outcome
 
         # Read back pixels and check if the frame is all-black.
+        black_frame_confirmed = False
         try:
+            from vtkmodules.util import numpy_support
+
             w2i = vtk_mod.vtkWindowToImageFilter()
             w2i.SetInput(render_window)
             w2i.SetInputBufferTypeToRGB()
@@ -963,26 +896,37 @@ class VolumeRenderer(VolumeRendererQualityMixin):
             dims = img.GetDimensions()
             n_pixels = dims[0] * dims[1]
             if n_pixels == 0:
-                return False
+                raise RuntimeError("GPU fallback readback returned an empty frame")
             scalars = img.GetPointData().GetScalars()
             if scalars is None:
-                return False
-            # Check a sample of pixels for any non-zero value.
-            n_tuples = scalars.GetNumberOfTuples()
-            step = max(1, n_tuples // 200)
-            all_black = True
-            for i in range(0, n_tuples, step):
-                r, g, b = scalars.GetTuple3(i)
-                if r > 0 or g > 0 or b > 0:
-                    all_black = False
-                    break
+                raise RuntimeError("GPU fallback readback had no RGB scalars")
+            # This is a small 2D RGB readback, so inspect every pixel rather
+            # than recreating the sparse-content blind spot of the old sample.
+            all_black = not bool(np.any(numpy_support.vtk_to_numpy(scalars) > 0))
             if not all_black:
                 if DEBUG_VOLUME_3D:
                     print("[DEBUG-VOLUME-3D] GPU fallback check: frame has content, GPU OK.")
-                return False
+                self._gpu_fallback_done = True
+                self._gpu_fallback_outcome = GpuFallbackOutcome.GPU_OK_VISIBLE
+                return self._gpu_fallback_outcome
+            black_frame_confirmed = True
         except Exception:
             # If readback itself fails, try CPU fallback anyway.
             pass
+
+        if black_frame_confirmed and not frame_expected_nonblank(
+            self._effective_scalar_opacity,
+            self._effective_color_tf,
+            self._scalar_occupancy,
+        ):
+            if DEBUG_VOLUME_3D:
+                print(
+                    "[DEBUG-VOLUME-3D] GPU fallback check: blank frame is "
+                    "expected from the occupied scalar range and transfer function."
+                )
+            self._gpu_fallback_probe_dirty = False
+            self._gpu_fallback_outcome = GpuFallbackOutcome.EXPECTED_BLANK
+            return self._gpu_fallback_outcome
 
         # GPU produced a black frame — switch to CPU ray casting.
         _log.warning(
@@ -998,7 +942,9 @@ class VolumeRenderer(VolumeRendererQualityMixin):
         if DEBUG_VOLUME_3D:
             new_mode = self._mapper.GetLastUsedRenderMode()
             print(f"[DEBUG-VOLUME-3D] GPU FALLBACK: new render mode = {new_mode}")
-        return True
+        self._gpu_fallback_done = True
+        self._gpu_fallback_outcome = GpuFallbackOutcome.FELL_BACK
+        return self._gpu_fallback_outcome
 
     def cleanup(self) -> None:
         """Release VTK objects to free GPU / CPU memory."""
@@ -1007,6 +953,12 @@ class VolumeRenderer(VolumeRendererQualityMixin):
         self._mapper.RemoveAllInputs()
         self._vtk_image = None
         self._vtk_image_original = None
+        self._vtk_numpy_backing = None
+        self._scalar_occupancy = None
+        self._source_dimensions = None
+        self._downsample_factor = 1
+        self._memory_budget_bytes = None
+        self._estimated_peak_bytes = None
         self._volume = None
         if DEBUG_VOLUME_3D:
             print("[DEBUG-VOLUME-3D] VolumeRenderer cleanup complete.")
@@ -1111,14 +1063,29 @@ class VolumeRenderer(VolumeRendererQualityMixin):
         # Scalar opacity: remap position, reshape opacity by the response
         # exponent, then apply the global multiplier.
         self._scalar_opacity.RemoveAllPoints()
+        effective_scalar_opacity: list[tuple[float, float]] = []
         for val, opa in preset.scalar_opacity:
             shaped = (max(0.0, min(1.0, opa)) ** gamma) * alpha
-            self._scalar_opacity.AddPoint(remap(val), shaped)
+            mapped_value = remap(val)
+            self._scalar_opacity.AddPoint(mapped_value, shaped)
+            effective_scalar_opacity.append((mapped_value, shaped))
 
         # Colour transfer function (position only — colour is not reshaped).
         self._color_tf.RemoveAllPoints()
+        effective_color_tf: list[tuple[float, float, float, float]] = []
         for val, r, g, b in preset.color:
-            self._color_tf.AddRGBPoint(remap(val), r, g, b)
+            mapped_value = remap(val)
+            self._color_tf.AddRGBPoint(mapped_value, r, g, b)
+            effective_color_tf.append((mapped_value, r, g, b))
+
+        # Retain VTK-free mirrors for the blank-frame policy.  They include
+        # every current W/L, threshold, opacity, and opacity-response change.
+        self._effective_scalar_opacity = effective_scalar_opacity
+        self._effective_color_tf = effective_color_tf
+        # A previously expected black frame should be probed again once the
+        # mapping changes.  Do not disturb confirmed visible/CPU outcomes.
+        if not self._gpu_fallback_done:
+            self._gpu_fallback_probe_dirty = True
 
         # Gradient opacity — only applied when explicitly enabled.  When
         # disabled, a flat 1.0 is used so uniform regions remain visible.

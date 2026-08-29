@@ -50,6 +50,46 @@ def _destroy_leaked_windows():
         yield
 
 @pytest.mark.qt
+def test_main_splitter_has_an_eight_pixel_hit_zone(qapp, tmp_path):
+    """The target size is explicit; QSS alone does not change every native handle."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+
+    assert w.splitter.handleWidth() == 8
+
+
+@pytest.mark.qt
+def test_default_labelled_toolbar_keeps_long_labels_visible(qapp, tmp_path):
+    """The full first-run toolbar remains one row at the 1280 px target."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+    w.resize(1280, 900)
+    w.show()
+    qapp.processEvents()
+    qapp.processEvents()
+
+    assert w.main_toolbar is not None
+    assert w.main_toolbar.width() == 1280
+    for action in w.main_toolbar.actions():
+        button = w.main_toolbar.widgetForAction(action)
+        if isinstance(button, QToolButton):
+            assert button.isVisible()
+            assert button.geometry().right() < w.main_toolbar.width()
+    for action in (
+        w.mouse_mode_crosshair_action,
+        w.series_navigator_action,
+    ):
+        button = w.main_toolbar.widgetForAction(action)
+        assert isinstance(button, QToolButton)
+        assert button.sizeHint().width() >= button.fontMetrics().horizontalAdvance(
+            action.text()
+        )
+
+    text_size_button = w._overlay_font_size_toolbar_btn
+    assert text_size_button.sizeHint().width() >= text_size_button.fontMetrics().horizontalAdvance(
+        text_size_button.text()
+    )
+
+
+@pytest.mark.qt
 def test_fullscreen_chrome_hide_and_restore_splitter(qapp):
     """Collapsing side panes for fullscreen uses total width in center; restore brings back sizes."""
     cm = ConfigManager()

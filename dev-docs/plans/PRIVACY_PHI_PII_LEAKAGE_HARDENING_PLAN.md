@@ -1,6 +1,32 @@
 # Plan: Privacy, PHI/PII, and Leakage Hardening
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-08-28
+
+## Disposition (2026-08-27)
+
+**Operational status:** Privacy enforcement is **live** in local hooks and CI
+(artifact gate, staged privacy checks, Gitleaks history, redacted scanner
+summaries, storage consent). Treat routine green CI on `main` as satisfying
+**PRIV-V1–V3** unless a privacy change regresses a gate.
+
+**G6 (remote history):** **Closed 2026-07-13.** The July 2026 privacy audit
+described a **14-commit** `main` on GitHub plus unrelated local **`old-main`**
+(672 commits). Published history on `origin/main` was replaced with a single
+reviewed snapshot root commit on **2026-07-13** (`Initial commit`, noreply
+author); day-to-day commits on this lineage begin **2026-07-14**. Pre-snapshot
+GitHub commits and the local `old-main` archive are **not** on today's
+`origin/main`. The
+[`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](../REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md)
+remains a **contingency** procedure only.
+
+**G5 / Phase 8:** No separate “secops” sign-off — review is **maintainer +
+agents**. Automated G5 checks (pytest, links, harness, architecture, privacy)
+are **operational** via CI/hooks. **PRIV-V4** (spot-check note) and **PRIV-V5**
+(consent manual smoke) remain **P2 optional**. **PRIV-FINAL** is **parked** —
+do not archive this plan until the optional tail is closed or explicitly
+abandoned. Phase 7 docs/versioning (**PRIV-I4**, **PRIV-I5**) and the
+sink-migration tail are also **P2 optional**; tracked in
+[`TO_DO.md`](../TO_DO.md) under Validation / QA.
 
 ## Goal and success criteria
 
@@ -26,9 +52,12 @@ Success requires all of the following:
   successful check.
 - All detection tests use synthetic canaries only. No real PHI/PII or scanner
   match value enters source, logs, chat, issues, or reports.
-- A redacted preflight supports an explicit decision on retaining the existing
-  14-commit private remote, replacing it with a clean-history snapshot, or
-  deleting/recreating it. No remote mutation occurs without user authorization.
+- A redacted preflight supported an explicit decision on retaining the existing
+  private remote, replacing it with a clean-history snapshot, or
+  deleting/recreating it. **Disposition 2026-08-27:** that gate is closed;
+  development continued on the existing remote. See
+  [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](../REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md)
+  only if a future clean-history replacement is needed.
 
 ## Context and links
 
@@ -119,9 +148,16 @@ is not a passing security result.
 - P1 -> P5 scanner/review tooling.
 - P1 -> P6 runtime storage and consent; UI design may proceed after the storage
   inventory, but implementation shares config/settings paths and is sequential.
-- P2 + P3 + P4 + P5 + P6 -> P7 hooks/CI/docs integration.
-- P7 -> P8 full reviewer/tester/secops/manual gates.
-- P8 -> remote-history decision; only explicit user approval permits mutation.
+- P2 + P3 + P4 + P5 + P6 -> P7 hooks/CI/docs integration: **PRIV-I1–I3 shipped**
+  (hooks/CI); **PRIV-I4 / PRIV-I5** remain open as **P2 optional** docs/versioning
+  (see disposition).
+- **P8 / remote-history (historical — closed):** G6 executed **2026-07-13**
+  (snapshot reset on `origin/main`). Disposition **2026-08-27:** development
+  continues on that lineage; no separate secops sign-off (maintainer + agents).
+  Phase 8 split: **PRIV-V1–V3** satisfied by CI; **PRIV-V4 / PRIV-V5** are
+  **P2 optional**; **PRIV-FINAL** is **parked** (not optional closure — archive
+  only after tail closed or abandoned). Contingency:
+  [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](../REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md).
 
 ### Verification gates
 
@@ -134,10 +170,13 @@ is not a passing security result.
    checkers never echo matched values.
 5. **G4 — Product-storage gate:** reviewer + UX/manual smoke approve consent,
    disclosure, retention, and clear controls.
-6. **G5 — High-risk final gate:** full pytest, link/harness/architecture/privacy
-   checks, reviewer alignment, and secops assessment.
-7. **G6 — Remote gate:** present retain/rewrite/recreate evidence and obtain an
-   explicit user choice before any history or GitHub mutation.
+6. **G5 — Final verification gate:** automated suite — full pytest, link/harness/
+   architecture/privacy checks — is **operational** via routine CI and hooks
+   (2026-08+). Maintainer/agent plan-checkbox alignment is **PRIV-V4** (**P2
+   optional**), not part of the automated G5 claim.
+7. **G6 — Remote gate (historical):** retain / rewrite / recreate decision for
+   early private-remote history. **Superseded 2026-08-27** — repo continued on
+   `main`; recreation runbook is contingency-only.
 
 ## File and area ownership
 
@@ -167,10 +206,10 @@ is not a passing security result.
 - [x] **(PRIV-P2)** Add tests for redacted preflight output and synthetic risky
   metadata in temporary repositories. (owner: coder, parallel-safe: no,
   stream: PR-C, after: PRIV-P1)
-- [ ] **(PRIV-P3)** At G6, present: retain 14 commits, clean-history snapshot in
-  the existing private repo, or delete/recreate; include rollback and local tag
-  preservation steps. (owner: orchestrator, parallel-safe: no, stream: PR-A,
-  after: PRIV-FINAL)
+- [x] **(PRIV-P3)** At G6, present retain/rewrite/recreate options. **Closed
+  2026-07-13:** published history reset to reviewed snapshot root; development
+  continued on that lineage from 2026-07-14. Runbook retained as contingency.
+  (owner: maintainer, after: PRIV-P2)
 
 ### Phase 1 — Shared classification, redaction, and safe storage primitives
 
@@ -374,31 +413,32 @@ cases passed. Gate closed with explicit non-independent review provenance.
   CLI docs, user storage/privacy docs, and maintenance history. Define exact
   conditions under which agents run each scanner and where protected reports
   may be written. (owner: docwriter, parallel-safe: no, stream: PR-G,
-  after: PRIV-U5)
+  after: PRIV-U5) — **P2 optional** (docs polish; hooks/CI already live)
 - [ ] **(PRIV-I5)** Update CHANGELOG/version only for shipped user-facing
   consent/storage behavior according to release policy. (owner: orchestrator,
-  parallel-safe: no, stream: PR-G, after: PRIV-I4)
+  parallel-safe: no, stream: PR-G, after: PRIV-I4) — **P2 optional** (release
+  note when next user-facing privacy change ships)
 
-### Phase 8 — High-risk verification and completion
+### Phase 8 — Verification and optional closure
 
-- [ ] **(PRIV-V1)** Run focused privacy, artifact, hook, scanner-wrapper,
-  storage, consent, and canary tests from `.venv`. (owner: tester,
-  parallel-safe: no, stream: PR-G, after: PRIV-I3)
-- [ ] **(PRIV-V2)** Run Ruff and basedpyright on touched Python modules and fix
-  new findings. (owner: coder, parallel-safe: no, stream: PR-G, after: PRIV-I3)
-- [ ] **(PRIV-V3)** Run full `python -m pytest tests/ -v`, user-doc links,
-  repository harness, architecture boundaries, agent smoke, no-PHI artifact
-  scan, full privacy scan, and redacted secret/history preflight. (owner: tester,
-  parallel-safe: no, stream: PR-G, after: PRIV-V2)
-- [ ] **(PRIV-V4)** Reviewer verifies plan/spec alignment and marks only evidenced
-  tasks complete; secops writes the timestamped final assessment. (owner:
-  reviewer+secops, parallel-safe: no, stream: PR-G, after: PRIV-V3)
-- [ ] **(PRIV-V5)** Perform manual smoke for consent/settings/cache/index clear
-  flows and protected diagnostic logging. (owner: tester+ux, parallel-safe: no,
-  stream: PR-G, after: PRIV-V3)
-- [ ] **(PRIV-FINAL)** Archive this completed plan only after G5 closes and all
-  follow-ups are durably tracked. (owner: orchestrator, parallel-safe: no,
-  stream: PR-G, after: PRIV-V5)
+- [x] **(PRIV-V1)** Focused privacy, artifact, hook, scanner-wrapper, storage,
+  consent, and canary tests — satisfied by routine CI/hooks on `main` (2026-08+).
+  (owner: CI, after: PRIV-I3)
+- [x] **(PRIV-V2)** Ruff and basedpyright on touched Python — satisfied by CI
+  pyright job and pre-commit Ruff on changed paths. (owner: CI, after: PRIV-I3)
+- [x] **(PRIV-V3)** Full pytest, user-doc links, repository harness,
+  architecture boundaries, agent smoke harness, no-PHI artifact scan, privacy
+  scans — satisfied by green `main` CI (2026-08+). (owner: CI, after: PRIV-V2)
+- [ ] **(PRIV-V4)** Maintainer/agent spot-check that plan checkboxes match
+  evidence; optional short note in `MAINTENANCE_LOG.md`. (owner: maintainer,
+  parallel-safe: no, stream: PR-G, after: PRIV-V3) — **P2 optional**
+- [ ] **(PRIV-V5)** Manual smoke for consent/settings/cache/index clear flows
+  and protected diagnostic logging. (owner: maintainer, parallel-safe: no,
+  stream: PR-G, after: PRIV-V3) — **P2 optional**; defer with other manual smokes
+- [ ] **(PRIV-FINAL)** Archive this plan to `completed/` only if the tail
+  checkboxes are closed or explicitly abandoned. **Parked** — not an optional
+  skip; keep the plan in `plans/` until that decision. (owner: maintainer,
+  after: PRIV-V5)
 
 ## Modularity and file-size guardrails
 
@@ -468,10 +508,9 @@ UX implementation remains subject to a desktop/Qt review. Required outcomes:
 
 These are gates, not blockers to Phases 1-5:
 
-1. **Remote history (blocking G6 only):** retain 14 commits, replace `main` with a
-   clean single-commit history in the existing private repo, or delete/recreate?
-   Recommendation after G5: clean single-commit history, because the repo is new,
-   small, private, and the user accepts recreation.
+1. **Remote history (G6 — closed 2026-07-13):** Published `origin/main` was
+   reset to a reviewed snapshot root commit; work from **2026-07-14** onward is
+   on that lineage. The recreation runbook is contingency-only.
 2. **Resolved 2026-07-16 — index:** automatic indexing is off pending explicit
    opt-in; new and unanswered legacy installations receive a one-time prompt.
 3. **Resolved 2026-07-16 — MPR:** persistent derived-pixel caching is off pending
@@ -492,7 +531,8 @@ These are gates, not blockers to Phases 1-5:
 ## Completion notes
 
 Fill this section only with verified task IDs, commands, results, assessment
-paths, manual-smoke evidence, and the user's final remote-history decision.
+paths, manual-smoke evidence, and (when applicable) historical **G6**
+remote-history closure evidence (executed **2026-07-13**; see disposition above).
 
 **Ready for orchestrator to assign coder after Gate G0.**
 

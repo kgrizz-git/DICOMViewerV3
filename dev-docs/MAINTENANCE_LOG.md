@@ -1,10 +1,79 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-08-28
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
+## 2026-08-28
+
+- **Privacy hardening plan disposition:** Marked G6 closed (**2026-07-13**
+  snapshot root on `origin/main`; development from **2026-07-14** on this
+  lineage). PRIV-V1–V3 satisfied by routine CI/hooks; demoted Phase 8 tail to
+  P2 optional. Review is maintainer + agents only.
+- **Backlog — Manual Smoke Checks section:** Added a dedicated [`TO_DO.md`](TO_DO.md)
+  section for human verification after merged implementation work, with workflow
+  guidance, a single **Next up** pointer, and a rule that slot 1 stays manual
+  smokes while any remain open. Consolidated volume-render, post-load first-paint,
+  and W/L preset smokes; removed duplicate 3D sub-bullets and closed the
+  refactor-extraction smoke block (all confirmed 2026-06).
+- **Pylinac ACR export slice plan:** Added
+  [`PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`](plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md)
+  (full metrics CSV/XLSX, batch CT CSV, multi-series MRI batch); linked from
+  `TO_DO.md` Next up.
+- **pytest-xdist parallelization — closed:** Fifteen consecutive green CI runs on
+  `main` (PRs #79–#92, 2026-08-23 through 2026-08-28) with `-n auto` and the
+  80% coverage floor. Archived
+  [`TEST_SUITE_PARALLELIZATION_PLAN.md`](plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md)
+  and removed the long Maintenance follow-up from `TO_DO.md`. Optional future
+  runtime work stays under [CI test runtime and coverage integrity](plans/CI_TEST_RUNTIME_AND_COVERAGE_INTEGRITY_PLAN.md).
+
+## 2026-08-26
+
+- **3D volume fallback and memory hardening:** Replaced the blank-frame
+  boolean with a transfer-function/occupancy-aware three-way outcome, keeping
+  legitimately blank CT Bone views on GPU while retaining real CPU fallback.
+  Expected-blank probes are transfer-function-dirty rather than reading back
+  the framebuffer every render. Eliminated calibration and VTK deep copies,
+  retained the shallow VTK NumPy backing safely, and added a pre-allocation
+  uniform downsampling guard based on available RAM (20%, capped at 2.5 GiB).
+  It preserves patient-space geometry and visibly reports its factor. Synthetic
+  512×512×800 measurement with smoothing: 1438 MiB peak RSS (baseline
+  3274–3276 MiB). The focused 68-test suite and the serial non-native pytest
+  scope both passed (the latter exited 0). A basic native-macOS 3D-view smoke
+  was user-confirmed; Windows/Parallels GPU-fallback checks remain in
+  [`TO_DO.md`](TO_DO.md) → **Manual Smoke Checks** (plan archived to
+  [`completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md`](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)).
+
+## 2026-08-25
+
+- **README feature gallery + approved-media update:** Expanded root `README.md`
+  Highlights and added a constrained-width gallery (ROI/MPR hero, 3D,
+  annotation customization, histogram, tag editor, tag export, automated QA
+  menu). Resized PNGs under `resources/readme-screenshots/` and refreshed their
+  SHA-256 pins in `security/approved-media-sha256.json`. Fusion and slab/MIP
+  screenshot follow-up tracked in `TO_DO.md`.
+
 ## 2026-08-24
+
+- **Approved-media manifest hardening:** The artifact gate now validates the
+  complete approved-media schema before exempting it from generic content
+  scanning: object root, allowed top-level fields, exact purpose, file and
+  image-tree paths, SHA-256 digests, and media-entry keys. Malformed manifests
+  fail closed without crashing; regression tests cover PHI-like content in
+  unknown fields and nested image-tree entries.
+
+- **First-run visual defaults and README showcase:** New installations now use
+  larger overlay/annotation text, medium overlay weight, violet accent,
+  visible red scale markers and direction labels, and compact icon-plus-label
+  toolbar buttons. Stored preferences continue to win without a config-file
+  rewrite. The main splitter has an explicit 8 px Qt hit target while keeping
+  a 1 px rest-state hairline; the labelled toolbar has a 1348 px uncompressed
+  Qt size hint and remains one row at the 1280 px target, protected by a Qt
+  regression test. The README now shows two human-approved synthetic-demo
+  workflows; their final PNG hashes are pinned in the approved-media manifest.
+  The artifact gate now avoids generic text scanning of arbitrary manifest
+  hashes while retaining its structured path-and-digest validation, fixing a
+  pre-existing false positive on a previously approved media filename.
 
 - **pytest CI hang fixed:** Two manually cancelled PR #82 `pytest` attempts reached 98–99% and then made no progress for 32–40 minutes. Debug logs placed `test_main_privacy_lifecycle.py::test_main_installs_privacy_boundary_before_application_construction` on the same xdist worker 85 seconds before `test_main_window_fullscreen.py::test_fullscreen_chrome_hide_and_restore_splitter` stalled. The former deliberately calls `main()`, which installs the process-global `sys.excepthook`, but did not restore it. A later Qt timer exception during scoped-widget cleanup was consequently routed to `main.exception_hook`; its modal `QMessageBox.critical()` cannot be dismissed in an offscreen worker and nested its event loop indefinitely. The test now scopes and verifies restoration of `sys.excepthook`. The exact CI-style native macOS command (`QT_QPA_PLATFORM=offscreen`, `-n 4`, coverage XML, 80% floor) completed in 54.53s: 6365 passed, 15 skipped, 81.88% coverage. Await the replacement GitHub run before closing the active xdist follow-up.
 
@@ -159,7 +228,7 @@ This file records development and repository-maintenance history that is useful 
   planned module-scoped app fixture was therefore dropped as both ineffective
   and a shared-state hazard.
 
-  **Plan:** [Parallelize the CI test suite](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md).
+  **Plan:** [Parallelize the CI test suite](plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md) (closed 2026-08-27).
 
 ## 2026-08-10
 

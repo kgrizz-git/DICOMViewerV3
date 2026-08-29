@@ -338,7 +338,7 @@ in-process: `PYTHONPATH=src python -m pytest -n 0 tests/path/test_x.py`.
 Tests must not assume execution order or a shared process — in particular,
 never construct a `QCoreApplication` in a test; depend on the session `qapp`
 fixture, or every later widget test in that worker will abort. See
-[`plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md`](plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md).
+[`plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md`](plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md).
 
 **Gitleaks:** `pre-commit` scans the **staged index**. `pre-push` and CI privacy
 gate both run **full reachable history** via `scripts/check_gitleaks_history.py`

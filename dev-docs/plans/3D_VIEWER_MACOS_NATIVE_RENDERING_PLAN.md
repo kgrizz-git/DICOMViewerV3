@@ -8,7 +8,7 @@
 [`3D_VIEWER_FIRST_PAINT_RESPONSIVENESS_PLAN.md`](3D_VIEWER_FIRST_PAINT_RESPONSIVENESS_PLAN.md),
 [`VOLUME_RENDER_DIALOG_LIFECYCLE_PLAN.md`](supporting/VOLUME_RENDER_DIALOG_LIFECYCLE_PLAN.md),
 [`3D_VIEWER_OVERLAY_GHOSTING_FIX_PLAN.md`](supporting/3D_VIEWER_OVERLAY_GHOSTING_FIX_PLAN.md),
-[`VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md`](supporting/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)
+[`VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md`](completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)
 
 > **For agentic workers:** Execute task-by-task and tick the checkboxes. Activate `.venv`
 > before pytest; allow ~10 minutes for the full suite. **Phase 0 is a decision gate — do
@@ -116,7 +116,7 @@ rescue Parallels' blank frames, but on native macOS it never executes — the *f
 - Changing transfer-function aesthetics or preset definitions.
 - Fixing the blank-frame false positive and the build-path memory amplification — those
   are tracked in
-  [`VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md`](supporting/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md).
+  [`VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md`](completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md).
 
 ---
 

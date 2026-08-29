@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-27
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -77,7 +77,7 @@ use `find` and the platform's available text-search tool rather than assuming
 - **Pylinac:** exact pin in `requirements.txt`; bump via [`DEPENDENCY_BUMP_VERIFICATION_PLAN.md`](dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) and [`PYLINAC_INTEGRATION_OVERVIEW.md`](dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
 - **Known dependency advisories:** [`security/pip-audit-exceptions.md`](security/pip-audit-exceptions.md) records the two temporary `pip-audit` exceptions, their review triggers, and the required removal criteria. Do not add or broaden an exception without explicit review.
 - **Version / changelog / SemVer:** bump [`src/version.py`](src/version.py) and keep **Current version** in [`CHANGELOG.md`](CHANGELOG.md) in sync; follow [`dev-docs/RELEASING.md`](dev-docs/RELEASING.md) for release cuts and [`dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increments.
-- **Tracking split / plan archive:** [`dev-docs/TO_DO.md`](dev-docs/TO_DO.md) is the active backlog, not a completion log. Remove fully completed items once captured in [`CHANGELOG.md`](CHANGELOG.md), [`dev-docs/MAINTENANCE_LOG.md`](dev-docs/MAINTENANCE_LOG.md), or a durable plan/investigation record. Move finished implementation plans to [`dev-docs/plans/completed/`](dev-docs/plans/completed/); keep only ongoing dependency/reference plans in [`dev-docs/plans/supporting/`](dev-docs/plans/supporting/). Use `CHANGELOG.md` for user-visible release changes and `MAINTENANCE_LOG.md` for CI, harness, static-analysis, dependency-verification, and repo-maintenance history.
+- **Tracking split / plan archive:** [`dev-docs/TO_DO.md`](dev-docs/TO_DO.md) is the active backlog, not a completion log. Remove fully completed items once captured in [`CHANGELOG.md`](CHANGELOG.md), [`dev-docs/MAINTENANCE_LOG.md`](dev-docs/MAINTENANCE_LOG.md), or a durable plan/investigation record. Move finished implementation plans to [`dev-docs/plans/completed/`](dev-docs/plans/completed/); keep only ongoing dependency/reference plans in [`dev-docs/plans/supporting/`](dev-docs/plans/supporting/). When a plan is merged but manual smoke remains, archive the plan and track the smoke in **Manual Smoke Checks** in `TO_DO.md` (one umbrella pointer in **Next up**). Use `CHANGELOG.md` for user-visible release changes and `MAINTENANCE_LOG.md` for CI, harness, static-analysis, dependency-verification, and repo-maintenance history.
 - **Doc dates:** when editing a document that already has a `**Last updated:**` line, update the date if the edit changes policy, workflow, user-facing behavior, or canonical guidance. Do not bump dates for typo-only edits.
 - **PHI / PII guardrails:** Before adding studies, DICOM, spreadsheets, screenshots, archives, document packages, or binary assets, read [`PHI_PII_REPOSITORY_GUARDRAILS.md`](dev-docs/PHI_PII_REPOSITORY_GUARDRAILS.md). The blocking artifact gate is `scripts/check_no_phi_artifacts.py`; its reviewed-asset manifest is `security/approved-media-sha256.json`. **Hounddog is local-only, non-blocking, and disconnected from accounts, repository integrations, uploads, and CI until the user explicitly changes that policy.**
 - **Tool inventory:** Before adding, replacing, or upgrading a privacy/security/analysis tool or model, update [`security/security-tool-inventory.json`](security/security-tool-inventory.json) and run `python scripts/check_security_tool_inventory.py`.
@@ -92,8 +92,8 @@ use `find` and the platform's available text-search tool rather than assuming
   values into chat, commits, issues, or reports — see
   [`SECURITY_TOOLS_CLI_GUIDE.md`](dev-docs/SECURITY_TOOLS_CLI_GUIDE.md).
 - **Debug flags:** Before adding `print` tracing, read [`src/utils/debug_flags.py`](src/utils/debug_flags.py) and gate behind an existing or new `DEBUG_*` constant (default **`False`**). Each flag documents which modules it affects. Revert flags to **`False`** before commit — CI **debug-flags-check** fails on any `True`. Do not use `DEBUG_AGENT_LOG` in release builds (writes `debug-088dbc.log`).
-- **Long-running commands:** use ~10 minute timeouts for full `pytest` or `pyright src/`.
-- **Git hooks:** Never use `git commit --no-verify` without explicit user permission. Git hooks (line complexity, PHI checks, ruff linting, etc.) are important quality gates. If hooks fail, fix the underlying issues rather than bypassing them.
+- **Long-running commands:** use ~10 minute timeouts for full `pytest` or `pyright src/`. Whole-repository pre-push privacy, PHI, secret, and type-analysis gates may take several minutes with little or no output; treat them as running until their completion status is known, give a progress update, and wait/poll rather than inferring failure.
+- **Git hooks:** Never use `--no-verify`, disable or edit a hook to skip checks, or use an equivalent workaround for any commit, push, or verification gate unless the user gives explicit, specific approval to bypass that exact gate after its risk has been explained. A general request to commit, push, update a PR, or finish work is not approval. Git hooks (line complexity, PHI checks, ruff linting, etc.) are important quality gates. If hooks fail, fix the underlying issues or report the blocker rather than bypassing them.
 
 ## Optional delegation
 
@@ -120,6 +120,6 @@ Workflows on **main** / **develop**: tests, Semgrep, Grype, debug flags, user-do
 
 ## View and display (agent-relevant defaults)
 
-- **Image smoothing:** off by default; View menu + context menu; persisted.
+- **Image smoothing:** on by default for new or missing configs; View menu + context menu; persisted. During zoom/pan the image uses fast scaling, then smooths after a short idle delay.
 - **Panes / navigator:** View menu + context menu; **N** toggles series navigator.
 - **Multi-window:** 1×1 focused; 1×2 / 2×1 by row/column; double-click expand/revert; **Swap** in 2×2 only.

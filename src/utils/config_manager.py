@@ -176,7 +176,7 @@ class ConfigManager(
             "recent_files": [],
             # Display
             "theme": "dark",
-            "accent": "steel-blue",
+            "accent": "violet",
             "scroll_wheel_mode": "slice",
             "privacy_view_enabled": False,
             "smooth_image_when_zoomed": True,
@@ -189,16 +189,23 @@ class ConfigManager(
             "overlay_mode": "minimal",
             "overlay_visibility_state": 0,
             "overlay_custom_fields": [],
-            "overlay_font_size": 10,
+            "overlay_font_size": 11,
             "overlay_font_color_r": 255,
             "overlay_font_color_g": 255,
             "overlay_font_color_b": 0,
+            "overlay_font_variant": "Medium",
+            "show_scale_markers": True,
+            "show_direction_labels": True,
+            "scale_markers_color_r": 255,
+            "scale_markers_color_g": 0,
+            "scale_markers_color_b": 0,
+            "toolbar_label_style": "text_under_icon",
             "overlay_tags": {},
             # Layout
             "multi_window_layout": "1x1",
             "view_slot_order": [0, 1, 2, 3],
             # ROI
-            "roi_font_size": 12,
+            "roi_font_size": 13,
             "roi_font_color_r": 255,
             "roi_font_color_g": 255,
             "roi_font_color_b": 0,
@@ -209,7 +216,7 @@ class ConfigManager(
             "roi_default_visible_statistics": ["mean", "std", "min", "max", "count", "area"],
             "roi_show_per_channel_statistics": True,
             # Measurement
-            "measurement_font_size": 12,
+            "measurement_font_size": 13,
             "measurement_font_color_r": 0,
             "measurement_font_color_g": 255,
             "measurement_font_color_b": 0,
@@ -218,6 +225,7 @@ class ConfigManager(
             "measurement_line_color_g": 255,
             "measurement_line_color_b": 0,
             # Annotation
+            "text_annotation_font_size": 13,
             "arrow_annotation_size": 6,
             # Cine
             "cine_default_speed": 1.0,

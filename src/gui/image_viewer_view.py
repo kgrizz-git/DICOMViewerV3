@@ -221,7 +221,7 @@ class ImageViewerViewMixin:
             return
 
         viewport_rect = self.viewport().rect()
-        major_tick_len_px = 14.0
+        major_tick_len_px = 18.0
         minor_tick_len_px = 8.0
 
         pen = QPen(QColor(self._scale_markers_color[0], self._scale_markers_color[1], self._scale_markers_color[2], 220))
@@ -300,7 +300,7 @@ class ImageViewerViewMixin:
 
         viewport_rect = self.viewport().rect()
         top_bottom_margin_px = 16.0
-        side_margin_px = 14.0
+        side_margin_px = 22.0
 
         overlay_font_family = "IBM Plex Sans"
         overlay_font_variant = "Bold"
@@ -336,7 +336,7 @@ class ImageViewerViewMixin:
         painter.drawText(
             QPointF(
                 center_x - (bottom_width / 2.0),
-                viewport_rect.bottom() - top_bottom_margin_px,
+                viewport_rect.bottom() - 18.0 - 4.0 - font_metrics.descent(),
             ),
             labels["bottom"],
         )

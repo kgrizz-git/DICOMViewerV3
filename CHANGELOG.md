@@ -6,7 +6,30 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Fixed
+- **Volume rescale slope guard (Sonar S1244):** Centralize exact-zero
+  `RescaleSlope` checks in `is_usable_rescale_slope()` and use it for 3D
+  volume calibration preflight and shared W/L rescale paths, targeting the
+  SonarCloud new-code reliability gate without introducing a near-zero
+  epsilon (gate clearance pending post-merge confirmation).
+  **Semantic versioning note: patch.**
+
 ### Changed
+- **README feature showcase:** Root `README.md` expands the Highlights table
+  (ROIs, MPR create/export, slab projections, fusion, 3D, tag edit/export,
+  cine, themes/settings, pylinac CT/MR/NM QC) and adds a constrained-width
+  feature gallery (ROI/MPR hero, 3D, annotation customization, histogram, tag
+  editor, tag export, automated QA menu). Screenshots are resized for display
+  and hash-pinned in `security/approved-media-sha256.json`. Docs-only.
+  **Semantic versioning note: patch.**
+- **First-run visual defaults and workspace ergonomics:** New installations
+  start with larger overlay/annotation text, medium overlay weight, violet
+  accent, red scale markers and direction labels enabled, plus a compact
+  icon-plus-label toolbar that remains one row at 1280 px (1348 px uncompressed
+  Qt size hint). Existing stored preferences are preserved. Splitter handles
+  now have an 8 px hit target while retaining a 1 px resting hairline. The
+  README includes approved synthetic-demo workflow screenshots.
+  **Semantic versioning note: patch.**
 - **Build Executables concurrency:** Manual publish and tag-push runs for the same release tag now share one concurrency group (`build-vX.Y.Z` via `github.ref_name` on tag pushes), so they serialize instead of racing the same GitHub Release assets. **Semantic versioning note: patch.**
 - **UI-triggered releases (Build Executables):** Manual `workflow_dispatch` can publish a GitHub Release from a user-supplied `release_tag_name` (`publish_to_release`); artifact upload is **skipped** on those runs only. Tag pushes keep 30-day Actions artifacts. Windows release payloads are a single **`DICOMViewerV3-*-Windows.zip`** (manual publish and tag push). Pre-release tags (`vX.Y.Z-…`) derive **prerelease** metadata. Release titles are set explicitly to **`Release vX.Y.Z`** (or the supplied tag) on every publish leg. Release asset rotation documented in `RELEASING.md` / `BUILDING_EXECUTABLES.md`. **`PYINSTALLER_MACOS_SLIM`** retired (D1): same-commit macOS A/B measured **0 MB saved** (1,178,268 KB both builds). **Semantic versioning note: patch.**
 - **PyInstaller security floor:** `requirements-build.txt` requires
@@ -55,6 +78,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   versioning note: patch.**
 
 ### Fixed
+- **3D volume blank-frame and memory handling:** A legitimately empty 3D view
+  (for example CT Bone on a bone-free scan) now remains on the GPU path instead
+  of being misclassified as a GPU failure and locked to Fast CPU rendering.
+  Genuine blank-frame failures still fall back safely. Very large volumes now
+  automatically downsample before their renderer array is allocated using a
+  budget based on available RAM (20%, capped at 2.5 GiB); the 3D dialog and
+  Advanced status clearly disclose the factor and preserved physical scale.
+  **Semantic versioning note: patch.**
 - **PySide6 6.11.2 tree typing (CI):** Fresh CI installs can resolve
   PySide6 6.11.2, whose stubs type ``QTreeWidgetItem.child()`` and
   ``parent()`` as optional. Export and metadata tree walks now use a shared

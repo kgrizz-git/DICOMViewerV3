@@ -215,6 +215,14 @@ Suggested menu item wording: **"Show Instances Separately"** (or "Expand Multi-F
 - **Other notes**
   - A separate `dev-docs` plan for QC integration could list targeted tests, required phantoms, validation datasets, and acceptance thresholds, as well as how QC results integrate with logs or external systems (e.g. exporting to a QA archive).
 
+### Interpreting MTF results
+
+- **Goal (deferred — after pylinac full export plan):** Let physicists set a site-specific **rMTF visibility cutoff** (separate presets for CT vs MRI) and report the interpolated **lp/mm** at that cutoff from pylinac’s existing rMTF grid; optionally mark which inserts pass a configured threshold. **Do not** auto-declare ACR accreditation hole/line “resolved” without human read.
+- **Second slice:** **Assisted visual scoring** — show slice-1 hole crops (MRI) or line-pair crops (CT); user records smallest resolved group; export as distinct columns from MTF@50%.
+- **Calibration:** Persist the chosen cutoff in config (not a multi-step training wizard). Fold any yes/no stepping into the interpret UI if needed.
+- **References:** [ACR phantom QA metrics and pylinac gaps](info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) §Direct resolution reads; [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](info/PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) (MRI MTF rMTF grid); [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) **C2**, **C24**.
+- **Avoid:** Pattern ROI σ alone as a visibility proxy; absolute MTF unless rMTF extrapolation warnings prove insufficient; claiming NEMA/ACR equivalence for automated scores.
+
 ## Interactive Oblique Rotation on MPR
 
 - **Suggestions / best approaches**

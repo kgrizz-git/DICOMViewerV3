@@ -2,7 +2,12 @@
 Stage 1 pylinac spike script for ACR CT datasets.
 
 Usage:
-    python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder" [--pdf-out "C:/out/report.pdf"]
+    python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder"
+    python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder" \\
+        --dump-json ~/private-qa-dumps/acr_ct_results_data.json
+
+Dump path must be outside the source checkout (assert_safe_internal_path).
+Copy reviewed dumps into tests/fixtures/qa/ before commit (see tests/fixtures/qa/README.md).
 
 This script is intentionally minimal and runs outside the Qt app so dependency
 and API compatibility can be validated before wiring deeper UI flows.
@@ -17,10 +22,14 @@ from typing import Any
 
 try:
     from scripts.privacy_console import print_redacted
+    from scripts.pylinac_spike_common import redact_paths_in_value, results_data_as_dict
 except ModuleNotFoundError:
     import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
+    import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
 
     print_redacted = privacy_console.print_redacted
+    redact_paths_in_value = pylinac_spike_common.redact_paths_in_value
+    results_data_as_dict = pylinac_spike_common.results_data_as_dict
 
 # Match the GUI runner: use viewer subclass (relaxed image index bounds).
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
@@ -34,7 +43,7 @@ from utils.privacy.safe_storage import (
 
 
 def _jsonable(value: Any) -> Any:
-    """Convert pylinac output to JSON-friendly values."""
+    """Convert pylinac output to JSON-friendly values (console preview)."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, (list, tuple)):
@@ -48,6 +57,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run an ACRCT pylinac spike.")
     parser.add_argument("--folder", required=True, help="Folder containing ACR CT DICOM files.")
     parser.add_argument("--pdf-out", default="", help="Optional output PDF report path.")
+    parser.add_argument(
+        "--dump-json",
+        default="",
+        help="Write redacted results_data(as_dict=True) JSON to this path (Phase 0 fixture).",
+    )
     args = parser.parse_args()
 
     folder = Path(args.folder).expanduser().resolve()
@@ -58,8 +72,8 @@ def main() -> int:
     try:
         import pylinac  # pyright: ignore[reportMissingTypeStubs]
 
-        from qa.pylinac_extent_subclasses import (
-            ACRCTForViewer,  # type: ignore[import-not-found]
+        from qa.pylinac_extent_subclasses import (  # type: ignore[import-not-found]
+            ACRCTForViewer,
         )
     except Exception as exc:
         print_redacted(f"Failed to import pylinac / viewer subclass: {exc}")
@@ -71,12 +85,29 @@ def main() -> int:
     try:
         analyzer = ACRCTForViewer.from_folder(str(folder))  # pyright: ignore[reportAttributeAccessIssue]
         analyzer.analyze()
-        results_data = analyzer.results_data()
-        payload = _jsonable(results_data if isinstance(results_data, dict) else {"results_data": results_data})
-        print_redacted(payload)
+        payload = redact_paths_in_value(results_data_as_dict(analyzer))
+        print_redacted(_jsonable(payload))
     except Exception as exc:
         print_redacted(f"Analysis failed: {exc}")
         return 4
+
+    if args.dump_json:
+        try:
+            from scripts.pylinac_spike_common import write_redacted_results_dump
+        except ModuleNotFoundError:
+            import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
+
+            write_redacted_results_dump = pylinac_spike_common.write_redacted_results_dump
+        try:
+            dump_path = assert_safe_internal_path(
+                Path(args.dump_json),
+                source_root=_SRC_ROOT.parent,
+            )
+            written = write_redacted_results_dump(analyzer, dump_path)
+            print_redacted(f"Wrote redacted results_data dump: {written}")
+        except Exception as exc:
+            print_redacted(f"JSON dump failed: {exc}")
+            return 6
 
     if args.pdf_out:
         try:

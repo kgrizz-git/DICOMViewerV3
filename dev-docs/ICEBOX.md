@@ -1,6 +1,6 @@
 # Icebox
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-08-25
 
 Parked work, split out of [`TO_DO.md`](TO_DO.md) on 2026-08-23. Everything here
 is **self-labelled** in its own text as P3, Optional, Deferred, or a spike — it
@@ -22,7 +22,9 @@ disappear.
 
 ## From: Documentation
 
-- [ ] **[P3]** **README end-user polish — hero screenshot(s).** Root [`README.md`](../README.md) was rewritten for end users (short intro, packaged-release-first, capability table, linked-out developer material). Remaining human-owned step: capture and PHI-review one primary hero screenshot (optional second) using wholly synthetic studies from approved demo fixtures only; after visual PHI review, record the approved asset hash in `security/approved-media-sha256.json` and insert into the README placeholder slot. **Plan:** [README end-user polish](plans/README_END_USER_POLISH_PLAN.md). Surfaced 2026-08-20.
+- README end-user polish and the initial approved hero/gallery screenshots shipped
+  (2026-08-24 / 2026-08-25). Remaining screenshot gap (fusion + slab/MIP) is tracked
+  in [`TO_DO.md`](TO_DO.md) under Documentation.
 
 ## From: Features (Near-Term)
 

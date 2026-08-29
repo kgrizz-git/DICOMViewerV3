@@ -2,6 +2,8 @@
 
 This document is a multi-phase implementation plan for optional image smoothing when the user zooms or pans, following the recommendations in [IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md](../info/IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md).
 
+> **Historical note (2026-08-26):** This completed plan records the original decision to default smoothing off. The shipped behavior was later changed: smoothing is on for new or missing configs, while an explicitly saved off preference is preserved. See `CHANGELOG.md` and the implementation section of `IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md` for current behavior.
+
 **References:**
 - Research and recommendations: `dev-docs/info/IMAGE_SMOOTHING_WHEN_MAGNIFIED_RESEARCH.md`
 - Current display: `src/gui/image_viewer.py` (QGraphicsView, QGraphicsPixmapItem, SmoothPixmapTransform)

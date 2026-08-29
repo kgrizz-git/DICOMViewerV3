@@ -46,6 +46,13 @@ def _spy_signal(window, signal_name: str) -> list:
 
 
 @pytest.mark.qt
+def test_new_profile_enables_image_smoothing_in_view_menu(main_window):
+    """A fresh configuration must expose the shipped smoothing default in the UI."""
+    assert main_window.smooth_when_zoomed_action.isChecked() is True
+    assert "does not modify DICOM data" in main_window.smooth_when_zoomed_action.toolTip()
+
+
+@pytest.mark.qt
 def test_set_smooth_when_zoomed_checked_syncs_without_emitting(main_window):
     emitted = _spy_signal(main_window, "smooth_when_zoomed_toggled")
     initial = main_window.smooth_when_zoomed_action.isChecked()

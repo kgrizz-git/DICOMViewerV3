@@ -338,7 +338,7 @@ def test_on_main_window_layout_changed(qapp) -> None:
     # Depends on the session qapp fixture for QTimer.singleShot support. Do not
     # construct a QCoreApplication here: it is non-GUI, and owning the process
     # would make every later widget test in this worker abort. See
-    # dev-docs/plans/supporting/TEST_SUITE_PARALLELIZATION_PLAN.md.
+    # dev-docs/plans/completed/TEST_SUITE_PARALLELIZATION_PLAN.md.
     app = MagicMock()
     ctrl = SubwindowLifecycleController(app)
     ctrl.on_main_window_layout_changed("1x2")
