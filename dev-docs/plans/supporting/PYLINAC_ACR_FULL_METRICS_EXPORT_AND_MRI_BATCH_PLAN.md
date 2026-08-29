@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
 **Last updated:** 2026-08-29
-**Status:** Active — **P1-F1/F2/F3 flatten + CSV landed**; **P3-C1** CT batch **Export CSV…** landed; XLSX/MRI-batch still open; **external review incorporated** (Hy3, GLM, Kilo Hy3, Cursor Grok 4.5/4.6 — see **Review notes**)
+**Status:** Active — **Phases 1–5 shipped** (flatten, XLSX, CT batch CSV, MRI batch, docs/strings); **Phase 6 (viewer-computed MRI SNR) still open**
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -343,10 +343,10 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 
 ### Phase 5 — Docs and closure
 
-- [ ] **(P5-D1)** User-docs: `USER_GUIDE_QA_PYLINAC.md` — update incrementally as CT CSV (Phase 3) and MRI batch (Phase 4) land; hub `USER_GUIDE.md` if needed. (owner: docs, after: P3-C2, P4-M4)
-- [ ] **(P5-D2)** Dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md`, appendix in this plan, `MAINTENANCE_LOG.md`. (owner: docs, after: P5-D1)
-- [ ] **(P5-D3)** In-app strings: menu, dialogs, tooltips, save-dialog titles (see **Documentation updates**). (owner: coder, with P4-M3, P3-C1)
-- [ ] **(P5-D4)** `CHANGELOG.md` **minor** when shipped. (owner: orchestrator)
+- [x] **(P5-D1)** User-docs: `USER_GUIDE_QA_PYLINAC.md` — MRI batch moved to its own `### ACR MRI batch` section (was a paragraph under `### ACR CT`); single-run CSV/XLSX now documented as full flatten (Summary vs Detail); **Embed module images in XLSX** option documented (default on, PDF parity, uncheck skips Images sheet); JSON still full `raw_pylinac` (no `metrics_flat`); compare mode unchanged; hub `USER_GUIDE.md` bullet updated; `CONFIGURATION.md` row expanded. (owner: docs) — **landed**
+- [x] **(P5-D2)** Dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md` — ACR CT CNR/batch/XLSX row updated to document canonical flatten (`qa_result_flatten.py`, metrics-overlay-wins, path denylist), wide batch CSV vs single-run metric/value, XLSX Summary/Detail/Images + embed toggle, `ACRMBatchResult` + `QAMRIBatchWorker` (not compare-mode `MRIBatchResult`), MRI batch menu + export; stale "batch for other modalities remain future work" corrected to "shipped for ACR CT and ACR MRI"; Phase 6 SNR kept **not shipped**. Plan appendix P5-D1/D2/D3 marked. `MAINTENANCE_LOG.md` dated completion note for Phases 1–5. (owner: docs) — **landed**
+- [x] **(P5-D3)** In-app strings: menu, dialogs, tooltips, save-dialog titles audited against the **Documentation updates** table — **all strings already landed** from P3/P4 (MRI batch menu in `main_window_menu_builder.py`; Export CSV/JSON/XLSX buttons in `mri_batch_result_dialog.py` + `ct_batch_result_dialog.py`; "Embed module images in XLSX" checkbox in `acr_ct_qa_dialog.py` + `acr_mri_qa_dialog.py`; selection dialog title/instructions in `acr_mri_series_selection_dialog.py`). **Zero Python changed.** (owner: coder) — **landed; no code change**
+- [x] **(P5-D4)** `CHANGELOG.md` — existing **Unreleased** **Added** (minor: MRI batch menu P4-M3, MRI batch export P4-M4, full-flatten CSV, XLSX Summary modality-aware columns P2-X1, embed-module-images toggle P2-I2, XLSX multi-module Images P2-X3) + **Fixed** P2-X4 (embed-off skips Images sheet, patch) already cover the ship. **No new CHANGELOG bullet needed** — user-docs facts are all represented. (owner: docs) — **landed; no new entry**
 - [ ] **(P5-D5)** `check_user_docs_links.py` + move plan to `completed/`; trim `TO_DO.md`. (owner: orchestrator)
 
 ### Phase 6 — Viewer-computed MRI SNR (extension slice)

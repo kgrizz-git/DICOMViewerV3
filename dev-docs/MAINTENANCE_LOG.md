@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-29
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-29
+
+- **Pylinac ACR full-metrics export + MRI batch — Phases 1–5 complete (docs/strings):** Closed the documentation and in-app-string slice of [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md). **P5-D1** user-docs: `USER_GUIDE_QA_PYLINAC.md` now has a dedicated `### ACR MRI batch` section (was a paragraph under `### ACR CT`); single-run CSV/XLSX documented as full flatten (Summary vs Detail); **Embed module images in XLSX** option documented (default on, PDF parity, uncheck skips Images sheet); JSON still carries full `raw_pylinac` (no `metrics_flat`); compare mode unchanged. Hub `USER_GUIDE.md` bullet updated; `CONFIGURATION.md` ACR/pylinac row expanded with the embed-toggle description. **P5-D2** dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md` ACR CT CNR/batch/XLSX row updated to document canonical flatten (`qa_result_flatten.py`, metrics-overlay-wins, path denylist), wide batch CSV vs single-run metric/value, XLSX Summary/Detail/Images + embed toggle, `ACRMBatchResult` + `QAMRIBatchWorker` (not compare-mode `MRIBatchResult`), MRI batch menu + export; stale "batch for other modalities remain future work" corrected to "shipped for ACR CT and ACR MRI"; Phase 6 SNR kept **not shipped**. Plan appendix P5-D1/D2/D3/D4 marked `[x]` with honest landed notes; plan status header updated to "Phases 1–5 shipped; Phase 6 (viewer-computed MRI SNR) still open". **P5-D3** in-app strings: audited against the plan's **Documentation updates** table — all strings already landed from P3/P4; **zero Python changed**. **P5-D4** CHANGELOG: existing Unreleased **Added** (minor) + **Fixed** P2-X4 (patch) already cover the ship; no new entry needed. Phase 6 (MRI SNR) remains open in the plan.
 
 ## 2026-08-28
 
