@@ -1,6 +1,6 @@
 # PHI / PII Repository Guardrails
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-08-29
 
 **Audience:** contributors and coding agents who add, generate, inspect, or export files in this repository.
 
@@ -12,6 +12,27 @@ This application processes clinical imaging. Treat every study, export, screensh
 2. Use wholly synthetic fixtures. DICOM fixtures must contain only the approved synthetic identifiers and must not carry real nested sequence values.
 3. Do not bypass hooks with `--no-verify` to admit a data or media file. Resolve the finding or obtain an explicit review decision.
 4. Do not put patient names, identifiers, dates of birth, accession numbers, local paths, raw exceptions, or unredacted datasets into logs, dialogs, test assertions, issue text, or documentation.
+
+## Local phantom data and QA metric dumps
+
+Gitignored roots such as `sample-DICOM-gitignored/CT-phantoms/` and
+`sample-DICOM-gitignored/MR-phantoms/` are for **private local** series only.
+Never stage them. When documenting or scripting, use those **repo-relative**
+paths — never a machine-absolute path.
+
+Pylinac `results_data` dumps committed under `tests/fixtures/qa/` must be
+**numeric metrics + phantom model** only: no absolute filesystem paths, and no
+institution name, institution address, station name, or other site/patient/UID
+keywords. Spike helpers in `scripts/pylinac_spike_common.py` drop those keys
+and redact remaining absolute paths. Dump JSON is written **outside** the
+checkout; copy a reviewed file into `tests/fixtures/qa/` only after that
+review. Workflow: [`tests/fixtures/qa/README.md`](../tests/fixtures/qa/README.md).
+
+If a DICOM fixture must be **tracked** in git, export it first with
+**File → De-identify & Export DICOM (PS3.15)…** (do not retain institution or
+device identity), then run the artifact gate and the required human review
+before any hash-manifest update. De-identification is not a substitute for
+leaving real local phantoms gitignored.
 
 ## What the blocking artifact gate covers
 

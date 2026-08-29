@@ -54,14 +54,14 @@ _SUMMARY_HEADERS = (
     "MTF@50% Col",
     "Slice Thickness (mm)",
     "Slice Shift (mm)",
+    "MRI SNR",
 )
 
 # Modality-aware Summary columns pulled from the canonical flatten rows
 # (``build_metric_rows``). Each entry is a human header paired with the exact
 # flatten key; a column stays blank when its key is absent for a run (CT rows
 # leave the MRI-only fields blank and vice versa — shared header, best-effort
-# fill). Locked gaps (CT slice thickness, CT SNR, ``mri_snr``) are intentionally
-# excluded; ``mri_snr`` lands with Phase 6.
+# fill). Locked gaps (CT slice thickness, CT SNR) are intentionally excluded.
 _SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("PIU (%)", "uniformity_module.piu"),
     ("PSG", "uniformity_module.psg"),
@@ -70,6 +70,7 @@ _SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("MTF@50% Col", "slice1.col_mtf_50"),
     ("Slice Thickness (mm)", "slice1.measured_slice_thickness_mm"),
     ("Slice Shift (mm)", "slice1.slice_shift_mm"),
+    ("MRI SNR", "mri_snr"),
 )
 
 
@@ -307,11 +308,12 @@ def build_qa_workbook(
         Summary -- one row per run: Series/Run ID, object ROI mean,
             background mean/std, CNR, status, warnings, then modality-aware
             key columns pulled from the canonical flatten (PIU, PSG, LC score,
-            MTF@50% row/col, slice thickness/shift). Each extra column is
-            best-effort: it stays blank when its flatten key is absent for the
-            run, so CT and MRI rows share one header with blanks where a metric
-            does not apply (CT slice thickness, CT SNR, and ``mri_snr`` are
-            excluded by design).
+            MTF@50% row/col, slice thickness/shift, uncorrected MRI SNR). Each
+            extra column is best-effort: it stays blank when its flatten key
+            is absent for the run, so CT and MRI rows share one header with
+            blanks where a metric does not apply (CT slice thickness and CT SNR
+            are excluded by design). ``MRI SNR`` is the viewer-harvested
+            uncorrected ACR-style ratio (``mri_snr``), not NEMA MS 1.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- per-module embedded PNGs from ``analyzed_module_images``
             (stable key sort), each preceded by its module label, stacked

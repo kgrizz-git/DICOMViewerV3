@@ -1,13 +1,15 @@
 """
 Stage 1 pylinac spike script for ACR MRI Large datasets.
 
-Usage:
-    python scripts/spike_pylinac_acrmri.py --folder "/path/to/acr_mri_folder"
-    python scripts/spike_pylinac_acrmri.py --folder "/path/to/acr_mri_folder" \\
+Usage (repo-relative folder; never commit the folder or dump paths):
+
+    python scripts/spike_pylinac_acrmri.py --folder sample-DICOM-gitignored/MR-phantoms/<series>
+    python scripts/spike_pylinac_acrmri.py --folder sample-DICOM-gitignored/MR-phantoms/<series> \\
         --dump-json ~/private-qa-dumps/acr_mri_results_data.json
 
 Dump path must be outside the source checkout (assert_safe_internal_path).
 Copy reviewed dumps into tests/fixtures/qa/ before commit (see tests/fixtures/qa/README.md).
+Console output never includes the folder or dump destination path.
 
 Runs outside the Qt app. Use ``--dump-json`` to emit a redacted ``results_data``
 fixture for Phase 0 (maintainer-only; requires local gitignored phantom data).
@@ -16,6 +18,7 @@ fixture for Phase 0 (maintainer-only; requires local gitignored phantom data).
 from __future__ import annotations
 
 import argparse
+import inspect
 import sys
 from pathlib import Path
 
@@ -33,6 +36,8 @@ _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
+from qa.analysis_types import QARequest
+from qa.pylinac_mri_echo import resolve_mri_analyze_echo_number
 from utils.privacy.safe_storage import (
     assert_safe_internal_path,
     ensure_private_directory,
@@ -52,7 +57,7 @@ def main() -> int:
 
     folder = Path(args.folder).expanduser().resolve()
     if not folder.exists() or not folder.is_dir():
-        print_redacted(f"Folder not found: {folder}")
+        print_redacted("Folder not found")
         return 2
 
     try:
@@ -65,12 +70,25 @@ def main() -> int:
         print_redacted(f"Failed to import pylinac / viewer subclass: {exc}")
         return 3
 
-    print_redacted(f"Running ACRMRILargeForViewer on: {folder}")
+    print_redacted("Running ACRMRILargeForViewer on a local folder")
     print(f"pylinac version: {getattr(pylinac, '__version__', 'unknown')}")
 
     try:
         analyzer = ACRMRILargeForViewer.from_folder(str(folder))  # pyright: ignore[reportAttributeAccessIssue]
-        analyzer.analyze()
+        echo_request = QARequest(
+            analysis_type="acr_mri_large",
+            folder_path=str(folder),
+            echo_number=None,
+        )
+        analyzed_echo = resolve_mri_analyze_echo_number(echo_request)
+        analyze_kwargs: dict[str, object] = {}
+        if "echo_number" in inspect.signature(analyzer.analyze).parameters:
+            analyze_kwargs["echo_number"] = analyzed_echo
+        if analyzed_echo is None:
+            print_redacted("No EchoNumber tags; using stock pylinac echo default")
+        else:
+            print_redacted(f"Analyzing auto-highest echo {analyzed_echo}")
+        analyzer.analyze(**analyze_kwargs)
     except Exception as exc:
         print_redacted(f"Analysis failed: {exc}")
         return 4
@@ -81,8 +99,8 @@ def main() -> int:
                 Path(args.dump_json),
                 source_root=_SRC_ROOT.parent,
             )
-            written = write_redacted_results_dump(analyzer, dump_path)
-            print_redacted(f"Wrote redacted results_data dump: {written}")
+            write_redacted_results_dump(analyzer, dump_path)
+            print_redacted("Wrote redacted results_data dump")
         except Exception as exc:
             print_redacted(f"JSON dump failed: {exc}")
             return 6

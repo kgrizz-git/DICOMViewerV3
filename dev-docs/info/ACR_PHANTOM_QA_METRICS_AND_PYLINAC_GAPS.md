@@ -44,19 +44,19 @@ These are the **quantitative tests** in the current **Phantom Test Guidance** us
 
 | Quantity | Where required | Typical definition | pylinac 3.43.2 |
 |----------|----------------|-------------------|----------------|
-| **SNR** | ACR **MRI QC Manual** (weekly technologist SNR check; physicist RF coil section); NEMA **MS 1-2008**; many papers | One ACR-style ratio on the **uniformity slice** (below); NEMA multiplies the same ratio by **0.655**. Two-image difference SNR is a different method. | **No** — no `snr` field in `acr.py` / `results_data` |
+| **SNR** | ACR **MRI QC Manual** (weekly technologist SNR check; physicist RF coil section); NEMA **MS 1-2008**; many papers | One ACR-style ratio on the **uniformity slice** (below); NEMA multiplies the same ratio by **0.655**. Two-image difference SNR is a different method. | **No native field** — viewer harvests uncorrected **`metrics.mri_snr`** (Phase 6) |
 | **SNR uniformity (SNRU)** | PMC automation papers; some site QC programs | Ratio of max/min SNR across sub-ROIs in uniform region, or **SNR(slice 6) / SNR(slice 7)** in [PMC8321175 §2.3.3.B](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (0.9–1.1) | **No** — defer after canonical slice-7 SNR |
 | **Legacy MRAP nickel-vial SNR** | 1999 AAPM phantom overview | Signal from **~2.5 cm²** ROI on NiCl₂ vial (early slices); noise from **corner background** ROI σ (four corners, 15–20 cm²) | **No** (phantom insert layout differs on current Large phantom) |
 
 ### SNR formula (one ACR-style ratio)
 
-**S̄** is the mean signal in a circular ROI on the ACR MRI phantom **uniformity slice** (ACR T1/T2 slice **7**), covering about **80% of the phantom diameter** (radius ≈ **0.80 ×** the phantom radius — not an 80% *area* construction with √0.80). Background noise is the pixel **σ** outside the phantom, typically averaged over ghost-free ROIs on the **frequency-encode** axis.
+**S̄** is the mean of pylinac’s **Center** disk ROI on the ACR MRI phantom **uniformity slice** (ACR T1/T2 slice **7** / pylinac uniformity module). Viewer v1 uses that Center ROI **as-is** (pylinac radius 80); it does not construct a separate ~80% phantom-diameter circle. Background noise is the pixel **σ** outside the phantom, averaged over ghost-free ROIs on the **frequency-encode** axis.
 
 NEMA MS 1, LCD-paper “ACR-style” SNR, PMC8321175 Eq. 7, and the Phase 6 export are **the same ratio**. The only extra factor in NEMA single-image SNR is the Rayleigh correction **0.655**. Viewer v1 exports the **uncorrected** ratio (`mri_snr`); do not apply 0.655 (OQ-10).
 
 | Method | Formula (conceptual) | Notes | Source |
 |--------|----------------------|-------|--------|
-| **ACR-style uncorrected** (QC / LCD / PMC Eq. 7 / Phase 6) | SNR = **S̄ / σ_bkg** | Uniformity slice; S̄ in ~**80% diameter** ROI; σ from background (freq-encode ghost-free pair, or a single background ROI in some write-ups) | ACR MRI QC Manual (requires the check); [PMC12257337](https://pmc.ncbi.nlm.nih.gov/articles/PMC12257337/); [PMC8321175 Eq. 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (`S̄ / mean(σ_L, σ_R)` on slice 7) |
+| **ACR-style uncorrected** (QC / LCD / PMC Eq. 7 / Phase 6) | SNR = **S̄ / σ_bkg** | Uniformity slice; S̄ = pylinac **Center** ROI mean (as-is); σ from background (freq-encode ghost-free pair) | ACR MRI QC Manual (requires the check); [PMC12257337](https://pmc.ncbi.nlm.nih.gov/articles/PMC12257337/); [PMC8321175 Eq. 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (`S̄ / mean(σ_L, σ_R)` on slice 7) |
 | **NEMA MS 1 single-image** | SNR ≈ **0.655 × S̄ / σ_bkg** | Same S̄ / σ_bkg family; **0.655** corrects Rayleigh noise on magnitude images | [PMC8321175 §2.3.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) citing NEMA MS 1 |
 | **Two-image difference** | SNR ≈ **√2 × S̄ / σ_diff** (often written 1.41×) | **Different method** — two identical acquisitions; σ from the subtracted image | NEMA / PMC8321175 |
 
@@ -78,7 +78,7 @@ pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 | **Top / Bottom** | Phase-encode ghost sampling | Rectangles at ±90° from phantom center |
 | **Left / Right** | Frequency-encode **ghost-free** background controls | Rectangles at 0° / 180° |
 
-**PSG** uses **means** of Top, Bottom, Left, Right. **SNR** uses **S̄** in a circle of about **80% of the phantom diameter** on that same uniformity slice, and **mean of σ** in the two **frequency-encode (ghost-free)** background ROIs — **Left/Right** only when frequency encode is horizontal; **Top/Bottom** when frequency encode is vertical (phase-encode ROIs would inflate σ).
+**PSG** uses **means** of Top, Bottom, Left, Right. **SNR** uses **S̄** from the same **Center** ROI pylinac already places for PIU/PSG, and **mean of σ** in the two **frequency-encode (ghost-free)** background ROIs — **Left/Right** only when frequency encode is horizontal; **Top/Bottom** when frequency encode is vertical (phase-encode ROIs would inflate σ).
 
 ---
 
@@ -102,7 +102,7 @@ pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 
 | Gap | Priority for DICOM Viewer V3 | Planned handling |
 |-----|------------------------------|------------------|
-| **MRI SNR** (ACR-style uncorrected ratio; NEMA adds 0.655) | **High** — user request | **Phase 6** — live harvest in `run_acr_mri_large_analysis`; export in flatten/CSV/XLSX |
+| **MRI SNR** (ACR-style uncorrected ratio; NEMA adds 0.655) | **High** — user request | **Phase 6 shipped** — live harvest in `run_acr_mri_large_analysis`; export in flatten/CSV/XLSX |
 | **SNR uniformity (SNRU)** | Low | Defer — slice-6/slice-7 ratio per PMC8321175 after slice-7 `mri_snr` ships |
 | **Visual high-contrast resolution** (hole-pair / line-pair read) | Low | pylinac **rMTF** is interim automated substitute; see **§Direct resolution reads** for investigation avenues |
 | **Weekly QC** (center frequency, TX gain, artifact form) | Out of scope | Not image-export metrics |

@@ -168,7 +168,9 @@ def build_pylinac_analysis_profile(
             )
             or DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
         )
-        profile["echo_number"] = request.echo_number
+        # echo_number is stamped later by stamp_analyzed_echo_on_profile
+        # (resolved auto-highest vs explicit request). Do not write the raw
+        # request value here — it would disagree with the analyzed echo.
         profile["low_contrast_method"] = lc_method
         profile["low_contrast_visibility_threshold"] = lc_threshold
         profile["low_contrast_visibility_sanity_multiplier"] = lc_sanity
@@ -477,7 +479,9 @@ class QARequest:
     study_uid: str = ""
     series_uid: str = ""
     modality: str = ""
-    # ACR MRI Large (pylinac): echo selection; None = library default (lowest echo).
+    # ACR MRI Large (pylinac): echo selection; None = viewer auto-highest
+    # EchoNumber from the series (T2 dual-echo). Stock pylinac still uses the
+    # lowest echo when analyze(echo_number=None) is left unresolved.
     echo_number: int | None = None
     # Documented for sagittal-in-separate-series workflows; stored in JSON for reproducibility.
     # Current pylinac ACRMRILarge may not expose this flag on analyze().

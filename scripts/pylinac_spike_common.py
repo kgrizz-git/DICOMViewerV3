@@ -2,20 +2,53 @@
 Shared helpers for pylinac ACR spike scripts (Phase 0 ``results_data`` fixture dumps).
 
 Used by ``spike_pylinac_acrct.py`` and ``spike_pylinac_acrmri.py`` to call
-``analyzer.results_data(as_dict=True)``, redact filesystem paths, and write JSON
-for ``tests/fixtures/qa/``. Maintainer-only: requires local gitignored phantom data.
+``analyzer.results_data(as_dict=True)``, drop site/PHI keys, redact filesystem
+paths, and write JSON for ``tests/fixtures/qa/``. Maintainer-only: requires
+local gitignored phantom data.
+
+Inputs:
+    A post-``analyze()`` pylinac analyzer, or an already-built results dict.
+
+Outputs:
+    A dump tree with absolute paths replaced by ``<redacted-path>`` and
+    institution / station / patient / UID-like DICOM keywords omitted.
+
+Requirements:
+    Never write dumps inside the source checkout (callers use
+    ``assert_safe_internal_path``). Never log folder or dump destination paths.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
+_SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from utils.privacy.classification import SENSITIVE_DICOM_FIELDS
+
+# Extra site/device keywords that may appear even if not in the DICOM registry.
+_EXTRA_DUMP_DROP_KEYS = frozenset(
+    {
+        "InstitutionalDepartmentName",
+        "InstitutionCodeSequence",
+        "PerformedStationName",
+        "ManufacturerModelName",
+    }
+)
+
+_DUMP_DROP_KEYS_LOWER = frozenset(
+    key.lower() for key in (SENSITIVE_DICOM_FIELDS | _EXTRA_DUMP_DROP_KEYS)
+)
+
 # Absolute Unix paths and Windows drive paths (conservative redaction for fixtures).
 _UNIX_ABS = re.compile(r"(?<![\w./-])(/[\w./-]+)")
-_WIN_ABS = re.compile(r"(?<![\w:])[A-Za-z]:[\\/][\w. \\-/]+")
+_WIN_ABS = re.compile(r"(?<![\w:])[A-Za-z]:[\\/][\w. \\/-]+")
 
 
 def _looks_like_absolute_path(text: str) -> bool:
@@ -38,6 +71,11 @@ def _looks_like_absolute_path(text: str) -> bool:
         return False
 
 
+def _is_dump_drop_key(key: object) -> bool:
+    """True when *key* is a DICOM/site identifier that must not appear in dumps."""
+    return str(key).strip().lower() in _DUMP_DROP_KEYS_LOWER
+
+
 def redact_paths_in_value(value: Any) -> Any:
     """Recursively redact absolute path strings in dict/list trees."""
     if isinstance(value, str):
@@ -51,6 +89,24 @@ def redact_paths_in_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [redact_paths_in_value(v) for v in value]
     return value
+
+
+def drop_sensitive_dump_keys(value: Any) -> Any:
+    """Omit institution, station, patient, and UID-like keys from a dump tree."""
+    if isinstance(value, dict):
+        return {
+            str(key): drop_sensitive_dump_keys(child)
+            for key, child in value.items()
+            if not _is_dump_drop_key(key)
+        }
+    if isinstance(value, (list, tuple)):
+        return [drop_sensitive_dump_keys(item) for item in value]
+    return value
+
+
+def redact_results_dump(value: Any) -> Any:
+    """Drop site/PHI keys, then redact any remaining absolute paths."""
+    return redact_paths_in_value(drop_sensitive_dump_keys(value))
 
 
 def results_data_as_dict(analyzer: Any) -> dict[str, Any]:
@@ -68,7 +124,7 @@ def write_redacted_results_dump(
     indent: int = 2,
 ) -> Path:
     """Write redacted ``results_data`` JSON to *out_path* (creates parent dirs)."""
-    payload = redact_paths_in_value(results_data_as_dict(analyzer))
+    payload = redact_results_dump(results_data_as_dict(analyzer))
     out_path = out_path.expanduser().resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=indent, sort_keys=True) + "\n", encoding="utf-8")

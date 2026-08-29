@@ -56,6 +56,7 @@ def _mri_result() -> QAResult:
             "num_images": 11,
             "phantom_roll": -0.42,
             "origin_slice": 0,
+            "mri_snr": 87.5,
         },
         warnings=[],
         errors=[],
@@ -85,11 +86,11 @@ def _headers(summary: openpyxl.worksheet.worksheet.Worksheet) -> list[str | None
 
 
 def test_summary_header_includes_new_columns() -> None:
-    """The full header tuple must end with the seven modality-aware columns."""
+    """The full header tuple must end with the eight modality-aware columns."""
     result = _ct_result()
     wb = build_qa_workbook([result], labels=["Run 1"])
     header = _headers(wb["Summary"])
-    assert header[-7:] == [
+    assert header[-8:] == [
         "PIU (%)",
         "PSG",
         "LC Score",
@@ -97,11 +98,12 @@ def test_summary_header_includes_new_columns() -> None:
         "MTF@50% Col",
         "Slice Thickness (mm)",
         "Slice Shift (mm)",
+        "MRI SNR",
     ]
 
 
 def test_summary_header_tuple_is_locked() -> None:
-    """_SUMMARY_HEADERS must match the canonical 14-column tuple (regression guard)."""
+    """_SUMMARY_HEADERS must match the canonical 15-column tuple (regression guard)."""
     assert _SUMMARY_HEADERS == (
         "Series/Run ID",
         "Object ROI Mean",
@@ -117,6 +119,7 @@ def test_summary_header_tuple_is_locked() -> None:
         "MTF@50% Col",
         "Slice Thickness (mm)",
         "Slice Shift (mm)",
+        "MRI SNR",
     )
 
 
@@ -130,7 +133,7 @@ def test_ct_row_fills_ct_relevant_columns_only() -> None:
     assert row[4] == 4.25  # CNR stays numeric
     # LC Score (index 9) fills; PIU/PSG (7,8) and the MRI-only MTF/thickness/shift (10-13) stay blank.
     assert row[9] == 1
-    for idx in (7, 8, 10, 11, 12, 13):
+    for idx in (7, 8, 10, 11, 12, 13, 14):
         assert row[idx] in (None, ""), f"column {idx} ({_SUMMARY_HEADERS[idx]}) should be blank for CT"
 
 
@@ -146,6 +149,7 @@ def test_mri_row_fills_mri_relevant_columns() -> None:
     assert row[11] == 0.98  # MTF@50% Col
     assert row[12] == 5.1  # Slice Thickness
     assert row[13] == 0.25  # Slice Shift
+    assert row[14] == 87.5  # MRI SNR
 
 
 def test_missing_keys_stay_blank() -> None:
@@ -160,7 +164,7 @@ def test_missing_keys_stay_blank() -> None:
     )
     wb = build_qa_workbook([result])
     row = [c.value for c in wb["Summary"][2]]
-    for idx in range(7, 14):
+    for idx in range(7, 15):
         assert row[idx] in (None, ""), f"column {idx} should be blank for an empty run"
 
 
@@ -185,6 +189,7 @@ def test_cnr_numeric_cells_still_numbers() -> None:
     mri_row = wb2["Summary"][2]
     assert isinstance(mri_row[7].value, (int, float))  # PIU
     assert isinstance(mri_row[12].value, (int, float))  # Slice Thickness
+    assert isinstance(mri_row[14].value, (int, float))  # MRI SNR
 
 
 def test_mixed_ct_and_mri_batch_share_header() -> None:
@@ -207,3 +212,5 @@ def test_mixed_ct_and_mri_batch_share_header() -> None:
     assert mri_row[11] == 0.98
     assert mri_row[12] == 5.1
     assert mri_row[13] == 0.25
+    assert mri_row[14] == 87.5
+    assert ct_row[14] in (None, "")
