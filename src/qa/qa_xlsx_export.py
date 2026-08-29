@@ -17,8 +17,10 @@ from typing import Any, cast
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from core.spreadsheet_safety import neutralize_spreadsheet_value
 from qa.analysis_types import QAResult
-from qa.qa_export import extract_low_contrast_cnr_values, flatten_metrics
+from qa.qa_export import extract_low_contrast_cnr_values
+from qa.qa_result_flatten import build_metric_rows
 
 
 # Guarded at import time so the Images-sheet builder can cheaply detect a
@@ -45,6 +47,32 @@ _SUMMARY_HEADERS = (
     "CNR",
     "Status",
     "Warnings",
+    "PIU (%)",
+    "PSG",
+    "LC Score",
+    "MTF@50% Row",
+    "MTF@50% Col",
+    "Slice Thickness (mm)",
+    "Slice Shift (mm)",
+    "MRI SNR",
+)
+
+# Modality-aware Summary columns pulled from the canonical flatten rows
+# (``build_metric_rows``). Each entry is a human header paired with the exact
+# flatten key; a column stays blank when its key is absent for a run (CT rows
+# leave the MRI-only fields blank and vice versa — shared header, best-effort
+# fill). Locked gaps (CT slice thickness, CT SNR) are intentionally excluded.
+# ``MRI SNR`` is reserved at the end of the header; values stay blank until
+# Phase 6 harvests ``mri_snr``.
+_SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("PIU (%)", "uniformity_module.piu"),
+    ("PSG", "uniformity_module.psg"),
+    ("LC Score", "low_contrast_score"),
+    ("MTF@50% Row", "slice1.row_mtf_50"),
+    ("MTF@50% Col", "slice1.col_mtf_50"),
+    ("Slice Thickness (mm)", "slice1.measured_slice_thickness_mm"),
+    ("Slice Shift (mm)", "slice1.slice_shift_mm"),
+    ("MRI SNR", "mri_snr"),
 )
 
 
@@ -73,6 +101,34 @@ def _cnr_summary_values(result: QAResult) -> tuple[Any, Any, Any, Any]:
     )
 
 
+def _xlsx_cell(value: Any) -> Any:
+    """Join list/tuple cells like CSV, then neutralize formula-like strings.
+
+    List/tuple values are joined with ``"; "`` (same separator as the CSV
+    builders) so openpyxl never emits a Python list repr. Every string cell
+    then passes through ``neutralize_spreadsheet_value`` so leading
+    ``= + - @`` values are treated as literal text, not formulas.
+    """
+    if isinstance(value, (list, tuple)):
+        value = "; ".join(str(item) for item in value)
+    return neutralize_spreadsheet_value(value)
+
+
+def _summary_extra_values(result: QAResult) -> list[Any]:
+    """
+    Pull the modality-aware Summary columns from the canonical flatten rows.
+
+    Reads ``build_metric_rows(result)`` once and looks up each key in
+    ``_SUMMARY_KEY_COLUMNS``; missing keys degrade to a blank cell. Numeric
+    scalars (PIU, PSG, MTF, thickness, shift, LC score) stay numbers so the
+    Summary sheet stays sortable/filterable. The caller applies ``_xlsx_cell``
+    to every extra value so formula-like mapped strings are stored as
+    neutralized text; numeric scalars pass through unchanged.
+    """
+    flat = dict(build_metric_rows(result))
+    return [flat.get(key) for _, key in _SUMMARY_KEY_COLUMNS]
+
+
 def _build_summary_sheet(
     ws: Worksheet, results: list[QAResult], row_labels: list[str | None]
 ) -> None:
@@ -81,8 +137,18 @@ def _build_summary_sheet(
         obj_mean, bg_mean, bg_std, cnr = _cnr_summary_values(result)
         status = "success" if result.success else "failed"
         warnings_text = "; ".join(result.warnings or [])
+        extra = [_xlsx_cell(value) for value in _summary_extra_values(result)]
         ws.append(
-            [_row_label(result, label), obj_mean, bg_mean, bg_std, cnr, status, warnings_text]
+            [
+                _xlsx_cell(_row_label(result, label)),
+                obj_mean,
+                bg_mean,
+                bg_std,
+                cnr,
+                _xlsx_cell(status),
+                _xlsx_cell(warnings_text),
+                *extra,
+            ]
         )
 
 
@@ -90,23 +156,76 @@ def _build_detail_sheet(
     ws: Worksheet, results: list[QAResult], row_labels: list[str | None]
 ) -> None:
     """
-    Flat metric rows, one block per run.
+    Full flatten metric rows, one block per run.
 
-    Reuses ``qa_export.flatten_metrics`` over ``result.metrics`` for the exact
-    dotted-key / list-joined shape the CSV export already produces, so the
-    Detail sheet matches the CSV export field-for-field.
+    Uses :func:`qa.qa_result_flatten.build_metric_rows` (the CSV source of
+    truth) which walks ``result.raw_pylinac`` into dotted keys then overlays
+    curated ``result.metrics`` (metrics wins on collision, curated keys stay
+    top-level). The path denylist in that builder still applies —
+    ``analyzed_image_path`` / ``pdf_report_path`` never reach Detail.
+
+    Every string cell is neutralized via :func:`neutralize_spreadsheet_value`
+    so formula-like values (e.g. DICOM-derived Series/Run labels or warnings)
+    are written as literal text, not live formulas. List/tuple cells are
+    joined with ``"; "`` first, matching the CSV export.
     """
     ws.append(["Metric", "Value"])
     for result, label in zip(results, row_labels, strict=True):
-        ws.append([_row_label(result, label), ""])
-        for key, value in flatten_metrics(result.metrics or {}):
-            ws.append([key, value])
+        ws.append([_xlsx_cell(_row_label(result, label)), ""])
+        for key, value in build_metric_rows(result):
+            ws.append([_xlsx_cell(key), _xlsx_cell(value)])
         ws.append([])  # blank separator row between run blocks
 
 
 def _append_note(ws: Worksheet, note: str) -> None:
     ws.append([])
     ws.append([note])
+
+
+def _module_images(result: QAResult) -> list[tuple[str, str]]:
+    """
+    Sorted (module label, absolute path) pairs for a run's per-module images.
+
+    Reads ``analyzed_module_images`` (module label → abs PNG path), drops any
+    path that is not a file on disk, and returns the pairs in stable ``str``
+    key order. An empty dict (embed off / save failed) yields an empty list.
+    A non-empty dict whose paths are all missing on disk also yields an empty
+    list, so :func:`_embeddable_images` can fall back to the legacy composite.
+    """
+    module_images = getattr(result, "analyzed_module_images", None) or {}
+    pairs = [
+        (str(label), path)
+        for label, path in module_images.items()
+        if path and os.path.isfile(path)
+    ]
+    pairs.sort(key=lambda pair: pair[0])
+    return pairs
+
+
+def _composite_image_path(result: QAResult) -> str | None:
+    """Absolute composite PNG path when the file exists on disk, else None."""
+    path = getattr(result, "analyzed_image_path", None)
+    return path if path and os.path.isfile(path) else None
+
+
+def _embeddable_images(result: QAResult) -> list[tuple[str, str]]:
+    """
+    Image list for one run: per-module PNGs first, else legacy composite.
+
+    Returns ``(module_label, abs_path)`` pairs. Composite fallback uses an
+    empty module label so the Images sheet does not emit a second label row
+    between the Series/Run ID and the image (same layout as the pre-P2-X3
+    one-image-per-run sheet). An empty list means this run has nothing
+    embeddable — the caller writes a per-run placeholder when the sheet
+    exists, or skips the sheet when every run is empty.
+    """
+    module_imgs = _module_images(result)
+    if module_imgs:
+        return module_imgs
+    composite = _composite_image_path(result)
+    if composite is not None:
+        return [("", composite)]
+    return []
 
 
 def _build_images_sheet(
@@ -116,28 +235,28 @@ def _build_images_sheet(
     row_labels: list[str | None],
 ) -> None:
     """
-    One embedded PNG per run, stacked vertically, each preceded by its
-    Series/Run ID label cell.
+    Per-module embedded PNGs, stacked vertically, from ``analyzed_module_images``.
 
-    Degrades gracefully: if Pillow is unavailable, or none of the runs have
-    an analyzed-image path on disk, the Images sheet is skipped entirely and
-    a note cell is appended to the Summary sheet instead -- the rest of the
-    workbook (Summary, Detail) still writes.
+    Per run: a Series/Run ID label row, then for each module a label row
+    followed by its embedded image. When a run has no module images but carries
+    a legacy ``analyzed_image_path`` (composite), that single image is embedded
+    as today (backward compat). When the sheet exists because *some* run has
+    an embeddable image, runs with nothing embeddable still get a
+    ``(no analyzed image for this run)`` placeholder so batch row identity
+    is preserved. Degrades gracefully: if Pillow is unavailable, or none of
+    the runs yield an embeddable image from either source, the Images sheet
+    is skipped entirely and a note cell is appended to the Summary sheet
+    instead -- the rest of the workbook (Summary, Detail) still writes.
     """
     if not _PILLOW_AVAILABLE:
         _append_note(summary_ws, "Images sheet skipped: Pillow is not available for image embedding.")
         return
 
-    def _has_image(result: QAResult) -> bool:
-        path = getattr(result, "analyzed_image_path", None)
-        return bool(path) and os.path.isfile(path)
-
-    available = [
-        (result, label)
+    plans = [
+        (result, label, _embeddable_images(result))
         for result, label in zip(results, row_labels, strict=True)
-        if _has_image(result)
     ]
-    if not available:
+    if not any(image_list for _, _, image_list in plans):
         _append_note(summary_ws, "Images sheet skipped: no analyzed images were available.")
         return
 
@@ -145,11 +264,17 @@ def _build_images_sheet(
 
     ws = wb.create_sheet("Images")
     row = 1
-    for result, label in zip(results, row_labels, strict=True):
-        ws.cell(row=row, column=1, value=_row_label(result, label))
+    for result, label, image_list in plans:
+        ws.cell(row=row, column=1, value=_xlsx_cell(_row_label(result, label)))
         row += 1
-        path = getattr(result, "analyzed_image_path", None)
-        if path and os.path.isfile(path):
+        if not image_list:
+            ws.cell(row=row, column=1, value="(no analyzed image for this run)")
+            row += 2
+            continue
+        for module_label, path in image_list:
+            if module_label:
+                ws.cell(row=row, column=1, value=_xlsx_cell(module_label))
+                row += 1
             try:
                 image = XLImage(path)
                 image.width = 480
@@ -159,9 +284,6 @@ def _build_images_sheet(
             except Exception:
                 ws.cell(row=row, column=1, value="(image could not be embedded)")
                 row += 2
-        else:
-            ws.cell(row=row, column=1, value="(no analyzed image for this run)")
-            row += 2
 
 
 def build_qa_workbook(
@@ -187,11 +309,23 @@ def build_qa_workbook(
 
     Sheets:
         Summary -- one row per run: Series/Run ID, object ROI mean,
-            background mean/std, CNR, status, warnings (see F1's canonical
-            ``metrics["low_contrast_cnr"]`` shape).
-        Detail -- flat metric rows per run (reuses ``qa_export._flatten``).
-        Images -- one embedded analyzed-image PNG per run, or a note cell on
-            Summary when Pillow/images are unavailable.
+            background mean/std, CNR, status, warnings, then modality-aware
+            key columns pulled from the canonical flatten (PIU, PSG, LC score,
+            MTF@50% row/col, slice thickness/shift, reserved MRI SNR). Each extra
+            column is best-effort: it stays blank when its flatten key is absent
+            for the run, so CT and MRI rows share one header with blanks where a
+            metric does not apply (CT slice thickness and CT SNR are excluded by
+            design; ``MRI SNR`` is present but blank until Phase 6 harvests
+            ``mri_snr``). Extra mapped values pass through ``_xlsx_cell``.
+        Detail -- full flatten per run (``build_metric_rows``; path denylist).
+        Images -- per-module embedded PNGs from ``analyzed_module_images``
+            (stable key sort), each preceded by its module label, stacked
+            vertically per run; falls back to the legacy composite
+            ``analyzed_image_path`` when a run has no module images. When the
+            sheet exists, a run with nothing embeddable still gets a
+            placeholder row. Skipped (with a Summary note) when Pillow is
+            unavailable or no run yields an embeddable image. Series/Run and
+            module labels on every sheet are formula-injection neutralized.
     """
     if labels is not None and len(labels) != len(results):
         raise ValueError("labels must be parallel to results (same length)")

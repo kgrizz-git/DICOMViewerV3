@@ -151,7 +151,7 @@ def _app() -> SimpleNamespace:
 
 
 def _mri_options(compare_request=None):
-    return (2, False, 1, 0.0, "method", 0.001, 1.0, compare_request, False)
+    return (2, False, 1, 0.0, "method", 0.001, 1.0, compare_request, False, True)
 
 
 def _compare_request() -> MRICompareRequest:
@@ -235,7 +235,7 @@ def test_open_acr_ct_focused_dialog_options_and_worker_request(qapp, monkeypatch
     monkeypatch.setattr(facade_module, "QMessageBox", lambda *_args: choice)
     facade_module.QMessageBox.ButtonRole = QMessageBox.ButtonRole
     facade_module.QMessageBox.StandardButton = QMessageBox.StandardButton
-    monkeypatch.setattr(facade_module, "prompt_acr_ct_options", lambda *_args, **_kwargs: (1.0, 2, True))
+    monkeypatch.setattr(facade_module, "prompt_acr_ct_options", lambda *_args, **_kwargs: (1.0, 2, True, True))
     monkeypatch.setattr(QAAppFacade, "user_confirms_preflight", lambda *_args: True)
     start = MagicMock()
     monkeypatch.setattr(QAAppFacade, "start_qa_worker", start)

@@ -72,6 +72,7 @@ def mock_app() -> SimpleNamespace:
         acr_ct_phantom_requested=DummySignal(),
         acr_ct_batch_requested=DummySignal(),
         acr_mri_phantom_requested=DummySignal(),
+        acr_mri_batch_requested=DummySignal(),
         nuclear_qc_requested=DummySignal(),
         export_requested=DummySignal(),
         deep_anonymizer_export_requested=DummySignal(),
@@ -230,6 +231,7 @@ def mock_app() -> SimpleNamespace:
     app._open_acr_ct_phantom_analysis = MagicMock()
     app._open_acr_ct_batch_analysis = MagicMock()
     app._open_acr_mri_phantom_analysis = MagicMock()
+    app._open_acr_mri_batch_analysis = MagicMock()
     app._open_nuclear_qc_analysis = MagicMock()
     app._open_export = MagicMock()
     app._open_deep_anonymizer_export = MagicMock()

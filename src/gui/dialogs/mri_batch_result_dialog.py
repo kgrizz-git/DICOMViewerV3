@@ -1,23 +1,21 @@
 """
-Non-modal ACR CT batch-results dialog (pylinac batch, Feature 2).
+Non-modal ACR MRI Large batch-results dialog (pylinac batch, P4-M4).
 
-Built by ``QAAppFacade.open_acr_ct_batch_analysis`` after ``QACTBatchWorker``
-emits ``CTBatchResult``. Layout borrows scaffolding (factory shape,
-``QTableWidget`` + export-button row, window chrome) from
-``mri_compare_result_dialog.py``, but the semantics differ: this is a batch
-*summary*, not a side-by-side compare -- **one row per series**, columns are
-the series label, status/warnings, and the F1 CNR block (object ROI mean /
-background mean / background sigma / CNR), read from the canonical
-``metrics["low_contrast_cnr"]`` shape.
+Built by ``gui.qa_mri_batch_flow._show_acr_mri_batch_summary`` after
+``QAMRIBatchWorker`` emits ``ACRMBatchResult``. Layout mirrors
+``ct_batch_result_dialog.py`` (factory shape, ``QTableWidget`` +
+export-button row, window chrome), but the semantics are MRI: **one row per
+series**, columns are the series label, status, the low-contrast (LC) score
+when present (the MRI analogue of the CT CNR block), and warnings.
 
 Inputs:
-    - Parent widget, ``CTBatchResult``, callbacks for XLSX/JSON/CSV export.
+    - Parent widget, ``ACRMBatchResult``, callbacks for XLSX/JSON/CSV export.
 
 Outputs:
     - Configured ``QDialog`` (caller stores reference, ``WA_DeleteOnClose``).
 
 Requirements:
-    - PySide6 widgets; ``qa.analysis_types.CTBatchResult``.
+    - PySide6 widgets; ``qa.analysis_types.ACRMBatchResult``.
 """
 
 from __future__ import annotations
@@ -40,40 +38,31 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from qa.analysis_types import CTBatchResult
-from qa.qa_export import extract_low_contrast_cnr_values
+from qa.analysis_types import ACRMBatchResult
 
 _COLUMN_HEADERS = (
     "Series/Run",
     "Status",
-    "Object ROI Mean",
-    "Background Mean",
-    "Background Std",
-    "CNR",
+    "LC Score",
     "Warnings",
 )
 
 
-def _cnr_summary_values(result: Any) -> tuple[str, str, str, str]:
+def _lc_score_value(result: Any) -> str:
     """
-    Pull the F1 CNR intermediates for a table row (same canonical
-    ``metrics["low_contrast_cnr"]`` shape as the F3 Summary sheet -- object
-    ROI mean is the average of ``object_rois[*].mean``; background mean/std
-    and module ``cnr`` read with ``.get()``; any missing key degrades to a
-    blank cell).
+    Pull the low-contrast score for a table row (MRI analogue of the CT CNR
+    block). Reads ``metrics["low_contrast_score"]`` with ``.get()``; any
+    missing/non-numeric key degrades to a blank cell.
     """
-    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
-    return (
-        "" if obj_mean is None else f"{obj_mean:.3f}",
-        "" if bg_mean is None else f"{bg_mean:.3f}",
-        "" if bg_std is None else f"{bg_std:.3f}",
-        "" if cnr is None else f"{cnr:.3f}",
-    )
+    score = result.metrics.get("low_contrast_score")
+    if isinstance(score, (int, float)):
+        return f"{score:.3f}"
+    return ""
 
 
-def create_ct_batch_result_dialog(
+def create_mri_batch_result_dialog(
     parent: QWidget | None,
-    batch: CTBatchResult,
+    batch: ACRMBatchResult,
     *,
     on_save_xlsx_clicked: Callable[[], None],
     on_save_json_clicked: Callable[[], None],
@@ -87,7 +76,7 @@ def create_ct_batch_result_dialog(
         parent: Owning window (typically ``app.main_window``).
         batch: Completed batch with parallel ``run_results`` / ``run_labels``.
         on_save_xlsx_clicked: Invoked when **Export XLSX** is pressed; caller
-            calls ``qa.qa_xlsx_export.build_qa_workbook`` directly (Feature 3).
+            calls ``qa.qa_xlsx_export.build_qa_workbook`` directly (OQ-9).
         on_save_json_clicked: Invoked when **Export JSON** is pressed.
         on_save_csv_clicked: Invoked when **Export CSV** is pressed; caller
             writes ``build_batch_metrics_csv`` (full flatten, one row per series).
@@ -102,7 +91,7 @@ def create_ct_batch_result_dialog(
     n = len(results)
 
     dialog = QDialog(parent)
-    dialog.setWindowTitle("ACR CT Phantom Analysis — Batch Results")
+    dialog.setWindowTitle("ACR MRI Phantom Analysis — Batch Results")
     dialog.setModal(False)
     dialog.setWindowModality(Qt.WindowModality.NonModal)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -111,7 +100,7 @@ def create_ct_batch_result_dialog(
 
     outer = QVBoxLayout(dialog)
     outer.addWidget(
-        QLabel(f"Batch summary — {n} series (one row per series; see plan Feature 2).")
+        QLabel(f"Batch summary — {n} series (one row per series; see plan Feature 4).")
     )
 
     table = QTableWidget(n, len(_COLUMN_HEADERS))
@@ -121,7 +110,7 @@ def create_ct_batch_result_dialog(
     table.verticalHeader().setVisible(False)
 
     for row, (label, result) in enumerate(zip(labels, results, strict=True)):
-        obj_mean, bg_mean, bg_std, cnr = _cnr_summary_values(result)
+        lc_score = _lc_score_value(result)
         status = "OK" if result.success else "FAILED"
         if result.warnings:
             wsum = "; ".join(result.warnings[:3])
@@ -129,7 +118,7 @@ def create_ct_batch_result_dialog(
                 wsum += " …"
         else:
             wsum = "—"
-        column_values = [label, status, obj_mean, bg_mean, bg_std, cnr, wsum]
+        column_values = [label, status, lc_score, wsum]
         for col, text in enumerate(column_values):
             table.setItem(row, col, QTableWidgetItem(text))
 

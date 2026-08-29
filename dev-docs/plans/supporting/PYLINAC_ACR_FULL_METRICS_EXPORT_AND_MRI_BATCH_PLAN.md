@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
-**Last updated:** 2026-08-28
-**Status:** Active — planning slice (no product code yet); **external review incorporated** (Hy3, GLM, Kilo Hy3, Cursor Grok 4.5/4.6 — see **Review notes**)
+**Last updated:** 2026-08-29
+**Status:** Active — **Phases 1–5 shipped** (flatten, XLSX, CT batch CSV, MRI batch, docs/strings); **Phase 6 (viewer-computed MRI SNR) still open**
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -53,7 +53,7 @@ Success means:
 | XLSX Images | One **composite** PNG per run (`save_analyzed_image`) when CT temp dir wired | **None** (no image save in runner) |
 | PDF figures | Full module set via `save_images()` inside `publish_pdf` | Same |
 
-Runners: `src/qa/pylinac_acr_ct.py`, `src/qa/pylinac_acr_mri.py`. Export: `src/qa/qa_export.py`, `src/qa/qa_xlsx_export.py`. Facade: `src/gui/qa_app_facade.py`. CT batch UI: `src/gui/dialogs/ct_batch_result_dialog.py`, `ct_batch_select_dialog.py` (`prompt_batch_series_selection`).
+Runners: `src/qa/pylinac_acr_ct.py`, `src/qa/pylinac_acr_mri.py`. Export: `src/qa/qa_export.py`, `src/qa/qa_xlsx_export.py`. Facade: `src/gui/qa_app_facade.py`. CT batch save dialogs: `src/gui/qa_ct_batch_export.py`. CT batch UI: `src/gui/dialogs/ct_batch_result_dialog.py`, `ct_batch_select_dialog.py` (`prompt_batch_series_selection`).
 
 **Target:** XLSX Images uses **`save_images()`** (PDF parity). Today’s composite-only CT path is replaced when the embed option is on (default). Toggle off → skip Images sheet (Summary note only), same graceful degradation as missing Pillow.
 
@@ -111,6 +111,7 @@ Do **not** close **P0-GATE** or claim **G2** until redacted dumps and the metric
 | **R0-8** | Formula-injection policy | Wire `neutralize_spreadsheet_value` from `src/core/spreadsheet_safety.py` into QA CSV/XLSX builders (not wired today; `qa_export.py` uses bare `csv.writer` — reuse the module's `SafeCsvWriter` wrapper). XLSX matters too: openpyxl treats leading-`=` strings as formulas on open, and Series/Run labels + warnings are DICOM-derived strings | Implementation note in Phase 1 + Phase 2 XLSX test |
 | **R0-9** | Committed golden dumps | Assert redacted JSON fixtures have no PHI paths (test also rejects absolute filesystem paths); run staged artifact gate on the dump commit; key-name smoke test loads dumps without `analyze()` | Enables CI flatten tests |
 | **R0-10** | XLSX module images (PDF parity) | Confirm `publish_pdf` uses `save_images(to_stream=True)`; document per-modality figure names from `plot_images()` (CT: hu, uniformity, spatial resolution, low contrast, mtf, side; MRI: geometric, slices, LC slices, rMTF, side, …) | **Locked** — see **OQ-9**; implement `save_images(directory=…)` when embed on |
+| **R0-3b** | Gap table result (from source) | See appendix §Live harvest below. CT: only `low_contrast_cnr` needs live harvest (background σ absent from dict). CT SNR/PSG/slice-thickness confirmed absent. MRI: PSG dict-complete (`uniformity_module.psg` + `ghosting_ratio`); SNR absent (Phase 6 viewer harvest). MTF grid dict-complete (`slice1.row_mtf_lp_mm` / `col_mtf_lp_mm`, keys 10–90). | **Gap table filled** |
 
 **Optional (non-blocking):** one local phantom run per modality to validate appendix numbers match UI and that XLSX Images matches PDF figure set (Manual Smoke Checks — not required to merge code).
 
@@ -189,7 +190,7 @@ All new tests under `tests/qa/` unless noted. Use **committed redacted `results_
 
 ### Phase 3 — batch CT CSV
 
-- [ ] **`tests/gui/test_ct_batch_result_dialog.py`** (or facade test) — Export CSV invokes `build_batch_metrics_csv` with batch labels (mock facade).
+- [x] **`tests/gui/test_ct_batch_result_dialog.py`** (or facade test) — Export CSV invokes `build_batch_metrics_csv` with batch labels (mock facade).
 
 ### Phase 4 — MRI batch
 
@@ -284,6 +285,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 
 - **Serial batch execution** for MRI (same rationale as CT batch in `worker.py`).
 - **One wide CSV row per run** for batch export; multi-run workbook = one Summary sheet + Detail + Images (module PNGs when embed on).
+- **Wide-row key collisions:** `build_tabular_run` overlays flatten keys onto provenance **in place** (metrics/flatten wins; keys stay top-level). Do **not** rename to `metric.<key>`. Typical overlap: `num_images`.
 - **XLSX module images:** PDF parity via `save_images()`; **default on**, persisted **`acr_qa_embed_module_images_in_xlsx`**; user can disable per run from options dialogs.
 - **Do not break** existing JSON schemas; flattened export is additive or export-layer only.
 - **Formula injection:** wire `neutralize_spreadsheet_value` (`src/core/spreadsheet_safety.py`) into QA CSV/XLSX builders.
@@ -298,54 +300,54 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [x] **(R0-0)** Spike scripts + `pylinac_spike_common.py`; CT/MRI `--dump-json` (path redaction). (owner: coder) — **in repo**; run on maintainer phantom when `test-DICOM-data/` populated
 - [ ] **(R0-1)** CT `results_data(as_dict=True)` key dump → appendix §CT + committed `tests/fixtures/qa/acr_ct_results_data.json`. (owner: maintainer, when CT phantom in gitignored folder)
 - [ ] **(R0-2)** MRI `results_data(as_dict=True)` key dump → appendix §MRI + committed `tests/fixtures/qa/acr_mri_results_data.json`. (owner: maintainer, when MRI phantom available)
-- [ ] **(R0-3)** Live-analyzer gap table (dict vs harvest). (owner: coder, after: R0-1, R0-2 — or from source read if dumps delayed)
-- [ ] **(R0-4)** Confirm **OQ-1** (CT PSG absent unless found). (owner: coder)
+- [x] **(R0-3)** Live-analyzer gap table (dict vs harvest) — **filled from source** (see appendix §Live harvest; CT only needs `low_contrast_cnr` live harvest; MRI PSG/SNR/MTF confirmed dict-complete except SNR = Phase 6). (owner: coder)
+- [x] **(R0-4)** Confirm **OQ-1** — **CT PSG absent** in pylinac 3.43.2: `ACRCTResult` has no `psg`/`ghosting_ratio`/`ghost_rois` fields; `ACRCT` has no `uniformity_module.ghost_rois`. PSG is MRI-only (`MRUniformityModuleOutput.psg` + `ghosting_ratio` present). (owner: coder)
 - [ ] **(R0-5)** Resolve **OQ-4**, **OQ-5** (Summary vs Detail flatten strategy). (owner: coder + reviewer)
-- [ ] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder)
-- [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder)
-- [ ] **(R0-8)** Document formula-injection wiring for Phase 1. (owner: coder)
+- [x] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder) — **landed**: `ACRMBatchResult` added to `src/qa/analysis_types.py`, mirroring `CTBatchResult` (`run_results` + `run_labels` only); docstring states it is **not** compare-mode `MRIBatchResult`.
+- [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P1-F3 interim:** two bands (provenance insertion order → remaining keys `str`-sorted). Curated top-level scalars interleave alphabetically with dotted `raw_pylinac` leaves rather than a third "family" band. Revisit after R0-1/R0-2 dumps if a fixed enumerated header is needed.
+- [x] **(R0-8)** Document formula-injection wiring for Phase 1 — `qa_export.build_metrics_csv` uses bare `csv.writer`; Phase 1 (P1-F2) must wrap with `SafeCsvWriter` from `src/core/spreadsheet_safety.py` and apply `neutralize_spreadsheet_value` to every cell. XLSX: openpyxl writes leading-`=` strings as live formulas on open — same neutralization applies to Series/Run labels and warnings in XLSX cells. (owner: coder) — **landed**: CSV wired in P1-F2; XLSX Summary, Detail, and Images Series/Run labels neutralized in P2-X2.
 - [ ] **(R0-9)** Commit redacted dumps; assert no PHI paths. (owner: maintainer, after: R0-1, R0-2)
-- [ ] **(R0-10)** Document module figure names per modality; lock **OQ-9**. (owner: coder)
+- [x] **(R0-10)** Document module figure names per modality from `plot_images()` source — see appendix §Figure names. **OQ-9 locked**: embed via `save_images(directory=…)` when toggle on. (owner: coder)
 - [ ] **(P0-T1)** Add `tests/qa/test_pylinac_results_data_spike.py` (loads committed dumps). (owner: tester, after: R0-9)
 - [ ] **(P0-GATE)** Reviewer signs off appendix + **OQ-1–OQ-10** before claiming Phase 0 complete. (owner: reviewer) — **does not block** starting Ph1–5 code
 
 ### Phase 1 — Canonical flattening (`qa_result_flatten.py` — **locked new module**)
 
-- [ ] **(P1-F1)** Add **`src/qa/qa_result_flatten.py`** (do not extend `qa_export` only): provenance + flatten walk `raw_pylinac`, overlay `metrics.*` (metrics wins for curated provenance scalars), add CNR/LC live fields. (owner: coder)
-- [ ] **(P1-F2)** Refactor `build_metrics_csv` to emit full flatten; keep two-column `metric,value` for single-run. (owner: coder, after: P1-F1)
-- [ ] **(P1-F3)** Add `build_batch_metrics_csv(results, labels)` — one header row, one row per run (wide). (owner: coder, after: P1-F1)
+- [x] **(P1-F1)** Add **`src/qa/qa_result_flatten.py`** (do not extend `qa_export` only): provenance + flatten walk `raw_pylinac`, overlay `metrics.*` (metrics wins for curated provenance scalars), add CNR/LC live fields. Synthetic tests in `tests/qa/test_qa_result_flatten.py`; golden dumps still **P1-F4**. (owner: coder)
+- [x] **(P1-F2)** Refactor `build_metrics_csv` to emit full flatten; keep two-column `metric,value` for single-run. (owner: coder, after: P1-F1) — **landed**
+- [x] **(P1-F3)** Add `build_batch_metrics_csv(results, labels)` — one header row, one row per run (wide). (owner: coder, after: P1-F1) — **landed**
 - [ ] **(P1-F4)** Tests: golden key sets from **committed dumps** for CT and MRI; failed run; warnings present. (owner: tester, after: R0-9, P1-F1)
 
 ### Phase 2 — XLSX upgrade
 
-- [ ] **(P2-I1)** `QARequest` / `QAResult`: `embed_module_images_in_xlsx`, `module_images_out_dir`, `analyzed_module_images`; runners call `save_images()` when enabled. (owner: coder)
-- [ ] **(P2-I2)** Config + dialogs: `acr_qa_embed_module_images_in_xlsx` (default **True**); checkbox on ACR CT/MRI options + batch options; profile/JSON `inputs` audit field. (owner: coder)
-- [ ] **(P2-I3)** Facade/worker temp-dir lifecycle for module image dirs (CT single, CT batch, MRI single, MRI batch). (owner: coder, after: P2-I1)
-- [ ] **(P2-X1)** Extend `build_qa_workbook` Summary sheet with modality-aware key columns (CNR, uniformity, PSG/LC score where present, MTF@50% row+col, slice thickness/position on MRI only — best-effort; omit **CT** slice-thickness and **CT SNR** unless Phase 0 finds fields; add **`mri_snr`** Summary column when Phase 6 harvest ships). (owner: coder, after: P1-F1)
-- [ ] **(P2-X2)** Detail sheet uses full flatten (replaces metrics-only flatten). (owner: coder, after: P1-F1)
-- [ ] **(P2-X3)** Images sheet: multi-module embed from `analyzed_module_images`; graceful skip when toggle off / no Pillow. (owner: coder, after: P2-I1, P2-X2)
-- [ ] **(P2-X4)** Tests: Images sheet module count + toggle off skips sheet; paths not in JSON/CSV. (owner: tester, after: P2-X3)
+- [x] **(P2-I1)** `QARequest` / `QAResult`: `embed_module_images_in_xlsx`, `module_images_out_dir`, `analyzed_module_images`; runners call `save_images()` when enabled. (owner: coder) — **landed**: CT/MRI runners share `capture_analyzed_module_images` (`save_images` **return** paths, not glob); CT skips composite when embed on + dir set; denylisted from flatten/JSON/CSV; failures swallowed.
+- [x] **(P2-I2)** Config + dialogs: `acr_qa_embed_module_images_in_xlsx` (default **True**); checkbox on ACR CT/MRI options + batch options; profile/JSON `inputs` audit field. (owner: coder) — **landed**: config mixin + default; checkbox on ACR CT, ACR MRI, and CT batch shared-options flows; persisted on accept; recorded in `QARequest.embed_module_images_in_xlsx`, `pylinac_analysis_profile`, and JSON `inputs`.
+- [x] **(P2-I3)** Facade/worker temp-dir lifecycle for module image dirs (CT single, CT batch, MRI single, MRI batch). (owner: coder, after: P2-I1) — **landed**: CT single nests module dir under composite image temp dir (single cleanup in ``start_qa_worker``); CT batch worker owns a sibling ``module_images_temp_dir`` with a **per-series uuid subdirectory**; MRI single gets a standalone dir cleaned via ``module_images_cleanup`` (assigned only on the non-compare branch). MRI batch skipped (worker does not exist yet; P4-M1). Extent-retry clears ``module_images_out_dir``.
+- [x] **(P2-X1)** Extend `build_qa_workbook` Summary sheet with modality-aware key columns (uniformity PIU, PSG, LC score where present, MTF@50% row+col, slice thickness/shift on MRI only — best-effort; omit **CT** slice-thickness and **CT SNR**; add **`mri_snr`** Summary column when Phase 6 harvest ships). (owner: coder, after: P1-F1) — **landed**: `_SUMMARY_HEADERS` extended with 7 modality-aware columns; `_summary_extra_values` pulls each from `build_metric_rows` (canonical flatten) so missing keys degrade to blank cells and CT/MRI rows share one header with blanks where a metric does not apply; numeric cells stay numbers. Locked gaps respected: no CT slice-thickness, no CT SNR, no `mri_snr`. Tests in `tests/qa/test_qa_xlsx_summary_columns.py`.
+- [x] **(P2-X2)** Detail sheet uses full flatten (replaces metrics-only flatten). (owner: coder, after: P1-F1) — **landed**: `_build_detail_sheet` now iterates `build_metric_rows(result)`; Summary, Detail, and Images Series/Run labels (plus Summary warnings) are neutralized via `neutralize_spreadsheet_value`; list/tuple cells joined with `"; "` (matches CSV).
+- [x] **(P2-X3)** Images sheet: multi-module embed from `analyzed_module_images`; graceful skip when toggle off / no Pillow. (owner: coder, after: P2-I1, P2-X2) — **landed**: `_build_images_sheet` reads `analyzed_module_images` first (stable `str` sort, missing files dropped), per run writes Series/Run label then stacked labeled module images (480×480, stride 34), module labels neutralized via `_xlsx_cell`; falls back to legacy composite `analyzed_image_path` when module dict empty; when the sheet exists, a run with nothing embeddable still gets ``(no analyzed image for this run)``; skips sheet + Summary note when Pillow missing or no embeddable image from either source.
+- [x] **(P2-X4)** Tests: Images sheet module count + toggle off skips sheet; paths not in JSON/CSV. (owner: tester, after: P2-X3) — **landed**: multiple module PNGs embed in stable key order; mixed modules+composite workbook; per-run placeholder when a sibling run has no image; formula-like module + run labels neutralized on Images; missing module files dropped; composite fallback when module dict empty; module-image paths do not leak into JSON/CSV; existing composite stride regression passes. **Remaining closed**: `save_composite_analyzed_image` now skips composite save when `embed_module_images_in_xlsx` is False (the composite's only purpose is XLSX embedding), so toggle-off produces `analyzed_image_path=None` and the workbook's composite fallback cannot run → Images sheet skipped with Summary note. CT/MRI dialog checkbox already stamps `embed_module_images_in_xlsx` on `QARequest` (P2-I2; not re-clicked in these tests); MRI runner never saved a composite, so it was already correct. Runner+workbook tests verify: `QARequest(embed=False)` → no embeddable path → `build_qa_workbook` skips Images; embed-on regression still embeds modules; embed-on-no-dir composite fallback preserved.
 
 ### Phase 3 — Batch CT CSV + export parity
 
-- [ ] **(P3-C1)** Add **Export CSV…** to `ct_batch_result_dialog` → `export_ct_batch_csv` in facade. (owner: coder, after: P1-F3)
-- [ ] **(P3-C2)** Verify single-run CT/MRI save dialog CSV/XLSX pick up full flatten without UI change. (owner: tester, after: P1-F2, P2-X2)
+- [x] **(P3-C1)** Add **Export CSV…** to `ct_batch_result_dialog` → `export_ct_batch_csv` in facade. (owner: coder, after: P1-F3)
+- [x] **(P3-C2)** Verify single-run CT/MRI save dialog CSV/XLSX pick up full flatten without UI change. (owner: tester, after: P1-F2, P2-X2) — **landed**: `QAAppFacade.export_qa_results` already routes `.csv` → `build_metrics_csv` (full flatten) and `.xlsx` → `build_qa_workbook` (Detail = `build_metric_rows`); no production change needed. Five tests in `tests/gui/test_qa_app_facade_export_slice.py` (`test_export_qa_results_csv_full_flatten_ct/mri`, `test_export_qa_results_xlsx_detail_full_flatten_ct/mri`, `test_export_qa_results_json_has_no_metrics_flat`) prove nested `raw_pylinac` dotted leaves survive the save-dialog path for both CT and MRI, curated-metrics overlay wins on a planted collision (`raw_pylinac.low_contrast_cnr` / `.low_contrast_score` vs metrics), and denylisted `analyzed_image_path`/`analyzed_module_images` paths never reach CSV or XLSX Detail (including when those keys live under `raw_pylinac`); JSON schema unchanged (no `metrics_flat` at any depth).
 
 ### Phase 4 — Multi-series MRI batch
 
-- [ ] **(P4-M1)** Add `QAMRIBatchWorker` (serial `run_acr_mri_large_analysis` per series); `ACRMBatchResult`. (owner: coder)
-- [ ] **(P4-M2)** `acr_mri_series_selection_dialog` — loaded MR series + Add folder; shared options from existing MRI dialog. (owner: coder)
-- [ ] **(P4-M3)** Menu: **ACR MRI Batch (pylinac)…**; progress N-of-M; cancel semantics match CT. (owner: coder, after: P4-M1, P4-M2)
-- [ ] **(P4-M4)** `mri_batch_result_dialog` — table per series; Export CSV / JSON / XLSX; module Images per **OQ-9**. (owner: coder, after: P4-M3, P1-F3, P2-X3)
-- [ ] **(P4-M5)** Tests: worker isolation, label parity, export hooks (mock runner); mirror patterns in `tests/test_qa_ct_batch_worker.py`. (owner: tester, after: P4-M4)
+- [x] **(P4-M1)** Add `QAMRIBatchWorker` (serial `run_acr_mri_large_analysis` per series); `ACRMBatchResult`. (owner: coder) — **landed**: `ACRMBatchResult` in `src/qa/analysis_types.py` (mirrors `CTBatchResult`; docstring clarifies it is **not** compare-mode `MRIBatchResult`); `QAMRIBatchWorker` in `src/qa/worker.py` (serial per-series, cooperative cancel, per-series error isolation, `series_completed` + `batch_result_ready`, worker-owned `image_temp_dir` + optional `module_images_temp_dir` with per-series uuid subdirs). Tests in `tests/test_qa_mri_batch_worker.py`.
+- [x] **(P4-M2)** `acr_mri_series_selection_dialog` — loaded MR series + Add folder; shared options from existing MRI dialog. (owner: coder) — **landed**: `src/gui/dialogs/acr_mri_series_selection_dialog.py` (`build_mri_series_entries` filters `Modality == "MR"`; `prompt_mri_batch_series_selection` returns parallel `(requests, labels)` with `analysis_type="acr_mri_large"` / `modality="MR"`, checkbox list + Add folder, skip/warn/info boxes mirroring CT); `stamp_mri_batch_options` helper applies echo/check_uid/origin_slice/scan extent/vanilla/embed/LC fields via `dataclasses.replace` (no compare-mode field). Tests in `tests/gui/test_mri_batch_selection_dialog.py`.
+- [x] **(P4-M3)** Menu: **ACR MRI Batch (pylinac)…**; progress N-of-M; cancel semantics match CT. (owner: coder, after: P4-M1, P4-M2) — **landed**: ``acr_mri_batch_requested`` signal + ``ACR MRI Batch (pylinac)…`` menu item; signal wired to ``_open_acr_mri_batch_analysis`` thin slot → ``dialog_actions.open_acr_mri_batch_analysis`` → ``gui.qa_mri_batch_flow.open_acr_mri_batch_analysis`` (selection → options → ``stamp_mri_batch_options`` → ``QAMRIBatchWorker`` → N-of-M progress → cancel calls ``worker.cancel()`` → minimal non-modal summary; temp dirs cleaned on dialog destroy or immediately when batch empty). ``compare_request`` ignored (OQ-7). Flow lives in ``src/gui/qa_mri_batch_flow.py`` so ``QAAppFacade`` does not grow. Tests in ``tests/gui/test_qa_mri_batch_flow.py``.
+- [x] **(P4-M4)** `mri_batch_result_dialog` — table per series; Export CSV / JSON / XLSX; module Images per **OQ-9**. (owner: coder, after: P4-M3, P1-F3, P2-X3) — **landed**: ``src/gui/dialogs/mri_batch_result_dialog.py`` (``create_mri_batch_result_dialog`` — one row per series: label, status, LC score, warnings; Export XLSX/JSON/CSV buttons; failed-series title suffix); ``src/gui/qa_mri_batch_export.py`` (``save_mri_batch_xlsx``/``json``/``csv`` — typed on ``ACRMBatchResult``; XLSX reuses ``build_qa_workbook`` so Images sheet embeds module PNGs per OQ-9; JSON emits per-run document array; CSV uses ``build_batch_metrics_csv``); wired from ``src/gui/qa_mri_batch_flow.py`` (flow module unchanged in role; buttons wired from the flow, not the facade). Tests in ``tests/gui/test_mri_batch_result_dialog.py`` + ``tests/gui/test_qa_mri_batch_export.py``.
+- [x] **(P4-M5)** Tests: worker isolation, label parity, export hooks (mock runner); mirror patterns in `tests/test_qa_ct_batch_worker.py`. (owner: tester, after: P4-M4) — **landed (export hooks + dialog)**: export hooks fire on button click (mock save path); workbook built from ``ACRMBatchResult.run_results``; CSV uses flatten (no ``analyzed_image_path`` / ``analyzed_module_images`` leak); JSON emits per-run document array with ``series_label``; dialog renders one row per series with LC score (including 0). Worker-isolation and label-parity coverage already in ``tests/test_qa_mri_batch_worker.py`` (P4-M1).
 
 ### Phase 5 — Docs and closure
 
-- [ ] **(P5-D1)** User-docs: `USER_GUIDE_QA_PYLINAC.md` — update incrementally as CT CSV (Phase 3) and MRI batch (Phase 4) land; hub `USER_GUIDE.md` if needed. (owner: docs, after: P3-C2, P4-M4)
-- [ ] **(P5-D2)** Dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md`, appendix in this plan, `MAINTENANCE_LOG.md`. (owner: docs, after: P5-D1)
-- [ ] **(P5-D3)** In-app strings: menu, dialogs, tooltips, save-dialog titles (see **Documentation updates**). (owner: coder, with P4-M3, P3-C1)
-- [ ] **(P5-D4)** `CHANGELOG.md` **minor** when shipped. (owner: orchestrator)
-- [ ] **(P5-D5)** `check_user_docs_links.py` + move plan to `completed/`; trim `TO_DO.md`. (owner: orchestrator)
+- [x] **(P5-D1)** User-docs: `USER_GUIDE_QA_PYLINAC.md` — MRI batch moved to its own `### ACR MRI batch` section (was a paragraph under `### ACR CT`); single-run CSV/XLSX now documented as full flatten (Summary vs Detail); **Embed module images in XLSX** option documented (default on, PDF parity, uncheck skips Images sheet); JSON still full `raw_pylinac` (no `metrics_flat`); compare mode unchanged; hub `USER_GUIDE.md` bullet updated; `CONFIGURATION.md` row expanded. (owner: docs) — **landed**
+- [x] **(P5-D2)** Dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md` — ACR CT CNR/batch/XLSX row updated to document canonical flatten (`qa_result_flatten.py`, metrics-overlay-wins, path denylist), wide batch CSV vs single-run metric/value, XLSX Summary/Detail/Images + embed toggle, `ACRMBatchResult` + `QAMRIBatchWorker` (not compare-mode `MRIBatchResult`), MRI batch menu + export; stale "batch for other modalities remain future work" corrected to "shipped for ACR CT and ACR MRI"; Phase 6 SNR kept **not shipped**. Plan appendix P5-D1/D2/D3 marked. `MAINTENANCE_LOG.md` dated completion note for Phases 1–5. (owner: docs) — **landed**
+- [x] **(P5-D3)** In-app strings: menu, dialogs, tooltips, save-dialog titles audited against the **Documentation updates** table — **all strings already landed** from P3/P4 (MRI batch menu in `main_window_menu_builder.py`; Export CSV/JSON/XLSX buttons in `mri_batch_result_dialog.py` + `ct_batch_result_dialog.py`; "Embed module images in XLSX" checkbox in `acr_ct_qa_dialog.py` + `acr_mri_qa_dialog.py`; selection dialog title/instructions in `acr_mri_series_selection_dialog.py`). **Zero Python changed.** (owner: coder) — **landed; no code change**
+- [x] **(P5-D4)** `CHANGELOG.md` — existing **Unreleased** **Added** (minor: MRI batch menu P4-M3, MRI batch export P4-M4, full-flatten CSV, XLSX Summary modality-aware columns P2-X1, embed-module-images toggle P2-I2, XLSX multi-module Images P2-X3) + **Fixed** P2-X4 (embed-off skips Images sheet, patch) already cover the ship. **No new CHANGELOG bullet needed** — user-docs facts are all represented. (owner: docs) — **landed; no new entry**
+- [ ] **(P5-D5)** `check_user_docs_links.py` + move plan to `completed/`; trim `TO_DO.md`. (owner: orchestrator) — **partial:** link checker OK; `TO_DO.md` Next-up/Features retargeted to remaining Phase 6. Plan **stays** in `plans/supporting/` until Phase 6 ships (do not archive a plan with remaining SNR work). Unchecked until the plan is actually moved.
 
 ### Phase 6 — Viewer-computed MRI SNR (extension slice)
 
@@ -391,24 +393,131 @@ SNR = mean(signal in central 80% of uniformity flood ROI)
 
 ## Metric registry appendix
 
-_Fill during Phase 0 (R0-1, R0-2). Do not guess keys — paste from fixture runs._
+_Dotted key paths below are copied from pylinac 3.43.2 result dataclass field names (`ACRCTResult` line 256, `ACRMRIResult` line 1614) and `results_data(as_dict=True)` output. Do not invent names. Optional/version-dependent fields noted._
 
 ### §CT — `ACRCT` keys
 
-_(pending Phase 0)_
+Top-level (`ACRCTResult`, `results_data` root):
+
+- `phantom_model: str`
+- `phantom_roll_deg: float`
+- `origin_slice: int`
+- `num_images: int`
+
+`ct_module` (`CTModuleOutput`):
+
+- `ct_module.offset: float`
+- `ct_module.roi_distance_from_center_mm: float`
+- `ct_module.roi_radius_mm: float`
+- `ct_module.roi_settings: dict` (material → {angle, distance, radius}; dumps also include runtime-mutated `angle_corrected`, `distance_pixels`, `radius_pixels` from `_convert_units_in_settings`)
+- `ct_module.rois: dict[str, float]` (material → mean HU; keys: Air, Poly, Acrylic, Bone, Water)
+
+`uniformity_module` (`UniformityModuleOutput` extends `CTModuleOutput`):
+
+- `uniformity_module.offset: float`
+- `uniformity_module.roi_distance_from_center_mm: float`
+- `uniformity_module.roi_radius_mm: float`
+- `uniformity_module.roi_settings: dict`
+- `uniformity_module.rois: dict[str, float]` (keys: Top, Right, Bottom, Left, Center)
+- `uniformity_module.center_roi_stdev: float`
+
+`low_contrast_module` (`LowContrastModuleOutput` extends `CTModuleOutput`):
+
+- `low_contrast_module.offset: float`
+- `low_contrast_module.roi_distance_from_center_mm: float`
+- `low_contrast_module.roi_radius_mm: float`
+- `low_contrast_module.roi_settings: dict`
+- `low_contrast_module.rois: dict[str, float]` (key: ROI)
+- `low_contrast_module.cnr: float`
+
+`spatial_resolution_module` (`SpatialResolutionModuleOutput` extends `CTModuleOutput`):
+
+- `spatial_resolution_module.offset: float`
+- `spatial_resolution_module.roi_distance_from_center_mm: float`
+- `spatial_resolution_module.roi_radius_mm: float`
+- `spatial_resolution_module.roi_settings: dict`
+- `spatial_resolution_module.rois: dict[str, float]` (keys: `10oclock`, `9oclock`, `7oclock`, `6oclock`, `4oclock`, `3oclock`, `2oclock`, `12oclock` — no 1/5/8/11 o'clock)
+- `spatial_resolution_module.lpmm_to_rmtf: dict` (lp/mm → relative MTF)
+
+**CT families confirmed ABSENT in 3.43.2** (do not emit columns): SNR, PSG, slice thickness (no thickness module on `ACRCT`), ghost ROIs.
 
 ### §MRI — `ACRMRILarge` keys
 
-_(pending Phase 0)_
+Top-level (`ACRMRIResult`, `results_data` root):
+
+- `phantom_model: str`
+- `phantom_roll_deg: float`
+- `origin_slice: int`
+- `num_images: int`
+
+`slice1` (`MRSlice1ModuleOutput`):
+
+- `slice1.offset: int`
+- `slice1.roi_settings: dict`
+- `slice1.rois: dict[str, ROIResult]` (via `rois_to_results`; each ROI has `name`, `value`, `stdev`, `difference`, `nominal_value`, `passed` — flatten leaves e.g. `slice1.rois.Row 1.1.value`)
+- `slice1.bar_difference_mm: float`
+- `slice1.slice_shift_mm: float`
+- `slice1.measured_slice_thickness_mm: float`
+- `slice1.row_mtf_50: float`
+- `slice1.col_mtf_50: float`
+- `slice1.row_mtf_lp_mm: dict[int, float]` (keys 10–90 → lp/mm)
+- `slice1.col_mtf_lp_mm: dict[int, float]` (keys 10–90 → lp/mm)
+
+`slice11` (`MRSlice11ModuleOutput`):
+
+- `slice11.offset: int`
+- `slice11.roi_settings: dict`
+- `slice11.rois: dict[str, ROIResult]` (bar ROIs via `rois_to_results`)
+- `slice11.bar_difference_mm: float`
+- `slice11.slice_shift_mm: float`
+
+`uniformity_module` (`MRUniformityModuleOutput`):
+
+- `uniformity_module.offset: int`
+- `uniformity_module.roi_settings: dict`
+- `uniformity_module.rois: dict[str, ROIResult]` (Center ROI via `rois_to_results`)
+- `uniformity_module.ghost_roi_settings: dict`
+- `uniformity_module.ghost_rois: dict[str, ROIResult]` (keys: Top, Bottom, Left, Right)
+- `uniformity_module.psg: float`
+- `uniformity_module.ghosting_ratio: float`
+- `uniformity_module.piu_passed: bool`
+- `uniformity_module.piu: float`
+
+`geometric_distortion_module` (`MRGeometricDistortionModuleOutput`):
+
+- `geometric_distortion_module.offset: int`
+- `geometric_distortion_module.profiles: dict[str, dict]` (keys: horizontal, vertical, negative diagonal, positive diagonal; each → {"width (mm)": float, "line": LineSerialized})
+- `geometric_distortion_module.distances: dict` (direction → "mm" string)
+
+`sagittal_localizer_module` (`MRSagittalLocalizationModuleOutput`):
+
+- `sagittal_localizer_module.profiles: dict[str, dict]` (keys: ROI1–ROI4; each → {"width (mm)": float, "line": LineSerialized})
+- `sagittal_localizer_module.distances: dict`
+
+`low_contrast_multi_slice_module` (`MRLowContrastMultiSliceModuleOutput`):
+
+- `low_contrast_multi_slice_module.score: int`
+- `low_contrast_multi_slice_module.low_contrast_rois: dict` (keys: slice_8, slice_9, slice_10, slice_11; each → `MRLowContrastModuleOutput`: offset, slice_num, spoke_settings, background_settings, spokes)
+
+**MRI note:** `has_sagittal_module: bool` is an instance attribute on `ACRMRILarge` (not in `results_data`); sagittal module populated only when a sagittal image is detected.
 
 ### §Live harvest — `metrics.*` extensions
 
 | Key | Modality | Source | Reason dict incomplete |
 |-----|----------|--------|------------------------|
 | `low_contrast_cnr` | CT | live analyzer | background σ not in `results_data` (shipped F1) |
-| `psg` | MRI | `uniformity_module` dict | expected dict-complete (`psg`, `ghosting_ratio`); harvest only if dump proves gap |
+| `psg` | MRI | `uniformity_module` dict | dict-complete (`psg`, `ghosting_ratio`); no harvest needed |
 | _snr_ | MRI | viewer harvest (Phase 6) | pylinac 3.43.2 has no SNR; see [ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](../../info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) |
-| _…_ | | | |
+
+**R0-3 gap summary (from source):** CT needs live harvest only for `low_contrast_cnr` (background σ absent). CT SNR/PSG/slice-thickness confirmed absent — omit. MRI PSG, MTF grid, PIU, geometric distortion, slice thickness, low-contrast score are all dict-complete. MRI SNR is the sole planned viewer-computed harvest (Phase 6).
+
+### §Figure names — `plot_images()` keys (R0-10)
+
+From pylinac 3.43.2 `acr.py` source:
+
+**ACR CT** (`ACRCT.plot_images`, line 462): `hu`, `uniformity`, `spatial resolution`, `low contrast`, `mtf`, `side`
+
+**ACR MRI Large** (`ACRMRILarge.plot_images`, line 1967): `geometric`, `slice 1`, `signal uniformity`, `slice 11`, plus per-slice LC keys from `low_contrast_multi_slice.slices` (`slice_8`, `slice_9`, `slice_10`, `slice_11`), optional `sagittal` (only when `has_sagittal_module`), `rMTF`, `side`
 
 ---
 
@@ -534,6 +643,17 @@ _(pending Phase 0)_
 ### Review notes — Cursor Grok 4.6 (2026-08-28)
 
 **Verdict:** Deferred-work roadmap accepted — MTF interpret UI first, then assisted visual scoring; demote ROI σ; fold calibration into interpret UI; gaps doc stays reference-only; cross-link **C2** / **C24**; deferred roadmap in gaps doc §Direct resolution reads.
+
+### Review notes — P1-F1 implementation (2026-08-29)
+
+**Verdict:** Approve with edits — incorporated in this commit.
+
+| Reviewer | Outcome |
+|----------|---------|
+| **Kilo LongCat 2.0 (paid)** | Remapped to image model; no code |
+| **Kilo LongCat 2.0 (free)** | Implemented flatten module + appendix from pylinac 3.43.2 source |
+| **OpenCode Hy3 Free** | Needs revision → tabular `metric.` rename and unused denylist **fixed** |
+| **OpenCode GLM 5.3 Flash** | Pass with nits → MRI `ROIResult` fixture shape, CT lp ROI key list, `roi_settings` mutated dump keys **fixed** |
 
 ---
 

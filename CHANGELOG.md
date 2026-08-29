@@ -6,7 +6,66 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **ACR MRI batch results dialog + export (P4-M4):** The ACR MRI Batch summary dialog now shows **one row per series** (label, status, low-contrast score, warnings) with **Export CSV…** (full flatten, one wide row per series), **Export XLSX…** (one workbook reusing ``build_qa_workbook`` — Summary/Detail/Images sheets, the last embedding per-module PNGs per OQ-9 while temp dirs live), and **Export JSON…** (a JSON array of per-run documents, ``schema_version`` 1.1). Buttons are wired from ``gui.qa_mri_batch_flow`` (not the facade); temp-dir cleanup on dialog destroy is unchanged. **Semantic versioning note: minor.**
+- **ACR MRI batch analysis (P4-M3):** New **Tools → Automated QA → ACR MRI Batch (pylinac)…** runs one shared MRI options set over **multiple selected MR series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); a minimal non-modal summary shows one label + success/fail per series. Compare is hidden on the shared MRI options dialog (OQ-7). Export buttons land in P4-M4. **Semantic versioning note: minor.**
+- **ACR MRI batch series selection (P4-M2):** Added
+  `acr_mri_series_selection_dialog` with `prompt_mri_batch_series_selection`
+  (loaded MR series checkbox list + "Add folder...", returns parallel
+  `(requests, labels)`) and `stamp_mri_batch_options` helper that applies
+  shared MRI options (echo, check_uid, origin_slice, scan extent, vanilla,
+  embed, low-contrast tuning) to each request via `dataclasses.replace`.
+  Mirrors the CT batch selection dialog; shared options come from the existing
+  `prompt_acr_mri_options` dialog (no compare-mode wiring). Internal plumbing
+  only — no user-visible change until the MRI batch menu lands (P4-M3).
+  **Semantic versioning note: patch.**
+- **ACR MRI batch worker plumbing (P4-M1):** Added `ACRMBatchResult` (mirrors
+  `CTBatchResult`; not compare-mode `MRIBatchResult`) and `QAMRIBatchWorker`
+  (serial per-series `run_acr_mri_large_analysis`, cooperative cancel,
+  per-series error isolation, worker-owned `image_temp_dir` + optional
+  `module_images_temp_dir` with per-series uuid subdirs). Internal plumbing
+  only — no user-visible change until the MRI batch UI lands (P4-M3/M4).
+  **Semantic versioning note: patch.**
+- **ACR QA XLSX Summary modality-aware columns (P2-X1):** The XLSX Summary
+  sheet now appends eight modality-aware key columns pulled from the canonical
+  flatten (PIU, PSG, LC score, MTF@50% row/col, slice thickness, slice shift,
+  and a reserved **MRI SNR** column). Each is best-effort: a column stays
+  blank when its flatten key is absent for the run, so CT and MRI rows share
+  one header with blanks where a metric does not apply. Numeric cells stay
+  numbers; CT slice thickness and CT SNR are excluded by design. ``MRI SNR``
+  is present in the header but stays blank until Phase 6 harvests ``mri_snr``.
+  **Semantic versioning note: minor.**
+- **ACR QA embed-module-images toggle (P2-I2):** ACR CT, ACR MRI, and CT batch
+  options dialogs now expose an **Embed module images in XLSX** checkbox
+  (default **on**) for PDF-parity module PNGs on the XLSX Images sheet. The
+  choice is persisted as ``acr_qa_embed_module_images_in_xlsx`` and recorded
+  in the run's ``pylinac_analysis_profile`` and JSON ``inputs`` for audit.
+  **Semantic versioning note: minor.**
+
 ### Fixed
+- **MRI batch now confirms slice-geometry preflight:** After shared MRI
+  options, the batch flow runs the same folder-input / IPP–IOP checks as
+  single-run MRI, shows one Yes/No dialog (default No) with series-label
+  prefixes, and attaches the unprefixed warnings to each ``QARequest``
+  so the batch summary and exports do not repeat the label. Declining
+  the dialog cancels the batch.
+  **Semantic versioning note: patch.**
+- **MRI batch JSON export now appends ``.json``:** ``save_mri_batch_json`` now
+  matches XLSX/CSV path normalization — a selected path with no ``.json``
+  suffix gets one appended; an explicit ``.json`` is left unchanged.
+  **Semantic versioning note: patch.**
+- **MRI batch result dialog slot survives deferred destroy:** Closing a prior
+  MRI batch summary no longer nulls ``app._mri_batch_result_dialog`` before
+  the replacement is assigned. The ``destroyed`` callback clears the slot only
+  when it still references the dialog being destroyed, so ``WA_DeleteOnClose``
+  cannot wipe a newer dialog.
+  **Semantic versioning note: patch.**
+- **XLSX Summary extras are formula-injection neutralized:** Mapped Summary
+  values (PIU, PSG, and the other extra columns) now pass through
+  ``_xlsx_cell`` before the row is written, so strings that begin with
+  ``= + - @`` are stored as literal text rather than live formulas.
+  **Semantic versioning note: patch.**
+- **ACR QA embed-off now skips the XLSX Images sheet (P2-X4):** Unchecking **Embed module images in XLSX** on the ACR CT/MRI options dialog now correctly skips the XLSX Images sheet (Summary note only), matching the missing-Pillow degradation. Previously the runner still saved the legacy composite image, so the workbook's composite fallback recreated the Images sheet even when the toggle was off. `save_composite_analyzed_image` now skips when `embed_module_images_in_xlsx` is False (the composite's only purpose is embedding). **Semantic versioning note: patch.**
 - **Volume rescale slope guard (Sonar S1244):** Centralize exact-zero
   `RescaleSlope` checks in `is_usable_rescale_slope()` and use it for 3D
   volume calibration preflight and shared W/L rescale paths, targeting the
@@ -15,6 +74,58 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch.**
 
 ### Changed
+- **MRI batch options hide compare (OQ-7):** The batch path now opens
+  ``prompt_acr_mri_options(..., allow_compare=False)`` so the compare
+  group is hidden instead of being accepted and dropped. Single-run MRI
+  still shows compare. ``get_options()`` keeps the 10-tuple shape.
+  **Semantic versioning note: patch.**
+- **ACR QA XLSX Images sheet multi-module embed (P2-X3):** The XLSX
+  Images sheet now embeds per-module PNGs from
+  ``QAResult.analyzed_module_images`` (module label → absolute path), in
+  stable key order, each preceded by its module label — stacked vertically
+  per run. Series/Run and module labels are formula-injection neutralized.
+  When a run has no module images, the legacy composite
+  ``analyzed_image_path`` is still embedded (backward compat). When the
+  sheet exists because some run has an embeddable image, a run with
+  nothing embeddable still gets a ``(no analyzed image for this run)``
+  placeholder. The sheet is skipped (with a Summary note) when Pillow is
+  unavailable or no run yields an embeddable image.
+  **Semantic versioning note: minor.**
+- **ACR QA module-image temp-dir lifecycle (P2-I3):** The facade/worker now
+  owns the per-module image temp dir for the embed-on path: CT single nests
+  the module dir under the composite image temp dir (single cleanup in
+  ``start_qa_worker``); the CT batch worker owns a sibling
+  ``module_images_temp_dir`` with a **per-series subdirectory** (pylinac
+  writes fixed names such as ``hu.png``); MRI single gets a standalone dir
+  released via a ``module_images_cleanup`` callable (compare-mode does not
+  create that dir). Paths are held open through ``workbook.save()`` and
+  cleaned in ``finally``/callbacks. MRI batch is skipped (worker does not
+  exist yet; see P4-M1). Internal plumbing only — no
+  user-visible change until the Images sheet lands (P2-X3).
+  **Semantic versioning note: patch.**
+- **ACR QA module-image capture plumbing (P2-I1):** `QARequest` gains
+  `embed_module_images_in_xlsx` (default true) and `module_images_out_dir`;
+  `QAResult` gains `analyzed_module_images` (module label → absolute PNG path,
+  transient, excluded from JSON/CSV). The ACR CT and MRI runners call
+  `analyzer.save_images(directory=...)` when embed is on and a module-images
+  directory is set, populating `analyzed_module_images` for the upcoming XLSX
+  Images sheet embed; CT skips the legacy composite save in that case. Save
+  failures are swallowed and do not fail the run. Internal/export plumbing
+  only — no user-visible change until the config toggle and Images sheet land
+  (P2-I2/I3, P2-X3). **Semantic versioning note: patch.**
+- **ACR QA CSV exports:** Single-run QA CSV now includes the full pylinac
+  `raw_pylinac` flatten (not only `result.metrics`), and every cell is
+  formula-injection neutralized. The ACR CT batch summary dialog offers
+  **Export CSV…** (one wide row per series, same flatten).
+  **Semantic versioning note: minor.**
+- **ACR QA XLSX Detail + formula neutralization:** The XLSX Detail sheet now
+  uses the full `raw_pylinac` flatten (via `build_metric_rows`, matching the
+  CSV export field-for-field), replacing the prior metrics-only walk. Every
+  string cell written to the Summary, Detail, and Images sheets is
+  formula-injection neutralized via `neutralize_spreadsheet_value` (leading
+  ``= + - @`` prefixed with an apostrophe), and list/tuple cells are joined
+  with ``"; "`` — so DICOM-derived Series/Run labels and warnings are written
+  as literal text, not live formulas. **Semantic versioning note: minor.**
 - **README feature showcase:** Root `README.md` expands the Highlights table
   (ROIs, MPR create/export, slab projections, fusion, 3D, tag edit/export,
   cine, themes/settings, pylinac CT/MR/NM QC) and adds a constrained-width

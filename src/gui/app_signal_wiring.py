@@ -89,6 +89,7 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.acr_ct_phantom_requested.connect(app._open_acr_ct_phantom_analysis)
     app.main_window.acr_ct_batch_requested.connect(app._open_acr_ct_batch_analysis)
     app.main_window.acr_mri_phantom_requested.connect(app._open_acr_mri_phantom_analysis)
+    app.main_window.acr_mri_batch_requested.connect(app._open_acr_mri_batch_analysis)
     app.main_window.nuclear_qc_requested.connect(app._open_nuclear_qc_analysis)
     app.main_window.export_requested.connect(app._open_export)
     app.main_window.deep_anonymizer_export_requested.connect(app._open_deep_anonymizer_export)

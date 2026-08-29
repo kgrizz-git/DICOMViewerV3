@@ -246,6 +246,7 @@ class ConfigManager(
             "acr_mri_low_contrast_visibility_threshold": 0.001,
             "acr_mri_low_contrast_visibility_sanity_multiplier": 3.0,
             "acr_qa_vanilla_pylinac": False,
+            "acr_qa_embed_module_images_in_xlsx": True,
             # Slice sync
             "slice_sync_enabled": False,
             "slice_sync_groups": [],

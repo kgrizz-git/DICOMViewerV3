@@ -30,6 +30,7 @@ from qa.analysis_types import (
     QAResult,
     build_pylinac_analysis_profile,
 )
+from qa.pylinac_module_images import capture_analyzed_module_images
 from qa.pylinac_mri_pdf import (
     _build_mri_notes_lines,
     _write_per_run_temp_pdf,
@@ -297,6 +298,8 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         except Exception:
             raw = {}
 
+        analyzed_module_images = capture_analyzed_module_images(analyzer, request)
+
         pdf_report_path: str | None = None
         if request.output_pdf_path:
             try:
@@ -347,6 +350,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             num_images=num_images,
             pylinac_version=py_ver,
             pylinac_analysis_profile=profile,
+            analyzed_module_images=analyzed_module_images,
         )
     except Exception as exc:
         return QAResult(

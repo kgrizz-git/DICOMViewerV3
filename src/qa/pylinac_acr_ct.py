@@ -16,6 +16,10 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from qa.analysis_types import QARequest, QAResult, build_pylinac_analysis_profile
+from qa.pylinac_module_images import (
+    capture_analyzed_module_images,
+    save_composite_analyzed_image,
+)
 from utils.debug_flags import DEBUG_PYLINAC_QA
 
 # Stock pylinac CatPhanBase message; viewer mixin uses a different out-of-range wording.
@@ -281,17 +285,17 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         # results_data(as_dict=True) (no background_rois / per-ROI std there).
         low_contrast_cnr = _extract_low_contrast_cnr_details(analyzer)
 
-        # F3: save the analyzed composite image for XLSX embedding, if the
-        # caller opted in. The runner is the only place that touches the live
-        # analyzer, so this transient side effect stays here rather than in
-        # the worker/facade (see QARequest.analyzed_image_out_path).
-        analyzed_image_path: str | None = None
-        if request.analyzed_image_out_path:
-            try:
-                analyzer.save_analyzed_image(request.analyzed_image_out_path)
-                analyzed_image_path = request.analyzed_image_out_path
-            except Exception:
-                analyzed_image_path = None
+        # F3: image output for XLSX embedding. The runner is the only place that
+        # touches the live analyzer, so these transient side effects stay here
+        # rather than in the worker/facade.
+        #
+        # When per-module embed is on AND a module-images output directory is
+        # set, prefer analyzer.save_images(directory=...) (PDF-parity module
+        # images) and skip the composite-only save. Otherwise, fall back to the
+        # composite save via analyzed_image_out_path when that is set (backward
+        # compat; see P2-I1 / OQ-9).
+        analyzed_module_images = capture_analyzed_module_images(analyzer, request)
+        analyzed_image_path = save_composite_analyzed_image(analyzer, request)
 
         pdf_report_path: str | None = None
         if request.output_pdf_path:
@@ -337,6 +341,7 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
             pylinac_version=py_ver,
             pylinac_analysis_profile=profile,
             analyzed_image_path=analyzed_image_path,
+            analyzed_module_images=analyzed_module_images,
         )
     except Exception as exc:
         err_text = f"ACR CT analysis failed: {exc}"

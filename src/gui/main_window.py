@@ -179,6 +179,7 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
     acr_ct_phantom_requested = Signal()  # Emitted when ACR CT (pylinac) analysis is requested
     acr_ct_batch_requested = Signal()  # Emitted when batch ACR CT (pylinac) analysis is requested
     acr_mri_phantom_requested = Signal()  # Emitted when ACR MRI Large (pylinac) analysis is requested
+    acr_mri_batch_requested = Signal()  # Emitted when batch ACR MRI Large (pylinac) analysis is requested
     nuclear_qc_requested = Signal()  # Emitted when nuclear-medicine QC (pylinac) analysis is requested
     create_mpr_view_requested = Signal()  # Tools → Create MPR view (focused subwindow)
     create_3d_view_requested = Signal()  # Toolbar / Tools → 3D volume render (focused subwindow)
@@ -1051,7 +1052,6 @@ class MainWindow(MainWindowOverlayOptionsMixin, QMainWindow):
             facade = getattr(app, "_volume_render_facade", None)
             if facade is not None:
                 facade.close_all_dialogs()
-
         # Save window geometry
         geometry = self.geometry()
         self.config_manager.set("window_width", geometry.width())

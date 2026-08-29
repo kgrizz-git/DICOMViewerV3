@@ -263,7 +263,10 @@ def test_empty_batch_guards_clean_up_or_skip_dialog(monkeypatch) -> None:
 def test_batch_xlsx_export_adds_extension_and_reports_status(monkeypatch, tmp_path: Path) -> None:
     output = tmp_path / "batch-without-extension"
     workbook = MagicMock()
-    monkeypatch.setattr(facade_module, "build_qa_workbook", lambda *args, **kwargs: workbook)
+    monkeypatch.setattr(
+        "gui.qa_ct_batch_export.build_qa_workbook",
+        lambda *args, **kwargs: workbook,
+    )
     app = _app(str(output))
     batch = CTBatchResult([_result()], ["Synthetic series"])
 
@@ -295,7 +298,7 @@ def test_ct_folder_flow_builds_folder_request(monkeypatch) -> None:
     app.file_dialog.open_folder.return_value = "/synthetic/folder"
     app.config_manager = MagicMock()
     app.config_manager.get_acr_qa_vanilla_pylinac.return_value = False
-    monkeypatch.setattr(facade_module, "prompt_acr_ct_options", lambda *_args, **_kwargs: (0.0, None, False))
+    monkeypatch.setattr(facade_module, "prompt_acr_ct_options", lambda *_args, **_kwargs: (0.0, None, False, True))
     monkeypatch.setattr(QAAppFacade, "user_confirms_preflight", lambda *_args: True)
     start = MagicMock()
     monkeypatch.setattr(QAAppFacade, "start_qa_worker", start)
@@ -319,7 +322,7 @@ def test_mri_single_run_routes_to_single_worker(monkeypatch) -> None:
     monkeypatch.setattr(facade_module, "QMessageBox", lambda *_args: choice)
     facade_module.QMessageBox.ButtonRole = QMessageBox.ButtonRole
     facade_module.QMessageBox.StandardButton = QMessageBox.StandardButton
-    monkeypatch.setattr(facade_module, "prompt_acr_mri_options", lambda *_args, **_kwargs: (1, False, 1, 0.0, "rose", 0.001, 1.0, None, False))
+    monkeypatch.setattr(facade_module, "prompt_acr_mri_options", lambda *_args, **_kwargs: (1, False, 1, 0.0, "rose", 0.001, 1.0, None, False, True))
     monkeypatch.setattr(QAAppFacade, "user_confirms_preflight", lambda *_args: True)
     start = MagicMock()
     monkeypatch.setattr(QAAppFacade, "start_qa_worker", start)

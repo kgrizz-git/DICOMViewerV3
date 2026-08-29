@@ -113,3 +113,166 @@ def test_export_qa_results_writes_csv_and_updates_status(tmp_path) -> None:
 
     assert "score,1" in output.read_text(encoding="utf-8")
     app.main_window.update_status.assert_called_once_with(f"Saved QA CSV: {output}")
+
+
+# ---------------------------------------------------------------------------
+# P3-C2 — single-run save-dialog CSV/XLSX pick up the full flatten (no UI
+# change). Synthetic QAResult fixtures carry a curated-metrics overlay that
+# must win on collision, a nested raw_pylinac tree with a dotted leaf, and
+# denylisted path fields that must never reach CSV / XLSX Detail.
+# ---------------------------------------------------------------------------
+
+
+def _acr_ct_result() -> QAResult:
+    """Synthetic ACR CT run: curated overlay + nested raw_pylinac + denied paths."""
+    return QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        metrics={
+            "low_contrast_cnr": 4.25,
+            "low_contrast_score": 1,
+            "num_images": 40,
+        },
+        raw_pylinac={
+            "phantom_model": "ACR CT 464",
+            # Same top-level key as metrics — flatten overlay must keep 4.25.
+            "low_contrast_cnr": 999.0,
+            "uniformity_module": {
+                "offset": 70.0,
+                "piu": 0.98,
+                "rois": {"Center": 3.0},
+            },
+            "ct_module": {
+                "offset": 0.0,
+                "rois": {"Air": -987.1},
+            },
+            # Denylist must skip this even when it lives under raw_pylinac.
+            "analyzed_image_path": "/tmp/raw_pylinac_ct.png",
+        },
+        num_images=40,
+        analyzed_image_path="/tmp/ct_analyzed.png",
+        analyzed_module_images={"uniformity": "/tmp/ct_uniformity.png"},
+    )
+
+
+def _acr_mri_result() -> QAResult:
+    """Synthetic ACR MRI Large run: curated overlay + nested raw_pylinac + denied paths."""
+    return QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        metrics={
+            "low_contrast_cnr": 3.10,
+            "low_contrast_score": 2,
+            "num_images": 11,
+        },
+        raw_pylinac={
+            "phantom_model": "ACR MRI Large",
+            "low_contrast_score": 99,
+            "uniformity_module": {
+                "offset": 50.0,
+                "piu": 0.95,
+            },
+            "geometry_module": {
+                "horizontal_distortion_mm": 1.2,
+            },
+            "analyzed_module_images": {"hu": "/tmp/raw_pylinac_mri.png"},
+        },
+        num_images=11,
+        analyzed_image_path="/tmp/mri_analyzed.png",
+        analyzed_module_images={"uniformity": "/tmp/mri_uniformity.png"},
+    )
+
+
+def test_export_qa_results_csv_full_flatten_ct(tmp_path) -> None:
+    """CSV via the save-dialog path carries the nested raw_pylinac leaf for CT."""
+    output = tmp_path / "ct.csv"
+    app = _app(str(output))
+
+    QAAppFacade(app).export_qa_results(_acr_ct_result(), "ct")
+
+    text = output.read_text(encoding="utf-8")
+    assert text.startswith("metric,value\n")
+    assert "uniformity_module.piu,0.98" in text
+    assert "ct_module.rois.Air,-987.1" in text
+    # Curated overlay wins over the colliding raw_pylinac leaf (999.0).
+    assert "low_contrast_cnr,4.25" in text
+    assert "low_contrast_cnr,999" not in text
+    # Denylisted path fields must not leak into CSV (QAResult or raw_pylinac).
+    assert "analyzed_image_path" not in text
+    assert "/tmp/ct_analyzed.png" not in text
+    assert "/tmp/raw_pylinac_ct.png" not in text
+    assert "analyzed_module_images" not in text
+    app.main_window.update_status.assert_called_once_with(f"Saved QA CSV: {output}")
+
+
+def test_export_qa_results_csv_full_flatten_mri(tmp_path) -> None:
+    """CSV via the save-dialog path carries the nested raw_pylinac leaf for MRI."""
+    output = tmp_path / "mri.csv"
+    app = _app(str(output))
+
+    QAAppFacade(app).export_qa_results(_acr_mri_result(), "mri")
+
+    text = output.read_text(encoding="utf-8")
+    assert "uniformity_module.piu,0.95" in text
+    assert "geometry_module.horizontal_distortion_mm,1.2" in text
+    assert "low_contrast_score,2" in text
+    assert "low_contrast_score,99" not in text
+    assert "analyzed_image_path" not in text
+    assert "/tmp/mri_analyzed.png" not in text
+    assert "/tmp/raw_pylinac_mri.png" not in text
+    assert "analyzed_module_images" not in text
+    app.main_window.update_status.assert_called_once_with(f"Saved QA CSV: {output}")
+
+
+def test_export_qa_results_xlsx_detail_full_flatten_ct(tmp_path) -> None:
+    """XLSX Detail sheet (save-dialog path) carries the nested raw_pylinac leaf for CT."""
+    import openpyxl
+
+    output = tmp_path / "ct.xlsx"
+    app = _app(str(output))
+
+    QAAppFacade(app).export_qa_results(_acr_ct_result(), "ct")
+
+    wb = openpyxl.load_workbook(output)
+    assert "Detail" in wb.sheetnames
+    detail = wb["Detail"]
+    pairs = {row[0]: row[1] for row in detail.iter_rows(values_only=True) if row[0]}
+    assert "uniformity_module.piu" in pairs
+    assert "ct_module.rois.Air" in pairs
+    assert pairs["low_contrast_cnr"] == 4.25
+    assert "analyzed_image_path" not in pairs
+    assert "analyzed_module_images" not in pairs
+    app.main_window.update_status.assert_called_once_with(f"Saved QA XLSX: {output}")
+
+
+def test_export_qa_results_xlsx_detail_full_flatten_mri(tmp_path) -> None:
+    """XLSX Detail sheet (save-dialog path) carries the nested raw_pylinac leaf for MRI."""
+    import openpyxl
+
+    output = tmp_path / "mri.xlsx"
+    app = _app(str(output))
+
+    QAAppFacade(app).export_qa_results(_acr_mri_result(), "mri")
+
+    wb = openpyxl.load_workbook(output)
+    detail = wb["Detail"]
+    pairs = {row[0]: row[1] for row in detail.iter_rows(values_only=True) if row[0]}
+    assert "uniformity_module.piu" in pairs
+    assert "geometry_module.horizontal_distortion_mm" in pairs
+    assert pairs["low_contrast_score"] == 2
+    assert "analyzed_image_path" not in pairs
+    assert "analyzed_module_images" not in pairs
+    app.main_window.update_status.assert_called_once_with(f"Saved QA XLSX: {output}")
+
+
+def test_export_qa_results_json_has_no_metrics_flat(tmp_path) -> None:
+    """JSON schema must not gain metrics_flat (no schema churn)."""
+    output = tmp_path / "ct.json"
+    app = _app(str(output))
+
+    QAAppFacade(app).export_qa_results(_acr_ct_result(), "ct")
+
+    doc = json.loads(output.read_text(encoding="utf-8"))
+    assert "metrics_flat" not in doc
+    assert "metrics_flat" not in json.dumps(doc)
+    app.main_window.update_status.assert_called_once_with(f"Saved QA JSON: {output}")

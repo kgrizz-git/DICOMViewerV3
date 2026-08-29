@@ -82,7 +82,7 @@ from main_app_initialization import InitializationMixin
 from main_app_subwindow_management import MPRNavigationMixin, SubwindowManagementMixin
 from main_app_tag_roi import ROIWorkflowMixin, TagEditingMixin
 from main_app_ui_and_files import FileOperationsMixin, UIHandlersMixin
-from qa.worker import QAAnalysisWorker, QABatchWorker, QACTBatchWorker
+from qa.worker import QAAnalysisWorker, QABatchWorker, QACTBatchWorker, QAMRIBatchWorker
 
 _PERF_IMPORTS_DONE = _time.perf_counter()
 
@@ -131,6 +131,8 @@ class DICOMViewerApp(
     _mri_compare_result_dialog: QDialog | None = None
     _qa_ct_batch_worker: QACTBatchWorker | None = None
     _ct_batch_result_dialog: QDialog | None = None
+    _qa_mri_batch_worker: QAMRIBatchWorker | None = None
+    _mri_batch_result_dialog: QDialog | None = None
     _histogram_wl_update_timer: QTimer | None = None
     _histogram_update_timer: QTimer | None = None
     study_index_service: LocalStudyIndexService

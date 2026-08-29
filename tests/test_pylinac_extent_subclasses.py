@@ -63,6 +63,22 @@ def test_build_profile_marks_relaxed_image_for_forviewer_engine() -> None:
     assert pv["relaxed_image_extent"] is False
 
 
+def test_build_profile_records_embed_module_images() -> None:
+    from qa.analysis_types import QARequest, build_pylinac_analysis_profile
+
+    req = QARequest(analysis_type="acr_ct", dicom_paths=[])
+    assert build_pylinac_analysis_profile(req, engine="ACRCT")[
+        "embed_module_images_in_xlsx"
+    ] is True
+
+    req_false = QARequest(
+        analysis_type="acr_ct", dicom_paths=[], embed_module_images_in_xlsx=False
+    )
+    assert build_pylinac_analysis_profile(req_false, engine="ACRCT")[
+        "embed_module_images_in_xlsx"
+    ] is False
+
+
 def _dataset_at_z(z: float):
     return SimpleNamespace(ImagePositionPatient=[0.0, 0.0, z])
 

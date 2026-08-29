@@ -10,6 +10,7 @@ Exports:
     MRICompareRequest    -- batch of up to 3 LcRunConfig rows from the dialog
     MRIBatchResult       -- collected QAResult objects for a compare-mode run
     CTBatchResult        -- collected QAResult objects for a batch ACR CT run
+    ACRMBatchResult      -- collected QAResult objects for a batch ACR MRI run
     QARequest            -- input payload for a single QA analysis run
     QAResult             -- normalized output payload for a single QA run
     NuclearOptions       -- base for per-class pylinac.nuclear option payloads
@@ -138,6 +139,9 @@ def build_pylinac_analysis_profile(
         "parent_attempt_outcome": getattr(request, "parent_attempt_outcome", None),
         "origin_slice_override": request.origin_slice,
         "check_uid": request.check_uid,
+        "embed_module_images_in_xlsx": bool(
+            getattr(request, "embed_module_images_in_xlsx", True)
+        ),
     }
     if request.analysis_type == "acr_mri_large":
         lc_method = str(
@@ -459,7 +463,17 @@ class QARequest:
     # Transient input: when set, the runner calls analyzer.save_analyzed_image()
     # to this path right after analyze() (CT only, see run_acr_ct_analysis).
     # Not part of any serialized payload; XLSX export image embedding only.
+    # When embed_module_images_in_xlsx is on and module_images_out_dir is set,
+    # runners prefer per-module images and skip the composite save (see P2-I1).
     analyzed_image_out_path: str | None = None
+    # Transient input: when True (default) AND module_images_out_dir is set, the
+    # runner calls analyzer.save_images(directory=module_images_out_dir) after
+    # analyze() and populates QAResult.analyzed_module_images. Not serialized.
+    embed_module_images_in_xlsx: bool = True
+    # Transient input: directory the runner passes to analyzer.save_images() when
+    # embed_module_images_in_xlsx is on. Not serialized; the facade/worker owns
+    # the directory lifecycle (P2-I3). Runners mkdir it defensively.
+    module_images_out_dir: str | None = None
     study_uid: str = ""
     series_uid: str = ""
     modality: str = ""
@@ -517,6 +531,13 @@ class QAResult:
     # builders name their fields explicitly, so this field cannot leak); used
     # only by qa_xlsx_export.build_qa_workbook to embed the image.
     analyzed_image_path: str | None = None
+    # Transient output: module label -> absolute PNG path for per-module images
+    # saved via analyzer.save_images(directory=...) when
+    # QARequest.embed_module_images_in_xlsx was on and module_images_out_dir was
+    # set. Not serialized (same rule as analyzed_image_path); used by the XLSX
+    # Images sheet embed (P2-X3). Empty dict when embed is off, dir is unset, or
+    # save_images() failed.
+    analyzed_module_images: dict[str, str] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +611,28 @@ class CTBatchResult:
     MRIBatchResult (one run per LcRunConfig with a single CT options set),
     there is no per-series config analogue -- one set of CT options applies
     to every series in the batch.
+
+    Fields:
+        run_results: One QAResult per selected series, in selection order.
+        run_labels: User-facing series label per result (built on the GUI
+            thread by the selection dialog; the worker never touches the
+            organizer, so labels ride in rather than being derived).
+    """
+
+    run_results: list[QAResult] = field(default_factory=list)
+    run_labels: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ACRMBatchResult:
+    """
+    Result container for a multi-series ACR MRI Large batch run.
+
+    This is **not** the compare-mode ``MRIBatchResult`` (which carries
+    ``run_configs: list[LcRunConfig]`` and drives ``run_acr_mri_large_batch``).
+    ``ACRMBatchResult`` mirrors ``CTBatchResult``: one ``QAResult`` per selected
+    series plus a parallel display label, with no per-series config analogue --
+    one set of MRI options applies to every series in the batch.
 
     Fields:
         run_results: One QAResult per selected series, in selection order.

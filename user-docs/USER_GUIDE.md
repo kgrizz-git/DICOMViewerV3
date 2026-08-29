@@ -1,6 +1,6 @@
 # DICOM Viewer V3 — User guide
 
-**Last updated:** 2026-06-16
+**Last updated:** 2026-08-29
 
 **Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](../CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
 
@@ -19,7 +19,7 @@ This hub links topic guides for the application. **In the running app**, use **H
 | [USER_GUIDE_TAGS.md](USER_GUIDE_TAGS.md) | DICOM tag viewer & editor: **Tools → View/Edit DICOM Tags…** (Ctrl+T) — search, copy, edit with undo/redo, Privacy Mode masking |
 | [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) | Consolidated keyboard-shortcut reference (also in-app via Help → Keyboard Shortcuts / F1) |
 | [USER_GUIDE_ANONYMIZATION.md](USER_GUIDE_ANONYMIZATION.md) | De-identified DICOM export (PS3.15 Basic Profile): presets, options, what is recorded, limits |
-| [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode |
+| [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode, batch export |
 | [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Image fusion (PET/SPECT on CT/MR): options, accuracy, algorithms |
 
 ## General viewing (2D)
