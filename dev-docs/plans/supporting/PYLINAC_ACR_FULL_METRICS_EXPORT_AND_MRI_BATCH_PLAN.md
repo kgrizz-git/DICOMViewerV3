@@ -331,7 +331,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 ### Phase 3 — Batch CT CSV + export parity
 
 - [x] **(P3-C1)** Add **Export CSV…** to `ct_batch_result_dialog` → `export_ct_batch_csv` in facade. (owner: coder, after: P1-F3)
-- [ ] **(P3-C2)** Verify single-run CT/MRI save dialog CSV/XLSX pick up full flatten without UI change. (owner: tester, after: P1-F2, P2-X2)
+- [x] **(P3-C2)** Verify single-run CT/MRI save dialog CSV/XLSX pick up full flatten without UI change. (owner: tester, after: P1-F2, P2-X2) — **landed**: `QAAppFacade.export_qa_results` already routes `.csv` → `build_metrics_csv` (full flatten) and `.xlsx` → `build_qa_workbook` (Detail = `build_metric_rows`); no production change needed. Five tests in `tests/gui/test_qa_app_facade_export_slice.py` (`test_export_qa_results_csv_full_flatten_ct/mri`, `test_export_qa_results_xlsx_detail_full_flatten_ct/mri`, `test_export_qa_results_json_has_no_metrics_flat`) prove nested `raw_pylinac` dotted leaves survive the save-dialog path for both CT and MRI, curated-metrics overlay wins on a planted collision (`raw_pylinac.low_contrast_cnr` / `.low_contrast_score` vs metrics), and denylisted `analyzed_image_path`/`analyzed_module_images` paths never reach CSV or XLSX Detail (including when those keys live under `raw_pylinac`); JSON schema unchanged (no `metrics_flat` at any depth).
 
 ### Phase 4 — Multi-series MRI batch
 
