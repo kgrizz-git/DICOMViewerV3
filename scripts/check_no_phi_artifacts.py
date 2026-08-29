@@ -226,41 +226,6 @@ EXTENSIONLESS_EXEMPT = {
     ".gitignore",
 } | TEXT_CONFIG_FILENAMES
 
-# These DICOM attributes must never hold a real value in a tracked fixture,
-# including when nested in a sequence.  ``Dataset.iterall()`` visits sequence
-# items recursively.
-DICOM_IDENTIFIER_KEYWORDS = {
-    "AccessionNumber",
-    "InstitutionAddress",
-    "InstitutionName",
-    "IssuerOfPatientID",
-    "OperatorsName",
-    "OtherPatientIDs",
-    "OtherPatientNames",
-    "PatientAddress",
-    "PatientBirthDate",
-    "PatientBirthTime",
-    "PatientComments",
-    "PatientID",
-    "PatientName",
-    "PatientSex",
-    "PatientTelephoneNumbers",
-    "PerformingPhysicianName",
-    "ReferringPhysicianName",
-    "StationName",
-    "StudyID",
-}
-
-# Synthetic test fixtures that intentionally carry recognizable, non-identifying
-# placeholder identifiers. Each directory prefix maps to the exact literal values
-# permitted for it; any other populated identifier still fails the gate.
-SYNTHETIC_FIXTURE_IDENTIFIERS: dict[str, frozenset[str]] = {
-    "tests/fixtures/dicom_rdsr/": frozenset({"Synthetic^RDSR", "SYN-RDSR-001"}),
-    "tests/fixtures/dicom_nuclear/": frozenset(
-        {"Synthetic^NuclearFixture", "SYNTHETIC-NM-001"}
-    ),
-}
-
 
 class _Searcher(Protocol):
     def search(self, string: str, /) -> re.Match[str] | None: ...
@@ -287,7 +252,9 @@ CONTENT_RULES: list[tuple[_Searcher, str]] = [
         "authenticated URL",
     ),
     (
-        re.compile(r'"Patient(Name|ID|BirthDate)"\s*:\s*"(?!\s*")[^"]+'),
+        re.compile(
+            r'"Patient(Name|ID|BirthDate)"\s*:\s*"(?!\s*")(?P<patient_tag_value>[^"]+)"'
+        ),
         "populated DICOM patient tag",
     ),
     (re.compile(r"\b(?:dicom|pacs)://[^\s/]+", re.I), "DICOM/PACS endpoint"),
@@ -305,6 +272,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.privacy_checks.dicom_identifier_gate import (
+    DICOM_IDENTIFIER_KEYWORDS,
+    SYNTHETIC_FIXTURE_IDENTIFIERS,
+    is_exact_deidentified_dummy,
+    skip_populated_patient_tag_match,
+)
 from scripts.privacy_checks.names import (
     IDENTIFIER_CONTENT_PATTERN,
     NAME_CONTENT_PATTERN,
@@ -553,6 +526,10 @@ def _content_reasons(
         if (
             why == "internal hostname"
             and match.group().lower() in SAFE_INTERNAL_HOSTNAMES
+        ):
+            continue
+        if why == "populated DICOM patient tag" and skip_populated_patient_tag_match(
+            match
         ):
             continue
         reasons.append(why)
@@ -859,6 +836,8 @@ def _check_dicom_dataset(path: str, dataset: Any) -> list[str]:
             path.startswith(prefix) and value in allowed
             for prefix, allowed in SYNTHETIC_FIXTURE_IDENTIFIERS.items()
         )
+        if is_exact_deidentified_dummy(value):
+            continue
         if value and not synthetic_fixture:
             problems.append(
                 f"{path}: populated nested DICOM identifier {element.keyword}"

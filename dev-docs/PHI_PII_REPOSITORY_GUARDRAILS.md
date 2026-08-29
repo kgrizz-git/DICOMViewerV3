@@ -32,7 +32,8 @@ If a DICOM fixture must be **tracked** in git, export it first with
 **File → De-identify & Export DICOM (PS3.15)…** (do not retain institution or
 device identity), then run the artifact gate and the required human review
 before any hash-manifest update. De-identification is not a substitute for
-leaving real local phantoms gitignored.
+leaving raw local phantoms gitignored. The reviewed Standard-share ACR set is
+`sample-phantom-data-committed/deid-phantoms/` (pixel review 2026-08-29).
 
 ## What the blocking artifact gate covers
 
@@ -50,7 +51,7 @@ leaving real local phantoms gitignored.
 - Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, TeX, PostScript/EPS, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.
 - Reads XLSX/XLSM cells for the same indicators. XLSX/XLSM, Office/OpenDocument packages (`.docx`, `.docm`, `.pptx`, `.pptm`, `.odt`, `.ods`, `.odp`, and templates/slideshows), and Apple iWork packages (`.pages`, `.numbers`, `.key`) also require manual review because they can embed images and other opaque content.
 - Extracts text from every unencrypted PDF page and fails closed when a PDF cannot be read. PDFs, PostScript/EPS, and notebooks require hash-bound manual review because they can contain rendered or embedded images that text extraction cannot prove safe.
-- Recursively reads DICOM metadata, including sequence items, private tags, and station names; it recognizes a standard `DICM` preamble even when a filename has no DICOM extension.
+- Recursively reads DICOM metadata, including sequence items, private tags, and station names; it recognizes a standard `DICM` preamble even when a filename has no DICOM extension. The exact de-identification dummy ``ANONYMIZED`` (entire value, case-sensitive) is not treated as a populated identifier; any other non-empty identifier still fails. DICOM admission still requires the hash manifest and human review.
 - Inspects ZIP, TAR, GZip, BZip2, and XZ containers in memory, including nested containers up to a bounded depth. It scans text/PDF/Excel payloads and detects DICOM by extension or preamble inside them. Archives and document packages always require hash-bound manual review. Encrypted, malformed, oversized, deeply nested, and unsupported archive formats (currently 7z, RAR, and Zstandard) fail closed rather than being waived by the hash manifest.
 - Fails closed for extensionless assets and image formats: AVIF, BMP, GIF, HEIC, ICO, ICNS, JPEG, JPEG 2000, JXL, PNG, SVG, TIFF, and WebP.
 
