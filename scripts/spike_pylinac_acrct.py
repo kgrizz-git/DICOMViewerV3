@@ -4,8 +4,9 @@ Stage 1 pylinac spike script for ACR CT datasets.
 Usage:
     python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder"
     python scripts/spike_pylinac_acrct.py --folder "C:/path/to/acr_ct_folder" \\
-        --dump-json tmp/acr_ct_results_data.json
+        --dump-json ~/private-qa-dumps/acr_ct_results_data.json
 
+Dump path must be outside the source checkout (assert_safe_internal_path).
 Copy reviewed dumps into tests/fixtures/qa/ before commit (see tests/fixtures/qa/README.md).
 
 This script is intentionally minimal and runs outside the Qt app so dependency

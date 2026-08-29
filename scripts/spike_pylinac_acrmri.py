@@ -4,8 +4,9 @@ Stage 1 pylinac spike script for ACR MRI Large datasets.
 Usage:
     python scripts/spike_pylinac_acrmri.py --folder "/path/to/acr_mri_folder"
     python scripts/spike_pylinac_acrmri.py --folder "/path/to/acr_mri_folder" \\
-        --dump-json tmp/acr_mri_results_data.json
+        --dump-json ~/private-qa-dumps/acr_mri_results_data.json
 
+Dump path must be outside the source checkout (assert_safe_internal_path).
 Copy reviewed dumps into tests/fixtures/qa/ before commit (see tests/fixtures/qa/README.md).
 
 Runs outside the Qt app. Use ``--dump-json`` to emit a redacted ``results_data``

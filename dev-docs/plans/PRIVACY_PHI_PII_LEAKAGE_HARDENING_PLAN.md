@@ -1,6 +1,6 @@
 # Plan: Privacy, PHI/PII, and Leakage Hardening
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-08-28
 
 ## Disposition (2026-08-27)
 
@@ -20,8 +20,12 @@ GitHub commits and the local `old-main` archive are **not** on today's
 remains a **contingency** procedure only.
 
 **G5 / Phase 8:** No separate “secops” sign-off — review is **maintainer +
-agents**. Remaining plan checkboxes (sink-migration tail, PRIV-I4/I5 docs,
-PRIV-V5 consent manual smoke) are **P2 optional**; tracked in
+agents**. Automated G5 checks (pytest, links, harness, architecture, privacy)
+are **operational** via CI/hooks. **PRIV-V4** (spot-check note) and **PRIV-V5**
+(consent manual smoke) remain **P2 optional**. **PRIV-FINAL** is **parked** —
+do not archive this plan until the optional tail is closed or explicitly
+abandoned. Phase 7 docs/versioning (**PRIV-I4**, **PRIV-I5**) and the
+sink-migration tail are also **P2 optional**; tracked in
 [`TO_DO.md`](../TO_DO.md) under Validation / QA.
 
 ## Goal and success criteria
@@ -144,8 +148,16 @@ is not a passing security result.
 - P1 -> P5 scanner/review tooling.
 - P1 -> P6 runtime storage and consent; UI design may proceed after the storage
   inventory, but implementation shares config/settings paths and is sequential.
-- P2 + P3 + P4 + P5 + P6 -> P7 hooks/CI/docs integration (**mandatory lanes shipped**).
-- **P8 / remote-history (historical — closed):** G6 executed **2026-07-13** (snapshot reset on `origin/main`). Disposition **2026-08-27:** development continues on that lineage; no separate secops sign-off (maintainer + agents). Remaining Phase 8 checkboxes are **P2 optional** (see disposition above); [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](../REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md) is contingency only.
+- P2 + P3 + P4 + P5 + P6 -> P7 hooks/CI/docs integration: **PRIV-I1–I3 shipped**
+  (hooks/CI); **PRIV-I4 / PRIV-I5** remain open as **P2 optional** docs/versioning
+  (see disposition).
+- **P8 / remote-history (historical — closed):** G6 executed **2026-07-13**
+  (snapshot reset on `origin/main`). Disposition **2026-08-27:** development
+  continues on that lineage; no separate secops sign-off (maintainer + agents).
+  Phase 8 split: **PRIV-V1–V3** satisfied by CI; **PRIV-V4 / PRIV-V5** are
+  **P2 optional**; **PRIV-FINAL** is **parked** (not optional closure — archive
+  only after tail closed or abandoned). Contingency:
+  [`REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md`](../REPOSITORY_RECREATION_PRIVACY_RUNBOOK.md).
 
 ### Verification gates
 
@@ -158,9 +170,10 @@ is not a passing security result.
    checkers never echo matched values.
 5. **G4 — Product-storage gate:** reviewer + UX/manual smoke approve consent,
    disclosure, retention, and clear controls.
-6. **G5 — Final verification gate:** full pytest, link/harness/architecture/privacy
-   checks, and maintainer/agent alignment. **Operational** via routine CI and
-   hooks (2026-08+).
+6. **G5 — Final verification gate:** automated suite — full pytest, link/harness/
+   architecture/privacy checks — is **operational** via routine CI and hooks
+   (2026-08+). Maintainer/agent plan-checkbox alignment is **PRIV-V4** (**P2
+   optional**), not part of the automated G5 claim.
 7. **G6 — Remote gate (historical):** retain / rewrite / recreate decision for
    early private-remote history. **Superseded 2026-08-27** — repo continued on
    `main`; recreation runbook is contingency-only.
@@ -400,10 +413,11 @@ cases passed. Gate closed with explicit non-independent review provenance.
   CLI docs, user storage/privacy docs, and maintenance history. Define exact
   conditions under which agents run each scanner and where protected reports
   may be written. (owner: docwriter, parallel-safe: no, stream: PR-G,
-  after: PRIV-U5)
+  after: PRIV-U5) — **P2 optional** (docs polish; hooks/CI already live)
 - [ ] **(PRIV-I5)** Update CHANGELOG/version only for shipped user-facing
   consent/storage behavior according to release policy. (owner: orchestrator,
-  parallel-safe: no, stream: PR-G, after: PRIV-I4)
+  parallel-safe: no, stream: PR-G, after: PRIV-I4) — **P2 optional** (release
+  note when next user-facing privacy change ships)
 
 ### Phase 8 — Verification and optional closure
 
@@ -422,7 +436,9 @@ cases passed. Gate closed with explicit non-independent review provenance.
   and protected diagnostic logging. (owner: maintainer, parallel-safe: no,
   stream: PR-G, after: PRIV-V3) — **P2 optional**; defer with other manual smokes
 - [ ] **(PRIV-FINAL)** Archive this plan to `completed/` only if the tail
-  checkboxes are closed or explicitly parked. (owner: maintainer, after: PRIV-V5)
+  checkboxes are closed or explicitly abandoned. **Parked** — not an optional
+  skip; keep the plan in `plans/` until that decision. (owner: maintainer,
+  after: PRIV-V5)
 
 ## Modularity and file-size guardrails
 

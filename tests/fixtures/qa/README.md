@@ -16,17 +16,16 @@ metrics only.
 ## Maintainer workflow
 
 1. Place ACR phantom DICOM under a **gitignored** folder (e.g. `test-DICOM-data/`).
-2. From repo root (venv activated), write dumps to a **private path** (not straight into this
-   tracked folder):
+2. From repo root (venv activated), write dumps to a path **outside the source
+   checkout** (`assert_safe_internal_path` rejects in-repo targets, including
+   gitignored `tmp/`):
 
    ```bash
    python scripts/spike_pylinac_acrct.py --folder test-DICOM-data/<acr-ct> \
-     --dump-json tmp/acr_ct_results_data.json
+     --dump-json ~/private-qa-dumps/acr_ct_results_data.json
    python scripts/spike_pylinac_acrmri.py --folder test-DICOM-data/<acr-mri> \
-     --dump-json tmp/acr_mri_results_data.json
+     --dump-json ~/private-qa-dumps/acr_mri_results_data.json
    ```
-
-   (`tmp/` is gitignored; any path outside the checkout is fine.)
 
 3. Review JSON for absolute paths (should be `<redacted-path>` only).
 4. Copy the reviewed files into `tests/fixtures/qa/` and commit (staged artifact gate required).
