@@ -8,7 +8,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ### Added
 - **ACR MRI batch results dialog + export (P4-M4):** The ACR MRI Batch summary dialog now shows **one row per series** (label, status, low-contrast score, warnings) with **Export CSV…** (full flatten, one wide row per series), **Export XLSX…** (one workbook reusing ``build_qa_workbook`` — Summary/Detail/Images sheets, the last embedding per-module PNGs per OQ-9 while temp dirs live), and **Export JSON…** (a JSON array of per-run documents, ``schema_version`` 1.1). Buttons are wired from ``gui.qa_mri_batch_flow`` (not the facade); temp-dir cleanup on dialog destroy is unchanged. **Semantic versioning note: minor.**
-- **ACR MRI batch analysis (P4-M3):** New **Tools → Automated QA → ACR MRI Batch (pylinac)…** runs one shared MRI options set over **multiple selected MR series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); a minimal non-modal summary shows one label + success/fail per series. ``compare_request`` from the MRI options dialog is ignored in batch (OQ-7). Export buttons land in P4-M4. **Semantic versioning note: minor.**
+- **ACR MRI batch analysis (P4-M3):** New **Tools → Automated QA → ACR MRI Batch (pylinac)…** runs one shared MRI options set over **multiple selected MR series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); a minimal non-modal summary shows one label + success/fail per series. Compare is hidden on the shared MRI options dialog (OQ-7). Export buttons land in P4-M4. **Semantic versioning note: minor.**
 - **ACR MRI batch series selection (P4-M2):** Added
   `acr_mri_series_selection_dialog` with `prompt_mri_batch_series_selection`
   (loaded MR series checkbox list + "Add folder...", returns parallel
@@ -43,6 +43,13 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: minor.**
 
 ### Fixed
+- **MRI batch now confirms slice-geometry preflight:** After shared MRI
+  options, the batch flow runs the same folder-input / IPP–IOP checks as
+  single-run MRI, shows one Yes/No dialog (default No) with series-label
+  prefixes, and attaches the unprefixed warnings to each ``QARequest``
+  so the batch summary and exports do not repeat the label. Declining
+  the dialog cancels the batch.
+  **Semantic versioning note: patch.**
 - **MRI batch JSON export now appends ``.json``:** ``save_mri_batch_json`` now
   matches XLSX/CSV path normalization — a selected path with no ``.json``
   suffix gets one appended; an explicit ``.json`` is left unchanged.
@@ -67,6 +74,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch.**
 
 ### Changed
+- **MRI batch options hide compare (OQ-7):** The batch path now opens
+  ``prompt_acr_mri_options(..., allow_compare=False)`` so the compare
+  group is hidden instead of being accepted and dropped. Single-run MRI
+  still shows compare. ``get_options()`` keeps the 10-tuple shape.
+  **Semantic versioning note: patch.**
 - **ACR QA XLSX Images sheet multi-module embed (P2-X3):** The XLSX
   Images sheet now embeds per-module PNGs from
   ``QAResult.analyzed_module_images`` (module label → absolute path), in

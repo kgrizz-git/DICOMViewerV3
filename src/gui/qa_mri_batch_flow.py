@@ -4,10 +4,11 @@ Multi-series ACR MRI Large (pylinac) batch flow — menu entry to summary.
 Mirrors the CT batch flow in ``open_acr_ct_batch_analysis`` /
 ``start_ct_batch_worker`` but for MRI: series selection
 (``prompt_mri_batch_series_selection``) → shared MRI options
-(``prompt_acr_mri_options``) → ``stamp_mri_batch_options`` (drops compare) →
-``QAMRIBatchWorker`` → N-of-M progress → cancel calls ``worker.cancel()`` →
-minimal non-modal summary (labels + success/fail) that keeps temp dirs alive
-until destroy.
+(``prompt_acr_mri_options`` with compare hidden, OQ-7) →
+``stamp_mri_batch_options`` → slice/folder preflight (same helpers as
+single-run MRI, one Yes/No confirm) → ``QAMRIBatchWorker`` → N-of-M
+progress → cancel calls ``worker.cancel()`` → minimal non-modal summary
+(labels + success/fail) that keeps temp dirs alive until destroy.
 
 This module is the public entry called by ``dialog_actions`` so
 ``QAAppFacade`` does **not** grow past its grandfathered line cap. The facade
@@ -29,10 +30,11 @@ Requirements:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QProgressDialog
+from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
 from gui.dialogs.acr_mri_qa_dialog import prompt_acr_mri_options
 from gui.dialogs.acr_mri_series_selection_dialog import (
@@ -45,9 +47,16 @@ from gui.qa_mri_batch_export import (
     save_mri_batch_json,
     save_mri_batch_xlsx,
 )
-from qa.analysis_types import ACRMBatchResult
+from qa.analysis_types import ACRMBatchResult, QARequest
+from qa.preflight import collect_slice_position_warnings
 from qa.worker import QAMRIBatchWorker
 from version import __version__ as APP_VERSION
+
+# Same folder-input text as ``QAAppFacade.build_preflight_warnings``.
+_FOLDER_GEOMETRY_WARNING = (
+    "Slice geometry was not verified from DICOM tags (folder input). "
+    "Ensure axial stack order matches what pylinac expects."
+)
 
 
 def open_acr_mri_batch_analysis(app: Any) -> None:
@@ -59,9 +68,10 @@ def open_acr_mri_batch_analysis(app: Any) -> None:
     then runs ``QAMRIBatchWorker`` and shows a minimal batch summary. No
     per-series modal -- all failures are collected into the final dialog.
 
-    ``compare_request`` from ``prompt_acr_mri_options`` is **ignored** (OQ-7:
-    no compare in batch). The single-run MRI options dialog still offers
-    compare; the batch path drops it.
+    Compare is hidden in the batch options dialog (OQ-7: no compare in
+    batch). After stamp, the same slice-geometry / folder preflight as
+    single-run MRI runs once for the whole selection; cancel returns
+    without starting the worker.
     """
     selection = prompt_mri_batch_series_selection(
         app.main_window,
@@ -86,6 +96,7 @@ def open_acr_mri_batch_analysis(app: Any) -> None:
         low_contrast_visibility_sanity_multiplier=lc_sanity_default,
         vanilla_pylinac_default=vanilla_def,
         embed_module_images_default=embed_def,
+        allow_compare=False,
     )
     if mri_opts is None:
         return
@@ -109,8 +120,84 @@ def open_acr_mri_batch_analysis(app: Any) -> None:
         low_contrast_visibility_threshold=float(lc_vis),
         low_contrast_visibility_sanity_multiplier=float(lc_sanity),
     )
+    combined, per_request = collect_mri_batch_preflight_warnings(
+        app.dicom_organizer, stamped, labels
+    )
+    if not user_confirms_mri_batch_preflight(app.main_window, combined):
+        return
+    stamped = [
+        replace(req, preflight_warnings=list(warns))
+        for req, warns in zip(stamped, per_request, strict=True)
+    ]
 
     _start_acr_mri_series_batch_worker(app, stamped, labels)
+
+
+def _lookup_series_datasets(organizer: Any, request: QARequest) -> list[Any]:
+    """Return in-memory datasets for a loaded series, or ``[]`` if unknown."""
+    studies = getattr(organizer, "studies", None)
+    if not isinstance(studies, dict):
+        return []
+    series_map = studies.get(request.study_uid, {})
+    if not isinstance(series_map, dict):
+        return []
+    datasets = series_map.get(request.series_uid, [])
+    if not isinstance(datasets, list):
+        return []
+    return list(datasets)
+
+
+def collect_mri_batch_preflight_warnings(
+    organizer: Any,
+    requests: list[QARequest],
+    labels: list[str],
+) -> tuple[list[str], list[list[str]]]:
+    """
+    Build per-request preflight strings plus a flattened confirm-dialog list.
+
+    Folder rows get the same unverified-geometry text as single-run MRI.
+    Loaded series run ``collect_slice_position_warnings`` on organizer
+    datasets looked up by ``(study_uid, series_uid)``. The confirm dialog
+    prefixes each line with the series label; stored ``preflight_warnings``
+    stay unprefixed because the batch summary/exports already scope by label.
+    """
+    per_request: list[list[str]] = []
+    combined: list[str] = []
+    for req, label in zip(requests, labels, strict=True):
+        raw: list[str] = []
+        if req.folder_path:
+            raw.append(_FOLDER_GEOMETRY_WARNING)
+        else:
+            datasets = _lookup_series_datasets(organizer, req)
+            if datasets:
+                raw.extend(collect_slice_position_warnings(datasets))
+        per_request.append(list(raw))
+        combined.extend(f"{label}: {warning}" for warning in raw)
+    return combined, per_request
+
+
+def user_confirms_mri_batch_preflight(parent: Any, warnings: list[str]) -> bool:
+    """
+    If warnings exist, show them and return True only if the user continues.
+
+    Matches ``QAAppFacade.user_confirms_preflight`` (Yes/No, default No).
+    """
+    if not warnings:
+        return True
+    text = "Preflight warnings:\n\n- " + "\n- ".join(warnings)
+    text += "\n\nContinue with analysis?"
+    box = QMessageBox(parent)
+    box.setWindowTitle("QA preflight")
+    box.setText(text)
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setStandardButtons(
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    )
+    box.setDefaultButton(QMessageBox.StandardButton.No)
+    box.setWindowFlags(box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+    box.activateWindow()
+    box.raise_()
+    return box.exec() == int(QMessageBox.StandardButton.Yes)
 
 
 def _start_acr_mri_series_batch_worker(

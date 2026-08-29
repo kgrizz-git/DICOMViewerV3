@@ -117,6 +117,20 @@ def test_acr_mri_dialog_compare_mode_yields_mri_compare_request(qapp) -> None:
     assert {c.label for c in compare_req.run_configs} == {"Run 1", "Run 2", "Run 3"}
 
 
+@pytest.mark.qt
+def test_acr_mri_dialog_hides_compare_when_disallowed(qapp) -> None:
+    """OQ-7: batch options hide compare and always return compare_request=None."""
+    from gui.dialogs.acr_mri_qa_dialog import AcrMrIQaOptionsDialog
+
+    dlg = AcrMrIQaOptionsDialog(None, allow_compare=False)
+    assert dlg._compare_group.isHidden()
+    dlg._compare_group.setChecked(True)
+    for row in dlg._compare_rows:
+        row.enable_check.setChecked(True)
+    *_, compare_req, _vanilla, _embed = dlg.get_options()
+    assert compare_req is None
+
+
 def test_single_run_qa_json_schema_1_1_key_set() -> None:
     """Regression: documented single-run export keys remain stable (schema 1.1)."""
     expected_top = {
