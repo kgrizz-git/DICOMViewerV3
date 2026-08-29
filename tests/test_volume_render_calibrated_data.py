@@ -456,6 +456,39 @@ def test_calibrate_preflight_catches_bad_slice_before_any_mutation() -> None:
     np.testing.assert_allclose(vd.array, raw_values)
 
 
+def test_calibrate_applies_tiny_nonzero_rescale_slope() -> None:
+    """Exact-zero policy: a tiny-but-nonzero RescaleSlope still calibrates.
+
+    Pins that only exact ``0.0`` is rejected — prevents silent epsilon creep
+    in ``is_usable_rescale_slope``.
+    """
+    study_uid = generate_uid()
+    series_uid = generate_uid()
+    tiny_slope = 1e-12
+    datasets = [
+        _make_ct_dataset(
+            np.full((2, 2), 500, dtype=np.uint16),
+            z=float(i),
+            slope=tiny_slope,
+            intercept=0.0,
+            instance_number=i + 1,
+            study_uid=study_uid,
+            series_uid=series_uid,
+        )
+        for i in range(3)
+    ]
+    volume = MprVolume.from_datasets(datasets)
+    raw_values = sitk.GetArrayFromImage(volume.sitk_image).astype(np.float32)
+
+    vd = VolumeRenderer.prepare_volume_data(
+        volume.sitk_image,
+        source_datasets=volume.source_datasets,
+        apply_rescale=True,
+    )
+    assert vd.rescale_applied is True
+    np.testing.assert_allclose(vd.array, raw_values * np.float32(tiny_slope))
+
+
 def test_calibrate_values_bit_identical_to_legacy_copy_path() -> None:
     """In-place calibration must produce bit-identical values to the old copy path.
 

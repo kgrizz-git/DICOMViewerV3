@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.dicom_rescale import is_usable_rescale_slope
+
 
 def _is_dataset_monochrome1(dataset: Any) -> bool:
     """Return True if the dataset has PhotometricInterpretation == MONOCHROME1."""
@@ -52,17 +54,12 @@ def apply_window_level_preset(app: Any, preset_index: int) -> None:
     rescale_intercept = vsm.rescale_intercept
 
     if is_rescaled and not use_rescaled_values:
-        if (
-            rescale_slope is not None
-            and rescale_intercept is not None
-            # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-            and rescale_slope != 0.0  # NOSONAR(S1244)
-        ):
+        if is_usable_rescale_slope(rescale_slope) and rescale_intercept is not None:
             wc, ww = app.dicom_processor.convert_window_level_rescaled_to_raw(
                 wc, ww, rescale_slope, rescale_intercept
             )
     elif not is_rescaled and use_rescaled_values:
-        if rescale_slope is not None and rescale_intercept is not None:
+        if is_usable_rescale_slope(rescale_slope) and rescale_intercept is not None:
             wc, ww = app.dicom_processor.convert_window_level_raw_to_rescaled(
                 wc, ww, rescale_slope, rescale_intercept
             )

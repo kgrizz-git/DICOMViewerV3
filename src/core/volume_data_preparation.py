@@ -159,16 +159,20 @@ def _calibrate_volume_array(
         f"_calibrate_volume_array requires float32; got {arr.dtype}"
     )
 
-    from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
+    from core.dicom_rescale import (
+        get_rescale_parameters,
+        infer_rescale_type,
+        is_usable_rescale_slope,
+    )
 
     f32_max = float(np.finfo(np.float32).max)
     params: list[tuple[float, float, str | None]] = []
     units: set[str] = set()
     for z_index, dataset in enumerate(source_datasets):
         slope, intercept, rescale_type = get_rescale_parameters(dataset)
-        if slope is None or intercept is None:
+        if intercept is None or not np.isfinite(intercept):
             return arr, False, None
-        if not np.isfinite(slope) or not np.isfinite(intercept) or slope == 0.0:
+        if not is_usable_rescale_slope(slope):
             return arr, False, None
 
         scalar_units = infer_rescale_type(dataset, slope, intercept, rescale_type)

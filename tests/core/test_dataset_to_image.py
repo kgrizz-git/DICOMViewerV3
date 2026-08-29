@@ -487,6 +487,33 @@ def test_resolve_window_level_and_rescale_shape_b_apply_rescale_false_no_leak_no
     assert (wc, ww) == (1064, 400)
 
 
+def test_resolve_window_level_and_rescale_apply_true_requires_usable_pair() -> None:
+    """apply_rescale=True must not emit a partial (slope, None) or zero-slope pair."""
+    ds_no_intercept = _make_grayscale_dataset(
+        [[864, 964, 1064]], rescale_slope=1.0, rescale_intercept=None
+    )
+    _wc, _ww, slope, intercept = resolve_window_level_and_rescale(
+        ds_no_intercept, window_center=40, window_width=400, apply_rescale=True
+    )
+    assert (slope, intercept) == (None, None)
+
+    ds_zero_slope = _make_grayscale_dataset(
+        [[864, 964, 1064]], rescale_slope=0.0, rescale_intercept=-1024.0
+    )
+    _wc, _ww, slope, intercept = resolve_window_level_and_rescale(
+        ds_zero_slope, window_center=40, window_width=400, apply_rescale=True
+    )
+    assert (slope, intercept) == (None, None)
+
+    ds_ok = _make_grayscale_dataset(
+        [[864, 964, 1064]], rescale_slope=1.0, rescale_intercept=-1024.0
+    )
+    _wc, _ww, slope, intercept = resolve_window_level_and_rescale(
+        ds_ok, window_center=40, window_width=400, apply_rescale=True
+    )
+    assert (slope, intercept) == (1.0, -1024.0)
+
+
 # ---------------------------------------------------------------------------
 # 13. Regression matrix over the two real call-site kwarg shapes
 # ---------------------------------------------------------------------------

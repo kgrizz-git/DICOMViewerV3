@@ -12,6 +12,7 @@ from core.dicom_rescale import (
     _normalize_explicit_rescale_type,
     get_rescale_parameters,
     infer_rescale_type,
+    is_usable_rescale_slope,
 )
 
 
@@ -192,6 +193,31 @@ class TestGetRescaleParameters(unittest.TestCase):
                 raise RuntimeError("unreadable tag")
 
         self.assertEqual(get_rescale_parameters(ExplodingDataset()), (None, None, None))
+
+
+class TestIsUsableRescaleSlope(unittest.TestCase):
+    """Exact-zero RescaleSlope policy for linear pixel transforms."""
+
+    def test_none_is_unusable(self):
+        assert is_usable_rescale_slope(None) is False
+
+    def test_nan_is_unusable(self):
+        assert is_usable_rescale_slope(float("nan")) is False
+
+    def test_inf_is_unusable(self):
+        assert is_usable_rescale_slope(float("inf")) is False
+        assert is_usable_rescale_slope(float("-inf")) is False
+
+    def test_exact_zero_is_unusable(self):
+        assert is_usable_rescale_slope(0.0) is False
+        assert is_usable_rescale_slope(-0.0) is False
+
+    def test_tiny_nonzero_is_usable(self):
+        assert is_usable_rescale_slope(1e-12) is True
+
+    def test_typical_slope_is_usable(self):
+        assert is_usable_rescale_slope(1.0) is True
+        assert is_usable_rescale_slope(-1.0) is True
 
 
 if __name__ == "__main__":
