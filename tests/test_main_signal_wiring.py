@@ -70,6 +70,7 @@ class MainWindowStub(QObject):
     acr_ct_phantom_requested = Signal()
     acr_ct_batch_requested = Signal()
     acr_mri_phantom_requested = Signal()
+    acr_mri_batch_requested = Signal()
     nuclear_qc_requested = Signal()
     deep_anonymizer_export_requested = Signal()
     export_screenshots_requested = Signal()
@@ -235,6 +236,7 @@ def _build_dialog_app():
         _open_acr_ct_phantom_analysis = lambda self: None  # noqa: E731
         _open_acr_ct_batch_analysis = lambda self: None  # noqa: E731
         _open_acr_mri_phantom_analysis = lambda self: None  # noqa: E731
+        _open_acr_mri_batch_analysis = lambda self: None  # noqa: E731
         _open_nuclear_qc_analysis = lambda self: None  # noqa: E731
         _open_deep_anonymizer_export = lambda self: None  # noqa: E731
         _open_export_screenshots = lambda self: None  # noqa: E731

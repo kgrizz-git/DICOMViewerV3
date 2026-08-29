@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt
 
 import gui.qa_mri_batch_flow as flow_mod
 from gui.qa_mri_batch_flow import (
+    _show_acr_mri_batch_summary,
     _start_acr_mri_series_batch_worker,
     open_acr_mri_batch_analysis,
 )
@@ -303,6 +304,45 @@ def test_empty_batch_cleans_temps_immediately(qapp, monkeypatch) -> None:
     # Empty batch → worker.image_temp_dir.cleanup() called immediately.
     assert worker.image_temp_dir.cleanup.called
     assert worker.module_images_temp_dir.cleanup.called
+
+
+def test_deferred_destroy_keeps_replacement_dialog(qapp, monkeypatch) -> None:
+    """WA_DeleteOnClose of the prior dialog must not clear a replacement slot."""
+    app = _make_app()
+    created: list[MagicMock] = []
+
+    def fake_create(*_args, **_kwargs):
+        dlg = MagicMock()
+        created.append(dlg)
+        return dlg
+
+    monkeypatch.setattr(flow_mod, "create_mri_batch_result_dialog", fake_create)
+
+    worker_a = _Worker([], [])
+    worker_b = _Worker([], [])
+    batch = ACRMBatchResult(
+        run_results=[QAResult(success=True, analysis_type="acr_mri_large")],
+        run_labels=["S0"],
+    )
+    _show_acr_mri_batch_summary(app, worker_a, batch)
+    dialog_a = created[0]
+    assert app._mri_batch_result_dialog is dialog_a
+    on_destroy_a = dialog_a.destroyed.connect.call_args[0][0]
+
+    _show_acr_mri_batch_summary(app, worker_b, batch)
+    dialog_a.close.assert_called_once()
+    dialog_b = created[1]
+    assert app._mri_batch_result_dialog is dialog_b
+    on_destroy_b = dialog_b.destroyed.connect.call_args[0][0]
+
+    on_destroy_a()
+    assert app._mri_batch_result_dialog is dialog_b
+    worker_a.image_temp_dir.cleanup.assert_called()
+    worker_b.image_temp_dir.cleanup.assert_not_called()
+
+    on_destroy_b()
+    assert app._mri_batch_result_dialog is None
+    worker_b.image_temp_dir.cleanup.assert_called()
 
 
 def test_dialog_actions_entry_calls_flow() -> None:

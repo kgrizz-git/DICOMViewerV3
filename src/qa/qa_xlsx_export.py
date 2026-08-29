@@ -54,14 +54,16 @@ _SUMMARY_HEADERS = (
     "MTF@50% Col",
     "Slice Thickness (mm)",
     "Slice Shift (mm)",
+    "MRI SNR",
 )
 
 # Modality-aware Summary columns pulled from the canonical flatten rows
 # (``build_metric_rows``). Each entry is a human header paired with the exact
 # flatten key; a column stays blank when its key is absent for a run (CT rows
 # leave the MRI-only fields blank and vice versa — shared header, best-effort
-# fill). Locked gaps (CT slice thickness, CT SNR, ``mri_snr``) are intentionally
-# excluded; ``mri_snr`` lands with Phase 6.
+# fill). Locked gaps (CT slice thickness, CT SNR) are intentionally excluded.
+# ``MRI SNR`` is reserved at the end of the header; values stay blank until
+# Phase 6 harvests ``mri_snr``.
 _SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("PIU (%)", "uniformity_module.piu"),
     ("PSG", "uniformity_module.psg"),
@@ -70,6 +72,7 @@ _SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("MTF@50% Col", "slice1.col_mtf_50"),
     ("Slice Thickness (mm)", "slice1.measured_slice_thickness_mm"),
     ("Slice Shift (mm)", "slice1.slice_shift_mm"),
+    ("MRI SNR", "mri_snr"),
 )
 
 
@@ -118,8 +121,9 @@ def _summary_extra_values(result: QAResult) -> list[Any]:
     Reads ``build_metric_rows(result)`` once and looks up each key in
     ``_SUMMARY_KEY_COLUMNS``; missing keys degrade to a blank cell. Numeric
     scalars (PIU, PSG, MTF, thickness, shift, LC score) stay numbers so the
-    Summary sheet stays sortable/filterable — only the caller neutralizes the
-    string cells (Series/Run, status, warnings).
+    Summary sheet stays sortable/filterable. The caller applies ``_xlsx_cell``
+    to every extra value so formula-like mapped strings are stored as
+    neutralized text; numeric scalars pass through unchanged.
     """
     flat = dict(build_metric_rows(result))
     return [flat.get(key) for _, key in _SUMMARY_KEY_COLUMNS]
@@ -133,7 +137,7 @@ def _build_summary_sheet(
         obj_mean, bg_mean, bg_std, cnr = _cnr_summary_values(result)
         status = "success" if result.success else "failed"
         warnings_text = "; ".join(result.warnings or [])
-        extra = _summary_extra_values(result)
+        extra = [_xlsx_cell(value) for value in _summary_extra_values(result)]
         ws.append(
             [
                 _xlsx_cell(_row_label(result, label)),
@@ -307,11 +311,12 @@ def build_qa_workbook(
         Summary -- one row per run: Series/Run ID, object ROI mean,
             background mean/std, CNR, status, warnings, then modality-aware
             key columns pulled from the canonical flatten (PIU, PSG, LC score,
-            MTF@50% row/col, slice thickness/shift). Each extra column is
-            best-effort: it stays blank when its flatten key is absent for the
-            run, so CT and MRI rows share one header with blanks where a metric
-            does not apply (CT slice thickness, CT SNR, and ``mri_snr`` are
-            excluded by design).
+            MTF@50% row/col, slice thickness/shift, reserved MRI SNR). Each extra
+            column is best-effort: it stays blank when its flatten key is absent
+            for the run, so CT and MRI rows share one header with blanks where a
+            metric does not apply (CT slice thickness and CT SNR are excluded by
+            design; ``MRI SNR`` is present but blank until Phase 6 harvests
+            ``mri_snr``). Extra mapped values pass through ``_xlsx_cell``.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- per-module embedded PNGs from ``analyzed_module_images``
             (stable key sort), each preceded by its module label, stacked
