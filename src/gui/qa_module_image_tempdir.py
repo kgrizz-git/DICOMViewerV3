@@ -70,3 +70,19 @@ def assign_module_images_out_dir(
     temp_dir = tempfile.TemporaryDirectory(prefix="qa-mri-module-images-")
     request.module_images_out_dir = temp_dir.name
     return temp_dir.cleanup
+
+
+def cleanup_batch_worker_temp_dirs(worker: object) -> None:
+    """
+    Release a CT/MRI batch worker's image dir and optional module-image dir.
+
+    ``module_images_temp_dir`` is ``None`` when embed is off. Bind it to a
+    local before calling ``cleanup`` so the optional type narrows (basedpyright
+    does not narrow ``getattr(...) is not None`` on a later attribute access).
+    """
+    image_dir = getattr(worker, "image_temp_dir", None)
+    if image_dir is not None:
+        image_dir.cleanup()
+    module_dir = getattr(worker, "module_images_temp_dir", None)
+    if module_dir is not None:
+        module_dir.cleanup()
