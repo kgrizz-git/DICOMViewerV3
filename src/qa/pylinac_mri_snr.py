@@ -46,7 +46,9 @@ _ALTERNATE_GHOST_PAIR: dict[tuple[str, str], tuple[str, str]] = {
 
 def _as_float(value: object) -> float | None:
     """Coerce a ROI statistic to float; None on missing/non-numeric."""
-    if value is None:
+    if value is None or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float, str)):
         return None
     try:
         number = float(value)
