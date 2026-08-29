@@ -109,6 +109,37 @@ def redact_results_dump(value: Any) -> Any:
     return redact_paths_in_value(drop_sensitive_dump_keys(value))
 
 
+def analyze_folder_with_extent_retry(
+    analyzer_cls: type,
+    folder: Path,
+    *,
+    check_uid: bool = False,
+    analyze_kwargs: dict[str, Any] | None = None,
+    tolerances_mm: tuple[float, ...] = (0.0, 1.0, 2.0),
+) -> Any:
+    """
+    Construct a viewer ACR analyzer and ``analyze()`` with scan-extent retries.
+
+    Pylinac ACR classes take the folder path in ``__init__`` (there is no
+    ``from_folder``). Tracked T1 axials need the same ~1 mm extent retry the
+    viewer offers; strict z-extent often fails first.
+    """
+    kwargs = dict(analyze_kwargs or {})
+    last_error: BaseException | None = None
+    for tol in tolerances_mm:
+        analyzer = analyzer_cls(str(folder), check_uid=check_uid)
+        analyzer._scan_extent_tolerance_mm = float(tol)
+        try:
+            analyzer.analyze(**kwargs)
+        except ValueError as exc:
+            last_error = exc
+            continue
+        return analyzer
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("analyze failed")
+
+
 def results_data_as_dict(analyzer: Any) -> dict[str, Any]:
     """Return ``results_data(as_dict=True)`` as a plain dict."""
     data = analyzer.results_data(as_dict=True)

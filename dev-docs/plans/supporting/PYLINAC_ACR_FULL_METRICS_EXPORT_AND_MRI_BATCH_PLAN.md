@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
 **Last updated:** 2026-08-29
-**Status:** Active — **Phases 1–6 shipped** (flatten, XLSX, CT batch CSV, MRI batch, docs/strings, viewer-computed MRI SNR + highest-echo default); remaining: archive after PRs (P5-D5), golden `results_data` dumps (R0-1/R0-2/R0-9, P1-F4)
+**Status:** Active — **Phases 1–6 shipped**; golden `results_data` dumps landed 2026-08-29 (R0-1/R0-2/R0-9, P1-F4). Remaining: **P0-GATE** reviewer sign-off, archive after two PRs (**P5-D5**)
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -67,12 +67,12 @@ Extract when present; omit column/row when module failed or pylinac version omit
 
 | Family | Examples (non-exhaustive) | Primary source | Confidence |
 |--------|---------------------------|----------------|------------|
-| HU linearity / materials | Per-material HU, ROI distances/radii, measured vs expected | `raw_pylinac.ct_module` (rois per material) + live ROIs if needed | Verify R0-1 |
-| Slice thickness | Measured thickness, ramp metrics | **No such module in pylinac 3.43.2 `ACRCT`** — result model has only `ct_module`, `uniformity_module`, `low_contrast_module`, `spatial_resolution_module` | **Absent (CT)** — omit unless R0-1 proves otherwise |
-| Slice position / geometry | Phantom roll, origin slice, image count | top-level `phantom_roll_deg`, `origin_slice`, `num_images` (no separate geometry module on CT) | Verify R0-1 |
-| Uniformity | Integral/differential uniformity, ROI stats | `uniformity_module` | Verify R0-1 |
-| Low contrast | CNR, object/background means & σ (existing F1) | `metrics.low_contrast_cnr` + `low_contrast_module` | Shipped F1 + R0-1 |
-| Spatial resolution / MTF | MTF at rMTF %, lp/mm, relative resolution grid | `spatial_resolution_module` | Verify R0-1 |
+| HU linearity / materials | Per-material HU, ROI distances/radii, measured vs expected | `raw_pylinac.ct_module` (rois per material) + live ROIs if needed | **Confirmed** 2026-08-29 dump |
+| Slice thickness | Measured thickness, ramp metrics | **No such module in pylinac 3.43.2 `ACRCT`** — result model has only `ct_module`, `uniformity_module`, `low_contrast_module`, `spatial_resolution_module` | **Absent (CT)** — omitted on dump |
+| Slice position / geometry | Phantom roll, origin slice, image count | top-level `phantom_roll_deg`, `origin_slice`, `num_images` (no separate geometry module on CT) | **Confirmed** 2026-08-29 dump |
+| Uniformity | Integral/differential uniformity, ROI stats | `uniformity_module` | **Confirmed** 2026-08-29 dump |
+| Low contrast | CNR, object/background means & σ (existing F1) | `metrics.low_contrast_cnr` + `low_contrast_module` | Shipped F1 + dump (`low_contrast_module.cnr`) |
+| Spatial resolution / MTF | MTF at rMTF %, lp/mm, relative resolution grid | `spatial_resolution_module` | **Confirmed** 2026-08-29 dump |
 | SNR | Module SNR if exposed | — | **Absent (CT)** — no SNR field in pylinac 3.43.2 `acr.py` results |
 | PSG (percent signal ghosting) | Ghosting ratio | N/A for CT phantom | **Expected absent (CT)** |
 
@@ -80,13 +80,13 @@ Extract when present; omit column/row when module failed or pylinac version omit
 
 | Family | Examples | Primary source | Confidence |
 |--------|----------|----------------|------------|
-| Geometric / slice | Slice thickness/position, phantom roll | `raw_pylinac` `slice1` / `slice11` / `geometric_distortion_module` | Verify R0-2 |
-| Uniformity | PIU, uniformity ROI stats | `uniformity_module` (incl. `piu`) | Verify R0-2 |
+| Geometric / slice | Slice thickness/position, phantom roll | `raw_pylinac` `slice1` / `slice11` / `geometric_distortion_module` | **Confirmed** 2026-08-29 T1 dump |
+| Uniformity | PIU, uniformity ROI stats | `uniformity_module` (incl. `piu`) | **Confirmed** 2026-08-29 dump |
 | SNR | SNR (viewer-computed) | — | **Absent in pylinac** — **Phase 6** viewer harvest; see [ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](../../info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md) |
-| PSG | Percent signal ghosting | `uniformity_module.psg` / `ghosting_ratio` (dict-present in 3.43.2) | Verify R0-2 |
-| Low contrast | Score, detectability, per-slice LC metrics | `low_contrast_multi_slice_module`, existing `_extract_lc_score` | Verify R0-2 |
-| MTF | Row/column rMTF % → lp/mm grid (10–90% step) | `slice1.row_mtf` / `col_mtf` outputs (`lpmm_to_rmtf`-style grids) | Verify R0-2; Summary MTF@50% only |
-| Other | `has_sagittal_module`, echo-specific fields | already partially in `metrics` | Verify R0-2 |
+| PSG | Percent signal ghosting | `uniformity_module.psg` / `ghosting_ratio` (dict-present in 3.43.2) | **Confirmed** 2026-08-29 dump |
+| Low contrast | Score, detectability, per-slice LC metrics | `low_contrast_multi_slice_module`, existing `_extract_lc_score` | **Confirmed** 2026-08-29 dump |
+| MTF | Row/column rMTF % → lp/mm grid (10–90% step) | `slice1.row_mtf` / `col_mtf` outputs (`lpmm_to_rmtf`-style grids) | **Confirmed** 2026-08-29 dump; Summary MTF@50% only |
+| Other | `has_sagittal_module`, echo-specific fields | already partially in `metrics` | T1 dump includes empty `sagittal_localizer_module` dicts (no flatten leaves); `has_sagittal_module` still not in `results_data` |
 
 **Discovery step (Phase 0):** run `results_data(as_dict=True)` once per modality on a **local (gitignored) phantom folder** via `scripts/spike_pylinac_acrct.py` / `scripts/spike_pylinac_acrmri.py` with **`--dump-json`**. Use **repo-relative** folders only in docs (`sample-DICOM-gitignored/CT-phantoms/`, `sample-DICOM-gitignored/MR-phantoms/`) — never machine-absolute paths. **Commit redacted dumps** as `tests/fixtures/qa/acr_ct_results_data.json` and `tests/fixtures/qa/acr_mri_results_data.json` (numeric metrics + phantom model only — no pixel data, no filesystem paths, no institution/address/station or other site/patient/UID keywords). Spike redaction drops those keys and replaces remaining absolute paths with `<redacted-path>`. The dump commit must pass the staged artifact gate (`scripts/check_no_phi_artifacts.py` / privacy hooks) — never `--no-verify`. Document exact key paths in this plan’s **Metric registry appendix**. CI golden tests consume the committed dumps — **no `analyze()` in CI** (no synthetic ACR image fixtures exist today). Where dict lacks background σ (CT CNR precedent), add guarded live-analyzer harvest in the runner and stash under `result.metrics` (see merge rule in the architecture sketch — top-level keys, not a literal `metrics.` prefix).
 
@@ -162,11 +162,11 @@ All new tests under `tests/qa/` unless noted. Use **committed redacted `results_
 
 ### Phase 0 / research
 
-- [ ] **`tests/qa/test_pylinac_results_data_spike.py`** — load committed `acr_*_results_data.json`; assert dict shape; optional snapshot of key names (not values) for regression; assert no absolute filesystem paths in the dumps (cheap PHI redaction regression per R0-9).
+- [x] **`tests/qa/test_pylinac_results_data_spike.py`** — load committed `acr_*_results_data.json`; assert dict shape; optional snapshot of key names (not values) for regression; assert no absolute filesystem paths in the dumps (cheap PHI redaction regression per R0-9).
 
 ### Phase 1 — flattening
 
-- [ ] **`tests/qa/test_qa_result_flatten.py`**
+- [x] **`tests/qa/test_qa_result_flatten.py`** (synthetic) **+ `test_pylinac_results_data_spike.py`** (golden dumps, P1-F4)
   - CT success: flatten includes keys from each target family present in committed dump (≥1 key per family per G2).
   - MRI success: same.
   - Failed run: provenance + errors; no crash on empty `raw_pylinac`.
@@ -298,25 +298,25 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 ### Phase 0 — Research and metric registry
 
 - [x] **(R0-0)** Spike scripts + `pylinac_spike_common.py`; CT/MRI `--dump-json` (path redaction). (owner: coder) — **in repo**; run on maintainer phantom when `test-DICOM-data/` populated
-- [ ] **(R0-1)** CT `results_data(as_dict=True)` key dump → appendix §CT + committed `tests/fixtures/qa/acr_ct_results_data.json`. (owner: maintainer, when CT phantom in gitignored folder)
-- [ ] **(R0-2)** MRI `results_data(as_dict=True)` key dump → appendix §MRI + committed `tests/fixtures/qa/acr_mri_results_data.json`. (owner: maintainer, when MRI phantom available)
+- [x] **(R0-1)** CT `results_data(as_dict=True)` key dump → appendix §CT + committed `tests/fixtures/qa/acr_ct_results_data.json`. (owner: maintainer) — **2026-08-29** from `deid-phantoms/ct/series-001/`
+- [x] **(R0-2)** MRI `results_data(as_dict=True)` key dump → appendix §MRI + committed `tests/fixtures/qa/acr_mri_results_data.json`. (owner: maintainer) — **2026-08-29** from `deid-phantoms/mr/series-005/` (T1; 1 mm extent)
 - [x] **(R0-3)** Live-analyzer gap table (dict vs harvest) — **filled from source** (see appendix §Live harvest; CT only needs `low_contrast_cnr` live harvest; MRI PSG/SNR/MTF confirmed dict-complete except SNR = Phase 6). (owner: coder)
 - [x] **(R0-4)** Confirm **OQ-1** — **CT PSG absent** in pylinac 3.43.2: `ACRCTResult` has no `psg`/`ghosting_ratio`/`ghost_rois` fields; `ACRCT` has no `uniformity_module.ghost_rois`. PSG is MRI-only (`MRUniformityModuleOutput.psg` + `ghosting_ratio` present). (owner: coder)
 - [ ] **(R0-5)** Resolve **OQ-4**, **OQ-5** (Summary vs Detail flatten strategy). (owner: coder + reviewer)
 - [x] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder) — **landed**: `ACRMBatchResult` added to `src/qa/analysis_types.py`, mirroring `CTBatchResult` (`run_results` + `run_labels` only); docstring states it is **not** compare-mode `MRIBatchResult`.
-- [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P1-F3 interim:** two bands (provenance insertion order → remaining keys `str`-sorted). Curated top-level scalars interleave alphabetically with dotted `raw_pylinac` leaves rather than a third "family" band. Revisit after R0-1/R0-2 dumps if a fixed enumerated header is needed.
+- [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P1-F3 interim:** two bands (provenance insertion order → remaining keys `str`-sorted). Curated top-level scalars interleave alphabetically with dotted `raw_pylinac` leaves rather than a third "family" band. Dumps landed 2026-08-29; still using the two-band interim unless a fixed enumerated header is needed.
 - [x] **(R0-8)** Document formula-injection wiring for Phase 1 — `qa_export.build_metrics_csv` uses bare `csv.writer`; Phase 1 (P1-F2) must wrap with `SafeCsvWriter` from `src/core/spreadsheet_safety.py` and apply `neutralize_spreadsheet_value` to every cell. XLSX: openpyxl writes leading-`=` strings as live formulas on open — same neutralization applies to Series/Run labels and warnings in XLSX cells. (owner: coder) — **landed**: CSV wired in P1-F2; XLSX Summary, Detail, and Images Series/Run labels neutralized in P2-X2.
-- [ ] **(R0-9)** Commit redacted dumps; assert no PHI paths. (owner: maintainer, after: R0-1, R0-2)
+- [x] **(R0-9)** Commit redacted dumps; assert no PHI paths. (owner: maintainer, after: R0-1, R0-2) — hygiene + family tests in `tests/qa/test_pylinac_results_data_spike.py`
 - [x] **(R0-10)** Document module figure names per modality from `plot_images()` source — see appendix §Figure names. **OQ-9 locked**: embed via `save_images(directory=…)` when toggle on. (owner: coder)
-- [ ] **(P0-T1)** Add `tests/qa/test_pylinac_results_data_spike.py` (loads committed dumps). (owner: tester, after: R0-9)
+- [x] **(P0-T1)** Add `tests/qa/test_pylinac_results_data_spike.py` (loads committed dumps). (owner: tester, after: R0-9)
 - [ ] **(P0-GATE)** Reviewer signs off appendix + **OQ-1–OQ-10** before claiming Phase 0 complete. (owner: reviewer) — **does not block** starting Ph1–5 code
 
 ### Phase 1 — Canonical flattening (`qa_result_flatten.py` — **locked new module**)
 
-- [x] **(P1-F1)** Add **`src/qa/qa_result_flatten.py`** (do not extend `qa_export` only): provenance + flatten walk `raw_pylinac`, overlay `metrics.*` (metrics wins for curated provenance scalars), add CNR/LC live fields. Synthetic tests in `tests/qa/test_qa_result_flatten.py`; golden dumps still **P1-F4**. (owner: coder)
+- [x] **(P1-F1)** Add **`src/qa/qa_result_flatten.py`** (do not extend `qa_export` only): provenance + flatten walk `raw_pylinac`, overlay `metrics.*` (metrics wins for curated provenance scalars), add CNR/LC live fields. Synthetic tests in `tests/qa/test_qa_result_flatten.py`; golden dumps **P1-F4** landed 2026-08-29. (owner: coder)
 - [x] **(P1-F2)** Refactor `build_metrics_csv` to emit full flatten; keep two-column `metric,value` for single-run. (owner: coder, after: P1-F1) — **landed**
 - [x] **(P1-F3)** Add `build_batch_metrics_csv(results, labels)` — one header row, one row per run (wide). (owner: coder, after: P1-F1) — **landed**
-- [ ] **(P1-F4)** Tests: golden key sets from **committed dumps** for CT and MRI; failed run; warnings present. (owner: tester, after: R0-9, P1-F1)
+- [x] **(P1-F4)** Tests: golden key sets from **committed dumps** for CT and MRI; failed run; warnings present. (owner: tester, after: R0-9, P1-F1) — `test_pylinac_results_data_spike.py` + synthetic failed-run coverage in `test_qa_result_flatten.py`
 
 ### Phase 2 — XLSX upgrade
 
@@ -404,6 +404,7 @@ Top-level (`ACRCTResult`, `results_data` root):
 - `phantom_roll_deg: float`
 - `origin_slice: int`
 - `num_images: int`
+- `date_of_analysis`, `pylinac_version`, `warnings` — present on the 2026-08-29 committed dump (analysis-run metadata, not patient tags)
 
 `ct_module` (`CTModuleOutput`):
 
@@ -450,6 +451,7 @@ Top-level (`ACRMRIResult`, `results_data` root):
 - `phantom_roll_deg: float`
 - `origin_slice: int`
 - `num_images: int`
+- `date_of_analysis`, `pylinac_version`, `warnings` — present on the 2026-08-29 committed dump
 
 `slice1` (`MRSlice1ModuleOutput`):
 
@@ -500,7 +502,7 @@ Top-level (`ACRMRIResult`, `results_data` root):
 - `low_contrast_multi_slice_module.score: int`
 - `low_contrast_multi_slice_module.low_contrast_rois: dict` (keys: slice_8, slice_9, slice_10, slice_11; each → `MRLowContrastModuleOutput`: offset, slice_num, spoke_settings, background_settings, spokes)
 
-**MRI note:** `has_sagittal_module: bool` is an instance attribute on `ACRMRILarge` (not in `results_data`); sagittal module populated only when a sagittal image is detected.
+**MRI note:** `has_sagittal_module: bool` is an instance attribute on `ACRMRILarge` (not in `results_data`). The 2026-08-29 T1-only dump still includes `sagittal_localizer_module` with empty `distances`/`profiles` dicts; flatten emits no sagittal leaves. Populate sagittal metrics only when a sagittal image is detected.
 
 ### §Live harvest — `metrics.*` extensions
 
@@ -526,7 +528,7 @@ From pylinac 3.43.2 `acr.py` source:
 
 - **G0:** Phase 0 appendix complete on committed dumps; **OQ-1–OQ-10** locked (OQ-10 already decided).
 - **G1:** Reviewer approves metric key naming convention before GUI wiring.
-- **G2:** Fixture tests prove CT + MRI flatten includes ≥1 value from each **present** target family using committed `results_data` dumps (not live `analyze()`).
+- **G2:** Fixture tests prove CT + MRI flatten includes ≥1 value from each **present** target family using committed `results_data` dumps (not live `analyze()`). **Met 2026-08-29** in `tests/qa/test_pylinac_results_data_spike.py`.
 - **G3:** Manual smoke on one local CT + one local MRI phantom (optional): single-run export, CT batch CSV, MRI batch export; **optional G3b:** XLSX Images module set matches PDF figure count when embed on.
 
 ---

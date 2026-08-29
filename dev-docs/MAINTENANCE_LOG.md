@@ -6,6 +6,7 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-29
 
+- **ACR golden `results_data` dumps:** Committed redacted CT/MRI JSON under `tests/fixtures/qa/` from `deid-phantoms/` (R0-1/R0-2/R0-9). `test_pylinac_results_data_spike.py` covers dump hygiene and G2 family keys (P0-T1, P1-F4). Spikes construct analyzers from the folder path and retry 0/1/2 mm scan extent.
 - **R6-2 T1 SNR compare recorded:** Manual vs viewer numbers for tracked `deid-phantoms/mr/series-005` live in `ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md` (~7% SNR gap after ROI redo; COL → Left/Right).
 - **MRI SNR ghost-free pair mapping:** COL (vertical PE) → noise Left/Right; ROW (horizontal PE) → noise Top/Bottom. Previous mapping was inverted. Missing-tag fallback remains ROW → Top/Bottom; a warning fires when the selected pair is the noisier of the two.
 - **Reviewed ACR phantom DICOM admitted:** `sample-phantom-data-committed/deid-phantoms/` (70 PS3.15 Standard-share instances) after human pixel review 2026-08-29; exact-path gitignore allowlist and SHA-256 manifest entries.

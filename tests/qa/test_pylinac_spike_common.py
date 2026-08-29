@@ -54,3 +54,27 @@ def test_dump_drops_institution_address_and_station_keys() -> None:
     assert "Example Site" not in blob
     assert "1 Main Street" not in blob
     assert "MRI1" not in blob
+
+
+def test_analyze_folder_with_extent_retry_skips_strict_then_succeeds() -> None:
+    """Viewer-style 0 → 1 mm retry without loading DICOM (P0 dump regeneration)."""
+    constructed: list[float] = []
+
+    class FakeAnalyzer:
+        def __init__(self, folder: str, check_uid: bool = False) -> None:
+            self.folder = folder
+            self.check_uid = check_uid
+            self._scan_extent_tolerance_mm = 0.0
+            constructed.append(self._scan_extent_tolerance_mm)
+
+        def analyze(self, **kwargs: object) -> None:
+            if float(self._scan_extent_tolerance_mm) < 1.0:
+                raise ValueError("physical scan extent does not cover")
+
+    analyzer = _common.analyze_folder_with_extent_retry(
+        FakeAnalyzer,
+        Path("sample-phantom-data-committed/deid-phantoms/ct/series-001"),
+        check_uid=False,
+    )
+    assert analyzer._scan_extent_tolerance_mm == 1.0
+    assert len(constructed) == 2

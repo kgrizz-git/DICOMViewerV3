@@ -10,8 +10,8 @@ numeric metrics and phantom-model strings only.
 
 | File | Source |
 |------|--------|
-| `acr_ct_results_data.json` | Reviewed copy of a private maintainer dump (see workflow below) |
-| `acr_mri_results_data.json` | Same |
+| `acr_ct_results_data.json` | Redacted dump from `deid-phantoms/ct/series-001/` (2026-08-29) |
+| `acr_mri_results_data.json` | Redacted dump from `deid-phantoms/mr/series-005/` (T1 11-slice; 2026-08-29) |
 
 ## Tracked de-identified phantoms (preferred dump source)
 
@@ -38,29 +38,32 @@ record machine-absolute paths (`/Users/…`, `C:\…`) in docs, dumps, logs, or 
 
 ## Maintainer workflow
 
-1. Keep phantom DICOM in a gitignored folder from the table above.
+1. Prefer tracked **`sample-phantom-data-committed/deid-phantoms/`** (table above). Gitignored folders remain valid for private regenerations.
 2. From repo root (venv activated), write dumps **outside** the source checkout
    (`assert_safe_internal_path` rejects in-repo targets, including gitignored
    `tmp/`):
 
    ```bash
-   python scripts/spike_pylinac_acrct.py --folder sample-DICOM-gitignored/CT-phantoms/<series> \
+   python scripts/spike_pylinac_acrct.py --folder sample-phantom-data-committed/deid-phantoms/ct/series-001 \
      --dump-json ~/private-qa-dumps/acr_ct_results_data.json
-   python scripts/spike_pylinac_acrmri.py --folder sample-DICOM-gitignored/MR-phantoms/<series> \
+   python scripts/spike_pylinac_acrmri.py --folder sample-phantom-data-committed/deid-phantoms/mr/series-005 \
      --dump-json ~/private-qa-dumps/acr_mri_results_data.json
    ```
 
-   Spike console lines never print the folder or dump destination. Dual-echo ACR
-   T2 series should use the highest echo (echo 2). The MRI spike now resolves
-   auto-highest ``EchoNumber`` the same way the viewer runner does before
-   ``analyze()``.
+   Spikes construct `ACRCTForViewer` / `ACRMRILargeForViewer` from the folder
+   path (no `from_folder`) and retry ``analyze()`` at 0 / 1 / 2 mm scan-extent
+   tolerance. Spike console lines never print the folder or dump destination.
+   Dual-echo ACR T2 series should use the highest echo (echo 2). The MRI spike
+   resolves auto-highest ``EchoNumber`` the same way the viewer runner does
+   before ``analyze()``.
 3. Review JSON: no absolute paths; no `InstitutionName` / `InstitutionAddress` /
    `StationName` (or other site/patient/UID keywords). Spike redaction drops
    those keys and replaces absolute paths with `<redacted-path>`.
 4. Copy the reviewed files into `tests/fixtures/qa/` and commit (staged artifact
    gate required). Never `--no-verify`.
 
-Until dumps exist, Phase 1–6 implementation may proceed; golden tests (**P1-F4**, **G2**) wait for **R0-9**.
+Golden flatten tests (**P1-F4**, **G2**) load these files in
+`tests/qa/test_pylinac_results_data_spike.py` — no live ``analyze()`` in CI.
 
 ## De-identification
 

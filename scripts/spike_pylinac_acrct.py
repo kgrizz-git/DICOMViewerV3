@@ -3,8 +3,8 @@ Stage 1 pylinac spike script for ACR CT datasets.
 
 Usage (repo-relative folder; never commit the folder or dump paths):
 
-    python scripts/spike_pylinac_acrct.py --folder sample-DICOM-gitignored/CT-phantoms/<series>
-    python scripts/spike_pylinac_acrct.py --folder sample-DICOM-gitignored/CT-phantoms/<series> \\
+    python scripts/spike_pylinac_acrct.py --folder sample-phantom-data-committed/deid-phantoms/ct/series-001
+    python scripts/spike_pylinac_acrct.py --folder sample-phantom-data-committed/deid-phantoms/ct/series-001 \\
         --dump-json ~/private-qa-dumps/acr_ct_results_data.json
 
 Dump path must be outside the source checkout (assert_safe_internal_path).
@@ -23,10 +23,17 @@ from pathlib import Path
 
 try:
     from scripts.privacy_console import print_redacted
+    from scripts.pylinac_spike_common import (
+        analyze_folder_with_extent_retry,
+        write_redacted_results_dump,
+    )
 except ModuleNotFoundError:
     import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
+    import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
 
     print_redacted = privacy_console.print_redacted
+    analyze_folder_with_extent_retry = pylinac_spike_common.analyze_folder_with_extent_retry
+    write_redacted_results_dump = pylinac_spike_common.write_redacted_results_dump
 
 # Match the GUI runner: use viewer subclass (relaxed image index bounds).
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
@@ -69,20 +76,13 @@ def main() -> int:
     print(f"pylinac version: {getattr(pylinac, '__version__', 'unknown')}")
 
     try:
-        analyzer = ACRCTForViewer.from_folder(str(folder))  # pyright: ignore[reportAttributeAccessIssue]
-        analyzer.analyze()
+        analyzer = analyze_folder_with_extent_retry(ACRCTForViewer, folder, check_uid=False)
         print_redacted("Analysis succeeded")
     except Exception as exc:
         print_redacted(f"Analysis failed: {exc}")
         return 4
 
     if args.dump_json:
-        try:
-            from scripts.pylinac_spike_common import write_redacted_results_dump
-        except ModuleNotFoundError:
-            import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
-
-            write_redacted_results_dump = pylinac_spike_common.write_redacted_results_dump
         try:
             dump_path = assert_safe_internal_path(
                 Path(args.dump_json),

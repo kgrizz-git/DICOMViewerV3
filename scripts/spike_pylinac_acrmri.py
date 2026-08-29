@@ -3,8 +3,8 @@ Stage 1 pylinac spike script for ACR MRI Large datasets.
 
 Usage (repo-relative folder; never commit the folder or dump paths):
 
-    python scripts/spike_pylinac_acrmri.py --folder sample-DICOM-gitignored/MR-phantoms/<series>
-    python scripts/spike_pylinac_acrmri.py --folder sample-DICOM-gitignored/MR-phantoms/<series> \\
+    python scripts/spike_pylinac_acrmri.py --folder sample-phantom-data-committed/deid-phantoms/mr/series-005
+    python scripts/spike_pylinac_acrmri.py --folder sample-phantom-data-committed/deid-phantoms/mr/series-005 \\
         --dump-json ~/private-qa-dumps/acr_mri_results_data.json
 
 Dump path must be outside the source checkout (assert_safe_internal_path).
@@ -24,12 +24,16 @@ from pathlib import Path
 
 try:
     from scripts.privacy_console import print_redacted
-    from scripts.pylinac_spike_common import write_redacted_results_dump
+    from scripts.pylinac_spike_common import (
+        analyze_folder_with_extent_retry,
+        write_redacted_results_dump,
+    )
 except ModuleNotFoundError:
     import privacy_console  # pyright: ignore[reportImplicitRelativeImport]
     import pylinac_spike_common  # pyright: ignore[reportImplicitRelativeImport]
 
     print_redacted = privacy_console.print_redacted
+    analyze_folder_with_extent_retry = pylinac_spike_common.analyze_folder_with_extent_retry
     write_redacted_results_dump = pylinac_spike_common.write_redacted_results_dump
 
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
@@ -74,21 +78,26 @@ def main() -> int:
     print(f"pylinac version: {getattr(pylinac, '__version__', 'unknown')}")
 
     try:
-        analyzer = ACRMRILargeForViewer.from_folder(str(folder))  # pyright: ignore[reportAttributeAccessIssue]
         echo_request = QARequest(
             analysis_type="acr_mri_large",
             folder_path=str(folder),
             echo_number=None,
+            check_uid=False,
         )
         analyzed_echo = resolve_mri_analyze_echo_number(echo_request)
         analyze_kwargs: dict[str, object] = {}
-        if "echo_number" in inspect.signature(analyzer.analyze).parameters:
+        if "echo_number" in inspect.signature(ACRMRILargeForViewer.analyze).parameters:
             analyze_kwargs["echo_number"] = analyzed_echo
         if analyzed_echo is None:
             print_redacted("No EchoNumber tags; using stock pylinac echo default")
         else:
             print_redacted(f"Analyzing auto-highest echo {analyzed_echo}")
-        analyzer.analyze(**analyze_kwargs)
+        analyzer = analyze_folder_with_extent_retry(
+            ACRMRILargeForViewer,
+            folder,
+            check_uid=False,
+            analyze_kwargs=analyze_kwargs,
+        )
     except Exception as exc:
         print_redacted(f"Analysis failed: {exc}")
         return 4

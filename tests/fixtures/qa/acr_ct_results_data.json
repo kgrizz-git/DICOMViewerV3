@@ -1,0 +1,236 @@
+{
+  "ct_module": {
+    "offset": 0.0,
+    "roi_distance_from_center_mm": 63.0,
+    "roi_radius_mm": 10.0,
+    "roi_settings": {
+      "Acrylic": {
+        "angle": 135,
+        "angle_corrected": 134.92488988799096,
+        "distance": 63,
+        "distance_pixels": 153.6,
+        "radius": 10,
+        "radius_pixels": 24.38095238095238
+      },
+      "Air": {
+        "angle": 45,
+        "angle_corrected": 44.92488988799094,
+        "distance": 63,
+        "distance_pixels": 153.6,
+        "radius": 10,
+        "radius_pixels": 24.38095238095238
+      },
+      "Bone": {
+        "angle": -45,
+        "angle_corrected": -45.07511011200906,
+        "distance": 63,
+        "distance_pixels": 153.6,
+        "radius": 10,
+        "radius_pixels": 24.38095238095238
+      },
+      "Poly": {
+        "angle": 225,
+        "angle_corrected": 224.92488988799096,
+        "distance": 63,
+        "distance_pixels": 153.6,
+        "radius": 10,
+        "radius_pixels": 24.38095238095238
+      },
+      "Water": {
+        "angle": 180,
+        "angle_corrected": 179.92488988799096,
+        "distance": 63,
+        "distance_pixels": 153.6,
+        "radius": 10,
+        "radius_pixels": 24.38095238095238
+      }
+    },
+    "rois": {
+      "Acrylic": 131.78916309012877,
+      "Air": -999.4898395721925,
+      "Bone": 880.583019881784,
+      "Poly": -90.27097808658472,
+      "Water": 2.4297210300429186
+    }
+  },
+  "date_of_analysis": "2026-08-29T14:26:34.265423",
+  "low_contrast_module": {
+    "cnr": 1.4477210036874955,
+    "offset": 30.0,
+    "roi_distance_from_center_mm": 60.0,
+    "roi_radius_mm": 6.0,
+    "roi_settings": {
+      "ROI": {
+        "angle": -90,
+        "angle_corrected": -90.07511011200906,
+        "distance": 60,
+        "distance_pixels": 146.28571428571428,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      }
+    },
+    "rois": {
+      "ROI": 99.0
+    }
+  },
+  "num_images": 25,
+  "origin_slice": 1,
+  "phantom_model": "ACR CT 464",
+  "phantom_roll_deg": -0.0751101120090567,
+  "pylinac_version": "3.43.2",
+  "spatial_resolution_module": {
+    "lpmm_to_rmtf": {
+      "0.4": 1.0,
+      "0.5": 0.547923420571165,
+      "0.6": 0.31791133503631586,
+      "0.7": 0.17692337093781882,
+      "0.8": 0.16318338398887414,
+      "0.9": 0.2096306691961043,
+      "1.0": 0.1306705039317432,
+      "1.2": 0.09379070266583166
+    },
+    "offset": 100.0,
+    "roi_distance_from_center_mm": 70.0,
+    "roi_radius_mm": 6.0,
+    "roi_settings": {
+      "10oclock": {
+        "angle": -135,
+        "angle_corrected": -135.07511011200904,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 0.4,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "12oclock": {
+        "angle": -90,
+        "angle_corrected": -90.07511011200906,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 1.2,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "2oclock": {
+        "angle": -45,
+        "angle_corrected": -45.07511011200906,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 1.0,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "3oclock": {
+        "angle": 0,
+        "angle_corrected": -0.0751101120090567,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 0.9,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "4oclock": {
+        "angle": 45,
+        "angle_corrected": 44.92488988799094,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 0.8,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "6oclock": {
+        "angle": 90,
+        "angle_corrected": 89.92488988799094,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 0.7,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "7oclock": {
+        "angle": 135,
+        "angle_corrected": 134.92488988799096,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 0.6,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      },
+      "9oclock": {
+        "angle": -180,
+        "angle_corrected": -180.07511011200904,
+        "distance": 70,
+        "distance_pixels": 170.66666666666666,
+        "lp/mm": 0.5,
+        "radius": 6,
+        "radius_pixels": 14.628571428571428
+      }
+    },
+    "rois": {
+      "10oclock": 1100.0,
+      "12oclock": 1052.0,
+      "2oclock": 1056.0,
+      "3oclock": 1132.5,
+      "4oclock": 1060.0,
+      "6oclock": 1059.0,
+      "7oclock": 1065.0,
+      "9oclock": 1049.0
+    }
+  },
+  "uniformity_module": {
+    "center_roi_stdev": 5.236463219772472,
+    "offset": 70.0,
+    "roi_distance_from_center_mm": 66.0,
+    "roi_radius_mm": 11.0,
+    "roi_settings": {
+      "Bottom": {
+        "angle": 90,
+        "angle_corrected": 89.92488988799094,
+        "distance": 66,
+        "distance_pixels": 160.9142857142857,
+        "radius": 11,
+        "radius_pixels": 26.81904761904762
+      },
+      "Center": {
+        "angle": 0,
+        "angle_corrected": -0.0751101120090567,
+        "distance": 0,
+        "distance_pixels": 0.0,
+        "radius": 11,
+        "radius_pixels": 26.81904761904762
+      },
+      "Left": {
+        "angle": 180,
+        "angle_corrected": 179.92488988799096,
+        "distance": 66,
+        "distance_pixels": 160.9142857142857,
+        "radius": 11,
+        "radius_pixels": 26.81904761904762
+      },
+      "Right": {
+        "angle": 0,
+        "angle_corrected": -0.0751101120090567,
+        "distance": 66,
+        "distance_pixels": 160.9142857142857,
+        "radius": 11,
+        "radius_pixels": 26.81904761904762
+      },
+      "Top": {
+        "angle": -90,
+        "angle_corrected": -90.07511011200906,
+        "distance": 66,
+        "distance_pixels": 160.9142857142857,
+        "radius": 11,
+        "radius_pixels": 26.81904761904762
+      }
+    },
+    "rois": {
+      "Bottom": 1.79140832595217,
+      "Center": 1.0741721854304636,
+      "Left": 1.5507950530035335,
+      "Right": 1.477242598320813,
+      "Top": 0.8794169611307421
+    }
+  },
+  "warnings": []
+}
