@@ -75,7 +75,7 @@ The following are saved in the same JSON file but are usually changed from toolb
 | Tag export | **`tag_export_*`** presets (managed in the tag export UI) |
 | Customizations | Bulk **import/export visual customizations** (JSON) |
 | Slice sync | **`slice_sync_enabled`**, **`slice_sync_groups`**, slice-location line visibility flags |
-| ACR / pylinac | **`acr_mri_low_contrast_*`**, **`acr_qa_vanilla_pylinac`** (options dialogs) |
+| ACR / pylinac | **`acr_mri_low_contrast_*`**, **`acr_qa_vanilla_pylinac`**, **`acr_qa_embed_module_images_in_xlsx`** (options dialogs) |
 | MPR | **`mpr_cache_max_mb`** |
 | 3D volume render | Requires **VTK** (`vtk` package); not a persisted Settings field — launched from toolbar **3D View** or **Tools → 3D Volume Render…** |
 | Study index browser | **`study_index_browser_column_order`** (column layout in the index UI when present) |

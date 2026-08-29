@@ -170,3 +170,17 @@ class QaPylinacConfigMixin:
         """Persist vanilla-pylinac default for the next ACR QA options dialog."""
         self._config()["acr_qa_vanilla_pylinac"] = bool(value)
         self._save_config()
+
+    def get_acr_qa_embed_module_images_in_xlsx(self) -> bool:
+        """
+        Whether ACR CT/MRI XLSX exports embed per-module pylinac PNGs on the
+        Images sheet (``save_images`` parity with the PDF report).
+
+        Defaults to True; persisted across runs via the options dialogs.
+        """
+        return bool(self._config().get("acr_qa_embed_module_images_in_xlsx", True))
+
+    def set_acr_qa_embed_module_images_in_xlsx(self, value: bool) -> None:
+        """Persist the embed-module-images default for the next ACR QA dialog."""
+        self._config()["acr_qa_embed_module_images_in_xlsx"] = bool(value)
+        self._save_config()

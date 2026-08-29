@@ -187,7 +187,8 @@ class AcrMrIQaOptionsDialog(QDialog):
         (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
          low_contrast_method, low_contrast_visibility_threshold,
          low_contrast_visibility_sanity_multiplier,
-         compare_request_or_none, vanilla_pylinac)
+         compare_request_or_none, vanilla_pylinac,
+         embed_module_images_in_xlsx)
         where compare_request_or_none is an MRICompareRequest when compare mode
         is enabled, else None.
     """
@@ -204,6 +205,7 @@ class AcrMrIQaOptionsDialog(QDialog):
             DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
         ),
         vanilla_pylinac_default: bool = False,
+        embed_module_images_default: bool = True,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("ACR MRI (pylinac) — Options")
@@ -231,6 +233,10 @@ class AcrMrIQaOptionsDialog(QDialog):
         self._vanilla.setChecked(bool(vanilla_pylinac_default))
         self._vanilla.toggled.connect(self._on_vanilla_pylinac_toggled)
         left_col.addWidget(self._vanilla)
+
+        self._embed_images = QCheckBox("Embed module images in XLSX")
+        self._embed_images.setChecked(bool(embed_module_images_default))
+        left_col.addWidget(self._embed_images)
 
         # --- Advanced group ---
         advanced = QGroupBox("Advanced")
@@ -447,6 +453,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         float,
         MRICompareRequest | None,
         bool,
+        bool,
     ]:
         """
         Return collected options.
@@ -455,7 +462,8 @@ class AcrMrIQaOptionsDialog(QDialog):
             (echo_number, check_uid, origin_slice, scan_extent_tolerance_mm,
              low_contrast_method, low_contrast_visibility_threshold,
              low_contrast_visibility_sanity_multiplier,
-             compare_request_or_none, vanilla_pylinac)
+             compare_request_or_none, vanilla_pylinac,
+             embed_module_images_in_xlsx)
         """
         if self._use_lowest_echo.isChecked():
             echo: int | None = None
@@ -484,6 +492,8 @@ class AcrMrIQaOptionsDialog(QDialog):
             if enabled_configs:
                 compare_request = MRICompareRequest(run_configs=enabled_configs)
 
+        embed = bool(self._embed_images.isChecked())
+
         return (
             echo,
             check_uid,
@@ -494,6 +504,7 @@ class AcrMrIQaOptionsDialog(QDialog):
             lc_sanity,
             compare_request,
             vanilla,
+            embed,
         )
 
 
@@ -508,7 +519,8 @@ def prompt_acr_mri_options(
         DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER
     ),
     vanilla_pylinac_default: bool = False,
-) -> tuple[int | None, bool, int | None, float, str, float, float, MRICompareRequest | None, bool] | None:
+    embed_module_images_default: bool = True,
+) -> tuple[int | None, bool, int | None, float, str, float, float, MRICompareRequest | None, bool, bool] | None:
     """
     Show modal ACR MRI options dialog.
 
@@ -518,10 +530,11 @@ def prompt_acr_mri_options(
         low_contrast_visibility_threshold: Pre-filled threshold value.
         low_contrast_visibility_sanity_multiplier: Pre-filled sanity multiplier.
         vanilla_pylinac_default: Initial state of Vanilla pylinac checkbox.
+        embed_module_images_default: Initial state of embed-module-images checkbox.
 
     Returns:
-        Tuple ending with compare_request_or_none and vanilla_pylinac, or None
-        if the user cancelled.
+        Tuple ending with vanilla_pylinac and embed_module_images_in_xlsx, or
+        None if the user cancelled.
     """
     dlg = AcrMrIQaOptionsDialog(
         parent,
@@ -531,6 +544,7 @@ def prompt_acr_mri_options(
             low_contrast_visibility_sanity_multiplier
         ),
         vanilla_pylinac_default=vanilla_pylinac_default,
+        embed_module_images_default=embed_module_images_default,
     )
     dlg.activateWindow()
     dlg.raise_()

@@ -109,7 +109,8 @@ def test_acr_mri_dialog_compare_mode_yields_mri_compare_request(qapp) -> None:
     dlg._compare_group.setChecked(True)
     for row in dlg._compare_rows:
         row.enable_check.setChecked(True)
-    *_, compare_req, _vanilla = dlg.get_options()
+    *_, compare_req, _vanilla, _embed = dlg.get_options()
+    assert _embed is True
     assert compare_req is not None
     assert isinstance(compare_req, MRICompareRequest)
     assert len(compare_req.run_configs) == 3

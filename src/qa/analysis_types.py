@@ -138,6 +138,9 @@ def build_pylinac_analysis_profile(
         "parent_attempt_outcome": getattr(request, "parent_attempt_outcome", None),
         "origin_slice_override": request.origin_slice,
         "check_uid": request.check_uid,
+        "embed_module_images_in_xlsx": bool(
+            getattr(request, "embed_module_images_in_xlsx", True)
+        ),
     }
     if request.analysis_type == "acr_mri_large":
         lc_method = str(

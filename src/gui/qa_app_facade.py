@@ -587,13 +587,16 @@ class QAAppFacade:
             return
 
         vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
+        embed_def = app.config_manager.get_acr_qa_embed_module_images_in_xlsx()
         ct_opts = prompt_acr_ct_options(
-            app.main_window, vanilla_pylinac_default=vanilla_def
+            app.main_window, vanilla_pylinac_default=vanilla_def,
+            embed_module_images_default=embed_def,
         )
         if ct_opts is None:
             return
-        ct_scan_tol, ct_origin_slice, ct_vanilla = ct_opts
+        ct_scan_tol, ct_origin_slice, ct_vanilla, ct_embed = ct_opts
         app.config_manager.set_acr_qa_vanilla_pylinac(ct_vanilla)
+        app.config_manager.set_acr_qa_embed_module_images_in_xlsx(ct_embed)
 
         pdf_path = app._prompt_save_path(
             "Optional PDF Report Output",
@@ -622,12 +625,14 @@ class QAAppFacade:
             preflight_warnings=preflight,
             scan_extent_tolerance_mm=float(ct_scan_tol),
             vanilla_pylinac=ct_vanilla,
+            embed_module_images_in_xlsx=ct_embed,
         )
         assign_module_images_out_dir(request=request, composite_image_temp_dir=image_temp_dir)
         json_inputs: dict[str, Any] = {
             "origin_slice_override": ct_origin_slice,
             "scan_extent_tolerance_mm": float(ct_scan_tol),
             "vanilla_pylinac": ct_vanilla,
+            "embed_module_images_in_xlsx": ct_embed,
             "qa_attempt": request.qa_attempt,
             "options": {},
             "preflight_warnings": preflight,
@@ -663,13 +668,16 @@ class QAAppFacade:
         requests, labels = selection
 
         vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
+        embed_def = app.config_manager.get_acr_qa_embed_module_images_in_xlsx()
         ct_opts = prompt_acr_ct_options(
-            app.main_window, vanilla_pylinac_default=vanilla_def
+            app.main_window, vanilla_pylinac_default=vanilla_def,
+            embed_module_images_default=embed_def,
         )
         if ct_opts is None:
             return
-        ct_scan_tol, ct_origin_slice, ct_vanilla = ct_opts
+        ct_scan_tol, ct_origin_slice, ct_vanilla, ct_embed = ct_opts
         app.config_manager.set_acr_qa_vanilla_pylinac(ct_vanilla)
+        app.config_manager.set_acr_qa_embed_module_images_in_xlsx(ct_embed)
 
         requests = [
             replace(
@@ -677,6 +685,7 @@ class QAAppFacade:
                 origin_slice=ct_origin_slice,
                 scan_extent_tolerance_mm=float(ct_scan_tol),
                 vanilla_pylinac=ct_vanilla,
+                embed_module_images_in_xlsx=ct_embed,
             )
             for req in requests
         ]
@@ -836,40 +845,29 @@ class QAAppFacade:
             )
             return
 
-        lc_method_default = app.config_manager.get_acr_mri_low_contrast_method()
-        lc_vis_default = (
-            app.config_manager.get_acr_mri_low_contrast_visibility_threshold()
-        )
-        lc_sanity_default = (
-            app.config_manager.get_acr_mri_low_contrast_visibility_sanity_multiplier()
-        )
-        vanilla_def = app.config_manager.get_acr_qa_vanilla_pylinac()
+        cm = app.config_manager
+        lc_method_default = cm.get_acr_mri_low_contrast_method()
+        lc_vis_default = cm.get_acr_mri_low_contrast_visibility_threshold()
+        lc_sanity_default = cm.get_acr_mri_low_contrast_visibility_sanity_multiplier()
+        vanilla_def = cm.get_acr_qa_vanilla_pylinac()
+        embed_def = cm.get_acr_qa_embed_module_images_in_xlsx()
         mri_opts = prompt_acr_mri_options(
             app.main_window,
             low_contrast_method=lc_method_default,
             low_contrast_visibility_threshold=lc_vis_default,
             low_contrast_visibility_sanity_multiplier=lc_sanity_default,
             vanilla_pylinac_default=vanilla_def,
+            embed_module_images_default=embed_def,
         )
         if mri_opts is None:
             return
-        (
-            echo_number,
-            check_uid,
-            origin_slice,
-            mri_scan_tol,
-            lc_method,
-            lc_vis,
-            lc_sanity,
-            compare_request,
-            mri_vanilla,
-        ) = mri_opts
-        app.config_manager.set_acr_qa_vanilla_pylinac(mri_vanilla)
-        app.config_manager.set_acr_mri_low_contrast_method(lc_method)
-        app.config_manager.set_acr_mri_low_contrast_visibility_threshold(lc_vis)
-        app.config_manager.set_acr_mri_low_contrast_visibility_sanity_multiplier(
-            lc_sanity
-        )
+        (echo_number, check_uid, origin_slice, mri_scan_tol, lc_method, lc_vis,
+         lc_sanity, compare_request, mri_vanilla, mri_embed) = mri_opts
+        cm.set_acr_qa_vanilla_pylinac(mri_vanilla)
+        cm.set_acr_qa_embed_module_images_in_xlsx(mri_embed)
+        cm.set_acr_mri_low_contrast_method(lc_method)
+        cm.set_acr_mri_low_contrast_visibility_threshold(lc_vis)
+        cm.set_acr_mri_low_contrast_visibility_sanity_multiplier(lc_sanity)
 
         preflight = self.build_preflight_warnings(
             "MR", use_focused, folder_path, datasets, modality or "MR"
@@ -902,6 +900,7 @@ class QAAppFacade:
             preflight_warnings=preflight,
             scan_extent_tolerance_mm=float(mri_scan_tol),
             vanilla_pylinac=mri_vanilla,
+            embed_module_images_in_xlsx=mri_embed,
             low_contrast_method=lc_method,
             low_contrast_visibility_threshold=float(lc_vis),
             low_contrast_visibility_sanity_multiplier=float(lc_sanity),
@@ -910,6 +909,7 @@ class QAAppFacade:
             "origin_slice_override": origin_slice,
             "scan_extent_tolerance_mm": float(mri_scan_tol),
             "vanilla_pylinac": mri_vanilla,
+            "embed_module_images_in_xlsx": mri_embed,
             "low_contrast_method": lc_method,
             "low_contrast_visibility_threshold": float(lc_vis),
             "low_contrast_visibility_sanity_multiplier": float(lc_sanity),

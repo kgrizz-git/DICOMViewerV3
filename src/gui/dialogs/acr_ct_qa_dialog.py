@@ -1,6 +1,6 @@
 """
-Stage 1 dialog: optional scan-extent tolerance, vanilla stock pylinac toggle, and
-HU-module origin slice for ACR CT (pylinac).
+Stage 1 dialog: optional scan-extent tolerance, vanilla stock pylinac toggle,
+embed-module-images toggle, and HU-module origin slice for ACR CT (pylinac).
 
 Does not import pylinac. Viewer integration (default) allows any in-range origin
 index; vanilla mode uses stock ``ACRCT`` (stricter interior-only origin rule).
@@ -31,6 +31,7 @@ class AcrCtQaOptionsDialog(QDialog):
         parent: QWidget | None = None,
         *,
         vanilla_pylinac_default: bool = False,
+        embed_module_images_default: bool = True,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("ACR CT (pylinac) — Options")
@@ -50,6 +51,9 @@ class AcrCtQaOptionsDialog(QDialog):
         self._vanilla = QCheckBox("Stock pylinac mode (ACRCT)")
         self._vanilla.setChecked(bool(vanilla_pylinac_default))
         self._vanilla.toggled.connect(self._on_vanilla_toggled)
+
+        self._embed_images = QCheckBox("Embed module images in XLSX")
+        self._embed_images.setChecked(bool(embed_module_images_default))
 
         localisation = QGroupBox("HU linearity module (origin slice)")
         loc_form = QFormLayout()
@@ -93,6 +97,7 @@ class AcrCtQaOptionsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(intro)
         layout.addWidget(self._vanilla)
+        layout.addWidget(self._embed_images)
         layout.addWidget(localisation)
         layout.addWidget(self._geom)
         layout.addWidget(buttons)
@@ -104,9 +109,10 @@ class AcrCtQaOptionsDialog(QDialog):
         if checked:
             self._extent_tol.setChecked(False)
 
-    def get_options(self) -> tuple[float, int | None, bool]:
+    def get_options(self) -> tuple[float, int | None, bool, bool]:
         """
-        Return ``(scan_extent_tolerance_mm, origin_slice_or_none, vanilla_pylinac)``.
+        Return ``(scan_extent_tolerance_mm, origin_slice_or_none, vanilla_pylinac,
+        embed_module_images_in_xlsx)``.
         """
         vanilla = bool(self._vanilla.isChecked())
         tol = 0.0
@@ -114,23 +120,27 @@ class AcrCtQaOptionsDialog(QDialog):
             tol = float(self._tol_spin.value())
         origin = int(self._origin_spin.value())
         origin_out: int | None = None if origin < 0 else origin
-        return tol, origin_out, vanilla
+        embed = bool(self._embed_images.isChecked())
+        return tol, origin_out, vanilla, embed
 
 
 def prompt_acr_ct_options(
     parent: QWidget | None = None,
     *,
     vanilla_pylinac_default: bool = False,
-) -> tuple[float, int | None, bool] | None:
+    embed_module_images_default: bool = True,
+) -> tuple[float, int | None, bool, bool] | None:
     """
     Show modal dialog.
 
     Returns:
-        ``(scan_extent_tolerance_mm, origin_slice, vanilla_pylinac)``, or
-        ``None`` if cancelled.
+        ``(scan_extent_tolerance_mm, origin_slice, vanilla_pylinac,
+        embed_module_images_in_xlsx)``, or ``None`` if cancelled.
     """
     dlg = AcrCtQaOptionsDialog(
-        parent, vanilla_pylinac_default=vanilla_pylinac_default
+        parent,
+        vanilla_pylinac_default=vanilla_pylinac_default,
+        embed_module_images_default=embed_module_images_default,
     )
     dlg.activateWindow()
     dlg.raise_()

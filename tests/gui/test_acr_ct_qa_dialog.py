@@ -10,10 +10,25 @@ from gui.dialogs.acr_ct_qa_dialog import AcrCtQaOptionsDialog
 @pytest.mark.qt
 def test_default_options_are_auto_origin_and_viewer_mode(qapp) -> None:
     dlg = AcrCtQaOptionsDialog()
-    tol, origin, vanilla = dlg.get_options()
+    tol, origin, vanilla, embed = dlg.get_options()
     assert tol == 0.0
     assert origin is None
     assert vanilla is False
+    assert embed is True
+
+
+@pytest.mark.qt
+def test_embed_images_defaults_true(qapp) -> None:
+    dlg = AcrCtQaOptionsDialog()
+    assert dlg._embed_images.isChecked() is True
+
+
+@pytest.mark.qt
+def test_embed_images_unchecked(qapp) -> None:
+    dlg = AcrCtQaOptionsDialog()
+    dlg._embed_images.setChecked(False)
+    _, _, _, embed = dlg.get_options()
+    assert embed is False
 
 
 @pytest.mark.qt
@@ -21,7 +36,7 @@ def test_extent_tolerance_only_when_enabled_and_not_vanilla(qapp) -> None:
     dlg = AcrCtQaOptionsDialog()
     dlg._extent_tol.setChecked(True)
     dlg._tol_spin.setValue(1.5)
-    tol, origin, vanilla = dlg.get_options()
+    tol, origin, vanilla, _ = dlg.get_options()
     assert tol == 1.5
     assert origin is None
     assert vanilla is False
@@ -34,7 +49,7 @@ def test_vanilla_mode_disables_extent_and_zeros_tol(qapp) -> None:
     dlg._tol_spin.setValue(2.0)
     # Enabling vanilla emits toggled → _on_vanilla_toggled clears extent.
     dlg._vanilla.setChecked(True)
-    tol, origin, vanilla = dlg.get_options()
+    tol, origin, vanilla, _ = dlg.get_options()
     assert vanilla is True
     assert tol == 0.0
     assert dlg._extent_tol.isChecked() is False
@@ -45,8 +60,8 @@ def test_vanilla_mode_disables_extent_and_zeros_tol(qapp) -> None:
 def test_origin_slice_special_value_maps_to_none(qapp) -> None:
     dlg = AcrCtQaOptionsDialog()
     dlg._origin_spin.setValue(7)
-    _, origin, _ = dlg.get_options()
+    _, origin, _, _ = dlg.get_options()
     assert origin == 7
     dlg._origin_spin.setValue(-1)
-    _, origin2, _ = dlg.get_options()
+    _, origin2, _, _ = dlg.get_options()
     assert origin2 is None

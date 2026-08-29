@@ -6,6 +6,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **ACR QA embed-module-images toggle (P2-I2):** ACR CT, ACR MRI, and CT batch
+  options dialogs now expose an **Embed module images in XLSX** checkbox
+  (default **on**) for PDF-parity module PNGs on the XLSX Images sheet. The
+  choice is persisted as ``acr_qa_embed_module_images_in_xlsx`` and recorded
+  in the run's ``pylinac_analysis_profile`` and JSON ``inputs`` for audit.
+  **Semantic versioning note: minor.**
+
 ### Fixed
 - **Volume rescale slope guard (Sonar S1244):** Centralize exact-zero
   `RescaleSlope` checks in `is_usable_rescale_slope()` and use it for 3D

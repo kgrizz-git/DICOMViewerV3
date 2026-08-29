@@ -161,6 +161,33 @@ class TestAcrMriLowContrastSanityMultiplier:
         assert host.get_acr_mri_low_contrast_visibility_sanity_multiplier() == 3.0
 
 
+class TestAcrQaEmbedModuleImages:
+    def test_default_true(self):
+        host = _make_host()
+        assert host.get_acr_qa_embed_module_images_in_xlsx() is True
+
+    def test_set_false(self):
+        host = _make_host()
+        host.set_acr_qa_embed_module_images_in_xlsx(False)
+        assert host.get_acr_qa_embed_module_images_in_xlsx() is False
+        assert host.save_calls == 1
+
+    def test_set_true(self):
+        host = _make_host()
+        host.set_acr_qa_embed_module_images_in_xlsx(True)
+        assert host.get_acr_qa_embed_module_images_in_xlsx() is True
+
+    def test_get_explicit_value(self):
+        host = _make_host()
+        host.config["acr_qa_embed_module_images_in_xlsx"] = False
+        assert host.get_acr_qa_embed_module_images_in_xlsx() is False
+
+    def test_persists_through_save(self):
+        host = _make_host()
+        host.set_acr_qa_embed_module_images_in_xlsx(False)
+        assert host.config["acr_qa_embed_module_images_in_xlsx"] is False
+
+
 class TestAcrQaVanillaPylinac:
     def test_default_false(self):
         host = _make_host()
