@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
 **Last updated:** 2026-08-29
-**Status:** Active — **Phases 1–6 shipped** (flatten, XLSX, CT batch CSV, MRI batch, docs/strings, viewer-computed MRI SNR + highest-echo default); remaining: archive after PRs (P5-D5), golden `results_data` dumps (R0-1/R0-2/R0-9, P1-F4), optional R6-2 local numeric notes
+**Status:** Active — **Phases 1–6 shipped** (flatten, XLSX, CT batch CSV, MRI batch, docs/strings, viewer-computed MRI SNR + highest-echo default); remaining: archive after PRs (P5-D5), golden `results_data` dumps (R0-1/R0-2/R0-9, P1-F4)
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -361,7 +361,7 @@ SNR = mean(pylinac Center ROI on the uniformity slice)
 ```
 
 - **Signal (S̄):** pylinac `MRUniformityModule` **Center** disk ROI mean (`pixel_value`), used as-is (roi radius 80 in pylinac 3.43.2). Do **not** invent a separate ~80% phantom-diameter circle. Do **not** call this a “flood” (nuclear-medicine term).
-- **Noise:** average of pixel **standard deviations** in the two **ghost-free** background rectangles on the **frequency-encode axis** — select the pair on that axis from pylinac `ghost_rois` (**Left/Right** when frequency encode is image columns; **Top/Bottom** when frequency encode is image rows). **Do not hard-code Left/Right** without `InPlanePhaseEncodingDirection` / orientation. **Fallback when DICOM tags missing:** assume phase encode = ROW, frequency encode = COL (PMC8321175 §2.2 default) → **Left/Right** for noise. Same ROI family as PSG §6, but use **σ** not mean intensity.
+- **Noise:** average of pixel **standard deviations** in the two **ghost-free** background rectangles on the **frequency-encode axis** — select the pair from pylinac `ghost_rois` (**Left/Right** when phase encode is DICOM **COL** / top–bottom; **Top/Bottom** when phase encode is DICOM **ROW** / left–right). **Do not hard-code Left/Right** without `InPlanePhaseEncodingDirection`. **Fallback when DICOM tags missing:** assume phase encode = ROW, frequency encode = COL (PMC8321175 §2.2) → **Top/Bottom** for noise. Same ROI family as PSG §6, but use **σ** not mean intensity.
 - **Encode direction:** read DICOM (`InPlanePhaseEncodingDirection`, orientation) before selecting axes; document fallback above in R6-3.
 - **Slice:** uniformity module slice (same as PIU/PSG).
 - **NEMA:** same S̄ / σ_bkg, times **0.655** — not applied in v1 (OQ-10).
@@ -383,7 +383,7 @@ SNR = mean(pylinac Center ROI on the uniformity slice)
 
 **Phase 6+ (after `mri_snr` ships):** optional **SNRU** slice-6÷7 ratio ([PMC8321175 §2.3.3.B](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)); export only, no default pass/fail.
 
-- [x] **(P6-R1)** R6-1 literature + Center-ROI decision locked (pylinac Center as-is; no 0.655). R6-2 live phantom numeric compare still optional (gitignored `sample-DICOM-gitignored/MR-phantoms` and `sample-DICOM-gitignored/CT-phantoms`; notes under `tmp/` only, no absolute paths or institution/station in any dump). (owner: coder + physicist reviewer)
+- [x] **(P6-R1)** R6-1 literature + Center-ROI decision locked (pylinac Center as-is; no 0.655). **R6-2 landed 2026-08-29:** manual vs viewer SNR on tracked `deid-phantoms/mr/series-005` (T1, SeriesNumber 3, COL); numbers in [ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md](../../info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md#r6-2--local-t1-snr-compare-2026-08-29). (owner: coder + physicist reviewer)
 - [x] **(P6-H1)** Implement R6-3/R6-4 harvest. (owner: coder, after: P6-R1, Phase 1 flatten exists) — **landed:** `src/qa/pylinac_mri_snr.py` (`extract_mri_snr_acr_style`) + runner overlay; `src/qa/pylinac_mri_echo.py` auto-highest echo when `QARequest.echo_number is None`.
 - [x] **(P6-E1)** R6-5 export + docs. (owner: coder + docs, after: P6-H1) — **landed:** XLSX Summary **MRI SNR** column; user guide uncorrected labeling; CHANGELOG minor.
 - [x] **(P6-T1)** R6-6 tests. (owner: tester, after: P6-H1) — **landed:** mocked ROI SNR tests, echo header tests, dialog default, flatten overlay, Summary column. No live `analyze()` in CI.

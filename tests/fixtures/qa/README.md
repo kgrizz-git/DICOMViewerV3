@@ -13,6 +13,18 @@ numeric metrics and phantom-model strings only.
 | `acr_ct_results_data.json` | Reviewed copy of a private maintainer dump (see workflow below) |
 | `acr_mri_results_data.json` | Same |
 
+## Tracked de-identified phantoms (preferred dump source)
+
+Use **`sample-phantom-data-committed/deid-phantoms/`** (PS3.15 Standard share; pixel review 2026-08-29) rather than gitignored clinical copies when producing the golden dumps:
+
+| Folder | What it is |
+|--------|------------|
+| `deid-phantoms/ct/series-001/` | ACR CT (25 instances) |
+| `deid-phantoms/mr/series-005/` | ACR T1 11-slice axial (DICOM SeriesNumber 3) — **not** `mr/series-003` (3-plane localizer) |
+| `deid-phantoms/mr/series-004/` | Dual-echo T2 (22 axials). Standard share may omit `EchoNumber`; auto-highest then cannot distinguish echoes |
+
+Spike `analyze()` on these T1 axials needs the viewer's **~1 mm** scan-extent retry (strict pylinac z-extent fails). Dump JSON still goes **outside** the checkout, then a redacted copy into this folder.
+
 ## Local phantom folders (gitignored — never stage)
 
 Place private ACR series under **repo-relative** gitignored roots only. Do **not**

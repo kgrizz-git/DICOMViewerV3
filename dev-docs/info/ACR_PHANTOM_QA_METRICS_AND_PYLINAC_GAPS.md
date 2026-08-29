@@ -60,9 +60,14 @@ NEMA MS 1, LCD-paper “ACR-style” SNR, PMC8321175 Eq. 7, and the Phase 6 expo
 | **NEMA MS 1 single-image** | SNR ≈ **0.655 × S̄ / σ_bkg** | Same S̄ / σ_bkg family; **0.655** corrects Rayleigh noise on magnitude images | [PMC8321175 §2.3.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) citing NEMA MS 1 |
 | **Two-image difference** | SNR ≈ **√2 × S̄ / σ_diff** (often written 1.41×) | **Different method** — two identical acquisitions; σ from the subtracted image | NEMA / PMC8321175 |
 
-**Phase 6 noise ROIs:** use the two **ghost-free** background rectangles on the **frequency-encode** axis (pylinac `ghost_rois`). When frequency encode is image **columns**, use **Left/Right**; when frequency encode is image **rows**, use **Top/Bottom**. Do not hard-code Left/Right without `InPlanePhaseEncodingDirection` / orientation. That matches PSG ROI placement but uses **σ** instead of mean intensity.
+**Phase 6 noise ROIs:** use the two **ghost-free** background rectangles on the **frequency-encode** axis (pylinac `ghost_rois`). DICOM ``InPlanePhaseEncodingDirection``:
 
-**Phase/frequency encode:** PSG guidance places ghost-sensitive ROIs along **phase encode** (top/bottom) vs ghost-free controls along **frequency encode** (left/right) when frequency encode is left–right. DICOM tags such as **`InPlanePhaseEncodingDirection`** (0018,1312) and the image orientation matrix determine which image axis is phase vs frequency. **Fallback when tags are missing (R6-3):** assume **phase encode = ROW** / **frequency encode = COL** (ACR default in [PMC8321175 §2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)) → noise from **Left/Right** ghost ROIs.
+- **COL** (phase along columns, top–bottom) → ghosts Top/Bottom → noise **Left/Right**
+- **ROW** (phase along rows, left–right) → ghosts Left/Right → noise **Top/Bottom**
+
+Do not hard-code Left/Right. That matches PSG ROI placement but uses **σ** instead of mean intensity. If the tag-selected pair has higher σ than the other pair, the run records a warning (the tag still wins).
+
+**Phase/frequency encode:** PSG guidance places ghost-sensitive ROIs along **phase encode** vs ghost-free controls along **frequency encode**. On a typical ACR axial with vertical phase encode (DICOM **COL**), that is Top/Bottom vs Left/Right. **Fallback when tags are missing (R6-3):** assume **phase encode = ROW** / **frequency encode = COL** (ACR default wording in [PMC8321175 §2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)) → noise from **Top/Bottom**.
 
 **SNR limits (export):** SNR has **no ACR accreditation pass/fail** threshold. Sites may apply QC-manual or local rules (e.g. [PMC8321175 §2.3.3.B](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) suggests **SNR ≥ 80×T** for technologist checks, or SNRU **0.9–1.1** between slices **6** and **7**). Viewer v1 exports **`mri_snr` as an uncorrected ratio** only — no pass/fail column unless added later.
 
@@ -75,10 +80,10 @@ pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 | ROI | Role in ACR §6 | pylinac `ghost_roi_settings` |
 |-----|----------------|------------------------------|
 | **Center** | Large circular ROI on the **uniformity slice** (PSG denominator) | Circular ROI, radius ≈ 80 px (~200 cm² per code comment) |
-| **Top / Bottom** | Phase-encode ghost sampling | Rectangles at ±90° from phantom center |
-| **Left / Right** | Frequency-encode **ghost-free** background controls | Rectangles at 0° / 180° |
+| **Top / Bottom** | Phase-encode ghost sampling when PE is vertical (DICOM COL) | Rectangles at ±90° from phantom center |
+| **Left / Right** | Frequency-encode **ghost-free** background when PE is vertical (DICOM COL) | Rectangles at 0° / 180° |
 
-**PSG** uses **means** of Top, Bottom, Left, Right. **SNR** uses **S̄** from the same **Center** ROI pylinac already places for PIU/PSG, and **mean of σ** in the two **frequency-encode (ghost-free)** background ROIs — **Left/Right** only when frequency encode is horizontal; **Top/Bottom** when frequency encode is vertical (phase-encode ROIs would inflate σ).
+**PSG** uses **means** of Top, Bottom, Left, Right. **SNR** uses **S̄** from the same **Center** ROI pylinac already places for PIU/PSG, and **mean of σ** in the two **frequency-encode (ghost-free)** background ROIs — **Left/Right** when phase encode is **COL** (vertical); **Top/Bottom** when phase encode is **ROW** (horizontal). Using the phase-encode pair inflates σ.
 
 ---
 
@@ -133,7 +138,20 @@ ACR accreditation **MRI test #2** (hole pairs) and the **CT spatial-resolution m
 
 ---
 
+## R6-2 — local T1 SNR compare (2026-08-29)
+
+Tracked Standard-share series: `sample-phantom-data-committed/deid-phantoms/mr/series-005` (DICOM **SeriesNumber 3**, 11-slice axial T1). Folder `mr/series-003` is the 3-plane localizer, not T1. Phase-encode tag **COL**. Viewer harvest used **1 mm** scan-extent tolerance (same retry the app offers). No site names or absolute paths.
+
+| Source | S̄ | σ pair (ghost-free) | mean σ | SNR = S̄ / mean(σ) |
+|--------|----|---------------------|--------|---------------------|
+| Viewer (`mri_snr`, pylinac Center + Left/Right) | 6063 | 8.56 / 8.36 | 8.46 | **717** |
+| Manual (uniformity slice; redo) | 6058 | 8.64 / 7.15 | 7.90 | **767** |
+
+First manual noise pair (6.57 / 5.13) was discarded: those ROIs were larger and farther into air than pylinac’s PSG rectangles and under-estimated σ. The redo is ~**7%** higher SNR than the viewer — within ordinary human ROI-placement scatter. Formula and COL → Left/Right mapping stand.
+
+---
+
 ## Phase 6+ pointer (SNR / SNRU)
 
-- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there.
+- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there. **R6-2** numeric compare is in [R6-2 — local T1 SNR compare](#r6-2--local-t1-snr-compare-2026-08-29).
 - **SNRU** (slice 6÷7 ratio, optional) — **Phase 6+** in the same plan; after `mri_snr` ships; no default pass/fail in v1.

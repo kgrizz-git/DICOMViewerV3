@@ -6,6 +6,8 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-29
 
+- **R6-2 T1 SNR compare recorded:** Manual vs viewer numbers for tracked `deid-phantoms/mr/series-005` live in `ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md` (~7% SNR gap after ROI redo; COL → Left/Right).
+- **MRI SNR ghost-free pair mapping:** COL (vertical PE) → noise Left/Right; ROW (horizontal PE) → noise Top/Bottom. Previous mapping was inverted. Missing-tag fallback remains ROW → Top/Bottom; a warning fires when the selected pair is the noisier of the two.
 - **Reviewed ACR phantom DICOM admitted:** `sample-phantom-data-committed/deid-phantoms/` (70 PS3.15 Standard-share instances) after human pixel review 2026-08-29; exact-path gitignore allowlist and SHA-256 manifest entries.
 - **Artifact gate dummy ``ANONYMIZED``:** `check_no_phi_artifacts.py` treats an identifier whose entire value is exactly ``ANONYMIZED`` as the de-id placeholder (not a populated name/ID). TO_DO tracks a follow-up to blank Type-2 / VR-legal CS instead of stuffing that dummy into Patient's Sex.
 - **Pylinac ACR dump redaction (site keys):** Spike `results_data` dumps now omit institution/address/station (and other `SENSITIVE_DICOM_FIELDS`) in addition to absolute paths; spike consoles no longer print folder or dump destinations. Local phantoms are documented only as repo-relative `sample-DICOM-gitignored/CT-phantoms/` and `…/MR-phantoms/`. Tracked DICOM fixtures, if ever added, go through **De-identify & Export DICOM (PS3.15)** first.

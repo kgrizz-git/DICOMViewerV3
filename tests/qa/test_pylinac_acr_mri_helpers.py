@@ -66,15 +66,15 @@ class _FakeMriAnalyzer:
         self.analyze_kwargs: dict[str, object] | None = None
         self.publish_pdf_calls: list[tuple[str, list[str]]] = []
         # Live SNR harvest reads these after analyze(); list stack has no
-        # InPlanePhaseEncodingDirection so harvest uses the ROW/COL fallback
-        # (Left/Right ghost ROIs).
+        # InPlanePhaseEncodingDirection so harvest uses the ROW fallback
+        # (Top/Bottom ghost-free ROIs when phase is along rows).
         self.uniformity_module = SimpleNamespace(
             rois={"Center": SimpleNamespace(pixel_value=200.0, std=1.0)},
             ghost_rois={
-                "Top": SimpleNamespace(pixel_value=1.0, std=10.0),
-                "Bottom": SimpleNamespace(pixel_value=1.0, std=10.0),
-                "Left": SimpleNamespace(pixel_value=1.0, std=4.0),
-                "Right": SimpleNamespace(pixel_value=1.0, std=6.0),
+                "Top": SimpleNamespace(pixel_value=1.0, std=4.0),
+                "Bottom": SimpleNamespace(pixel_value=1.0, std=6.0),
+                "Left": SimpleNamespace(pixel_value=1.0, std=10.0),
+                "Right": SimpleNamespace(pixel_value=1.0, std=10.0),
             },
         )
         _FakeMriAnalyzer.last_instance = self
@@ -323,7 +323,7 @@ def test_run_analysis_normalizes_successful_fake_analyzer_result(monkeypatch) ->
     assert result.metrics["mri_snr"] == 40.0
     assert result.metrics["mri_snr_signal_mean"] == 200.0
     assert result.metrics["mri_snr_noise_mean"] == 5.0
-    assert result.metrics["mri_snr_noise_roi_pair"] == "Left/Right"
+    assert result.metrics["mri_snr_noise_roi_pair"] == "Top/Bottom"
     assert result.metrics["mri_snr_phase_encoding_fallback"] is True
     assert result.pylinac_analysis_profile["echo_number"] == 2
     assert result.pylinac_analysis_profile["echo_number_auto_highest"] is False

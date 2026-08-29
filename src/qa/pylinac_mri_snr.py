@@ -26,18 +26,22 @@ from __future__ import annotations
 
 from typing import Any
 
-# pylinac 3.43.2 ``ghost_rois`` keys are *spatial* (fixed angles around the
-# phantom), not named after phase-encode:
-#   Top/Bottom = vertical (rows); Left/Right = horizontal (columns).
-# ACR ghosts appear along the *phase-encode* axis. Noise for uncorrected SNR
-# is taken on the *frequency-encode* (ghost-free) pair:
-#   phase ROW (rows/vertical) → ghosts Top/Bottom → noise Left/Right
-#   phase COL (columns/horizontal) → ghosts Left/Right → noise Top/Bottom
+# pylinac 3.43.2 ``ghost_rois`` keys are spatial (fixed phantom-centered
+# angles): Top/Bottom = vertical; Left/Right = horizontal.
+# DICOM ``InPlanePhaseEncodingDirection``:
+#   ROW = phase along rows (left–right) → ghosts Left/Right → noise Top/Bottom
+#   COL = phase along columns (top–bottom) → ghosts Top/Bottom → noise Left/Right
+# Noise is the frequency-encode (ghost-free) pair. Fallback when the tag is
+# missing is ROW / frequency COL (PMC8321175 §2.2) → Top/Bottom.
 _FREQ_GHOST_PAIR_BY_PHASE: dict[str, tuple[str, str]] = {
-    "ROW": ("Left", "Right"),
-    "COL": ("Top", "Bottom"),
+    "ROW": ("Top", "Bottom"),
+    "COL": ("Left", "Right"),
 }
 _FALLBACK_PHASE = "ROW"
+_ALTERNATE_GHOST_PAIR: dict[tuple[str, str], tuple[str, str]] = {
+    ("Top", "Bottom"): ("Left", "Right"),
+    ("Left", "Right"): ("Top", "Bottom"),
+}
 
 
 def _as_float(value: object) -> float | None:
@@ -140,6 +144,8 @@ def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
     noise = _mean_noise_std(uniformity, pair)
     if noise is None or noise == 0.0:
         return None
+    alternate = _ALTERNATE_GHOST_PAIR[pair]
+    alternate_noise = _mean_noise_std(uniformity, alternate)
     return {
         "mri_snr": signal / noise,
         "mri_snr_signal_mean": signal,
@@ -147,6 +153,9 @@ def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
         "mri_snr_noise_roi_pair": f"{pair[0]}/{pair[1]}",
         "mri_snr_phase_encoding_direction": phase,
         "mri_snr_phase_encoding_fallback": used_fallback,
+        "mri_snr_selected_pair_noisier_than_alternate": (
+            alternate_noise is not None and noise > alternate_noise
+        ),
     }
 
 
@@ -162,7 +171,17 @@ def overlay_mri_snr_metrics(
     """
     harvested = extract_mri_snr_acr_style(analyzer)
     if harvested:
+        noisier = bool(
+            harvested.pop("mri_snr_selected_pair_noisier_than_alternate", False)
+        )
         metrics.update(harvested)
+        if warnings is not None and noisier:
+            warnings.append(
+                "MRI SNR used the frequency-encode ghost-ROI pair from "
+                "InPlanePhaseEncodingDirection, but the other pair had lower "
+                "background σ. Confirm phase-encode axis vs Top/Bottom vs "
+                "Left/Right placement."
+            )
         return
     if warnings is not None:
         warnings.append(
