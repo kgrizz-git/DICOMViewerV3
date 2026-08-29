@@ -263,7 +263,10 @@ def test_empty_batch_guards_clean_up_or_skip_dialog(monkeypatch) -> None:
 def test_batch_xlsx_export_adds_extension_and_reports_status(monkeypatch, tmp_path: Path) -> None:
     output = tmp_path / "batch-without-extension"
     workbook = MagicMock()
-    monkeypatch.setattr(facade_module, "build_qa_workbook", lambda *args, **kwargs: workbook)
+    monkeypatch.setattr(
+        "gui.qa_ct_batch_export.build_qa_workbook",
+        lambda *args, **kwargs: workbook,
+    )
     app = _app(str(output))
     batch = CTBatchResult([_result()], ["Synthetic series"])
 

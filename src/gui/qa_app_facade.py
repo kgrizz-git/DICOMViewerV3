@@ -38,6 +38,11 @@ from gui.dialogs.ct_batch_result_dialog import create_ct_batch_result_dialog
 from gui.dialogs.ct_batch_select_dialog import prompt_batch_series_selection
 from gui.dialogs.mri_compare_result_dialog import create_mri_compare_result_dialog
 from gui.dialogs.nuclear_qa_dialog import prompt_nuclear_options
+from gui.qa_ct_batch_export import (
+    save_ct_batch_csv,
+    save_ct_batch_json,
+    save_ct_batch_xlsx,
+)
 from qa.analysis_types import (
     CTBatchResult,
     MRIBatchResult,
@@ -767,6 +772,7 @@ class QAAppFacade:
             batch,
             on_save_xlsx_clicked=lambda: self.export_ct_batch_xlsx(batch),
             on_save_json_clicked=lambda: self.export_ct_batch_json(batch),
+            on_save_csv_clicked=lambda: self.export_ct_batch_csv(batch),
             on_destroyed=on_dialog_destroyed,
         )
         app._ct_batch_result_dialog = dialog
@@ -776,53 +782,15 @@ class QAAppFacade:
 
     def export_ct_batch_xlsx(self, batch: CTBatchResult) -> None:
         """Offer XLSX export for a finished ACR CT batch (Feature 3 reuse)."""
-        app = self._app
-        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
-        path = app._prompt_save_path(
-            "Save QA Batch Results XLSX",
-            f"qa-acr-ct-batch-{timestamp}.xlsx",
-            "Excel Files (*.xlsx)",
-            remember_pylinac_output_dir=True,
-        )
-        if not path:
-            return
-        if not path.lower().endswith(".xlsx"):
-            path = f"{path}.xlsx"
-        workbook = build_qa_workbook(
-            batch.run_results, labels=batch.run_labels, app_version=APP_VERSION
-        )
-        workbook.save(path)
-        app.main_window.update_status(f"Saved QA batch XLSX: {path}")
+        save_ct_batch_xlsx(self._app, batch)
 
     def export_ct_batch_json(self, batch: CTBatchResult) -> None:
-        """
-        Offer JSON export for a finished ACR CT batch.
+        """Offer JSON export for a finished ACR CT batch (per-run document array)."""
+        save_ct_batch_json(self._app, batch)
 
-        Emits a JSON array of per-run ``build_single_run_document`` documents
-        (schema_version "1.3" each), consistent with the single-run JSON
-        export -- there is no dedicated batch JSON schema for ACR CT (unlike
-        the MRI compare document), so a list wrapper keeps this simple and
-        lossless.
-        """
-        app = self._app
-        timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
-        json_path = app._prompt_save_path(
-            "Save QA Batch Results JSON",
-            f"qa-acr-ct-batch-{timestamp}.json",
-            "JSON Files (*.json)",
-            remember_pylinac_output_dir=True,
-        )
-        if not json_path:
-            return
-        payload = [
-            build_single_run_document(
-                result, app_version=APP_VERSION, inputs={"series_label": label}
-            )
-            for label, result in zip(batch.run_labels, batch.run_results, strict=True)
-        ]
-        with open(json_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
-        app.main_window.update_status(f"Saved QA batch JSON: {json_path}")
+    def export_ct_batch_csv(self, batch: CTBatchResult) -> None:
+        """Offer CSV export for a finished ACR CT batch (full flatten)."""
+        save_ct_batch_csv(self._app, batch)
 
     def open_acr_mri_phantom_analysis(self) -> None:
         """Open the Stage 1 ACR MRI Large (pylinac) analysis flow."""

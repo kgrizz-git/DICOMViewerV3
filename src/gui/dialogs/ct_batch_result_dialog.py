@@ -11,7 +11,7 @@ background mean / background sigma / CNR), read from the canonical
 ``metrics["low_contrast_cnr"]`` shape.
 
 Inputs:
-    - Parent widget, ``CTBatchResult``, callbacks for XLSX/JSON export.
+    - Parent widget, ``CTBatchResult``, callbacks for XLSX/JSON/CSV export.
 
 Outputs:
     - Configured ``QDialog`` (caller stores reference, ``WA_DeleteOnClose``).
@@ -77,6 +77,7 @@ def create_ct_batch_result_dialog(
     *,
     on_save_xlsx_clicked: Callable[[], None],
     on_save_json_clicked: Callable[[], None],
+    on_save_csv_clicked: Callable[[], None],
     on_destroyed: Callable[..., None] | None = None,
 ) -> QDialog:
     """
@@ -88,6 +89,8 @@ def create_ct_batch_result_dialog(
         on_save_xlsx_clicked: Invoked when **Export XLSX** is pressed; caller
             calls ``qa.qa_xlsx_export.build_qa_workbook`` directly (Feature 3).
         on_save_json_clicked: Invoked when **Export JSON** is pressed.
+        on_save_csv_clicked: Invoked when **Export CSV** is pressed; caller
+            writes ``build_batch_metrics_csv`` (full flatten, one row per series).
         on_destroyed: Optional slot for ``dialog.destroyed`` (e.g. clear app
             ref).
 
@@ -157,6 +160,10 @@ def create_ct_batch_result_dialog(
     save_json_btn = QPushButton("Export JSON…")
     save_json_btn.clicked.connect(on_save_json_clicked)
     btn_row.addWidget(save_json_btn)
+    save_csv_btn = QPushButton("Export CSV…")
+    save_csv_btn.setToolTip("Full flatten, one row per series.")
+    save_csv_btn.clicked.connect(on_save_csv_clicked)
+    btn_row.addWidget(save_csv_btn)
     close_btn = QPushButton("Close")
     close_btn.clicked.connect(dialog.close)
     btn_row.addWidget(close_btn)

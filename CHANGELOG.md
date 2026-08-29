@@ -17,8 +17,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Changed
 - **ACR QA CSV exports:** Single-run QA CSV now includes the full pylinac
   `raw_pylinac` flatten (not only `result.metrics`), and every cell is
-  formula-injection neutralized. A wide batch CSV builder is in place for
-  the CT/MRI batch dialogs.
+  formula-injection neutralized. The ACR CT batch summary dialog offers
+  **Export CSV…** (one wide row per series, same flatten).
   **Semantic versioning note: minor.**
 - **README feature showcase:** Root `README.md` expands the Highlights table
   (ROIs, MPR create/export, slab projections, fusion, 3D, tag edit/export,

@@ -244,8 +244,10 @@ def test_ct_batch_dialog_wires_exports_and_cleans_temp_dir(qapp, monkeypatch) ->
     monkeypatch.setattr(facade_module, "create_ct_batch_result_dialog", MagicMock(return_value=dialog))
     export_xlsx = MagicMock()
     export_json = MagicMock()
+    export_csv = MagicMock()
     monkeypatch.setattr(QAAppFacade, "export_ct_batch_xlsx", export_xlsx)
     monkeypatch.setattr(QAAppFacade, "export_ct_batch_json", export_json)
+    monkeypatch.setattr(QAAppFacade, "export_ct_batch_csv", export_csv)
     batch = _batch_result()
 
     facade.show_ct_batch_result_dialog(worker, batch)
@@ -254,9 +256,11 @@ def test_ct_batch_dialog_wires_exports_and_cleans_temp_dir(qapp, monkeypatch) ->
     kwargs = factory.call_args.kwargs
     kwargs["on_save_xlsx_clicked"]()
     kwargs["on_save_json_clicked"]()
+    kwargs["on_save_csv_clicked"]()
     kwargs["on_destroyed"]()
     export_xlsx.assert_called_once_with(batch)
     export_json.assert_called_once_with(batch)
+    export_csv.assert_called_once_with(batch)
     assert app._ct_batch_result_dialog is None
     worker.image_temp_dir.cleanup.assert_called_once()
 
@@ -272,7 +276,10 @@ def test_ct_batch_json_and_xlsx_exports_report_synthetic_paths(qapp, monkeypatch
     assert json.loads(json_path.read_text(encoding="utf-8"))[0]["run"]["status"] == "success"
 
     workbook = MagicMock()
-    monkeypatch.setattr(facade_module, "build_qa_workbook", MagicMock(return_value=workbook))
+    monkeypatch.setattr(
+        "gui.qa_ct_batch_export.build_qa_workbook",
+        MagicMock(return_value=workbook),
+    )
     app._prompt_save_path.return_value = str(xlsx_path)
     facade.export_ct_batch_xlsx(batch)
 

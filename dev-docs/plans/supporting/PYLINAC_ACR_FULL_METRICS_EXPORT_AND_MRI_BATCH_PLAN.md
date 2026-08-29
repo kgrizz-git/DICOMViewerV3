@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
 **Last updated:** 2026-08-29
-**Status:** Active — **P1-F1 flatten module landed** (CSV/XLSX/MRI-batch still open); **external review incorporated** (Hy3, GLM, Kilo Hy3, Cursor Grok 4.5/4.6 — see **Review notes**)
+**Status:** Active — **P1-F1/F2/F3 flatten + CSV landed**; **P3-C1** CT batch **Export CSV…** landed; XLSX/MRI-batch still open; **external review incorporated** (Hy3, GLM, Kilo Hy3, Cursor Grok 4.5/4.6 — see **Review notes**)
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -53,7 +53,7 @@ Success means:
 | XLSX Images | One **composite** PNG per run (`save_analyzed_image`) when CT temp dir wired | **None** (no image save in runner) |
 | PDF figures | Full module set via `save_images()` inside `publish_pdf` | Same |
 
-Runners: `src/qa/pylinac_acr_ct.py`, `src/qa/pylinac_acr_mri.py`. Export: `src/qa/qa_export.py`, `src/qa/qa_xlsx_export.py`. Facade: `src/gui/qa_app_facade.py`. CT batch UI: `src/gui/dialogs/ct_batch_result_dialog.py`, `ct_batch_select_dialog.py` (`prompt_batch_series_selection`).
+Runners: `src/qa/pylinac_acr_ct.py`, `src/qa/pylinac_acr_mri.py`. Export: `src/qa/qa_export.py`, `src/qa/qa_xlsx_export.py`. Facade: `src/gui/qa_app_facade.py`. CT batch save dialogs: `src/gui/qa_ct_batch_export.py`. CT batch UI: `src/gui/dialogs/ct_batch_result_dialog.py`, `ct_batch_select_dialog.py` (`prompt_batch_series_selection`).
 
 **Target:** XLSX Images uses **`save_images()`** (PDF parity). Today’s composite-only CT path is replaced when the embed option is on (default). Toggle off → skip Images sheet (Summary note only), same graceful degradation as missing Pillow.
 
@@ -190,7 +190,7 @@ All new tests under `tests/qa/` unless noted. Use **committed redacted `results_
 
 ### Phase 3 — batch CT CSV
 
-- [ ] **`tests/gui/test_ct_batch_result_dialog.py`** (or facade test) — Export CSV invokes `build_batch_metrics_csv` with batch labels (mock facade).
+- [x] **`tests/gui/test_ct_batch_result_dialog.py`** (or facade test) — Export CSV invokes `build_batch_metrics_csv` with batch labels (mock facade).
 
 ### Phase 4 — MRI batch
 
@@ -330,7 +330,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 
 ### Phase 3 — Batch CT CSV + export parity
 
-- [ ] **(P3-C1)** Add **Export CSV…** to `ct_batch_result_dialog` → `export_ct_batch_csv` in facade. (owner: coder, after: P1-F3)
+- [x] **(P3-C1)** Add **Export CSV…** to `ct_batch_result_dialog` → `export_ct_batch_csv` in facade. (owner: coder, after: P1-F3)
 - [ ] **(P3-C2)** Verify single-run CT/MRI save dialog CSV/XLSX pick up full flatten without UI change. (owner: tester, after: P1-F2, P2-X2)
 
 ### Phase 4 — Multi-series MRI batch

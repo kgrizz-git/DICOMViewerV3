@@ -39,6 +39,7 @@ def test_one_row_per_series_with_cnr_cells(qapp) -> None:
         _batch(),
         on_save_xlsx_clicked=lambda: None,
         on_save_json_clicked=lambda: None,
+        on_save_csv_clicked=lambda: None,
     )
     table = dlg.findChildren(QTableWidget)[0]
     assert table.rowCount() == 2
@@ -52,17 +53,21 @@ def test_one_row_per_series_with_cnr_cells(qapp) -> None:
 def test_export_buttons_fire_callbacks(qapp) -> None:
     xlsx: list[int] = []
     json_clicks: list[int] = []
+    csv: list[int] = []
     dlg = create_ct_batch_result_dialog(
         None,
         _batch(),
         on_save_xlsx_clicked=lambda: xlsx.append(1),
         on_save_json_clicked=lambda: json_clicks.append(1),
+        on_save_csv_clicked=lambda: csv.append(1),
     )
     buttons = {b.text(): b for b in dlg.findChildren(QPushButton)}
     buttons["Export XLSX…"].click()
     buttons["Export JSON…"].click()
+    buttons["Export CSV…"].click()
     assert xlsx == [1]
     assert json_clicks == [1]
+    assert csv == [1]
 
 
 @pytest.mark.qt
@@ -72,5 +77,6 @@ def test_failed_series_updates_title(qapp) -> None:
         _batch(fail_second=True),
         on_save_xlsx_clicked=lambda: None,
         on_save_json_clicked=lambda: None,
+        on_save_csv_clicked=lambda: None,
     )
     assert "one or more series failed" in dlg.windowTitle()

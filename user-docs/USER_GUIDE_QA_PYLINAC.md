@@ -1,6 +1,6 @@
 # User guide — ACR phantom QA (pylinac)
 
-**Last updated:** 2026-07-28
+**Last updated:** 2026-08-29
 
 The viewer can run **automated ACR phantom analysis** using the **pylinac** library (pinned in `requirements.txt`, currently **3.43.2**). This is **optional QA tooling**; the app still runs if pylinac is missing until you use these menus.
 
@@ -39,7 +39,7 @@ The MRI dialog can include:
 
 - Similar worker flow; optional extent tolerance and JSON profile fields align with the MRI path where implemented.
 - **CNR intermediates:** the result dialog surfaces the values behind the low-contrast **contrast-to-noise ratio** — the **object ROI mean**, the **background mean**, the **background noise (σ)**, and the module **CNR**. These are also written to **`metrics.low_contrast_cnr`** in the JSON/CSV/XLSX exports (keys `object_rois`, `background`, `cnr`); any key may be absent if a given pylinac build does not expose it.
-- **Batch mode** (**ACR CT Batch (pylinac)…**): select **multiple loaded CT series** from a checkbox list (or **Add folder…** for on-disk series), then one shared CT options set is applied to every series. Series run **one at a time**; a progress dialog shows **N-of-M**, and **Cancel** stops after the in-flight series finishes (already-completed series are kept). The batch summary dialog shows **one row per series** (label, status/warnings, and the CNR block) with **Export XLSX…** (one workbook, one row per series, plus an embedded analyzed image per series) and **Export JSON…** (a JSON array of per-run documents). Per-series PDF output is not part of batch mode.
+- **Batch mode** (**ACR CT Batch (pylinac)…**): select **multiple loaded CT series** from a checkbox list (or **Add folder…** for on-disk series), then one shared CT options set is applied to every series. Series run **one at a time**; a progress dialog shows **N-of-M**, and **Cancel** stops after the in-flight series finishes (already-completed series are kept). The batch summary dialog shows **one row per series** (label, status/warnings, and the CNR block) with **Export CSV…** (one wide row per series, full flatten), **Export XLSX…** (one workbook, one row per series, plus an embedded analyzed image per series), and **Export JSON…** (a JSON array of per-run documents). Per-series PDF output is not part of batch mode.
 
 ## Interpretation
 
