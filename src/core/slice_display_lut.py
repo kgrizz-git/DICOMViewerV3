@@ -12,6 +12,7 @@ Requirements: core.dicom_processor.DICOMProcessor conversion helpers.
 
 
 from core.dicom_processor import DICOMProcessor
+from core.dicom_rescale import is_usable_rescale_slope
 
 
 def apply_window_level_rescale_conversion(
@@ -30,12 +31,7 @@ def apply_window_level_rescale_conversion(
     If dataset WL is already in the same space as the viewer, values are unchanged.
     """
     if is_rescaled and not use_rescaled_values:
-        if (
-            rescale_slope is not None
-            and rescale_intercept is not None
-            # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-            and rescale_slope != 0.0  # NOSONAR(S1244)
-        ):
+        if is_usable_rescale_slope(rescale_slope) and rescale_intercept is not None:
             return dicom_processor.convert_window_level_rescaled_to_raw(
                 wc, ww, rescale_slope, rescale_intercept
             )

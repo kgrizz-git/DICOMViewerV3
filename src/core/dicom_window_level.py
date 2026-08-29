@@ -20,7 +20,7 @@ import numpy as np
 from pydicom.dataset import Dataset
 
 from core.dicom_pixel_array import get_pixel_array
-from core.dicom_rescale import get_rescale_parameters
+from core.dicom_rescale import get_rescale_parameters, is_usable_rescale_slope
 from utils.privacy.console import print_redacted
 
 
@@ -110,8 +110,7 @@ def convert_window_level_rescaled_to_raw(
     center: float, width: float, slope: float, intercept: float
 ) -> tuple[float, float]:
     """Convert window/level from rescaled to raw pixel values. Returns (raw_center, raw_width)."""
-    # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-    if slope == 0.0:  # NOSONAR(S1244)
+    if not is_usable_rescale_slope(slope):
         return center, width
     return (center - intercept) / slope, width / slope
 
@@ -170,10 +169,8 @@ def get_window_level_from_dataset(
             from_dicom_tags = False
         is_rescaled = (
             from_dicom_tags
-            and rescale_slope is not None
+            and is_usable_rescale_slope(rescale_slope)
             and rescale_intercept is not None
-            # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-            and rescale_slope != 0.0  # NOSONAR(S1244)
         )
         return window_center, window_width, is_rescaled
     except Exception:
@@ -226,10 +223,8 @@ def convert_window_level_units(
         window_center is not None
         and window_width is not None
         and extracted_from_dataset
-        and rescale_slope is not None
+        and is_usable_rescale_slope(rescale_slope)
         and rescale_intercept is not None
-        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-        and rescale_slope != 0.0  # NOSONAR(S1244)
     ):
         if not apply_rescale and is_rescaled:
             # Window/level is in rescaled units (HU), but we're not applying rescale to
@@ -386,10 +381,8 @@ def get_window_level_presets_from_dataset(
             )
             is_rescaled = (
                 from_dicom_tags
-                and rescale_slope is not None
+                and is_usable_rescale_slope(rescale_slope)
                 and rescale_intercept is not None
-                # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-                and rescale_slope != 0.0  # NOSONAR(S1244)
             )
             presets.append((wc, ww, is_rescaled, preset_name))
         return presets

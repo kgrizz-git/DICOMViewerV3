@@ -30,6 +30,7 @@ from pydicom.dataset import Dataset
 from PySide6.QtCore import QPointF
 
 from core.dicom_processor import DICOMProcessor
+from core.dicom_rescale import is_usable_rescale_slope
 from core.view_state_inversion import get_persisted_user_inversion
 from gui.image_viewer import ImageViewer
 from gui.main_window import MainWindow
@@ -397,8 +398,7 @@ class ViewStateManager:
             return reset_window_center, reset_window_width
 
         if reset_use_rescaled_values and not self.use_rescaled_values:
-            if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
+            if is_usable_rescale_slope(self.rescale_slope) and self.rescale_intercept is not None:
                 return self.dicom_processor.convert_window_level_rescaled_to_raw(
                     reset_window_center, reset_window_width,
                     self.rescale_slope, self.rescale_intercept
@@ -459,8 +459,7 @@ class ViewStateManager:
     ) -> tuple[float, float]:
         """Convert dataset W/L values to the requested rescale display mode."""
         if is_rescaled and not use_rescaled:
-            if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
+            if is_usable_rescale_slope(self.rescale_slope) and self.rescale_intercept is not None:
                 return self.dicom_processor.convert_window_level_rescaled_to_raw(
                     wc, ww, self.rescale_slope, self.rescale_intercept
                 )
@@ -665,8 +664,7 @@ class ViewStateManager:
     ) -> tuple[float, float]:
         """Convert preset W/L values to match the current rescale display mode."""
         if preset_is_rescaled and not self.use_rescaled_values:
-            if (self.rescale_slope is not None and self.rescale_intercept is not None and
-                    self.rescale_slope != 0.0):  # NOSONAR(S1244)
+            if is_usable_rescale_slope(self.rescale_slope) and self.rescale_intercept is not None:
                 return self.dicom_processor.convert_window_level_rescaled_to_raw(
                     preset_wc, preset_ww, self.rescale_slope, self.rescale_intercept
                 )
@@ -728,9 +726,8 @@ class ViewStateManager:
         self, checked: bool, current_center: float | None, current_width: float | None
     ) -> tuple[float | None, float | None]:
         """Convert W/L values when toggling rescale display mode."""
-        if (current_center is None or current_width is None or
-                self.rescale_slope is None or self.rescale_intercept is None or
-                self.rescale_slope == 0.0):  # NOSONAR(S1244)
+        if (current_center is None or current_width is None or self.rescale_intercept is None
+                or not is_usable_rescale_slope(self.rescale_slope)):
             return current_center, current_width
 
         if self.use_rescaled_values and not checked:

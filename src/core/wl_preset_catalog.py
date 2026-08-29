@@ -17,7 +17,11 @@ from typing import Any, Literal, NamedTuple
 
 from pydicom.dataset import Dataset
 
-from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
+from core.dicom_rescale import (
+    get_rescale_parameters,
+    infer_rescale_type,
+    is_usable_rescale_slope,
+)
 from core.dicom_window_level import (
     convert_window_level_raw_to_rescaled,
     convert_window_level_rescaled_to_raw,
@@ -162,10 +166,8 @@ def _has_usable_rescale(
     rescale_intercept: float | None,
 ) -> bool:
     return (
-        rescale_slope is not None
+        is_usable_rescale_slope(rescale_slope)
         and rescale_intercept is not None
-        # RescaleSlope is DICOM DS-VR; exact 0.0 is well-defined
-        and rescale_slope != 0.0  # NOSONAR(S1244)
     )
 
 
