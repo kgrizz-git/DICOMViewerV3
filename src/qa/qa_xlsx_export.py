@@ -17,8 +17,10 @@ from typing import Any, cast
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from core.spreadsheet_safety import neutralize_spreadsheet_value
 from qa.analysis_types import QAResult
-from qa.qa_export import extract_low_contrast_cnr_values, flatten_metrics
+from qa.qa_export import extract_low_contrast_cnr_values
+from qa.qa_result_flatten import build_metric_rows
 
 
 # Guarded at import time so the Images-sheet builder can cheaply detect a
@@ -73,6 +75,19 @@ def _cnr_summary_values(result: QAResult) -> tuple[Any, Any, Any, Any]:
     )
 
 
+def _xlsx_cell(value: Any) -> Any:
+    """Join list/tuple cells like CSV, then neutralize formula-like strings.
+
+    List/tuple values are joined with ``"; "`` (same separator as the CSV
+    builders) so openpyxl never emits a Python list repr. Every string cell
+    then passes through ``neutralize_spreadsheet_value`` so leading
+    ``= + - @`` values are treated as literal text, not formulas.
+    """
+    if isinstance(value, (list, tuple)):
+        value = "; ".join(str(item) for item in value)
+    return neutralize_spreadsheet_value(value)
+
+
 def _build_summary_sheet(
     ws: Worksheet, results: list[QAResult], row_labels: list[str | None]
 ) -> None:
@@ -82,7 +97,15 @@ def _build_summary_sheet(
         status = "success" if result.success else "failed"
         warnings_text = "; ".join(result.warnings or [])
         ws.append(
-            [_row_label(result, label), obj_mean, bg_mean, bg_std, cnr, status, warnings_text]
+            [
+                _xlsx_cell(_row_label(result, label)),
+                obj_mean,
+                bg_mean,
+                bg_std,
+                cnr,
+                _xlsx_cell(status),
+                _xlsx_cell(warnings_text),
+            ]
         )
 
 
@@ -90,17 +113,24 @@ def _build_detail_sheet(
     ws: Worksheet, results: list[QAResult], row_labels: list[str | None]
 ) -> None:
     """
-    Flat metric rows, one block per run.
+    Full flatten metric rows, one block per run.
 
-    Reuses ``qa_export.flatten_metrics`` over ``result.metrics`` for the exact
-    dotted-key / list-joined shape the CSV export already produces, so the
-    Detail sheet matches the CSV export field-for-field.
+    Uses :func:`qa.qa_result_flatten.build_metric_rows` (the CSV source of
+    truth) which walks ``result.raw_pylinac`` into dotted keys then overlays
+    curated ``result.metrics`` (metrics wins on collision, curated keys stay
+    top-level). The path denylist in that builder still applies —
+    ``analyzed_image_path`` / ``pdf_report_path`` never reach Detail.
+
+    Every string cell is neutralized via :func:`neutralize_spreadsheet_value`
+    so formula-like values (e.g. DICOM-derived Series/Run labels or warnings)
+    are written as literal text, not live formulas. List/tuple cells are
+    joined with ``"; "`` first, matching the CSV export.
     """
     ws.append(["Metric", "Value"])
     for result, label in zip(results, row_labels, strict=True):
-        ws.append([_row_label(result, label), ""])
-        for key, value in flatten_metrics(result.metrics or {}):
-            ws.append([key, value])
+        ws.append([_xlsx_cell(_row_label(result, label)), ""])
+        for key, value in build_metric_rows(result):
+            ws.append([_xlsx_cell(key), _xlsx_cell(value)])
         ws.append([])  # blank separator row between run blocks
 
 
@@ -146,7 +176,7 @@ def _build_images_sheet(
     ws = wb.create_sheet("Images")
     row = 1
     for result, label in zip(results, row_labels, strict=True):
-        ws.cell(row=row, column=1, value=_row_label(result, label))
+        ws.cell(row=row, column=1, value=_xlsx_cell(_row_label(result, label)))
         row += 1
         path = getattr(result, "analyzed_image_path", None)
         if path and os.path.isfile(path):
@@ -189,9 +219,10 @@ def build_qa_workbook(
         Summary -- one row per run: Series/Run ID, object ROI mean,
             background mean/std, CNR, status, warnings (see F1's canonical
             ``metrics["low_contrast_cnr"]`` shape).
-        Detail -- flat metric rows per run (reuses ``qa_export._flatten``).
+        Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- one embedded analyzed-image PNG per run, or a note cell on
-            Summary when Pillow/images are unavailable.
+            Summary when Pillow/images are unavailable. Series/Run labels on
+            every sheet are formula-injection neutralized.
     """
     if labels is not None and len(labels) != len(results):
         raise ValueError("labels must be parallel to results (same length)")

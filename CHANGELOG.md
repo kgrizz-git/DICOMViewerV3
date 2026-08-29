@@ -20,6 +20,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   formula-injection neutralized. The ACR CT batch summary dialog offers
   **Export CSV…** (one wide row per series, same flatten).
   **Semantic versioning note: minor.**
+- **ACR QA XLSX Detail + formula neutralization:** The XLSX Detail sheet now
+  uses the full `raw_pylinac` flatten (via `build_metric_rows`, matching the
+  CSV export field-for-field), replacing the prior metrics-only walk. Every
+  string cell written to the Summary, Detail, and Images sheets is
+  formula-injection neutralized via `neutralize_spreadsheet_value` (leading
+  ``= + - @`` prefixed with an apostrophe), and list/tuple cells are joined
+  with ``"; "`` — so DICOM-derived Series/Run labels and warnings are written
+  as literal text, not live formulas. **Semantic versioning note: minor.**
 - **README feature showcase:** Root `README.md` expands the Highlights table
   (ROIs, MPR create/export, slab projections, fusion, 3D, tag edit/export,
   cine, themes/settings, pylinac CT/MR/NM QC) and adds a constrained-width

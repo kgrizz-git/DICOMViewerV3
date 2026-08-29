@@ -21,6 +21,7 @@ from openpyxl.utils.units import pixels_to_EMU
 from qa import qa_xlsx_export
 from qa.analysis_types import QAResult
 from qa.qa_export import build_metrics_csv, build_single_run_document
+from qa.qa_result_flatten import build_metric_rows
 from qa.qa_xlsx_export import build_qa_workbook
 
 _SRC_ROOT = Path(__file__).resolve().parent.parent / "src"
@@ -221,3 +222,150 @@ def test_analyzed_image_path_does_not_leak_into_json_or_csv() -> None:
 
     csv_text = build_metrics_csv(result)
     assert secret_path not in csv_text
+
+
+# ---------------------------------------------------------------------------
+# P2-X2 — Detail sheet uses full flatten + formula neutralization
+# ---------------------------------------------------------------------------
+
+
+def _raw_pylinac_result() -> QAResult:
+    """Synthetic run with a nested raw_pylinac tree + curated metrics."""
+    return QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        metrics={
+            "low_contrast_cnr": {
+                "cnr": 4.25,
+                "object_rois": [{"mean": 105.0}, {"mean": 95.0}],
+                "background": {"mean": 12.0, "std": 1.5},
+            },
+            "low_contrast_score": 1,
+            "num_images": 40,
+            "phantom_roll": 0.31,
+            "origin_slice": 5,
+        },
+        warnings=["=cmd"],
+        errors=[],
+        raw_pylinac={
+            "phantom_model": "ACR CT 464",
+            "phantom_roll_deg": 0.31,
+            "origin_slice": 5,
+            "num_images": 40,
+            "ct_module": {
+                "offset": 0.0,
+                "rois": {"Air": -987.1, "Water": 5.2},
+            },
+            "uniformity_module": {
+                "offset": 70.0,
+                "rois": {"Center": 3.0},
+                "center_roi_stdev": 4.2,
+            },
+        },
+        study_uid="1.2.3.4",
+        series_uid="1.2.3.4.5",
+        modality="CT",
+        num_images=40,
+        pylinac_version="3.43.2",
+        analyzed_image_path="/tmp/analyzed_image.png",
+    )
+
+
+def test_detail_row_count_matches_build_metric_rows() -> None:
+    """Detail body rows must match build_metric_rows for a synthetic raw_pylinac tree."""
+    result = _raw_pylinac_result()
+    expected_rows = list(build_metric_rows(result))
+    wb = build_qa_workbook([result], labels=["Run A"])
+    detail = wb["Detail"]
+
+    # Count rows that carry a metric key (column 1 non-blank) AND a non-empty
+    # value (column 2 not blank). Label rows have a blank column 2, so they
+    # are excluded; blank separator rows have both blank. This count must
+    # equal the number of build_metric_rows entries.
+    metric_row_count = sum(
+        1
+        for row in detail.iter_rows(min_row=2)
+        if row[0].value and row[1].value not in (None, "")
+    )
+    assert metric_row_count == len(expected_rows)
+
+
+def test_detail_row_count_exceeds_metrics_only_flatten() -> None:
+    """Full flatten Detail must have more metric rows than metrics-only walk."""
+    result = _raw_pylinac_result()
+    from qa.qa_export import flatten_metrics
+
+    metrics_only_count = len(list(flatten_metrics(result.metrics or {})))
+    full_count = len(list(build_metric_rows(result)))
+    assert full_count > metrics_only_count
+
+
+def test_detail_formula_like_series_label_neutralized() -> None:
+    """A Series/Run label beginning with '=' must be neutralized in Detail."""
+    result = _raw_pylinac_result()
+    wb = build_qa_workbook([result], labels=["=Run1"])
+    detail = wb["Detail"]
+    # The label row is the first row after the header.
+    label_cell = detail.cell(row=2, column=1).value
+    assert label_cell == "'=Run1"
+
+
+def test_summary_formula_like_series_label_neutralized() -> None:
+    """A Series/Run label beginning with '=' must be neutralized in Summary."""
+    result = _raw_pylinac_result()
+    wb = build_qa_workbook([result], labels=["=Run1"])
+    summary = wb["Summary"]
+    # Row 2, column 1 = first data row, Series/Run ID.
+    assert summary.cell(row=2, column=1).value == "'=Run1"
+
+
+def test_summary_formula_like_warning_neutralized() -> None:
+    """A warning beginning with '=' must be neutralized in Summary."""
+    result = _raw_pylinac_result()
+    wb = build_qa_workbook([result], labels=["Run1"])
+    summary = wb["Summary"]
+    # Column 7 = Warnings.
+    assert summary.cell(row=2, column=7).value == "'=cmd"
+
+
+def test_detail_analyzed_image_path_not_present() -> None:
+    """The path denylist must hold in the Detail sheet."""
+    result = _raw_pylinac_result()
+    wb = build_qa_workbook([result], labels=["Run1"])
+    detail_values = [c.value for row in wb["Detail"].iter_rows() for c in row]
+    assert "analyzed_image_path" not in detail_values
+    assert "/tmp/analyzed_image.png" not in [str(v) for v in detail_values if v]
+
+
+def test_detail_formula_like_metric_value_neutralized() -> None:
+    """Formula-like metric values in raw_pylinac must be neutralized in Detail."""
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        metrics={"safe": "ok"},
+        raw_pylinac={"phantom_model": "=SUM(A1)", "origin_slice": 3},
+    )
+    wb = build_qa_workbook([result], labels=["Run1"])
+    detail = wb["Detail"]
+    # Find the phantom_model row and confirm neutralization.
+    model_rows = [
+        row for row in detail.iter_rows(min_row=2)
+        if row[0].value == "phantom_model"
+    ]
+    assert len(model_rows) == 1
+    assert model_rows[0][1].value == "'=SUM(A1)"
+
+
+def test_images_formula_like_series_label_neutralized(tmp_path: Path) -> None:
+    """A Series/Run label beginning with '=' must be neutralized on Images."""
+    try:
+        from PIL import Image as PILImage
+    except ImportError:
+        pytest.skip("Pillow is not installed")
+
+    png_path = tmp_path / "analyzed.png"
+    PILImage.new("RGB", (16, 16), color="red").save(png_path)
+    result = _result(analyzed_image_path=str(png_path))
+    wb = build_qa_workbook([result], labels=["=Run1"])
+    images = wb["Images"]
+    assert images.cell(row=1, column=1).value == "'=Run1"

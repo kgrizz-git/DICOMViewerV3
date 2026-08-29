@@ -305,7 +305,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [ ] **(R0-5)** Resolve **OQ-4**, **OQ-5** (Summary vs Detail flatten strategy). (owner: coder + reviewer)
 - [ ] **(R0-6)** Lock **OQ-2** (`ACRMBatchResult`). (owner: coder)
 - [ ] **(R0-7)** Lock **OQ-3** (wide CSV column order prototype). (owner: coder) — **P1-F3 interim:** two bands (provenance insertion order → remaining keys `str`-sorted). Curated top-level scalars interleave alphabetically with dotted `raw_pylinac` leaves rather than a third "family" band. Revisit after R0-1/R0-2 dumps if a fixed enumerated header is needed.
-- [x] **(R0-8)** Document formula-injection wiring for Phase 1 — `qa_export.build_metrics_csv` uses bare `csv.writer`; Phase 1 (P1-F2) must wrap with `SafeCsvWriter` from `src/core/spreadsheet_safety.py` and apply `neutralize_spreadsheet_value` to every cell. XLSX: openpyxl writes leading-`=` strings as live formulas on open — same neutralization applies to Series/Run labels and warnings in XLSX cells. (owner: coder)
+- [x] **(R0-8)** Document formula-injection wiring for Phase 1 — `qa_export.build_metrics_csv` uses bare `csv.writer`; Phase 1 (P1-F2) must wrap with `SafeCsvWriter` from `src/core/spreadsheet_safety.py` and apply `neutralize_spreadsheet_value` to every cell. XLSX: openpyxl writes leading-`=` strings as live formulas on open — same neutralization applies to Series/Run labels and warnings in XLSX cells. (owner: coder) — **landed**: CSV wired in P1-F2; XLSX Summary, Detail, and Images Series/Run labels neutralized in P2-X2.
 - [ ] **(R0-9)** Commit redacted dumps; assert no PHI paths. (owner: maintainer, after: R0-1, R0-2)
 - [x] **(R0-10)** Document module figure names per modality from `plot_images()` source — see appendix §Figure names. **OQ-9 locked**: embed via `save_images(directory=…)` when toggle on. (owner: coder)
 - [ ] **(P0-T1)** Add `tests/qa/test_pylinac_results_data_spike.py` (loads committed dumps). (owner: tester, after: R0-9)
@@ -324,7 +324,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [ ] **(P2-I2)** Config + dialogs: `acr_qa_embed_module_images_in_xlsx` (default **True**); checkbox on ACR CT/MRI options + batch options; profile/JSON `inputs` audit field. (owner: coder)
 - [ ] **(P2-I3)** Facade/worker temp-dir lifecycle for module image dirs (CT single, CT batch, MRI single, MRI batch). (owner: coder, after: P2-I1)
 - [ ] **(P2-X1)** Extend `build_qa_workbook` Summary sheet with modality-aware key columns (CNR, uniformity, PSG/LC score where present, MTF@50% row+col, slice thickness/position on MRI only — best-effort; omit **CT** slice-thickness and **CT SNR** unless Phase 0 finds fields; add **`mri_snr`** Summary column when Phase 6 harvest ships). (owner: coder, after: P1-F1)
-- [ ] **(P2-X2)** Detail sheet uses full flatten (replaces metrics-only flatten). (owner: coder, after: P1-F1)
+- [x] **(P2-X2)** Detail sheet uses full flatten (replaces metrics-only flatten). (owner: coder, after: P1-F1) — **landed**: `_build_detail_sheet` now iterates `build_metric_rows(result)`; Summary, Detail, and Images Series/Run labels (plus Summary warnings) are neutralized via `neutralize_spreadsheet_value`; list/tuple cells joined with `"; "` (matches CSV).
 - [ ] **(P2-X3)** Images sheet: multi-module embed from `analyzed_module_images`; graceful skip when toggle off / no Pillow. (owner: coder, after: P2-I1, P2-X2)
 - [ ] **(P2-X4)** Tests: Images sheet module count + toggle off skips sheet; paths not in JSON/CSV. (owner: tester, after: P2-X3)
 
