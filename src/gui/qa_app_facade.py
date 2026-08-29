@@ -23,6 +23,7 @@ import json
 import os
 import tempfile
 import uuid
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -43,6 +44,7 @@ from gui.qa_ct_batch_export import (
     save_ct_batch_json,
     save_ct_batch_xlsx,
 )
+from gui.qa_module_image_tempdir import assign_module_images_out_dir
 from qa.analysis_types import (
     CTBatchResult,
     MRIBatchResult,
@@ -118,7 +120,6 @@ from version import __version__ as APP_VERSION
 
 _BTN_USE_FOCUSED_SERIES = "Use Focused Series"
 _BTN_CHOOSE_FOLDER = "Choose Folder"
-
 
 
 _UTC_TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
@@ -410,6 +411,7 @@ class QAAppFacade:
             vanilla_pylinac=False,
             qa_attempt=request.qa_attempt + 1,
             parent_attempt_outcome="failed_strict_extent",
+            module_images_out_dir=None,
         )
         merged: dict[str, Any] = dict(json_inputs or {})
         merged["scan_extent_tolerance_mm"] = tol
@@ -437,17 +439,15 @@ class QAAppFacade:
         json_inputs: dict[str, Any] | None = None,
         allow_extent_retry: bool = True,
         analyzed_image_temp_dir: tempfile.TemporaryDirectory[str] | None = None,
+        module_images_cleanup: Callable[[], None] | None = None,
     ) -> None:
         """
         Show progress, run QA in a background thread, then summary + JSON export.
 
-        ``analyzed_image_temp_dir``, when given, is a caller-owned
-        ``TemporaryDirectory`` holding the analyzed-image PNG that
-        ``request.analyzed_image_out_path`` points into (see
-        ``open_acr_ct_phantom_analysis``, F3 XLSX image embedding). It is kept
-        open until after the auto JSON/CSV/XLSX export prompt in
-        ``export_qa_results`` completes, then cleaned up here -- the runner
-        only writes the image; the facade owns its lifecycle.
+        ``analyzed_image_temp_dir`` is a caller-owned temp dir holding the
+        analyzed-image PNG; kept open until export completes, then cleaned here.
+        ``module_images_cleanup`` (P2-I3) releases the module-images dir in the
+        same finally.
         """
         app = self._app
         progress = QProgressDialog(progress_label, "Cancel", 0, 0, app.main_window)
@@ -474,6 +474,8 @@ class QAAppFacade:
                 app.main_window.update_status("Ignored late QA result after cancellation.")
                 if analyzed_image_temp_dir is not None:
                     analyzed_image_temp_dir.cleanup()
+                if module_images_cleanup is not None:
+                    module_images_cleanup()
                 return
             try:
                 progress.close()
@@ -518,14 +520,13 @@ class QAAppFacade:
                         json_default_stem=json_default_stem,
                     )
             finally:
-                # Keep the temp PNG alive through export_qa_results (XLSX save
-                # embeds it) before cleaning it up. Note: a scan-extent retry
-                # above starts a *new* worker without this temp dir, so the
-                # retry run's own XLSX export degrades to a note cell -- an
-                # accepted, documented limitation (retry is a rare secondary
-                # attempt on the same series).
+                # Keep temp PNG alive through export_qa_results (XLSX embeds it).
+                # A scan-extent retry starts a *new* worker without this dir, so
+                # the retry's XLSX export degrades to a note cell (accepted).
                 if analyzed_image_temp_dir is not None:
                     analyzed_image_temp_dir.cleanup()
+                if module_images_cleanup is not None:
+                    module_images_cleanup()
 
         app._qa_worker.result_ready.connect(on_result)
         app._qa_worker.finished.connect(progress.close)
@@ -605,13 +606,6 @@ class QAAppFacade:
 
         modality_eff = modality or "CT"
 
-        # F3: XLSX image embedding. The facade owns a single TemporaryDirectory
-        # for the analyzed-image PNG, created up front (before analysis runs)
-        # so run_acr_ct_analysis can call analyzer.save_analyzed_image() into
-        # it -- the worker/runner never sees the analyzer once analyze()
-        # returns, so this is the only point the path can be threaded in. The
-        # directory stays open through the post-run export prompt in
-        # start_qa_worker's on_result and is cleaned up there in a finally.
         image_temp_dir = tempfile.TemporaryDirectory(prefix="qa-ct-image-")
         image_out_path = os.path.join(image_temp_dir.name, f"{uuid.uuid4().hex}.png")
 
@@ -629,6 +623,7 @@ class QAAppFacade:
             scan_extent_tolerance_mm=float(ct_scan_tol),
             vanilla_pylinac=ct_vanilla,
         )
+        assign_module_images_out_dir(request=request, composite_image_temp_dir=image_temp_dir)
         json_inputs: dict[str, Any] = {
             "origin_slice_override": ct_origin_slice,
             "scan_extent_tolerance_mm": float(ct_scan_tol),
@@ -747,16 +742,15 @@ class QAAppFacade:
         """
         Show the non-modal batch summary dialog and wire its export buttons.
 
-        The worker's ``image_temp_dir`` (holding the batch's analyzed-image
-        PNGs, see ``QACTBatchWorker`` docstring) is kept alive for the life of
-        this dialog -- the user may click Export XLSX more than once -- and is
-        cleaned up when the dialog closes (``on_destroyed``), mirroring
-        ``start_qa_worker``'s single-run temp-dir lifecycle (kept open through
-        export, cleaned in a finally/callback afterwards).
+        The worker's ``image_temp_dir`` (and ``module_images_temp_dir`` when
+        embed is on) are kept alive for the dialog's life and cleaned up in
+        ``on_destroyed`` (mirrors ``start_qa_worker`` single-run lifecycle).
         """
         app = self._app
         if not batch.run_results:
             worker.image_temp_dir.cleanup()
+            if getattr(worker, "module_images_temp_dir", None) is not None:
+                worker.module_images_temp_dir.cleanup()
             return
 
         if app._ct_batch_result_dialog is not None:
@@ -766,6 +760,8 @@ class QAAppFacade:
         def on_dialog_destroyed(*_args: Any) -> None:
             app._ct_batch_result_dialog = None
             worker.image_temp_dir.cleanup()
+            if getattr(worker, "module_images_temp_dir", None) is not None:
+                worker.module_images_temp_dir.cleanup()
 
         dialog = create_ct_batch_result_dialog(
             app.main_window,
@@ -932,6 +928,7 @@ class QAAppFacade:
                 json_inputs=json_inputs,
             )
         else:
+            module_images_cleanup = assign_module_images_out_dir(request=request)
             self.start_qa_worker(
                 request,
                 progress_title="ACR MRI Phantom Analysis",
@@ -939,6 +936,7 @@ class QAAppFacade:
                 result_dialog_title="ACR MRI Phantom Analysis",
                 json_default_stem="qa-acr-mri",
                 json_inputs=json_inputs,
+                module_images_cleanup=module_images_cleanup,
             )
 
     def open_nuclear_qc_analysis(self) -> None:

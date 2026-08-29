@@ -178,6 +178,15 @@ class QACTBatchWorker(QThread):
     dialog's XLSX export has run, then call ``image_temp_dir.cleanup()``
     (same pattern as ``start_qa_worker``'s ``analyzed_image_temp_dir``).
 
+    P2-I3: when any request has ``embed_module_images_in_xlsx`` True, the worker
+    also creates a sibling ``module_images_temp_dir`` (prefix
+    ``qa-ct-batch-module-images-``) and assigns each cloned request a
+    **per-series subdirectory** so pylinac's fixed ``hu.png`` / ``mtf.png``
+    names cannot overwrite another series. The facade cleans up
+    ``module_images_temp_dir`` alongside ``image_temp_dir`` when the batch
+    result dialog is destroyed. When no request requests embed, no
+    module-images dir is created.
+
     Signals:
         series_completed(int done, int total, object QAResult): emitted after
             each series finishes (success or failure), to drive N-of-M
@@ -218,6 +227,14 @@ class QACTBatchWorker(QThread):
         # The facade is responsible for calling cleanup() once the batch
         # result has been consumed (result dialog shown + XLSX export done).
         self.image_temp_dir = tempfile.TemporaryDirectory(prefix="qa-ct-batch-image-")
+        # P2-I3: module-images temp dir for per-module PNGs. Created when any
+        # request requests embed; None when embed is off for all requests.
+        if any(getattr(req, "embed_module_images_in_xlsx", True) for req in requests):
+            self.module_images_temp_dir: tempfile.TemporaryDirectory[str] | None = (
+                tempfile.TemporaryDirectory(prefix="qa-ct-batch-module-images-")
+            )
+        else:
+            self.module_images_temp_dir = None
 
     def cancel(self) -> None:
         """Request cooperative cancellation; checked between series."""
@@ -234,11 +251,18 @@ class QACTBatchWorker(QThread):
                 # Cooperative cancellation: skip remaining series, emit the
                 # partial batch collected so far.
                 break
+            module_out: str | None = None
+            if self.module_images_temp_dir is not None:
+                module_out = os.path.join(
+                    self.module_images_temp_dir.name, uuid.uuid4().hex
+                )
+                os.makedirs(module_out, exist_ok=True)
             cloned_request = dataclasses.replace(
                 request,
                 analyzed_image_out_path=os.path.join(
                     self.image_temp_dir.name, f"{uuid.uuid4().hex}.png"
                 ),
+                module_images_out_dir=module_out,
             )
             try:
                 result = run_acr_ct_analysis(cloned_request)

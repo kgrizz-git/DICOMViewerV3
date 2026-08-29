@@ -15,6 +15,18 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch.**
 
 ### Changed
+- **ACR QA module-image temp-dir lifecycle (P2-I3):** The facade/worker now
+  owns the per-module image temp dir for the embed-on path: CT single nests
+  the module dir under the composite image temp dir (single cleanup in
+  ``start_qa_worker``); the CT batch worker owns a sibling
+  ``module_images_temp_dir`` with a **per-series subdirectory** (pylinac
+  writes fixed names such as ``hu.png``); MRI single gets a standalone dir
+  released via a ``module_images_cleanup`` callable (compare-mode does not
+  create that dir). Paths are held open through ``workbook.save()`` and
+  cleaned in ``finally``/callbacks. MRI batch is skipped (worker does not
+  exist yet; see P4-M1). Internal plumbing only — no
+  user-visible change until the Images sheet lands (P2-X3).
+  **Semantic versioning note: patch.**
 - **ACR QA module-image capture plumbing (P2-I1):** `QARequest` gains
   `embed_module_images_in_xlsx` (default true) and `module_images_out_dir`;
   `QAResult` gains `analyzed_module_images` (module label → absolute PNG path,
