@@ -11,14 +11,19 @@ paths out of JSON/CSV output.
 from __future__ import annotations
 
 import builtins as _builtins
+import io
 import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import openpyxl
+import pytest
+
 from qa.analysis_types import QARequest, QAResult
 from qa.qa_export import build_metrics_csv, build_single_run_document
 from qa.qa_result_flatten import build_metric_rows, build_tabular_run
+from qa.qa_xlsx_export import build_qa_workbook
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -196,7 +201,8 @@ def test_ct_ignores_leftover_pngs_in_out_dir(tmp_path: Path) -> None:
     assert str(leftover) not in result.analyzed_module_images.values()
 
 
-def test_ct_embed_off_calls_composite_not_save_images(tmp_path: Path) -> None:
+def test_ct_embed_off_skips_composite_and_save_images(tmp_path: Path) -> None:
+    """P2-X4: embed off → no composite save, no module images, no embeddable path."""
     analyzer = _stub_analyzer(("hu",))
     out_dir = tmp_path / "ct_modules"
     composite_path = tmp_path / "composite.png"
@@ -218,8 +224,8 @@ def test_ct_embed_off_calls_composite_not_save_images(tmp_path: Path) -> None:
 
     assert result.success is True
     analyzer.save_images.assert_not_called()
-    analyzer.save_analyzed_image.assert_called_once_with(str(composite_path))
-    assert result.analyzed_image_path == str(composite_path)
+    analyzer.save_analyzed_image.assert_not_called()
+    assert result.analyzed_image_path is None
     assert result.analyzed_module_images == {}
 
 
@@ -377,3 +383,125 @@ def test_module_images_not_in_json_document(tmp_path: Path) -> None:
         assert path not in blob
         assert path not in csv_text
     assert "analyzed_module_images" not in csv_text
+
+
+# ---------------------------------------------------------------------------
+# P2-X4 end-to-end: toggle-off → runner produces no embeddable image →
+# build_qa_workbook skips the Images sheet (composite fallback must not run).
+# ---------------------------------------------------------------------------
+
+
+def _xlsx_sheet_names(wb: openpyxl.Workbook) -> list[str]:
+    return wb.sheetnames
+
+
+def _save_and_reload(wb: openpyxl.Workbook) -> openpyxl.Workbook:
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return openpyxl.load_workbook(buffer)
+
+
+def test_p2x4_ct_embed_off_runner_result_skips_images_sheet(tmp_path: Path) -> None:
+    """P2-X4: embed off → composite not saved → workbook has no Images sheet."""
+    analyzer = _stub_analyzer(("hu",))
+    out_dir = tmp_path / "ct_modules"
+    composite_path = tmp_path / "composite.png"
+    analyzer.save_analyzed_image.side_effect = lambda p: Path(p).write_bytes(b"\x89PNG")
+
+    with _ChainPatcher(analyzer):
+        from qa.pylinac_acr_ct import run_acr_ct_analysis
+
+        req = _make_request(
+            embed_module_images_in_xlsx=False,
+            module_images_out_dir=str(out_dir),
+            analyzed_image_out_path=str(composite_path),
+        )
+        result = run_acr_ct_analysis(req)
+
+    # Runner must not leave any embeddable image when embed is off.
+    assert result.analyzed_image_path is None
+    assert result.analyzed_module_images == {}
+
+    wb = build_qa_workbook([result], labels=["Run 1"])
+    reloaded = _save_and_reload(wb)
+    assert "Images" not in _xlsx_sheet_names(reloaded)
+    summary_values = [
+        c.value for row in reloaded["Summary"].iter_rows() for c in row
+    ]
+    assert any(
+        isinstance(v, str) and "Images sheet skipped" in v for v in summary_values
+    )
+
+
+def test_p2x4_ct_embed_off_paths_denylisted_from_csv_json(tmp_path: Path) -> None:
+    """P2-X4: even if a composite path existed, embed-off result has none to leak."""
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        metrics={"input_count": 5, "vanilla_pylinac": False},
+        study_uid="1.2.3",
+        series_uid="1.2.3.4",
+        modality="CT",
+        num_images=5,
+        # Simulate the post-fix state: embed off → no paths at all.
+        analyzed_image_path=None,
+        analyzed_module_images={},
+    )
+    csv_text = build_metrics_csv(result)
+    doc = build_single_run_document(result, app_version="test")
+    blob = json.dumps(doc)
+    assert "analyzed_image_path" not in blob
+    assert "analyzed_module_images" not in blob
+    assert "analyzed_image_path" not in csv_text
+    assert "analyzed_module_images" not in csv_text
+
+
+def test_p2x4_ct_embed_on_regression_modules_embed(tmp_path: Path) -> None:
+    """P2-X4 regression: embed on + modules → Images sheet still embeds them."""
+    pytest.importorskip("PIL")
+
+    analyzer = _stub_analyzer(("hu", "mtf"))
+    out_dir = tmp_path / "ct_modules"
+
+    with _ChainPatcher(analyzer):
+        from qa.pylinac_acr_ct import run_acr_ct_analysis
+
+        req = _make_request(
+            embed_module_images_in_xlsx=True,
+            module_images_out_dir=str(out_dir),
+        )
+        result = run_acr_ct_analysis(req)
+
+    assert result.analyzed_module_images
+    assert result.analyzed_image_path is None  # composite skipped when embed on + dir set
+
+    wb = build_qa_workbook([result], labels=["Run 1"])
+    reloaded = _save_and_reload(wb)
+    assert "Images" in _xlsx_sheet_names(reloaded)
+
+
+def test_p2x4_ct_embed_on_no_dir_falls_back_to_composite(tmp_path: Path) -> None:
+    """P2-X4 regression: embed on but no dir → composite fallback still works."""
+    PILImage = pytest.importorskip("PIL.Image")
+
+    analyzer = _stub_analyzer(("hu",))
+    composite_path = tmp_path / "composite.png"
+    PILImage.new("RGB", (200, 200), color="red").save(composite_path)
+    analyzer.save_analyzed_image.side_effect = lambda p: None  # file already exists
+
+    with _ChainPatcher(analyzer):
+        from qa.pylinac_acr_ct import run_acr_ct_analysis
+
+        req = _make_request(
+            embed_module_images_in_xlsx=True,
+            module_images_out_dir=None,  # no dir → composite fallback
+            analyzed_image_out_path=str(composite_path),
+        )
+        result = run_acr_ct_analysis(req)
+
+    assert result.analyzed_image_path == str(composite_path)
+
+    wb = build_qa_workbook([result], labels=["Run 1"])
+    reloaded = _save_and_reload(wb)
+    assert "Images" in _xlsx_sheet_names(reloaded)

@@ -42,6 +42,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: minor.**
 
 ### Fixed
+- **ACR QA embed-off now skips the XLSX Images sheet (P2-X4):** Unchecking **Embed module images in XLSX** on the ACR CT/MRI options dialog now correctly skips the XLSX Images sheet (Summary note only), matching the missing-Pillow degradation. Previously the runner still saved the legacy composite image, so the workbook's composite fallback recreated the Images sheet even when the toggle was off. `save_composite_analyzed_image` now skips when `embed_module_images_in_xlsx` is False (the composite's only purpose is embedding). **Semantic versioning note: patch.**
 - **Volume rescale slope guard (Sonar S1244):** Centralize exact-zero
   `RescaleSlope` checks in `is_usable_rescale_slope()` and use it for 3D
   volume calibration preflight and shared W/L rescale paths, targeting the

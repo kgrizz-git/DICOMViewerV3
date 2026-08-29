@@ -60,11 +60,14 @@ def capture_analyzed_module_images(analyzer: Any, request: QARequest) -> dict[st
 
 def save_composite_analyzed_image(analyzer: Any, request: QARequest) -> str | None:
     """
-    Save the legacy CT composite PNG when per-module embed is not in use.
+    Save the legacy CT composite PNG only when XLSX embed is on and modules are not.
 
-    Skips when embed is on and ``module_images_out_dir`` is set (even if
-    ``capture_analyzed_module_images`` returned empty after a save failure).
-    Swallows save errors so the analysis run still succeeds.
+    Skips when embed is off (the composite's only purpose is XLSX embedding,
+    so toggle-off must not leave an embeddable image for the workbook),
+    when embed is on and ``module_images_out_dir`` is set (even if
+    ``capture_analyzed_module_images`` returned empty after a save failure),
+    or when no output path is set. Swallows save errors so the analysis run
+    still succeeds.
 
     Args:
         analyzer: Pylinac ACR CT analyzer after ``analyze()``.
@@ -73,7 +76,9 @@ def save_composite_analyzed_image(analyzer: Any, request: QARequest) -> str | No
     Returns:
         The composite path on success, otherwise ``None``.
     """
-    if request.embed_module_images_in_xlsx and request.module_images_out_dir:
+    if not request.embed_module_images_in_xlsx:
+        return None
+    if request.module_images_out_dir:
         return None
     if not request.analyzed_image_out_path:
         return None
