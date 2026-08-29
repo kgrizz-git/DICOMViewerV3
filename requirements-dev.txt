@@ -37,3 +37,6 @@ lizard>=1.23.0
 # main.py split; run from repo root:
 #   python -m interrogate src/main_app_*.py src/main.py --ignore-init-method -f <baseline>
 interrogate>=1.7.0
+
+# Pin h11 to mitigate CVE-2024-27306 / Aikido scanner flags (transitive via semgrep/uvicorn)
+h11>=0.16.0
