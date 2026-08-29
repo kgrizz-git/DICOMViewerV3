@@ -42,7 +42,9 @@ from qa.analysis_types import QAResult
 
 # Keys that must never appear in flatten output even if a runner or dump
 # accidentally stores them under raw_pylinac / metrics.
-_PATH_FIELD_DENYLIST = frozenset({"analyzed_image_path", "pdf_report_path"})
+_PATH_FIELD_DENYLIST = frozenset(
+    {"analyzed_image_path", "analyzed_module_images", "pdf_report_path"}
+)
 
 
 def _is_denied_key(key: Any) -> bool:

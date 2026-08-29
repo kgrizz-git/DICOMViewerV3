@@ -320,7 +320,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 
 ### Phase 2 — XLSX upgrade
 
-- [ ] **(P2-I1)** `QARequest` / `QAResult`: `embed_module_images_in_xlsx`, `module_images_out_dir`, `analyzed_module_images`; runners call `save_images()` when enabled. (owner: coder)
+- [x] **(P2-I1)** `QARequest` / `QAResult`: `embed_module_images_in_xlsx`, `module_images_out_dir`, `analyzed_module_images`; runners call `save_images()` when enabled. (owner: coder) — **landed**: CT/MRI runners share `capture_analyzed_module_images` (`save_images` **return** paths, not glob); CT skips composite when embed on + dir set; denylisted from flatten/JSON/CSV; failures swallowed.
 - [ ] **(P2-I2)** Config + dialogs: `acr_qa_embed_module_images_in_xlsx` (default **True**); checkbox on ACR CT/MRI options + batch options; profile/JSON `inputs` audit field. (owner: coder)
 - [ ] **(P2-I3)** Facade/worker temp-dir lifecycle for module image dirs (CT single, CT batch, MRI single, MRI batch). (owner: coder, after: P2-I1)
 - [ ] **(P2-X1)** Extend `build_qa_workbook` Summary sheet with modality-aware key columns (CNR, uniformity, PSG/LC score where present, MTF@50% row+col, slice thickness/position on MRI only — best-effort; omit **CT** slice-thickness and **CT SNR** unless Phase 0 finds fields; add **`mri_snr`** Summary column when Phase 6 harvest ships). (owner: coder, after: P1-F1)

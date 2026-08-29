@@ -94,7 +94,7 @@
     "src/gui/multi_window_layout.py::swap_views": 28,
     "src/gui/series_navigator.py::_resolve_thumbnail_window_level": 21,
     "src/gui/series_navigator_view.py::paintEvent": 21,
-    "src/qa/pylinac_acr_ct.py::run_acr_ct_analysis": 32,
+    "src/qa/pylinac_acr_ct.py::run_acr_ct_analysis": 30,
     "src/qa/pylinac_acr_mri.py::run_acr_mri_large_analysis": 21,
     "src/qa/pylinac_acr_mri.py::run_acr_mri_large_batch": 29,
     "src/tools/crosshair_manager.py::display_crosshairs_for_slice": 23,

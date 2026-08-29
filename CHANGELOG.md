@@ -15,6 +15,16 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch.**
 
 ### Changed
+- **ACR QA module-image capture plumbing (P2-I1):** `QARequest` gains
+  `embed_module_images_in_xlsx` (default true) and `module_images_out_dir`;
+  `QAResult` gains `analyzed_module_images` (module label → absolute PNG path,
+  transient, excluded from JSON/CSV). The ACR CT and MRI runners call
+  `analyzer.save_images(directory=...)` when embed is on and a module-images
+  directory is set, populating `analyzed_module_images` for the upcoming XLSX
+  Images sheet embed; CT skips the legacy composite save in that case. Save
+  failures are swallowed and do not fail the run. Internal/export plumbing
+  only — no user-visible change until the config toggle and Images sheet land
+  (P2-I2/I3, P2-X3). **Semantic versioning note: patch.**
 - **ACR QA CSV exports:** Single-run QA CSV now includes the full pylinac
   `raw_pylinac` flatten (not only `result.metrics`), and every cell is
   formula-injection neutralized. The ACR CT batch summary dialog offers
