@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-29
 
 ---
 
@@ -29,7 +29,8 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Pylinac ACR — full metrics CSV/XLSX, batch CT CSV, multi-series MRI batch** — [Features (Near-Term)](#features-near-term) · **Plan:** [Pylinac ACR full metrics export and MRI batch](plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md)
-3. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
+3. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
+4. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -108,6 +109,7 @@ Release blockers (license compliance, versioned executables) live in
 
 ## Maintenance
 
+- [ ] **[P1]** **Address open issues flagged on Aikido dashboard.** Review the Aikido scanner dashboard and triage/address remaining findings (e.g., configuring further explicit pins, fixing flagged code, or marking false positives).
 - [ ] **[P2]** **If DeepSource is enabled, require the same privacy controls as external CI scanners.** Do not enable the repository integration until it is configured to run only after the blocking privacy gate and excludes protected data/runtime roots plus DICOM, imaging, spreadsheet, document, and media patterns. Update `security/security-tool-inventory.json`, document the exact trigger/exclusion configuration, and verify that no source is sent before the gate passes.
 - [ ] **[P2]** **Restore blocking Grype and Semgrep SARIF uploads when GitHub Code Scanning is available.** The current private repository has Code Scanning disabled, so `.github/workflows/grype.yml` and `.github/workflows/semgrep.yml` keep their actual vulnerability/SAST scans mandatory but make only their optional Security-tab uploads nonblocking. When the repository becomes public **or** Code Scanning is explicitly enabled for the private repository, remove `continue-on-error: true` from both workflows, manually run them, and confirm that both SARIF result sets appear in the GitHub Security tab. **Added 2026-07-14.**
 - [ ] **[P2]** **Work through local Semgrep, basedpyright, and dependency-scan findings.** Triage actionable bugs/technical debt versus false positives using the repository's local-first tools; do not enable hosted source-analysis integrations to perform this work.
