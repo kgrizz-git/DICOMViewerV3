@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import math
 import os
 import platform
 import re
@@ -168,7 +169,11 @@ def _calibrate_volume_array(
         slope, intercept, rescale_type = get_rescale_parameters(dataset)
         if slope is None or intercept is None:
             return arr, False, None
-        if not np.isfinite(slope) or not np.isfinite(intercept) or slope == 0.0:
+        if (
+            not np.isfinite(slope)
+            or not np.isfinite(intercept)
+            or math.isclose(float(slope), 0.0)
+        ):
             return arr, False, None
 
         scalar_units = infer_rescale_type(dataset, slope, intercept, rescale_type)
