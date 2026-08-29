@@ -18,6 +18,7 @@ Requirements:
 from __future__ import annotations
 
 import math
+from typing import TypeGuard
 
 from pydicom.dataset import Dataset
 
@@ -26,7 +27,7 @@ from utils.privacy.console import print_redacted
 _DISPLAY_NONE_RESCALE_TYPES = {"UNSPECIFIED", "US"}
 
 
-def is_usable_rescale_slope(slope: float | None) -> bool:
+def is_usable_rescale_slope(slope: float | None) -> TypeGuard[float]:
     """Return True when RescaleSlope can drive a linear pixel transform.
 
     RescaleSlope is DICOM DS-VR (decimal string, exact parse). An exact

@@ -174,7 +174,6 @@ def _calibrate_volume_array(
             return arr, False, None
         if not is_usable_rescale_slope(slope):
             return arr, False, None
-        assert slope is not None  # narrowed by is_usable_rescale_slope
 
         scalar_units = infer_rescale_type(dataset, slope, intercept, rescale_type)
         if scalar_units:
