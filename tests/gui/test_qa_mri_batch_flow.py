@@ -3,10 +3,12 @@ Unit tests for P4-M3 — multi-series ACR MRI Large batch flow.
 
 Exercises ``gui.qa_mri_batch_flow.open_acr_mri_batch_analysis`` with the
 selection dialog, MRI options, and ``QAMRIBatchWorker`` all mocked. Verifies
-the flow calls selection + options + stamp + worker, that ``compare_request``
-is ignored (OQ-7), that progress/cancel wire ``worker.cancel()``, and that
-temp-dir cleanup matches the CT batch lifecycle (immediate on empty batch,
-deferred to dialog destroy otherwise). No live ``analyze()`` runs.
+the flow calls selection + options (``allow_compare=False``) + stamp +
+preflight + worker, that compare is not stamped (OQ-7), that preflight
+cancel skips the worker, that progress/cancel wire ``worker.cancel()``,
+and that temp-dir cleanup matches the CT batch lifecycle (immediate on
+empty batch, deferred to dialog destroy otherwise). No live ``analyze()``
+runs.
 """
 
 from __future__ import annotations
@@ -111,6 +113,8 @@ def _make_app() -> SimpleNamespace:
     app.config_manager.get_acr_mri_low_contrast_method.return_value = "rose"
     app.config_manager.get_acr_mri_low_contrast_visibility_threshold.return_value = 0.001
     app.config_manager.get_acr_mri_low_contrast_visibility_sanity_multiplier.return_value = 1.0
+    # Real dict so preflight lookup does not treat MagicMock as datasets.
+    app.dicom_organizer.studies = {}
     return app
 
 
@@ -150,11 +154,10 @@ def test_flow_calls_selection_options_stamp_and_worker(monkeypatch) -> None:
         lambda *_a, **_k: (requests, labels),
     )
     # prompt_acr_mri_options returns a 10-tuple; compare_request is index 7.
-    monkeypatch.setattr(
-        flow_mod,
-        "prompt_acr_mri_options",
-        lambda *_a, **_k: (1, False, 1, 0.0, "rose", 0.001, 1.0, MagicMock(), False, True),
+    prompt = MagicMock(
+        return_value=(1, False, 1, 0.0, "rose", 0.001, 1.0, MagicMock(), False, True),
     )
+    monkeypatch.setattr(flow_mod, "prompt_acr_mri_options", prompt)
     stamped = []
 
     def fake_stamp(reqs, **kwargs) -> list[QARequest]:
@@ -168,6 +171,7 @@ def test_flow_calls_selection_options_stamp_and_worker(monkeypatch) -> None:
     open_acr_mri_batch_analysis(app)
 
     start.assert_called_once()
+    assert prompt.call_args.kwargs.get("allow_compare") is False
     args = start.call_args.args
     assert args[0] is app
     assert len(args[1]) == 2  # stamped requests
@@ -190,11 +194,10 @@ def test_compare_request_is_ignored(monkeypatch) -> None:
         "prompt_mri_batch_series_selection",
         lambda *_a, **_k: (requests, labels),
     )
-    monkeypatch.setattr(
-        flow_mod,
-        "prompt_acr_mri_options",
-        lambda *_a, **_k: (1, False, 1, 0.0, "rose", 0.001, 1.0, compare_obj, False, True),
+    prompt = MagicMock(
+        return_value=(1, False, 1, 0.0, "rose", 0.001, 1.0, compare_obj, False, True),
     )
+    monkeypatch.setattr(flow_mod, "prompt_acr_mri_options", prompt)
     stamped = []
 
     def fake_stamp(reqs, **kwargs) -> list[QARequest]:
@@ -208,11 +211,13 @@ def test_compare_request_is_ignored(monkeypatch) -> None:
     open_acr_mri_batch_analysis(app)
 
     start.assert_called_once()
+    assert prompt.call_args.kwargs.get("allow_compare") is False
     # stamp kwargs carry no compare field.
     assert "compare_request" not in stamped[0]
-    # The compare object was passed by the options dialog but never reaches the worker.
     args = start.call_args.args
-    assert args[1] == requests  # stamped == requests (identity preserved by fake_stamp)
+    assert len(args[1]) == 1
+    assert args[1][0].dicom_paths == requests[0].dicom_paths
+    assert args[1][0].preflight_warnings == []
 
 
 def test_flow_bails_when_selection_cancelled(monkeypatch) -> None:
@@ -252,6 +257,114 @@ def test_flow_bails_when_options_cancelled(monkeypatch) -> None:
     open_acr_mri_batch_analysis(app)
 
     start.assert_not_called()
+
+
+def test_folder_preflight_attaches_warning_and_confirms(monkeypatch) -> None:
+    """Folder rows get the unverified-geometry warning attached after confirm."""
+    app = _make_app()
+    requests = [
+        QARequest(
+            analysis_type="acr_mri_large",
+            folder_path="/fake/added-folder",
+            modality="MR",
+        )
+    ]
+    labels = ["Added folder"]
+    monkeypatch.setattr(
+        flow_mod,
+        "prompt_mri_batch_series_selection",
+        lambda *_a, **_k: (requests, labels),
+    )
+    monkeypatch.setattr(
+        flow_mod,
+        "prompt_acr_mri_options",
+        lambda *_a, **_k: (1, False, 1, 0.0, "rose", 0.001, 1.0, None, False, True),
+    )
+    confirmed: list[list[str]] = []
+
+    def fake_confirm(_parent, warnings: list[str]) -> bool:
+        confirmed.append(warnings)
+        return True
+
+    monkeypatch.setattr(flow_mod, "user_confirms_mri_batch_preflight", fake_confirm)
+    start = MagicMock()
+    monkeypatch.setattr(flow_mod, "_start_acr_mri_series_batch_worker", start)
+
+    open_acr_mri_batch_analysis(app)
+
+    start.assert_called_once()
+    assert confirmed
+    assert any(w.startswith("Added folder:") and "folder input" in w for w in confirmed[0])
+    attached = start.call_args.args[1][0].preflight_warnings
+    assert attached
+    assert not attached[0].startswith("Added folder:")
+    assert "folder input" in attached[0]
+
+
+def test_preflight_cancel_does_not_start_worker(monkeypatch) -> None:
+    """Declining preflight returns without launching QAMRIBatchWorker."""
+    app = _make_app()
+    requests = [
+        QARequest(
+            analysis_type="acr_mri_large",
+            folder_path="/fake/added-folder",
+            modality="MR",
+        )
+    ]
+    labels = ["Added folder"]
+    monkeypatch.setattr(
+        flow_mod,
+        "prompt_mri_batch_series_selection",
+        lambda *_a, **_k: (requests, labels),
+    )
+    monkeypatch.setattr(
+        flow_mod,
+        "prompt_acr_mri_options",
+        lambda *_a, **_k: (1, False, 1, 0.0, "rose", 0.001, 1.0, None, False, True),
+    )
+    monkeypatch.setattr(
+        flow_mod, "user_confirms_mri_batch_preflight", lambda *_a, **_k: False
+    )
+    start = MagicMock()
+    monkeypatch.setattr(flow_mod, "_start_acr_mri_series_batch_worker", start)
+
+    open_acr_mri_batch_analysis(app)
+
+    start.assert_not_called()
+
+
+def test_loaded_series_preflight_uses_organizer_datasets(monkeypatch) -> None:
+    """Loaded series look up organizer.studies[study][series] for IPP/IOP checks."""
+    app = _make_app()
+    datasets = [object(), object()]
+    app.dicom_organizer.studies = {"study-0": {"series-0": datasets}}
+    requests = _make_requests(1)
+    labels = ["Series 0"]
+    monkeypatch.setattr(
+        flow_mod,
+        "prompt_mri_batch_series_selection",
+        lambda *_a, **_k: (requests, labels),
+    )
+    monkeypatch.setattr(
+        flow_mod,
+        "prompt_acr_mri_options",
+        lambda *_a, **_k: (1, False, 1, 0.0, "rose", 0.001, 1.0, None, False, True),
+    )
+    monkeypatch.setattr(
+        flow_mod,
+        "collect_slice_position_warnings",
+        lambda _ds: ["non-monotonic IPP"],
+    )
+    monkeypatch.setattr(
+        flow_mod, "user_confirms_mri_batch_preflight", lambda *_a, **_k: True
+    )
+    start = MagicMock()
+    monkeypatch.setattr(flow_mod, "_start_acr_mri_series_batch_worker", start)
+
+    open_acr_mri_batch_analysis(app)
+
+    attached = start.call_args.args[1][0].preflight_warnings
+    assert attached == ["non-monotonic IPP"]
 
 
 def test_worker_progress_and_cancel_wire_cancel(qapp, monkeypatch) -> None:

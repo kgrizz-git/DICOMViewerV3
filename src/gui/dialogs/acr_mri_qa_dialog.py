@@ -13,6 +13,8 @@ Compare mode:
     ``LC_COMPARE_MULTIPLIERS`` (0.75 × … 1.25 ×).
     When compare mode is enabled, ``get_options()`` includes an
     ``Optional[MRICompareRequest]`` before the final ``vanilla_pylinac`` bool.
+    Pass ``allow_compare=False`` to hide the compare group (MRI batch, OQ-7);
+    ``get_options()`` then always returns ``compare_request=None``.
 
 Does not import pylinac directly.
 
@@ -190,7 +192,8 @@ class AcrMrIQaOptionsDialog(QDialog):
          compare_request_or_none, vanilla_pylinac,
          embed_module_images_in_xlsx)
         where compare_request_or_none is an MRICompareRequest when compare mode
-        is enabled, else None.
+        is enabled, else None. When ``allow_compare`` is False (MRI batch,
+        OQ-7), the compare group is hidden and this slot is always None.
     """
 
     def __init__(
@@ -206,13 +209,15 @@ class AcrMrIQaOptionsDialog(QDialog):
         ),
         vanilla_pylinac_default: bool = False,
         embed_module_images_default: bool = True,
+        allow_compare: bool = True,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("ACR MRI (pylinac) — Options")
         self.setWindowFlags(
             self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setMinimumWidth(1000)
+        self._allow_compare = bool(allow_compare)
+        self.setMinimumWidth(720 if not self._allow_compare else 1000)
 
         # ----------------------------------------------------------------
         # Left column: intro + Advanced + Scan extent
@@ -377,6 +382,9 @@ class AcrMrIQaOptionsDialog(QDialog):
         btn_row.addStretch()
         compare_layout.addLayout(btn_row)
         compare_group.setLayout(compare_layout)
+        if not self._allow_compare:
+            compare_group.setChecked(False)
+            compare_group.hide()
         right_col.addWidget(compare_group)
         right_col.addStretch()
 
@@ -485,7 +493,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         lc_sanity = float(self._lc_sanity_spin.value())
 
         compare_request: MRICompareRequest | None = None
-        if self._compare_group.isChecked():
+        if self._allow_compare and self._compare_group.isChecked():
             enabled_configs = [
                 row.to_lc_run_config()
                 for row in self._compare_rows
@@ -522,6 +530,7 @@ def prompt_acr_mri_options(
     ),
     vanilla_pylinac_default: bool = False,
     embed_module_images_default: bool = True,
+    allow_compare: bool = True,
 ) -> tuple[int | None, bool, int | None, float, str, float, float, MRICompareRequest | None, bool, bool] | None:
     """
     Show modal ACR MRI options dialog.
@@ -533,6 +542,8 @@ def prompt_acr_mri_options(
         low_contrast_visibility_sanity_multiplier: Pre-filled sanity multiplier.
         vanilla_pylinac_default: Initial state of Vanilla pylinac checkbox.
         embed_module_images_default: Initial state of embed-module-images checkbox.
+        allow_compare: When False (MRI batch, OQ-7), hide the compare group
+            and return ``compare_request=None``. The 10-tuple shape is unchanged.
 
     Returns:
         Tuple ending with vanilla_pylinac and embed_module_images_in_xlsx, or
@@ -547,6 +558,7 @@ def prompt_acr_mri_options(
         ),
         vanilla_pylinac_default=vanilla_pylinac_default,
         embed_module_images_default=embed_module_images_default,
+        allow_compare=allow_compare,
     )
     dlg.activateWindow()
     dlg.raise_()
