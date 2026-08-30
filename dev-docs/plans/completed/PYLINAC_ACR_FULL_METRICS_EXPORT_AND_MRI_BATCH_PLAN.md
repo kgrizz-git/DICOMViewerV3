@@ -1,7 +1,7 @@
 # Plan: Pylinac ACR — full metrics export, batch CT CSV, and multi-series MRI batch
 
-**Last updated:** 2026-08-29
-**Status:** Active — **Phases 0–6 shipped** (P0-GATE signed 2026-08-29). Remaining: archive after two PRs (**P5-D5**)
+**Last updated:** 2026-08-30
+**Status:** Completed — **Phases 0–6 shipped** (P0-GATE signed 2026-08-29); PRs #97 and #98 are merged to `main`. Optional real-phantom smoke is tracked in [`TO_DO.md`](../../TO_DO.md#manual-smoke-checks).
 **Priority:** P1
 **Branch:** `plan/pylinac-acr-full-metrics-export-mri-batch` (implementation: `feature/pylinac-acr-full-metrics-export-mri-batch`)
 **Area:** Automated QA / pylinac (ACR CT + ACR MRI Large only)
@@ -221,7 +221,7 @@ All new tests under `tests/qa/` unless noted. Use **committed redacted `results_
 | **`dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`** | Document canonical flatten keys, batch MRI flow, export surfaces (CSV wide vs metric/value), JSON vs export-layer flatten, **module image embed toggle**, **MRI SNR (Phase 6)** |
 | **`dev-docs/info/PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md`** | MTF grid / metric extraction notes if live harvest added |
 | **`dev-docs/info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md`** | Cross-link metric families now exported |
-| **`dev-docs/plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`** | Metric registry appendix (Phase 0 output); mark open questions decided |
+| **`dev-docs/plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`** | Metric registry appendix (Phase 0 output); mark open questions decided |
 | **`dev-docs/MAINTENANCE_LOG.md`** | Implementation completion note |
 | **`CHANGELOG.md`** | **Minor** — MRI batch menu + enriched CSV/XLSX exports |
 | **`dev-docs/TO_DO.md`** | Close/consolidate bullets when plan completes |
@@ -347,7 +347,7 @@ acr_mri_series_selection_dialog.py (NEW) — mirror CT selection; MR series filt
 - [x] **(P5-D2)** Dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md` — ACR CT CNR/batch/XLSX row updated to document canonical flatten (`qa_result_flatten.py`, metrics-overlay-wins, path denylist), wide batch CSV vs single-run metric/value, XLSX Summary/Detail/Images + embed toggle, `ACRMBatchResult` + `QAMRIBatchWorker` (not compare-mode `MRIBatchResult`), MRI batch menu + export; stale "batch for other modalities remain future work" corrected to "shipped for ACR CT and ACR MRI"; Phase 6 SNR kept **not shipped**. Plan appendix P5-D1/D2/D3 marked. `MAINTENANCE_LOG.md` dated completion note for Phases 1–5. (owner: docs) — **landed**
 - [x] **(P5-D3)** In-app strings: menu, dialogs, tooltips, save-dialog titles audited against the **Documentation updates** table — **all strings already landed** from P3/P4 (MRI batch menu in `main_window_menu_builder.py`; Export CSV/JSON/XLSX buttons in `mri_batch_result_dialog.py` + `ct_batch_result_dialog.py`; "Embed module images in XLSX" checkbox in `acr_ct_qa_dialog.py` + `acr_mri_qa_dialog.py`; selection dialog title/instructions in `acr_mri_series_selection_dialog.py`). **Zero Python changed.** (owner: coder) — **landed; no code change**
 - [x] **(P5-D4)** `CHANGELOG.md` — existing **Unreleased** **Added** (minor: MRI batch menu P4-M3, MRI batch export P4-M4, full-flatten CSV, XLSX Summary modality-aware columns P2-X1, embed-module-images toggle P2-I2, XLSX multi-module Images P2-X3) + **Fixed** P2-X4 (embed-off skips Images sheet, patch) already cover the ship. **No new CHANGELOG bullet needed** — user-docs facts are all represented. (owner: docs) — **landed; no new entry**
-- [ ] **(P5-D5)** `check_user_docs_links.py` + move plan to `completed/`; trim `TO_DO.md`. (owner: orchestrator) — **partial:** Phase 6 harvest shipped; plan **stays** in `plans/supporting/` until the two planned PRs land and the plan is archived. Unchecked until the plan is actually moved.
+- [x] **(P5-D5)** `check_user_docs_links.py` + move plan to `completed/`; trim `TO_DO.md`. (owner: orchestrator) — **completed 2026-08-30:** PRs #97 and #98 merged; plan archived and the optional manual smoke moved to `TO_DO.md`.
 
 ### Phase 6 — Viewer-computed MRI SNR (extension slice)
 
@@ -529,7 +529,7 @@ From pylinac 3.43.2 `acr.py` source:
 - **G0:** Phase 0 appendix complete on committed dumps; **OQ-1–OQ-10** locked. **Met 2026-08-29** (P0-GATE).
 - **G1:** Reviewer approves metric key naming convention before GUI wiring. **Met 2026-08-29** with P0-GATE (dotted `raw_pylinac` paths in the appendix).
 - **G2:** Fixture tests prove CT + MRI flatten includes ≥1 value from each **present** target family using committed `results_data` dumps (not live `analyze()`). **Met 2026-08-29** in `tests/qa/test_pylinac_results_data_spike.py`.
-- **G3:** Manual smoke on one local CT + one local MRI phantom (optional): single-run export, CT batch CSV, MRI batch export; **optional G3b:** XLSX Images module set matches PDF figure count when embed on.
+- **G3:** Manual smoke on one local CT + one local MRI phantom (optional): single-run export, CT batch CSV, MRI batch export; **optional G3b:** XLSX Images module set matches PDF figure count when embed on. **Transferred 2026-08-30** to [`TO_DO.md` Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks) after merge.
 
 ---
 
