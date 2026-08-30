@@ -68,7 +68,9 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
   pushes to `main`/`develop`.
   It uses the repository `SONAR_TOKEN` secret and root
   [`sonar-project.properties`](../sonar-project.properties). SonarQube Cloud
-  Automatic Analysis must remain disabled. That approved scan imports the pytest
+  Automatic Analysis must remain disabled. The job waits up to 600 seconds for
+  the Cloud Quality Gate and fails if that gate is red; this is post-push
+  visibility, not PR merge protection. That approved scan imports the pytest
   coverage report (`coverage.xml`, `src/` paths and line numbers only), handed
   from the `tests` job to the `sonarqube` job as an internal GitHub Actions
   artifact and read via `sonar.python.coverage.reportPaths`. Coverage is not

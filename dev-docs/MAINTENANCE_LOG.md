@@ -6,6 +6,10 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-30
 
+- **Protected-branch SonarQube Quality Gate:** The privacy-gated `sonarqube`
+  job now waits up to 600 seconds for its Cloud Quality Gate and fails when it
+  is red. Analysis remains limited to `src/` after `main`/`develop` pushes;
+  this adds post-push visibility only and does not enable PR analysis.
 - **Pylinac ACR plan closeout:** PRs #97 and #98 merged to `main`; archived the completed [full-metrics export and MRI batch plan](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md), removed stale “two PRs remaining” backlog claims, and carried its optional local CT/MRI export verification into `TO_DO.md` Manual Smoke Checks.
 
 ## 2026-08-29
