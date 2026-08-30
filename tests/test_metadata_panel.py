@@ -465,10 +465,10 @@ def test_panel_population_perf_gate_enhanced_multiframe(qapp) -> None:
 
     Resolving each parent's children by rescanning the tag dict cost ~19s on this
     dataset in the tag viewer; the shared child index makes it ~0.2s. The panel
-    reuses those helpers and must not regress. The gate allows 5s of CPU time for
+    reuses those helpers and must not regress. The gate allows 6s of CPU time for
     24k QTreeWidgetItem allocations: measured ~0.28s locally under coverage and
     ~2.1s on a 4-vCPU CI runner where four xdist workers saturate the available
-    SMT threads. The ~19s O(n^2) regression stays ~4x above this budget.
+    SMT threads. The ~19s O(n^2) regression stays more than 3x above this budget.
     """
     frames = []
     for frame_index in range(2000):
@@ -512,9 +512,11 @@ def test_panel_population_perf_gate_enhanced_multiframe(qapp) -> None:
     # runner with coverage, versus ~277 ms locally under coverage. It passed
     # serially before the suite moved to pytest-xdist; four workers saturating
     # four SMT vCPUs cut per-thread throughput, inflating CPU time too. The code
-    # under test did not change. Still catches the ~19 s O(n^2) rescan
-    # regression this guards, with ~4x margin.
-    assert cpu_ms < 5000
+    # under test did not change. It still catches the ~19 s O(n^2) rescan
+    # regression. PR #101 later measured 5064 ms
+    # on unchanged code, so the gate is 6000 ms to absorb normal CI variance
+    # while retaining more than 3x separation from that regression.
+    assert cpu_ms < 6000
 
 
 def test_group_headers_span_full_width_and_are_visually_distinct(qapp) -> None:
