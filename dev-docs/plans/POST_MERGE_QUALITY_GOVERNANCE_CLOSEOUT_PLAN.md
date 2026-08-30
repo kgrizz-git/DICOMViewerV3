@@ -46,10 +46,17 @@ the plan is archived, and optional human verification is still visible.
    `sonarqube` job:
 
    ```yaml
-   -Dsonar.qualitygate.wait=true
-   -Dsonar.qualitygate.timeout=600
+   - name: SonarQube Cloud scan
+     uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995
+     with:
+       args: >
+         -Dsonar.qualitygate.wait=true
+         -Dsonar.qualitygate.timeout=600
    ```
 
+   Retain that existing action pin (including its adjacent audit annotation)
+   and preserve the existing `env: SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}`
+   block alongside the new `with: args:` block.
    This makes the job poll the Cloud result and return non-zero for a failed
    Quality Gate. It runs only after the privacy gate and tests, and only for
    `main`/`develop` pushes.
@@ -88,4 +95,4 @@ fails both paths.
 
 - [GitHub Actions CI/CD review and storage](supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md)
 - [SonarQube Cloud GitHub Actions documentation](https://docs.sonarsource.com/sonarcloud/advanced-setup/ci-based-analysis/github-actions-for-sonarcloud)
-- [`tmp/plan_lower_block_ccn_to_15_2026-08-29T23-01.md`](../../tmp/plan_lower_block_ccn_to_15_2026-08-29T23-01.md) — detailed discovery notes; ignored scratch, not a durable repository record
+- The ignored CCN-15 discovery notes informed this plan; the durable procedure is Phase 3 above.
