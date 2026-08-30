@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-08-30
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-08-30
+
+- **Pylinac ACR plan closeout:** PRs #97 and #98 merged to `main`; archived the completed [full-metrics export and MRI batch plan](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md), removed stale “two PRs remaining” backlog claims, and carried its optional local CT/MRI export verification into `TO_DO.md` Manual Smoke Checks.
 
 ## 2026-08-29
 
@@ -14,7 +18,7 @@ This file records development and repository-maintenance history that is useful 
 - **Artifact gate dummy ``ANONYMIZED``:** `check_no_phi_artifacts.py` treats an identifier whose entire value is exactly ``ANONYMIZED`` as the de-id placeholder (not a populated name/ID). TO_DO tracks a follow-up to blank Type-2 / VR-legal CS instead of stuffing that dummy into Patient's Sex.
 - **Pylinac ACR dump redaction (site keys):** Spike `results_data` dumps now omit institution/address/station (and other `SENSITIVE_DICOM_FIELDS`) in addition to absolute paths; spike consoles no longer print folder or dump destinations. Local phantoms are documented only as repo-relative `sample-DICOM-gitignored/CT-phantoms/` and `…/MR-phantoms/`. Tracked DICOM fixtures, if ever added, go through **De-identify & Export DICOM (PS3.15)** first.
 - **Hy3 review nits (Phase 6):** Analysis profile `echo_number` is stamped only after auto-highest resolution; MRI spike uses the same auto-highest echo as the runner; SNR harvest failure emits a result warning. Standard-share de-id now strips Performed Station Name / AE Title.
-- **Pylinac ACR full-metrics export + MRI batch — Phases 1–5 complete (docs/strings):** Closed the documentation and in-app-string slice of [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md). **P5-D1** user-docs: `USER_GUIDE_QA_PYLINAC.md` now has a dedicated `### ACR MRI batch` section (was a paragraph under `### ACR CT`); single-run CSV/XLSX documented as full flatten (Summary vs Detail); **Embed module images in XLSX** option documented (default on, PDF parity, uncheck skips Images sheet); JSON still carries full `raw_pylinac` (no `metrics_flat`); compare mode unchanged. Hub `USER_GUIDE.md` bullet updated; `CONFIGURATION.md` ACR/pylinac row expanded with the embed-toggle description. **P5-D2** dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md` ACR CT CNR/batch/XLSX row updated to document canonical flatten (`qa_result_flatten.py`, metrics-overlay-wins, path denylist), wide batch CSV vs single-run metric/value, XLSX Summary/Detail/Images + embed toggle, `ACRMBatchResult` + `QAMRIBatchWorker` (not compare-mode `MRIBatchResult`), MRI batch menu + export; stale "batch for other modalities remain future work" corrected to "shipped for ACR CT and ACR MRI"; Phase 6 SNR kept **not shipped**. Plan appendix P5-D1/D2/D3/D4 marked `[x]` with honest landed notes; plan status header updated to "Phases 1–5 shipped; Phase 6 (viewer-computed MRI SNR) still open". **P5-D3** in-app strings: audited against the plan's **Documentation updates** table — all strings already landed from P3/P4; **zero Python changed**. **P5-D4** CHANGELOG: existing Unreleased **Added** (minor) + **Fixed** P2-X4 (patch) already cover the ship; no new entry needed. **P5-D5** partial: link checker OK; plan not moved to `completed/` while Phase 6 remains; `TO_DO.md` Next-up retargeted to MRI SNR. Phase 6 (MRI SNR) remains open in the plan.
+- **Pylinac ACR full-metrics export + MRI batch — Phases 1–5 complete (docs/strings):** Closed the documentation and in-app-string slice of [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md). **P5-D1** user-docs: `USER_GUIDE_QA_PYLINAC.md` now has a dedicated `### ACR MRI batch` section (was a paragraph under `### ACR CT`); single-run CSV/XLSX documented as full flatten (Summary vs Detail); **Embed module images in XLSX** option documented (default on, PDF parity, uncheck skips Images sheet); JSON still carries full `raw_pylinac` (no `metrics_flat`); compare mode unchanged. Hub `USER_GUIDE.md` bullet updated; `CONFIGURATION.md` ACR/pylinac row expanded with the embed-toggle description. **P5-D2** dev-docs: `PYLINAC_INTEGRATION_OVERVIEW.md` ACR CT CNR/batch/XLSX row updated to document canonical flatten (`qa_result_flatten.py`, metrics-overlay-wins, path denylist), wide batch CSV vs single-run metric/value, XLSX Summary/Detail/Images + embed toggle, `ACRMBatchResult` + `QAMRIBatchWorker` (not compare-mode `MRIBatchResult`), MRI batch menu + export; stale "batch for other modalities remain future work" corrected to "shipped for ACR CT and ACR MRI"; Phase 6 SNR was then unshipped. Plan appendix P5-D1/D2/D3/D4 marked `[x]` with honest landed notes; plan status header updated to "Phases 1–5 shipped; Phase 6 (viewer-computed MRI SNR) still open". **P5-D3** in-app strings: audited against the plan's **Documentation updates** table — all strings already landed from P3/P4; **zero Python changed**. **P5-D4** CHANGELOG: existing Unreleased **Added** (minor) + **Fixed** P2-X4 (patch) already cover the ship; no new entry needed. **P5-D5** partial: link checker OK; plan remained active while Phase 6 was open; `TO_DO.md` Next-up retargeted to MRI SNR. Phase 6 later shipped and the plan was archived on 2026-08-30.
 
 ## 2026-08-28
 
@@ -29,7 +33,7 @@ This file records development and repository-maintenance history that is useful 
   and W/L preset smokes; removed duplicate 3D sub-bullets and closed the
   refactor-extraction smoke block (all confirmed 2026-06).
 - **Pylinac ACR export slice plan:** Added
-  [`PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`](plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md)
+  [`PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md`](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md)
   (full metrics CSV/XLSX, batch CT CSV, multi-series MRI batch); linked from
   `TO_DO.md` Next up.
 - **pytest-xdist parallelization — closed:** Fifteen consecutive green CI runs on
@@ -565,13 +569,13 @@ Use this log for CI, static analysis, harness changes, dependency-verification p
 ## 2026-07-25
 
 - **Superseded by the privacy-gated PR/push configuration below:** enabled the
-  initial approved SonarQube Cloud CI analysis of `src/` only after pushes to
-  `main`: `.github/workflows/sonarqube-cloud-main.yml` is pinned to the
-  official scan action and uses only the repository `SONAR_TOKEN` secret.
-  Root `sonar-project.properties` excludes tests, coverage, artifacts, local
-  data, and generated/cache paths. The harness now permits only this exact
-  main-only workflow; Automatic Analysis must remain disabled in SonarQube
-  Cloud to prevent independent PR analysis.
+  initial approved SonarQube Cloud CI analysis of `src/` only after protected
+  pushes. The current approved scan is the `sonarqube` job in
+  `.github/workflows/ci.yml`, pinned to the official action and using only the
+  repository `SONAR_TOKEN` secret. Root `sonar-project.properties` excludes
+  tests, coverage, artifacts, local data, and generated/cache paths. The
+  harness permits only this approved workflow; Automatic Analysis must remain
+  disabled in SonarQube Cloud to prevent independent PR analysis.
 - Completed the privacy structural-schema SonarQube slice: decomposed metric
   normalization and rendered-value revalidation, schema loading, validator
   parsing, and operation parsing into small fail-closed helpers. Added direct

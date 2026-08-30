@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-29  
 **Purpose:** Tabulate what physicists are asked to measure on **ACR CT** and **ACR MRI** accreditation phantoms, how those quantities are defined in primary references, what **pylinac 3.43.2** already computes, and what remains **viewer-native** work (MRI **SNR**, direct resolution reads, etc.).  
-**Related:** [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) (Phases 0–6), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md), [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) (MTF rMTF grid), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (**C2**, **C24**).
+**Related:** [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) (Phases 0–6), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md), [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) (MTF rMTF grid), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (**C2**, **C24**).
 
 ---
 
@@ -156,5 +156,5 @@ First manual noise pair (6.57 / 5.13) was discarded: those ROIs were larger and 
 
 ## Phase 6+ pointer (SNR / SNRU)
 
-- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there. **R6-2** numeric compare is in [R6-2 — local T1 SNR compare](#r6-2--local-t1-snr-compare-2026-08-29).
+- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there. **R6-2** numeric compare is in [R6-2 — local T1 SNR compare](#r6-2--local-t1-snr-compare-2026-08-29).
 - **SNRU** (slice 6÷7 ratio, optional) — **Phase 6+** in the same plan; after `mri_snr` ships; no default pass/fail in v1.

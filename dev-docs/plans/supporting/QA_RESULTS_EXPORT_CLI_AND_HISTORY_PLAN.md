@@ -44,7 +44,7 @@ Success means:
 
 **Note (2026-08-28):** ACR CT/MRI flattening, full CSV/XLSX, batch CT CSV, and MRI
 multi-series batch are scoped first in
-[PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md).
+[PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md).
 Reuse its **`src/qa/qa_result_flatten.py`** module (canonical flatten boundary) when
 implementing T1–T2 here for other analysis types. Do not introduce a parallel
 `qa.result_serialization` flatten path — wrap or import `qa_result_flatten` if
