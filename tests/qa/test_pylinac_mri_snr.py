@@ -178,6 +178,21 @@ def test_overlay_warns_when_snr_cannot_be_computed() -> None:
     assert "MRI SNR not computed" in warnings[0]
 
 
+def test_overlay_warns_when_snr_noise_is_non_positive() -> None:
+    metrics: dict[str, object] = {}
+    warnings: list[str] = []
+    overlay_mri_snr_metrics(
+        metrics,
+        _analyzer(phase="ROW", top_std=-1.0, bottom_std=-1.0),
+        warnings=warnings,
+    )
+    assert not metrics
+    assert warnings == [
+        "MRI SNR not computed: missing Center or frequency-encode ghost "
+        "ROIs, or background noise was non-positive."
+    ]
+
+
 def test_flatten_overlays_top_level_mri_snr() -> None:
     result = QAResult(
         success=True,

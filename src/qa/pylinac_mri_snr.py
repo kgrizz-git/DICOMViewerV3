@@ -227,5 +227,5 @@ def overlay_mri_snr_metrics(
     if warnings is not None:
         warnings.append(
             "MRI SNR not computed: missing Center or frequency-encode ghost "
-            "ROIs, or background noise was zero."
+            "ROIs, or background noise was non-positive."
         )
