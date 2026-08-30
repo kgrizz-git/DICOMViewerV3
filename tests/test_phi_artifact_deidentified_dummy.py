@@ -52,6 +52,13 @@ def test_json_patient_tag_anonymized_dummy_is_allowed() -> None:
     assert "populated DICOM patient tag" not in reasons
 
 
+def test_json_dummy_then_real_patient_tag_on_same_line_is_flagged() -> None:
+    reasons = phi._content_reasons(
+        '{"PatientName": "ANONYMIZED", "PatientID": "SYN-GATE-001"}'
+    )
+    assert "populated DICOM patient tag" in reasons
+
+
 def test_json_patient_tag_still_flags_real_values() -> None:
     reasons = phi._content_reasons('{"PatientName": "DOE^JANE"}')
     assert "populated DICOM patient tag" in reasons

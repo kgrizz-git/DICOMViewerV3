@@ -49,6 +49,8 @@ _DUMP_DROP_KEYS_LOWER = frozenset(
 # Absolute Unix paths and Windows drive paths (conservative redaction for fixtures).
 _UNIX_ABS = re.compile(r"(?<![\w./-])(/[\w./-]+)")
 _WIN_ABS = re.compile(r"(?<![\w:])[A-Za-z]:[\\/][\w. \\/-]+")
+# DICOM UID-shaped dotted decimals: roots 0/1/2, ≥3 components (covers 2.25.*).
+_UID_LIKE = re.compile(r"\b(?:0|1|2)(?:\.\d+){2,}\b")
 
 
 def _looks_like_absolute_path(text: str) -> bool:
@@ -74,6 +76,28 @@ def _looks_like_absolute_path(text: str) -> bool:
 def _is_dump_drop_key(key: object) -> bool:
     """True when *key* is a DICOM/site identifier that must not appear in dumps."""
     return str(key).strip().lower() in _DUMP_DROP_KEYS_LOWER
+
+
+def _normalized_dump_key(key: object) -> str:
+    """Lowercased key with separators stripped for UID-context matching."""
+    return str(key).strip().lower().replace("_", "").replace("-", "")
+
+
+def _is_uid_context_key(key: object) -> bool:
+    """True when the key name itself is a UID / identifier context.
+
+    Matches dump-drop keys and names that end with ``uid`` (``SeriesInstanceUID``,
+    ``misc_uid``). Does not treat incidental substrings such as ``guid``.
+    """
+    if _is_dump_drop_key(key):
+        return True
+    normalized = _normalized_dump_key(key)
+    return normalized.endswith("uid") and not normalized.endswith("guid")
+
+
+def _looks_like_uid(text: str) -> bool:
+    """True when *text* contains a DICOM UID-shaped dotted decimal."""
+    return bool(text) and _UID_LIKE.search(text) is not None
 
 
 def redact_paths_in_value(value: Any) -> Any:
@@ -104,9 +128,29 @@ def drop_sensitive_dump_keys(value: Any) -> Any:
     return value
 
 
+def redact_uid_strings(value: Any, *, uid_context: bool = False) -> Any:
+    """Recursively redact UID-shaped strings, including UID-named keys."""
+    if isinstance(value, str):
+        if _looks_like_uid(value):
+            return _UID_LIKE.sub("<redacted-uid>", value)
+        if uid_context:
+            return "<redacted-uid>"
+        return value
+    if isinstance(value, dict):
+        return {
+            str(key): redact_uid_strings(
+                child, uid_context=uid_context or _is_uid_context_key(key)
+            )
+            for key, child in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [redact_uid_strings(item, uid_context=uid_context) for item in value]
+    return value
+
+
 def redact_results_dump(value: Any) -> Any:
-    """Drop site/PHI keys, then redact any remaining absolute paths."""
-    return redact_paths_in_value(drop_sensitive_dump_keys(value))
+    """Drop site/PHI keys, then redact remaining paths and UID-shaped strings."""
+    return redact_uid_strings(redact_paths_in_value(drop_sensitive_dump_keys(value)))
 
 
 def analyze_folder_with_extent_retry(

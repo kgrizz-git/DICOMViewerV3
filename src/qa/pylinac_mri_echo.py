@@ -74,9 +74,33 @@ def _candidate_dicom_paths(request: QARequest) -> list[str]:
     return [str(path) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def highest_echo_number_from_paths(paths: list[str]) -> int | None:
+def _series_instance_uid(dataset: Any) -> str:
+    """SeriesInstanceUID from a header dataset, or empty."""
+    return str(getattr(dataset, "SeriesInstanceUID", "") or "").strip()
+
+
+def _matches_requested_series(dataset: Any, requested: str) -> bool:
+    """True when *dataset* belongs to *requested* (UID or composite key)."""
+    uid = _series_instance_uid(dataset)
+    if not uid:
+        return False
+    if uid == requested:
+        return True
+    return requested.startswith(f"{uid}_")
+
+
+def highest_echo_number_from_paths(
+    paths: list[str],
+    *,
+    series_uid: str = "",
+) -> int | None:
     """
-    Return the maximum EchoNumber found in *paths*.
+    Return the maximum EchoNumber found in *paths* for one series.
+
+    When *series_uid* is set, only that SeriesInstanceUID (or composite
+    ``UID_SeriesNumber`` key) is considered. When it is empty, the folder
+    must contain a single series; mixed-series folders return ``None`` so
+    pylinac is not given a cross-series highest echo.
 
     Unreadable files are skipped. Does not log path names.
     """
@@ -87,15 +111,26 @@ def highest_echo_number_from_paths(paths: list[str]) -> int | None:
     except Exception:
         return None
 
-    found: list[int] = []
+    echoes_by_series: dict[str, list[int]] = {}
+    series_seen: set[str] = set()
     for path in paths:
         try:
             dataset = pydicom.dcmread(path, stop_before_pixels=True, force=True)
         except Exception:
             continue
+        uid = _series_instance_uid(dataset)
+        if series_uid:
+            if not uid or not _matches_requested_series(dataset, series_uid):
+                continue
+        series_seen.add(uid)
         parsed = _echo_from_dataset(dataset)
         if parsed is not None:
-            found.append(parsed)
+            echoes_by_series.setdefault(uid, []).append(parsed)
+    if not series_uid and len(series_seen) > 1:
+        return None
+    if not echoes_by_series:
+        return None
+    found = [echo for echoes in echoes_by_series.values() for echo in echoes]
     return max(found) if found else None
 
 
@@ -108,11 +143,11 @@ def resolve_mri_analyze_echo_number(request: QARequest) -> int | None:
     its library minimum.
     """
     if request.echo_number is not None:
-        try:
-            return int(request.echo_number)
-        except (TypeError, ValueError):
-            return None
-    return highest_echo_number_from_paths(_candidate_dicom_paths(request))
+        return coerce_echo_number(request.echo_number)
+    return highest_echo_number_from_paths(
+        _candidate_dicom_paths(request),
+        series_uid=request.series_uid,
+    )
 
 
 def stamp_analyzed_echo_on_profile(
@@ -123,7 +158,13 @@ def stamp_analyzed_echo_on_profile(
     """Record requested vs analyzed echo on ``pylinac_analysis_profile``."""
     profile["echo_number"] = analyzed_echo
     profile["echo_number_requested"] = request.echo_number
-    profile["echo_number_auto_highest"] = request.echo_number is None
+    profile["echo_number_auto_highest"] = (
+        request.echo_number is None and analyzed_echo is not None
+    )
+    # Stock pylinac analyze(echo_number=None) uses the lowest echo. Passing a
+    # resolved echo (auto-highest or explicit) is not vanilla-equivalent.
+    if analyzed_echo is not None:
+        profile["vanilla_equivalent"] = False
 
 
 def stamp_resolved_echo_on_profile(
@@ -147,5 +188,5 @@ def overlay_analyzed_echo_metrics(
     """Record requested vs analyzed echo on curated ``QAResult.metrics``."""
     metrics["echo_number"] = analyzed_echo
     metrics["echo_number_requested"] = request.echo_number
-    if request.echo_number is None:
+    if request.echo_number is None and analyzed_echo is not None:
         metrics["echo_number_auto_highest"] = True

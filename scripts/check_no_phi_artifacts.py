@@ -276,7 +276,7 @@ from scripts.privacy_checks.dicom_identifier_gate import (
     DICOM_IDENTIFIER_KEYWORDS,
     SYNTHETIC_FIXTURE_IDENTIFIERS,
     is_exact_deidentified_dummy,
-    skip_populated_patient_tag_match,
+    populated_patient_tag_finding,
 )
 from scripts.privacy_checks.names import (
     IDENTIFIER_CONTENT_PATTERN,
@@ -520,16 +520,16 @@ def _content_reasons(
     for pattern, why in CONTENT_RULES:
         if carved_out and isinstance(pattern, PathCarveoutPattern):
             continue
+        if why == "populated DICOM patient tag":
+            if populated_patient_tag_finding(pattern, text):
+                reasons.append(why)
+            continue
         match = pattern.search(text)
         if match is None:
             continue
         if (
             why == "internal hostname"
             and match.group().lower() in SAFE_INTERNAL_HOSTNAMES
-        ):
-            continue
-        if why == "populated DICOM patient tag" and skip_populated_patient_tag_match(
-            match
         ):
             continue
         reasons.append(why)

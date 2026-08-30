@@ -13,6 +13,7 @@ Outputs: allow/skip decisions for ``check_no_phi_artifacts``.
 from __future__ import annotations
 
 import re
+from typing import Protocol
 
 # Exact dummy written by ``DICOMAnonymizer`` for text patient tags.
 DEIDENTIFIED_DUMMY_VALUE = "ANONYMIZED"
@@ -62,3 +63,24 @@ def skip_populated_patient_tag_match(match: re.Match[str]) -> bool:
     """True when a CONTENT_RULES patient-tag match is only the dummy."""
     dummy = match.groupdict().get("patient_tag_value")
     return dummy is not None and is_exact_deidentified_dummy(dummy)
+
+
+class _PatientTagPattern(Protocol):
+    """Minimal regex-like surface used by the JSON patient-tag CONTENT_RULE."""
+
+    def search(self, string: str, /) -> re.Match[str] | None: ...
+
+
+def populated_patient_tag_finding(pattern: _PatientTagPattern, text: str) -> bool:
+    """True when any patient-tag match on *text* is not the de-id dummy.
+
+    Inspects every match so a dummy tag cannot hide a real tag on the same line.
+    """
+    finditer = getattr(pattern, "finditer", None)
+    if finditer is None:
+        match = pattern.search(text)
+        return match is not None and not skip_populated_patient_tag_match(match)
+    return any(
+        not skip_populated_patient_tag_match(tag_match)
+        for tag_match in finditer(text)
+    )

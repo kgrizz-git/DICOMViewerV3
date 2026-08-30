@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from qa.analysis_types import QAResult
 from qa.pylinac_mri_snr import (
+    _as_float,
     extract_mri_snr_acr_style,
     frequency_encode_ghost_roi_names,
     overlay_mri_snr_metrics,
@@ -90,6 +91,32 @@ def test_snr_returns_none_when_noise_is_zero() -> None:
         _analyzer(phase="ROW", top_std=0.0, bottom_std=0.0)
     )
     assert harvested is None
+
+
+def test_as_float_rejects_non_finite_values() -> None:
+    assert _as_float(float("nan")) is None
+    assert _as_float(float("inf")) is None
+    assert _as_float(float("-inf")) is None
+    assert _as_float("inf") is None
+    assert _as_float("-inf") is None
+
+
+def test_snr_returns_none_when_signal_or_noise_is_infinite() -> None:
+    assert (
+        extract_mri_snr_acr_style(_analyzer(phase="ROW", center=float("inf"))) is None
+    )
+    assert (
+        extract_mri_snr_acr_style(
+            _analyzer(phase="ROW", top_std=float("inf"), bottom_std=2.0)
+        )
+        is None
+    )
+    assert (
+        extract_mri_snr_acr_style(
+            _analyzer(phase="ROW", top_std=float("-inf"), bottom_std=2.0)
+        )
+        is None
+    )
 
 
 def test_snr_returns_none_without_uniformity_module() -> None:

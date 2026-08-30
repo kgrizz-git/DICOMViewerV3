@@ -24,6 +24,7 @@ Requirements:
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 # pylinac 3.43.2 ``ghost_rois`` keys are spatial (fixed phantom-centered
@@ -45,7 +46,7 @@ _ALTERNATE_GHOST_PAIR: dict[tuple[str, str], tuple[str, str]] = {
 
 
 def _as_float(value: object) -> float | None:
-    """Coerce a ROI statistic to float; None on missing/non-numeric."""
+    """Coerce a ROI statistic to float; None on missing/non-numeric/non-finite."""
     if value is None or isinstance(value, bool):
         return None
     if not isinstance(value, (int, float, str)):
@@ -54,7 +55,7 @@ def _as_float(value: object) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    if number != number:  # NaN
+    if not math.isfinite(number):
         return None
     return number
 

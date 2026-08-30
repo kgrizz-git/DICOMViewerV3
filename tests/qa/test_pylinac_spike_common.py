@@ -56,6 +56,39 @@ def test_dump_drops_institution_address_and_station_keys() -> None:
     assert "MRI1" not in blob
 
 
+def test_dump_redacts_uid_shaped_strings_for_roots_0_1_and_2() -> None:
+    uid_like = _common._UID_LIKE
+    assert uid_like.search("0.1.2.3")
+    assert uid_like.search("1.2.840.999.1")
+    assert uid_like.search("2.16.840.1.113883")
+    assert uid_like.search("2.25.123456789012345678901234567890123")
+    tree = {
+        "notes": "ref 1.2.840.999.8.8.8 leftover",
+        "uuid_style": "2.25.123456789012345678901234567890123",
+        "root_zero": "0.1.2.3.4",
+        "nested": {"misc_uid": "1.2.840.999.7"},
+    }
+    redacted = redact_results_dump(tree)
+    blob = str(redacted)
+    assert "<redacted-uid>" in redacted["notes"]
+    assert redacted["uuid_style"] == "<redacted-uid>"
+    assert redacted["root_zero"] == "<redacted-uid>"
+    assert redacted["nested"]["misc_uid"] == "<redacted-uid>"
+    assert "1.2.840" not in blob
+    assert "2.25." not in blob
+    assert "0.1.2.3" not in blob
+
+
+def test_dump_uid_context_is_suffix_not_substring_and_nests() -> None:
+    tree = {
+        "guid": "keep-guid-token",
+        "customUID": {"value": "nested-under-uid-key"},
+    }
+    redacted = redact_results_dump(tree)
+    assert redacted["guid"] == "keep-guid-token"
+    assert redacted["customUID"]["value"] == "<redacted-uid>"
+
+
 def test_analyze_folder_with_extent_retry_skips_strict_then_succeeds() -> None:
     """Viewer-style 0 → 1 mm retry without loading DICOM (P0 dump regeneration)."""
     constructed: list[float] = []

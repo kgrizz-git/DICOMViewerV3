@@ -36,7 +36,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   blank when its flatten key is absent for the run, so CT and MRI rows share
   one header with blanks where a metric does not apply. Numeric cells stay
   numbers; CT slice thickness and CT SNR are excluded by design. ``MRI SNR``
-  is present in the header but stays blank until Phase 6 harvests ``mri_snr``.
+  fills from harvested ``mri_snr`` (Phase 6 shipped); CT rows stay blank.
   **Semantic versioning note: minor.**
 - **ACR QA embed-module-images toggle (P2-I2):** ACR CT, ACR MRI, and CT batch
   options dialogs now expose an **Embed module images in XLSX** checkbox
@@ -46,6 +46,15 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: minor.**
 
 ### Fixed
+- **CodeRabbit PR 97 follow-ups:** MRI SNR changelog status matches the
+  shipped harvest; the PHI artifact gate inspects every patient-tag match
+  on a line; ACR dump redaction recursively redacts UID-shaped strings
+  (roots 0/1/2, including ``2.25``); MRI ``vanilla_equivalent`` is refined
+  after echo resolution; explicit ``echo_number`` must be positive;
+  folder auto-highest uses one series only; ``echo_number_auto_highest``
+  is true only when a highest echo was actually resolved; SNR harvest
+  rejects non-finite signal/noise.
+  **Semantic versioning note: patch.**
 - **MRI analysis profile keeps echo provenance on early failure:** The ACR MRI
   Large runner now stamps requested vs analyzed echo on
   ``pylinac_analysis_profile`` before constructing the analyzer, so invalid

@@ -171,6 +171,8 @@ def build_pylinac_analysis_profile(
         # echo_number is stamped later by stamp_analyzed_echo_on_profile
         # (resolved auto-highest vs explicit request). Do not write the raw
         # request value here — it would disagree with the analyzed echo.
+        # vanilla_equivalent is refined after that stamp when a resolved
+        # echo is passed to analyze() (stock pylinac uses lowest / None).
         profile["low_contrast_method"] = lc_method
         profile["low_contrast_visibility_threshold"] = lc_threshold
         profile["low_contrast_visibility_sanity_multiplier"] = lc_sanity

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +29,7 @@ _SPEC.loader.exec_module(_common)
 _looks_like_absolute_path = _common._looks_like_absolute_path
 _is_dump_drop_key = _common._is_dump_drop_key
 
-_UID_LIKE = re.compile(r"\b1\.\d+(?:\.\d+){3,}\b")
+_UID_LIKE = _common._UID_LIKE
 
 _CT_TOP_KEYS = frozenset(
     {
