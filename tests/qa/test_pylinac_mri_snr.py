@@ -98,6 +98,13 @@ def test_snr_returns_none_when_noise_is_zero() -> None:
     assert harvested is None
 
 
+def test_snr_returns_none_when_noise_is_negative() -> None:
+    harvested = extract_mri_snr_acr_style(
+        _analyzer(phase="ROW", top_std=-1.0, bottom_std=-1.0)
+    )
+    assert harvested is None
+
+
 def test_as_float_rejects_non_finite_values() -> None:
     assert _as_float(float("nan")) is None
     assert _as_float(float("inf")) is None
@@ -169,6 +176,21 @@ def test_overlay_warns_when_snr_cannot_be_computed() -> None:
     assert "mri_snr" not in metrics
     assert len(warnings) == 1
     assert "MRI SNR not computed" in warnings[0]
+
+
+def test_overlay_warns_when_snr_noise_is_non_positive() -> None:
+    metrics: dict[str, object] = {}
+    warnings: list[str] = []
+    overlay_mri_snr_metrics(
+        metrics,
+        _analyzer(phase="ROW", top_std=-1.0, bottom_std=-1.0),
+        warnings=warnings,
+    )
+    assert not metrics
+    assert warnings == [
+        "MRI SNR not computed: missing Center or frequency-encode ghost "
+        "ROIs, or background noise was non-positive."
+    ]
 
 
 def test_flatten_overlays_top_level_mri_snr() -> None:
