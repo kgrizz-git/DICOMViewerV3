@@ -5,7 +5,7 @@
   "policy": {
     "default_data_handling": "local-only",
     "finding_output": "category/count/status only; never retain or paste matched sensitive values",
-    "external_source_or_coverage_uploads": "prohibited except the approved privacy-gated GitHub Actions SonarQube Cloud scan of src/ and its src-path-and-line-number coverage metadata; standalone third-party coverage uploads and test-source, artifact, or local-data uploads are prohibited",
+    "external_source_or_coverage_uploads": "no source or coverage data may be sent to a third-party analysis service until CI privacy gates pass; PRs never send source or coverage data to such a service; only the approved protected-main/develop SonarQube Cloud scan may then submit src/ and its src-path-and-line-number coverage metadata; standalone third-party coverage uploads and test-source, artifact, or local-data uploads are prohibited",
     "allowed_remote_outputs": "GitHub Actions logs, optional SARIF attached to this private GitHub repository, and the narrowly scoped approved SonarQube Cloud main analysis",
     "version_field_meaning": "tested_version records the locally or CI-tested release, not an automatic upgrade constraint"
   },
@@ -328,7 +328,7 @@
         "privacy-gated CI blocking",
         "bounded post-push Quality Gate blocking"
       ],
-      "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; the job waits up to 600 seconds for the Cloud Quality Gate; Automatic Analysis disabled; coverage metadata containing src paths and line numbers is included only in that approved scan; standalone third-party coverage uploads and PR, test-source, artifact, or local-data uploads are prohibited",
+      "network_policy": "No SonarQube Cloud upload occurs until the CI privacy gates pass; PRs perform no SonarQube Cloud analysis or upload. Only protected main/develop pushes may then submit src/ and coverage metadata containing src paths and line numbers; the job waits up to 600 seconds for the Cloud Quality Gate; Automatic Analysis is disabled; standalone third-party coverage uploads and test-source, artifact, or local-data uploads are prohibited",
       "entrypoints": [
         ".github/workflows/ci.yml"
       ],
