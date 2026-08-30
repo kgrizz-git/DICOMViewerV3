@@ -5,7 +5,7 @@
   "policy": {
     "default_data_handling": "local-only",
     "finding_output": "category/count/status only; never retain or paste matched sensitive values",
-    "external_source_or_coverage_uploads": "prohibited except approved privacy-gated GitHub Actions source scans limited to src/; no test, coverage, artifact, or local-data upload is permitted",
+    "external_source_or_coverage_uploads": "no source or coverage data may be sent to a third-party analysis service until CI privacy gates pass; PRs never send source or coverage data to such a service; only the approved protected-main/develop SonarQube Cloud scan may then submit src/ and its src-path-and-line-number coverage metadata; standalone third-party coverage uploads and test-source, artifact, or local-data uploads are prohibited",
     "allowed_remote_outputs": "GitHub Actions logs, optional SARIF attached to this private GitHub repository, and the narrowly scoped approved SonarQube Cloud main analysis",
     "version_field_meaning": "tested_version records the locally or CI-tested release, not an automatic upgrade constraint"
   },
@@ -325,9 +325,10 @@
       "install_reference": "dev-docs/CONTRIBUTING.md",
       "tested_version": "SonarSource/sonarqube-scan-action v8.1.0 commit-pinned",
       "enforcement": [
-        "privacy-gated CI blocking"
+        "privacy-gated CI blocking",
+        "bounded post-push Quality Gate blocking"
       ],
-      "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; Automatic Analysis disabled; no PR, test, coverage, artifact, or local-data upload",
+      "network_policy": "No SonarQube Cloud upload occurs until the CI privacy gates pass; PRs perform no SonarQube Cloud analysis or upload. Only protected main/develop pushes may then submit src/ and coverage metadata containing src paths and line numbers; the job waits up to 600 seconds for the Cloud Quality Gate; Automatic Analysis is disabled; standalone third-party coverage uploads and test-source, artifact, or local-data uploads are prohibited",
       "entrypoints": [
         ".github/workflows/ci.yml"
       ],

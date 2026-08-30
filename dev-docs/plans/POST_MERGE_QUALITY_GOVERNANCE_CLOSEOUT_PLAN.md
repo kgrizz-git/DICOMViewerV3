@@ -1,7 +1,7 @@
 # Plan: Post-merge quality-governance closeout
 
 **Last updated:** 2026-08-30
-**Status:** Active
+**Status:** Active — Phases 1–2 implemented; Phase 3 remains
 **Priority:** P1
 **Area:** Documentation closeout, protected-branch CI, maintainability policy
 
@@ -28,7 +28,7 @@ the change; do not delay an earlier completed PR for a later phase.
 - Keep the three changes independently reviewable and do not bypass hooks or
   verification gates.
 
-## Phase 1 — documentation closeout (PR 1)
+## Phase 1 — documentation closeout (PR 1, merged)
 
 1. Move the merged [Pylinac ACR full metrics export and MRI batch plan](completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) from `plans/supporting/` to `plans/completed/`.
 2. Mark its archival task complete and transfer its optional CT/MRI real-phantom
@@ -40,7 +40,7 @@ the change; do not delay an earlier completed PR for a later phase.
 **Acceptance:** `TO_DO.md` contains no claim that the two Pylinac PRs remain,
 the plan is archived, and optional human verification is still visible.
 
-## Phase 2 — protected-branch SonarQube Cloud Quality Gate (PR 2)
+## Phase 2 — protected-branch SonarQube Cloud Quality Gate (PR 2, implemented)
 
 1. In `.github/workflows/ci.yml`, add scanner arguments to the existing
    `sonarqube` job:
@@ -60,8 +60,8 @@ the plan is archived, and optional human verification is still visible.
    This makes the job poll the Cloud result and return non-zero for a failed
    Quality Gate. It runs only after the privacy gate and tests, and only for
    `main`/`develop` pushes.
-2. Correct the stale `sonar-project.properties` workflow comment; the active
-   scanner job lives in `ci.yml`.
+2. Confirm the `sonar-project.properties` workflow comment identifies the active
+   `ci.yml` scanner job; do not put Quality Gate waiting in that shared file.
 3. Update `dev-docs/CONTRIBUTING.md` and
    `security/security-tool-inventory.json` to document the bounded, blocking
    post-push quality-gate behavior.
@@ -72,7 +72,11 @@ the plan is archived, and optional human verification is still visible.
 `SonarQube Cloud scan` job red. This is post-merge visibility, not PR merge
 protection; enabling PR analysis needs a separate privacy review.
 
-## Phase 3 — CCN 15 ratchet and CI parity (PR 3)
+**Implementation note (2026-08-30):** The existing protected-branch job now
+waits for the Quality Gate with the specified 600-second timeout. Inspect the
+first protected-branch run after merge to confirm the hosted behavior.
+
+## Phase 3 — CCN 15 ratchet and CI parity (PR 3, remaining)
 
 1. Change `BLOCK_CCN` and its docstring in
    `scripts/git_hook_line_complexity.py` from 20 to 15.
