@@ -29,6 +29,20 @@
       "rule_id": "jfrog-identity-token",
       "start_line": 26,
       "reason": "Reviewed SHA-256 digest of synthetic DICOM RDSR fixture; not a credential"
+    },
+    {
+      "blob_oid": "d5d74d5ffca3fc1136903ffa2e823af268c66042",
+      "path": "security/approved-media-sha256.json",
+      "rule_id": "jfrog-identity-token",
+      "start_line": 119,
+      "reason": "Reviewed SHA-256 digest of redacted synthetic DICOM RDSR fixture; not a credential"
+    },
+    {
+      "blob_oid": "d5d74d5ffca3fc1136903ffa2e823af268c66042",
+      "path": "security/approved-media-sha256.json",
+      "rule_id": "jfrog-identity-token",
+      "start_line": 120,
+      "reason": "Reviewed SHA-256 digest of redacted synthetic DICOM RDSR fixture; not a credential"
     }
   ]
 }

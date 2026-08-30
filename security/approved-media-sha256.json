@@ -113,10 +113,10 @@
     "tests/fixtures/dicom_decoder/synthetic_monochrome_uncompressed_12_bit.dcm": "9400171f9cd0736f3e181c7708ec4126191004876b8785922ea678bcf44c0e16",
     "tests/fixtures/dicom_decoder/synthetic_monochrome_uncompressed_16_bit.dcm": "82a84688cc052c294e3a8df49cbf2206925918fae4a128b5ac7230a4d74de200",
     "tests/fixtures/dicom_decoder/synthetic_rgb_no_color_markers_jpeg_baseline.dcm": "12faf049f4b68d151dc95a1a018a8b5f629255e824ee41d097c8a3447490e6bc",
-    "tests/fixtures/dicom_nuclear/synthetic_nm_four_bar_resolution.dcm": "592fa9a2577e47ccd77a5a5ae9d98a52dd009fa1622e7f621c8a0b50ab18bd4e",
-    "tests/fixtures/dicom_nuclear/synthetic_nm_planar_uniformity.dcm": "9690060f8764d462b79654e6d698a3ed868fd2e495bff2d70c28c22e56b38d2e",
-    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm": "6b3b33946aa1a2e2d0e2123e86b8ee278d3ca8866d3a0e7e69e335e7f5951385",
-    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm": "749e7b1a407278ef5fc8554acf942a077d866c824d11d9ceb11f81e878f174d3",
-    "tests/fixtures/dicom_rdsr/synthetic_enhanced_xray_rdsr.dcm": "a5c9685c62523c2f2930f607500f29e69a88c612aa8b483d9ed172798fa0dec1"
+    "tests/fixtures/dicom_nuclear/synthetic_nm_four_bar_resolution.dcm": "da5e4c3e64505ab65a098b8afa4e2d601a3d81be3f2ded5373168893dfc0148f",
+    "tests/fixtures/dicom_nuclear/synthetic_nm_planar_uniformity.dcm": "653f25626163a06bf7b5c8f5e27bf1693da3e53e8c35255364c176f70d6b9766",
+    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm": "8c1de35c4a4cb16d24964b239a465e46bb96c40b0924eeda706b93604da1c14d",
+    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm": "ce261f5d1cb9cc4fe6f3b923c2ccb18ec78a921d7ebc5e18c977f63eaf599146",
+    "tests/fixtures/dicom_rdsr/synthetic_enhanced_xray_rdsr.dcm": "e06e35f0909e008e33688d64a9e737344264db1a2c13269d4b974a9a1fc14e32"
   }
 }

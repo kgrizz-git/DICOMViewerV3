@@ -17,6 +17,14 @@ assert _spec and _spec.loader
 phi = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(phi)
 
+_REVIEWED_SYNTHETIC_DICOM_FIXTURES = (
+    "tests/fixtures/dicom_nuclear/synthetic_nm_four_bar_resolution.dcm",
+    "tests/fixtures/dicom_nuclear/synthetic_nm_planar_uniformity.dcm",
+    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_comprehensive_sr.dcm",
+    "tests/fixtures/dicom_rdsr/synthetic_ct_dose_xray_rdsr.dcm",
+    "tests/fixtures/dicom_rdsr/synthetic_enhanced_xray_rdsr.dcm",
+)
+
 
 def test_exact_anonymized_dummy_is_allowed_on_dicom_identifiers() -> None:
     from pydicom.dataset import Dataset
@@ -67,6 +75,16 @@ def test_institutional_department_name_is_rejected() -> None:
     dataset.InstitutionalDepartmentName = "Imaging"
     problems = phi._check_dicom_dataset("sample-phantom-data-committed/x.dcm", dataset)
     assert any("InstitutionalDepartmentName" in item for item in problems)
+
+
+def test_reviewed_synthetic_dicom_fixtures_have_no_populated_identifiers() -> None:
+    """Keep the reviewed fixture families compatible with the artifact gate."""
+    from pydicom import dcmread
+
+    root = Path(__file__).resolve().parent.parent
+    for relative_path in _REVIEWED_SYNTHETIC_DICOM_FIXTURES:
+        dataset = dcmread(root / relative_path, stop_before_pixels=True)
+        assert phi._check_dicom_dataset(relative_path, dataset) == []
 
 
 def test_json_patient_tag_anonymized_dummy_is_allowed() -> None:
