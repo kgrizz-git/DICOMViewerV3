@@ -380,7 +380,7 @@
       "purpose": "Cyclomatic-complexity and function-size gate.",
       "install_scope": "application development venv",
       "install_reference": "requirements-dev.txt",
-      "tested_version": "1.23.0",
+      "tested_version": "1.24.0",
       "enforcement": [
         "pre-push blocking"
       ],
