@@ -225,8 +225,10 @@ class AcrMrIQaOptionsDialog(QDialog):
         left_col = QVBoxLayout()
 
         intro = QLabel(
-            "Echo: pylinac uses the lowest echo by default if you leave "
-            '"Use lowest echo number" checked. '
+            "Echo: when a series has more than one echo, the recommended "
+            "default is the highest echo number (ACR T2 dual-echo: echo 2 / "
+            "TE≈80 is T2-weighted; echo 1 is proton-density and is not used "
+            "for ACR QC). Stock pylinac would otherwise use the lowest echo. "
             "Match SeriesInstanceUID: enable for strict series matching when "
             "your pylinac version supports analyze(check_uid=...); otherwise "
             "the choice is recorded in JSON only."
@@ -247,9 +249,9 @@ class AcrMrIQaOptionsDialog(QDialog):
         advanced = QGroupBox("Advanced")
         form = QFormLayout()
 
-        self._use_lowest_echo = QCheckBox("Use lowest echo number (recommended)")
-        self._use_lowest_echo.setChecked(True)
-        self._use_lowest_echo.toggled.connect(self._on_use_lowest_toggled)
+        self._use_highest_echo = QCheckBox("Use highest echo number (recommended)")
+        self._use_highest_echo.setChecked(True)
+        self._use_highest_echo.toggled.connect(self._on_use_highest_toggled)
 
         self._echo_spin = QSpinBox()
         self._echo_spin.setRange(1, 32)
@@ -266,7 +268,7 @@ class AcrMrIQaOptionsDialog(QDialog):
         self._origin_spin.setSpecialValueText("(auto)")
         self._origin_spin.setValue(-1)
 
-        form.addRow(self._use_lowest_echo)
+        form.addRow(self._use_highest_echo)
         form.addRow("Echo number:", self._echo_spin)
         form.addRow(self._check_uid)
         form.addRow("Origin slice index (-1 = auto):", self._origin_spin)
@@ -404,14 +406,14 @@ class AcrMrIQaOptionsDialog(QDialog):
         layout.addLayout(columns)
         layout.addWidget(buttons)
 
-        self._on_use_lowest_toggled(self._use_lowest_echo.isChecked())
+        self._on_use_highest_toggled(self._use_highest_echo.isChecked())
         self._on_compare_toggled(compare_group.isChecked())
 
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
 
-    def _on_use_lowest_toggled(self, checked: bool) -> None:
+    def _on_use_highest_toggled(self, checked: bool) -> None:
         self._echo_spin.setEnabled(not checked)
 
     def _on_vanilla_pylinac_toggled(self, checked: bool) -> None:
@@ -473,7 +475,7 @@ class AcrMrIQaOptionsDialog(QDialog):
              compare_request_or_none, vanilla_pylinac,
              embed_module_images_in_xlsx)
         """
-        if self._use_lowest_echo.isChecked():
+        if self._use_highest_echo.isChecked():
             echo: int | None = None
         else:
             echo = int(self._echo_spin.value())

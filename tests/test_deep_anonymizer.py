@@ -135,11 +135,24 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
 
     def test_strip_device_default_removes_and_no_retain_code(self) -> None:
         ds = _synthetic_dataset()
+        ds.PerformedStationName = "MRI1"
+        ds.PerformedStationAETitle = "MRI_AE"
         anon = DeepDICOMAnonymizer(DeepAnonymizerOptions()).anonymize_dataset(ds)
         self.assertNotIn("DeviceSerialNumber", anon)
         self.assertNotIn("StationName", anon)
+        self.assertNotIn("PerformedStationName", anon)
+        self.assertNotIn("PerformedStationAETitle", anon)
         codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
         self.assertNotIn("113109", codes)
+
+    def test_retain_device_identity_keeps_performed_station(self) -> None:
+        ds = _synthetic_dataset()
+        ds.PerformedStationName = "MRI1"
+        ds.PerformedStationAETitle = "MRI_AE"
+        options = DeepAnonymizerOptions(retain_device_identity=True)
+        anon = DeepDICOMAnonymizer(options).anonymize_dataset(ds)
+        self.assertEqual(anon.PerformedStationName, "MRI1")
+        self.assertEqual(anon.PerformedStationAETitle, "MRI_AE")
 
     def test_curated_physician_contact_tags_removed(self) -> None:
         ds = _synthetic_dataset()

@@ -39,6 +39,8 @@ SENSITIVE_DICOM_FIELDS = PATIENT_PII_FIELDS | frozenset(
         "PerformingPhysicianName",
         "ReferringPhysicianName",
         "StationName",
+        "PerformedStationName",
+        "PerformedStationAETitle",
         "StudyDate",
         "StudyDescription",
         "StudyID",

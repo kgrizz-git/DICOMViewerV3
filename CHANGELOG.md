@@ -7,6 +7,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **ACR pylinac golden `results_data` dumps:** `tests/fixtures/qa/acr_ct_results_data.json` and `acr_mri_results_data.json` are redacted metric trees from tracked de-identified ACR phantoms (no pixels, no paths). CI flatten tests load these files; no live ``analyze()``. **Semantic versioning note: patch.**
+- **Reviewed de-identified ACR phantom DICOM:** `sample-phantom-data-committed/deid-phantoms/` holds PS3.15 Standard-share CT/MR phantom series (70 instances) for local QA. Human pixel review 2026-08-29; hashes in `security/approved-media-sha256.json`; exact-path gitignore allowlist. **Semantic versioning note: patch.**
+- **ACR MRI SNR harvest (P6) + highest-echo default:** ACR MRI Large runs now export viewer-computed **``mri_snr``** (uncorrected ACR-style **S̄ / σ_bkg** on the uniformity slice; pylinac Center ROI mean over the mean σ of the two frequency-encode ghost-free background ROIs). No NEMA **0.655** factor. XLSX Summary adds an **MRI SNR** column (blank on CT). A blank SNR cell is accompanied by a result warning when Center/ghost ROIs are missing or noise is zero. The MRI options dialog default is **Use highest echo number** (auto-highest ``EchoNumber``); dual-echo T2 series should analyze echo 2, not proton-density echo 1. The analysis profile's ``echo_number`` is the resolved echo (not the unresolved request). The MRI ``results_data`` spike uses the same auto-highest default. Stock pylinac still uses the lowest echo if ``analyze(echo_number=None)`` is left unresolved. **Semantic versioning note: minor.**
 - **ACR MRI batch results dialog + export (P4-M4):** The ACR MRI Batch summary dialog now shows **one row per series** (label, status, low-contrast score, warnings) with **Export CSV…** (full flatten, one wide row per series), **Export XLSX…** (one workbook reusing ``build_qa_workbook`` — Summary/Detail/Images sheets, the last embedding per-module PNGs per OQ-9 while temp dirs live), and **Export JSON…** (a JSON array of per-run documents, ``schema_version`` 1.1). Buttons are wired from ``gui.qa_mri_batch_flow`` (not the facade); temp-dir cleanup on dialog destroy is unchanged. **Semantic versioning note: minor.**
 - **ACR MRI batch analysis (P4-M3):** New **Tools → Automated QA → ACR MRI Batch (pylinac)…** runs one shared MRI options set over **multiple selected MR series** (checkbox list plus **Add folder…**). Series run serially with an N-of-M progress dialog and cooperative cancel (in-flight series finishes; completed series are kept); a minimal non-modal summary shows one label + success/fail per series. Compare is hidden on the shared MRI options dialog (OQ-7). Export buttons land in P4-M4. **Semantic versioning note: minor.**
 - **ACR MRI batch series selection (P4-M2):** Added
@@ -33,7 +36,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   blank when its flatten key is absent for the run, so CT and MRI rows share
   one header with blanks where a metric does not apply. Numeric cells stay
   numbers; CT slice thickness and CT SNR are excluded by design. ``MRI SNR``
-  is present in the header but stays blank until Phase 6 harvests ``mri_snr``.
+  fills from harvested ``mri_snr`` (Phase 6 shipped); CT rows stay blank.
   **Semantic versioning note: minor.**
 - **ACR QA embed-module-images toggle (P2-I2):** ACR CT, ACR MRI, and CT batch
   options dialogs now expose an **Embed module images in XLSX** checkbox
@@ -43,6 +46,21 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: minor.**
 
 ### Fixed
+- **CodeRabbit PR 97 follow-ups:** MRI SNR changelog status matches the
+  shipped harvest; the PHI artifact gate inspects every patient-tag match
+  on a line; ACR dump redaction recursively redacts UID-shaped strings
+  (roots 0/1/2, including ``2.25``); MRI ``vanilla_equivalent`` is refined
+  after echo resolution; explicit ``echo_number`` must be positive;
+  folder auto-highest uses one series only; ``echo_number_auto_highest``
+  is true only when a highest echo was actually resolved; SNR harvest
+  rejects non-finite signal/noise.
+  **Semantic versioning note: patch.**
+- **MRI analysis profile keeps echo provenance on early failure:** The ACR MRI
+  Large runner now stamps requested vs analyzed echo on
+  ``pylinac_analysis_profile`` before constructing the analyzer, so invalid
+  source, missing-pylinac, and worker isolation failures still record
+  ``echo_number`` / ``echo_number_requested`` / ``echo_number_auto_highest``.
+  **Semantic versioning note: patch.**
 - **MRI batch now confirms slice-geometry preflight:** After shared MRI
   options, the batch flow runs the same folder-input / IPP–IOP checks as
   single-run MRI, shows one Yes/No dialog (default No) with series-label
@@ -65,6 +83,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   ``_xlsx_cell`` before the row is written, so strings that begin with
   ``= + - @`` are stored as literal text rather than live formulas.
   **Semantic versioning note: patch.**
+- **ACR MRI SNR used the ghosted ROI pair when phase-encode was COL:** Frequency-encode (ghost-free) noise ROIs are **Left/Right** when ``InPlanePhaseEncodingDirection`` is **COL** (vertical PE; ghosts Top/Bottom) and **Top/Bottom** when it is **ROW**. The harvest had those swapped, so COL series (typical ACR axial) used the noisier Top/Bottom boxes. A warning is added if the tag-selected pair has higher σ than the other pair. **Semantic versioning note: patch.**
+- **Standard-share de-id strips performed-station tags:** PS3.15 Standard share now removes **Performed Station Name** ``(0040,0242)`` and **Performed Station AE Title** ``(0040,0241)`` with the other device/station identifiers (previously ``StationName`` was stripped but performed-station tags could remain). Research/retain-device still keeps them. **Semantic versioning note: patch.**
 - **ACR QA embed-off now skips the XLSX Images sheet (P2-X4):** Unchecking **Embed module images in XLSX** on the ACR CT/MRI options dialog now correctly skips the XLSX Images sheet (Summary note only), matching the missing-Pillow degradation. Previously the runner still saved the legacy composite image, so the workbook's composite fallback recreated the Images sheet even when the toggle was off. `save_composite_analyzed_image` now skips when `embed_module_images_in_xlsx` is False (the composite's only purpose is embedding). **Semantic versioning note: patch.**
 - **Volume rescale slope guard (Sonar S1244):** Centralize exact-zero
   `RescaleSlope` checks in `is_usable_rescale_slope()` and use it for 3D
@@ -74,6 +94,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch.**
 
 ### Changed
+- **Artifact gate: exact ``ANONYMIZED`` dummy is not a populated DICOM identifier.** The blocking PHI artifact check allows identifier tags (and JSON ``PatientName`` / ``PatientID`` / ``PatientBirthDate`` strings) whose entire value is exactly ``ANONYMIZED`` — the dummy written by de-id export. Other values still fail. Does not waive hash-manifest review for DICOM pixels. **Semantic versioning note: patch.**
 - **MRI batch options hide compare (OQ-7):** The batch path now opens
   ``prompt_acr_mri_options(..., allow_compare=False)`` so the compare
   group is hidden instead of being accepted and dropped. Single-run MRI

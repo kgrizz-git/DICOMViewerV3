@@ -47,6 +47,8 @@ STATION_DEVICE_TAGS: tuple[BaseTag, ...] = (
     Tag(0x0018, 0x1008),  # GantryID
     Tag(0x0018, 0x1020),  # SoftwareVersions
     Tag(0x0018, 0x700A),  # DetectorID
+    Tag(0x0040, 0x0241),  # PerformedStationAETitle
+    Tag(0x0040, 0x0242),  # PerformedStationName
 )
 
 # Operator and physician name / contact / identification tags.

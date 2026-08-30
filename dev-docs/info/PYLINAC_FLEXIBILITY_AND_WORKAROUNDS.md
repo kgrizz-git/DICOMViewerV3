@@ -68,9 +68,9 @@ A **single DICOM series** the user selects for ACR MRI–large phantom QA can st
 
 **Product / integration direction:**
 
-1. **Preflight or series binding:** When building the slice list for MRI phantom analysis, detect **distinct echo groups** (unique `(EchoNumber, EchoTime)` with slice counts and ordering). If only one group exists, keep today’s path; no extra UI.
-2. **When multiple echoes are present:** Expose a **user choice**—e.g. a dropdown listing echo number and/or echo time (and slice count)—for **which echo to analyze**. Map the selection to the **`echo_number`** (and/or filter instances by TE before construct) per pylinac’s contract for the loaded stack.
-3. **Audit / exports:** Record the chosen **`EchoNumber` / `EchoTime`** (and pylinac **`echo_number`** if relevant) in **`QAResult`** or JSON so reports distinguish “TE 12 ms” vs “TE 80 ms” runs.
+1. **Shipped default:** When `QARequest.echo_number` is **None**, the viewer resolves the **highest** `EchoNumber` from series headers and passes that integer into `analyze()`. ACR T2 dual-echo series should therefore analyze **echo 2** (T2-weighted) rather than proton-density echo 1. Stock pylinac still uses **min** echo if `echo_number=None` reaches the library.
+2. **When multiple echoes are present:** The MRI options dialog defaults to **Use highest echo number**; uncheck to type a specific echo. A richer dropdown (echo time + slice count) remains optional later.
+3. **Audit / exports:** Record analyzed vs requested echo on `QAResult.metrics` / `pylinac_analysis_profile` (`echo_number`, `echo_number_requested`, `echo_number_auto_highest`).
 
 This is **parameter exposure and UI clarity**, not a fork: it avoids silent ambiguity when the same series UID mixes echoes.
 
