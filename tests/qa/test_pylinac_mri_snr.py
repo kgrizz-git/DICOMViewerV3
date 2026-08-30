@@ -98,6 +98,13 @@ def test_snr_returns_none_when_noise_is_zero() -> None:
     assert harvested is None
 
 
+def test_snr_returns_none_when_noise_is_negative() -> None:
+    harvested = extract_mri_snr_acr_style(
+        _analyzer(phase="ROW", top_std=-1.0, bottom_std=-1.0)
+    )
+    assert harvested is None
+
+
 def test_as_float_rejects_non_finite_values() -> None:
     assert _as_float(float("nan")) is None
     assert _as_float(float("inf")) is None

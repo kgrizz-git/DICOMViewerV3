@@ -156,7 +156,7 @@ def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
     Compute uncorrected ACR-style SNR from the live uniformity module.
 
     Returns None when the analyzer has no usable Center / ghost ROIs or when
-    the noise term is zero (avoid inf). Does not apply 0.655.
+    the noise term is non-positive (avoid an invalid SNR). Does not apply 0.655.
     """
     uniformity = getattr(analyzer, "uniformity_module", None)
     if uniformity is None:
@@ -167,7 +167,7 @@ def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
     phase, used_fallback = phase_encoding_direction_from_analyzer(analyzer)
     pair = frequency_encode_ghost_roi_names(phase)
     noise = _mean_noise_std(uniformity, pair)
-    if noise is None or noise == 0.0:
+    if noise is None or noise <= 0.0:
         return None
     alternate = _ALTERNATE_GHOST_PAIR[pair]
     alternate_noise = _mean_noise_std(uniformity, alternate)
