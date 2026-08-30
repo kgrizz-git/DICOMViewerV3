@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-30
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -132,7 +132,7 @@ immediately without re-running the installer.
 Gitleaks gates (so a ratcheted grandfather JSON is scanned in the same commit)
 and before ruff. Thresholds: warn above
 **600** lines, block above **750** lines, and block lizard cyclomatic complexity
-(**CCN**) above **20**. Paths already over threshold are listed in
+(**CCN**) above **15**. Paths already over threshold are listed in
 `scripts/line_complexity_grandfather.json` with their measured size/CCN: staying
 at or below that baseline warns only; **growing past the recorded baseline
 blocks** (regression). When a staged change **improves** a grandfathered
