@@ -1,0 +1,2919 @@
+{
+  "date_of_analysis": "2026-08-29T14:26:34.363943",
+  "geometric_distortion_module": {
+    "distances": {
+      "horizontal": "190.44mm",
+      "negative diagonal": "190.59mm",
+      "positive diagonal": "190.84mm",
+      "vertical": "190.44mm"
+    },
+    "offset": 40,
+    "profiles": {
+      "horizontal": {
+        "line": {
+          "b": 129.56053162063054,
+          "center": {
+            "x": 128.0,
+            "y": 129.56053162063054,
+            "z": 0.0
+          },
+          "length": 195.0,
+          "m": -0.0,
+          "point1": {
+            "x": 30.5,
+            "y": 129.56053162063054,
+            "z": 0.0
+          },
+          "point2": {
+            "x": 225.5,
+            "y": 129.56053162063054,
+            "z": 0.0
+          }
+        },
+        "width (mm)": 190.437
+      },
+      "negative diagonal": {
+        "line": {
+          "b": 1.860142883197227,
+          "center": {
+            "x": 127.0,
+            "y": 128.86014288319723,
+            "z": 0.0
+          },
+          "length": 195.16147160748713,
+          "m": 1.0,
+          "point1": {
+            "x": 58.0,
+            "y": 59.86014288319723,
+            "z": 0.0
+          },
+          "point2": {
+            "x": 196.0,
+            "y": 197.86014288319723,
+            "z": 0.0
+          }
+        },
+        "width (mm)": 190.59469317187194
+      },
+      "positive diagonal": {
+        "line": {
+          "b": 257.26092035806386,
+          "center": {
+            "x": 127.5,
+            "y": 129.76092035806386,
+            "z": 0.0
+          },
+          "length": 196.5756851698602,
+          "m": -1.0,
+          "point1": {
+            "x": 58.0,
+            "y": 199.26092035806386,
+            "z": 0.0
+          },
+          "point2": {
+            "x": 197.0,
+            "y": 60.260920358063856,
+            "z": 0.0
+          }
+        },
+        "width (mm)": 190.83848460940686
+      },
+      "vertical": {
+        "line": {
+          "b": null,
+          "center": {
+            "x": 127.70038873743331,
+            "y": 129.0,
+            "z": 0.0
+          },
+          "length": 195.0,
+          "m": null,
+          "point1": {
+            "x": 127.70038873743331,
+            "y": 31.5,
+            "z": 0.0
+          },
+          "point2": {
+            "x": 127.70038873743331,
+            "y": 226.5,
+            "z": 0.0
+          }
+        },
+        "width (mm)": 190.437
+      }
+    }
+  },
+  "low_contrast_multi_slice_module": {
+    "low_contrast_rois": {
+      "slice_10": {
+        "background_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          }
+        },
+        "offset": 90.0,
+        "slice_num": 10,
+        "spoke_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.8000000000000003,
+            "radius_pixels": 2.8670899037476962
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.6000000000000001,
+            "radius_pixels": 0.614376407945935
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.5600000000000005,
+            "radius_pixels": 2.6213393405693224
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.32,
+            "radius_pixels": 2.375588777390948
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.08,
+            "radius_pixels": 2.1298382142125742
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.8399999999999999,
+            "radius_pixels": 1.8840876510342002
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.56,
+            "radius_pixels": 1.5973786606594307
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.32,
+            "radius_pixels": 1.3516280974810568
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.08,
+            "radius_pixels": 1.1058775343026828
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.8400000000000001,
+            "radius_pixels": 0.8601269711243089
+          }
+        },
+        "spokes": {
+          "spoke_1": [
+            {
+              "cnr": 0.0008203699745995767,
+              "contrast": 0.04117741064022457,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 123.89999256172128,
+              "visibility": 0.004168943454648356,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006008995732588888,
+              "contrast": 0.03868076834371194,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 97.94717043187153,
+              "visibility": 0.003053642161954287,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00017324659302507317,
+              "contrast": 0.01278038601982257,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 83.74010196190048,
+              "visibility": 0.0008804018581793411,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_10": [
+            {
+              "cnr": 0.00024420930961159353,
+              "contrast": 0.026109720182334203,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 57.325733411044425,
+              "visibility": 0.0004328497312480464,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0001301871140270582,
+              "contrast": 0.011856005137080237,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 67.56418400184334,
+              "visibility": 0.00023075065159553482,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0020332602746511064,
+              "contrast": 0.018299342471859957,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 667.3333333333334,
+              "visibility": 0.0036038600036985605,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_2": [
+            {
+              "cnr": 0.0006363663128948212,
+              "contrast": 0.03515033445706842,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 111.93785132924832,
+              "visibility": 0.0029566870776213845,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0005173376155777428,
+              "contrast": 0.040498074333104976,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 80.36359736095268,
+              "visibility": 0.0024036555860224885,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0002900306824895949,
+              "contrast": 0.019489027186374058,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 92.63884652795906,
+              "visibility": 0.0013475414296049149,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_3": [
+            {
+              "cnr": 0.0005919818202067339,
+              "contrast": 0.03648968471999201,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 100.43823280533655,
+              "visibility": 0.002492611365951504,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006117835038098439,
+              "contrast": 0.04446432246726729,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 86.44764029108764,
+              "visibility": 0.002575988760204676,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00020488070938584505,
+              "contrast": 0.017408199254045815,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 73.07500942586373,
+              "visibility": 0.0008626751150922508,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_4": [
+            {
+              "cnr": 0.0003583357328790098,
+              "contrast": 0.03431324054274118,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 64.5173152611155,
+              "visibility": 0.0013527317051910495,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0009697373492066921,
+              "contrast": 0.049154750740682276,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 124.70228598397364,
+              "visibility": 0.003660797229012986,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00035740575186926865,
+              "contrast": 0.023582866325689938,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 95.08444208009941,
+              "visibility": 0.0013492209897315692,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_5": [
+            {
+              "cnr": 0.000563834123902932,
+              "contrast": 0.04268417968601361,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 82.26839427391171,
+              "visibility": 0.0018829006083329806,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0009392782162144099,
+              "contrast": 0.04353795171216661,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 135.87166995881563,
+              "visibility": 0.0031366805408331415,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00030838692653626596,
+              "contrast": 0.018119530813628732,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 105.75971205915475,
+              "visibility": 0.0010298453161324418,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_6": [
+            {
+              "cnr": 0.0005391703769171572,
+              "contrast": 0.04034031672589733,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 83.05350562635397,
+              "visibility": 0.0015265422823501438,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006364390768795653,
+              "contrast": 0.0422765166195279,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 95.14253508816566,
+              "visibility": 0.0018019372031372331,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003594734091168417,
+              "contrast": 0.014125176750762778,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 157.63188916906682,
+              "visibility": 0.001017769858824654,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_7": [
+            {
+              "cnr": 0.00037659572587488745,
+              "contrast": 0.04770674317197707,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 49.40048085087879,
+              "visibility": 0.0009022097878570379,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003877229677203998,
+              "contrast": 0.044035963095462316,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 55.795315322565415,
+              "visibility": 0.000928867303636197,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00011850076541142012,
+              "contrast": 0.010060572303836267,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 73.2342541452198,
+              "visibility": 0.0002838920972200636,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_8": [
+            {
+              "cnr": 0.00016266541877360075,
+              "contrast": 0.02527262626800696,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 39.41668008720528,
+              "visibility": 0.0003188432354572816,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00015633374465207027,
+              "contrast": 0.0195640219952868,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 49.38763149289518,
+              "visibility": 0.00030643241404243796,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00010536905218622397,
+              "contrast": 0.01665837311645694,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 39.3844224073344,
+              "visibility": 0.0002065356593270898,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_9": [
+            {
+              "cnr": 0.00010889571296494516,
+              "contrast": 0.015227499296080048,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 43.36520334559575,
+              "visibility": 0.00019301262579181876,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 5.575952098296984e-05,
+              "contrast": 0.008219223390884404,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 41.35888556693647,
+              "visibility": 9.88311776909118e-05,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00012481907748801793,
+              "contrast": 0.018476128188358403,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 40.55443405251378,
+              "visibility": 0.00022123605456011137,
+              "visibility threshold": 0.001
+            }
+          ]
+        }
+      },
+      "slice_11": {
+        "background_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          }
+        },
+        "offset": 100.0,
+        "slice_num": 11,
+        "spoke_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.8000000000000003,
+            "radius_pixels": 2.8670899037476962
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.6000000000000001,
+            "radius_pixels": 0.614376407945935
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.5600000000000005,
+            "radius_pixels": 2.6213393405693224
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.32,
+            "radius_pixels": 2.375588777390948
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.08,
+            "radius_pixels": 2.1298382142125742
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.8399999999999999,
+            "radius_pixels": 1.8840876510342002
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.56,
+            "radius_pixels": 1.5973786606594307
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.32,
+            "radius_pixels": 1.3516280974810568
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.08,
+            "radius_pixels": 1.1058775343026828
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.8400000000000001,
+            "radius_pixels": 0.8601269711243089
+          }
+        },
+        "spokes": {
+          "spoke_1": [
+            {
+              "cnr": 0.001013244031467377,
+              "contrast": 0.050008380623997366,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 126.9280699739644,
+              "visibility": 0.005149087855158581,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0007442316826073245,
+              "contrast": 0.0526533962311079,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 89.73314496741219,
+              "visibility": 0.0037820250594399786,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00024487805191598504,
+              "contrast": 0.02619622320034072,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 57.90985670025121,
+              "visibility": 0.0012444174986054066,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_10": [
+            {
+              "cnr": 3.897945756847765e-05,
+              "contrast": 0.004166367358666806,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 56.0502495794023,
+              "visibility": 6.908928967345637e-05,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 8.333254553062102e-06,
+              "contrast": 0.001855434053136466,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 27.03744297709306,
+              "visibility": 1.4770309123150846e-05,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00015438558905065522,
+              "contrast": 0.025540746068493186,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 35.73613707367012,
+              "visibility": 0.00027364133183715035,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_2": [
+            {
+              "cnr": 0.0005038466217582841,
+              "contrast": 0.046153293585230994,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 68.13725403793609,
+              "visibility": 0.0023409736899478663,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006253954550909639,
+              "contrast": 0.05236715268267214,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 75.50057363331379,
+              "visibility": 0.002905714245084839,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00044618494185921185,
+              "contrast": 0.035271877021043695,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 78.97318848002253,
+              "visibility": 0.002073065819312819,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_3": [
+            {
+              "cnr": 0.00041753701129480043,
+              "contrast": 0.05143308670354146,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 50.92460592437933,
+              "visibility": 0.0017580903070560242,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006025449041317491,
+              "contrast": 0.05924666492283549,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 64.71747401201868,
+              "visibility": 0.0025370885139858767,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0002877726816296846,
+              "contrast": 0.034400046318888974,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 52.30930684073959,
+              "visibility": 0.0012117018336644113,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_4": [
+            {
+              "cnr": 0.0004320049278637754,
+              "contrast": 0.05336063022292464,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 50.8789899560353,
+              "visibility": 0.0016308358589440931,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0005850122948090214,
+              "contrast": 0.058998954438882194,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 63.12791150832807,
+              "visibility": 0.0022084447809784477,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003667471198442287,
+              "contrast": 0.036838978015448574,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 62.539883866900226,
+              "visibility": 0.0013844850269741271,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_5": [
+            {
+              "cnr": 0.0004120356242777719,
+              "contrast": 0.05453391758254919,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 47.5359600971184,
+              "visibility": 0.0013759758317519629,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0005606904973113154,
+              "contrast": 0.05206469145622056,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 68.37309254819799,
+              "visibility": 0.0018724025980657877,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00045753503576535836,
+              "contrast": 0.03289686452376264,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 86.72436588763928,
+              "visibility": 0.0015279192242088516,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_6": [
+            {
+              "cnr": 0.0003939188388069627,
+              "contrast": 0.06392021645954557,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 39.117511920656156,
+              "visibility": 0.0011152945135661512,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00039455982481621544,
+              "contrast": 0.055029051507537716,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 45.87742237826403,
+              "visibility": 0.001117109324407789,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003107476457069669,
+              "contrast": 0.025827445000746744,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 74.77691339631002,
+              "visibility": 0.0008798135814225813,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_7": [
+            {
+              "cnr": 0.0003027780971997469,
+              "contrast": 0.05780236094150329,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 33.0580367359283,
+              "visibility": 0.000725365011001462,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003405032531184448,
+              "contrast": 0.0596360447270336,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 36.79323424513773,
+              "visibility": 0.0008157431076705397,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003150514423528564,
+              "contrast": 0.037177672119610074,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 53.70107584377153,
+              "visibility": 0.0007547682446710914,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_8": [
+            {
+              "cnr": 0.00011641226716884035,
+              "contrast": 0.025536958551828217,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 27.891671407422074,
+              "visibility": 0.00022818165158195483,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 8.146048852082198e-05,
+              "contrast": 0.01630546955624355,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 30.749761919838217,
+              "visibility": 0.00015967207976797616,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 1.4233389048931665e-05,
+              "contrast": 0.002261698508141359,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 38.14012080767527,
+              "visibility": 2.789910633802228e-05,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_9": [
+            {
+              "cnr": 0.0006157838548972904,
+              "contrast": 0.016318272154778195,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 228.81132075471697,
+              "visibility": 0.0010914484649381458,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00010520833292000137,
+              "contrast": 0.025241559905199162,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 25.783618361441885,
+              "visibility": 0.00018647691483140598,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 7.04202405172392e-05,
+              "contrast": 0.00979108689687616,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 44.117446804660794,
+              "visibility": 0.00012481662648647325,
+              "visibility threshold": 0.001
+            }
+          ]
+        }
+      },
+      "slice_8": {
+        "background_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          }
+        },
+        "offset": 70.0,
+        "slice_num": 8,
+        "spoke_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.8000000000000003,
+            "radius_pixels": 2.8670899037476962
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.6000000000000001,
+            "radius_pixels": 0.614376407945935
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.5600000000000005,
+            "radius_pixels": 2.6213393405693224
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.32,
+            "radius_pixels": 2.375588777390948
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.08,
+            "radius_pixels": 2.1298382142125742
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.8399999999999999,
+            "radius_pixels": 1.8840876510342002
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.56,
+            "radius_pixels": 1.5973786606594307
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.32,
+            "radius_pixels": 1.3516280974810568
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.08,
+            "radius_pixels": 1.1058775343026828
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.8400000000000001,
+            "radius_pixels": 0.8601269711243089
+          }
+        },
+        "spokes": {
+          "spoke_1": [
+            {
+              "cnr": 0.0014605824432799052,
+              "contrast": 0.02882427307206068,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 309.2763144545654,
+              "visibility": 0.0074223652808090065,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0008698915477739649,
+              "contrast": 0.027388761591211803,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 197.2351503986826,
+              "visibility": 0.004420601419641559,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 6.381465638153987e-05,
+              "contrast": 0.00458069922787142,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 86.0042892085939,
+              "visibility": 0.0003242923342755307,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_10": [
+            {
+              "cnr": 0.0002716075647006058,
+              "contrast": 0.014917825537294564,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 109.62382841748448,
+              "visibility": 0.0004814118739886578,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0011971161979913983,
+              "contrast": 0.022146649662840866,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 331.43243243243245,
+              "visibility": 0.0021218332151112236,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 5.414459810106869e-05,
+              "contrast": 0.004645369514468827,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 71.18078757208097,
+              "visibility": 9.596880140997068e-05,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_2": [
+            {
+              "cnr": 0.0008881481480442278,
+              "contrast": 0.027307206068268017,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 198.21943243565448,
+              "visibility": 0.004126516597634159,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0008088683895567343,
+              "contrast": 0.02853923700336033,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 175.5665450523162,
+              "visibility": 0.0037581667452187967,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00012803677116837446,
+              "contrast": 0.006530207291387061,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 121.33696880044731,
+              "visibility": 0.00059488483142958,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_3": [
+            {
+              "cnr": 0.0005908777579997065,
+              "contrast": 0.02334597555836494,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 153.65469992239866,
+              "visibility": 0.0024879625779110318,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006237200905553466,
+              "contrast": 0.031200246734518596,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 123.65352918384936,
+              "visibility": 0.0026262492087132387,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0002932498874229392,
+              "contrast": 0.02036147334706023,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 89.92729876952632,
+              "visibility": 0.0012347642740095457,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_4": [
+            {
+              "cnr": 0.00035440918222126285,
+              "contrast": 0.01441213653603034,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 147.98877690864737,
+              "visibility": 0.001337908819613611,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0007397813435840973,
+              "contrast": 0.030943647081437875,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 146.54024891005244,
+              "visibility": 0.0027927041222900626,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.000435327428373616,
+              "contrast": 0.023299128202301154,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 115.60898071695725,
+              "visibility": 0.0016433784310846515,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_5": [
+            {
+              "cnr": 0.00036386504299887654,
+              "contrast": 0.014580699536451748,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 150.2056666303958,
+              "visibility": 0.0012151121788642211,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0009110030300917975,
+              "contrast": 0.02811415225633067,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 198.34315103476925,
+              "visibility": 0.0030422567326704405,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00037866256677420465,
+              "contrast": 0.015766432967973434,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 148.23298122522604,
+              "visibility": 0.0012645278941201916,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_6": [
+            {
+              "cnr": 0.0005495464798503514,
+              "contrast": 0.015339233038348082,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 215.79913500910436,
+              "visibility": 0.0015559199346316082,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0011564691624703404,
+              "contrast": 0.032200249096266634,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 221.88233589069134,
+              "visibility": 0.003274287962256287,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0008488278648753322,
+              "contrast": 0.013936063547827966,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 378.36500088487225,
+              "visibility": 0.0024032693219870325,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_7": [
+            {
+              "cnr": 0.00030911033652222884,
+              "contrast": 0.013990729034976822,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 132.9060997965749,
+              "visibility": 0.0007405351467817452,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0016766013079756626,
+              "contrast": 0.032170982221299306,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 320.7177318462836,
+              "visibility": 0.004016631115171195,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00020851384975682525,
+              "contrast": 0.006060606060606061,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 211.31419075905941,
+              "visibility": 0.0004995363017392763,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_8": [
+            {
+              "cnr": 0.0001220308742646022,
+              "contrast": 0.009608091024020228,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 76.0717107675786,
+              "visibility": 0.0002391947782728178,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0008557153513779315,
+              "contrast": 0.033609983828151176,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 156.80908613595702,
+              "visibility": 0.001677302116951755,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003308268876730452,
+              "contrast": 0.02161084071341212,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 95.27168159429361,
+              "visibility": 0.0006484593716181748,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_9": [
+            {
+              "cnr": 0.0002846564227134129,
+              "contrast": 0.022334597555836493,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 77.29896182103779,
+              "visibility": 0.0005045403726233771,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00039413468607257015,
+              "contrast": 0.024487946779846854,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 98.79140643609996,
+              "visibility": 0.0006985855421047636,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00015510740017968976,
+              "contrast": 0.0096181440999696,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 99.28305287184023,
+              "visibility": 0.000274920708752434,
+              "visibility threshold": 0.001
+            }
+          ]
+        }
+      },
+      "slice_9": {
+        "background_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              0,
+              20,
+              32
+            ],
+            "distances_pixels": [
+              0.0,
+              20.479213598197827,
+              32.76674175711653
+            ],
+            "radius": 2.5,
+            "radius_pixels": 2.5599016997747284
+          }
+        },
+        "offset": 80.0,
+        "slice_num": 9,
+        "spoke_settings": {
+          "spoke_1": {
+            "angle": -90,
+            "angle_corrected": -90.72198894095501,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.8000000000000003,
+            "radius_pixels": 2.8670899037476962
+          },
+          "spoke_10": {
+            "angle": 234,
+            "angle_corrected": 233.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.6000000000000001,
+            "radius_pixels": 0.614376407945935
+          },
+          "spoke_2": {
+            "angle": -54,
+            "angle_corrected": -54.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.5600000000000005,
+            "radius_pixels": 2.6213393405693224
+          },
+          "spoke_3": {
+            "angle": -18,
+            "angle_corrected": -18.721988940955015,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.32,
+            "radius_pixels": 2.375588777390948
+          },
+          "spoke_4": {
+            "angle": 18,
+            "angle_corrected": 17.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 2.08,
+            "radius_pixels": 2.1298382142125742
+          },
+          "spoke_5": {
+            "angle": 54,
+            "angle_corrected": 53.278011059044985,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.8399999999999999,
+            "radius_pixels": 1.8840876510342002
+          },
+          "spoke_6": {
+            "angle": 90,
+            "angle_corrected": 89.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.56,
+            "radius_pixels": 1.5973786606594307
+          },
+          "spoke_7": {
+            "angle": 126,
+            "angle_corrected": 125.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.32,
+            "radius_pixels": 1.3516280974810568
+          },
+          "spoke_8": {
+            "angle": 162,
+            "angle_corrected": 161.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 1.08,
+            "radius_pixels": 1.1058775343026828
+          },
+          "spoke_9": {
+            "angle": 198,
+            "angle_corrected": 197.27801105904499,
+            "distances": [
+              12.75,
+              25.5,
+              38.25
+            ],
+            "distances_pixels": [
+              13.055498668851115,
+              26.11099733770223,
+              39.166496006553345
+            ],
+            "radius": 0.8400000000000001,
+            "radius_pixels": 0.8601269711243089
+          }
+        },
+        "spokes": {
+          "spoke_1": [
+            {
+              "cnr": 0.0016387887898483848,
+              "contrast": 0.043262194084209775,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 232.20679150522318,
+              "visibility": 0.008327971537871359,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0010032256357554803,
+              "contrast": 0.040865703301073905,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 154.19434168932023,
+              "visibility": 0.005098176526706348,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0002087785696612411,
+              "contrast": 0.016867939228671674,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 76.92456042520342,
+              "visibility": 0.0010609677077527283,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_10": [
+            {
+              "cnr": 5.4933535964119234e-05,
+              "contrast": 0.007692569522447976,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 42.28255142763316,
+              "visibility": 9.736715736345979e-05,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00012103903698139974,
+              "contrast": 0.014744671244920708,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 50.079017215076604,
+              "visibility": 0.00021453610720757713,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 5.2354898303687465e-05,
+              "contrast": 0.005801406451295324,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 54.670531462749445,
+              "visibility": 9.279664111213751e-05,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_2": [
+            {
+              "cnr": 0.0010203674423947568,
+              "contrast": 0.03483780931958198,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 178.09226109960704,
+              "visibility": 0.004740834280856716,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006573618895971031,
+              "contrast": 0.04078389830508469,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 100.29532555763565,
+              "visibility": 0.0030542367892653854,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0005269921105976349,
+              "contrast": 0.025066159198358615,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 131.77872697155274,
+              "visibility": 0.0024485123298316046,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_3": [
+            {
+              "cnr": 0.0006500684800892011,
+              "contrast": 0.02930664760543242,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 134.15434684009048,
+              "visibility": 0.002737192303559746,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0008884195352955884,
+              "contrast": 0.04293652129988214,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 128.16293530598577,
+              "visibility": 0.003740798375595026,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0002915203145156932,
+              "contrast": 0.031324224537309285,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 58.30550627886993,
+              "visibility": 0.001227481697180856,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_4": [
+            {
+              "cnr": 0.0004870950520450081,
+              "contrast": 0.028710984036216313,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 102.5477231422006,
+              "visibility": 0.0018388032782804943,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0008324223483210445,
+              "contrast": 0.043253365259167134,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 118.9164741160946,
+              "visibility": 0.0031424276156786935,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00048508725309608054,
+              "contrast": 0.02969521981307238,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 101.81121149978513,
+              "visibility": 0.0018312237570475931,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_5": [
+            {
+              "cnr": 0.0007317929666093149,
+              "contrast": 0.03177439667789915,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 139.62483395175838,
+              "visibility": 0.0024437921785657826,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0011121963630406813,
+              "contrast": 0.0430898349512229,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 159.93852776142958,
+              "visibility": 0.003714133500929346,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0007818180232110316,
+              "contrast": 0.02760382333553065,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 176.6069223264963,
+              "visibility": 0.0026108487746711296,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_6": [
+            {
+              "cnr": 0.0005734507093695188,
+              "contrast": 0.028966268423023217,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 119.69380861265424,
+              "visibility": 0.0016235995005911793,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0009554165067536296,
+              "contrast": 0.0429000896019829,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 138.67986390592208,
+              "visibility": 0.0027050516075344056,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00021565758488262965,
+              "contrast": 0.01464489069053595,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 91.09373694035577,
+              "visibility": 0.0006105869979637848,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_7": [
+            {
+              "cnr": 0.00060105574455664,
+              "contrast": 0.03245515504271756,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 112.34901418753297,
+              "visibility": 0.0014399483013964312,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00046921637122624896,
+              "contrast": 0.04171893852829075,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 69.8218922947246,
+              "visibility": 0.0011241009221748903,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0003965701443556471,
+              "contrast": 0.01965946465994946,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 125.35871168042806,
+              "visibility": 0.0009500624707790975,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_8": [
+            {
+              "cnr": 0.0003776170846717579,
+              "contrast": 0.03364648218114977,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 68.16336255915684,
+              "visibility": 0.0007401736272431962,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0006028192801195508,
+              "contrast": 0.04849855007629083,
+              "contrast method": "Weber",
+              "passed visibility": true,
+              "signal to noise": 77.6852193482181,
+              "visibility": 0.001181596255174921,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.0002810387974801762,
+              "contrast": 0.028586826627926117,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 61.65057499864374,
+              "visibility": 0.0005508688948959668,
+              "visibility threshold": 0.001
+            }
+          ],
+          "spoke_9": [
+            {
+              "cnr": 0.00037958104999695784,
+              "contrast": 0.02828551005820481,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 81.08139819159322,
+              "visibility": 0.000672789893797867,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.00014181006010913647,
+              "contrast": 0.017136539524599256,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 50.24764093979547,
+              "visibility": 0.00025135178713758165,
+              "visibility threshold": 0.001
+            },
+            {
+              "cnr": 0.000147794404146907,
+              "contrast": 0.01729194528518812,
+              "contrast method": "Weber",
+              "passed visibility": false,
+              "signal to noise": 52.94017094017094,
+              "visibility": 0.00026195876077247146,
+              "visibility threshold": 0.001
+            }
+          ]
+        }
+      }
+    },
+    "score": 10
+  },
+  "num_images": 11,
+  "origin_slice": 0,
+  "phantom_model": "ACR MRI Large",
+  "phantom_roll_deg": -0.7219889409550149,
+  "pylinac_version": "3.43.2",
+  "sagittal_localizer_module": {
+    "distances": {},
+    "profiles": {}
+  },
+  "slice1": {
+    "bar_difference_mm": -2.9298,
+    "col_mtf_50": 1.0492258054645733,
+    "col_mtf_lp_mm": {
+      "10": 1.1368771943425626,
+      "20": 1.1149643471230652,
+      "30": 1.093051499903568,
+      "40": 1.0711386526840707,
+      "50": 1.0492258054645733,
+      "60": 1.027312958245076,
+      "70": 1.0054001110255788,
+      "80": 0.7263313609467453,
+      "90": 0.36316568047337267
+    },
+    "measured_slice_thickness_mm": 5.31842951814988,
+    "offset": 0,
+    "roi_settings": {
+      "Col 0.9": {
+        "angle": 51,
+        "angle_corrected": 50.278011059044985,
+        "distance": 55,
+        "distance_pixels": 56.31783739504403,
+        "lp/mm": 1.1111111111111112,
+        "radius": 2,
+        "radius_pixels": 2.047921359819783
+      },
+      "Col 1.0": {
+        "angle": 74,
+        "angle_corrected": 73.27801105904499,
+        "distance": 44,
+        "distance_pixels": 45.054269916035224,
+        "lp/mm": 1.0,
+        "radius": 3,
+        "radius_pixels": 3.071882039729674
+      },
+      "Col 1.1": {
+        "angle": 104,
+        "angle_corrected": 103.27801105904499,
+        "distance": 44,
+        "distance_pixels": 45.054269916035224,
+        "lp/mm": 0.9090909090909091,
+        "radius": 3,
+        "radius_pixels": 3.071882039729674
+      },
+      "Col Reference": {
+        "angle": 135,
+        "angle_corrected": 134.27801105904499,
+        "distance": 58,
+        "distance_pixels": 59.3897194347737,
+        "lp/mm": 0,
+        "radius": 9,
+        "radius_pixels": 9.215646119189023
+      },
+      "Row 0.9": {
+        "angle": 52,
+        "angle_corrected": 51.278011059044985,
+        "distance": 46,
+        "distance_pixels": 47.102191275855006,
+        "lp/mm": 1.1111111111111112,
+        "radius": 2,
+        "radius_pixels": 2.047921359819783
+      },
+      "Row 1.0": {
+        "angle": 81,
+        "angle_corrected": 80.27801105904499,
+        "distance": 36,
+        "distance_pixels": 36.86258447675609,
+        "lp/mm": 1.0,
+        "radius": 3,
+        "radius_pixels": 3.071882039729674
+      },
+      "Row 1.1": {
+        "angle": 116,
+        "angle_corrected": 115.27801105904499,
+        "distance": 40,
+        "distance_pixels": 40.958427196395654,
+        "lp/mm": 0.9090909090909091,
+        "radius": 3,
+        "radius_pixels": 3.071882039729674
+      },
+      "Row Reference": {
+        "angle": 135,
+        "angle_corrected": 134.27801105904499,
+        "distance": 58,
+        "distance_pixels": 59.3897194347737,
+        "lp/mm": 0,
+        "radius": 9,
+        "radius_pixels": 9.215646119189023
+      }
+    },
+    "rois": {
+      "Col 0.9": {
+        "difference": null,
+        "name": "Col 0.9",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 127.59342982039998,
+        "value": 1171.5
+      },
+      "Col 1.0": {
+        "difference": null,
+        "name": "Col 1.0",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 376.88481031973134,
+        "value": 1165.0
+      },
+      "Col 1.1": {
+        "difference": null,
+        "name": "Col 1.1",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 836.4190991777405,
+        "value": 1481.0
+      },
+      "Col Reference": {
+        "difference": null,
+        "name": "Col Reference",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 1913.110454744232,
+        "value": 335.0
+      },
+      "Row 0.9": {
+        "difference": null,
+        "name": "Row 0.9",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 76.85554963829276,
+        "value": 1199.5
+      },
+      "Row 1.0": {
+        "difference": null,
+        "name": "Row 1.0",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 634.9049762672277,
+        "value": 999.0
+      },
+      "Row 1.1": {
+        "difference": null,
+        "name": "Row 1.1",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 697.9024572558475,
+        "value": 1268.5
+      },
+      "Row Reference": {
+        "difference": null,
+        "name": "Row Reference",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 1913.110454744232,
+        "value": 335.0
+      }
+    },
+    "row_mtf_50": 1.0208499899743657,
+    "row_mtf_lp_mm": {
+      "10": 1.1171843652015188,
+      "20": 1.0931007713947305,
+      "30": 1.0690171775879422,
+      "40": 1.044933583781154,
+      "50": 1.0208499899743657,
+      "60": 0.9967663961675777,
+      "70": 0.9726828023607894,
+      "80": 0.9485992085540011,
+      "90": 0.924515614747213
+    },
+    "slice_shift_mm": -1.4649
+  },
+  "slice11": {
+    "bar_difference_mm": 1.9532,
+    "offset": 100,
+    "roi_settings": {
+      "Left": {
+        "angle": 2.5,
+        "angle_corrected": 1.7780110590449851,
+        "distance": 65,
+        "distance_pixels": 66.55744419414295,
+        "height": 25,
+        "height_pixels": 25.599016997747285,
+        "width": 2,
+        "width_pixels": 2.047921359819783
+      },
+      "Right": {
+        "angle": -2.5,
+        "angle_corrected": -3.221988940955015,
+        "distance": 65,
+        "distance_pixels": 66.55744419414295,
+        "height": 25,
+        "height_pixels": 25.599016997747285,
+        "width": 2,
+        "width_pixels": 2.047921359819783
+      }
+    },
+    "rois": {
+      "Left": {
+        "difference": null,
+        "name": "Left",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 2646.8005761542663,
+        "value": 2967.0416666666665
+      },
+      "Right": {
+        "difference": null,
+        "name": "Right",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 2648.764318822395,
+        "value": 2476.0
+      }
+    },
+    "slice_shift_mm": 0.9766
+  },
+  "uniformity_module": {
+    "ghost_roi_settings": {
+      "Bottom": {
+        "angle": 90,
+        "angle_corrected": 89.27801105904499,
+        "distance": 110,
+        "distance_pixels": 112.63567479008806,
+        "height": 15,
+        "height_pixels": 15.359410198648371,
+        "width": 60,
+        "width_pixels": 61.437640794593484
+      },
+      "Left": {
+        "angle": 180,
+        "angle_corrected": 179.27801105904499,
+        "distance": 110,
+        "distance_pixels": 112.63567479008806,
+        "height": 60,
+        "height_pixels": 61.437640794593484,
+        "width": 15,
+        "width_pixels": 15.359410198648371
+      },
+      "Right": {
+        "angle": 0,
+        "angle_corrected": -0.7219889409550149,
+        "distance": 110,
+        "distance_pixels": 112.63567479008806,
+        "height": 60,
+        "height_pixels": 61.437640794593484,
+        "width": 15,
+        "width_pixels": 15.359410198648371
+      },
+      "Top": {
+        "angle": -90,
+        "angle_corrected": -90.72198894095501,
+        "distance": 110,
+        "distance_pixels": 112.63567479008806,
+        "height": 15,
+        "height_pixels": 15.359410198648371,
+        "width": 60,
+        "width_pixels": 61.437640794593484
+      }
+    },
+    "ghost_rois": {
+      "Bottom": {
+        "difference": null,
+        "name": "Bottom",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 11.482190624206352,
+        "value": 16.40357142857143
+      },
+      "Left": {
+        "difference": null,
+        "name": "Left",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 8.55817220602253,
+        "value": 12.291666666666666
+      },
+      "Right": {
+        "difference": null,
+        "name": "Right",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 8.362999491063498,
+        "value": 12.06547619047619
+      },
+      "Top": {
+        "difference": null,
+        "name": "Top",
+        "nominal_value": null,
+        "passed": null,
+        "stdev": 11.81708661209405,
+        "value": 23.15595238095238
+      }
+    },
+    "ghosting_ratio": 0.0012537012165908755,
+    "offset": 0,
+    "piu": 97.62376237623762,
+    "piu_passed": true,
+    "psg": 0.12537012165908756,
+    "roi_settings": {
+      "Center": {
+        "angle": 90,
+        "angle_corrected": 89.27801105904499,
+        "distance": 5,
+        "distance_pixels": 5.119803399549457,
+        "radius": 80,
+        "radius_pixels": 81.91685439279131
+      }
+    },
+    "rois": {
+      "Center": {
+        "difference": 6063.0,
+        "name": "Center",
+        "nominal_value": 0.0,
+        "passed": true,
+        "stdev": 59.75267282783592,
+        "value": 6063.0
+      }
+    }
+  },
+  "warnings": []
+}

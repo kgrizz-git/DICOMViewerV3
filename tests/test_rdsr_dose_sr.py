@@ -67,7 +67,7 @@ def test_parse_xray_rdsr_fixture_values(xray_rdsr_ds: Dataset) -> None:
     assert summary.irradiation_event_count == 2
     assert summary.manufacturer == "SyntheticFixture"
     assert summary.manufacturer_model_name == "RDSR-Gen"
-    assert summary.device_serial_number == "SER-SYN-1"
+    assert summary.device_serial_number is None
     assert summary.study_instance_uid
     assert summary.series_instance_uid
     assert summary.sop_instance_uid

@@ -3,11 +3,11 @@ Tests for P2-X1 — modality-aware key columns on the XLSX Summary sheet.
 
 The Summary sheet keeps its original 7 columns, then appends modality-aware
 columns pulled from the canonical flatten (``build_metric_rows``): PIU, PSG,
-LC score, MTF@50% row/col, slice thickness, slice shift, and a reserved MRI
-SNR column. Each is best-effort: a column stays blank when its flatten key is
-absent for the run, so CT and MRI rows share one header with blanks where a
-metric does not apply. MRI SNR is present in the header but stays blank until
-Phase 6 harvests ``mri_snr``.
+LC score, MTF@50% row/col, slice thickness, slice shift, and MRI SNR. Each is
+best-effort: a column stays blank when its flatten key is absent for the run,
+so CT and MRI rows share one header with blanks where a metric does not apply.
+The synthetic MRI fixture plants ``metrics["mri_snr"] = 87.5`` so the harvest
+column is asserted filled; CT rows leave it blank.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _ct_result() -> QAResult:
 
 
 def _mri_result() -> QAResult:
-    """Synthetic ACR MRI run: has PIU, PSG, LC score, MTF@50%, thickness, shift."""
+    """Synthetic ACR MRI run: PIU, PSG, LC score, MTF, thickness, shift, planted SNR."""
     return QAResult(
         success=True,
         analysis_type="acr_mri_large",
@@ -58,6 +58,7 @@ def _mri_result() -> QAResult:
             "num_images": 11,
             "phantom_roll": -0.42,
             "origin_slice": 0,
+            "mri_snr": 87.5,
         },
         warnings=[],
         errors=[],
@@ -140,7 +141,7 @@ def test_ct_row_fills_ct_relevant_columns_only() -> None:
 
 
 def test_mri_row_fills_mri_relevant_columns() -> None:
-    """MRI row: PIU/PSG/MTF/thickness/shift fill; reserved MRI SNR stays blank."""
+    """MRI row: PIU/PSG/MTF/thickness/shift/SNR fill from the synthetic fixture."""
     result = _mri_result()
     wb = build_qa_workbook([result], labels=["MRI-1"])
     row = [c.value for c in wb["Summary"][2]]
@@ -151,7 +152,7 @@ def test_mri_row_fills_mri_relevant_columns() -> None:
     assert row[11] == 0.98  # MTF@50% Col
     assert row[12] == 5.1  # Slice Thickness
     assert row[13] == 0.25  # Slice Shift
-    assert row[14] in (None, "")  # MRI SNR reserved until Phase 6
+    assert row[14] == 87.5  # MRI SNR (synthetic fixture, not a phantom measurement)
 
 
 def test_missing_keys_stay_blank() -> None:
@@ -199,6 +200,7 @@ def test_cnr_numeric_cells_still_numbers() -> None:
     mri_row = wb2["Summary"][2]
     assert isinstance(mri_row[7].value, (int, float))  # PIU
     assert isinstance(mri_row[12].value, (int, float))  # Slice Thickness
+    assert isinstance(mri_row[14].value, (int, float))  # MRI SNR
 
 
 def test_mixed_ct_and_mri_batch_share_header() -> None:
@@ -214,7 +216,7 @@ def test_mixed_ct_and_mri_batch_share_header() -> None:
     assert ct_row[10] in (None, "")
     assert ct_row[14] in (None, "")
 
-    # MRI: fills harvested fields; reserved MRI SNR stays blank until Phase 6.
+    # MRI: fills harvested fields including synthetic MRI SNR.
     assert mri_row[7] == 99.1
     assert mri_row[8] == 0.42
     assert mri_row[9] == 34
@@ -222,4 +224,4 @@ def test_mixed_ct_and_mri_batch_share_header() -> None:
     assert mri_row[11] == 0.98
     assert mri_row[12] == 5.1
     assert mri_row[13] == 0.25
-    assert mri_row[14] in (None, "")
+    assert mri_row[14] == 87.5

@@ -27,7 +27,7 @@ The viewer can run **automated ACR phantom analysis** using the **pylinac** libr
 - Results include **metrics**, **warnings/errors**, and optional **JSON, CSV, or XLSX** export with reproducibility fields (pylinac version, analysis profile). The save dialog offers all three formats; choose by the file extension:
   - **`.json`** writes the full document (unchanged — **`raw_pylinac`** still carries the full pylinac dict; no `metrics_flat` is added).
   - **`.csv`** writes the **full pylinac flatten** (one `metric,value` row per leaf, dotted keys from `raw_pylinac` plus curated top-level scalars like `low_contrast_cnr` / `low_contrast_score`), not only the short `result.metrics` list.
-  - **`.xlsx`** writes a workbook with **Summary**, **Detail**, and **Images** sheets. **Summary** shows one row per run with modality-aware key columns (PIU, PSG, LC score, MTF@50% row/col, slice thickness/shift on MRI — best-effort, blank where a metric does not apply). **Detail** is the full flatten (same dotted keys as CSV). **Images** embeds per-module PNGs (the same figures pylinac puts in its PDF reports) when **Embed module images in XLSX** is enabled — see below.
+  - **`.xlsx`** writes a workbook with **Summary**, **Detail**, and **Images** sheets. **Summary** shows one row per run with modality-aware key columns (PIU, PSG, LC score, MTF@50% row/col, slice thickness/shift on MRI, and **MRI SNR** when harvested — best-effort, blank where a metric does not apply). **Detail** is the full flatten (same dotted keys as CSV). **Images** embeds per-module PNGs (the same figures pylinac puts in its PDF reports) when **Embed module images in XLSX** is enabled — see below.
 - **Embed module images in XLSX** (default **on**): the ACR CT, ACR MRI, and CT batch options dialogs expose this checkbox. When on, the XLSX **Images** sheet embeds the per-module PNGs for PDF-parity figure output; unchecking skips the Images sheet (a Summary note records the choice). The setting is persisted as **`acr_qa_embed_module_images_in_xlsx`** (see [CONFIGURATION.md](CONFIGURATION.md)) and recorded in the run's `pylinac_analysis_profile` for audit.
 - Exported JSON records **vanilla pylinac** (stock **ACRCT** / **ACRMRILarge** vs viewer integration classes) under **`run.vanilla_pylinac`**, **`inputs.vanilla_pylinac`**, and **`pylinac_analysis_profile.vanilla_pylinac`**. The single-run **ACR CT** document is **`schema_version` 1.3**; single-run **ACR MRI** remains **`schema_version` 1.1**. Its **`raw_pylinac`** field is an opaque, pylinac-version-dependent passthrough (audit context, not a stable contract).
 - **PDF:** You can choose an output path for pylinac-generated PDFs where the flow supports it. After a **successful single** CT/MRI run, the app asks whether to **open that PDF** (compare mode still uses **Open PDF** on the results window).
@@ -36,7 +36,7 @@ The viewer can run **automated ACR phantom analysis** using the **pylinac** libr
 
 The MRI dialog can include:
 
-- **Echo** and related acquisition choices (as exposed by the dialog).
+- **Echo** (default **highest** when the box is checked): dual-echo ACR **T2** series should use **echo 2** (T2-weighted, typically TE≈80). Echo 1 is proton-density and is not used for ACR QC. Uncheck the box to type a specific echo number. ``echo_number is None`` on the request means the runner resolves the **highest** ``EchoNumber`` from the series headers before calling pylinac (stock pylinac would otherwise pick the **lowest** echo).
 - **Low-contrast detectability:** method (e.g. Weber), **visibility threshold**, **sanity multiplier** (persisted in config).
 - **Compare mode:** run up to **three** low-contrast configurations and compare scores; combined **PDF** and JSON (`schema_version` **1.2**) may be produced (see [CHANGELOG.md](../CHANGELOG.md)). Each run in the **`runs`** array includes **`vanilla_pylinac`** on its **`run`** object (and in **`pylinac_analysis_profile`**) when relevant.
 - **Scan-extent tolerance:** If pylinac rejects the volume for strict physical extent, you can retry with an optional **0.5–2.0 mm** tolerance; runs record a **`pylinac_analysis_profile`** for audit.
@@ -55,6 +55,7 @@ The MRI dialog can include:
 
 - Use exported **JSON/PDF** together with your institution’s QA policy.  
 - MRI PDFs include **interpretation notes** (MTF, low-contrast scoring, colored ROI legends) where enabled.
+- **MRI SNR** (``metrics.mri_snr`` / XLSX **MRI SNR**): this is an **uncorrected ACR-style ratio** (center ROI mean ÷ mean background σ on the frequency-encode ghost-free pair). It is **not** NEMA MS 1 SNR (that method multiplies the same ratio by **0.655**). SNR is a QC-manual metric, not one of the seven ACR accreditation phantom tests, and the export has **no pass/fail column**.
 
 ## Nuclear Medicine QC (`pylinac.nuclear`)
 

@@ -62,8 +62,7 @@ _SUMMARY_HEADERS = (
 # flatten key; a column stays blank when its key is absent for a run (CT rows
 # leave the MRI-only fields blank and vice versa — shared header, best-effort
 # fill). Locked gaps (CT slice thickness, CT SNR) are intentionally excluded.
-# ``MRI SNR`` is reserved at the end of the header; values stay blank until
-# Phase 6 harvests ``mri_snr``.
+# ``MRI SNR`` maps ``mri_snr`` (viewer-harvested uncorrected ACR-style ratio).
 _SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
     ("PIU (%)", "uniformity_module.piu"),
     ("PSG", "uniformity_module.psg"),
@@ -311,12 +310,13 @@ def build_qa_workbook(
         Summary -- one row per run: Series/Run ID, object ROI mean,
             background mean/std, CNR, status, warnings, then modality-aware
             key columns pulled from the canonical flatten (PIU, PSG, LC score,
-            MTF@50% row/col, slice thickness/shift, reserved MRI SNR). Each extra
-            column is best-effort: it stays blank when its flatten key is absent
-            for the run, so CT and MRI rows share one header with blanks where a
-            metric does not apply (CT slice thickness and CT SNR are excluded by
-            design; ``MRI SNR`` is present but blank until Phase 6 harvests
-            ``mri_snr``). Extra mapped values pass through ``_xlsx_cell``.
+            MTF@50% row/col, slice thickness/shift, uncorrected MRI SNR). Each
+            extra column is best-effort: it stays blank when its flatten key
+            is absent for the run, so CT and MRI rows share one header with
+            blanks where a metric does not apply (CT slice thickness and CT SNR
+            are excluded by design). ``MRI SNR`` is the viewer-harvested
+            uncorrected ACR-style ratio (``mri_snr``), not NEMA MS 1. Extra
+            mapped values pass through ``_xlsx_cell``.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- per-module embedded PNGs from ``analyzed_module_images``
             (stable key sort), each preceded by its module label, stacked

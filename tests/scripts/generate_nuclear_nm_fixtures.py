@@ -55,7 +55,6 @@ def _base_dataset(*, sop_instance_suffix: int, pixels: np.ndarray) -> Dataset:
     ds.Modality = "NM"
     ds.Manufacturer = "DICOMViewerV3"
     ds.ManufacturerModelName = "SyntheticFixtureGenerator"
-    ds.DeviceSerialNumber = "SYNTHETIC-ONLY"
     ds.SeriesDescription = "Synthetic NM test fixture"
     ds.SeriesNumber = 1
     ds.InstanceNumber = sop_instance_suffix

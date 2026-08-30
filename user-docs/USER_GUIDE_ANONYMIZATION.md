@@ -1,6 +1,6 @@
 # De-identification (anonymized export)
 
-**Last updated:** 2026-06-16
+**Last updated:** 2026-08-29
 
 The viewer can export DICOM with patient and site identifiers removed, conforming to the **DICOM PS3.15 Annex E Basic Application Level Confidentiality Profile** (the "Basic Profile"). Both entry points below use the **same conformant engine** — there is no weaker "patient tags only" mode.
 
@@ -44,7 +44,7 @@ The **Preset** dropdown sets all options at once. Editing any individual option 
 Available under **Options…** (Export dialog) or inline (dedicated dialog):
 
 - **Retain institution identity** — keep institution name/address/department (declares PS3.16 code **113112**). Off by default.
-- **Retain device identity** — keep station name, device serial number, and manufacturer/model (declares **113109**). Off by default; on in the *Research* preset.
+- **Retain device identity** — keep station name (including performed station name/AE title), device serial number, and manufacturer/model (declares **113109**). Off by default; on in the *Research* preset.
 - **Strip operator and physician names** — remove operator, performing/referring/reading physician names.
 - **Re-mint UIDs** — replace Study/Series/SOP Instance UIDs with new ones, kept **consistent within a single export** so cross-references between the exported files stay intact. Turning this **off** keeps the original UIDs and declares **113110**. (SOP Class and Transfer Syntax UIDs are always preserved so files still load.)
 - **Dates** — one of:

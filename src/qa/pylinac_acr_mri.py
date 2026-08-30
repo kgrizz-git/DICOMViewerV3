@@ -31,12 +31,19 @@ from qa.analysis_types import (
     build_pylinac_analysis_profile,
 )
 from qa.pylinac_module_images import capture_analyzed_module_images
+from qa.pylinac_mri_echo import (
+    overlay_analyzed_echo_metrics,
+    resolve_mri_analyze_echo_number,
+    stamp_analyzed_echo_on_profile,
+    stamp_resolved_echo_on_profile,
+)
 from qa.pylinac_mri_pdf import (
     _build_mri_notes_lines,
     _write_per_run_temp_pdf,
     assemble_mri_compare_pdf,
     build_mri_compare_summary_pdf,
 )
+from qa.pylinac_mri_snr import overlay_mri_snr_metrics
 from utils.config.qa_pylinac_config import (
     DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
     DEFAULT_ACR_MRI_LOW_CONTRAST_VISIBILITY_SANITY_MULTIPLIER,
@@ -71,6 +78,10 @@ def _image_count(analyzer: Any, request: QARequest) -> int:
 
 
 def _missing_pylinac_result(request: QARequest) -> QAResult:
+    profile = build_pylinac_analysis_profile(
+        request, engine="(pylinac not installed)"
+    )
+    stamp_resolved_echo_on_profile(profile, request)
     return QAResult(
         success=False,
         analysis_type=request.analysis_type,
@@ -81,9 +92,7 @@ def _missing_pylinac_result(request: QARequest) -> QAResult:
         series_uid=request.series_uid,
         modality=request.modality,
         num_images=len(request.dicom_paths),
-        pylinac_analysis_profile=build_pylinac_analysis_profile(
-            request, engine="(pylinac not installed)"
-        ),
+        pylinac_analysis_profile=profile,
     )
 
 
@@ -129,6 +138,18 @@ def _build_mri_analyzer(
     return analyzer
 
 
+def _apply_mri_post_analyze_metrics(
+    metrics: dict[str, Any],
+    analyzer: Any,
+    request: QARequest,
+    analyzed_echo: int | None,
+    extra_warnings: list[str] | None = None,
+) -> None:
+    """Stamp analyzed echo and optional ACR-style SNR onto curated metrics."""
+    overlay_analyzed_echo_metrics(metrics, request, analyzed_echo)
+    overlay_mri_snr_metrics(metrics, analyzer, warnings=extra_warnings)
+
+
 def _build_mri_analyze_kwargs(
     analyzer: Any,
     request: QARequest,
@@ -136,6 +157,7 @@ def _build_mri_analyze_kwargs(
     lc_method: str,
     lc_vis: float,
     lc_sanity: float,
+    echo_number: int | None,
 ) -> dict[str, Any]:
     """
     Build the keyword-argument dict for analyze() using signature inspection.
@@ -145,10 +167,11 @@ def _build_mri_analyze_kwargs(
 
     Args:
         analyzer: An unanalyzed ACRMRILarge instance (used for signature).
-        request: Input payload for echo, check_uid, origin_slice.
+        request: Input payload for check_uid, origin_slice.
         lc_method: Contrast method string.
         lc_vis: Visibility threshold float.
         lc_sanity: Sanity multiplier float.
+        echo_number: Resolved echo to analyze (auto-highest already applied).
 
     Returns:
         Dict of kwargs ready to unpack into analyzer.analyze(**kwargs).
@@ -156,7 +179,7 @@ def _build_mri_analyze_kwargs(
     sig = inspect.signature(analyzer.analyze)
     kwargs: dict[str, Any] = {}
     if "echo_number" in sig.parameters:
-        kwargs["echo_number"] = request.echo_number
+        kwargs["echo_number"] = echo_number
     if "check_uid" in sig.parameters:
         kwargs["check_uid"] = request.check_uid
     if request.origin_slice is not None and "origin_slice" in sig.parameters:
@@ -237,6 +260,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
     mri_cls = ACRMRILarge if vanilla else ACRMRILargeForViewer
     engine = "ACRMRILarge" if vanilla else "ACRMRILargeForViewer"
     profile = build_pylinac_analysis_profile(request, engine=engine)
+    analyzed_echo = stamp_resolved_echo_on_profile(profile, request)
 
     lc_method = str(
         getattr(request, "low_contrast_method", DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD)
@@ -279,7 +303,12 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
             )
 
         analyze_kwargs = _build_mri_analyze_kwargs(
-            analyzer, request, lc_method=lc_method, lc_vis=lc_vis, lc_sanity=lc_sanity
+            analyzer,
+            request,
+            lc_method=lc_method,
+            lc_vis=lc_vis,
+            lc_sanity=lc_sanity,
+            echo_number=analyzed_echo,
         )
         extra_warnings = list(_build_mri_extra_warnings(analyzer))
         if warn_ignore_tol:
@@ -312,7 +341,6 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         num_images = _image_count(analyzer, request)
         metrics: dict[str, Any] = {
             "input_count": len(request.dicom_paths),
-            "echo_number": request.echo_number,
             "check_uid": request.check_uid,
             "origin_slice_override": request.origin_slice,
             "scan_extent_tolerance_mm": eff_tol,
@@ -335,6 +363,9 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         lc_score = _extract_lc_score(raw)
         if lc_score is not None:
             metrics["low_contrast_score"] = lc_score
+        _apply_mri_post_analyze_metrics(
+            metrics, analyzer, request, analyzed_echo, extra_warnings
+        )
 
         return QAResult(
             success=True,
@@ -457,6 +488,7 @@ def run_acr_mri_large_batch(
     eff_tol = 0.0 if vanilla else tol
     warn_ignore_tol = vanilla and tol > 0.0
     mri_cls = ACRMRILarge if vanilla else ACRMRILargeForViewer
+    analyzed_echo = resolve_mri_analyze_echo_number(base_request)
 
     # Allocate a temp directory for per-run PDFs (used only when PDF output is requested)
     tmp_dir: Path | None = None
@@ -480,6 +512,7 @@ def run_acr_mri_large_batch(
         )
         engine = "ACRMRILarge" if vanilla else "ACRMRILargeForViewer"
         profile = build_pylinac_analysis_profile(per_run_request, engine=engine)
+        stamp_analyzed_echo_on_profile(profile, per_run_request, analyzed_echo)
 
         try:
             analyzer = _build_mri_analyzer(
@@ -509,6 +542,7 @@ def run_acr_mri_large_batch(
             lc_method=cfg.low_contrast_method,
             lc_vis=cfg.low_contrast_visibility_threshold,
             lc_sanity=cfg.low_contrast_visibility_sanity_multiplier,
+            echo_number=analyzed_echo,
         )
         extra_warnings = list(_build_mri_extra_warnings(analyzer))
         if warn_ignore_tol:
@@ -538,7 +572,6 @@ def run_acr_mri_large_batch(
             num_images = _image_count(analyzer, per_run_request)
             metrics: dict[str, Any] = {
                 "input_count": len(per_run_request.dicom_paths),
-                "echo_number": per_run_request.echo_number,
                 "check_uid": per_run_request.check_uid,
                 "origin_slice_override": per_run_request.origin_slice,
                 "scan_extent_tolerance_mm": eff_tol,
@@ -561,6 +594,9 @@ def run_acr_mri_large_batch(
             lc_score = _extract_lc_score(raw)
             if lc_score is not None:
                 metrics["low_contrast_score"] = lc_score
+            _apply_mri_post_analyze_metrics(
+                metrics, analyzer, per_run_request, analyzed_echo, extra_warnings
+            )
 
             run_results.append(
                 QAResult(

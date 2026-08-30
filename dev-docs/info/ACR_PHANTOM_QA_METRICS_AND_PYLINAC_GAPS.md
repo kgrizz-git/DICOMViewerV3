@@ -1,6 +1,6 @@
 # ACR phantom QA metrics — references and pylinac gaps
 
-**Last updated:** 2026-08-28  
+**Last updated:** 2026-08-29  
 **Purpose:** Tabulate what physicists are asked to measure on **ACR CT** and **ACR MRI** accreditation phantoms, how those quantities are defined in primary references, what **pylinac 3.43.2** already computes, and what remains **viewer-native** work (MRI **SNR**, direct resolution reads, etc.).  
 **Related:** [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) (Phases 0–6), [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md), [PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md](PYLINAC_CUSTOMIZATION_AND_EXTENSIONS.md) (MTF rMTF grid), [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) (**C2**, **C24**).
 
@@ -17,7 +17,7 @@
 | **NEMA MS 3-2008** | Image **uniformity** measurement standard | [NEMA MS 3-2008 (overview)](https://www.nema.org/standards/view/determination-of-image-uniformity-in-diagnostic-magnetic-resonance-images) |
 | **Automated ACR QC study (PMC)** | Implements PSG, PIU, **SNR**, **SNRU** with ROI automation; explicitly notes **SNR is not one of the seven ACR accreditation tests** but is ubiquitous in QC manuals | [PMC8321175](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) |
 | **Low-contrast automation (2024)** | Uses slice-7 **SNR** (central ROI mean ÷ background σ) as covariate for LCD scoring | [PMC12257337](https://pmc.ncbi.nlm.nih.gov/articles/PMC12257337/) |
-| **Legacy ACR MR accreditation phantom overview (AAPM 1999)** | Early phantom spec; **nickel-chloride vial SNR** on early slices + corner background ROIs; RF uniformity on flood slice | [AAPM 99AM PDF](https://www.aapm.org/meetings/99am/pdf/2728-58500.pdf) |
+| **Legacy ACR MR accreditation phantom overview (AAPM 1999)** | Early phantom spec; **nickel-chloride vial SNR** on early slices + corner background ROIs; RF uniformity on the uniformity slice | [AAPM 99AM PDF](https://www.aapm.org/meetings/99am/pdf/2728-58500.pdf) |
 | **pylinac ACR MRI Large** | What the library automates today | [pylinac ACR docs](https://pylinac.readthedocs.io/en/latest/acr.html) |
 
 ---
@@ -32,11 +32,13 @@ These are the **quantitative tests** in the current **Phantom Test Guidance** us
 | 2 | **High-contrast spatial resolution** | Axial slice **1** | **Visual** assessment of hole pairs (0.9 / 1.0 / 1.1 mm); site-series fallback if ACR series fails | Qualitative (smallest resolved pair) | **Partial** — automated **MTF / rMTF grid** on slice 1 (`row_mtf_lp_mm`, `col_mtf_lp_mm`, 10–90%); not the same as human hole-pair read |
 | 3 | **Slice thickness accuracy** | ACR T1 & T2, slice **1** | Ramp-based thickness from slice 1 geometry | **5.0 mm ± 0.7 mm** (fail **> ±1.0 mm**) | **Yes** — `slice1.measured_slice_thickness_mm` |
 | 4 | **Slice position accuracy** | ACR T1 & T2, slices **1** and **11** | Wedge / bar displacement between slices 1 and 11 | **≤ ±5 mm** (stricter **±4 mm** in some tables) | **Yes** — `slice1` / `slice11` `bar_difference_mm`, `slice_shift_mm` |
-| 5 | **Image intensity uniformity (PIU)** | ACR T1 & T2, slice **7** | Large circular ROI on uniform flood; find ~1 cm² max/min regions; **PIU = 100 × (1 − (high−low)/(high+low))** | **ACR guidance:** **≥ 87.5%** (<3 T); **≥ 82%** (3 T) | **Yes** — `uniformity_module.piu` (pylinac uses 99th/1st percentile variant, not the 1 cm² high/low regions); **`piu_passed`** in code uses **85% / 80%** (pylinac internal thresholds — **not** the ACR submission limits) |
+| 5 | **Image intensity uniformity (PIU)** | ACR T1 & T2, slice **7** | Large circular ROI on the **uniformity slice**; find ~1 cm² max/min regions; **PIU = 100 × (1 − (high−low)/(high+low))** | **ACR guidance:** **≥ 87.5%** (<3 T); **≥ 82%** (3 T) | **Yes** — `uniformity_module.piu` (pylinac uses 99th/1st percentile variant, not the 1 cm² high/low regions); **`piu_passed`** in code uses **85% / 80%** (pylinac internal thresholds — **not** the ACR submission limits) |
 | 6 | **Percent signal ghosting (PSG)** | ACR T1, slice **7** | Center ROI mean + four **background** ROIs (top, bottom, left, right outside phantom); **ghosting ratio = \|(left+right)−(top+bottom)\| / (2×center)** (same magnitude as other sign orderings); PSG = ratio × 100% | **≤ 2.5%** (ratio **≤ 0.025**) | **Yes** — same formula in `MRUniformityModule.ghosting_ratio` / `.psg` (`(L+R)−(T+B)` in pylinac source); ghost ROIs at fixed phantom-centered angles (Top/Bottom/Left/Right) |
 | 7 | **Low-contrast object detectability** | ACR T1 & T2, slices **8–11** | Count **complete spokes** (all three disks visible per spoke); stop at first incomplete spoke; sum across slices | Score thresholds vary by field strength (e.g. **≥ 9** at 1.5 T, **≥ 37** at 3 T in some tables) | **Yes** — `low_contrast_multi_slice_module.score` (pylinac visibility algorithm; see [PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md](PYLINAC_MRI_LOW_CONTRAST_DETECTABILITY.md)) |
 
-**Note on slice numbering:** Guidance uses **ACR T1 axial series** slice indices (slice 7 = uniformity + ghosting flood). pylinac maps modules by **stack offset** from the HU/origin slice; verify alignment on real data in Phase 0.
+**Note on slice numbering:** Guidance uses **ACR T1 axial series** slice indices (slice 7 = **uniformity slice**, also used for PSG). pylinac maps modules by **stack offset** from the HU/origin slice; verify alignment on real data in Phase 0. Do not call this a “flood” — that term is nuclear-medicine usage, not ACR MRI phantom testing.
+
+**Follow-up (not v1):** consider a viewer-side **ACR-procedure PIU** (slice 7 large circular ROI, ~1 cm² high/low, ACR formula and **87.5%/82%** limits) as a separate metric from pylinac `uniformity_module.piu`. Tracked in [TO_DO.md](../TO_DO.md) under Features (Near-Term) / pylinac ACR. Do not confuse PIU with **`mri_snr`**.
 
 ---
 
@@ -44,38 +46,46 @@ These are the **quantitative tests** in the current **Phantom Test Guidance** us
 
 | Quantity | Where required | Typical definition | pylinac 3.43.2 |
 |----------|----------------|-------------------|----------------|
-| **SNR** | ACR **MRI QC Manual** (weekly technologist SNR check; physicist RF coil section); NEMA **MS 1-2008**; many papers | Multiple incompatible definitions exist — see below | **No** — no `snr` field in `acr.py` / `results_data` |
+| **SNR** | ACR **MRI QC Manual** (weekly technologist SNR check; physicist RF coil section); NEMA **MS 1-2008**; many papers | One ACR-style ratio on the **uniformity slice** (below); NEMA multiplies the same ratio by **0.655**. Two-image difference SNR is a different method. | **No native field** — viewer harvests uncorrected **`metrics.mri_snr`** (Phase 6) |
 | **SNR uniformity (SNRU)** | PMC automation papers; some site QC programs | Ratio of max/min SNR across sub-ROIs in uniform region, or **SNR(slice 6) / SNR(slice 7)** in [PMC8321175 §2.3.3.B](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (0.9–1.1) | **No** — defer after canonical slice-7 SNR |
 | **Legacy MRAP nickel-vial SNR** | 1999 AAPM phantom overview | Signal from **~2.5 cm²** ROI on NiCl₂ vial (early slices); noise from **corner background** ROI σ (four corners, 15–20 cm²) | **No** (phantom insert layout differs on current Large phantom) |
 
-### Common SNR definitions (literature)
+### SNR formula (one ACR-style ratio)
+
+**S̄** is the mean of pylinac’s **Center** disk ROI on the ACR MRI phantom **uniformity slice** (ACR T1/T2 slice **7** / pylinac uniformity module). Viewer v1 uses that Center ROI **as-is** (pylinac radius 80); it does not construct a separate ~80% phantom-diameter circle. Background noise is the pixel **σ** outside the phantom, averaged over ghost-free ROIs on the **frequency-encode** axis.
+
+NEMA MS 1, LCD-paper “ACR-style” SNR, PMC8321175 Eq. 7, and the Phase 6 export are **the same ratio**. The only extra factor in NEMA single-image SNR is the Rayleigh correction **0.655**. Viewer v1 exports the **uncorrected** ratio (`mri_snr`); do not apply 0.655 (OQ-10).
 
 | Method | Formula (conceptual) | Notes | Source |
 |--------|----------------------|-------|--------|
-| **NEMA MS 1 single-image** | SNR ≈ **0.655 × S̄ / σ_bkg** | S̄ = mean in uniform phantom ROI; σ_bkg = std in **air/background** ROI; **0.655** corrects Rayleigh noise on magnitude images | [PMC8321175 §2.3.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) citing NEMA MS 1 |
-| **Two-image difference** | SNR ≈ **√2 × S̄ / σ_diff** (often written 1.41×) | Requires two identical acquisitions; σ from subtracted image inside same ROI | NEMA / PMC8321175 |
-| **ACR-style central / background (LCD papers)** | SNR = **mean(central uniform ROI) / σ(background)** | Slice **7** central portion vs background σ; used as LCD covariate | [PMC12257337](https://pmc.ncbi.nlm.nih.gov/articles/PMC12257337/) |
-| **Proposed viewer formula (this project)** | SNR = **mean(central 80% of uniformity flood) / mean(σ in two ghost-free background ROIs on the frequency-encode axis)** | Noise ROIs = the pair on the **frequency-encode** axis (ghost-free, lower structured/ghost contamination than phase-encode ROIs). When frequency encode is image **columns**, use pylinac **Left/Right**; when frequency encode is image **rows**, use **Top/Bottom**. Aligns with PSG ROI geometry but averages **σ** instead of means | Maintainer spec — Phase 6 plan; literature ancestor [PMC8321175 Eq. 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (`S̄ / mean(σ_L, σ_R)` on slice 7) |
+| **ACR-style uncorrected** (QC / LCD / PMC Eq. 7 / Phase 6) | SNR = **S̄ / σ_bkg** | Uniformity slice; S̄ = pylinac **Center** ROI mean (as-is); σ from background (freq-encode ghost-free pair) | ACR MRI QC Manual (requires the check); [PMC12257337](https://pmc.ncbi.nlm.nih.gov/articles/PMC12257337/); [PMC8321175 Eq. 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) (`S̄ / mean(σ_L, σ_R)` on slice 7) |
+| **NEMA MS 1 single-image** | SNR ≈ **0.655 × S̄ / σ_bkg** | Same S̄ / σ_bkg family; **0.655** corrects Rayleigh noise on magnitude images | [PMC8321175 §2.3.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) citing NEMA MS 1 |
+| **Two-image difference** | SNR ≈ **√2 × S̄ / σ_diff** (often written 1.41×) | **Different method** — two identical acquisitions; σ from the subtracted image | NEMA / PMC8321175 |
 
-**Central 80% signal ROI (Phase 6):** same center as pylinac’s Center flood circle; **radius = R_center × √0.80** (equivalent area fraction 0.80). Pixel mean inside that circle is the signal term.
+**Phase 6 noise ROIs:** use the two **ghost-free** background rectangles on the **frequency-encode** axis (pylinac `ghost_rois`). DICOM ``InPlanePhaseEncodingDirection``:
 
-**Phase/frequency encode:** PSG guidance places ghost-sensitive ROIs along **phase encode** (top/bottom) vs ghost-free controls along **frequency encode** (left/right) when frequency encode is left–right. DICOM tags such as **`InPlanePhaseEncodingDirection`** (0018,1312) and the image orientation matrix determine which image axis is phase vs frequency. **Rule:** always pick the **ghost-free (frequency-encode) pair** for noise — never hard-code Left/Right without checking encode direction. **Fallback when tags are missing (R6-3):** assume **phase encode = ROW** / **frequency encode = COL** (ACR default in [PMC8321175 §2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)) → noise from **Left/Right** ghost ROIs.
+- **COL** (phase along columns, top–bottom) → ghosts Top/Bottom → noise **Left/Right**
+- **ROW** (phase along rows, left–right) → ghosts Left/Right → noise **Top/Bottom**
+
+Do not hard-code Left/Right. That matches PSG ROI placement but uses **σ** instead of mean intensity. If the tag-selected pair has a higher mean **σ** or background intensity than the other pair, the run records a warning (the tag still wins).
+
+**Phase/frequency encode:** PSG guidance places ghost-sensitive ROIs along **phase encode** vs ghost-free controls along **frequency encode**. On a typical ACR axial with vertical phase encode (DICOM **COL**), that is Top/Bottom vs Left/Right. **Fallback when tags are missing (R6-3):** assume **phase encode = ROW** / **frequency encode = COL** (ACR default wording in [PMC8321175 §2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)) → noise from **Top/Bottom**.
 
 **SNR limits (export):** SNR has **no ACR accreditation pass/fail** threshold. Sites may apply QC-manual or local rules (e.g. [PMC8321175 §2.3.3.B](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/) suggests **SNR ≥ 80×T** for technologist checks, or SNRU **0.9–1.1** between slices **6** and **7**). Viewer v1 exports **`mri_snr` as an uncorrected ratio** only — no pass/fail column unless added later.
 
 ---
 
-## PSG vs proposed SNR — shared geometry
+## PSG vs SNR — shared geometry
 
 pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 
 | ROI | Role in ACR §6 | pylinac `ghost_roi_settings` |
 |-----|----------------|------------------------------|
-| **Center** | Large flood signal (also used in PSG denominator) | Circular ROI, radius ≈ 80 px (~200 cm² per code comment) |
-| **Top / Bottom** | Phase-encode ghost sampling | Rectangles at ±90° from phantom center |
-| **Left / Right** | Frequency-encode **ghost-free** background controls | Rectangles at 0° / 180° |
+| **Center** | Large circular ROI on the **uniformity slice** (PSG denominator) | Circular ROI, radius ≈ 80 px (~200 cm² per code comment) |
+| **Top / Bottom** | Phase-encode ghost sampling when PE is vertical (DICOM COL) | Rectangles at ±90° from phantom center |
+| **Left / Right** | Frequency-encode **ghost-free** background when PE is vertical (DICOM COL) | Rectangles at 0° / 180° |
 
-**PSG** uses **means** of Top, Bottom, Left, Right. **Proposed SNR** uses **mean signal in central 80%** of the flood (stricter than full Center ROI) and **mean of σ** in the two **frequency-encode (ghost-free)** background ROIs — **Left/Right** only when frequency encode is horizontal; **Top/Bottom** when frequency encode is vertical (phase-encode ROIs would inflate σ).
+**PSG** uses **means** of Top, Bottom, Left, Right. **SNR** uses **S̄** from the same **Center** ROI pylinac already places for PIU/PSG, and **mean of σ** in the two **frequency-encode (ghost-free)** background ROIs — **Left/Right** when phase encode is **COL** (vertical); **Top/Bottom** when phase encode is **ROW** (horizontal). Using the phase-encode pair inflates σ.
 
 ---
 
@@ -99,7 +109,8 @@ pylinac `MRUniformityModule` (slice 7 / uniformity offset) already places:
 
 | Gap | Priority for DICOM Viewer V3 | Planned handling |
 |-----|------------------------------|------------------|
-| **MRI SNR** (ACR-style / NEMA / proposed freq-encode noise) | **High** — user request | **Phase 6** — live harvest in `run_acr_mri_large_analysis`; export in flatten/CSV/XLSX |
+| **MRI SNR** (ACR-style uncorrected ratio; NEMA adds 0.655) | **High** — user request | **Phase 6 shipped** — live harvest in `run_acr_mri_large_analysis`; export in flatten/CSV/XLSX |
+| **CT image thickness** (pylinac `ACRCT` has no ramp module) | Low (P2) | **No CT SNR.** Nominal DICOM `SliceThickness` harvest tracked in `TO_DO.md`; ACR Module 1 ramp measurement remains catalog **C6**. |
 | **SNR uniformity (SNRU)** | Low | Defer — slice-6/slice-7 ratio per PMC8321175 after slice-7 `mri_snr` ships |
 | **Visual high-contrast resolution** (hole-pair / line-pair read) | Low | pylinac **rMTF** is interim automated substitute; see **§Direct resolution reads** for investigation avenues |
 | **Weekly QC** (center frequency, TX gain, artifact form) | Out of scope | Not image-export metrics |
@@ -130,7 +141,20 @@ ACR accreditation **MRI test #2** (hole pairs) and the **CT spatial-resolution m
 
 ---
 
+## R6-2 — local T1 SNR compare (2026-08-29)
+
+Tracked Standard-share series: `sample-phantom-data-committed/deid-phantoms/mr/series-005` (DICOM **SeriesNumber 3**, 11-slice axial T1). Folder `mr/series-003` is the 3-plane localizer, not T1. Phase-encode tag **COL**. Viewer harvest used **1 mm** scan-extent tolerance (same retry the app offers). No site names or absolute paths.
+
+| Source | S̄ | σ pair (ghost-free) | mean σ | SNR = S̄ / mean(σ) |
+|--------|----|---------------------|--------|---------------------|
+| Viewer (`mri_snr`, pylinac Center + Left/Right) | 6063 | 8.56 / 8.36 | 8.46 | **717** |
+| Manual (uniformity slice; redo) | 6058 | 8.64 / 7.15 | 7.90 | **767** |
+
+First manual noise pair (6.57 / 5.13) was discarded: those ROIs were larger and farther into air than pylinac’s PSG rectangles and under-estimated σ. The redo is ~**7%** higher SNR than the viewer — within ordinary human ROI-placement scatter. Formula and COL → Left/Right mapping stand.
+
+---
+
 ## Phase 6+ pointer (SNR / SNRU)
 
-- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there.
+- **Phase 6 MRI SNR** — [PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md](../plans/supporting/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) **Phase 6**; R6-* checklist there. **R6-2** numeric compare is in [R6-2 — local T1 SNR compare](#r6-2--local-t1-snr-compare-2026-08-29).
 - **SNRU** (slice 6÷7 ratio, optional) — **Phase 6+** in the same plan; after `mri_snr` ships; no default pass/fail in v1.

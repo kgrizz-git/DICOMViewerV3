@@ -65,6 +65,18 @@ class _FakeMriAnalyzer:
         self.dicom_stack = [object(), object(), object()]
         self.analyze_kwargs: dict[str, object] | None = None
         self.publish_pdf_calls: list[tuple[str, list[str]]] = []
+        # Live SNR harvest reads these after analyze(); list stack has no
+        # InPlanePhaseEncodingDirection so harvest uses the ROW fallback
+        # (Top/Bottom ghost-free ROIs when phase is along rows).
+        self.uniformity_module = SimpleNamespace(
+            rois={"Center": SimpleNamespace(pixel_value=200.0, std=1.0)},
+            ghost_rois={
+                "Top": SimpleNamespace(pixel_value=1.0, std=4.0),
+                "Bottom": SimpleNamespace(pixel_value=1.0, std=6.0),
+                "Left": SimpleNamespace(pixel_value=1.0, std=10.0),
+                "Right": SimpleNamespace(pixel_value=1.0, std=10.0),
+            },
+        )
         _FakeMriAnalyzer.last_instance = self
         _FakeMriAnalyzer.instances.append(self)
 
@@ -212,6 +224,7 @@ def test_build_mri_analyze_kwargs_passes_only_supported_parameters() -> None:
         lc_method="Ratio",
         lc_vis=0.2,
         lc_sanity=4.5,
+        echo_number=2,
     )
 
     assert kwargs == {
@@ -231,6 +244,7 @@ def test_build_mri_analyze_kwargs_omits_unsupported_and_optional_parameters() ->
         lc_method="Ratio",
         lc_vis=0.2,
         lc_sanity=4.5,
+        echo_number=2,
     )
 
     assert kwargs == {"echo_number": 2}
@@ -303,6 +317,16 @@ def test_run_analysis_normalizes_successful_fake_analyzer_result(monkeypatch) ->
     assert result.num_images == 3
     assert result.metrics["low_contrast_score"] == 11
     assert result.metrics["phantom_roll"] == 1.25
+    assert result.metrics["echo_number"] == 2
+    assert result.metrics["echo_number_requested"] == 2
+    assert "echo_number_auto_highest" not in result.metrics
+    assert result.metrics["mri_snr"] == 40.0
+    assert result.metrics["mri_snr_signal_mean"] == 200.0
+    assert result.metrics["mri_snr_noise_mean"] == 5.0
+    assert result.metrics["mri_snr_noise_roi_pair"] == "Top/Bottom"
+    assert result.metrics["mri_snr_phase_encoding_fallback"] is True
+    assert result.pylinac_analysis_profile["echo_number"] == 2
+    assert result.pylinac_analysis_profile["echo_number_auto_highest"] is False
     assert result.raw_pylinac["has_sagittal_module"] is True
     assert result.pylinac_version == "test-version"
     assert result.pylinac_analysis_profile["engine"] == "ACRMRILargeForViewer"
@@ -317,6 +341,9 @@ def test_run_analysis_returns_validation_failure_before_fake_analysis(monkeypatc
     assert result.errors == ["No DICOM paths or folder were provided."]
     assert result.num_images == 0
     assert result.pylinac_version == "test-version"
+    assert result.pylinac_analysis_profile["echo_number"] == 2
+    assert result.pylinac_analysis_profile["echo_number_requested"] == 2
+    assert result.pylinac_analysis_profile["echo_number_auto_highest"] is False
 
 
 def test_run_analysis_returns_normalized_failure_when_analysis_raises(monkeypatch) -> None:
@@ -328,6 +355,8 @@ def test_run_analysis_returns_normalized_failure_when_analysis_raises(monkeypatc
     assert result.num_images == 2
     assert result.errors == ["ACR MRI Large analysis failed: synthetic analysis failure"]
     assert result.pylinac_analysis_profile["engine"] == "ACRMRILargeForViewer"
+    assert result.pylinac_analysis_profile["echo_number"] == 2
+    assert result.pylinac_analysis_profile["echo_number_auto_highest"] is False
 
 
 def test_run_analysis_keeps_success_when_optional_pdf_publish_fails(monkeypatch) -> None:
@@ -351,6 +380,7 @@ def test_run_batch_returns_one_missing_dependency_result_per_config(monkeypatch)
     assert all(result.success is False for result in batch.run_results)
     assert all(result.num_images == 2 for result in batch.run_results)
     assert all("pylinac is not installed" in result.errors[0] for result in batch.run_results)
+    assert all(result.pylinac_analysis_profile["echo_number"] == 2 for result in batch.run_results)
 
 
 def test_run_batch_preserves_run_order_and_propagates_each_config(monkeypatch) -> None:
@@ -382,6 +412,8 @@ def test_run_batch_preserves_run_order_and_propagates_each_config(monkeypatch) -
     assert _FakeMriAnalyzer.instances[0].analyze_kwargs["low_contrast_method"] == "Weber"
     assert _FakeMriAnalyzer.instances[1].analyze_kwargs is not None
     assert _FakeMriAnalyzer.instances[1].analyze_kwargs["low_contrast_method"] == "Ratio"
+    assert batch.run_results[0].metrics["mri_snr"] == 40.0
+    assert batch.run_results[0].metrics["echo_number"] == 2
 
 
 def test_run_batch_leaves_pdf_path_empty_when_pdf_assembly_reports_failure(

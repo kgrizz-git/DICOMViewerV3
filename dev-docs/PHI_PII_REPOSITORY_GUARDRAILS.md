@@ -1,6 +1,6 @@
 # PHI / PII Repository Guardrails
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-08-29
 
 **Audience:** contributors and coding agents who add, generate, inspect, or export files in this repository.
 
@@ -12,6 +12,29 @@ This application processes clinical imaging. Treat every study, export, screensh
 2. Use wholly synthetic fixtures. DICOM fixtures must contain only the approved synthetic identifiers and must not carry real nested sequence values.
 3. Do not bypass hooks with `--no-verify` to admit a data or media file. Resolve the finding or obtain an explicit review decision.
 4. Do not put patient names, identifiers, dates of birth, accession numbers, local paths, raw exceptions, or unredacted datasets into logs, dialogs, test assertions, issue text, or documentation.
+
+## Local phantom data and QA metric dumps
+
+Gitignored roots such as `sample-DICOM-gitignored/CT-phantoms/` and
+`sample-DICOM-gitignored/MR-phantoms/` are for **private local** series only.
+Never stage them. When documenting or scripting, use those **repo-relative**
+paths — never a machine-absolute path.
+
+Pylinac `results_data` dumps committed under `tests/fixtures/qa/` may contain
+numeric QA metrics, phantom-model strings, and required non-identifying
+technical metadata (`pylinac_version`, `warnings`) only: no absolute filesystem
+paths, or institution, patient, station, site, or UID identifiers. Spike helpers
+in `scripts/pylinac_spike_common.py` drop those keys and redact remaining
+absolute paths. Dump JSON is written **outside** the checkout; copy a reviewed
+file into `tests/fixtures/qa/` only after that review. Workflow:
+[`tests/fixtures/qa/README.md`](../tests/fixtures/qa/README.md).
+
+If a DICOM fixture must be **tracked** in git, export it first with
+**File → De-identify & Export DICOM (PS3.15)…** (do not retain institution or
+device identity), then run the artifact gate and the required human review
+before any hash-manifest update. De-identification is not a substitute for
+leaving raw local phantoms gitignored. The reviewed Standard-share ACR set is
+`sample-phantom-data-committed/deid-phantoms/` (pixel review 2026-08-29).
 
 ## What the blocking artifact gate covers
 
@@ -29,7 +52,7 @@ This application processes clinical imaging. Treat every study, export, screensh
 - Scans tracked text data, including JSON, CSV/TSV, YAML, INI, XML, HTML, Markdown, TeX, PostScript/EPS, notebooks, and SVG, for local-path, patient-tag, private-network, and internal-endpoint indicators.
 - Reads XLSX/XLSM cells for the same indicators. XLSX/XLSM, Office/OpenDocument packages (`.docx`, `.docm`, `.pptx`, `.pptm`, `.odt`, `.ods`, `.odp`, and templates/slideshows), and Apple iWork packages (`.pages`, `.numbers`, `.key`) also require manual review because they can embed images and other opaque content.
 - Extracts text from every unencrypted PDF page and fails closed when a PDF cannot be read. PDFs, PostScript/EPS, and notebooks require hash-bound manual review because they can contain rendered or embedded images that text extraction cannot prove safe.
-- Recursively reads DICOM metadata, including sequence items, private tags, and station names; it recognizes a standard `DICM` preamble even when a filename has no DICOM extension.
+- Recursively reads DICOM metadata, including sequence items, private tags, and station names; it recognizes a standard `DICM` preamble even when a filename has no DICOM extension. The exact de-identification dummy ``ANONYMIZED`` (entire value, case-sensitive) is not treated as a populated identifier; any other non-empty identifier still fails. DICOM admission still requires the hash manifest and human review.
 - Inspects ZIP, TAR, GZip, BZip2, and XZ containers in memory, including nested containers up to a bounded depth. It scans text/PDF/Excel payloads and detects DICOM by extension or preamble inside them. Archives and document packages always require hash-bound manual review. Encrypted, malformed, oversized, deeply nested, and unsupported archive formats (currently 7z, RAR, and Zstandard) fail closed rather than being waived by the hash manifest.
 - Fails closed for extensionless assets and image formats: AVIF, BMP, GIF, HEIC, ICO, ICNS, JPEG, JPEG 2000, JXL, PNG, SVG, TIFF, and WebP.
 

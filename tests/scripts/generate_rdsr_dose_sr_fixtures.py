@@ -112,7 +112,6 @@ def build_synthetic_ct_dose_sr(*, sop_class_uid: str) -> Dataset:
     ds.Modality = "SR"
     ds.Manufacturer = "SyntheticFixture"
     ds.ManufacturerModelName = "RDSR-Gen"
-    ds.DeviceSerialNumber = "SER-SYN-1"
     ds.SeriesDescription = "Synthetic CT dose SR (test fixture)"
     ds.SeriesNumber = 1
     ds.SOPClassUID = sop_class_uid
