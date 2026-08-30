@@ -5,7 +5,7 @@
   "policy": {
     "default_data_handling": "local-only",
     "finding_output": "category/count/status only; never retain or paste matched sensitive values",
-    "external_source_or_coverage_uploads": "prohibited except approved privacy-gated GitHub Actions source scans limited to src/; no test, coverage, artifact, or local-data upload is permitted",
+    "external_source_or_coverage_uploads": "prohibited except the approved privacy-gated GitHub Actions SonarQube Cloud scan of src/ and its src-path-and-line-number coverage metadata; standalone third-party coverage uploads and test-source, artifact, or local-data uploads are prohibited",
     "allowed_remote_outputs": "GitHub Actions logs, optional SARIF attached to this private GitHub repository, and the narrowly scoped approved SonarQube Cloud main analysis",
     "version_field_meaning": "tested_version records the locally or CI-tested release, not an automatic upgrade constraint"
   },
@@ -328,7 +328,7 @@
         "privacy-gated CI blocking",
         "bounded post-push Quality Gate blocking"
       ],
-      "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; the job waits up to 600 seconds for the Cloud Quality Gate; Automatic Analysis disabled; no PR, test, coverage, artifact, or local-data upload",
+      "network_policy": "SonarQube Cloud upload of src only after privacy checks on protected main/develop pushes; the job waits up to 600 seconds for the Cloud Quality Gate; Automatic Analysis disabled; coverage metadata containing src paths and line numbers is included only in that approved scan; standalone third-party coverage uploads and PR, test-source, artifact, or local-data uploads are prohibited",
       "entrypoints": [
         ".github/workflows/ci.yml"
       ],
