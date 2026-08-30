@@ -1,7 +1,7 @@
 # Refactor Plan: Split main.py into Multiple Files
 
 **Created:** 2026-08-07  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-30
 **Status:** Complete pending human commit (gate remediation done 2026-08-08)  
 **Target:** `src/main.py` (~334 lines) + 5 mixin modules under `src/main_app_*.py` (each ≤750 lines; largest ~642)
 
@@ -72,7 +72,7 @@ The class contains methods that fall into logical categories. The counts below a
 ## Hook Configuration & Complexity Measurement
 
 ### How complexity is measured
-Complexity is measured by **Lizard** (`lizard>=1.23.0`, from `requirements-dev.txt`), invoked by the pre-commit hook `scripts/git_hook_line_complexity.py`. The hook analyzes each staged file for:
+Complexity is measured by **Lizard** (`lizard==1.24.0`, from `requirements-dev.txt`), invoked by the pre-commit hook `scripts/git_hook_line_complexity.py`. The hook analyzes each staged file for:
 - **Line count:** `WARN_LINES = 600`, `BLOCK_LINES = 750` (file length)
 - **Function cyclomatic complexity (CCN):** `BLOCK_CCN = 20` (per-function; any function exceeding CCN 20 blocks the commit)
 
@@ -568,7 +568,7 @@ python scripts/check_user_docs_links.py
 
 - `scripts/git_hook_line_complexity.py` - Line count and complexity (Lizard CCN) thresholds
 - `scripts/line_complexity_grandfather.json` - Current grandfather list (`files` + `functions` maps)
-- `requirements-dev.txt` (lizard>=1.23.0) - Complexity measurement dependency
+- `requirements-dev.txt` (lizard==1.24.0) - Complexity measurement dependency
 - `src/utils/config/display_config.py` - Reference plain-mixin pattern (`DisplayConfigMixin`)
 - `ARCHITECTURE.md` - Architecture boundaries and conventions
 - `dev-docs/SOURCE_LAYOUT.md` - Source code layout documentation

@@ -1,7 +1,7 @@
 # Plan: Post-merge quality-governance closeout
 
 **Last updated:** 2026-08-30
-**Status:** Active — Phases 1–2 implemented; Phase 3 remains
+**Status:** Completed — all three phases implemented
 **Priority:** P1
 **Area:** Documentation closeout, protected-branch CI, maintainability policy
 
@@ -11,7 +11,7 @@ Close out the merged Pylinac ACR implementation correctly, then make two
 independent quality-policy improvements without relying on chat history or
 combining unrelated risk into one review.
 
-This plan is deliberately executed as **three small PRs**, in order. Each PR
+This plan was deliberately executed as **three small PRs**, in order. Each PR
 may use a single atomic commit if its verification results remain attached to
 the change; do not delay an earlier completed PR for a later phase.
 
@@ -30,9 +30,9 @@ the change; do not delay an earlier completed PR for a later phase.
 
 ## Phase 1 — documentation closeout (PR 1, merged)
 
-1. Move the merged [Pylinac ACR full metrics export and MRI batch plan](completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) from `plans/supporting/` to `plans/completed/`.
+1. Move the merged [Pylinac ACR full metrics export and MRI batch plan](PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) from `plans/supporting/` to `plans/completed/`.
 2. Mark its archival task complete and transfer its optional CT/MRI real-phantom
-   export check to [Manual Smoke Checks](../TO_DO.md#manual-smoke-checks).
+   export check to [Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).
 3. Replace the obsolete “two PRs” Next Up item with this plan’s single umbrella
    entry, and refresh the stale complexity backlog wording.
 4. Run the documentation link and repository harness checks.
@@ -73,10 +73,11 @@ the plan is archived, and optional human verification is still visible.
 protection; enabling PR analysis needs a separate privacy review.
 
 **Implementation note (2026-08-30):** The existing protected-branch job now
-waits for the Quality Gate with the specified 600-second timeout. Inspect the
-first protected-branch run after merge to confirm the hosted behavior.
+waits for the Quality Gate with the specified 600-second timeout. Its first
+protected-branch run completed successfully after privacy gates and tests,
+confirming the hosted behavior.
 
-## Phase 3 — CCN 15 ratchet and CI parity (PR 3, remaining)
+## Phase 3 — CCN 15 ratchet and CI parity (PR 3, implemented)
 
 1. Change `BLOCK_CCN` and its docstring in
    `scripts/git_hook_line_complexity.py` from 20 to 15.
@@ -95,8 +96,14 @@ first protected-branch run after merge to confirm the hosted behavior.
 exceptions are narrow and reviewed, and a new or regressed CCN >15 function
 fails both paths.
 
+**Implementation note (2026-08-30):** `BLOCK_CCN` is now 15 and CI invokes
+the canonical checker with `--all` in addition to the supplemental Lizard
+annotations. The inventory added exactly 80 existing CCN 16–20 functions at
+their measured ceilings without regenerating the older baseline. The canonical
+full-tree check and focused hook tests pass.
+
 ## References
 
-- [GitHub Actions CI/CD review and storage](supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md)
+- [GitHub Actions CI/CD review and storage](../supporting/GITHUB_ACTIONS_CI_CD_REVIEW_AND_STORAGE.md)
 - [SonarQube Cloud GitHub Actions documentation](https://docs.sonarsource.com/sonarcloud/advanced-setup/ci-based-analysis/github-actions-for-sonarcloud)
 - The ignored CCN-15 discovery notes informed this plan; the durable procedure is Phase 3 above.

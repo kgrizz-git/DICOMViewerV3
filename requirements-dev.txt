@@ -30,8 +30,9 @@ pytest-cov>=7.1.0
 pytest-xdist>=3.8.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
 ruff>=0.15.21
-# Complexity analysis (cyclomatic complexity, NLOC, etc.)
-lizard>=1.23.0
+# Complexity analysis (cyclomatic complexity, NLOC, etc.). Pin to keep the
+# grandfathered CCN baseline reproducible in local checks and CI.
+lizard==1.24.0
 # Docstring coverage measurement (percentage of documented functions/classes).
 # Used by MAIN_PY_REFACTOR_PLAN.md to gate docstring regressions during the
 # main.py split; run from repo root:

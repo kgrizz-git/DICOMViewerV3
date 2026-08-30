@@ -17,7 +17,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
   pre-commit path blocks the staged artifact gate,
   `scripts/git_hook_privacy_checks.py --staged`, and the line/complexity gate
   (`scripts/git_hook_line_complexity.py --staged`: warn @600 lines, block @750
-  lines or CCN>20; grandfathered hotspots in
+  lines or CCN>15; grandfathered hotspots in
   `scripts/line_complexity_grandfather.json` warn only when at/below their
   recorded baseline and **block on growth**; improvements **auto-ratchet** caps
   downward and `git add` the JSON into the same commit); privacy findings report

@@ -378,14 +378,17 @@
       "id": "lizard",
       "category": "complexity",
       "purpose": "Cyclomatic-complexity and function-size gate.",
-      "install_scope": "application development venv",
+      "install_scope": "application development venv and CI",
       "install_reference": "requirements-dev.txt",
-      "tested_version": "1.23.0",
+      "tested_version": "1.24.0",
       "enforcement": [
-        "pre-push blocking"
+        "pre-commit blocking",
+        "pre-push advisory",
+        "CI blocking"
       ],
       "network_policy": "offline-runtime",
       "entrypoints": [
+        ".githooks/pre-commit",
         ".githooks/pre-push",
         ".github/workflows/ci.yml"
       ],

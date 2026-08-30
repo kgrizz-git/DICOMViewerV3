@@ -36,7 +36,7 @@ if [[ "$PRUNE_DAYS" -gt 0 ]]; then
   fi
 fi
 
-# Line-count and complexity gate: warn at 600 lines, block at 750; block CCN>20.
+# Line-count and complexity gate: warn at 600 lines, block at 750; block CCN>15.
 # Grandfathered files/functions (scripts/line_complexity_grandfather.json) warn
 # only at/below their cap; growth blocks. Improved caps auto-ratchet downward
 # and stage the JSON — run before privacy/Gitleaks so the same commit scans it.

@@ -203,7 +203,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install lizard
-        run: pip install "lizard>=1.23.0"
+        run: pip install "lizard==1.24.0"
+
+      - name: Enforce repository complexity ratchet
+        run: python scripts/git_hook_line_complexity.py --all
 
       - name: Run lizard + annotations
         run: |
