@@ -6,6 +6,12 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-08-30
 
+- **Post-merge quality-governance closeout:** The first protected-branch CI run
+  after the Quality Gate change completed successfully, including the waited
+  SonarQube Cloud result. The local and CI complexity ratchet now block CCN
+  above 15 through the same canonical checker; 80 existing CCN 16–20 functions
+  received narrow current-ceiling grandfather entries, while new or regressed
+  functions do not. Archived the completed [closeout plan](plans/completed/POST_MERGE_QUALITY_GOVERNANCE_CLOSEOUT_PLAN.md).
 - **Protected-branch SonarQube Quality Gate:** The privacy-gated `sonarqube`
   job now waits up to 600 seconds for its Cloud Quality Gate and fails when it
   is red. Analysis remains limited to `src/` after `main`/`develop` pushes;

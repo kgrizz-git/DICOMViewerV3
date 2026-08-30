@@ -3,7 +3,7 @@
 
 Thresholds:
   - File line count: warn at 600, block at 750
-  - Function cyclomatic complexity (CCN): block at 20
+  - Function cyclomatic complexity (CCN): block above 15
 
 Grandfathering:
   Files and functions already over the threshold at the time of hook
@@ -46,7 +46,7 @@ from pathlib import Path
 
 WARN_LINES = 600
 BLOCK_LINES = 750
-BLOCK_CCN = 20
+BLOCK_CCN = 15
 
 GRANDFATHER_PATH = Path(__file__).resolve().parent / "line_complexity_grandfather.json"
 

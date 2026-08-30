@@ -132,6 +132,19 @@ def test_function_over_ccn_threshold_is_blocking() -> None:
     assert v.blocking is True
 
 
+def test_function_at_ccn_15_is_not_a_violation() -> None:
+    body = "def boundary(value):\n" + "\n".join(
+        f"    if value == {index}:\n        return {index}"
+        for index in range(1, 15)
+    ) + "\n    return 0\n"
+
+    violations, ok = ghlc.analyze_content("ccn_boundary.py", body)
+
+    assert ok
+    assert ghlc.BLOCK_CCN == 15
+    assert [v for v in violations if v.kind == "function_ccn"] == []
+
+
 def test_grandfather_marks_item_without_clearing_blocking_flag() -> None:
     """``apply_grandfather`` sets ``grandfathered``; callers exclude those from FAIL.
 
