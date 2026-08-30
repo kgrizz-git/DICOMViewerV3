@@ -27,6 +27,10 @@ def _analyzer(
     right_std: float = 20.0,
     top_std: float = 2.0,
     bottom_std: float = 4.0,
+    left_mean: float = 1.0,
+    right_mean: float = 1.0,
+    top_mean: float = 1.0,
+    bottom_mean: float = 1.0,
 ) -> SimpleNamespace:
     metadata = SimpleNamespace()
     if phase is not None:
@@ -36,10 +40,10 @@ def _analyzer(
         uniformity_module=SimpleNamespace(
             rois={"Center": _roi(mean=center, std=1.0)},
             ghost_rois={
-                "Top": _roi(mean=1.0, std=top_std),
-                "Bottom": _roi(mean=1.0, std=bottom_std),
-                "Left": _roi(mean=1.0, std=left_std),
-                "Right": _roi(mean=1.0, std=right_std),
+                "Top": _roi(mean=top_mean, std=top_std),
+                "Bottom": _roi(mean=bottom_mean, std=bottom_std),
+                "Left": _roi(mean=left_mean, std=left_std),
+                "Right": _roi(mean=right_mean, std=right_std),
             },
         ),
     )
@@ -68,6 +72,7 @@ def test_snr_uses_top_bottom_when_phase_is_row() -> None:
     assert harvested["mri_snr_phase_encoding_direction"] == "ROW"
     assert harvested["mri_snr_phase_encoding_fallback"] is False
     assert harvested["mri_snr_selected_pair_noisier_than_alternate"] is False
+    assert harvested["mri_snr_selected_pair_higher_mean_than_alternate"] is False
 
 
 def test_snr_uses_left_right_when_phase_is_col() -> None:
@@ -134,7 +139,27 @@ def test_overlay_warns_when_tag_pair_is_noisier_than_alternate() -> None:
     )
     assert metrics["mri_snr_noise_roi_pair"] == "Left/Right"
     assert "mri_snr_selected_pair_noisier_than_alternate" not in metrics
-    assert any("other pair had lower background" in item for item in warnings)
+    assert "mri_snr_selected_pair_higher_mean_than_alternate" not in metrics
+    assert any("higher background σ" in item for item in warnings)
+
+
+def test_overlay_warns_when_tag_pair_has_higher_background_mean() -> None:
+    """Keep the tag-selected pair but flag an unexpected higher mean."""
+    metrics: dict[str, object] = {}
+    warnings: list[str] = []
+    overlay_mri_snr_metrics(
+        metrics,
+        _analyzer(
+            phase="ROW",
+            top_mean=20.0,
+            bottom_mean=20.0,
+            left_mean=2.0,
+            right_mean=4.0,
+        ),
+        warnings=warnings,
+    )
+    assert metrics["mri_snr_noise_roi_pair"] == "Top/Bottom"
+    assert any("higher background mean" in item for item in warnings)
 
 
 def test_overlay_warns_when_snr_cannot_be_computed() -> None:

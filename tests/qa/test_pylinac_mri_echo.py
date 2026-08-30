@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from pydicom.dataset import FileDataset, FileMetaDataset
+from pydicom.multival import MultiValue
 from pydicom.uid import ExplicitVRLittleEndian, MRImageStorage, generate_uid
+from pydicom.valuerep import IS
 
 from qa.analysis_types import QARequest, build_pylinac_analysis_profile
 from qa.pylinac_mri_echo import (
@@ -47,6 +49,11 @@ def test_coerce_echo_number_parses_int_and_skips_junk() -> None:
     assert coerce_echo_number("not-an-echo") is None
     assert coerce_echo_number(0) is None
     assert coerce_echo_number(-1) is None
+
+
+def test_coerce_echo_number_uses_highest_pydicom_multivalue() -> None:
+    """pydicom MultiValue is a Sequence, not a built-in list or tuple."""
+    assert coerce_echo_number(MultiValue(IS, [1, 2])) == 2
 
 
 def test_highest_echo_number_from_dual_echo_files(tmp_path: Path) -> None:

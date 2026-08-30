@@ -23,7 +23,9 @@ DEIDENTIFIED_DUMMY_VALUE = "ANONYMIZED"
 # items recursively.
 DICOM_IDENTIFIER_KEYWORDS = {
     "AccessionNumber",
+    "DeviceSerialNumber",
     "InstitutionAddress",
+    "InstitutionalDepartmentName",
     "InstitutionName",
     "IssuerOfPatientID",
     "OperatorsName",

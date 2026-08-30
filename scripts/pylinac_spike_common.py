@@ -46,9 +46,10 @@ _DUMP_DROP_KEYS_LOWER = frozenset(
     key.lower() for key in (SENSITIVE_DICOM_FIELDS | _EXTRA_DUMP_DROP_KEYS)
 )
 
-# Absolute Unix paths and Windows drive paths (conservative redaction for fixtures).
+# Absolute Unix, Windows drive, and Windows UNC paths (conservative redaction).
 _UNIX_ABS = re.compile(r"(?<![\w./-])(/[\w./-]+)")
 _WIN_ABS = re.compile(r"(?<![\w:])[A-Za-z]:[\\/][\w. \\/-]+")
+_WIN_UNC_ABS = re.compile(r'(?<!\\)\\\\[^\\/:*?"<>|\r\n]+(?:\\[^\\/:*?"<>|\r\n]+)+')
 # DICOM UID-shaped dotted decimals: roots 0/1/2, ≥3 components (covers 2.25.*).
 _UID_LIKE = re.compile(r"\b(?:0|1|2)(?:\.\d+){2,}\b")
 
@@ -105,7 +106,8 @@ def redact_paths_in_value(value: Any) -> Any:
     if isinstance(value, str):
         if _looks_like_absolute_path(value):
             return "<redacted-path>"
-        replaced = _WIN_ABS.sub("<redacted-path>", value)
+        replaced = _WIN_UNC_ABS.sub("<redacted-path>", value)
+        replaced = _WIN_ABS.sub("<redacted-path>", replaced)
         replaced = _UNIX_ABS.sub("<redacted-path>", replaced)
         return replaced
     if isinstance(value, dict):

@@ -4,7 +4,8 @@
 
 Redacted **`results_data(as_dict=True)`** JSON dumps for **ACR CT** and **ACR MRI Large** used by
 `tests/qa/test_pylinac_results_data_spike.py` and flatten golden tests. **No DICOM pixels** —
-numeric metrics and phantom-model strings only.
+numeric QA metrics, phantom-model strings, and required non-identifying technical metadata
+(`pylinac_version`, `warnings`) only.
 
 ## Files (when committed)
 
@@ -67,8 +68,9 @@ Golden flatten tests (**P1-F4**, **G2**) load these files in
 
 ## De-identification
 
-- Committed JSON: numeric QA metrics and phantom model strings only. No patient
-  identifiers, institution/address/station names, or filesystem paths.
+- Committed JSON: numeric QA metrics, phantom-model strings, and required
+  non-identifying technical metadata (`pylinac_version`, `warnings`) only. No
+  patient identifiers, institution/address/station names, or filesystem paths.
 - **If we later keep DICOM fixtures in the repo**, export them first with
   **File → De-identify & Export DICOM (PS3.15)…** (Standard share; do **not**
   enable retain-institution or retain-device identity). Then run the staged

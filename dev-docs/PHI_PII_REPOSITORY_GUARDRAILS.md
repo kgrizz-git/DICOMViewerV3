@@ -20,13 +20,14 @@ Gitignored roots such as `sample-DICOM-gitignored/CT-phantoms/` and
 Never stage them. When documenting or scripting, use those **repo-relative**
 paths — never a machine-absolute path.
 
-Pylinac `results_data` dumps committed under `tests/fixtures/qa/` must be
-**numeric metrics + phantom model** only: no absolute filesystem paths, and no
-institution name, institution address, station name, or other site/patient/UID
-keywords. Spike helpers in `scripts/pylinac_spike_common.py` drop those keys
-and redact remaining absolute paths. Dump JSON is written **outside** the
-checkout; copy a reviewed file into `tests/fixtures/qa/` only after that
-review. Workflow: [`tests/fixtures/qa/README.md`](../tests/fixtures/qa/README.md).
+Pylinac `results_data` dumps committed under `tests/fixtures/qa/` may contain
+numeric QA metrics, phantom-model strings, and required non-identifying
+technical metadata (`pylinac_version`, `warnings`) only: no absolute filesystem
+paths, or institution, patient, station, site, or UID identifiers. Spike helpers
+in `scripts/pylinac_spike_common.py` drop those keys and redact remaining
+absolute paths. Dump JSON is written **outside** the checkout; copy a reviewed
+file into `tests/fixtures/qa/` only after that review. Workflow:
+[`tests/fixtures/qa/README.md`](../tests/fixtures/qa/README.md).
 
 If a DICOM fixture must be **tracked** in git, export it first with
 **File → De-identify & Export DICOM (PS3.15)…** (do not retain institution or

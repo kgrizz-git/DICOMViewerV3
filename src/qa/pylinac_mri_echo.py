@@ -22,6 +22,7 @@ Requirements:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,9 @@ def coerce_echo_number(value: object) -> int | None:
     """Parse a DICOM EchoNumber / EchoNumbers value to a positive int."""
     if value is None:
         return None
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, Sequence) and not isinstance(
+        value, (str, bytes, bytearray)
+    ):
         parsed = [coerce_echo_number(item) for item in value]
         found = [item for item in parsed if item is not None]
         return max(found) if found else None

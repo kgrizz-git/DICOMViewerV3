@@ -67,7 +67,7 @@ NEMA MS 1, LCD-paper “ACR-style” SNR, PMC8321175 Eq. 7, and the Phase 6 expo
 - **COL** (phase along columns, top–bottom) → ghosts Top/Bottom → noise **Left/Right**
 - **ROW** (phase along rows, left–right) → ghosts Left/Right → noise **Top/Bottom**
 
-Do not hard-code Left/Right. That matches PSG ROI placement but uses **σ** instead of mean intensity. If the tag-selected pair has higher σ than the other pair, the run records a warning (the tag still wins).
+Do not hard-code Left/Right. That matches PSG ROI placement but uses **σ** instead of mean intensity. If the tag-selected pair has a higher mean **σ** or background intensity than the other pair, the run records a warning (the tag still wins).
 
 **Phase/frequency encode:** PSG guidance places ghost-sensitive ROIs along **phase encode** vs ghost-free controls along **frequency encode**. On a typical ACR axial with vertical phase encode (DICOM **COL**), that is Top/Bottom vs Left/Right. **Fallback when tags are missing (R6-3):** assume **phase encode = ROW** / **frequency encode = COL** (ACR default wording in [PMC8321175 §2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8321175/)) → noise from **Top/Bottom**.
 

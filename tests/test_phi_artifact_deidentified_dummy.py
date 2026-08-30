@@ -33,7 +33,9 @@ def test_anonymized_dummy_must_be_the_entire_value() -> None:
 
     dataset = Dataset()
     dataset.PatientName = "ANONYMIZED^Extra"
-    problems = phi._check_dicom_dataset("sample-phantom-data-committed/x.dcm", dataset)
+    problems = phi._check_dicom_dataset(
+        "sample-phantom-data-committed/x.dcm", dataset
+    )
     assert problems
     assert any("PatientName" in item for item in problems)
 
@@ -43,8 +45,28 @@ def test_anonymized_dummy_is_case_sensitive() -> None:
 
     dataset = Dataset()
     dataset.PatientID = "anonymized"
-    problems = phi._check_dicom_dataset("sample-phantom-data-committed/x.dcm", dataset)
+    problems = phi._check_dicom_dataset(
+        "sample-phantom-data-committed/x.dcm", dataset
+    )
     assert problems
+
+
+def test_device_serial_number_is_rejected() -> None:
+    from pydicom.dataset import Dataset
+
+    dataset = Dataset()
+    dataset.DeviceSerialNumber = "SERIAL-123"
+    problems = phi._check_dicom_dataset("sample-phantom-data-committed/x.dcm", dataset)
+    assert any("DeviceSerialNumber" in item for item in problems)
+
+
+def test_institutional_department_name_is_rejected() -> None:
+    from pydicom.dataset import Dataset
+
+    dataset = Dataset()
+    dataset.InstitutionalDepartmentName = "Imaging"
+    problems = phi._check_dicom_dataset("sample-phantom-data-committed/x.dcm", dataset)
+    assert any("InstitutionalDepartmentName" in item for item in problems)
 
 
 def test_json_patient_tag_anonymized_dummy_is_allowed() -> None:

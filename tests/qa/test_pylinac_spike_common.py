@@ -27,6 +27,14 @@ def test_dump_redacts_absolute_paths_and_keeps_repo_relative() -> None:
     assert "/Users/" not in str(redacted)
 
 
+def test_dump_redacts_embedded_windows_unc_paths() -> None:
+    tree = {"source": r"source=\\pacs\private\scan"}
+    redacted = redact_results_dump(tree)
+    assert redacted["source"] == "source=<redacted-path>"
+    assert "pacs" not in str(redacted)
+    assert "private" not in str(redacted)
+
+
 def test_dump_drops_institution_address_and_station_keys() -> None:
     tree = {
         "phantom_model": "ACR MRI Large",

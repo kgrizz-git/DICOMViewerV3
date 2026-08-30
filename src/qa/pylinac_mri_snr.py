@@ -112,21 +112,43 @@ def frequency_encode_ghost_roi_names(phase: str) -> tuple[str, str]:
     return _FREQ_GHOST_PAIR_BY_PHASE.get(phase, _FREQ_GHOST_PAIR_BY_PHASE[_FALLBACK_PHASE])
 
 
-def _mean_noise_std(uniformity_module: Any, names: tuple[str, str]) -> float | None:
-    """Mean of pixel σ on the named ghost_rois."""
+def _mean_ghost_roi_stat(
+    uniformity_module: Any,
+    names: tuple[str, str],
+    attr: str,
+    *,
+    fallback_attr: str | None = None,
+) -> float | None:
+    """Mean named ghost-ROI statistic, with an optional fallback attribute."""
     ghosts = getattr(uniformity_module, "ghost_rois", None)
     if not isinstance(ghosts, dict):
         return None
-    stds: list[float] = []
+    values: list[float] = []
     for name in names:
         roi = ghosts.get(name)
-        std = _roi_stat(roi, "std") if roi is not None else None
-        if std is None:
+        value = _roi_stat(roi, attr) if roi is not None else None
+        if value is None and roi is not None and fallback_attr is not None:
+            value = _roi_stat(roi, fallback_attr)
+        if value is None:
             return None
-        stds.append(std)
-    if len(stds) != 2:
+        values.append(value)
+    if len(values) != 2:
         return None
-    return (stds[0] + stds[1]) / 2.0
+    return (values[0] + values[1]) / 2.0
+
+
+def _mean_noise_std(uniformity_module: Any, names: tuple[str, str]) -> float | None:
+    """Mean of pixel σ on the named ghost_rois."""
+    return _mean_ghost_roi_stat(uniformity_module, names, "std")
+
+
+def _mean_background_intensity(
+    uniformity_module: Any, names: tuple[str, str]
+) -> float | None:
+    """Mean background intensity on named ghost ROIs (pixel_value, then mean)."""
+    return _mean_ghost_roi_stat(
+        uniformity_module, names, "pixel_value", fallback_attr="mean"
+    )
 
 
 def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
@@ -149,6 +171,8 @@ def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
         return None
     alternate = _ALTERNATE_GHOST_PAIR[pair]
     alternate_noise = _mean_noise_std(uniformity, alternate)
+    background_mean = _mean_background_intensity(uniformity, pair)
+    alternate_background_mean = _mean_background_intensity(uniformity, alternate)
     return {
         "mri_snr": signal / noise,
         "mri_snr_signal_mean": signal,
@@ -158,6 +182,11 @@ def extract_mri_snr_acr_style(analyzer: Any) -> dict[str, Any] | None:
         "mri_snr_phase_encoding_fallback": used_fallback,
         "mri_snr_selected_pair_noisier_than_alternate": (
             alternate_noise is not None and noise > alternate_noise
+        ),
+        "mri_snr_selected_pair_higher_mean_than_alternate": (
+            background_mean is not None
+            and alternate_background_mean is not None
+            and background_mean > alternate_background_mean
         ),
     }
 
@@ -177,13 +206,22 @@ def overlay_mri_snr_metrics(
         noisier = bool(
             harvested.pop("mri_snr_selected_pair_noisier_than_alternate", False)
         )
+        higher_mean = bool(
+            harvested.pop("mri_snr_selected_pair_higher_mean_than_alternate", False)
+        )
         metrics.update(harvested)
-        if warnings is not None and noisier:
+        if warnings is not None and (noisier or higher_mean):
+            unexpected = []
+            if noisier:
+                unexpected.append("higher background σ")
+            if higher_mean:
+                unexpected.append("higher background mean")
             warnings.append(
                 "MRI SNR used the frequency-encode ghost-ROI pair from "
-                "InPlanePhaseEncodingDirection, but the other pair had lower "
-                "background σ. Confirm phase-encode axis vs Top/Bottom vs "
-                "Left/Right placement."
+                "InPlanePhaseEncodingDirection, but it had "
+                f"{' and '.join(unexpected)} than the phase-encode pair. "
+                "Confirm phase-encode axis vs Top/Bottom vs Left/Right "
+                "placement."
             )
         return
     if warnings is not None:
