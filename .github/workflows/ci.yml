@@ -363,7 +363,7 @@ jobs:
           exit "${exit_code}"
 
       - name: Upload SARIF results to GitHub Security
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         if: always() && hashFiles('semgrep.sarif') != ''
         continue-on-error: true
         with:
@@ -435,16 +435,16 @@ jobs:
           python-version: "3.12"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           languages: ${{ matrix.language }}
 
       - name: Autobuild
         if: matrix.language != 'python' && matrix.language != 'actions'
-        uses: github/codeql-action/autobuild@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        uses: github/codeql-action/autobuild@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -495,7 +495,7 @@ jobs:
           echo "upload=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload Grype SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         if: always() && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]'
         continue-on-error: true
         with:
@@ -573,7 +573,7 @@ jobs:
           name: coverage-xml
 
       - name: SonarQube Cloud scan
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key -- pinned public GitHub Action commit SHA (v8.1.0), not a credential
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key -- pinned public GitHub Action commit SHA (v8.1.0), not a credential
         with:
           args: >
             -Dsonar.qualitygate.wait=true
