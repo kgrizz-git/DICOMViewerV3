@@ -1,9 +1,8 @@
 """
 Unit tests for the shared base ``DICOMAnonymizer`` (group-0010 patient stripping).
 
-Covers PS3.15-aligned refinements (Phase 3 of the de-identification conformance
-plan): sequence-recursive patient stripping and blank-don't-delete for Type-2
-date attributes such as PatientBirthDate.
+Covers PS3.15-aligned refinements: sequence-recursive patient stripping and
+blank-don't-delete for common Type-2 Patient Module attributes.
 """
 
 from __future__ import annotations
@@ -25,15 +24,26 @@ def _patient_dataset() -> Dataset:
     ds.PatientName = "Doe^Jane"
     ds.PatientID = "PID-123"
     ds.PatientBirthDate = "19800101"
+    ds.PatientSex = "F"
+    ds.PatientAge = "044Y"
+    ds.IssuerOfPatientID = "Example Hospital"
     ds.Modality = "CT"
     return ds
 
 
 class TestBaseAnonymizerPatientTags(unittest.TestCase):
-    def test_text_tags_replaced_with_dummy(self) -> None:
+    def test_type_two_patient_tags_are_blanked_not_replaced_with_dummy(self) -> None:
         anon = DICOMAnonymizer().anonymize_dataset(_patient_dataset())
-        self.assertEqual(anon.PatientName, "ANONYMIZED")
-        self.assertEqual(anon.PatientID, "ANONYMIZED")
+        for keyword in (
+            "PatientName",
+            "PatientID",
+            "PatientBirthDate",
+            "PatientSex",
+            "PatientAge",
+        ):
+            with self.subTest(keyword=keyword):
+                self.assertIn(keyword, anon)
+                self.assertEqual(getattr(anon, keyword), "")
         # Non-patient tag untouched.
         self.assertEqual(anon.Modality, "CT")
 
@@ -43,6 +53,18 @@ class TestBaseAnonymizerPatientTags(unittest.TestCase):
         anon = DICOMAnonymizer().anonymize_dataset(_patient_dataset())
         self.assertIn("PatientBirthDate", anon)
         self.assertEqual(anon.PatientBirthDate, "")
+
+    def test_issuer_of_patient_id_and_other_patient_text_are_removed(self) -> None:
+        ds = _patient_dataset()
+        ds.PatientAddress = "1 Example Street"
+
+        anon = DICOMAnonymizer().anonymize_dataset(ds)
+
+        # PS3.15 Table E.1-1 action X: IssuerOfPatientID must be removed, not
+        # replaced with a dummy. A generic text group-0010 tag follows the same
+        # conservative remove path.
+        self.assertNotIn("IssuerOfPatientID", anon)
+        self.assertNotIn("PatientAddress", anon)
 
     def test_nested_patient_phi_in_sequence_is_anonymized(self) -> None:
         ds = _patient_dataset()
@@ -55,8 +77,8 @@ class TestBaseAnonymizerPatientTags(unittest.TestCase):
 
         anon = DICOMAnonymizer().anonymize_dataset(ds)
         out_item = anon.RequestAttributesSequence[0]
-        self.assertEqual(out_item.PatientName, "ANONYMIZED")
-        self.assertEqual(out_item.PatientID, "ANONYMIZED")
+        self.assertEqual(out_item.PatientName, "")
+        self.assertEqual(out_item.PatientID, "")
         self.assertEqual(out_item.PatientBirthDate, "")
 
     def test_deeply_nested_patient_phi_is_anonymized(self) -> None:
@@ -69,14 +91,16 @@ class TestBaseAnonymizerPatientTags(unittest.TestCase):
 
         anon = DICOMAnonymizer().anonymize_dataset(ds)
         out = anon.RequestAttributesSequence[0].ReferencedImageSequence[0]
-        self.assertEqual(out.PatientName, "ANONYMIZED")
+        self.assertEqual(out.PatientName, "")
 
     def test_other_vr_patient_tag_removed(self) -> None:
         ds = _patient_dataset()
-        # PatientWeight is DS (numeric text) — treated as text VR; use a binary-ish
-        # patient tag to exercise the "other" removal branch.
+        # PatientWeight is a numeric-text DS. It must be removed rather than
+        # replaced by a text dummy that violates its VR.
+        ds.PatientWeight = "75"
         ds.add_new(Tag(0x0010, 0x21C0), "US", 4)  # PregnancyStatus
         anon = DICOMAnonymizer().anonymize_dataset(ds)
+        self.assertNotIn("PatientWeight", anon)
         self.assertNotIn(Tag(0x0010, 0x21C0), anon)
 
     def test_original_not_mutated(self) -> None:

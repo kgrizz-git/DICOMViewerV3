@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from PySide6.QtWidgets import QLabel
 
 from gui.dialogs.cine_export_dialog import CineExportDialog
 
@@ -59,3 +60,11 @@ def test_reject_leaves_dialog_rejected(qapp) -> None:
     )
     dlg.reject()
     assert dlg.result() == int(dlg.DialogCode.Rejected)
+
+
+@pytest.mark.qt
+def test_privacy_notice_is_visible(qapp) -> None:
+    dlg = CineExportDialog(None, default_fps=10.0, total_frames=3, loop_start=None, loop_end=None)
+    notice = dlg.findChild(QLabel, "cinePrivacyNotice")
+    assert notice is not None
+    assert "Review the rendered frames" in notice.text()

@@ -30,7 +30,7 @@ file into `tests/fixtures/qa/` only after that review. Workflow:
 [`tests/fixtures/qa/README.md`](../tests/fixtures/qa/README.md).
 
 If a DICOM fixture must be **tracked** in git, export it first with
-**File → De-identify & Export DICOM (PS3.15)…** (do not retain institution or
+**File → De-identify & Export DICOM…** (do not retain institution or
 device identity), then run the artifact gate and the required human review
 before any hash-manifest update. De-identification is not a substitute for
 leaving raw local phantoms gitignored. The reviewed Standard-share ACR set is

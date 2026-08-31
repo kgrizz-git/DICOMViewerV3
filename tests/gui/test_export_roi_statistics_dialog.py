@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QLabel, QMessageBox
 
 from gui.dialogs.export_roi_statistics_dialog import (
     ExportROIStatisticsDialog,
@@ -76,6 +76,9 @@ def test_dialog_populates_tree_and_default_path(qapp) -> None:
     dlg.radio_csv.setChecked(True)
     dlg._on_format_changed()
     assert dlg.file_path_edit.text().lower().endswith(".csv")
+    notice = dlg.findChild(QLabel, "roiExportPrivacyNotice")
+    assert notice is not None
+    assert "accession number" in notice.text()
 
 
 @pytest.mark.qt

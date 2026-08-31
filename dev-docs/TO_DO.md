@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-08-31
 
 ---
 
@@ -28,9 +28,8 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 > other work.
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
-2. **De-id: blank Type-2 / VR-legal patient tags** — [Bugs / Correctness](#bugs--correctness)
-3. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-4. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
+2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
+3. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -66,6 +65,7 @@ Release blockers (license compliance, versioned executables) live in
 
 ## Validation / QA
 
+- [ ] **[P1]** **Reassess DICOM de-identification compliance and claims.** Build a primary-source, versioned PS3.15/PS3.16 requirement matrix; audit every DICOM and “anonymize” export path (especially MPR); correct unsupported wording; and plan remediations only after the research and claim-review gates. Do not represent this as legal certification or HIPAA Safe Harbor without the separate authorized assessment. **Plan:** [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
 - [ ] **[P1]** Run assessment templates
 - [ ] **[P1]** See qi-assessment recommendations
 - [ ] **[P1]** Also see to-dos on Unpushed Edits Google Sheet
@@ -95,7 +95,6 @@ Release blockers (license compliance, versioned executables) live in
 
 
 <!-- OverlayConfigDialog findings — corrected 2026-07-10 after reviewer pushback on original #1/#2/#4. See tmp/overlay-config-dialog-test-review-2026-07-10.md -->
-- [ ] **[P2]** **De-id: blank Type-2 / VR-legal values instead of stuffing ``ANONYMIZED`` into every text patient tag.** PS3.15 action **Z** allows a zero-length value *or* a dummy **consistent with the VR**. Dummy ``ANONYMIZED`` is acceptable for PN/LO (Patient's Name / Patient ID is **Z/D**). It is **not** VR-legal for **Patient's Sex (0010,0040)** (CS defined terms are empty / M / F / O). **Issuer of Patient ID** is Table E.1-1 **X** (remove), not dummy. Prefer present-but-empty Type-2 values in ``src/utils/dicom_anonymizer.py``. The artifact gate already allows the *exact* dummy ``ANONYMIZED`` so reviewed de-id exports are not blocked solely for that placeholder.
 - [ ] **[P2]** **MONOCHROME1 for MPR and on-screen projection panes (follow-up to the on-screen viewer fix).** MPR panes render via `mpr_view_math.array_to_pil` (`mpr_view_math.py:87-94`) and on-screen projections via `slice_display_pixels.create_slice_projection_pil_image` (`slice_display_manager.py` ~line 359); neither routes through `render_grayscale_image`, so the core-routed MONOCHROME1 inversion does **not** reach them. The single-slice viewer fix shipped 2026-08-16; extend `mpr_view_math` + `slice_display_pixels` projection path (and the export-projection path) so MPR/projection polarity matches the corrected slice view. Tracked from [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md) §Follow-up.
 
 - **W/L preset smoke (US, CR, DX):** tracked in [Manual Smoke Checks](#manual-smoke-checks).

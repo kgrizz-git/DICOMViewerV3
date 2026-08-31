@@ -72,7 +72,7 @@ Golden flatten tests (**P1-F4**, **G2**) load these files in
   non-identifying technical metadata (`pylinac_version`, `warnings`) only. No
   patient identifiers, institution/address/station names, or filesystem paths.
 - **If we later keep DICOM fixtures in the repo**, export them first with
-  **File → De-identify & Export DICOM (PS3.15)…** (Standard share; do **not**
+  **File → De-identify & Export DICOM…** (Standard share; do **not**
   enable retain-institution or retain-device identity). Then run the staged
   artifact gate and the usual human review before any hash-manifest update.
   Gitignored local phantoms stay gitignored; de-identification is the gate for

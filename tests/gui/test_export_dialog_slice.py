@@ -49,6 +49,20 @@ def test_format_change_to_jpg(qapp, tmp_path) -> None:
 
 
 @pytest.mark.qt
+def test_deidentification_notice_is_visible_when_enabled(qapp, tmp_path) -> None:
+    dlg = ExportDialog(_studies(), config_manager=_cm(tmp_path))
+    dlg.dicom_radio.setChecked(True)
+    dlg._on_format_changed()
+    assert dlg.anonymize_scope_notice.isHidden()
+    dlg.anonymize_checkbox.setChecked(True)
+    assert not dlg.anonymize_scope_notice.isHidden()
+    assert "Burned-in text" in dlg.anonymize_scope_notice.text()
+    dlg.anonymize_checkbox.setChecked(False)
+    assert dlg.anonymize_scope_notice.isHidden()
+    dlg.close()
+
+
+@pytest.mark.qt
 def test_export_without_selection_warns(qapp, tmp_path, monkeypatch) -> None:
     warned: list[str] = []
     monkeypatch.setattr(

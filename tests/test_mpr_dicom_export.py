@@ -10,6 +10,8 @@ from typing import cast
 import numpy as np
 import pydicom
 from pydicom.dataset import Dataset
+from pydicom.sequence import Sequence
+from pydicom.tag import Tag
 from pydicom.uid import CTImageStorage, SecondaryCaptureImageStorage, generate_uid
 
 from core.mpr_builder import MprResult
@@ -20,6 +22,7 @@ from core.mpr_dicom_export import (
 )
 from core.mpr_volume import MprVolume
 from core.slice_geometry import SlicePlane, SliceStack
+from utils.deep_anonymizer import DeepAnonymizerOptions
 
 
 def _synthetic_ct_template() -> Dataset:
@@ -113,6 +116,7 @@ def test_write_mpr_series_round_trip_ct(tmp_path) -> None:
         assert ds.RescaleType == "HU"
     assert len(series_uids) == 1
     assert paths[0].parent == paths[1].parent == paths[2].parent
+    assert paths[0].parent.name.startswith("501-")
 
 
 def test_write_mpr_series_raw_ct_omits_rescale_type(tmp_path) -> None:
@@ -181,3 +185,111 @@ def test_write_mpr_series_cancel_mid_run(tmp_path) -> None:
         assert "cancelled" in str(e).lower()
     else:
         raise AssertionError("expected cancel")
+
+
+def test_write_mpr_series_deidentified_uses_deep_batch_on_disk(tmp_path) -> None:
+    """MPR de-identification must match the deep DICOM batch behavior on disk."""
+    template = _synthetic_ct_template()
+    template.PatientBirthDate = "19800102"
+    template.PatientSex = "F"
+    template.InstitutionName = "Synthetic Hospital"
+    template.ImageComments = "Synthetic patient note"
+    template.add_new(Tag(0x0011, 0x0010), "LO", "SYNTHETIC_PRIVATE")
+    template.add_new(Tag(0x0004, 0x1511), "UI", generate_uid())
+    template.OriginalAttributesSequence = Sequence([Dataset()])
+    template.DigitalSignaturesSequence = Sequence([Dataset()])
+    original_uids = {
+        str(template.StudyInstanceUID),
+        str(template.SeriesInstanceUID),
+        str(template.SOPInstanceUID),
+        str(template.FrameOfReferenceUID),
+    }
+    mpr = _synthetic_mpr_result(template)
+
+    paths = write_mpr_series(
+        tmp_path,
+        mpr,
+        template,
+        MprDicomExportOptions(orientation_label="Axial", anonymize=True),
+    )
+
+    assert len(paths) == 3
+    output_series_uids: set[str] = set()
+    output_sop_uids: set[str] = set()
+    for path in paths:
+        ds = pydicom.dcmread(str(path), force=True)
+        assert ds.PatientName == ""
+        assert ds.PatientID == ""
+        assert ds.PatientBirthDate == ""
+        assert ds.PatientSex == ""
+        assert "InstitutionName" not in ds
+        assert "ImageComments" not in ds
+        assert not any(elem.tag.group % 2 for elem in ds)
+        assert Tag(0x0004, 0x1511) not in ds
+        assert "OriginalAttributesSequence" not in ds
+        assert "DigitalSignaturesSequence" not in ds
+        assert "PatientIdentityRemoved" not in ds
+        assert "DeidentificationMethodCodeSequence" not in ds
+        assert "Metadata de-identification" in ds.DeidentificationMethod
+        assert ds.preamble == b"\x00" * 128
+        assert str(ds.file_meta.MediaStorageSOPInstanceUID) == str(ds.SOPInstanceUID)
+        assert str(ds.StudyInstanceUID) not in original_uids
+        assert str(ds.SeriesInstanceUID) not in original_uids
+        assert str(ds.SOPInstanceUID) not in original_uids
+        assert str(ds.FrameOfReferenceUID) not in original_uids
+        assert str(ds.ReferencedSeriesSequence[0].SeriesInstanceUID) not in original_uids
+        output_series_uids.add(str(ds.SeriesInstanceUID))
+        output_sop_uids.add(str(ds.SOPInstanceUID))
+        assert "SYNTHETIC" not in str(path)
+
+    assert len(output_series_uids) == 1
+    assert len(output_sop_uids) == len(paths)
+    assert template.PatientName == "Synthetic^Test"
+    assert template.PatientBirthDate == "19800102"
+    assert template.ImageComments == "Synthetic patient note"
+
+
+def test_write_mpr_series_deidentified_never_embeds_source_uid_in_comments(tmp_path) -> None:
+    """Free-text retention must not reintroduce a source UID via MPR comments."""
+    template = _synthetic_ct_template()
+    original_series_uid = str(template.SeriesInstanceUID)
+    mpr = _synthetic_mpr_result(template)
+
+    paths = write_mpr_series(
+        tmp_path,
+        mpr,
+        template,
+        MprDicomExportOptions(
+            orientation_label="Axial",
+            series_description_suffix="Reviewed",
+            anonymize=True,
+            deep_anonymizer_options=DeepAnonymizerOptions(strip_free_text=False),
+        ),
+    )
+
+    for path in paths:
+        ds = pydicom.dcmread(str(path), force=True)
+        assert original_series_uid not in str(getattr(ds, "ImageComments", ""))
+        assert ds.SeriesDescription == "MPR Axial Reviewed"
+
+
+def test_write_mpr_series_removes_user_suffix_when_stripping_free_text(tmp_path) -> None:
+    """Free-text removal covers the generated MPR Series Description suffix."""
+    template = _synthetic_ct_template()
+    mpr = _synthetic_mpr_result(template)
+
+    paths = write_mpr_series(
+        tmp_path,
+        mpr,
+        template,
+        MprDicomExportOptions(
+            orientation_label="Axial",
+            series_description_suffix="Reviewed",
+            anonymize=True,
+            deep_anonymizer_options=DeepAnonymizerOptions(strip_free_text=True),
+        ),
+    )
+
+    for path in paths:
+        ds = pydicom.dcmread(str(path), force=True)
+        assert "SeriesDescription" not in ds

@@ -13,12 +13,19 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QVBoxLayout,
 )
 
 from core.mpr_dicom_export import MprDicomExportOptions
+from gui.dialogs.anonymization_options_widget import (
+    BURNED_IN_PHI_WARNING,
+    AnonymizationOptionsDialog,
+)
+from utils.deep_anonymizer import DeepAnonymizerOptions
 
 
 class MprDicomSaveDialog(QDialog):
@@ -30,10 +37,7 @@ class MprDicomSaveDialog(QDialog):
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
-        info = (
-            "Exports one DICOM file per MPR plane with new series and instance UIDs.\n"
-            "Patient/study metadata follows the same rules as other DICOM exports."
-        )
+        info = "Exports one DICOM file per MPR plane with new series and instance UIDs."
         if orientation_label:
             info += f"\n\nOrientation: {orientation_label}"
 
@@ -45,9 +49,26 @@ class MprDicomSaveDialog(QDialog):
         self._suffix.setPlaceholderText("Optional text appended to Series Description")
         form.addRow("Series description suffix:", self._suffix)
 
-        self._anonymize = QCheckBox("Anonymize patient identifiers (same as DICOM export)", self)
+        self._anonymizer_options = DeepAnonymizerOptions.standard_share()
+        self._anonymize = QCheckBox("De-identify DICOM metadata", self)
         self._anonymize.setChecked(False)
-        form.addRow(self._anonymize)
+        self._anonymize_options_button = QPushButton("Options…", self)
+        self._anonymize_options_button.setEnabled(False)
+        self._anonymize.toggled.connect(self._on_anonymize_toggled)
+        self._anonymize_options_button.clicked.connect(self._open_anonymizer_options)
+        anonymize_row = QHBoxLayout()
+        anonymize_row.addWidget(self._anonymize)
+        anonymize_row.addWidget(self._anonymize_options_button)
+        form.addRow(anonymize_row)
+
+        self._anonymize_scope_notice = QLabel(BURNED_IN_PHI_WARNING, self)
+        self._anonymize_scope_notice.setObjectName("deidentificationScopeNotice")
+        self._anonymize_scope_notice.setWordWrap(True)
+        self._anonymize_scope_notice.setStyleSheet(
+            "QLabel { color: #b45309; padding: 6px; background: #fffbeb; }"
+        )
+        self._anonymize_scope_notice.setVisible(False)
+        form.addRow(self._anonymize_scope_notice)
 
         self._rescaled = QCheckBox(
             "Use rescaled pixel values (HU when slope/intercept present)", self
@@ -64,12 +85,26 @@ class MprDicomSaveDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _on_anonymize_toggled(self, checked: bool) -> None:
+        """Show metadata-deidentification controls only when enabled."""
+        self._anonymize_options_button.setEnabled(checked)
+        self._anonymize_scope_notice.setVisible(checked)
+
+    def _open_anonymizer_options(self) -> None:
+        """Edit the same deep de-identification settings used by DICOM export."""
+        dialog = AnonymizationOptionsDialog(self._anonymizer_options, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._anonymizer_options = dialog.get_options()
+
     def build_options(self, orientation_label: str) -> MprDicomExportOptions:
         """Return ``MprDicomExportOptions`` from the current dialog fields."""
         return MprDicomExportOptions(
             orientation_label=orientation_label or "",
             series_description_suffix=self._suffix.text().strip(),
             anonymize=self._anonymize.isChecked(),
+            deep_anonymizer_options=(
+                self._anonymizer_options if self._anonymize.isChecked() else None
+            ),
             use_rescaled_pixel_values=self._rescaled.isChecked(),
             window_center_override=None,
             window_width_override=None,

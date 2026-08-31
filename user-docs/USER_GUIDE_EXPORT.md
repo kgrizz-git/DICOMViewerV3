@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-31
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -32,9 +32,11 @@ The window/level, overlay, and resolution options below the format are only rele
 
 > Annotation line/text sizes are formula-based and are **not** scaled with the export magnification, so they stay legible at every resolution.
 
+> **Privacy:** PNG/JPG, screenshots, and cine output can contain image text or anything visible in overlays, annotations, or the application window. These formats are not de-identified; review the rendered output before sharing.
+
 ## DICOM option
 
-- **De-identify (PS3.15 Basic Profile) (DICOM only):** when checked, each exported DICOM is run through the conformant PS3.15 de-identification engine before writing (the **Standard share** preset by default). Use **Options…** to choose a preset or toggle individual rules. Full details — presets, per-option rules, what is recorded, and limits — are in the [de-identified export guide](USER_GUIDE_ANONYMIZATION.md). Unchecked, the DICOM is written as-is.
+- **De-identify DICOM metadata (DICOM only):** when checked, each exported DICOM is processed with the selected metadata de-identification settings before writing (the **Standard share** preset by default). Use **Options…** to choose a preset or toggle individual rules. Review the [de-identified export guide](USER_GUIDE_ANONYMIZATION.md) for limits, including identifying pixel content and the need for an organization-appropriate review before sharing. Unchecked, the DICOM is written as-is.
 
 ## Combine Slices (intensity projection)
 
@@ -63,15 +65,17 @@ These are separate from the main Export Images dialog:
 
 | Export | Where | Covered in |
 |--------|-------|------------|
-| Rendered **screenshots** of panes / whole window | **File → Export Screenshots…** | [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
-| **Cine** loop (GIF / AVI / MP4 / MPG) | **File → Export Cine As…** | [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
-| **De-identified** DICOM (dedicated dialog) | **File → De-identify & Export DICOM (PS3.15)…** | [De-identified export](USER_GUIDE_ANONYMIZATION.md) |
-| **DICOM tags** (CSV / TXT / XLSX) | **File → Export DICOM Tags…** (**Ctrl+Shift+T**) | [Hub → DICOM tags](USER_GUIDE.md) · [Tag export dialog](#dicom-tag-export-dialog) |
-| **ROI statistics** & measurements | **Tools → Export ROI Statistics…** | [Measurements & annotations](USER_GUIDE_ANNOTATIONS.md) |
+| Rendered **screenshots** of panes / whole window | **File → Export Screenshots…** | Captures what is visible, including any image text/overlays. [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
+| **Cine** loop (GIF / AVI / MP4 / MPG) | **File → Export Cine As…** | Can include rendered image text, overlays, ROIs, and measurements. [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
+| **De-identified** DICOM (dedicated dialog) | **File → De-identify & Export DICOM…** | [De-identified export](USER_GUIDE_ANONYMIZATION.md) |
+| **DICOM tags** (CSV / TXT / XLSX) | **File → Export DICOM Tags…** (**Ctrl+Shift+T**) | May contain identifiers, including private-tag values. [Hub → DICOM tags](USER_GUIDE.md) · [Tag export dialog](#dicom-tag-export-dialog) |
+| **ROI statistics** & measurements | **Tools → Export ROI Statistics…** | Review the output filename before sharing; defaults can include an accession number or patient ID. [Measurements & annotations](USER_GUIDE_ANNOTATIONS.md) |
 
 ## DICOM tag export dialog
 
 **File → Export DICOM Tags…** (**Ctrl+Shift+T**) opens a two-pane dialog: studies/series on the left, tags on the right.
+
+> **Privacy:** Tag export is not a de-identification workflow. Selected fields, including private tags when enabled, can contain patient or other identifying information.
 
 - **Studies** start **collapsed** so large loads stay compact; expand what you need.
 - **Select All** / **Deselect All** buttons and the **Select All** checkbox above the tag tree apply only to **visible** leaf tags (the search filter is respected). Sequence/Item parent rows stay independently checkable when you want a summary column.

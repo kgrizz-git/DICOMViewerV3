@@ -52,7 +52,7 @@ class TestNormalizeActionLabel(unittest.TestCase):
         cases = {
             "&Open File(s)...": "Open File(s)",
             "Open &Study Index…": "Open Study Index",
-            "De-identify && Export DICOM (PS3.15)…": "De-identify & Export DICOM (PS3.15)",
+            "De-identify && Export DICOM…": "De-identify & Export DICOM",
             "E&xit": "Exit",
             "&1×1": "1×1",
         }

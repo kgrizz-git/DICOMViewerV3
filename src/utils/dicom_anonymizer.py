@@ -18,9 +18,23 @@ Requirements:
 import copy
 
 from pydicom.dataset import Dataset
+from pydicom.tag import BaseTag, Tag
 
 from utils.dicom_utils import is_patient_tag
-from utils.dicom_vr_helpers import is_date_vr, is_text_vr
+
+# These attributes are Type 2 in the common Patient Module and have PS3.15
+# Basic Profile actions Z and Z/D. Keeping them present with a zero-length value
+# both satisfies their Type-2 requirement and stays legal for their VRs. In
+# particular, ``ANONYMIZED`` is not a legal CS value for PatientSex.
+TYPE_2_PATIENT_TAGS: frozenset[BaseTag] = frozenset(
+    {
+        Tag(0x0010, 0x0010),  # PatientName (PN, Z)
+        Tag(0x0010, 0x0020),  # PatientID (LO, Z/D)
+        Tag(0x0010, 0x0030),  # PatientBirthDate (DA, Z)
+        Tag(0x0010, 0x0040),  # PatientSex (CS, Z)
+        Tag(0x0010, 0x1010),  # PatientAge (IS, Z)
+    }
+)
 
 
 class DICOMAnonymizer:
@@ -28,9 +42,8 @@ class DICOMAnonymizer:
     Anonymizes DICOM datasets by replacing or removing patient-related tags.
     
     Features:
-    - Replaces text-valued patient tags with "ANONYMIZED"
-    - Removes date/time patient tags
-    - Removes other non-text patient tags
+    - Blanks common Type-2 patient attributes with zero-length VR-legal values
+    - Removes other patient attributes
     - Preserves all other tags and image data
     """
 
@@ -46,12 +59,13 @@ class DICOMAnonymizer:
         **at every level of the dataset tree**, descending into sequences so PHI
         nested in items (e.g. Referenced Patient Sequence, Request Attributes
         Sequence, SR ContentSequence) is anonymized too:
-        - Text-valued tags: replaced with "ANONYMIZED" (a dummy value satisfies the
-          PS3.15 Z/D actions).
-        - Date/time tags: **blanked** (zero-length value) rather than deleted, so
-          Type-2 attributes such as PatientBirthDate (0010,0030) stay present and
-          IOD-conformant per PS3.15 action Z.
-        - Other patient tags: removed.
+        - Common Type-2 Patient Module attributes (PatientName, PatientID,
+          PatientBirthDate, PatientSex, and PatientAge): **blanked** with a
+          zero-length value.
+          This preserves required attributes while remaining VR-legal (notably,
+          PatientSex is CS and cannot contain the old ``ANONYMIZED`` dummy).
+        - All other patient tags: removed. This includes IssuerOfPatientID,
+          whose PS3.15 Basic Profile action is X.
 
         Args:
             dataset: pydicom Dataset to anonymize
@@ -81,21 +95,18 @@ class DICOMAnonymizer:
             if not is_patient_tag(str(elem.tag)):
                 continue
 
-            vr = elem.VR if hasattr(elem, "VR") else ""
-            if is_text_vr(vr):
-                # Text-valued tags: replace with "ANONYMIZED" dummy.
-                try:
-                    ds[elem.tag].value = "ANONYMIZED"
-                except Exception:
-                    tags_to_remove.append(elem.tag)
-            elif is_date_vr(vr):
-                # Date/time tags: blank (keep element present for Type-2 conformance).
+            if elem.tag in TYPE_2_PATIENT_TAGS:
+                # PS3.15 action Z: keep common Type-2 Patient Module attributes
+                # present with a zero-length value. This works for PN, LO, DA,
+                # and CS without relying on a dummy that may violate a VR's
+                # defined terms.
                 try:
                     ds[elem.tag].value = ""
                 except Exception:
                     tags_to_remove.append(elem.tag)
-            elif vr != "SQ":
-                # Other patient VR types: remove.
+            else:
+                # Other group-0010 attributes, including IssuerOfPatientID, use
+                # the conservative remove path rather than a generic text dummy.
                 tags_to_remove.append(elem.tag)
 
         for tag in tags_to_remove:
@@ -107,4 +118,3 @@ class DICOMAnonymizer:
                     ds[tag].value = ""
                 except Exception:
                     pass
-

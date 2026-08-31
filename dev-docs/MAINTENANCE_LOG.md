@@ -1,10 +1,16 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-08-31
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-08-30
+
+- **De-id Type-2 / VR conformance:** The shared group-0010 anonymizer now
+  blanks Patient Name, Patient ID, Birth Date, and Sex rather than assigning a
+  generic text dummy. Issuer of Patient ID and other non-Type-2 patient
+  attributes are removed; focused base/deep anonymizer regressions cover the
+  PS3.15 action-Z/action-X split.
 
 - **Post-merge quality-governance closeout:** The first protected-branch CI run
   after the Quality Gate change completed successfully, including the waited

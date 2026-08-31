@@ -1,9 +1,9 @@
 """
 Deep anonymization tag profile for DICOM export.
 
-Defines tag inventories and actions aligned with DICOM PS3.15 Basic Application
-Level Confidentiality Profile (patient, institution, device, operator, UIDs,
-dates, private tags, and free-text comments).
+Defines a curated metadata-deidentification inventory (patient, institution,
+device, operator, UIDs, dates, private tags, and free-text comments). It is not
+the complete PS3.15 action table; the active assessment tracks that mapping.
 
 Inputs:
     Imported by ``deep_anonymizer.DeepDICOMAnonymizer``.
@@ -110,10 +110,9 @@ UID_TAGS: tuple[BaseTag, ...] = (
     Tag(0x0020, 0x0200),  # SynchronizationFrameOfReferenceUID
 )
 
-# PS3.15 de-identification provenance written on export.
-PATIENT_IDENTITY_REMOVED_TAG = Tag(0x0012, 0x0062)
-DEIDENTIFICATION_METHOD_TAG = Tag(0x0012, 0x0063)
-DEIDENTIFICATION_METHOD = "Deep anonymization (DICOM Viewer V3)"
+# Factual metadata-transformation record written on export. Do not emit profile
+# provenance codes until the active PS3.15 assessment supports them.
+DEIDENTIFICATION_METHOD = "Metadata de-identification (DICOM Viewer V3)"
 
 # Tags retained when ``retain_manufacturer`` is True (subset of STATION_DEVICE_TAGS).
 MANUFACTURER_RETAIN_TAGS: tuple[BaseTag, ...] = (
