@@ -1,8 +1,20 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-01
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-01
+
+- **DICOM output-scope baseline:** Recorded the user-reachable DICOM writer
+  surface before attempting Table E.1-1 action resolution. The ordinary and
+  dedicated export paths re-serialize source datasets rather than claiming a
+  finite preserved-IOD set; MPR currently emits CT Image Storage, MR Image
+  Storage, or Secondary Capture (with modality `OT`) according to its
+  source-modality branch. See the
+  [output-scope baseline](plans/supporting/DICOM_OUTPUT_SCOPE_BASELINE.md).
+  This is a factual inventory and a boundary for later PS3.3 Type/condition work,
+  not an IOD-validity or profile-conformance claim.
 
 ## 2026-08-31
 

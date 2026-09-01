@@ -4,7 +4,7 @@
 
 **Priority:** P1
 
-**Created / last updated:** 2026-08-31
+**Created / last updated:** 2026-09-01
 
 **Related:** [PS3.15 De-identification Conformance Plan](../completed/PS315_DEIDENTIFICATION_CONFORMANCE_PLAN.md) (historical implementation record, not a current certification); [Deep Anonymizer Export Plan](DEEP_ANONYMIZER_EXPORT_PLAN.md); [PHI/PII repository guardrails](../../PHI_PII_REPOSITORY_GUARDRAILS.md).
 
@@ -41,6 +41,10 @@ In scope:
   conformance.
 - Export UI, user docs, help text, docstrings, release notes, and provenance
   metadata.
+- The current DICOM writer surface and any future formally supported SOP
+  Class/IOD preservation scope. The current baseline is recorded in
+  [DICOM Output Scope Baseline](DICOM_OUTPUT_SCOPE_BASELINE.md); it explicitly
+  records that no finite source-IOD preservation promise exists yet.
 
 Out of scope until separately approved:
 
@@ -99,7 +103,7 @@ required research result, not a pass.
 | R-06 | Date handling must match the selected temporal option; document which date/time VRs and attribute rows are retained, modified, blanked, or removed. | S-01, S-02 | Deep modes keep/shift/blank broad DA/DT values; TM is retained on removal; DOB is always blank. | Unverified option mapping | Compare every supported behavior to Table E.1-1 and option semantics; revise controls/copy before making a profile claim. |
 | R-07 | Remove or clean identifying private attributes only as PS3.15 permits; do not imply that blanket private-tag removal removes all PHI. | S-01 | Deep default removes odd-group private attributes; simple/MPR path needs audit. | Partial | Validate recursion and creator blocks; document vendor/private and pixel limitations. |
 | R-08 | Address identifying text/graphics/pixels only when the corresponding option is actually implemented; otherwise warn clearly and do not claim it. | S-01 | UI warns that burned-in text is neither detected nor removed. | Warning present; complete scope unverified | Audit overlays, presentation states, icons, encapsulated documents, and all UI claims. |
-| R-09 | Preserve DICOM validity for every supported SOP Class/IOD after de-identification. | S-01 plus applicable PS3.3/PS3.5 requirements | Tests perform synthetic pydicom round-trips. | Insufficient evidence | Define a modality/SOP-class corpus, independent validation tools, and negative tests for Type 1/2/conditional attributes. |
+| R-09 | Preserve DICOM validity for every supported SOP Class/IOD after de-identification. | S-01 plus applicable PS3.3/PS3.5 requirements | Tests perform synthetic pydicom round-trips. The current [output-scope baseline](DICOM_OUTPUT_SCOPE_BASELINE.md) records no formal source-IOD preservation promise; it identifies CT, MR, and Secondary Capture only as MPR-emitted candidate scopes. | Insufficient evidence | Define a formal IOD corpus, independent validation tools, and negative tests for Type 1/2/conditional attributes before claiming support. |
 | R-10 | HIPAA Safe Harbor, Expert Determination, GDPR/UK GDPR “anonymous,” and similar legal claims require their own applicability and evidence analysis. | S-03, S-04; S-08 when selected | Current reviewed de-identification copy avoids legal/compliance assurances and directs users to organization-appropriate review. The complete claims inventory remains pending. | Interim claim remediation complete; no legal claim | Keep the no-legal-claim policy. Defer any legal language unless future project ownership explicitly changes that policy. |
 | R-11 | Every user-visible export path named “anonymize” or “de-identify” has a defined scope and does not inherit a DICOM claim accidentally. | Product wording; S-01 where DICOM is claimed | The MPR dialog now uses the shared deep options/default and presents the metadata-only burned-in-pixel limitation. Legacy `anonymize=True` projection/export branches still call the base anonymizer; report export has a separate masking option. | MPR gap remediated; inventory incomplete | Assess and align the remaining base-anonymizer call sites before making a common-path claim. |
 | R-12 | Remove group `0004` elements from a non-DICOMDIR de-identified SOP Instance/DICOM File. | S-01, E.1.1 step 9 | The shared deep engine now removes group `0004` recursively. Synthetic deep and final serialized MPR regressions cover a non-DICOMDIR element. | Implemented for reviewed deep paths; base paths pending | Extend final-on-disk coverage and decide treatment of any non-deep export path. |
@@ -218,6 +222,11 @@ technical-profile claims or external distribution messaging.
   [`ps315_e1_inventory.json`](ps315_e1_inventory.json). It preserves raw base
   actions and option columns; IOD Type and option-dependent resolution remains
   intentionally unassessed.
+- [x] Record the current DICOM writer surface in the
+  [output-scope baseline](DICOM_OUTPUT_SCOPE_BASELINE.md). It explicitly
+  distinguishes arbitrary source-dataset re-export from the MPR writer's CT,
+  MR, and Secondary Capture SOP Class selection, and records that no formal
+  IOD-preservation promise exists yet.
 - [ ] For each inventory row, record the resolved action policy for each
   supported IOD Type and selected option set. Do not infer `X/Z/D` resolution
   from a generic dataset.
@@ -227,8 +236,9 @@ technical-profile claims or external distribution messaging.
   `current` URL is a discovery link, not a version pin.
 - [ ] Verify PS3.16 CID 7050 code values, meanings, and option declarations
   against the same DICOM edition.
-- [ ] Define which PS3.3 IOD/SOP Classes the application promises to preserve;
-  document the applicable Type 1/2/conditional validation strategy.
+- [ ] Select any PS3.3 IOD/SOP Classes the application will formally promise
+  to preserve; then document the applicable Type 1/2/conditional validation
+  strategy. Do not mistake the current MPR SOP Class selection for that promise.
 - [ ] Research PS3.15 requirements for private attributes, overlays/graphics,
   icon images, encapsulated documents, structured reports, original attributes,
   File Meta, preamble, UIDs and references, and pixel content.

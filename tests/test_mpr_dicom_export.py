@@ -12,7 +12,12 @@ import pydicom
 from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 from pydicom.tag import Tag
-from pydicom.uid import CTImageStorage, SecondaryCaptureImageStorage, generate_uid
+from pydicom.uid import (
+    CTImageStorage,
+    MRImageStorage,
+    SecondaryCaptureImageStorage,
+    generate_uid,
+)
 
 from core.mpr_builder import MprResult
 from core.mpr_dicom_export import (
@@ -133,6 +138,24 @@ def test_write_mpr_series_raw_ct_omits_rescale_type(tmp_path) -> None:
     )
     ds0 = pydicom.dcmread(str(paths[0]), force=True)
     assert "RescaleType" not in ds0
+
+
+def test_write_mpr_series_selects_mr_storage_for_mr_template(tmp_path) -> None:
+    template = _synthetic_ct_template()
+    template.Modality = "MR"
+    mpr = _synthetic_mpr_result(template)
+
+    paths = write_mpr_series(
+        tmp_path,
+        mpr,
+        template,
+        MprDicomExportOptions(orientation_label="Coronal"),
+    )
+
+    ds0 = pydicom.dcmread(str(paths[0]), force=True)
+    assert str(ds0.SOPClassUID) == str(MRImageStorage)
+    assert str(ds0.file_meta.MediaStorageSOPClassUID) == str(MRImageStorage)
+    assert ds0.Modality == "MR"
 
 
 def test_write_mpr_series_empty_raises(tmp_path) -> None:
