@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QGraphicsPixmapItem, QMessageBox, QWidget
+from PySide6.QtWidgets import QGraphicsPixmapItem, QLabel, QMessageBox, QWidget
 
 from gui.dialogs.screenshot_export_dialog import ScreenshotExportDialog
 from utils.config_manager import ConfigManager
@@ -42,6 +42,14 @@ def test_default_mode_is_separate(qapp, tmp_path) -> None:
     assert dlg.export_mode == ScreenshotExportDialog.MODE_SEPARATE
     assert len(dlg._checkboxes) == 1
     assert dlg._checkboxes[0].isChecked() is True
+
+
+@pytest.mark.qt
+def test_privacy_notice_is_visible(qapp, tmp_path) -> None:
+    dlg = ScreenshotExportDialog([_FakeSub()], config_manager=_cm(tmp_path))
+    notice = dlg.findChild(QLabel, "screenshotPrivacyNotice")
+    assert notice is not None
+    assert "captures what is visible on screen" in notice.text()
 
 
 @pytest.mark.qt

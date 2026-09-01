@@ -1,6 +1,6 @@
 # User guide — MPR (multi-planar reformation)
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-08-31
 
 MPR lets you build **orthogonal views** (e.g. sagittal / coronal) from an axial stack (or another base orientation), shown inside a viewer pane.
 
@@ -18,6 +18,16 @@ The pane switches to the MPR for that configuration. Afterward you can change co
 ## Clearing MPR
 
 - **Right-click** the MPR pane → **Clear MPR View** to return that pane to normal 2D viewing for its assigned series.
+
+## Saving MPR as DICOM
+
+When an MPR stack is complete, use **File → Save MPR as DICOM…** to write one
+derived DICOM instance per plane. The dialog can apply the same **DICOM metadata
+de-identification** settings and presets as the normal DICOM export path.
+
+> **Important:** this setting applies to DICOM metadata, not patient information
+> burned into image pixels. Review the detailed [de-identified export guide](USER_GUIDE_ANONYMIZATION.md)
+> and your organization's required process before sharing an MPR export.
 
 ## Tips
 

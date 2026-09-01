@@ -50,7 +50,7 @@ class DeepAnonymizerExportDialog(QDialog):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("De-identify & Export DICOM (PS3.15)")
+        self.setWindowTitle("De-identify & Export DICOM")
         self.setModal(True)
         self.resize(820, 700)
 

@@ -4,7 +4,7 @@ Shared de-identification options UI.
 Provides a reusable widget (preset dropdown + detailed PS3.15 toggles) and a thin
 options-only dialog wrapping it. Used both by the inline Export dialog's
 "Options..." button and by the full de-identification export dialog, so a single
-conformant ``DeepAnonymizerOptions`` shape drives every anonymized export path.
+``DeepAnonymizerOptions`` shape drives those deep DICOM export workflows.
 
 Inputs:
     Optional initial DeepAnonymizerOptions.
@@ -38,12 +38,13 @@ _CUSTOM_LABEL = "Custom…"
 BURNED_IN_PHI_WARNING = (
     "<b>Warning:</b> De-identification removes identifying metadata only. "
     "<b>Burned-in text</b> (patient names or other PHI embedded in pixel data) "
-    "is <b>not</b> removed or detected."
+    "is <b>not</b> removed or detected. Review the exported files using your "
+    "organization's required process before disclosure."
 )
 
 
 class AnonymizationOptionsWidget(QWidget):
-    """Preset dropdown + detailed PS3.15 de-identification toggles.
+    """Preset dropdown + detailed DICOM metadata-de-identification toggles.
 
     Selecting a preset fills the toggles; editing any toggle switches the preset
     selector to "Custom…". ``get_options`` always reflects the live toggle state.
@@ -81,16 +82,16 @@ class AnonymizationOptionsWidget(QWidget):
         self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         layout.addWidget(self.preset_combo)
 
-        options_group = QGroupBox("De-identification options (PS3.15 Basic Profile)")
+        options_group = QGroupBox("DICOM metadata de-identification settings")
         options_layout = QVBoxLayout()
 
         self.retain_institution_cb = QCheckBox(
-            "Retain institution identity (declares 113112)"
+            "Retain institution identity"
         )
         options_layout.addWidget(self.retain_institution_cb)
 
         self.retain_device_cb = QCheckBox(
-            "Retain device identity — station / serial / manufacturer (declares 113109)"
+            "Retain device identity — station / serial / manufacturer"
         )
         options_layout.addWidget(self.retain_device_cb)
 
@@ -98,15 +99,15 @@ class AnonymizationOptionsWidget(QWidget):
         options_layout.addWidget(self.strip_operators_cb)
 
         self.uid_remap_cb = QCheckBox(
-            "Re-mint UIDs (consistent within this export; off declares 113110)"
+            "Re-mint UIDs (consistent within this export)"
         )
         options_layout.addWidget(self.uid_remap_cb)
 
         options_layout.addWidget(QLabel("Dates:"))
         self.date_button_group = QButtonGroup(self)
-        self.date_keep_rb = QRadioButton("Keep dates (declares 113106)")
+        self.date_keep_rb = QRadioButton("Keep dates")
         self.date_shift_rb = QRadioButton(
-            "Shift dates to ~1900 — preserves relative timing (declares 113107)"
+            "Shift dates to ~1900 — preserves relative timing"
         )
         self.date_remove_rb = QRadioButton("Remove dates (blank, keeps file valid)")
         for rb in (self.date_keep_rb, self.date_shift_rb, self.date_remove_rb):
@@ -223,7 +224,7 @@ class AnonymizationOptionsDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("De-identification Options (PS3.15)")
+        self.setWindowTitle("DICOM Metadata De-identification Settings")
         self.setModal(True)
         layout = QVBoxLayout(self)
         self.options_widget = AnonymizationOptionsWidget(options, parent=self)

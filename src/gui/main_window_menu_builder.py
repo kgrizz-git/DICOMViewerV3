@@ -112,9 +112,9 @@ def build_menu_bar(main_window) -> None:
     _mi(export_action, "export")
     file_menu.addAction(export_action)
 
-    deep_anonymizer_export_action = QAction("De-identify && Export DICOM (PS3.15)…", main_window)
+    deep_anonymizer_export_action = QAction("De-identify && Export DICOM…", main_window)
     deep_anonymizer_export_action.setStatusTip(
-        "Export DICOM de-identified to the PS3.15 Basic Profile, with presets and per-option control"
+        "Export DICOM with configurable metadata de-identification settings; review before sharing"
     )
     deep_anonymizer_export_action.triggered.connect(
         main_window.deep_anonymizer_export_requested.emit

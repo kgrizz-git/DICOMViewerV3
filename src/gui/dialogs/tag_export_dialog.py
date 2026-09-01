@@ -44,6 +44,7 @@ from core.dicom_parser import DICOMParser
 from core.tag_export_controller import TagExportController, resolve_export_format
 from core.tag_export_union import union_tags_across_datasets
 from gui.dialogs import tag_export_dialog_helpers as _tag_export_helpers
+from gui.dialogs.privacy_notice import create_tag_export_privacy_notice
 from gui.dialogs.tag_export_dialog_navigation import TagExportDialogNavigationMixin
 from gui.dialogs.tag_export_dialog_presets import TagExportDialogPresetsMixin
 from gui.dialogs.tag_export_dialog_selection import TagExportDialogSelectionMixin
@@ -204,7 +205,7 @@ class TagExportDialog(
         splitter.setStretchFactor(1, 2)
 
         layout.addWidget(splitter)
-
+        layout.addWidget(create_tag_export_privacy_notice(self))
         # Bottom buttons (tag count lives here — export is dialog-level, not tag-panel)
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.tag_count_label)
@@ -1108,4 +1109,3 @@ class TagExportDialog(
         layout.addLayout(button_layout)
 
         return dialog.exec() == QDialog.DialogCode.Accepted
-

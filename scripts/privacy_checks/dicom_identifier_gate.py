@@ -1,10 +1,9 @@
 """DICOM identifier keywords and de-id dummy values for the artifact gate.
 
-Tracked fixtures must not carry real identifier tags. The de-id export engine
-writes ``ANONYMIZED`` into text patient tags; the gate allows that string only
-when the entire stripped value matches (case-sensitive). PS3.15 action Z also
-permits a zero-length value; a later engine change should prefer blanks for
-Type-2 / CS attributes (see TO_DO).
+Tracked fixtures must not carry real identifier tags. Current de-id exports
+blank Type-2 patient values. The gate also accepts the legacy ``ANONYMIZED``
+dummy only when the entire stripped value matches (case-sensitive), so already
+reviewed de-identified fixtures remain admissible.
 
 Inputs: tag keyword, identifier string, optional JSON/content regex match.
 Outputs: allow/skip decisions for ``check_no_phi_artifacts``.
@@ -15,7 +14,7 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
-# Exact dummy written by ``DICOMAnonymizer`` for text patient tags.
+# Legacy exact dummy accepted for previously reviewed de-identified fixtures.
 DEIDENTIFIED_DUMMY_VALUE = "ANONYMIZED"
 
 # These DICOM attributes must never hold a real value in a tracked fixture,

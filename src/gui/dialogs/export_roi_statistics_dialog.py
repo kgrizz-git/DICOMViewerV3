@@ -183,6 +183,15 @@ class ExportROIStatisticsDialog(QDialog):
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter)
 
+        privacy_notice = QLabel(
+            "<b>Privacy notice:</b> The suggested filename can include an accession number or "
+            "patient ID. Review and change it before sharing the export."
+        )
+        privacy_notice.setObjectName("roiExportPrivacyNotice")
+        privacy_notice.setWordWrap(True)
+        privacy_notice.setStyleSheet("QLabel { color: #b45309; padding: 6px; background: #fffbeb; }")
+        layout.addWidget(privacy_notice)
+
         # Buttons
         button_layout = QHBoxLayout()
         button_layout.addStretch()

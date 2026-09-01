@@ -1,10 +1,60 @@
 # Maintenance Log
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-09-01
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
+## 2026-09-01
+
+- **PS3.15 action-resolution method:** Added the evidence schema and
+  Type/condition/option decision procedure required before assessing an
+  individual Table E.1-1 action. It deliberately records no resolved rows or
+  formal IOD scope; current transformation behavior remains separate from
+  future expected-action and serialized-output evidence.
+
+- **PS3.15 primary-source review record:** Documented two independent checks of
+  the source-derived Table E.1-1 inventory: the retained retrieval and a
+  separately retrieved snapshot both reproduced its 15-column header, 656 rows,
+  and complete requirements array. See the
+  [review record](plans/supporting/PS315_E1_PRIMARY_SOURCE_REVIEWS.md). This
+  closes an evidence gate only; compound action resolution, IOD validation, and
+  any profile or legal/privacy claim remain out of scope.
+
+- **PS3.16 CID 7050 inventory:** Added a reproducible, 13-row inventory from
+  the retrieved NEMA PS3.16 2026c CID 7050 page. It records the context-group
+  metadata, source fingerprint, retrieval metadata, and unavailable
+  edition-archive URL status; the raw source remains ignored. This records
+  code values and meanings for later assessment only, without asserting that
+  the application implements a DICOM profile or option.
+
+- **DICOM output-scope baseline:** Recorded the user-reachable DICOM writer
+  surface before attempting Table E.1-1 action resolution. The ordinary and
+  dedicated export paths re-serialize source datasets rather than claiming a
+  finite preserved-IOD set; MPR currently emits CT Image Storage, MR Image
+  Storage, or Secondary Capture (with modality `OT`) according to its
+  source-modality branch. See the
+  [output-scope baseline](plans/supporting/DICOM_OUTPUT_SCOPE_BASELINE.md).
+  This is a factual inventory and a boundary for later PS3.3 Type/condition work,
+  not an IOD-validity or profile-conformance claim.
+
+## 2026-08-31
+
+- **PS3.15 Table E.1-1 inventory bootstrap:** Added a reproducible extractor
+  and a 656-row, machine-readable inventory sourced from the retrieved NEMA
+  PS3.15 2026c Annex E page. The inventory records byte/source and requirements
+  digests, retrieval metadata, and the unavailable edition-archive URL status;
+  the raw standards artifact remains ignored. This is evidence infrastructure,
+  not a DICOM-profile or legal-compliance claim. The active reassessment plan
+  now records the sole-maintainer/no-legal-claim policy and the remaining
+  independent-source-review and IOD/action-resolution gates.
+
 ## 2026-08-30
+
+- **De-id Type-2 / VR conformance:** The shared group-0010 anonymizer now
+  blanks Patient Name, Patient ID, Birth Date, and Sex rather than assigning a
+  generic text dummy. Issuer of Patient ID and other non-Type-2 patient
+  attributes are removed; focused base/deep anonymizer regressions cover the
+  PS3.15 action-Z/action-X split.
 
 - **Post-merge quality-governance closeout:** The first protected-branch CI run
   after the Quality Gate change completed successfully, including the waited

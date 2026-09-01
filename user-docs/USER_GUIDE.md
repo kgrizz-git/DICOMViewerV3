@@ -11,14 +11,14 @@ This hub links topic guides for the application. **In the running app**, use **H
 | Guide | Contents |
 |-------|-----------|
 | [CONFIGURATION.md](CONFIGURATION.md) | **Edit → Settings…**, local study index, where other preferences live (View menu, etc.) |
-| [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating and clearing MPR views |
+| [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating/clearing views and saving MPR as DICOM |
 | [USER_GUIDE_3D.md](USER_GUIDE_3D.md) | 3D volume rendering (VTK): toolbar **3D View**, transfer-function presets |
 | [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md) | Multi-window layouts & navigation: pane layouts (1/2/3/4 keys), assigning series, focus/expand/swap, slice & cine navigation |
 | [USER_GUIDE_ANNOTATIONS.md](USER_GUIDE_ANNOTATIONS.md) | Measurements & annotations: ROI/measure/text/arrow tools + shortcuts, editing, copy/cut/paste, ROI statistics |
 | [USER_GUIDE_EXPORT.md](USER_GUIDE_EXPORT.md) | Exporting images & data: **File → Export…** (DICOM / PNG / JPG), selection tree, W/L & overlay & resolution options, de-identify; other export paths |
 | [USER_GUIDE_TAGS.md](USER_GUIDE_TAGS.md) | DICOM tag viewer & editor: **Tools → View/Edit DICOM Tags…** (Ctrl+T) — search, copy, edit with undo/redo, Privacy Mode masking |
 | [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) | Consolidated keyboard-shortcut reference (also in-app via Help → Keyboard Shortcuts / F1) |
-| [USER_GUIDE_ANONYMIZATION.md](USER_GUIDE_ANONYMIZATION.md) | De-identified DICOM export (PS3.15 Basic Profile): presets, options, what is recorded, limits |
+| [USER_GUIDE_ANONYMIZATION.md](USER_GUIDE_ANONYMIZATION.md) | DICOM metadata de-identification export: presets, options, what is recorded, and limitations |
 | [USER_GUIDE_QA_PYLINAC.md](USER_GUIDE_QA_PYLINAC.md) | ACR CT / ACR MRI phantom analysis (pylinac), JSON/PDF, compare mode, batch export |
 | [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) | Image fusion (PET/SPECT on CT/MR): options, accuracy, algorithms |
 

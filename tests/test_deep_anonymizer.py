@@ -53,6 +53,7 @@ def _synthetic_dataset(
     ds.PatientName = "Test^Patient"
     ds.PatientID = "PID123"
     ds.PatientBirthDate = "19800101"
+    ds.PatientSex = "F"
     ds.StudyInstanceUID = study_uid or generate_uid()
     ds.SeriesInstanceUID = series_uid or generate_uid()
     ds.SOPInstanceUID = sop_uid or generate_uid()
@@ -102,26 +103,25 @@ class TestDeepAnonymizerProfile(unittest.TestCase):
 class TestDeepDICOMAnonymizer(unittest.TestCase):
     """Deep anonymizer behavior on synthetic datasets."""
 
-    def test_strips_identifying_tags_and_sets_ps315_tags(self) -> None:
+    def test_strips_identifying_tags_and_records_scoped_method(self) -> None:
         ds = _synthetic_dataset()
         options = DeepAnonymizerOptions()
         anon = DeepDICOMAnonymizer(options).anonymize_dataset(ds)
 
-        self.assertEqual(anon.PatientName, "ANONYMIZED")
-        self.assertEqual(anon.PatientID, "ANONYMIZED")
-        # PatientBirthDate is Type 2 (PS3.15 action Z) → blanked, not deleted.
-        self.assertIn("PatientBirthDate", anon)
-        self.assertEqual(anon.PatientBirthDate, "")
+        for keyword in ("PatientName", "PatientID", "PatientBirthDate", "PatientSex"):
+            with self.subTest(keyword=keyword):
+                self.assertIn(keyword, anon)
+                self.assertEqual(getattr(anon, keyword), "")
         self.assertNotIn("InstitutionName", anon)
         self.assertNotIn("StationName", anon)
         self.assertNotIn("OperatorsName", anon)
         self.assertNotIn("ImageComments", anon)
-        self.assertEqual(anon.PatientIdentityRemoved, "YES")
-        self.assertIn("Deep anonymization", anon.DeidentificationMethod)
+        self.assertNotIn("PatientIdentityRemoved", anon)
+        self.assertNotIn("DeidentificationMethodCodeSequence", anon)
+        self.assertIn("Metadata de-identification", anon.DeidentificationMethod)
 
     def test_retain_device_identity_keeps_device_tags(self) -> None:
-        """Retain Device Identity Option (§E.3.8) keeps device identity — including
-        the serial number — and declares 113109."""
+        """Retain device identity keeps device tags, including the serial number."""
         ds = _synthetic_dataset()
         options = DeepAnonymizerOptions(retain_device_identity=True)
         anon = DeepDICOMAnonymizer(options).anonymize_dataset(ds)
@@ -130,10 +130,8 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         self.assertEqual(anon.ManufacturerModelName, "Model X")
         self.assertEqual(anon.DeviceSerialNumber, "SN-9999")
         self.assertEqual(anon.StationName, "CT-ROOM-1")
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertIn("113109", codes)
 
-    def test_strip_device_default_removes_and_no_retain_code(self) -> None:
+    def test_strip_device_default_removes_device_tags(self) -> None:
         ds = _synthetic_dataset()
         ds.PerformedStationName = "MRI1"
         ds.PerformedStationAETitle = "MRI_AE"
@@ -142,8 +140,6 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         self.assertNotIn("StationName", anon)
         self.assertNotIn("PerformedStationName", anon)
         self.assertNotIn("PerformedStationAETitle", anon)
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertNotIn("113109", codes)
 
     def test_retain_device_identity_keeps_performed_station(self) -> None:
         ds = _synthetic_dataset()
@@ -210,16 +206,34 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         self.assertNotIn(Tag(0x0040, 0xA123), anon_root)  # PersonName
         self.assertNotIn(Tag(0x0040, 0xA123), anon_root.ContentSequence[0])
 
-    def test_retain_institution_identity_keeps_and_declares(self) -> None:
+    def test_removes_group_0004_original_attributes_and_digital_signatures(self) -> None:
+        """Required structural removals apply recursively before serialization."""
+        ds = _synthetic_dataset()
+        ds.add_new(Tag(0x0004, 0x1511), "UI", generate_uid())
+        ds.OriginalAttributesSequence = [Dataset()]
+        ds.DigitalSignaturesSequence = [Dataset()]
+        nested = Dataset()
+        nested.add_new(Tag(0x0004, 0x1512), "UI", generate_uid())
+        nested.OriginalAttributesSequence = [Dataset()]
+        ds.RequestAttributesSequence = [nested]
+
+        anon = DeepDICOMAnonymizer(DeepAnonymizerOptions()).anonymize_dataset(ds)
+
+        self.assertNotIn(Tag(0x0004, 0x1511), anon)
+        self.assertNotIn("OriginalAttributesSequence", anon)
+        self.assertNotIn("DigitalSignaturesSequence", anon)
+        nested_anon = anon.RequestAttributesSequence[0]
+        self.assertNotIn(Tag(0x0004, 0x1512), nested_anon)
+        self.assertNotIn("OriginalAttributesSequence", nested_anon)
+
+    def test_retain_institution_identity_keeps_institution_tags(self) -> None:
         ds = _synthetic_dataset()
         anon = DeepDICOMAnonymizer(
             DeepAnonymizerOptions(retain_institution_identity=True)
         ).anonymize_dataset(ds)
         self.assertEqual(anon.InstitutionName, "Test Hospital")
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertIn("113112", codes)
 
-    def test_retain_uids_skips_remap_and_declares_113110(self) -> None:
+    def test_retain_uids_skips_remap(self) -> None:
         study = generate_uid()
         ds = _synthetic_dataset(study_uid=study)
         anon = DeepDICOMAnonymizer(
@@ -227,39 +241,6 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         ).anonymize_batch([ds])[0]
         # UID retained (not re-minted) ...
         self.assertEqual(str(anon.StudyInstanceUID), study)
-        # ... and declared.
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertIn("113110", codes)
-
-    def test_method_codes_basic_profile_and_date_mode(self) -> None:
-        ds = _synthetic_dataset()
-        # Default = shift → 113107, no 113106/113110/113109/113112.
-        anon = DeepDICOMAnonymizer(DeepAnonymizerOptions()).anonymize_dataset(ds)
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertIn("113100", codes)
-        self.assertIn("113107", codes)
-        self.assertNotIn("113106", codes)
-        # Coding scheme designator is DCM.
-        for item in anon.DeidentificationMethodCodeSequence:
-            self.assertEqual(item.CodingSchemeDesignator, "DCM")
-
-    def test_method_codes_keep_dates_uses_113106(self) -> None:
-        ds = _synthetic_dataset()
-        anon = DeepDICOMAnonymizer(
-            DeepAnonymizerOptions(date_shift=False, date_remove=False)
-        ).anonymize_dataset(ds)
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertIn("113106", codes)
-        self.assertNotIn("113107", codes)
-
-    def test_method_codes_remove_dates_no_temporal_code(self) -> None:
-        ds = _synthetic_dataset()
-        anon = DeepDICOMAnonymizer(
-            DeepAnonymizerOptions(date_remove=True)
-        ).anonymize_dataset(ds)
-        codes = {item.CodeValue for item in anon.DeidentificationMethodCodeSequence}
-        self.assertNotIn("113106", codes)
-        self.assertNotIn("113107", codes)
 
     def test_uid_remap_consistent_in_batch(self) -> None:
         study = generate_uid()
@@ -395,6 +376,16 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         self.assertNotEqual(result.StudyDate, "20240115")
         # Must land near the fake 1900 anchor, not a recent-looking date.
         self.assertIn(result.StudyDate[:3], ("188", "189", "190"))
+
+    def test_date_shift_keeps_patient_birth_date_blanked(self) -> None:
+        """PatientBirthDate remains the PS3.15 action-Z blank, not a shifted date."""
+        ds = _synthetic_dataset()
+        ds.PatientBirthDate = "19800101"
+
+        result = DeepDICOMAnonymizer(DeepAnonymizerOptions()).anonymize_batch([ds])[0]
+
+        self.assertIn("PatientBirthDate", result)
+        self.assertEqual(result.PatientBirthDate, "")
 
     def _assert_in_anchor_window(self, date_str: str) -> None:
         """Earliest batch date lands within [anchor - jitter_max, anchor]."""
@@ -538,8 +529,11 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         buffer.seek(0)
         reloaded = pydicom.dcmread(buffer)
 
-        self.assertEqual(reloaded.PatientIdentityRemoved, "YES")
-        self.assertEqual(reloaded.PatientName, "ANONYMIZED")
+        self.assertNotIn("PatientIdentityRemoved", reloaded)
+        self.assertNotIn("DeidentificationMethodCodeSequence", reloaded)
+        self.assertEqual(reloaded.PatientName, "")
+        self.assertEqual(reloaded.PatientBirthDate, "")
+        self.assertEqual(reloaded.PatientSex, "")
         self.assertIn("PixelData", reloaded)
 
 

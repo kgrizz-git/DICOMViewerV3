@@ -150,6 +150,16 @@ class CineExportDialog(QDialog):
         )
         help_lbl.setWordWrap(True)
 
+        privacy_notice = QLabel(
+            "<b>Privacy notice:</b> Cine export can include visible image text, overlays, ROIs, "
+            "and measurements. Review the rendered frames before sharing."
+        )
+        privacy_notice.setObjectName("cinePrivacyNotice")
+        privacy_notice.setWordWrap(True)
+        privacy_notice.setStyleSheet(
+            "QLabel { color: #b45309; padding: 6px; background: #fffbeb; }"
+        )
+
         res_group = QGroupBox("Resolution (same as image export)")
         res_layout = QVBoxLayout()
         res_layout.addWidget(self._resolution_combo)
@@ -171,6 +181,7 @@ class CineExportDialog(QDialog):
         root.addWidget(loop_group)
         root.addWidget(self._overlay_check)
         root.addWidget(help_lbl)
+        root.addWidget(privacy_notice)
         root.addWidget(buttons)
         self.setLayout(root)
 

@@ -29,7 +29,7 @@ class TestExportManagerPhase1(unittest.TestCase):
         mgr = ExportManager()
         self.assertIsNotNone(mgr)
 
-    def test_deep_anonymized_overwrite_paths_use_anonymized_folder_tags(self):
+    def test_deep_anonymized_overwrite_paths_use_blank_patient_id_fallback(self):
         """Preflight paths must match the folders written by de-identified export."""
         ds = Dataset()
         ds.PatientID = "PID123"
@@ -58,7 +58,7 @@ class TestExportManagerPhase1(unittest.TestCase):
             [
                 os.path.join(
                     "/exports",
-                    "ANONYMIZED",
+                    "UNKNOWN",
                     "20240115-UNKNOWN_STUDY",
                     "3-UNKNOWN_SERIES",
                     "Instance_0007.dcm",
@@ -99,7 +99,7 @@ class TestExportManagerPhase1(unittest.TestCase):
             paths[0],
             os.path.join(
                 "/exports",
-                "ANONYMIZED",
+                "UNKNOWN",
                 f"{shifted_date}-UNKNOWN_STUDY",
                 "3-UNKNOWN_SERIES",
                 "Instance_0007.dcm",

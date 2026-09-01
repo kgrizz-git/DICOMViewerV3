@@ -9,7 +9,7 @@ Inputs:
     pydicom Dataset objects, DeepAnonymizerOptions
 
 Outputs:
-    Anonymized Dataset copies with PS3.15 de-identification tags set
+    Metadata-deidentified Dataset copies with a scoped method record
 
 Requirements:
     pydicom, utils.dicom_anonymizer, utils.deep_anonymizer_profile
@@ -70,22 +70,28 @@ FILE_META_IDENTIFYING_TAGS = (
     Tag(0x0002, 0x0101),  # PrivateInformationCreatorUID
 )
 
+# PS3.15 E.1.1 step 9 requires group 0004 removal. The notes following
+# Table E.1-1 also call out Digital Signatures and Original Attributes as
+# potential sources of identifying pre-modification values or certificates.
+ALWAYS_REMOVE_TAGS = (
+    Tag(0x0400, 0x0561),  # OriginalAttributesSequence
+    Tag(0xFFFA, 0xFFFA),  # DigitalSignaturesSequence
+)
+
 
 @dataclass
 class DeepAnonymizerOptions:
     """User-configurable de-identification options.
 
-    Defaults = PS3.15 Basic Application Confidentiality Profile with no retain
-    options (institution + device stripped, UIDs re-minted, dates shifted). Each
-    ``retain_*`` flag that is enabled is declared via a CID 7050 code in the
-    De-identification Method Code Sequence (see ``deid_provenance``).
+    Defaults remove selected institution/device metadata, re-mint selected UIDs,
+    and shift dates. The options describe transformations, not profile conformance;
+    their evidence-backed scope is maintained in the compliance plan.
     """
 
-    # Retain options (off by default = base profile). Each, when on, keeps the
-    # corresponding attributes AND adds its CID 7050 declaration.
-    retain_institution_identity: bool = False  # → 113112
-    retain_device_identity: bool = False  # → 113109 (StationName, serial, manufacturer…)
-    retain_uids: bool = False  # → 113110 (skip UID re-mint; re-identification vector)
+    # Retain options (off by default). Each increases linkage or re-identification risk.
+    retain_institution_identity: bool = False
+    retain_device_identity: bool = False
+    retain_uids: bool = False
 
     strip_operators: bool = True
     uid_remap: bool = True
@@ -98,29 +104,29 @@ class DeepAnonymizerOptions:
 
     @property
     def remint_uids(self) -> bool:
-        """Whether UIDs are re-minted (base profile) vs retained (113110)."""
+        """Whether UIDs are re-minted or retained."""
         return self.uid_remap and not self.retain_uids
 
     @classmethod
     def standard_share(cls) -> DeepAnonymizerOptions:
-        """Default conformant preset for routine sharing.
+        """Default metadata-de-identification preset.
 
-        Pure PS3.15 Basic Profile with dates shifted (113107): institution and
-        device stripped, UIDs re-minted, operators/free-text/private removed.
+        Strips selected institution/device/operator/free-text/private metadata,
+        re-mints selected UIDs, and shifts dates.
         """
         return cls()
 
     @classmethod
     def maximal_strip(cls) -> DeepAnonymizerOptions:
-        """Most aggressive preset: dates removed entirely (no temporal option).
+        """Most aggressive available metadata preset: dates blanked entirely.
 
-        Same as Standard Share but dates are blanked (base profile, no 113106/7).
+        Same as Standard Share but dates are blanked.
         """
         return cls(date_shift=False, date_remove=True)
 
     @classmethod
     def research(cls) -> DeepAnonymizerOptions:
-        """Research preset: retain device identity (declares 113109).
+        """Research preset: retain device identity.
 
         Keeps station / serial / manufacturer for equipment-correlated analysis;
         institution still stripped, UIDs re-minted, dates shifted.
@@ -178,12 +184,16 @@ class DeepDICOMAnonymizer:
         """
         anonymized = self._patient_anonymizer.anonymize_dataset(dataset)
 
+        # These requirements do not depend on a user-selectable retain option.
+        self._remove_group_0004_elements(anonymized)
+        self._remove_tags_in_dataset_tree(anonymized, ALWAYS_REMOVE_TAGS)
+
         # Study/order identifiers: always blanked (PS3.15 base profile action Z,
         # no retain option). Blank rather than delete to keep Type-2 conformance.
         self._blank_tags_in_dataset_tree(anonymized, IDENTIFIER_TAGS)
 
         # Institution + device identity: stripped unless the matching retain option
-        # is set (PS3.15 §E.3.8 / §E.3.11). Retention is declared via CID 7050.
+        # is set. Full profile/option coverage is assessed separately.
         if not self.options.retain_institution_identity:
             self._remove_tags_in_dataset_tree(anonymized, INSTITUTION_SITE_TAGS)
         if not self.options.retain_device_identity:
@@ -299,20 +309,10 @@ class DeepDICOMAnonymizer:
             self._date_shift_offset = (target - datetime(2000, 1, 1)).days
 
     def _set_deidentification_tags(self, ds: Dataset) -> None:
-        """Write PS3.15 provenance + CID 7050 method codes for the applied options."""
-        if self.options.date_remove:
-            date_mode = "remove"
-        elif self.options.date_shift:
-            date_mode = "shift"
-        else:
-            date_mode = "keep"
+        """Record the configured metadata transformation without profile coding."""
         apply_deidentification_provenance(
             ds,
             method_text=DEIDENTIFICATION_METHOD,
-            date_mode=date_mode,
-            retain_device_identity=self.options.retain_device_identity,
-            retain_institution_identity=self.options.retain_institution_identity,
-            retain_uids=not self.options.remint_uids,
         )
 
     @staticmethod
@@ -380,6 +380,17 @@ class DeepDICOMAnonymizer:
                 for item in elem.value:
                     if isinstance(item, Dataset):
                         self._strip_private_tags(item)
+
+    def _remove_group_0004_elements(self, ds: Dataset) -> None:
+        """Remove group 0004 elements throughout an instance (PS3.15 E.1.1.9)."""
+        for elem in list(ds):
+            if elem.tag.group == 0x0004:
+                self._remove_tag(ds, elem.tag)
+                continue
+            if elem.VR == "SQ" and elem.value:
+                for item in elem.value:
+                    if isinstance(item, Dataset):
+                        self._remove_group_0004_elements(item)
 
     def _apply_uid_remap(self, ds: Dataset) -> None:
         """Replace known UIDs in the dataset tree."""

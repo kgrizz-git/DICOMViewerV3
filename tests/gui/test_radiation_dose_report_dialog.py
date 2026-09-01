@@ -36,6 +36,7 @@ def test_table_shows_summary_fields(qapp) -> None:
     values = [dlg._table.item(r, 1).text() for r in range(dlg._table.rowCount())]
     assert "12.5" in values
     assert "SyntheticVendor" in values
+    assert "does not de-identify the source DICOM" in dlg._hint.text()
 
 
 @pytest.mark.qt

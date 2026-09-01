@@ -78,7 +78,8 @@ class RadiationDoseReportDialog(QDialog):
             "identifiers and CT-style dose NUM items; many fluoroscopy RDSRs use different template "
             "nodes, so several cells may be empty. This is not a full SR tree—use "
             "Tools → View/Edit DICOM Tags for every element. Export may contain identifiers unless "
-            "Anonymize export is checked."
+            "Anonymize export is checked. That option masks only the listed UID/device fields in "
+            "this summary; it does not de-identify the source DICOM or establish that no identifiers remain."
         )
         self._hint.setWordWrap(True)
         layout.addWidget(self._hint)

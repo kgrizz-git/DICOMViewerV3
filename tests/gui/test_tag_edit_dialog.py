@@ -6,6 +6,7 @@ import pytest
 from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QSpinBox,
@@ -26,6 +27,14 @@ def test_string_vr_accept_sets_new_value(qapp) -> None:
     dlg._validate_and_accept()
     assert dlg.new_value == "SYNTHETIC^PATIENT"
     assert dlg.result() == int(dlg.DialogCode.Accepted)
+
+
+@pytest.mark.qt
+def test_edit_scope_notice_is_visible(qapp) -> None:
+    dlg = TagEditDialog(tag_str="(0010,0010)", tag_name="Patient Name", vr="PN")
+    notice = dlg.findChild(QLabel, "tagEditScopeNotice")
+    assert notice is not None
+    assert "not a de-identification workflow" in notice.text()
 
 
 @pytest.mark.qt

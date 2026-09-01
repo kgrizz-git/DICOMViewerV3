@@ -160,6 +160,7 @@ celerybeat.pid
 .direnv/
 .venv
 .phi-tools/
+.kilo/
 env/
 venv/
 ENV/

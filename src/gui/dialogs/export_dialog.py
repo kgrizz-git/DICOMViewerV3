@@ -43,7 +43,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from gui.dialogs.anonymization_options_widget import AnonymizationOptionsDialog
+from gui.dialogs.anonymization_options_widget import (
+    BURNED_IN_PHI_WARNING,
+    AnonymizationOptionsDialog,
+)
 from gui.export_manager import ExportManager, ExportSelectedRequest
 from gui.qt_tree_widget_utils import iter_tree_children
 from utils.deep_anonymizer import DeepAnonymizerOptions
@@ -129,7 +132,7 @@ class ExportDialog(QDialog):
         self.include_overlays = True
         self.export_scale = 1.0  # 1.0, 1.5, 2.0, or 4.0
         self.anonymize_enabled = False
-        # Conformant de-identification options for the inline checkbox path.
+        # Shared metadata de-identification options for the inline checkbox path.
         # Defaults to the Standard Share preset; editable via "Options…".
         self.anonymizer_options = DeepAnonymizerOptions.standard_share()
 
@@ -189,10 +192,11 @@ class ExportDialog(QDialog):
             projection_info_label.setStyleSheet("QLabel { color: #0066cc; padding: 5px; }")
             layout.addWidget(projection_info_label)
 
-        # De-identify option (only for DICOM) — routes through the conformant
-        # PS3.15 engine (Standard Share preset by default); "Options…" customizes.
+        # De-identify option (only for DICOM) — routes through the shared deep
+        # metadata-de-identification path (Standard Share preset by default);
+        # "Options…" customizes.
         anonymize_row = QHBoxLayout()
-        self.anonymize_checkbox = QCheckBox("De-identify (PS3.15 Basic Profile) (DICOM only)")
+        self.anonymize_checkbox = QCheckBox("De-identify DICOM metadata (DICOM only)")
         self.anonymize_checkbox.setEnabled(False)  # Initially disabled (only enabled for DICOM)
         self.anonymize_checkbox.setChecked(False)
         self.anonymize_checkbox.toggled.connect(self._on_anonymize_toggled)
@@ -203,6 +207,14 @@ class ExportDialog(QDialog):
         anonymize_row.addWidget(self.anonymize_options_button)
         anonymize_row.addStretch()
         layout.addLayout(anonymize_row)
+        self.anonymize_scope_notice = QLabel(BURNED_IN_PHI_WARNING, self)
+        self.anonymize_scope_notice.setObjectName("deidentificationScopeNotice")
+        self.anonymize_scope_notice.setWordWrap(True)
+        self.anonymize_scope_notice.setStyleSheet(
+            "QLabel { color: #b45309; padding: 6px; background: #fffbeb; }"
+        )
+        self.anonymize_scope_notice.setVisible(False)
+        layout.addWidget(self.anonymize_scope_notice)
 
         # Window/Level options (only for PNG/JPG)
         self.window_level_group = QGroupBox("Window/Level (for PNG/JPG)")
@@ -355,6 +367,7 @@ class ExportDialog(QDialog):
         """Track de-identify state and gate the Options… button."""
         self.anonymize_enabled = checked
         self.anonymize_options_button.setEnabled(checked and self.dicom_radio.isChecked())
+        self.anonymize_scope_notice.setVisible(checked and self.dicom_radio.isChecked())
 
     def _open_anonymize_options(self) -> None:
         """Open the shared de-identification options dialog (preset + toggles)."""
@@ -605,7 +618,7 @@ class ExportDialog(QDialog):
             self.export_format = "DICOM"
 
         # Get de-identify state (only for DICOM format). The inline checkbox now
-        # routes through the conformant PS3.15 engine (deep_anonymize) with the
+        # Routes through the shared deep metadata-de-identification path with the
         # selected preset/options — never the old group-0010-only path.
         deep_anonymize = self.anonymize_enabled and self.export_format == "DICOM"
         deep_anonymized_items = None
@@ -711,5 +724,3 @@ class ExportDialog(QDialog):
                 "Export Failed",
                 f"Failed to export files:\n{sanitize_message(str(e), redact_paths=True)}"
             )
-
-

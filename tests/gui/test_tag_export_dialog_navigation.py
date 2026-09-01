@@ -11,6 +11,7 @@ from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QAction, QShortcut
+from PySide6.QtWidgets import QLabel
 
 from gui.dialogs import tag_export_dialog as _tag_export_dialog_mod
 from gui.dialogs.tag_export_dialog import TagExportDialog
@@ -68,6 +69,15 @@ def test_expand_all_and_collapse_all_buttons_exist(qapp, tmp_path) -> None:
     dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
     assert dlg.expand_all_button.text() == "Expand All"
     assert dlg.collapse_all_button.text() == "Collapse All"
+    dlg.close()
+
+
+@pytest.mark.qt
+def test_privacy_notice_is_visible(qapp, tmp_path) -> None:
+    dlg = TagExportDialog(_studies(), config_manager=_cm(tmp_path))
+    notice = dlg.findChild(QLabel, "tagExportPrivacyNotice")
+    assert notice is not None
+    assert "Private tags" in notice.text()
     dlg.close()
 
 

@@ -89,6 +89,13 @@ class TagEditDialog(QDialog):
         """Create the UI components."""
         layout = QVBoxLayout(self)
         layout.addLayout(self._create_tag_information_layout())
+        notice = QLabel(
+            "<b>Note:</b> Editing a tag changes the in-memory dataset and can affect later "
+            "DICOM exports. This is not a de-identification workflow."
+        )
+        notice.setObjectName("tagEditScopeNotice")
+        notice.setWordWrap(True)
+        layout.addWidget(notice)
         value_layout, value_input = self._create_value_input_layout()
         layout.addLayout(value_layout)
         layout.addWidget(self._create_button_box())

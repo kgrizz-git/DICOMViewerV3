@@ -73,6 +73,7 @@ from pydicom.uid import (
 
 from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
 from core.mpr_builder import MprResult
+from utils.deep_anonymizer import DeepAnonymizerOptions, DeepDICOMAnonymizer
 
 
 class MprDicomExportError(RuntimeError):
@@ -86,6 +87,7 @@ class MprDicomExportOptions:
     orientation_label: str = ""
     series_description_suffix: str = ""
     anonymize: bool = False
+    deep_anonymizer_options: DeepAnonymizerOptions | None = None
     use_rescaled_pixel_values: bool = True
     window_center_override: float | None = None
     window_width_override: float | None = None
@@ -158,15 +160,89 @@ def _strip_conflicting_elements(ds: Dataset) -> None:
 
 
 def _series_description_default(
-    template: Dataset, orientation_label: str, suffix: str
+    template: Dataset,
+    orientation_label: str,
+    suffix: str,
+    *,
+    include_source_description: bool = True,
 ) -> str:
-    base = str(getattr(template, "SeriesDescription", "") or "").strip()
+    base = (
+        str(getattr(template, "SeriesDescription", "") or "").strip()
+        if include_source_description
+        else ""
+    )
     orient = (orientation_label or "").strip() or "MPR"
     desc = f"MPR {orient} from {base}" if base else f"MPR {orient}"
     suf = (suffix or "").strip()
     if suf:
         desc = f"{desc} {suf}"
     return desc[:64]
+
+
+def _deep_options_and_suffix(
+    options: MprDicomExportOptions,
+) -> tuple[DeepAnonymizerOptions | None, str]:
+    """Return de-identification settings and a suffix safe for those settings."""
+    if not options.anonymize:
+        return None, options.series_description_suffix
+    deep_options = options.deep_anonymizer_options or DeepAnonymizerOptions.standard_share()
+    suffix = "" if deep_options.strip_free_text else options.series_description_suffix
+    return deep_options, suffix
+
+
+def _set_mpr_image_comments(
+    ds: Dataset,
+    *,
+    anonymize: bool,
+    source_series_uid: str,
+    index: int,
+    total: int,
+) -> None:
+    """Set a derived-series comment without retaining a source UID when de-identifying."""
+    try:
+        if anonymize:
+            ds.ImageComments = f"Derived MPR reformatted series; plane {index}/{total}"
+        else:
+            ds.ImageComments = (
+                f"Derived MPR reformatted series; source series UID {source_series_uid}; "
+                f"plane {index}/{total}"
+            )[:1024]
+    except Exception:
+        pass
+
+
+def _mpr_series_dir(
+    root: Path,
+    folder_ds: Dataset,
+    template: Dataset,
+    options: MprDicomExportOptions,
+) -> Path:
+    """Create the export directory using fields from the output dataset."""
+    patient_id = _sanitize_folder_name(str(getattr(folder_ds, "PatientID", "UNKNOWN_PATIENT")))
+    study_date = _sanitize_folder_name(str(getattr(folder_ds, "StudyDate", "UNKNOWN_DATE")))
+    study_description = _sanitize_folder_name(
+        str(getattr(folder_ds, "StudyDescription", "UNKNOWN_STUDY"))
+    )
+    series_number = getattr(folder_ds, "SeriesNumber", None)
+    series_number_str = _sanitize_folder_name(
+        str(series_number) if series_number not in (None, "") else "UNKNOWN_SERIES_NUM"
+    )
+    series_description = str(getattr(folder_ds, "SeriesDescription", "") or "").strip()
+    if not series_description:
+        series_description = _series_description_default(
+            template,
+            options.orientation_label,
+            "",
+            include_source_description=not options.anonymize,
+        )
+    series_dir = (
+        root
+        / patient_id
+        / f"{study_date}-{study_description}"
+        / f"{series_number_str}-{_sanitize_folder_name(series_description)}"
+    )
+    series_dir.mkdir(parents=True, exist_ok=True)
+    return series_dir
 
 
 def _export_rescale_type(
@@ -196,8 +272,10 @@ def write_mpr_series(
     """
     Write each MPR plane as one DICOM file under ``output_dir``.
 
-    Creates the same patient/study/series folder hierarchy as slice export when
-    ``anonymize`` is False; when True, folder names use anonymized patient tags.
+    Creates the same patient/study/series folder hierarchy as slice export. When
+    ``anonymize`` is True, it first builds the complete derived MPR batch, then
+    passes that batch through the same ``DeepDICOMAnonymizer`` operation and
+    options used by regular DICOM export before choosing folders or writing files.
 
     Args:
         output_dir: Root directory for export (folders created beneath).
@@ -236,37 +314,7 @@ def write_mpr_series(
         use_rescaled_pixel_values=bool(opts.use_rescaled_pixel_values),
     )
 
-    if opts.anonymize:
-        from utils.dicom_anonymizer import DICOMAnonymizer
-
-        folder_ds = DICOMAnonymizer().anonymize_dataset(template)
-    else:
-        folder_ds = template
-
-    patient_id = _sanitize_folder_name(str(getattr(folder_ds, "PatientID", "UNKNOWN_PATIENT")))
-    study_date = _sanitize_folder_name(str(getattr(folder_ds, "StudyDate", "UNKNOWN_DATE")))
-    study_description = _sanitize_folder_name(
-        str(getattr(folder_ds, "StudyDescription", "UNKNOWN_STUDY"))
-    )
-    series_number_src = getattr(folder_ds, "SeriesNumber", None)
-    if series_number_src is None or series_number_src == "":
-        series_number_str = "UNKNOWN_SERIES_NUM"
-    else:
-        series_number_str = (
-            str(int(series_number_src))
-            if isinstance(series_number_src, (int, float))
-            else str(series_number_src)
-        )
-    series_number_str = _sanitize_folder_name(series_number_str)
-    series_description_for_folder = _sanitize_folder_name(
-        _series_description_default(template, opts.orientation_label, opts.series_description_suffix)
-    )
-
-    patient_dir = root / patient_id
-    study_dir = patient_dir / f"{study_date}-{study_description}"
-    series_dir = study_dir / f"{series_number_str}-{series_description_for_folder}"
-    series_dir.mkdir(parents=True, exist_ok=True)
-
+    series_number_src = getattr(template, "SeriesNumber", None)
     new_series_uid = pydicom.uid.generate_uid()
     study_uid = str(getattr(template, "StudyInstanceUID", "") or pydicom.uid.generate_uid())
     source_series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
@@ -281,17 +329,13 @@ def write_mpr_series(
         except (TypeError, ValueError):
             series_num_val = 501
 
-    written: list[Path] = []
     total = mpr_result.n_slices
     planes = getattr(mpr_result.slice_stack, "planes", None) or []
+    anonymizer_options, generated_suffix = _deep_options_and_suffix(opts)
 
     base_template = copy.deepcopy(template)
     _strip_conflicting_elements(base_template)
-    if opts.anonymize:
-        from utils.dicom_anonymizer import DICOMAnonymizer
-
-        base_template = DICOMAnonymizer().anonymize_dataset(base_template)
-        _strip_conflicting_elements(base_template)
+    derived_datasets: list[Dataset] = []
 
     for i in range(total):
         if progress_callback:
@@ -323,7 +367,10 @@ def write_mpr_series(
             ds.SeriesNumber = series_num_val
 
         ds.SeriesDescription = _series_description_default(
-            template, opts.orientation_label, opts.series_description_suffix
+            template,
+            opts.orientation_label,
+            generated_suffix,
+            include_source_description=not opts.anonymize,
         )[:64]
 
         ds.ImageType = ["DERIVED", "SECONDARY", "REFORMATTED"]
@@ -400,14 +447,25 @@ def write_mpr_series(
                 ]
                 ds.ImagePositionPatient = [float(org[0]), float(org[1]), float(org[2])]
 
-        try:
-            ds.ImageComments = (
-                f"Derived MPR reformatted series; source series UID {source_series_uid}; "
-                f"plane {i + 1}/{total}"
-            )[:1024]
-        except Exception:
-            pass
+        _set_mpr_image_comments(
+            ds,
+            anonymize=opts.anonymize,
+            source_series_uid=source_series_uid,
+            index=i + 1,
+            total=total,
+        )
 
+        derived_datasets.append(ds)
+
+    if opts.anonymize:
+        derived_datasets = DeepDICOMAnonymizer(anonymizer_options).anonymize_batch(
+            derived_datasets
+        )
+
+    series_dir = _mpr_series_dir(root, derived_datasets[0], template, opts)
+
+    written: list[Path] = []
+    for i, ds in enumerate(derived_datasets):
         out_path = series_dir / f"MPR_{i + 1:04d}.dcm"
         try:
             dcmwrite(str(out_path), ds, write_like_original=False)

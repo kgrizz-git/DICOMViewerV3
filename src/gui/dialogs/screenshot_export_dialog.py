@@ -121,6 +121,16 @@ class ScreenshotExportDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
+        privacy_notice = QLabel(
+            "<b>Privacy notice:</b> Screenshot export captures what is visible on screen, "
+            "including image text, overlays, annotations, and—when selected—the full window. "
+            "Review the display before sharing."
+        )
+        privacy_notice.setObjectName("screenshotPrivacyNotice")
+        privacy_notice.setWordWrap(True)
+        privacy_notice.setStyleSheet("QLabel { color: #b45309; padding: 6px; background: #fffbeb; }")
+        layout.addWidget(privacy_notice)
+
         # Subwindow selection
         self._subwindow_group = QGroupBox("Subwindows to export (separate files only)")
         group_layout = QVBoxLayout()
