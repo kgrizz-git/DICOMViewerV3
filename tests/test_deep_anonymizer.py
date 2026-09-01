@@ -536,6 +536,89 @@ class TestDeepDICOMAnonymizer(unittest.TestCase):
         self.assertEqual(reloaded.PatientSex, "")
         self.assertIn("PixelData", reloaded)
 
+    def test_serialized_batch_scrubs_common_nested_metadata_risks(self) -> None:
+        """A synthetic deep batch keeps its metadata protections after serialization.
+
+        This is deliberately a bounded regression test, not a DICOM profile or
+        IOD-validity assessment.  It exercises the common sharing-risk cases in
+        one wholly synthetic batch: nested patient identifiers and free text,
+        private attributes, group 0004, UID references, and File Meta/preamble.
+        """
+        study_uid = generate_uid()
+        first_sop_uid = generate_uid()
+        first = _synthetic_dataset(study_uid=study_uid, sop_uid=first_sop_uid)
+        second = _synthetic_dataset(study_uid=study_uid)
+
+        nested = Dataset()
+        nested.PatientName = "Nested^Synthetic"
+        nested.PatientID = "NESTED-ID"
+        nested.ImageComments = "Synthetic nested note"
+        nested.add_new(Tag(0x0011, 0x0010), "LO", "SYNTHETIC_CREATOR")
+        nested.add_new(Tag(0x0011, 0x1001), "LO", "synthetic-private-value")
+        nested.add_new(Tag(0x0004, 0x1511), "UI", generate_uid())
+        first.RequestAttributesSequence = DicomSequence([nested])
+        first.add_new(Tag(0x0013, 0x0010), "LO", "SYNTHETIC_TOP_CREATOR")
+        first.add_new(Tag(0x0013, 0x1001), "LO", "synthetic-top-private-value")
+        first.add_new(Tag(0x0004, 0x1511), "UI", generate_uid())
+        first.file_meta.SourceApplicationEntityTitle = "SYNTH_SOURCE_AE"
+        first.file_meta.SendingApplicationEntityTitle = "SYNTH_SEND_AE"
+        first.file_meta.ReceivingApplicationEntityTitle = "SYNTH_RECV_AE"
+        first.file_meta.PrivateInformationCreatorUID = generate_uid()
+        first.file_meta.PrivateInformation = b"synthetic-private-information"
+        first.preamble = b"\xAA" * 128
+
+        reference = Dataset()
+        reference.ReferencedSOPClassUID = first.SOPClassUID
+        reference.ReferencedSOPInstanceUID = first_sop_uid
+        second.ReferencedImageSequence = DicomSequence([reference])
+
+        anonymized = DeepDICOMAnonymizer(
+            DeepAnonymizerOptions(date_shift=False)
+        ).anonymize_batch([first, second])
+        reloaded: list[Dataset] = []
+        for dataset in anonymized:
+            buffer = io.BytesIO()
+            dataset.save_as(buffer, write_like_original=False)
+            buffer.seek(0)
+            reloaded.append(pydicom.dcmread(buffer))
+
+        first_out, second_out = reloaded
+        nested_out = first_out.RequestAttributesSequence[0]
+        self.assertEqual(nested_out.PatientName, "")
+        self.assertEqual(nested_out.PatientID, "")
+        self.assertNotIn("ImageComments", nested_out)
+        self.assertNotIn("StudyDescription", first_out)
+        self.assertNotIn("ImageComments", first_out)
+        self.assertFalse(any(element.tag.group % 2 for element in first_out))
+        self.assertFalse(any(element.tag.group % 2 for element in nested_out))
+        self.assertNotIn(Tag(0x0004, 0x1511), first_out)
+        self.assertNotIn(Tag(0x0004, 0x1511), nested_out)
+
+        self.assertNotEqual(str(first_out.SOPInstanceUID), first_sop_uid)
+        self.assertEqual(str(first_out.StudyInstanceUID), str(second_out.StudyInstanceUID))
+        self.assertNotEqual(str(first_out.StudyInstanceUID), study_uid)
+        self.assertEqual(
+            str(second_out.ReferencedImageSequence[0].ReferencedSOPClassUID),
+            str(first_out.SOPClassUID),
+        )
+        self.assertEqual(
+            str(second_out.ReferencedImageSequence[0].ReferencedSOPInstanceUID),
+            str(first_out.SOPInstanceUID),
+        )
+        self.assertEqual(
+            str(first_out.file_meta.MediaStorageSOPInstanceUID),
+            str(first_out.SOPInstanceUID),
+        )
+        for tag in (
+            Tag(0x0002, 0x0016),
+            Tag(0x0002, 0x0017),
+            Tag(0x0002, 0x0018),
+            Tag(0x0002, 0x0101),
+            Tag(0x0002, 0x0102),
+        ):
+            self.assertNotIn(tag, first_out.file_meta)
+        self.assertEqual(first_out.preamble, b"\x00" * 128)
+
 
 if __name__ == "__main__":
     unittest.main()

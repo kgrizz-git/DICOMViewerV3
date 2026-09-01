@@ -297,20 +297,31 @@ the [PS3.15 Table E.1-1 primary-source review record](PS315_E1_PRIMARY_SOURCE_RE
 
 ### Near-term bounded milestone — practical regression hardening
 
-- [ ] Build a compact, wholly synthetic serialized-output regression suite for
+- [x] Build a compact, wholly synthetic serialized-output regression suite for
   the selected common sharing-risk cases: nested identifiers, private
   attributes, UID references, group `0004`, free text, File Meta, and
-  MPR-derived output.
-- [ ] For every case, assert only the observed behavior and the intended
+  MPR-derived output. The deep-batch round trip is covered by
+  `tests/test_deep_anonymizer.py::TestDeepDICOMAnonymizer::test_serialized_batch_scrubs_common_nested_metadata_risks`;
+  the on-disk MPR derived-output case is covered by
+  `tests/test_mpr_dicom_export.py::test_write_mpr_series_deidentified_uses_deep_batch_on_disk`.
+- [x] For every case, assert only the observed behavior and the intended
   metadata-de-identification invariant (for example, removal, blanking, or
-  consistent remapping observed in the current implementation); record known exclusions rather than
-  inferring IOD validity, PS3.15 profile coverage, or a legal/privacy result.
-- [ ] Re-check that the relevant dialog and user-guide warnings still direct
-  users to review output before sharing.
+  consistent remapping observed in the current implementation). The new
+  deep-batch test docstring explicitly excludes IOD validity, PS3.15 profile
+  coverage, and a legal/privacy result; the MPR assertions remain limited to
+  observed serialized metadata behavior.
+- [x] Re-check that the relevant dialog and user-guide warnings still direct
+  users to review output before sharing. Verified the shared
+  `BURNED_IN_PHI_WARNING`, the DICOM export/MPR surfaces, and
+  [`USER_GUIDE_ANONYMIZATION.md`](../../../user-docs/USER_GUIDE_ANONYMIZATION.md).
 
 **Milestone gate:** the compact suite passes, is wholly synthetic, and makes
 no conformance claim. Completion does not open the deferred PS3.3 or broad
 profile-conformance paths above.
+
+**Completed 2026-09-01:** This bounded regression milestone adds serialized
+output evidence only. It does not change the scoped wording policy or begin
+the deferred PS3.3/IOD or broad PS3.15 profile-conformance assessments.
 
 The broader Phase 2 fixture matrix below is a separate, deferred assessment of
 all public paths and modalities. Do not duplicate it while implementing this
