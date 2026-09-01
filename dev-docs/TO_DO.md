@@ -30,10 +30,13 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
 3. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
-4. **Reassess DICOM metadata-de-identification behavior and claims** — keep the
-   work bounded to source-backed output-scope evidence and clear warnings;
-   defer any PS3.3 IOD-validity or profile-conformance matrix unless the
-   maintainer deliberately chooses a narrow supported-object claim. **Plan:**
+4. **Practical DICOM metadata-de-identification regression hardening** — add a
+   small synthetic serialized-output suite for common sharing risks (nested
+   identifiers, private attributes, UID references, group `0004`, free text,
+   File Meta, and MPR-derived output). Keep the existing clear warnings and do **not** turn
+   this into a PS3.3 IOD-validity or PS3.15 profile-conformance project unless
+   the maintainer deliberately chooses a narrow supported-object claim.
+   **Plan:**
    [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
@@ -70,7 +73,7 @@ Release blockers (license compliance, versioned executables) live in
 
 ## Validation / QA
 
-- [ ] **[P1]** **Reassess DICOM de-identification compliance and claims.** Build a primary-source, versioned PS3.15/PS3.16 requirement matrix; audit every DICOM and “anonymize” export path (especially MPR); correct unsupported wording; and plan remediations only after the research and claim-review gates. Under the recorded sole-maintainer policy, do not make legal-certification or HIPAA Safe Harbor claims. **Plan:** [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
+- [ ] **[P1]** **Practical DICOM metadata-de-identification regression hardening.** Add a compact synthetic serialized-output regression suite for the common sharing-risk cases; re-check the existing scoped warnings and review-before-sharing guidance. The completed PS3.15/PS3.16 evidence work is retained in the plan. Defer PS3.3 IOD-validity and PS3.15 profile-conformance assessment unless the maintainer explicitly chooses a narrow supported-object claim. Under the recorded sole-maintainer policy, do not make legal-certification or HIPAA Safe Harbor claims. **Plan:** [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
 - [ ] **[P1]** Run assessment templates
 - [ ] **[P1]** See qi-assessment recommendations
 - [ ] **[P1]** Also see to-dos on Unpushed Edits Google Sheet

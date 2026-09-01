@@ -10,7 +10,9 @@ from pathlib import Path
 import pytest
 
 from scripts.build_ps316_cid7050_inventory import (
+    _OFFICIAL_CID_7050_URL,
     InventorySource,
+    _parse_args,
     _validate_utc_timestamp,
     build_inventory_document,
     extract_inventory,
@@ -20,6 +22,8 @@ _COMMITTED_INVENTORY = (
     Path(__file__).resolve().parents[1] / "dev-docs/plans/supporting/ps316_cid7050_inventory.json"
 )
 _RETAINED_SOURCE = Path(__file__).resolve().parents[1] / "tmp/ps315-assessment/PS3.16-current-CID-7050.html"
+_EXPECTED_SOURCE_SHA256 = "115f4ec2c9d7c803fded4b204af2932baa4d55beac307a18ef0005f13d905c14"
+_EXPECTED_SOURCE_BYTES = 21919
 
 
 def _cid_page(rows: str, *, context: str | None = None) -> str:
@@ -97,7 +101,7 @@ def test_build_inventory_document_records_source_fingerprint() -> None:
     document = build_inventory_document(
         InventorySource(
             edition="2026c",
-            source_url_current="https://example.test/current",
+            source_url_current=_OFFICIAL_CID_7050_URL,
             edition_url_candidate="https://example.test/2026c",
             edition_url_status="not published (HTTP 404 on 2026-09-01)",
             retrieved_at_utc="2026-09-01T04:29:46Z",
@@ -120,7 +124,7 @@ def test_build_inventory_document_rejects_mismatched_page_edition() -> None:
         build_inventory_document(
             InventorySource(
                 edition="2024b",
-                source_url_current="https://example.test/current",
+                source_url_current=_OFFICIAL_CID_7050_URL,
                 edition_url_candidate="https://example.test/2024b",
                 edition_url_status="not published (HTTP 404 on 2026-09-01)",
                 retrieved_at_utc="2026-09-01T04:29:46Z",
@@ -138,8 +142,26 @@ def test_build_inventory_document_rejects_editionless_archive_url() -> None:
         build_inventory_document(
             InventorySource(
                 edition="2026c",
-                source_url_current="https://example.test/current",
+                source_url_current=_OFFICIAL_CID_7050_URL,
                 edition_url_candidate="https://example.test/archive",
+                edition_url_status="not published (HTTP 404 on 2026-09-01)",
+                retrieved_at_utc="2026-09-01T04:29:46Z",
+            ),
+            source_bytes,
+        )
+
+
+def test_build_inventory_document_rejects_noncanonical_source_url() -> None:
+    source_bytes = _cid_page(
+        "<tr><td>DCM</td><td>113100</td><td>Basic Application Confidentiality Profile</td></tr>"
+    ).encode()
+
+    with pytest.raises(ValueError, match="official NEMA CID 7050 URL"):
+        build_inventory_document(
+            InventorySource(
+                edition="2026c",
+                source_url_current="https://example.test/current",
+                edition_url_candidate="https://example.test/2026c",
                 edition_url_status="not published (HTTP 404 on 2026-09-01)",
                 retrieved_at_utc="2026-09-01T04:29:46Z",
             ),
@@ -199,6 +221,29 @@ def test_validate_utc_timestamp_accepts_zulu_timestamp() -> None:
     _validate_utc_timestamp("2026-09-01T04:29:46Z")
 
 
+def test_parse_args_defaults_to_official_source_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_ps316_cid7050_inventory.py",
+            "--input",
+            "source.html",
+            "--output",
+            "inventory.json",
+            "--edition",
+            "2026c",
+            "--retrieved-at-utc",
+            "2026-09-01T04:29:46Z",
+            "--edition-url-candidate",
+            "https://example.test/2026c",
+            "--edition-url-status",
+            "not published (HTTP 404 on 2026-09-01)",
+        ],
+    )
+
+    assert _parse_args().source_url_current == _OFFICIAL_CID_7050_URL
+
+
 def test_committed_inventory_has_complete_cid_7050_codes() -> None:
     inventory = json.loads(_COMMITTED_INVENTORY.read_text(encoding="utf-8"))
     codes = inventory["codes"]
@@ -214,7 +259,8 @@ def test_committed_inventory_has_complete_cid_7050_codes() -> None:
         "Version": "20170914",
         "UID": "1.2.840.10008.6.1.925",
     }
-    assert len(inventory["source"]["content_sha256"]) == 64
+    assert inventory["source"]["content_sha256"] == _EXPECTED_SOURCE_SHA256
+    assert inventory["source"]["content_bytes"] == _EXPECTED_SOURCE_BYTES
     assert inventory["extraction"]["row_count"] == 13
     codes_digest = hashlib.sha256(
         json.dumps(codes, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -243,6 +289,16 @@ def test_committed_inventory_has_complete_cid_7050_codes() -> None:
         ("DCM", "113111", "Retain Safe Private Option"),
         ("DCM", "113112", "Retain Institution Identity Option"),
     }
+
+
+def test_retained_source_matches_committed_fingerprint_when_available() -> None:
+    if not _RETAINED_SOURCE.is_file():
+        pytest.skip("The ignored official-source retrieval artifact is unavailable")
+
+    source_bytes = _RETAINED_SOURCE.read_bytes()
+
+    assert len(source_bytes) == _EXPECTED_SOURCE_BYTES
+    assert hashlib.sha256(source_bytes).hexdigest() == _EXPECTED_SOURCE_SHA256
 
 
 def test_retained_source_regenerates_committed_inventory_when_available() -> None:

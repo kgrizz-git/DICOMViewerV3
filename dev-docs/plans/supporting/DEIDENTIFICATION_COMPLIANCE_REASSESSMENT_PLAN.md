@@ -208,6 +208,28 @@ traceable.
 **Gate:** scope and the no-legal-claim wording policy recorded before new
 technical-profile claims or external distribution messaging.
 
+## Maintainer next-step choices — 2026-09-01
+
+The source evidence, output-scope baseline, action-resolution method, and
+warning/wording work are recorded. They improve the implementation and keep
+claims bounded; they do **not** establish PS3.15 profile conformance, IOD
+validity, or a legal/privacy conclusion.
+
+The selected next step is the **small practical hardening milestone** detailed
+in [Phase 2](#near-term-bounded-milestone--practical-regression-hardening).
+It is implementation evidence only, not a conformance result.
+
+The maintainer may instead choose either of these explicitly deferred paths:
+
+1. a narrow, named-object PS3.3 Type 1/2/conditional assessment, if a future
+   technical statement about a particular output family is useful; or
+2. a broad PS3.15 profile-conformance program, which would require resolving
+   all applicable table actions, selected options, IOD validity, and ongoing
+   maintenance. It is not needed for the current scoped warnings.
+
+Do not start either deferred path implicitly while completing the practical
+hardening milestone.
+
 ## Phase 1 — Authoritative research and requirement register
 
 - [x] Record the initial DICOM edition/date used for the assessment; the committed
@@ -272,6 +294,28 @@ the [PS3.15 Table E.1-1 primary-source review record](PS315_E1_PRIMARY_SOURCE_RE
   array match the committed inventory.
 
 ## Phase 2 — Repository and output evidence assessment
+
+### Near-term bounded milestone — practical regression hardening
+
+- [ ] Build a compact, wholly synthetic serialized-output regression suite for
+  the selected common sharing-risk cases: nested identifiers, private
+  attributes, UID references, group `0004`, free text, File Meta, and
+  MPR-derived output.
+- [ ] For every case, assert only the observed behavior and the intended
+  metadata-de-identification invariant (for example, removal, blanking, or
+  consistent remapping observed in the current implementation); record known exclusions rather than
+  inferring IOD validity, PS3.15 profile coverage, or a legal/privacy result.
+- [ ] Re-check that the relevant dialog and user-guide warnings still direct
+  users to review output before sharing.
+
+**Milestone gate:** the compact suite passes, is wholly synthetic, and makes
+no conformance claim. Completion does not open the deferred PS3.3 or broad
+profile-conformance paths above.
+
+The broader Phase 2 fixture matrix below is a separate, deferred assessment of
+all public paths and modalities. Do not duplicate it while implementing this
+compact milestone; promote a useful synthetic fixture only if the maintainer
+later deliberately starts that broader assessment.
 
 - [ ] Build a complete call graph of all anonymization/de-identification/masking
   paths, including background, projection, MPR, derived objects, report export,

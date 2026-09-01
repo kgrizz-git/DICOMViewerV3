@@ -21,6 +21,9 @@ from typing import Any
 
 _EXPECTED_HEADER = ("Coding Scheme Designator", "Code Value", "Code Meaning")
 _CONTEXT_FIELDS = ("Keyword", "FHIR Keyword", "Type", "Version", "UID")
+_OFFICIAL_CID_7050_URL = (
+    "https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_7050.html"
+)
 _EDITION_PATTERN = re.compile(
     r'<span[^>]+class="documentreleaseinformation"[^>]*>\s*DICOM PS3\.16\s+([^\s<]+)\s+-',
     re.IGNORECASE,
@@ -201,6 +204,8 @@ def extract_inventory(html: str) -> tuple[list[str], dict[str, str], list[dict[s
 
 def build_inventory_document(source: InventorySource, source_bytes: bytes) -> dict[str, Any]:
     """Return an auditable, source-derived CID 7050 inventory document."""
+    if source.source_url_current != _OFFICIAL_CID_7050_URL:
+        raise ValueError("--source-url-current must be the official NEMA CID 7050 URL")
     html = source_bytes.decode("utf-8")
     page_edition = _extract_page_edition(html)
     if source.edition != page_edition:
@@ -260,7 +265,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--retrieved-at-utc", required=True, help="ISO-8601 retrieval timestamp")
     parser.add_argument(
         "--source-url-current",
-        default="https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_7050.html",
+        default=_OFFICIAL_CID_7050_URL,
+        help="Canonical official NEMA CID 7050 URL; other values are rejected",
     )
     parser.add_argument(
         "--edition-url-candidate",
