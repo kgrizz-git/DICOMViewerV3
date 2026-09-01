@@ -17,10 +17,11 @@ described as anonymized, de-identified, private, or safe to share**, not merely
 the primary DICOM Export dialog.
 
 This is not legal advice, certification, or a declaration that an output is
-anonymous under any law. No product copy may claim a DICOM profile, HIPAA Safe
-Harbor, GDPR anonymization, regulatory approval, or suitability for public
-release unless this plan records the applicable evidence and an authorized human
-approves the claim.
+anonymous under any law. The project is sole-maintained and has no legal or
+compliance department. Accordingly, it will not make HIPAA Safe Harbor, GDPR
+anonymization, regulatory-approval, or public-release-suitability claims. A
+future technical DICOM-profile claim is permitted only if this plan records the
+applicable evidence and the maintainer deliberately approves its exact scope.
 
 Until Phase 3 completes, use conservative wording such as **“de-identification
 tools,” “metadata de-identification,”** and **“review before sharing.”** Do not
@@ -76,7 +77,7 @@ verify it independently before updating any status below.
 ### Evidence lifecycle
 
 `Unverified` → `Primary source verified` → `Implementation assessed` →
-`Automated evidence` → `Human review complete` → `Claim approved`.
+`Automated evidence` → `Maintainer review complete` → `Technical claim approved`.
 
 A later standard revision, newly supported IOD/SOP Class, new export route,
 dependency change, or wording change returns affected rows to at least
@@ -99,12 +100,12 @@ required research result, not a pass.
 | R-07 | Remove or clean identifying private attributes only as PS3.15 permits; do not imply that blanket private-tag removal removes all PHI. | S-01 | Deep default removes odd-group private attributes; simple/MPR path needs audit. | Partial | Validate recursion and creator blocks; document vendor/private and pixel limitations. |
 | R-08 | Address identifying text/graphics/pixels only when the corresponding option is actually implemented; otherwise warn clearly and do not claim it. | S-01 | UI warns that burned-in text is neither detected nor removed. | Warning present; complete scope unverified | Audit overlays, presentation states, icons, encapsulated documents, and all UI claims. |
 | R-09 | Preserve DICOM validity for every supported SOP Class/IOD after de-identification. | S-01 plus applicable PS3.3/PS3.5 requirements | Tests perform synthetic pydicom round-trips. | Insufficient evidence | Define a modality/SOP-class corpus, independent validation tools, and negative tests for Type 1/2/conditional attributes. |
-| R-10 | HIPAA Safe Harbor, Expert Determination, GDPR/UK GDPR “anonymous,” and similar legal claims require their own applicability and evidence analysis. | S-03, S-04; S-08 when selected | Current reviewed de-identification copy avoids legal/compliance assurances and directs users to organization-appropriate review. The complete claims inventory remains pending. | Interim claim remediation complete; no legal claim | Keep the no-claim policy and obtain authorized legal/product decision before adding legal language. |
+| R-10 | HIPAA Safe Harbor, Expert Determination, GDPR/UK GDPR “anonymous,” and similar legal claims require their own applicability and evidence analysis. | S-03, S-04; S-08 when selected | Current reviewed de-identification copy avoids legal/compliance assurances and directs users to organization-appropriate review. The complete claims inventory remains pending. | Interim claim remediation complete; no legal claim | Keep the no-legal-claim policy. Defer any legal language unless future project ownership explicitly changes that policy. |
 | R-11 | Every user-visible export path named “anonymize” or “de-identify” has a defined scope and does not inherit a DICOM claim accidentally. | Product wording; S-01 where DICOM is claimed | The MPR dialog now uses the shared deep options/default and presents the metadata-only burned-in-pixel limitation. Legacy `anonymize=True` projection/export branches still call the base anonymizer; report export has a separate masking option. | MPR gap remediated; inventory incomplete | Assess and align the remaining base-anonymizer call sites before making a common-path claim. |
 | R-12 | Remove group `0004` elements from a non-DICOMDIR de-identified SOP Instance/DICOM File. | S-01, E.1.1 step 9 | The shared deep engine now removes group `0004` recursively. Synthetic deep and final serialized MPR regressions cover a non-DICOMDIR element. | Implemented for reviewed deep paths; base paths pending | Extend final-on-disk coverage and decide treatment of any non-deep export path. |
 | R-13 | Supply a scoped de-identifier Conformance Statement if making a PS3.15 conformance claim, including supported profile/options, attribute handling, dummy/replacement behavior, UID consistency, and encrypted-attributes behavior where applicable. | S-01, E.1.3 | No current dedicated statement located. | Missing / unverified | Define the required statement content in Phase 1 and publish only after the matrix is evidenced. |
 | R-14 | When retaining/modifying longitudinal temporal information, ensure every related DICOM attribute, option declaration, and output assertion is correctly mapped. | S-01, S-02 | Date modes and CID codes exist; completeness of related temporal attributes has not been verified. | Unverified | Research the exact option semantics and required attributes; do not infer requirements from model output. |
-| R-15 | A de-identifier claiming the Basic Profile protects the SOP Instance UID and **all** references to other SOP Instances, including references in sequence items; replacements must be internally consistent across the protected set. | S-01, E.1.1 steps 2 and 5 | Deep engine has a per-batch UID map; basic/MPR paths do not use it. | Partial / unverified | Test top-level and nested references across a multi-instance batch; document which UID contexts are intentionally preserved and why. |
+| R-15 | A de-identifier claiming the Basic Profile protects the SOP Instance UID and **all** references to other SOP Instances, including references in sequence items; replacements must be internally consistent across the protected set. | S-01, E.1.1 steps 2 and 5 | The deep engine has a per-batch UID map. Basic paths do not use it; MPR now uses the shared deep batch/UID map. | Partial / unverified | Test top-level and nested references across a multi-instance batch; document which UID contexts are intentionally preserved and why. |
 | R-16 | A table action applies to sequence contents: `K` requires recursive application, `C` requires context-aware cleaning or recursive application, and an `X` sequence removes its items. | S-01, E.1.1 and Table E.1-1a | Deep engine recurses selected routines; coverage is curated rather than action-table-derived. | Unverified | Map every sequence action and test sequence removal/cleaning/UID remapping in serialized output. |
 | R-17 | The action table is normative but extensible; new, retired, private, and standard-extended attributes may still identify people. De-identification of Private SOP Classes is not defined. | S-01, E.1.1 notes after Table E.1-1 | Blanket private removal exists only in the deep path; unsupported-object policy is not defined. | Unverified | Version the table dataset, define an upgrade trigger and explicit unsupported Private SOP Class behavior. |
 | R-18 | If encrypted attributes are used, they have defined encoding/encryption and sequence requirements; use is optional, not an implicit substitute for normal replacement/removal. | S-01, E.1.1 steps 1 and 4 | No encrypted-attribute implementation identified. | Not implemented / no claim | Record as unsupported in a future Conformance Statement; do not add ad-hoc hashes or recovery identifiers as a substitute. |
@@ -184,11 +185,11 @@ traceable.
 | Historical deep-export provenance: CID 7050 `113100` | The exported instance was processed according to the Basic Application Confidentiality Profile. | Unverified pending R-01 and R-15–R-22. | **Interim remediation complete 2026-08-31:** deep export no longer emits profile/option codes or `PatientIdentityRemoved`; it records only scoped method text until evidence supports a profile claim. |
 | Historical MPR checkbox: “same as DICOM export” | MPR has the same engine, option behavior, provenance, and profile coverage. | Formerly contradicted by the base-anonymizer path. | **Remediated 2026-08-31:** MPR now invokes the shared deep batch/options and uses scoped metadata wording; full-profile coverage remains unverified. |
 
-## Phase 0 — Freeze unsupported claims and establish ownership
+## Phase 0 — Freeze unsupported claims and record the solo-maintainer policy
 
-- [ ] Name a product owner and an authorized legal/compliance reviewer for any
-  jurisdictional claim. The engineering team may describe implemented behavior,
-  not grant legal clearance.
+- [x] Record the project policy: it is sole-maintained with no legal/compliance
+  department, and it will make no jurisdictional or regulatory de-identification
+  claim. Engineering may describe verified technical behavior only.
 - [ ] Search UI, user docs, developer docs, changelog, release notes, and source
   strings for “anonymous,” “anonymize,” “de-identify,” “PS3.15,” “conform,”
   “safe,” “HIPAA,” “GDPR,” “public,” and “share.” Add every claim to the claims
@@ -200,21 +201,30 @@ traceable.
   file/report exports labelled “anonymize.” Default: include both, but keep
   separate matrices and claims.
 
-**Gate:** owner, scope, and a temporary wording policy recorded before new
-compliance claims or external distribution messaging.
+**Gate:** scope and the no-legal-claim wording policy recorded before new
+technical-profile claims or external distribution messaging.
 
 ## Phase 1 — Authoritative research and requirement register
 
-- [ ] Pin the DICOM edition/date used for the assessment; save section/table
+- [x] Record the initial DICOM edition/date used for the assessment; the committed
+  source-derived inventory records the retrieved page's edition label, digest,
+  byte count, URLs, and timestamp. It also records whether a stable edition URL
+  was published at retrieval time; the digest is the effective immutable pin
+  when it was not. The raw source remains an ignored local retrieval artifact
+  and can be regenerated using
+  `scripts/build_ps315_e1_inventory.py`.
+- [x] Normalize the complete PS3.15 Table E.1-1 action inventory into the
+  versioned, machine-readable
+  [`ps315_e1_inventory.json`](ps315_e1_inventory.json). It preserves raw base
+  actions and option columns; IOD Type and option-dependent resolution remains
+  intentionally unassessed.
+- [ ] For each inventory row, record the resolved action policy for each
+  supported IOD Type and selected option set. Do not infer `X/Z/D` resolution
+  from a generic dataset.
+- [ ] Pin the DICOM edition/date used for every later assessment source; save section/table
   identifiers, retrieval date, organization, canonical URL, retrieved-page
   edition label, and a content fingerprint for every requirement. The
   `current` URL is a discovery link, not a version pin.
-- [ ] Normalize the complete PS3.15 Table E.1-1 action inventory into a
-  versioned, machine-readable requirements dataset. Record action, option
-  overrides, Type/IOD resolution notes, sequence handling, source row, and a
-  stable table-row identifier. Store a source-derived representation or a
-  reproducible extraction recipe with its digest; do not hand-maintain a
-  partial tag list as though it were the table.
 - [ ] Verify PS3.16 CID 7050 code values, meanings, and option declarations
   against the same DICOM edition.
 - [ ] Define which PS3.3 IOD/SOP Classes the application promises to preserve;
@@ -229,8 +239,14 @@ compliance claims or external distribution messaging.
   standard text beyond short, necessary paraphrases/quotes.
 
 **Gate:** two independent primary-source reviews of the requirements dataset;
-unresolved interpretation questions are explicitly marked and escalated before
-code design.
+unresolved interpretation questions remain explicitly marked and block a
+technical profile claim before code design.
+
+- [ ] Complete independent primary-source review 1: compare the committed
+  inventory's header, row count, and a documented sample of rows against the
+  retrieved official source.
+- [ ] Complete independent primary-source review 2 using a separately retrieved
+  official source snapshot or an independently verified edition-specific copy.
 
 ## Phase 2 — Repository and output evidence assessment
 
@@ -269,7 +285,7 @@ implementation phases are planned in detail.
 - [ ] Compare terms such as “anonymization,” “de-identification,” “metadata
   only,” “best effort,” “profile implementation,” and “Safe Harbor.” Determine
   whether “best-effort” informs users without understating known constraints;
-  obtain product/legal approval for the selected term.
+  maintain the no-legal-claim policy when selecting a term.
 - [ ] Make limitations prominent and consistent: pixel/burned-in text, unusual
   private data, non-DICOM outputs, retained options, and the need for a
   recipient-appropriate review process.
@@ -277,19 +293,19 @@ implementation phases are planned in detail.
   de-identification dialog, its confirmation/progress state, and the matching
   user-guide section. It must name the selected scope/options and known
   exclusions, avoid an unqualified legal/compliance conclusion, link to the
-  detailed limitations, and be approved through the claims register before
-  release.
+  detailed limitations, and be approved through the claims register by the
+  maintainer before release.
   The existing startup `DisclaimerDialog` is not the integration point: it
   concerns diagnostic use and can be suppressed persistently through
   `disclaimer_accepted`. Assess a separate, operation-scoped component in the
   anonymization-options/export flow; whether it requires a per-export
-  acknowledgement remains a product/legal decision.
+  acknowledgement remains a maintainer decision.
 - [ ] Ensure code/docstrings never call an internal utility “conformant” merely
   because it satisfies a subset of table rows; reserve profile language for the
   assessed export behavior and exact option set.
 
-**Gate:** product copy review and authorized legal/compliance review for every
-claim that crosses from technical behavior into legal/regulatory assurance.
+**Gate:** maintainer review for technical product copy. Claims that cross into
+legal/regulatory assurance are out of scope and must not be added.
 
 ## Phase 4 — Remediation design (stub; populate after Phases 1–3)
 
@@ -319,7 +335,8 @@ claim that crosses from technical behavior into legal/regulatory assurance.
 - [ ] Run the full automated matrix, independent validation, privacy gates, and
   human visual-review scenarios using only approved synthetic/de-identified
   data.
-- [ ] Require human review of limitations, legal wording, and any release note.
+- [ ] Require maintainer review of limitations and any release note; reject
+  legal/regulatory wording under the recorded project policy.
 - [ ] Publish a scoped conformance statement only if Phases 1–5 establish it;
   otherwise publish the approved limitation wording.
 - [ ] Add a recurring review trigger for DICOM edition changes, new export

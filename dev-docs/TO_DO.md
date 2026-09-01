@@ -65,7 +65,7 @@ Release blockers (license compliance, versioned executables) live in
 
 ## Validation / QA
 
-- [ ] **[P1]** **Reassess DICOM de-identification compliance and claims.** Build a primary-source, versioned PS3.15/PS3.16 requirement matrix; audit every DICOM and “anonymize” export path (especially MPR); correct unsupported wording; and plan remediations only after the research and claim-review gates. Do not represent this as legal certification or HIPAA Safe Harbor without the separate authorized assessment. **Plan:** [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
+- [ ] **[P1]** **Reassess DICOM de-identification compliance and claims.** Build a primary-source, versioned PS3.15/PS3.16 requirement matrix; audit every DICOM and “anonymize” export path (especially MPR); correct unsupported wording; and plan remediations only after the research and claim-review gates. Under the recorded sole-maintainer policy, do not make legal-certification or HIPAA Safe Harbor claims. **Plan:** [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
 - [ ] **[P1]** Run assessment templates
 - [ ] **[P1]** See qi-assessment recommendations
 - [ ] **[P1]** Also see to-dos on Unpushed Edits Google Sheet

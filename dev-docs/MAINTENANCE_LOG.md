@@ -4,6 +4,17 @@
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
+## 2026-08-31
+
+- **PS3.15 Table E.1-1 inventory bootstrap:** Added a reproducible extractor
+  and a 656-row, machine-readable inventory sourced from the retrieved NEMA
+  PS3.15 2026c Annex E page. The inventory records byte/source and requirements
+  digests, retrieval metadata, and the unavailable edition-archive URL status;
+  the raw standards artifact remains ignored. This is evidence infrastructure,
+  not a DICOM-profile or legal-compliance claim. The active reassessment plan
+  now records the sole-maintainer/no-legal-claim policy and the remaining
+  independent-source-review and IOD/action-resolution gates.
+
 ## 2026-08-30
 
 - **De-id Type-2 / VR conformance:** The shared group-0010 anonymizer now
