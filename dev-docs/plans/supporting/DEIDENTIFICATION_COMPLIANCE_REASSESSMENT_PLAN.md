@@ -64,7 +64,7 @@ verify it independently before updating any status below.
 | ID | Organization / source | Authority and use | Canonical link | Retrieved | Status |
 |---|---|---|---|---|---|
 | S-01 | National Electrical Manufacturers Association (NEMA), DICOM Standard | Normative DICOM confidentiality profile, action codes, profile options, file-meta and provenance requirements | [PS3.15 2026c Annex E](https://dicom.nema.org/medical/dicom/current/output/chtml/part15/chapter_E.html) | 2026-08-31 | Verified primary source. The retrieved page identified itself as **PS3.15 2026c**; preserve that edition label, section/table identifiers, retrieval date, and a content fingerprint in the Phase 1 dataset rather than silently treating the moving `current` URL as immutable. |
-| S-02 | NEMA, DICOM Standard | Normative meanings/codes for de-identification method code sequence | [PS3.16 CID 7050](https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_7050.html) | 2026-08-31 | Verified primary source; reconcile emitted codes in Phase 2 |
+| S-02 | NEMA, DICOM Standard | Normative meanings/codes for de-identification method code sequence | [PS3.16 CID 7050](https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_7050.html) | 2026-09-01 | Source-derived [CID 7050 inventory](ps316_cid7050_inventory.json) records the retrieved PS3.16 2026c page, its context-group metadata, source fingerprint, and all 13 table rows. It is code-value evidence only, not a claim that any profile or option is applied. |
 | S-03 | U.S. Department of Health and Human Services, Office for Civil Rights | HIPAA de-identification guidance; jurisdictional/legal framework, not a DICOM-conformance specification | [Guidance on De-identification of Protected Health Information](https://www.hhs.gov/guidance/sites/default/files/hhs-guidance-documents/hhs_deid_guidance.pdf) | 2026-08-31 | Verified primary source; use only after applicability review |
 | S-04 | Office of the Federal Register / eCFR | Current U.S. regulatory text for HIPAA de-identification; eCFR is continuously updated and should be checked again before a legal claim | [45 CFR 164.514](https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164/subpart-E/section-164.514) | 2026-08-31 | Verified primary source for the U.S. requirement text; applicability remains a legal decision |
 | S-05 | pydicom contributors | Implementation/documentation comparison; expressly a starting point, not a normative de-identification authority | [Anonymize DICOM data example](https://pydicom.github.io/pydicom/stable/auto_examples/metadata_processing/plot_anonymize.html) | 2026-08-31 | Verified comparison source; no compliance claim adopted |
@@ -116,7 +116,7 @@ required research result, not a pass.
 | R-19 | Original Attributes Sequence can retain unencrypted pre-modification values and generally needs removal or selective treatment; Digital Signatures Sequence requires removal. | S-01, E.1.1 notes after Table E.1-1 | The shared deep engine removes both recursively. Synthetic deep and final serialized MPR regressions cover both top-level sequences. | Implemented for reviewed deep paths; base paths pending | Extend output coverage to remaining public routes; retain the no-profile-claim gate. |
 | R-20 | Clean Pixel Data / Clean Recognizable Visual Features are separate options. Icon-image pixel data, graphics, overlays, structured text, and encapsulated documents require their own handling; the standard does not specify a general content-cleaning method. | S-01, E.1.1; E.3 options; notes after Table E.1-1 | Pixel warning exists; engine has no approved clean-pixel/visual-feature option. | Scope boundary present, implementation unverified | Keep the exclusion prominent; inventory these objects and decide block/remove/warn behavior rather than implying they are cleaned. |
 | R-21 | Replacement and dummy values must not identify the patient and must preserve Information Object integrity; Type 1, Type 2, and conditional requirements determine whether `D`, `Z`, or `X` applies. | S-01, E.1.1 step 2 and Table E.1-1a | Patient Type-2 values are blanked; general IOD/type resolution is not implemented as a table-driven policy. | Partial / unverified | Test Type 1/2/conditional cases against the explicitly supported IOD set and record all dummy-value strategies. |
-| R-22 | Profile options override the base-table action when selected, and retention options can increase re-identification risk; option declarations must match behavior. | S-01, E.1.1; E.3; S-02 | UI exposes temporal/UID/private-related choices and deep provenance codes; complete option mapping is unverified. | Unverified | Reconcile every UI selection, effective transformation, and CID 7050 code in a versioned option matrix. |
+| R-22 | Profile options override the base-table action when selected, and retention options can increase re-identification risk; option declarations must match behavior. | S-01, E.1.1; E.3; S-02 | UI exposes temporal/UID/private-related choices; the deep path currently does not emit CID 7050 profile/option codes while the assessment remains incomplete. The complete option mapping is unverified. | Unverified | Reconcile every UI selection, effective transformation, and CID 7050 code in a versioned option matrix. |
 | R-23 | Attribute-profile conformance does not itself guarantee confidentiality or resolve regulatory requirements; the standard requires the de-identifier to address remaining identifying information. | S-01, Annex E note and E.1.1 notes; S-03/S-04 for U.S. legal context | Some product copy currently makes broader profile/safety assertions. | Claim gap confirmed | Complete Phase 3 before any legal, universal-safety, or unqualified-profile assertion. |
 
 ## Current path inventory (to be validated in Phase 2)
@@ -227,6 +227,16 @@ technical-profile claims or external distribution messaging.
   distinguishes arbitrary source-dataset re-export from the MPR writer's CT,
   MR, and Secondary Capture SOP Class selection, and records that no formal
   IOD-preservation promise exists yet.
+- [x] Verify PS3.16 CID 7050 code values, meanings, and option declarations
+  against the same DICOM edition. The source-derived
+  [`ps316_cid7050_inventory.json`](ps316_cid7050_inventory.json) records all
+  13 rows and context-group metadata from the retrieved PS3.16 2026c page.
+  It can be regenerated from the ignored
+  `tmp/ps315-assessment/PS3.16-current-CID-7050.html` artifact using
+  `scripts/build_ps316_cid7050_inventory.py`; the extractor verifies that the
+  supplied edition matches the retrieved page before writing the inventory.
+  It is an evidence register only: it does not reactivate code-sequence
+  provenance or assert that an option/profile is implemented.
 - [ ] For each inventory row, record the resolved action policy for each
   supported IOD Type and selected option set. Do not infer `X/Z/D` resolution
   from a generic dataset.
@@ -234,8 +244,6 @@ technical-profile claims or external distribution messaging.
   identifiers, retrieval date, organization, canonical URL, retrieved-page
   edition label, and a content fingerprint for every requirement. The
   `current` URL is a discovery link, not a version pin.
-- [ ] Verify PS3.16 CID 7050 code values, meanings, and option declarations
-  against the same DICOM edition.
 - [ ] Select any PS3.3 IOD/SOP Classes the application will formally promise
   to preserve; then document the applicable Type 1/2/conditional validation
   strategy. Do not mistake the current MPR SOP Class selection for that promise.

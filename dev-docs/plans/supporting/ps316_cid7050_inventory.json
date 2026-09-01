@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "source": {
+    "organization": "National Electrical Manufacturers Association (NEMA)",
+    "dicom_edition": "2026c",
+    "part": "PS3.16",
+    "chapter_section": "Chapter B, CID 7050, Table CID 7050",
+    "context_group": {
+      "cid": 7050,
+      "Keyword": "DeidentificationMethod",
+      "FHIR Keyword": "dicom-cid-7050-DeidentificationMethod",
+      "Type": "Extensible",
+      "Version": "20170914",
+      "UID": "1.2.840.10008.6.1.925"
+    },
+    "source_url_current": "https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_7050.html",
+    "edition_url_candidate": "https://dicom.nema.org/medical/dicom/2026c/output/chtml/part16/sect_CID_7050.html",
+    "edition_url_status": "not published (HTTP 404 on 2026-09-01)",
+    "retrieved_at_utc": "2026-09-01T04:29:46Z",
+    "content_sha256": "115f4ec2c9d7c803fded4b204af2932baa4d55beac307a18ef0005f13d905c14",
+    "content_bytes": 21919,
+    "content_fingerprint_method": "sha256 of retrieved HTML bytes"
+  },
+  "extraction": {
+    "script": "scripts/build_ps316_cid7050_inventory.py",
+    "table_header": [
+      "Coding Scheme Designator",
+      "Code Value",
+      "Code Meaning"
+    ],
+    "row_count": 13,
+    "codes_sha256": "1f12e3b22a892ebd9861739e0a1cf60e6e001e043e6087d82639167dcdd9f8a9",
+    "interpretation_note": "Raw CID 7050 code values and meanings only. This inventory does not assert that any application behavior applies the profile or an option."
+  },
+  "codes": [
+    {
+      "stable_id": "CID7050-001",
+      "source_table_row_number": 1,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113100",
+      "code_meaning": "Basic Application Confidentiality Profile"
+    },
+    {
+      "stable_id": "CID7050-002",
+      "source_table_row_number": 2,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113101",
+      "code_meaning": "Clean Pixel Data Option"
+    },
+    {
+      "stable_id": "CID7050-003",
+      "source_table_row_number": 3,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113102",
+      "code_meaning": "Clean Recognizable Visual Features Option"
+    },
+    {
+      "stable_id": "CID7050-004",
+      "source_table_row_number": 4,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113103",
+      "code_meaning": "Clean Graphics Option"
+    },
+    {
+      "stable_id": "CID7050-005",
+      "source_table_row_number": 5,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113104",
+      "code_meaning": "Clean Structured Content Option"
+    },
+    {
+      "stable_id": "CID7050-006",
+      "source_table_row_number": 6,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113105",
+      "code_meaning": "Clean Descriptors Option"
+    },
+    {
+      "stable_id": "CID7050-007",
+      "source_table_row_number": 7,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113106",
+      "code_meaning": "Retain Longitudinal Temporal Information Full Dates Option"
+    },
+    {
+      "stable_id": "CID7050-008",
+      "source_table_row_number": 8,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113107",
+      "code_meaning": "Retain Longitudinal Temporal Information Modified Dates Option"
+    },
+    {
+      "stable_id": "CID7050-009",
+      "source_table_row_number": 9,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113108",
+      "code_meaning": "Retain Patient Characteristics Option"
+    },
+    {
+      "stable_id": "CID7050-010",
+      "source_table_row_number": 10,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113109",
+      "code_meaning": "Retain Device Identity Option"
+    },
+    {
+      "stable_id": "CID7050-011",
+      "source_table_row_number": 11,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113110",
+      "code_meaning": "Retain UIDs Option"
+    },
+    {
+      "stable_id": "CID7050-012",
+      "source_table_row_number": 12,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113111",
+      "code_meaning": "Retain Safe Private Option"
+    },
+    {
+      "stable_id": "CID7050-013",
+      "source_table_row_number": 13,
+      "coding_scheme_designator": "DCM",
+      "code_value": "113112",
+      "code_meaning": "Retain Institution Identity Option"
+    }
+  ]
+}

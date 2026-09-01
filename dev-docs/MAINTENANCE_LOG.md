@@ -6,6 +6,13 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-01
 
+- **PS3.16 CID 7050 inventory:** Added a reproducible, 13-row inventory from
+  the retrieved NEMA PS3.16 2026c CID 7050 page. It records the context-group
+  metadata, source fingerprint, retrieval metadata, and unavailable
+  edition-archive URL status; the raw source remains ignored. This records
+  code values and meanings for later assessment only, without asserting that
+  the application implements a DICOM profile or option.
+
 - **DICOM output-scope baseline:** Recorded the user-reachable DICOM writer
   surface before attempting Table E.1-1 action resolution. The ordinary and
   dedicated export paths re-serialize source datasets rather than claiming a
