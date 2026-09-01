@@ -32,7 +32,6 @@ TYPE_2_PATIENT_TAGS: frozenset[BaseTag] = frozenset(
         Tag(0x0010, 0x0020),  # PatientID (LO, Z/D)
         Tag(0x0010, 0x0030),  # PatientBirthDate (DA, Z)
         Tag(0x0010, 0x0040),  # PatientSex (CS, Z)
-        Tag(0x0010, 0x1010),  # PatientAge (IS, Z)
     }
 )
 
@@ -60,7 +59,7 @@ class DICOMAnonymizer:
         nested in items (e.g. Referenced Patient Sequence, Request Attributes
         Sequence, SR ContentSequence) is anonymized too:
         - Common Type-2 Patient Module attributes (PatientName, PatientID,
-          PatientBirthDate, PatientSex, and PatientAge): **blanked** with a
+          PatientBirthDate, and PatientSex): **blanked** with a
           zero-length value.
           This preserves required attributes while remaining VR-legal (notably,
           PatientSex is CS and cannot contain the old ``ANONYMIZED`` dummy).

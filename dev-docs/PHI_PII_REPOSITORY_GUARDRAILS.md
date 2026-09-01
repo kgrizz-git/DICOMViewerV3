@@ -1,6 +1,6 @@
 # PHI / PII Repository Guardrails
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-09-01
 
 **Audience:** contributors and coding agents who add, generate, inspect, or export files in this repository.
 

@@ -6,6 +6,12 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-01
 
+- **PS3.15 action-resolution method:** Added the evidence schema and
+  Type/condition/option decision procedure required before assessing an
+  individual Table E.1-1 action. It deliberately records no resolved rows or
+  formal IOD scope; current transformation behavior remains separate from
+  future expected-action and serialized-output evidence.
+
 - **PS3.15 primary-source review record:** Documented two independent checks of
   the source-derived Table E.1-1 inventory: the retained retrieval and a
   separately retrieved snapshot both reproduced its 15-column header, 656 rows,

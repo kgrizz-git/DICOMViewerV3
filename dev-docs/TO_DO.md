@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-01
 
 ---
 
@@ -30,6 +30,11 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
 3. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
+4. **Reassess DICOM metadata-de-identification behavior and claims** — keep the
+   work bounded to source-backed output-scope evidence and clear warnings;
+   defer any PS3.3 IOD-validity or profile-conformance matrix unless the
+   maintainer deliberately chooses a narrow supported-object claim. **Plan:**
+   [De-identification compliance reassessment](plans/supporting/DEIDENTIFICATION_COMPLIANCE_REASSESSMENT_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.

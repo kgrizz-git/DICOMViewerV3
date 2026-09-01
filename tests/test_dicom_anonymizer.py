@@ -39,13 +39,16 @@ class TestBaseAnonymizerPatientTags(unittest.TestCase):
             "PatientID",
             "PatientBirthDate",
             "PatientSex",
-            "PatientAge",
         ):
             with self.subTest(keyword=keyword):
                 self.assertIn(keyword, anon)
                 self.assertEqual(getattr(anon, keyword), "")
         # Non-patient tag untouched.
         self.assertEqual(anon.Modality, "CT")
+
+    def test_patient_age_is_removed(self) -> None:
+        anon = DICOMAnonymizer().anonymize_dataset(_patient_dataset())
+        self.assertNotIn("PatientAge", anon)
 
     def test_birthdate_blanked_not_deleted(self) -> None:
         """PatientBirthDate (0010,0030) is Type 2 (PS3.15 action Z) — must stay

@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-09-01
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 

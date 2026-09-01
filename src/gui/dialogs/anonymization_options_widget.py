@@ -44,7 +44,7 @@ BURNED_IN_PHI_WARNING = (
 
 
 class AnonymizationOptionsWidget(QWidget):
-    """Preset dropdown + detailed PS3.15 de-identification toggles.
+    """Preset dropdown + detailed DICOM metadata-de-identification toggles.
 
     Selecting a preset fills the toggles; editing any toggle switches the preset
     selector to "Custom…". ``get_options`` always reflects the live toggle state.

@@ -1,6 +1,6 @@
 # De-identification (anonymized export)
 
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-01
 
 The viewer offers DICOM **metadata de-identification** settings that remove or
 replace selected identifiers during the DICOM export workflows described below.
@@ -74,7 +74,7 @@ following factual transformation detail:
 
 - **DeidentificationMethod (0012,0063)** identifies the application's metadata transformation. It does not certify that all identifying information was removed.
 - The application deliberately does **not** write `PatientIdentityRemoved = YES` or a PS3.16 CID 7050 profile/option code sequence while its PS3.15 assessment is incomplete.
-- **File Meta** is regenerated and the 128-byte preamble zeroed; `MediaStorageSOPInstanceUID (0002,0003)` is kept in sync with `SOPInstanceUID (0008,0018)` so no original instance UID leaks.
+- **File Meta** is regenerated and the 128-byte preamble zeroed; `MediaStorageSOPInstanceUID (0002,0003)` is kept in sync with `SOPInstanceUID (0008,0018)` to avoid a mismatch. When Re-mint UIDs is off, the original UID remains by design.
 
 ## Scope and limits
 

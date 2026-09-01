@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-01
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -67,7 +67,7 @@ These are separate from the main Export Images dialog:
 |--------|-------|------------|
 | Rendered **screenshots** of panes / whole window | **File → Export Screenshots…** | Captures what is visible, including any image text/overlays. [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
 | **Cine** loop (GIF / AVI / MP4 / MPG) | **File → Export Cine As…** | Can include rendered image text, overlays, ROIs, and measurements. [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
-| **De-identified** DICOM (dedicated dialog) | **File → De-identify & Export DICOM…** | [De-identified export](USER_GUIDE_ANONYMIZATION.md) |
+| DICOM with metadata de-identification (dedicated dialog) | **File → De-identify & Export DICOM…** | [Metadata de-identification export](USER_GUIDE_ANONYMIZATION.md) |
 | **DICOM tags** (CSV / TXT / XLSX) | **File → Export DICOM Tags…** (**Ctrl+Shift+T**) | May contain identifiers, including private-tag values. [Hub → DICOM tags](USER_GUIDE.md) · [Tag export dialog](#dicom-tag-export-dialog) |
 | **ROI statistics** & measurements | **Tools → Export ROI Statistics…** | Review the output filename before sharing; defaults can include an accession number or patient ID. [Measurements & annotations](USER_GUIDE_ANNOTATIONS.md) |
 

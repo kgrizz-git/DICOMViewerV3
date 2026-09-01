@@ -222,6 +222,9 @@ technical-profile claims or external distribution messaging.
   [`ps315_e1_inventory.json`](ps315_e1_inventory.json). It preserves raw base
   actions and option columns; IOD Type and option-dependent resolution remains
   intentionally unassessed.
+- [x] Define the [IOD- and option-specific action-resolution method](PS315_E1_ACTION_RESOLUTION_METHOD.md).
+  It records the inputs, compound-action procedure, and unresolved-status rule
+  without resolving any row or selecting a formal IOD support scope.
 - [x] Record the current DICOM writer surface in the
   [output-scope baseline](DICOM_OUTPUT_SCOPE_BASELINE.md). It explicitly
   distinguishes arbitrary source-dataset re-export from the MPR writer's CT,
