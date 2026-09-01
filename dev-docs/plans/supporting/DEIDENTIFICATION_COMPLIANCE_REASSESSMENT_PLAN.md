@@ -258,13 +258,15 @@ technical-profile claims or external distribution messaging.
 
 **Gate:** two independent primary-source reviews of the requirements dataset;
 unresolved interpretation questions remain explicitly marked and block a
-technical profile claim before code design.
+technical profile claim before code design. The completed review evidence is in
+the [PS3.15 Table E.1-1 primary-source review record](PS315_E1_PRIMARY_SOURCE_REVIEWS.md).
 
-- [ ] Complete independent primary-source review 1: compare the committed
-  inventory's header, row count, and a documented sample of rows against the
-  retrieved official source.
-- [ ] Complete independent primary-source review 2 using a separately retrieved
-  official source snapshot or an independently verified edition-specific copy.
+- [x] Complete independent primary-source review 1: compare the committed
+  inventory's header, row count, complete extracted requirements array, and a
+  documented sample of rows against the retained official source.
+- [x] Complete independent primary-source review 2 using a separately retrieved
+  official source snapshot. The source fingerprint and regenerated requirements
+  array match the committed inventory.
 
 ## Phase 2 — Repository and output evidence assessment
 

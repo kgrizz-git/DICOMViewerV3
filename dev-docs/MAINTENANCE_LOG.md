@@ -6,6 +6,14 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-01
 
+- **PS3.15 primary-source review record:** Documented two independent checks of
+  the source-derived Table E.1-1 inventory: the retained retrieval and a
+  separately retrieved snapshot both reproduced its 15-column header, 656 rows,
+  and complete requirements array. See the
+  [review record](plans/supporting/PS315_E1_PRIMARY_SOURCE_REVIEWS.md). This
+  closes an evidence gate only; compound action resolution, IOD validation, and
+  any profile or legal/privacy claim remain out of scope.
+
 - **PS3.16 CID 7050 inventory:** Added a reproducible, 13-row inventory from
   the retrieved NEMA PS3.16 2026c CID 7050 page. It records the context-group
   metadata, source fingerprint, retrieval metadata, and unavailable
