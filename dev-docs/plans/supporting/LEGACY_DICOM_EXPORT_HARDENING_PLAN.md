@@ -15,13 +15,13 @@ Prevent `ExportManager` from silently using its legacy standalone
 serialization. This is a small safety and regression-hardening change, not a
 PS3.3 IOD-validation or PS3.15 profile-conformance project.
 
-## Current state
+## Pre-change state
 
-The normal export dialogs select `deep_anonymize=True`. However,
-`src/gui/export_manager.py` still accepts the older `anonymize=True` request
-flag and can invoke `DICOMAnonymizer` directly for folder planning and DICOM
-writing. That helper performs only the base group-0010 transformation when used
-on its own.
+Before this change, the normal export dialogs selected `deep_anonymize=True`,
+but `src/gui/export_manager.py` also accepted the older `anonymize=True`
+request flag and could invoke `DICOMAnonymizer` directly for folder planning
+and DICOM writing. Used on its own, that helper performed only the base
+group-0010 transformation.
 
 `DICOMAnonymizer` remains an intentional internal dependency of
 `DeepDICOMAnonymizer`; this plan must not remove or weaken that deep-engine

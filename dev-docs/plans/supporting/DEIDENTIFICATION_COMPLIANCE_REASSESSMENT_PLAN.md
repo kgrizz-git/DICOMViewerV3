@@ -336,6 +336,12 @@ the [PS3.15 Table E.1-1 primary-source review record](PS315_E1_PRIMARY_SOURCE_RE
   users to review output before sharing. Verified the shared
   `BURNED_IN_PHI_WARNING`, the DICOM export/MPR surfaces, and
   [`USER_GUIDE_ANONYMIZATION.md`](../../../user-docs/USER_GUIDE_ANONYMIZATION.md).
+- [x] Replace MPR's former base-anonymizer branch with the regular DICOM
+  export's deep batch operation and the same `DeepAnonymizerOptions`
+  UI/defaults. Derived MPR datasets are processed as one batch before writing,
+  preserving a shared UID/date mapping and removing generated free-text source
+  references before serialization. Completed 2026-08-31; serialized MPR
+  regression coverage was extended on 2026-09-01.
 
 **Completed-milestone gate:** the compact suite passes, is wholly synthetic, and makes
 no conformance claim. Completion does not open the deferred PS3.3 or broad
@@ -364,13 +370,6 @@ starts that broader assessment.
 - [ ] Validate selected exports using pydicom plus at least one independent
   DICOM validator/tool where feasible; distinguish syntax/VR validity from IOD
   validity and de-identification-profile coverage.
-- [x] Replace MPR's base-anonymizer branch with the regular DICOM export's deep
-  batch operation and the same `DeepAnonymizerOptions` UI/defaults. Build each
-  derived MPR dataset first, process the complete derived batch once, then write
-  it; this preserves one UID/date mapping and removes generated free-text source
-  references before serialization. Verify folder naming, provenance, File Meta,
-  preamble, generated MPR UIDs, and progress/cancellation behavior. Completed
-  2026-08-31; serialized regression coverage was extended on 2026-09-01.
 - [ ] Update the matrices above with evidence links and statuses. Never turn
   “untested” into “pass” because a model or a generic round-trip succeeded.
 
@@ -437,10 +436,12 @@ that work establishes it; otherwise retain the approved limitation wording.
 
 The selected modest track is complete. Re-open the deferred formal track only
 when the maintainer chooses to make a named PS3.15 technical claim, promise
-validity for named IOD/SOP Class output, add a materially new DICOM export
-route/options, or change the DICOM edition/engine in a way that affects this
-evidence. A passing pydicom round-trip or a clean metadata scan alone is not
-sufficient for a formal conformance claim.
+validity for named IOD/SOP Class output, or change the DICOM edition/engine in
+a way that requires a formal conformance conclusion. A passing pydicom
+round-trip or a clean metadata scan alone is not sufficient for a formal
+conformance claim. Material DICOM export-route or de-identification-option
+changes instead follow the maintenance trigger below; they do not by themselves
+re-open the deferred formal track.
 
 For any material DICOM export-route, de-identification-option, or user-facing
 claim change, first update the path inventory, scoped limitation wording, and a
