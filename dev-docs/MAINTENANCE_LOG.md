@@ -6,6 +6,14 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-01
 
+- **De-identification plan reset:** Reordered the reassessment plan around the
+  completed, proportionate metadata-de-identification safeguards and moved the
+  unresolved PS3.3/IOD and broad PS3.15 profile-conformance work into an
+  explicitly opt-in formal track. The active backlog now retains only a change
+  trigger: new or materially changed DICOM export behavior must update the
+  path inventory, scoped limitation wording, and wholly synthetic serialized
+  output evidence before it ships.
+
 - **Practical DICOM metadata-de-identification regression hardening:** Added
   wholly synthetic write/read coverage for nested identifiers, private
   attributes, UID references, group `0004`, free text, and File Meta; extended
