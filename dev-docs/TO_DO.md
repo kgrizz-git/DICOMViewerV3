@@ -30,6 +30,14 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
 3. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
+4. **[P2] Evaluate a documentation-generation workflow.** First audit the
+   existing user guides, developer documentation, and public-code docstrings
+   for gaps, duplication, ownership, and stale guidance. Then compare
+   Mintlify, DeepWiki-RS, and Sphinx (plus any clearly better local-first
+   alternative) for producing both in-repository developer documentation and
+   user-facing docs. Record source/privacy behavior, generated-output review
+   workflow, maintenance burden, and a recommendation before adopting or
+   adding a tool.
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
 
