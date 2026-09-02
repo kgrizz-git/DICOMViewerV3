@@ -6,6 +6,15 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-01
 
+- **Practical DICOM metadata-de-identification regression hardening:** Added
+  wholly synthetic write/read coverage for nested identifiers, private
+  attributes, UID references, group `0004`, free text, and File Meta; extended
+  the existing on-disk MPR case to verify that its remapped source-series
+  reference is consistent across the derived output. The assertions describe
+  observed metadata transformations only, not IOD validity, DICOM-profile
+  coverage, or a legal/privacy result. The scoped warnings and
+  review-before-sharing guidance were rechecked.
+
 - **PS3.15 action-resolution method:** Added the evidence schema and
   Type/condition/option decision procedure required before assessing an
   individual Table E.1-1 action. It deliberately records no resolved rows or

@@ -239,6 +239,7 @@ def test_write_mpr_series_deidentified_uses_deep_batch_on_disk(tmp_path) -> None
     assert len(paths) == 3
     output_series_uids: set[str] = set()
     output_sop_uids: set[str] = set()
+    referenced_source_series_uids: set[str] = set()
     for path in paths:
         ds = pydicom.dcmread(str(path), force=True)
         assert ds.PatientName == ""
@@ -260,13 +261,18 @@ def test_write_mpr_series_deidentified_uses_deep_batch_on_disk(tmp_path) -> None
         assert str(ds.SeriesInstanceUID) not in original_uids
         assert str(ds.SOPInstanceUID) not in original_uids
         assert str(ds.FrameOfReferenceUID) not in original_uids
-        assert str(ds.ReferencedSeriesSequence[0].SeriesInstanceUID) not in original_uids
+        referenced_source_series_uid = str(
+            ds.ReferencedSeriesSequence[0].SeriesInstanceUID
+        )
+        assert referenced_source_series_uid not in original_uids
+        referenced_source_series_uids.add(referenced_source_series_uid)
         output_series_uids.add(str(ds.SeriesInstanceUID))
         output_sop_uids.add(str(ds.SOPInstanceUID))
         assert "SYNTHETIC" not in str(path)
 
     assert len(output_series_uids) == 1
     assert len(output_sop_uids) == len(paths)
+    assert len(referenced_source_series_uids) == 1
     assert template.PatientName == "Synthetic^Test"
     assert template.PatientBirthDate == "19800102"
     assert template.ImageComments == "Synthetic patient note"
