@@ -1,6 +1,6 @@
 # De-identification Compliance Reassessment Plan
 
-**Status:** Active supporting record — bounded metadata-de-identification safeguards are complete; formal PS3.3/IOD and PS3.15 profile-conformance work is explicitly deferred and is not scheduled.
+**Status:** Active supporting record — bounded metadata-de-identification safeguards are complete; one queued legacy-export hardening task is tracked separately. Formal PS3.3/IOD and PS3.15 profile-conformance work is explicitly deferred and is not scheduled.
 
 **Priority:** P1
 
@@ -40,6 +40,12 @@ Keep this document as the evidence and change-control record. Do not begin the
 formal-conformance track below merely because an unchecked item remains. Start
 it only through an explicit maintainer decision to make a named technical claim
 or to support a defined IOD/SOP Class family.
+
+The next bounded implementation task is tracked separately in the
+[Legacy DICOM Export Hardening Plan](LEGACY_DICOM_EXPORT_HARDENING_PLAN.md).
+It removes the risk of standalone base-anonymizer export behavior and adds
+normal-export serialized-output coverage; it is not part of the deferred formal
+conformance track.
 
 ## Scope
 
