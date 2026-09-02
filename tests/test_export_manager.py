@@ -9,15 +9,20 @@ and mock DICOM datasets. No real DICOM files required.
 import os
 import sys
 import unittest
+from pathlib import Path
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from PIL import Image
-from pydicom.dataset import Dataset
+from pydicom import dcmread
+from pydicom.dataset import Dataset, FileMetaDataset
+from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
 
-from gui.export_manager import ExportManager
+from gui import export_manager as export_manager_module
+from gui.export_manager import ExportManager, ExportSelectedRequest, ExportSliceRequest
 from utils.deep_anonymizer import DeepAnonymizerOptions
 
 
@@ -159,3 +164,115 @@ class TestProcessImageByPhotometricInterpretation(unittest.TestCase):
         self.assertIn(out.mode, ("L", "RGB"))
         arr = np.array(out)
         self.assertGreater(arr.size, 0)
+
+
+class _NoopProgress:
+    """Minimal non-interactive progress dialog for ExportManager disk-write tests."""
+
+    def __init__(self, *_args) -> None:
+        pass
+
+    def setWindowModality(self, _modality) -> None:
+        pass
+
+    def setMinimumDuration(self, _duration) -> None:
+        pass
+
+    def wasCanceled(self) -> bool:
+        return False
+
+    def setValue(self, _value: int) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def _synthetic_dicom_for_deep_export() -> Dataset:
+    """Return a wholly synthetic DICOM instance suitable for a write/read test."""
+    sop_instance_uid = generate_uid()
+    file_meta = FileMetaDataset()
+    file_meta.MediaStorageSOPClassUID = CTImageStorage
+    file_meta.MediaStorageSOPInstanceUID = sop_instance_uid
+    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    file_meta.ImplementationClassUID = generate_uid()
+
+    dataset = Dataset()
+    dataset.file_meta = file_meta
+    dataset.preamble = b"\x00" * 128
+    dataset.is_little_endian = True
+    dataset.is_implicit_VR = False
+    dataset.SOPClassUID = CTImageStorage
+    dataset.SOPInstanceUID = sop_instance_uid
+    dataset.PatientName = "Synthetic^Patient"
+    dataset.PatientID = "SYNTHETIC-PATIENT"
+    dataset.StudyDate = "20260101"
+    dataset.StudyDescription = "Synthetic Study"
+    dataset.SeriesNumber = 2
+    dataset.SeriesDescription = "Synthetic Series"
+    dataset.InstanceNumber = 1
+    dataset.StudyInstanceUID = generate_uid()
+    dataset.SeriesInstanceUID = generate_uid()
+    dataset.RequestAttributesSequence = [Dataset()]
+    dataset.RequestAttributesSequence[0].PatientName = "Nested^Synthetic"
+    dataset.RequestAttributesSequence[0].PatientID = "NESTED-PATIENT"
+    return dataset
+
+
+def test_export_selected_deep_dicom_round_trip_scrubs_nested_identifiers(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Check final serialized metadata behavior, not IOD/profile/legal compliance."""
+    monkeypatch.setattr(export_manager_module, "QProgressDialog", _NoopProgress)
+    dataset = _synthetic_dicom_for_deep_export()
+
+    exported, downgraded = ExportManager().export_selected(
+        ExportSelectedRequest(
+            {("study", "series", 0): dataset},
+            str(tmp_path),
+            "DICOM",
+            deep_anonymize=True,
+            deep_anonymizer_options=DeepAnonymizerOptions(date_shift=False),
+        )
+    )
+
+    output_files = list(tmp_path.rglob("*.dcm"))
+    assert exported == 1
+    assert downgraded == []
+    assert len(output_files) == 1
+
+    reloaded = dcmread(output_files[0])
+    nested = reloaded.RequestAttributesSequence[0]
+    assert reloaded.PatientName == ""
+    assert reloaded.PatientID == ""
+    assert nested.PatientName == ""
+    assert nested.PatientID == ""
+
+
+def test_legacy_anonymize_requests_fail_closed_before_writing(tmp_path: Path) -> None:
+    """Legacy standalone anonymization must not create DICOM output."""
+    dataset = _synthetic_dicom_for_deep_export()
+    manager = ExportManager()
+
+    with pytest.raises(ValueError, match="Standalone legacy anonymization is disabled"):
+        ExportManager.get_export_paths_for_selection(
+            {("study", "series", 0): dataset},
+            str(tmp_path),
+            "DICOM",
+            anonymize=True,
+        )
+    with pytest.raises(ValueError, match="Standalone legacy anonymization is disabled"):
+        manager.export_selected(
+            ExportSelectedRequest(
+                {("study", "series", 0): dataset},
+                str(tmp_path),
+                "DICOM",
+                anonymize=True,
+            )
+        )
+    with pytest.raises(ValueError, match="Standalone legacy anonymization is disabled"):
+        manager.export_slice(
+            ExportSliceRequest(dataset, str(tmp_path / "legacy.dcm"), "DICOM", anonymize=True)
+        )
+
+    assert not list(tmp_path.rglob("*.dcm"))

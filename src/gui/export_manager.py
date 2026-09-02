@@ -32,11 +32,21 @@ from PySide6.QtWidgets import QProgressDialog
 from core.dicom_processor import DICOMProcessor
 from gui import export_rendering as _er
 from utils.deep_anonymizer import DeepDICOMAnonymizer
-from utils.dicom_anonymizer import DICOMAnonymizer
 from utils.privacy.console import print_redacted
 
 if TYPE_CHECKING:
     from utils.deep_anonymizer import DeepAnonymizerOptions
+
+
+_LEGACY_ANONYMIZE_ERROR = (
+    "Standalone legacy anonymization is disabled; use deep_anonymize=True for DICOM export."
+)
+
+
+def _reject_legacy_anonymize(anonymize: bool, *, deep_anonymize: bool = False) -> None:
+    """Reject the obsolete standalone base-anonymizer export request path."""
+    if anonymize and not deep_anonymize:
+        raise ValueError(_LEGACY_ANONYMIZE_ERROR)
 
 
 @dataclass
@@ -60,6 +70,7 @@ class ExportSelectedRequest:
     studies: dict[str, dict[str, list[Dataset]]] | None = None
     export_scale: float = 1.0
     scale_annotations_with_image: bool = False
+    # Compatibility-only: standalone use fails closed; use deep_anonymize for DICOM.
     anonymize: bool = False
     deep_anonymize: bool = False
     deep_anonymizer_options: Optional["DeepAnonymizerOptions"] = None
@@ -94,6 +105,7 @@ class ExportSliceRequest:
     total_slices: int | None = None
     export_scale: float = 1.0
     scale_annotations_with_image: bool = False
+    # Compatibility-only: standalone use fails closed; callers receive a ValueError.
     anonymize: bool = False
     dataset_pre_anonymized: bool = False
     projection_enabled: bool = False
@@ -174,8 +186,9 @@ class ExportManager:
             projection_enabled: Whether projection suffix is added to filenames
             projection_type: "aip", "mip", or "minip"
             projection_slice_count: Number of slices (for suffix)
-            anonymize: Whether DICOM export uses legacy patient anonymization
-            deep_anonymize: Whether DICOM export uses PS3.15 deep anonymization
+            anonymize: Deprecated compatibility flag. Standalone use raises;
+                select deep_anonymize for DICOM metadata de-identification.
+            deep_anonymize: Whether DICOM export uses deep metadata de-identification
             deep_anonymizer_options: Options used by deep anonymization
             deep_anonymized_items: Precomputed deep-anonymized selection, reused
                 so randomized date shifting matches the subsequent export
@@ -183,6 +196,8 @@ class ExportManager:
         Returns:
             List of absolute paths that would be written
         """
+        _reject_legacy_anonymize(anonymize, deep_anonymize=deep_anonymize)
+
         paths: list[str] = []
         invalid_chars = '<>:"/\\|?*'
 
@@ -209,8 +224,6 @@ class ExportManager:
                 selected_items,
                 deep_anonymizer_options,
             )
-        patient_anonymizer = DICOMAnonymizer() if anonymize and format == "DICOM" else None
-
         for (study_uid, series_uid), items in items_by_study_series.items():
             if not items:
                 continue
@@ -218,8 +231,6 @@ class ExportManager:
             first_key = (study_uid, series_uid, items[0][0])
             if deep_anonymize and format == "DICOM":
                 folder_dataset = pre_anonymized.get(first_key, first_dataset)
-            elif patient_anonymizer is not None:
-                folder_dataset = patient_anonymizer.anonymize_dataset(first_dataset)
             else:
                 folder_dataset = first_dataset
 
@@ -298,6 +309,8 @@ class ExportManager:
         subwindow_annotation_managers = request.subwindow_annotation_managers
         deep_anonymized_items = request.deep_anonymized_items
 
+        _reject_legacy_anonymize(anonymize, deep_anonymize=deep_anonymize)
+
         exported = 0
         downgraded: list[tuple[str, float, float]] = []  # (filename, requested_scale, actual_scale)
 
@@ -337,9 +350,6 @@ class ExportManager:
                 if deep_anonymize and export_format == "DICOM":
                     first_key = (study_uid, series_uid, items[0][0])
                     folder_dataset = pre_anonymized.get(first_key, items[0][1])
-                elif anonymize:
-                    anonymizer = DICOMAnonymizer()
-                    folder_dataset = anonymizer.anonymize_dataset(first_dataset)
                 else:
                     folder_dataset = first_dataset
 
@@ -442,7 +452,7 @@ class ExportManager:
                             total_slices,
                             export_scale,
                             scale_annotations_with_image,
-                            anonymize=anonymize and not deep_anonymize,
+                            anonymize=False,
                             dataset_pre_anonymized=deep_anonymize and export_format == "DICOM",
                             projection_enabled=projection_enabled,
                             projection_type=projection_type,
@@ -509,6 +519,8 @@ class ExportManager:
         studies = request.studies
         subwindow_annotation_managers = request.subwindow_annotation_managers
 
+        _reject_legacy_anonymize(anonymize)
+
         try:
             if export_format == "DICOM":
                 # Export as DICOM
@@ -524,11 +536,6 @@ class ExportManager:
 
                     if dataset_pre_anonymized:
                         projection_dataset.save_as(output_path)
-                    elif anonymize:
-                        # Apply anonymization
-                        anonymizer = DICOMAnonymizer()
-                        anonymized_dataset = anonymizer.anonymize_dataset(projection_dataset)
-                        anonymized_dataset.save_as(output_path)
                     else:
                         # Export projection dataset without anonymization
                         projection_dataset.save_as(output_path)
@@ -536,11 +543,6 @@ class ExportManager:
                     # Export as regular DICOM (no projection)
                     if dataset_pre_anonymized:
                         dataset.save_as(output_path)
-                    elif anonymize:
-                        # Apply anonymization
-                        anonymizer = DICOMAnonymizer()
-                        anonymized_dataset = anonymizer.anonymize_dataset(dataset)
-                        anonymized_dataset.save_as(output_path)
                     else:
                         # Export original data without anonymization
                         dataset.save_as(output_path)
@@ -639,4 +641,3 @@ class ExportManager:
         except Exception as e:
             print_redacted(f"Error exporting slice: {e}")
             return (False, None)
-

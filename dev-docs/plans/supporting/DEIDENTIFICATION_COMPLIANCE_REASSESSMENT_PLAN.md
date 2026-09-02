@@ -1,10 +1,10 @@
 # De-identification Compliance Reassessment Plan
 
-**Status:** Active supporting record — bounded metadata-de-identification safeguards are complete; one queued legacy-export hardening task is tracked separately. Formal PS3.3/IOD and PS3.15 profile-conformance work is explicitly deferred and is not scheduled.
+**Status:** Active supporting record — bounded metadata-de-identification safeguards are complete. Formal PS3.3/IOD and PS3.15 profile-conformance work is explicitly deferred and is not scheduled.
 
 **Priority:** P1
 
-**Created / last updated:** 2026-09-01
+**Created / last updated:** 2026-09-02
 
 **Related:** [PS3.15 De-identification Conformance Plan](../completed/PS315_DEIDENTIFICATION_CONFORMANCE_PLAN.md) (historical implementation record, not a current certification); [Deep Anonymizer Export Plan](DEEP_ANONYMIZER_EXPORT_PLAN.md); [PHI/PII repository guardrails](../../PHI_PII_REPOSITORY_GUARDRAILS.md).
 
@@ -41,7 +41,7 @@ formal-conformance track below merely because an unchecked item remains. Start
 it only through an explicit maintainer decision to make a named technical claim
 or to support a defined IOD/SOP Class family.
 
-The next bounded implementation task is tracked separately in the
+The completed bounded implementation task is recorded in the
 [Legacy DICOM Export Hardening Plan](LEGACY_DICOM_EXPORT_HARDENING_PLAN.md).
 It removes the risk of standalone base-anonymizer export behavior and adds
 normal-export serialized-output coverage; it is not part of the deferred formal
@@ -124,8 +124,8 @@ required research result, not a pass.
 | R-08 | Address identifying text/graphics/pixels only when the corresponding option is actually implemented; otherwise warn clearly and do not claim it. | S-01 | UI warns that burned-in text is neither detected nor removed. | Warning present; complete scope unverified | Audit overlays, presentation states, icons, encapsulated documents, and all UI claims. |
 | R-09 | Preserve DICOM validity for every supported SOP Class/IOD after de-identification. | S-01 plus applicable PS3.3/PS3.5 requirements | Tests perform synthetic pydicom round-trips. The current [output-scope baseline](DICOM_OUTPUT_SCOPE_BASELINE.md) records no formal source-IOD preservation promise; it identifies CT, MR, and Secondary Capture only as MPR-emitted candidate scopes. | Insufficient evidence | Define a formal IOD corpus, independent validation tools, and negative tests for Type 1/2/conditional attributes before claiming support. |
 | R-10 | HIPAA Safe Harbor, Expert Determination, GDPR/UK GDPR “anonymous,” and similar legal claims require their own applicability and evidence analysis. | S-03, S-04; S-08 when selected | Current reviewed de-identification copy avoids legal/compliance assurances and directs users to organization-appropriate review. The complete claims inventory remains pending. | Interim claim remediation complete; no legal claim | Keep the no-legal-claim policy. Defer any legal language unless future project ownership explicitly changes that policy. |
-| R-11 | Every user-visible export path named “anonymize” or “de-identify” has a defined scope and does not inherit a DICOM claim accidentally. | Product wording; S-01 where DICOM is claimed | The MPR dialog now uses the shared deep options/default and presents the metadata-only burned-in-pixel limitation. Legacy `anonymize=True` projection/export branches still call the base anonymizer; report export has a separate masking option. | MPR gap remediated; inventory incomplete | Assess and align the remaining base-anonymizer call sites before making a common-path claim. |
-| R-12 | Remove group `0004` elements from a non-DICOMDIR de-identified SOP Instance/DICOM File. | S-01, E.1.1 step 9 | The shared deep engine now removes group `0004` recursively. Synthetic deep and final serialized MPR regressions cover a non-DICOMDIR element. | Implemented for reviewed deep paths; base paths pending | Extend final-on-disk coverage and decide treatment of any non-deep export path. |
+| R-11 | Every user-visible export path named “anonymize” or “de-identify” has a defined scope and does not inherit a DICOM claim accidentally. | Product wording; S-01 where DICOM is claimed | MPR uses the shared deep options/default and presents the metadata-only burned-in-pixel limitation. `ExportManager` standalone `anonymize=True` requests now fail closed; normal export dialogs use the deep path. Report export has a separate masking option. | Reviewed DICOM metadata paths aligned; broader inventory remains scoped | Maintain the path inventory and re-check it before adding or materially changing an export/de-identification route. |
+| R-12 | Remove group `0004` elements from a non-DICOMDIR de-identified SOP Instance/DICOM File. | S-01, E.1.1 step 9 | The shared deep engine removes group `0004` recursively. Synthetic deep and final serialized MPR regressions cover a non-DICOMDIR element; the normal ExportManager serialized regression covers nested patient metadata. Standalone base export requests fail closed. | Implemented for reviewed deep paths; no standalone base export path | Extend final-on-disk coverage only when a material new DICOM export path is added. |
 | R-13 | Supply a scoped de-identifier Conformance Statement if making a PS3.15 conformance claim, including supported profile/options, attribute handling, dummy/replacement behavior, UID consistency, and encrypted-attributes behavior where applicable. | S-01, E.1.3 | No current dedicated statement located. | Missing / unverified | Define the required statement content in Phase 1 and publish only after the matrix is evidenced. |
 | R-14 | When retaining/modifying longitudinal temporal information, ensure every related DICOM attribute, option declaration, and output assertion is correctly mapped. | S-01, S-02 | Date modes and CID codes exist; completeness of related temporal attributes has not been verified. | Unverified | Research the exact option semantics and required attributes; do not infer requirements from model output. |
 | R-15 | A de-identifier claiming the Basic Profile protects the SOP Instance UID and **all** references to other SOP Instances, including references in sequence items; replacements must be internally consistent across the protected set. | S-01, E.1.1 steps 2 and 5 | The deep engine has a per-batch UID map. Basic paths do not use it; MPR now uses the shared deep batch/UID map. | Partial / unverified | Test top-level and nested references across a multi-instance batch; document which UID contexts are intentionally preserved and why. |
@@ -146,7 +146,7 @@ required research result, not a pass.
 | Dedicated DICOM de-identification | `deep_anonymizer_export_dialog.py` → same deep engine | Same options/presets | Metadata-de-identification wording; no profile/legal claim. Formal identical-output assessment is deferred. | P1 |
 | Projection DICOM export | `ExportManager` projection branch | Derived DICOM may be pre-anonymized | Must validate source/projection ordering and final metadata | P1 |
 | MPR DICOM save | `mpr_dicom_export.py` → derived batch → `DeepDICOMAnonymizer.anonymize_batch()` when selected | Uses the same deep option shape/default as normal DICOM export; UI states metadata scope and pixel limitation | Serialized regression covers MPR UID remap, provenance, file meta/preamble, private/group-0004/special-sequence removal, source-UID-free generated comments, and post-transform folder tags. This is not full profile evidence. | P1 |
-| Legacy/direct base anonymizer callers | `DICOMAnonymizer` callers outside the deep engine | Group-0010 transformation | Internal helper; not a standalone PS3.15 claim | P1 |
+| Legacy/direct base anonymizer callers | `ExportManager` rejects standalone `anonymize=True`; `DeepDICOMAnonymizer` retains its internal base helper | No standalone output; deep path remains the scoped metadata transformation | Internal helper; not a standalone PS3.15 claim | Remediated 2026-09-02 |
 | Radiation-dose report CSV/JSON | `RadiationDoseReportDialog` → `apply_privacy_to_ct_radiation_dose_summary` | Masks selected UID/device strings in a non-DICOM summary | Separate masking feature; no DICOM provenance or profile claim applies | P1 |
 | PNG/JPG/screenshots/cine | Raster/export rendering paths | Not de-identified according to user guide | Must keep scope boundary prominent | P2 |
 | Dose report / CSV/XLSX and other non-DICOM exports | Individual exporters | May mask selected values | Not DICOM Profile output; needs feature-specific wording | P2 |
@@ -441,3 +441,8 @@ validity for named IOD/SOP Class output, add a materially new DICOM export
 route/options, or change the DICOM edition/engine in a way that affects this
 evidence. A passing pydicom round-trip or a clean metadata scan alone is not
 sufficient for a formal conformance claim.
+
+For any material DICOM export-route, de-identification-option, or user-facing
+claim change, first update the path inventory, scoped limitation wording, and a
+wholly synthetic serialized-output regression. This maintenance trigger does
+not itself reopen the deferred formal-conformance track.

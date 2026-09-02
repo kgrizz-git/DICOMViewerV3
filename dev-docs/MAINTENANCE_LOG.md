@@ -1,8 +1,17 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-02
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-02
+
+- **Legacy DICOM export hardening:** Disabled standalone `ExportManager`
+  `anonymize=True` behavior rather than permitting its limited base
+  transformation to write output. Added wholly synthetic serialized normal
+  deep-export and fail-closed regressions. This is metadata-behavior coverage,
+  not a DICOM-profile, IOD-validity, or legal/privacy conclusion. See the
+  [legacy export hardening plan](plans/supporting/LEGACY_DICOM_EXPORT_HARDENING_PLAN.md).
 
 ## 2026-09-01
 
