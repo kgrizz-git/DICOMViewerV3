@@ -6,6 +6,10 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **Dependabot ungroup for review-only pins:** `.github/dependabot.yml` excludes **`pylinac`** (ACR QA re-verify) and **`typer`** (phi-scan `~=0.24.1`) from the `python-patch-minor` group so each still gets a solo PR. **Semantic versioning note: patch** (CI tooling only).
+- **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
+
 ### Fixed
 - **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
 
