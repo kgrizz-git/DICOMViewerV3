@@ -129,7 +129,7 @@
     "src/gui/dialogs/tag_export_dialog_presets.py::_load_preset_by_name": 18,
     "src/gui/export_app_facade.py::prompt_save_path": 22,
     "src/gui/export_manager.py::export_selected": 30,
-    "src/gui/export_manager.py::export_slice": 27,
+    "src/gui/export_manager.py::export_slice": 25,
     "src/gui/export_manager.py::get_export_paths_for_selection": 18,
     "src/gui/export_rendering.py::create_projection_dataset": 35,
     "src/gui/export_rendering.py::create_projection_for_export": 22,

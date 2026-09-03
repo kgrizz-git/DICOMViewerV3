@@ -107,6 +107,8 @@ class ExportSliceRequest:
     scale_annotations_with_image: bool = False
     # Compatibility-only: standalone use fails closed; callers receive a ValueError.
     anonymize: bool = False
+    # Compatibility-only: deep export already supplies the transformed dataset.
+    # Kept so callers can signal pre-anonymized input; export_slice does not branch on it.
     dataset_pre_anonymized: bool = False
     projection_enabled: bool = False
     projection_type: str = "aip"
@@ -512,7 +514,9 @@ class ExportManager:
         export_scale = request.export_scale
         scale_annotations_with_image = request.scale_annotations_with_image
         anonymize = request.anonymize
-        dataset_pre_anonymized = request.dataset_pre_anonymized
+        # dataset_pre_anonymized remains on ExportSliceRequest for API compatibility.
+        # Deep de-id already swaps the dataset before this method; both former branches
+        # only called save_as after the legacy anonymize=True path was removed.
         projection_enabled = request.projection_enabled
         projection_type = request.projection_type
         projection_slice_count = request.projection_slice_count
@@ -523,7 +527,7 @@ class ExportManager:
 
         try:
             if export_format == "DICOM":
-                # Export as DICOM
+                # Export as DICOM (deep-anonymized or original dataset already selected by caller)
                 if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
                     # Create projection dataset for DICOM export
                     projection_dataset = _er.create_projection_dataset(
@@ -533,19 +537,9 @@ class ExportManager:
                     if projection_dataset is None:
                         # Fall back to single slice if projection fails
                         projection_dataset = dataset
-
-                    if dataset_pre_anonymized:
-                        projection_dataset.save_as(output_path)
-                    else:
-                        # Export projection dataset without anonymization
-                        projection_dataset.save_as(output_path)
+                    projection_dataset.save_as(output_path)
                 else:
-                    # Export as regular DICOM (no projection)
-                    if dataset_pre_anonymized:
-                        dataset.save_as(output_path)
-                    else:
-                        # Export original data without anonymization
-                        dataset.save_as(output_path)
+                    dataset.save_as(output_path)
                 return (True, None)
             else:
                 # Export as image (PNG or JPG)
