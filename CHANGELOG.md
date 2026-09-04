@@ -6,6 +6,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **Local SonarQube findings JSON archive:** `scripts/report_local_sonarqube_issues.py` now writes a timestamped safe-subset JSON dump (plus `latest.json`) under ignored `tmp/sonarqube-findings/` by default so priority findings can be compared over time; use `--no-dump` to skip. **Semantic versioning note: patch** (developer tooling only).
+
 ### Changed
 - **Dependabot ungroup for review-only pins:** `.github/dependabot.yml` excludes **`pylinac`** (ACR QA re-verify) and **`typer`** (phi-scan `~=0.24.1`) from the `python-patch-minor` group so each still gets a solo PR. **Semantic versioning note: patch** (CI tooling only).
 - **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**

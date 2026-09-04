@@ -189,8 +189,7 @@ Re-measure after each phase with:
 ```bash
 python scripts/run_local_sonarqube.py --with-coverage
 python scripts/report_local_sonarqube_issues.py \
-  --expected-revision "$(git rev-parse HEAD)" \
-  --output tmp/sonarqube-priority-findings.md
+  --expected-revision "$(git rev-parse HEAD)"
 ```
 
 ---

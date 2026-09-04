@@ -1,6 +1,6 @@
 # Local SonarQube Community Build
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-09-03
 
 This directory holds the **local** SonarQube analysis settings for DICOM Viewer V3
 ([`sonar-project.properties`](sonar-project.properties)). Analysis is submitted
@@ -166,6 +166,10 @@ docker inspect sonarqube --format '{{json .Mounts}}' | python3 -m json.tool
 python scripts/run_local_sonarqube.py --status
 python scripts/run_local_sonarqube.py
 python scripts/check_local_sonarqube_updates.py
+# After analysis: priority findings + automatic JSON archive under tmp/sonarqube-findings/
+python scripts/report_local_sonarqube_issues.py \
+  --expected-revision "$(git rev-parse HEAD)"
+# Optional Markdown copy: add --output tmp/sonar-findings.md
 ```
 
 ## Backup

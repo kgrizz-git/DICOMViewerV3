@@ -6,25 +6,36 @@ CRITICAL, and MAJOR issues for one component, regardless of issue type,
 rejecting any response that contains another project's component key. This
 prevents a mixed-project response from being triaged as a DICOM Viewer finding.
 
+On success it archives a timestamped JSON dump under ignored
+``tmp/sonarqube-findings/`` (plus ``latest.json``) so findings can be compared
+over time. Pass ``--no-dump`` to skip the archive. Optional ``--output`` still
+writes Markdown under ``tmp/`` for a one-off human-readable report.
+
 Usage (with SONAR_TOKEN in the ignored .env file or exported, and the local
 service running):
     python scripts/report_local_sonarqube_issues.py
     python scripts/report_local_sonarqube_issues.py --fail-on-findings
+    python scripts/report_local_sonarqube_issues.py --no-dump
     python scripts/report_local_sonarqube_issues.py --output tmp/sonar-findings.md
 
-The optional report path is restricted to the ignored ``tmp/`` directory.
 Tokens remain in the environment and HTTP Authorization header; they are never
-put in command arguments, output, or persisted state.
+put in command arguments, output, or persisted state. Issue message text from
+SonarQube is never written to reports.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
+import re
+import subprocess
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -57,6 +68,10 @@ REPORTED_QUERIES = (
     ("CRITICAL", {"severities": "CRITICAL"}),
     ("MAJOR", {"severities": "MAJOR"}),
 )
+DEFAULT_DUMP_DIRECTORY = Path("tmp/sonarqube-findings")
+LATEST_JSON_NAME = "latest.json"
+FINDINGS_SCHEMA_VERSION = 1
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 class SonarReportError(RuntimeError):
@@ -239,6 +254,79 @@ def collect_reported_findings(host_url: str, token: str, project_key: str) -> So
     return SonarReport(project_key=project_key, analysis=analysis, issues=tuple(issues))
 
 
+def current_git_head(repo_root: Path) -> str | None:
+    """Return HEAD when Git metadata is available; otherwise None."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    revision = result.stdout.strip() if isinstance(result.stdout, str) else ""
+    return revision if result.returncode == 0 and revision else None
+
+
+def _count_by(issues: tuple[SonarIssue, ...], attr: str) -> dict[str, int]:
+    """Return a stable sorted histogram for one issue attribute."""
+    counter: Counter[str] = Counter(getattr(issue, attr) for issue in issues)
+    return {key: counter[key] for key in sorted(counter)}
+
+
+def build_findings_document(
+    report: SonarReport,
+    *,
+    dumped_at_utc: datetime,
+    git_head: str | None,
+) -> dict[str, Any]:
+    """Build the machine-readable archive document (no tokens or issue messages)."""
+    return {
+        "schema_version": FINDINGS_SCHEMA_VERSION,
+        "dumped_at_utc": dumped_at_utc.astimezone(UTC).isoformat(),
+        "project_key": report.project_key,
+        "analysis": {
+            "date": report.analysis.date,
+            "revision": report.analysis.revision,
+        },
+        "git_head": git_head,
+        "summary": {
+            "total": len(report.issues),
+            "by_severity": _count_by(report.issues, "severity"),
+            "by_type": _count_by(report.issues, "issue_type"),
+            "by_rule": _count_by(report.issues, "rule"),
+        },
+        "issues": [
+            {
+                "severity": issue.severity,
+                "type": issue.issue_type,
+                "rule": issue.rule,
+                "path": issue.path,
+                "line": issue.line,
+            }
+            for issue in report.issues
+        ],
+    }
+
+
+def render_json_report(
+    report: SonarReport,
+    *,
+    dumped_at_utc: datetime | None = None,
+    git_head: str | None = None,
+) -> str:
+    """Serialize the findings document as indented JSON with a trailing newline."""
+    document = build_findings_document(
+        report,
+        dumped_at_utc=dumped_at_utc or datetime.now(UTC),
+        git_head=git_head,
+    )
+    return json.dumps(document, indent=2, sort_keys=False) + "\n"
+
+
 def render_markdown_report(report: SonarReport) -> str:
     """Render a stable, concise Markdown report without server-supplied messages."""
     lines = [
@@ -262,22 +350,56 @@ def render_markdown_report(report: SonarReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def resolve_output_path(repo_root: Path, requested_path: Path) -> Path:
-    """Allow an optional report only below this checkout's ignored ``tmp/`` root."""
+def resolve_tmp_path(repo_root: Path, requested_path: Path, *, flag: str = "path") -> Path:
+    """Allow a path only below this checkout's ignored ``tmp/`` root."""
     tmp_root = (repo_root / "tmp").resolve()
     candidate = requested_path if requested_path.is_absolute() else repo_root / requested_path
     resolved = candidate.resolve(strict=False)
     if resolved == tmp_root:
-        raise SonarReportError("--output must name a file below tmp/")
+        raise SonarReportError(f"{flag} must name a file or directory below tmp/")
     try:
         resolved.relative_to(tmp_root)
     except ValueError as exc:
-        raise SonarReportError("--output must stay below the ignored tmp/ directory") from exc
+        raise SonarReportError(
+            f"{flag} must stay below the ignored tmp/ directory"
+        ) from exc
     return resolved
 
 
-def write_markdown_report(path: Path, report: SonarReport) -> None:
-    """Atomically write a local report with owner-only permissions where supported."""
+def resolve_output_path(repo_root: Path, requested_path: Path) -> Path:
+    """Allow an optional Markdown report only below ignored ``tmp/``."""
+    resolved = resolve_tmp_path(repo_root, requested_path, flag="--output")
+    if resolved.is_dir() or requested_path.name in {"", ".", ".."}:
+        raise SonarReportError("--output must name a file below tmp/")
+    return resolved
+
+
+def resolve_dump_directory(repo_root: Path, requested_directory: Path) -> Path:
+    """Allow the findings archive directory only below ignored ``tmp/``."""
+    return resolve_tmp_path(repo_root, requested_directory, flag="--dump-dir")
+
+
+def _sanitize_filename_part(value: str) -> str:
+    """Collapse unsafe characters so dump names stay portable."""
+    cleaned = _SAFE_FILENAME_RE.sub("-", value).strip("-._")
+    return cleaned or "unknown"
+
+
+def dump_filename_stem(
+    *,
+    dumped_at_utc: datetime,
+    project_key: str,
+    revision: str | None,
+) -> str:
+    """Build a stable timestamped stem for one findings dump."""
+    stamp = dumped_at_utc.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+    project = _sanitize_filename_part(project_key)
+    short_rev = _sanitize_filename_part((revision or "unknown")[:12])
+    return f"{stamp}_{project}_{short_rev}"
+
+
+def write_text_atomically(path: Path, content: str, *, purpose: str) -> None:
+    """Atomically write text with owner-only permissions where supported."""
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
@@ -289,11 +411,75 @@ def write_markdown_report(path: Path, report: SonarReport) -> None:
     try:
         os.chmod(temporary_path, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output_file:
-            output_file.write(render_markdown_report(report))
+            output_file.write(content)
         temporary_path.replace(path)
     except OSError as exc:
         temporary_path.unlink(missing_ok=True)
-        raise SonarReportError("could not write the local SonarQube report") from exc
+        raise SonarReportError(f"could not write the {purpose}") from exc
+
+
+def write_markdown_report(path: Path, report: SonarReport) -> None:
+    """Atomically write a local Markdown report under ignored ``tmp/``."""
+    write_text_atomically(path, render_markdown_report(report), purpose="local SonarQube Markdown report")
+
+
+def write_json_report(
+    path: Path,
+    report: SonarReport,
+    *,
+    dumped_at_utc: datetime | None = None,
+    git_head: str | None = None,
+    purpose: str = "local SonarQube JSON report",
+) -> None:
+    """Atomically write a local JSON findings dump under ignored ``tmp/``."""
+    write_text_atomically(
+        path,
+        render_json_report(
+            report,
+            dumped_at_utc=dumped_at_utc,
+            git_head=git_head,
+        ),
+        purpose=purpose,
+    )
+
+
+def archive_findings_json(
+    dump_directory: Path,
+    report: SonarReport,
+    *,
+    dumped_at_utc: datetime | None = None,
+    git_head: str | None = None,
+) -> tuple[Path, Path]:
+    """Write a timestamped JSON dump and refresh ``latest.json`` in the same folder.
+
+    The timestamped dump is written first, then ``latest.json``. A failure on the
+    second write leaves the timestamped file in place; re-running the reporter
+    refreshes ``latest.json``.
+    """
+    stamped = dumped_at_utc or datetime.now(UTC)
+    revision = report.analysis.revision or git_head
+    stem = dump_filename_stem(
+        dumped_at_utc=stamped,
+        project_key=report.project_key,
+        revision=revision,
+    )
+    timestamped_path = dump_directory / f"{stem}.json"
+    latest_path = dump_directory / LATEST_JSON_NAME
+    write_json_report(
+        timestamped_path,
+        report,
+        dumped_at_utc=stamped,
+        git_head=git_head,
+        purpose="timestamped SonarQube findings dump",
+    )
+    write_json_report(
+        latest_path,
+        report,
+        dumped_at_utc=stamped,
+        git_head=git_head,
+        purpose="sonarqube-findings/latest.json pointer",
+    )
+    return timestamped_path, latest_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -323,6 +509,20 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Write Markdown only under this checkout's ignored tmp/ directory.",
     )
+    parser.add_argument(
+        "--no-dump",
+        action="store_true",
+        help="Skip the default timestamped JSON archive under tmp/sonarqube-findings/.",
+    )
+    parser.add_argument(
+        "--dump-dir",
+        type=Path,
+        default=DEFAULT_DUMP_DIRECTORY,
+        help=(
+            "Directory under ignored tmp/ for timestamped JSON dumps "
+            f"(default: {DEFAULT_DUMP_DIRECTORY.as_posix()})."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -342,6 +542,8 @@ def main() -> int:
     if not project_key:
         print("--project-key must not be empty", file=sys.stderr)
         return 2
+    output_path: Path | None = None
+    dump_paths: tuple[Path, Path] | None = None
     try:
         host_url = normalize_host_url(args.host_url)
         if get_server_status(host_url) != "UP":
@@ -349,10 +551,23 @@ def main() -> int:
             return 2
         report = collect_reported_findings(host_url, token, project_key)
         if args.expected_revision and report.analysis.revision != args.expected_revision:
-            print("SonarQube latest analysis revision does not match --expected-revision.", file=sys.stderr)
+            print(
+                "SonarQube latest analysis revision does not match --expected-revision.",
+                file=sys.stderr,
+            )
             return 2
-        output_path = resolve_output_path(REPO_ROOT, args.output) if args.output else None
-        if output_path is not None:
+        git_head = current_git_head(REPO_ROOT)
+        dumped_at = datetime.now(UTC)
+        if not args.no_dump:
+            dump_directory = resolve_dump_directory(REPO_ROOT, args.dump_dir)
+            dump_paths = archive_findings_json(
+                dump_directory,
+                report,
+                dumped_at_utc=dumped_at,
+                git_head=git_head,
+            )
+        if args.output is not None:
+            output_path = resolve_output_path(REPO_ROOT, args.output)
             write_markdown_report(output_path, report)
     except (RuntimeError, SonarReportError, ValueError) as exc:
         print_redacted(f"Local SonarQube report failed: {exc}", file=sys.stderr)
@@ -360,9 +575,18 @@ def main() -> int:
 
     print("Local SonarQube reported-finding report completed.")
     print(f"Reported findings: {len(report.issues)}")
-    print("Use --output tmp/<report>.md to retain scoped finding metadata.")
+    if dump_paths is not None:
+        timestamped_path, latest_path = dump_paths
+        # Relative paths only — avoid printing identifiers that end in ``root``.
+        archive_rel = timestamped_path.relative_to(REPO_ROOT).as_posix()
+        latest_rel = latest_path.relative_to(REPO_ROOT).as_posix()
+        print(f"JSON archive: {archive_rel} (latest: {latest_rel})")
+    elif args.no_dump:
+        print("JSON archive skipped (--no-dump).")
     if output_path is not None:
-        print("Detailed report written under the ignored tmp/ directory.")
+        print("Markdown report written under the ignored tmp/ directory.")
+    else:
+        print("Use --output tmp/<report>.md for an optional Markdown copy.")
     return 1 if args.fail_on_findings and report.issues else 0
 
 
