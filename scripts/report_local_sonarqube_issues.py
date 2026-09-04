@@ -399,7 +399,11 @@ def dump_filename_stem(
 
 
 def write_text_atomically(path: Path, content: str, *, purpose: str) -> None:
-    """Atomically write text with owner-only permissions where supported."""
+    """Atomically write text with owner-only permissions where supported.
+
+    Closes the ``mkstemp`` file descriptor if setup fails before ``fdopen``
+    takes ownership, so a failed ``chmod`` cannot leak the FD.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
@@ -408,12 +412,16 @@ def write_text_atomically(path: Path, content: str, *, purpose: str) -> None:
         text=True,
     )
     temporary_path = Path(temporary_name)
+    owns_descriptor = True
     try:
         os.chmod(temporary_path, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output_file:
+            owns_descriptor = False
             output_file.write(content)
         temporary_path.replace(path)
     except OSError as exc:
+        if owns_descriptor:
+            os.close(descriptor)
         temporary_path.unlink(missing_ok=True)
         raise SonarReportError(f"could not write the {purpose}") from exc
 
@@ -526,6 +534,56 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_and_write_reports(
+    args: argparse.Namespace,
+    report: SonarReport,
+    *,
+    dumped_at: datetime,
+    git_head: str | None,
+) -> tuple[Path | None, tuple[Path, Path] | None]:
+    """Resolve dump/output paths first, then write any requested artifacts."""
+    dump_directory: Path | None = None
+    output_path: Path | None = None
+    if not args.no_dump:
+        dump_directory = resolve_dump_directory(REPO_ROOT, args.dump_dir)
+    if args.output is not None:
+        output_path = resolve_output_path(REPO_ROOT, args.output)
+    dump_paths: tuple[Path, Path] | None = None
+    if dump_directory is not None:
+        dump_paths = archive_findings_json(
+            dump_directory,
+            report,
+            dumped_at_utc=dumped_at,
+            git_head=git_head,
+        )
+    if output_path is not None:
+        write_markdown_report(output_path, report)
+    return output_path, dump_paths
+
+
+def print_completion_summary(
+    report: SonarReport,
+    args: argparse.Namespace,
+    *,
+    dump_paths: tuple[Path, Path] | None,
+    output_path: Path | None,
+) -> None:
+    """Print the console summary without embedding sensitive path roots."""
+    print("Local SonarQube reported-finding report completed.")
+    print(f"Reported findings: {len(report.issues)}")
+    if dump_paths is not None:
+        timestamped_path, latest_path = dump_paths
+        archive_rel = timestamped_path.relative_to(REPO_ROOT).as_posix()
+        latest_rel = latest_path.relative_to(REPO_ROOT).as_posix()
+        print(f"JSON archive: {archive_rel} (latest: {latest_rel})")
+    elif args.no_dump:
+        print("JSON archive skipped (--no-dump).")
+    if output_path is not None:
+        print("Markdown report written under the ignored tmp/ directory.")
+    else:
+        print("Use --output tmp/<report>.md for an optional Markdown copy.")
+
+
 def main() -> int:
     """Run the component-safe report and return a conventional CLI exit code."""
     load_dotenv(REPO_ROOT)
@@ -542,8 +600,6 @@ def main() -> int:
     if not project_key:
         print("--project-key must not be empty", file=sys.stderr)
         return 2
-    output_path: Path | None = None
-    dump_paths: tuple[Path, Path] | None = None
     try:
         host_url = normalize_host_url(args.host_url)
         if get_server_status(host_url) != "UP":
@@ -556,37 +612,19 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
-        git_head = current_git_head(REPO_ROOT)
-        dumped_at = datetime.now(UTC)
-        if not args.no_dump:
-            dump_directory = resolve_dump_directory(REPO_ROOT, args.dump_dir)
-            dump_paths = archive_findings_json(
-                dump_directory,
-                report,
-                dumped_at_utc=dumped_at,
-                git_head=git_head,
-            )
-        if args.output is not None:
-            output_path = resolve_output_path(REPO_ROOT, args.output)
-            write_markdown_report(output_path, report)
+        output_path, dump_paths = resolve_and_write_reports(
+            args,
+            report,
+            dumped_at=datetime.now(UTC),
+            git_head=current_git_head(REPO_ROOT),
+        )
     except (RuntimeError, SonarReportError, ValueError) as exc:
         print_redacted(f"Local SonarQube report failed: {exc}", file=sys.stderr)
         return 2
 
-    print("Local SonarQube reported-finding report completed.")
-    print(f"Reported findings: {len(report.issues)}")
-    if dump_paths is not None:
-        timestamped_path, latest_path = dump_paths
-        # Relative paths only — avoid printing identifiers that end in ``root``.
-        archive_rel = timestamped_path.relative_to(REPO_ROOT).as_posix()
-        latest_rel = latest_path.relative_to(REPO_ROOT).as_posix()
-        print(f"JSON archive: {archive_rel} (latest: {latest_rel})")
-    elif args.no_dump:
-        print("JSON archive skipped (--no-dump).")
-    if output_path is not None:
-        print("Markdown report written under the ignored tmp/ directory.")
-    else:
-        print("Use --output tmp/<report>.md for an optional Markdown copy.")
+    print_completion_summary(
+        report, args, dump_paths=dump_paths, output_path=output_path
+    )
     return 1 if args.fail_on_findings and report.issues else 0
 
 

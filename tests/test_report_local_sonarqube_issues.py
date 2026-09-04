@@ -299,3 +299,55 @@ def test_main_custom_dump_dir_and_markdown_output(monkeypatch, tmp_path, capsys)
     output = capsys.readouterr().out
     assert "JSON archive:" in output
     assert "Markdown report written" in output
+
+
+def test_write_text_atomically_closes_fd_when_chmod_fails(monkeypatch, tmp_path):
+    module = _load_module()
+    closed: list[int] = []
+    real_close = module.os.close
+
+    def tracking_close(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    def boom_chmod(_path, _mode):
+        raise OSError("chmod denied")
+
+    monkeypatch.setattr(module.os, "chmod", boom_chmod)
+    monkeypatch.setattr(module.os, "close", tracking_close)
+    target = tmp_path / "out.json"
+    with pytest.raises(module.SonarReportError, match="could not write"):
+        module.write_text_atomically(target, "{}\n", purpose="test dump")
+    assert closed
+    assert not target.exists()
+    assert not list(tmp_path.glob(".out.json.*.tmp"))
+
+
+def test_main_rejects_bad_output_before_writing_dump(monkeypatch, tmp_path):
+    module = _load_module()
+    (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "report_local_sonarqube_issues.py",
+            "--output",
+            "outside.md",
+        ],
+    )
+    report = _sample_report(module)
+    archive_calls: list[object] = []
+    monkeypatch.setattr(module, "get_server_status", lambda _host: "UP")
+    monkeypatch.setattr(module, "collect_reported_findings", lambda *_args: report)
+    monkeypatch.setattr(module, "current_git_head", lambda _root: "abc123")
+    monkeypatch.setattr(
+        module,
+        "archive_findings_json",
+        lambda *_args, **_kwargs: archive_calls.append(True) or (tmp_path, tmp_path),
+    )
+
+    assert module.main() == 2
+    assert archive_calls == []
+    assert not (tmp_path / "tmp" / "sonarqube-findings").exists()
