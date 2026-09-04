@@ -2,7 +2,7 @@
 
 All notable changes to DICOM Viewer V3 are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increment rules.
 
-**Current version:** `0.4.4` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
+**Current version:** `0.4.5` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
 
 ## [Unreleased]
 
@@ -11,6 +11,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
 
 ### Fixed
+- **ACR batch CSV dropped preflight/runner warnings:** `build_tabular_run` / `build_metric_rows` no longer let pylinac `results_data` top-level `warnings` / `errors` (often empty lists) overwrite `QAResult` audit lists, so Export CSV keeps geometry preflight and runner warnings. **Semantic versioning note: patch.**
 - **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
 
 ### Added

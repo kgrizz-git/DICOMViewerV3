@@ -253,6 +253,30 @@ def test_batch_csv_list_error_cells_joined_and_neutralized() -> None:
     assert errors_cell.startswith("[") is False
 
 
+def test_batch_csv_preserves_preflight_warnings_over_empty_pylinac_warnings() -> None:
+    """Empty raw_pylinac warnings must not blank the batch CSV warnings column."""
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        warnings=["Slice spacing irregular: expected 5.00 mm"],
+        errors=[],
+        raw_pylinac={
+            "num_images": 25,
+            "warnings": [],
+            "ct_module": {"rois": {"Water": 0.1}},
+        },
+        metrics={"num_images": 25},
+    )
+    text = build_batch_metrics_csv([result], labels=["Series-A"])
+    rows = list(csv.reader(io.StringIO(text)))
+    header = rows[0]
+    warnings_cell = rows[1][header.index("warnings")]
+    assert "Slice spacing irregular" in warnings_cell
+    # Single-run metric CSV must not emit a hollow warnings metric row.
+    single_keys = [r[0] for r in csv.reader(io.StringIO(build_metrics_csv(result)))]
+    assert "warnings" not in single_keys
+
+
 def test_failed_run_empty_raw_pylinac_csv_no_crash() -> None:
     """Failed/empty raw_pylinac still yields provenance CSV rows."""
     result = QAResult(

@@ -340,6 +340,34 @@ def test_warnings_empty_when_none() -> None:
     assert prov["warnings"] == []
 
 
+def test_tabular_run_keeps_result_warnings_when_raw_pylinac_has_empty_warnings() -> None:
+    """Pylinac dumps always include top-level warnings=[]; must not clobber QAResult."""
+    result = _ct_result()
+    result.warnings = ["Slice spacing irregular: expected 5.00 mm"]
+    result.raw_pylinac = {**result.raw_pylinac, "warnings": []}
+    rows = dict(build_metric_rows(result))
+    assert "warnings" not in rows
+    tab = build_tabular_run(result, label="CT-1")
+    assert tab["warnings"] == ["Slice spacing irregular: expected 5.00 mm"]
+
+
+def test_tabular_run_keeps_result_errors_when_raw_pylinac_has_errors_key() -> None:
+    """Empty or dump-sourced errors must not replace runner/preflight errors."""
+    result = QAResult(
+        success=False,
+        analysis_type="acr_ct",
+        errors=["physical scan extent too short"],
+        warnings=["preflight: duplicate ImagePositionPatient"],
+        raw_pylinac={"num_images": 10, "warnings": [], "errors": []},
+        metrics={},
+    )
+    tab = build_tabular_run(result)
+    assert tab["errors"] == ["physical scan extent too short"]
+    assert tab["warnings"] == ["preflight: duplicate ImagePositionPatient"]
+    assert "warnings" not in dict(build_metric_rows(result))
+    assert "errors" not in dict(build_metric_rows(result))
+
+
 # ---------------------------------------------------------------------------
 # Stable sort order
 # ---------------------------------------------------------------------------
