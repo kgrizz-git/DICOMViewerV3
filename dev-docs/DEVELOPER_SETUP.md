@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-09-03
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -251,8 +251,7 @@ file automatically:
 
 ```bash
 python scripts/report_local_sonarqube_issues.py --fail-on-findings \
-  --expected-revision "$(git rev-parse HEAD)" \
-  --output tmp/sonarqube-priority-findings.md
+  --expected-revision "$(git rev-parse HEAD)"
 ```
 
 The reporter queries `componentKeys=dicom-viewer-v3` for three scoped tiers:
@@ -265,20 +264,30 @@ The reporter queries `componentKeys=dicom-viewer-v3` for three scoped tiers:
 
 It verifies every returned component has the `dicom-viewer-v3` prefix and
 rejects a mixed-project response. `--fail-on-findings` exits **1** when any
-scoped issue is present (all three tiers). The optional Markdown report is
-restricted to ignored `tmp/`; neither the token nor SonarQube issue messages are
-written to it. On PowerShell, pass the `git rev-parse HEAD` result as the
+scoped issue is present (all three tiers).
+
+On success the reporter **archives** a timestamped JSON dump under ignored
+`tmp/sonarqube-findings/` (for example
+`20260903T230500Z_dicom-viewer-v3_<rev>.json`) and refreshes
+`tmp/sonarqube-findings/latest.json`. Retaining findings no longer requires
+`--output`; that flag is only for an optional one-off Markdown copy. Each dump
+includes schema version, analysis identity, optional Git HEAD, summary counts
+(by severity / type / rule), and the same safe issue fields as the Markdown
+report (severity, type, rule, path, line). Neither the token nor SonarQube
+issue messages are written. Use `--no-dump` to skip the archive, or
+`--dump-dir tmp/<subdir>` to choose another folder still under ignored `tmp/`.
+Optional `--output tmp/<report>.md` still writes a one-off Markdown copy under
+`tmp/`. On PowerShell, pass the `git rev-parse HEAD` result as the
 `--expected-revision` value, or omit that optional assertion when only reading
 the report.
 
 For a release or remediation branch, pair the reporter with a fresh analysis of
-the same revision:
+the same revision (JSON archive is written automatically):
 
 ```bash
 python scripts/run_local_sonarqube.py --with-coverage
 python scripts/report_local_sonarqube_issues.py \
-  --expected-revision "$(git rev-parse HEAD)" \
-  --output tmp/sonarqube-priority-findings.md
+  --expected-revision "$(git rev-parse HEAD)"
 ```
 
 Recommended cadence: run `python scripts/run_local_sonarqube.py

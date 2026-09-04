@@ -1,8 +1,16 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-02
+**Last updated:** 2026-09-03
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-03
+
+- **Local SonarQube findings archive:** `scripts/report_local_sonarqube_issues.py`
+  now defaults to writing timestamped safe-subset JSON dumps (and
+  `latest.json`) under ignored `tmp/sonarqube-findings/` for trend monitoring;
+  `--no-dump` and optional Markdown `--output` remain available. Docs and
+  focused tests updated.
 
 ## 2026-09-02
 

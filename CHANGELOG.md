@@ -6,12 +6,16 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added
+- **Local SonarQube findings JSON archive:** `scripts/report_local_sonarqube_issues.py` now writes a timestamped safe-subset JSON dump (plus `latest.json`) under ignored `tmp/sonarqube-findings/` by default so priority findings can be compared over time; use `--no-dump` to skip. **Semantic versioning note: patch** (developer tooling only).
+
 ### Changed
 - **Dependabot ungroup for review-only pins:** `.github/dependabot.yml` excludes **`pylinac`** (ACR QA re-verify) and **`typer`** (phi-scan `~=0.24.1`) from the `python-patch-minor` group so each still gets a solo PR. **Semantic versioning note: patch** (CI tooling only).
 - **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
 
 ### Fixed
 - **ACR batch CSV dropped audit warnings:** `build_tabular_run` / `build_metric_rows` keep `QAResult` geometry-preflight and runner audit lists while retaining non-empty pylinac `results_data` warnings/errors, rather than letting empty top-level lists overwrite them. **Semantic versioning note: patch.**
+- **Local SonarQube reporter write hygiene:** Close the temp FD if `chmod` fails before `fdopen`, and resolve `--dump-dir` / `--output` before any archive or Markdown write so a bad `--output` cannot leave a partial JSON dump. **Semantic versioning note: patch** (developer tooling only).
 - **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
 
 ### Added
