@@ -1,7 +1,7 @@
 # Documentation workflow, freshness, and publication plan
 
 **Created:** 2026-09-04
-**Status:** Ready for Phase 0 — no documentation platform selected or installed
+**Status:** Phase 0 complete; Phase 1 triage and accuracy audit in progress — no documentation platform selected or installed
 **Priority:** P2 evaluation; ongoing user-documentation completeness remains P1
 
 ## Goal
@@ -76,14 +76,19 @@ connection.
 
 ## Phase 0 — Establish the baseline and ownership map
 
-- [ ] Inventory every user-facing, developer-facing, generated, and in-app help
-  source; identify its audience, canonical owner, and duplicate/mirror sources.
-- [ ] Run and preserve the existing `scripts/check_user_docs_links.py` and
-  `scripts/check_doc_feature_coverage.py` reports as a dated baseline.
-- [ ] Capture a scoped `interrogate` baseline for public modules/contracts; do
+- [x] Inventory the active user-facing, developer-facing, and in-app help
+  surfaces in [`DOCUMENTATION_INVENTORY.md`](../DOCUMENTATION_INVENTORY.md),
+  including audience, canonical source, mirrors, stewardship role, change
+  trigger, evidence, and review state. Historical plans, investigations, and
+  generated output are not canonical product documentation unless an inventory
+  row explicitly adds them.
+- [x] Run and preserve the existing `scripts/check_user_docs_links.py` and
+  `scripts/check_doc_feature_coverage.py` reports as a dated baseline in
+  [`doc-assessment-2026-09-04-164808.md`](../doc-assessments/doc-assessment-2026-09-04-164808.md).
+- [x] Capture a scoped `interrogate` baseline for public modules/contracts; do
   not count private boilerplate as a quality goal.
-- [ ] Define a concise feature-to-doc ownership map: feature/UI owner, user
-  guide/in-app-help owner, developer/architecture source, and change trigger.
+- [x] Define the feature-to-document ownership map through the inventory's
+  canonical-source, mirror, stewardship, and trigger fields.
 
 **Exit:** a dated assessment exists under `dev-docs/doc-assessments/`, with
 findings only—no content fixes mixed into the assessment.
@@ -95,9 +100,12 @@ findings only—no content fixes mixed into the assessment.
 - [ ] Review public docstrings and selected internal contracts for accurate
   signatures, parameters, return values, exceptions, side effects, ownership,
   and initialization/order assumptions.
-- [ ] Triage each feature→doc candidate gap as: document, intentionally omit,
-  duplicate/consolidate, or obsolete. Record rationale rather than silently
-  closing candidates.
+- [ ] Triage each feature→doc candidate gap in
+  [`DOCUMENTATION_TRIAGE.md`](../DOCUMENTATION_TRIAGE.md) as: `document`,
+  `intentionally-omit`, `duplicate`, `obsolete`, or `deferred`; record the
+  rationale, relevant inventory ID, exact canonical destination, and a
+  repository-relative follow-up when it is not resolved in the same change.
+  `pending-triage` is an intake state, not a resolution.
 - [ ] Separate findings by user risk and freshness urgency, then schedule
   documentation edits as bounded follow-up batches.
 
@@ -111,7 +119,8 @@ complete until the listed fixes are reviewed and merged.
   workflows, and build/install paths.
 - [ ] For each accepted feature batch, update the mapped canonical docs and any
   declared mirror (Quick Guide, in-app HTML, README) in the same pull request,
-  or record an explicit deferred follow-up.
+  update the relevant inventory review state, or record an explicit deferred
+  follow-up in the triage ledger.
 - [ ] Keep `check_user_docs_links.py` mandatory after user-doc edits; use
   `check_doc_feature_coverage.py` as a triage report rather than an automatic
   truth test.
@@ -129,6 +138,18 @@ sources, not a best-effort post-release sweep.
 | New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps |
 | Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required |
 | Minor/major release or substantial UI/Help change | Inventory and audit user, developer, in-app, and relevant code documentation before a fix batch | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` |
+
+### Living records and history
+
+- [`DOCUMENTATION_INVENTORY.md`](../DOCUMENTATION_INVENTORY.md) is the
+  authoritative current-state ownership and evidence register. Do not duplicate
+  its rows in assessments; assessments cite the inventory IDs sampled.
+- [`DOCUMENTATION_TRIAGE.md`](../DOCUMENTATION_TRIAGE.md) is the current-state
+  decision register for feature-coverage and audit signals. Git history keeps
+  the rationale and state-transition history for each stable triage ID.
+- `doc-assessments/` is an append-only historical record of assessment scope,
+  evidence, findings, and waivers. Keep all snapshots; any exceptional pruning
+  needs a dated decision in a later assessment.
 
 ### Automation follow-up
 

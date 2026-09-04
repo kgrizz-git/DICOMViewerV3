@@ -1,7 +1,7 @@
 # Documentation Assessment Template - [PROJECT_NAME]
 
-**Template Version**: 3.0  
-**Last Updated**: 2026-04-20
+**Template Version**: 3.1
+**Last Updated**: 2026-09-04
 
 ## Purpose
 
@@ -28,9 +28,11 @@ Instead, for each documentation assessment:
 1. **Create a new timestamped copy** of this template:
    - Copy this entire file to `[DEV_DOCS]/doc-assessments/doc-assessment-YYYY-MM-DD-HHMMSS.md`
    - Use format: `doc-assessment-2024-01-15-143022.md` (year-month-day-hour-minute-second)
-   - Example command: `cp [DEV_DOCS]/templates/doc-assessment-template.md "[DEV_DOCS]/doc-assessments/doc-assessment-$(date +%Y-%m-%d-%H%M%S).md"`
+   - Example command: `cp [DEV_DOCS]/templates-generalized/doc-assessment-template.md "[DEV_DOCS]/doc-assessments/doc-assessment-$(date +%Y-%m-%d-%H%M%S).md"`
 
 2. **Work with the timestamped copy**:
+   - Start from the current documentation inventory; cite the stable inventory
+     IDs and triage IDs sampled rather than recreating a competing ownership map
    - Fill in the analysis sections with actual findings
    - Mark off items in the timestamped file as you complete them
    - Document discrepancies, inaccuracies, and missing information
@@ -40,6 +42,19 @@ Instead, for each documentation assessment:
    - Review all findings in the timestamped file
    - If new assessment patterns or criteria are discovered, add them to this master template
    - Keep the timestamped file as a record of that specific assessment
+
+### Repository-specific inventory and tailoring
+
+This is a generalized template. Before beginning, identify the repository's
+living documentation inventory and triage ledger (for this repository:
+`dev-docs/DOCUMENTATION_INVENTORY.md` and
+`dev-docs/DOCUMENTATION_TRIAGE.md`). Use them as the authoritative current
+source/mirror/trigger map and cite their stable IDs in the snapshot.
+
+Tailor or remove prompts for paths that do not exist in the repository. Do not
+invent placeholder files such as `GETTING_STARTED.md` or
+`TECHNICAL_DETAILS.md` merely to satisfy a generic checklist; record the
+actual canonical equivalent or mark the prompt not applicable with a reason.
 
 ### Critical: No Code or Documentation Changes During Assessment
 
@@ -669,8 +684,12 @@ Use this structure in your timestamped assessment file:
 
 ## Template Version
 
-- **Version**: 2.1
+- **Version**: 3.1
 - **Created**: 2026-01-20
-- **Last Updated**: 2026-04-03
+- **Last Updated**: 2026-09-04
+- **Changes in v3.1**: Corrected the template-copy path; added inventory and
+  triage integration, repository-tailoring rule, and reconciled the footer
+  version with the header.
+- **Changes in v3.0**: Generalized current documentation assessment guidance.
 - **Changes in v2.1**: Step 1 and checklist: bundled / in-app user documentation (non-Markdown, e.g. HTML Quick Start); purpose alignment bullet; assessment results table example row.
 - **Changes in v1.1**: Added documentation purpose and organization evaluation criteria

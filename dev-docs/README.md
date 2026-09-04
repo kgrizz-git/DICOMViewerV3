@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-04
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -68,6 +68,8 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | Location | Purpose |
 |----------|---------|
 | [`doc-assessments/`](doc-assessments/) | Timestamped documentation assessments |
+| [`DOCUMENTATION_INVENTORY.md`](DOCUMENTATION_INVENTORY.md) | Current canonical documentation surfaces, mirrors, update triggers, and review evidence |
+| [`DOCUMENTATION_TRIAGE.md`](DOCUMENTATION_TRIAGE.md) | Current documentation-gap decisions and bounded follow-ups |
 | [`ux-assessments/`](ux-assessments/) | UX assessments and design investigations (e.g. [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md); hub: [TAG_TREE_VISUAL_HIERARCHY_PLAN.md](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md)) |
 | [`templates-generalized/`](templates-generalized/) | Reusable templates (assessments, plans) |
 | [`refactor-assessments/`](refactor-assessments/) | Refactor-focused assessments |
