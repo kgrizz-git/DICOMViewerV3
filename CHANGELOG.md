@@ -11,7 +11,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
 
 ### Fixed
-- **ACR batch CSV dropped preflight/runner warnings:** `build_tabular_run` / `build_metric_rows` no longer let pylinac `results_data` top-level `warnings` / `errors` (often empty lists) overwrite `QAResult` audit lists, so Export CSV keeps geometry preflight and runner warnings. **Semantic versioning note: patch.**
+- **ACR batch CSV dropped audit warnings:** `build_tabular_run` / `build_metric_rows` keep `QAResult` geometry-preflight and runner audit lists while retaining non-empty pylinac `results_data` warnings/errors, rather than letting empty top-level lists overwrite them. **Semantic versioning note: patch.**
 - **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
 
 ### Added

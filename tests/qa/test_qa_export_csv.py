@@ -253,8 +253,8 @@ def test_batch_csv_list_error_cells_joined_and_neutralized() -> None:
     assert errors_cell.startswith("[") is False
 
 
-def test_batch_csv_preserves_preflight_warnings_over_empty_pylinac_warnings() -> None:
-    """Empty raw_pylinac warnings must not blank the batch CSV warnings column."""
+def test_batch_csv_preserves_all_preflight_and_pylinac_warnings() -> None:
+    """Batch CSV audit warnings retain normalized and non-empty raw messages."""
     result = QAResult(
         success=True,
         analysis_type="acr_ct",
@@ -262,7 +262,7 @@ def test_batch_csv_preserves_preflight_warnings_over_empty_pylinac_warnings() ->
         errors=[],
         raw_pylinac={
             "num_images": 25,
-            "warnings": [],
+            "warnings": ["pylinac: low contrast"],
             "ct_module": {"rois": {"Water": 0.1}},
         },
         metrics={"num_images": 25},
@@ -272,8 +272,10 @@ def test_batch_csv_preserves_preflight_warnings_over_empty_pylinac_warnings() ->
     header = rows[0]
     warnings_cell = rows[1][header.index("warnings")]
     assert "Slice spacing irregular" in warnings_cell
+    assert "pylinac: low contrast" in warnings_cell
     # Single-run metric CSV must not emit a hollow warnings metric row.
-    single_keys = [r[0] for r in csv.reader(io.StringIO(build_metrics_csv(result)))]
+    single_rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    single_keys = [row[0] for row in single_rows[1:] if row]
     assert "warnings" not in single_keys
 
 

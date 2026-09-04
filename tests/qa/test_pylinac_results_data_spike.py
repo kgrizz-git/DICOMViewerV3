@@ -161,7 +161,7 @@ def test_ct_flatten_includes_present_families() -> None:
     )]
     missing = [prefix for prefix in _CT_FAMILY_PREFIXES if not _has_prefix(keys, prefix)]
     assert missing == []
-    assert "warnings" in keys
+    assert "warnings" not in keys
 
 
 def test_mri_flatten_includes_present_families() -> None:
@@ -171,7 +171,7 @@ def test_mri_flatten_includes_present_families() -> None:
     )]
     missing = [prefix for prefix in _MRI_FAMILY_PREFIXES if not _has_prefix(keys, prefix)]
     assert missing == []
-    assert "warnings" in keys
+    assert "warnings" not in keys
     # Empty sagittal dicts must not invent flatten leaves.
     assert not any(key.startswith("sagittal_localizer_module.") for key in keys)
 
