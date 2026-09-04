@@ -45,6 +45,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 | Location | Purpose |
 |----------|---------|
 | [`plans/`](plans/) | Active, supporting, and archived implementation plans |
+| [`plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) | Documentation freshness workflow, assessment cadence, and platform-evaluation gate |
 | [`plans/supporting/`](plans/supporting/) | Ongoing dependency/reference plans that still support open backlog work |
 | [`plans/completed/`](plans/completed/) | Completed implementation plan records; move finished plans here when closing their backlog items |
 | [`TO_DO.md`](TO_DO.md) | Active product and engineering backlog |
@@ -79,6 +80,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | Script / workflow | Purpose |
 |-------------------|---------|
 | [`../scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Validates relative links in `user-docs/*.md` and `dev-docs/README.md` |
+| [`../scripts/check_doc_feature_coverage.py`](../scripts/check_doc_feature_coverage.py) | Report-only: maps `QAction` labels to `user-docs/` mentions and lists candidate gaps for [`DOCUMENTATION_TRIAGE.md`](DOCUMENTATION_TRIAGE.md) |
 | [`../scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files, slim `AGENTS.md`, `TO_DO.md` freshness, plan paths, harness doc links |
 | [`../scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary guard against new high-risk layer violations (`architecture_boundary_baseline.txt` tracks current legacy edges) |
 | [`../scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Imports, version, committed DICOM fixture; optional `--qt-smoke` |

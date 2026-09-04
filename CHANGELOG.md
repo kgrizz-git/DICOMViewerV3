@@ -7,18 +7,8 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Added
+- **Documentation freshness workflow:** Living inventory and triage ledgers (`dev-docs/DOCUMENTATION_INVENTORY.md`, `dev-docs/DOCUMENTATION_TRIAGE.md`), Phase 0 baseline assessment, updated assessment template v3.1, and plan `dev-docs/plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`, with PR-template and release-checklist docs-impact reminders. **Semantic versioning note: patch** (developer documentation / process only).
 - **Local SonarQube findings JSON archive:** `scripts/report_local_sonarqube_issues.py` now writes a timestamped safe-subset JSON dump (plus `latest.json`) under ignored `tmp/sonarqube-findings/` by default so priority findings can be compared over time; use `--no-dump` to skip. **Semantic versioning note: patch** (developer tooling only).
-
-### Changed
-- **Dependabot ungroup for review-only pins:** `.github/dependabot.yml` excludes **`pylinac`** (ACR QA re-verify) and **`typer`** (phi-scan `~=0.24.1`) from the `python-patch-minor` group so each still gets a solo PR. **Semantic versioning note: patch** (CI tooling only).
-- **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
-
-### Fixed
-- **ACR batch CSV dropped audit warnings:** `build_tabular_run` / `build_metric_rows` keep `QAResult` geometry-preflight and runner audit lists while retaining non-empty pylinac `results_data` warnings/errors, rather than letting empty top-level lists overwrite them. **Semantic versioning note: patch.**
-- **Local SonarQube reporter write hygiene:** Close the temp FD if `chmod` fails before `fdopen`, and resolve `--dump-dir` / `--output` before any archive or Markdown write so a bad `--output` cannot leave a partial JSON dump. **Semantic versioning note: patch** (developer tooling only).
-- **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
-
-### Added
 - **ACR pylinac golden `results_data` dumps:** `tests/fixtures/qa/acr_ct_results_data.json` and `acr_mri_results_data.json` are redacted metric trees from tracked de-identified ACR phantoms (no pixels, no paths). CI flatten tests load these files; no live ``analyze()``. **Semantic versioning note: patch.**
 - **Reviewed de-identified ACR phantom DICOM:** `sample-phantom-data-committed/deid-phantoms/` holds PS3.15 Standard-share CT/MR phantom series (70 instances) for local QA. Human pixel review 2026-08-29; hashes in `security/approved-media-sha256.json`; exact-path gitignore allowlist. **Semantic versioning note: patch.**
 - **ACR MRI SNR harvest (P6) + highest-echo default:** ACR MRI Large runs now export viewer-computed **``mri_snr``** (uncorrected ACR-style **S̄ / σ_bkg** on the uniformity slice; pylinac Center ROI mean over the mean σ of the two frequency-encode ghost-free background ROIs). No NEMA **0.655** factor. XLSX Summary adds an **MRI SNR** column (blank on CT). A blank SNR cell is accompanied by a result warning when Center/ghost ROIs are missing or noise is zero. The MRI options dialog default is **Use highest echo number** (auto-highest ``EchoNumber``); dual-echo T2 series should analyze echo 2, not proton-density echo 1. The analysis profile's ``echo_number`` is the resolved echo (not the unresolved request). The MRI ``results_data`` spike uses the same auto-highest default. Stock pylinac still uses the lowest echo if ``analyze(echo_number=None)`` is left unresolved. **Semantic versioning note: minor.**
@@ -57,7 +47,14 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   in the run's ``pylinac_analysis_profile`` and JSON ``inputs`` for audit.
   **Semantic versioning note: minor.**
 
+### Changed
+- **Dependabot ungroup for review-only pins:** `.github/dependabot.yml` excludes **`pylinac`** (ACR QA re-verify) and **`typer`** (phi-scan `~=0.24.1`) from the `python-patch-minor` group so each still gets a solo PR. **Semantic versioning note: patch** (CI tooling only).
+- **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
+
 ### Fixed
+- **ACR batch CSV dropped audit warnings:** `build_tabular_run` / `build_metric_rows` keep `QAResult` geometry-preflight and runner audit lists while retaining non-empty pylinac `results_data` warnings/errors, rather than letting empty top-level lists overwrite them. **Semantic versioning note: patch.**
+- **Local SonarQube reporter write hygiene:** Close the temp FD if `chmod` fails before `fdopen`, and resolve `--dump-dir` / `--output` before any archive or Markdown write so a bad `--output` cannot leave a partial JSON dump. **Semantic versioning note: patch** (developer tooling only).
+- **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
 - **De-id Type-2 patient values are now blank and VR-legal:** DICOM exports
   keep Patient Name, Patient ID, Birth Date, and Sex present with zero-length
   values. This replaces the generic ``ANONYMIZED`` text dummy, which was not a

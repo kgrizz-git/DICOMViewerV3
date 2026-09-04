@@ -1,7 +1,7 @@
 # Documentation workflow, freshness, and publication plan
 
 **Created:** 2026-09-04
-**Status:** Phase 0 complete; Phase 1 triage and accuracy audit in progress — no documentation platform selected or installed
+**Status:** Phase 0 complete; Phase 1 not started — no documentation platform selected or installed
 **Priority:** P2 evaluation; ongoing user-documentation completeness remains P1
 
 ## Goal
@@ -95,8 +95,10 @@ findings only—no content fixes mixed into the assessment.
 
 ## Phase 1 — Accuracy and completeness audit
 
-- [ ] Use the documentation-assessment template to compare docs with code, UI
-  labels/menu paths, configuration defaults, tests, and release behavior.
+- [ ] Use the documentation-assessment template
+  ([`templates-generalized/doc-assessment-template.md`](../templates-generalized/doc-assessment-template.md))
+  to compare docs with code, UI labels/menu paths, configuration defaults,
+  tests, and release behavior.
 - [ ] Review public docstrings and selected internal contracts for accurate
   signatures, parameters, return values, exceptions, side effects, ownership,
   and initialization/order assumptions.
