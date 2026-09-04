@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -44,6 +46,22 @@ def _issue(*, component: str = "dicom-viewer-v3:src/example.py", line: int = 12)
 
 def _page(issues: list[dict[str, Any]], *, total: int, page: int) -> dict[str, Any]:
     return {"paging": {"total": total, "pageIndex": page}, "issues": issues}
+
+
+def _sample_report(module: ModuleType):
+    return module.SonarReport(
+        project_key="dicom-viewer-v3",
+        analysis=module.AnalysisMetadata(date="2026-07-18", revision="abc123"),
+        issues=(
+            module.SonarIssue(
+                severity="BLOCKER",
+                issue_type="BUG",
+                rule="python:S930",
+                path="src/example.py",
+                line=12,
+            ),
+        ),
+    )
 
 
 def test_fetch_issues_uses_component_filter_and_keeps_token_out_of_url(monkeypatch):
@@ -148,19 +166,7 @@ def test_collect_reported_findings_queries_all_priority_severities(monkeypatch):
 
 def test_markdown_report_is_token_free_and_output_stays_in_tmp(tmp_path):
     module = _load_module()
-    report = module.SonarReport(
-        project_key="dicom-viewer-v3",
-        analysis=module.AnalysisMetadata(date="2026-07-18", revision="abc123"),
-        issues=(
-            module.SonarIssue(
-                severity="BLOCKER",
-                issue_type="BUG",
-                rule="python:S930",
-                path="src/example.py",
-                line=12,
-            ),
-        ),
-    )
+    report = _sample_report(module)
 
     markdown = module.render_markdown_report(report)
     assert "test-token" not in markdown
@@ -172,7 +178,52 @@ def test_markdown_report_is_token_free_and_output_stays_in_tmp(tmp_path):
         module.resolve_output_path(tmp_path, Path("report.md"))
 
 
-def test_main_loads_token_from_dotenv(monkeypatch, tmp_path):
+def test_json_archive_writes_timestamped_and_latest_under_tmp(tmp_path):
+    module = _load_module()
+    report = _sample_report(module)
+    dump_dir = module.resolve_dump_directory(tmp_path, Path("tmp/sonarqube-findings"))
+    stamped = datetime(2026, 9, 3, 23, 5, 0, tzinfo=UTC)
+
+    timestamped_path, latest_path = module.archive_findings_json(
+        dump_dir,
+        report,
+        dumped_at_utc=stamped,
+        git_head="deadbeef",
+    )
+
+    assert timestamped_path.name == "20260903T230500Z_dicom-viewer-v3_abc123.json"
+    assert latest_path.name == "latest.json"
+    payload = json.loads(timestamped_path.read_text(encoding="utf-8"))
+    assert payload == json.loads(latest_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["summary"]["total"] == 1
+    assert payload["summary"]["by_severity"] == {"BLOCKER": 1}
+    assert payload["issues"][0]["path"] == "src/example.py"
+    assert "message" not in payload["issues"][0]
+    payload_text = timestamped_path.read_text(encoding="utf-8")
+    assert "file-token" not in payload_text
+    assert "SONAR_TOKEN" not in payload_text
+    assert "test-token" not in payload_text
+
+    with pytest.raises(module.SonarReportError, match="--dump-dir must stay below"):
+        module.resolve_dump_directory(tmp_path, Path("sonarqube-findings"))
+    with pytest.raises(module.SonarReportError, match="--dump-dir must stay below"):
+        module.resolve_dump_directory(tmp_path, Path("tmp/../escape"))
+    custom = module.resolve_dump_directory(tmp_path, (tmp_path / "tmp" / "custom").resolve())
+    assert custom == (tmp_path / "tmp" / "custom").resolve()
+
+
+def test_current_git_head_returns_none_when_git_missing(monkeypatch, tmp_path):
+    module = _load_module()
+
+    def boom(*_args, **_kwargs):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(module.subprocess, "run", boom)
+    assert module.current_git_head(tmp_path) is None
+
+
+def test_main_loads_token_from_dotenv_and_dumps_json(monkeypatch, tmp_path, capsys):
     module = _load_module()
     (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
     monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
@@ -190,6 +241,113 @@ def test_main_loads_token_from_dotenv(monkeypatch, tmp_path):
         "collect_reported_findings",
         lambda _host, token, _project: seen_tokens.append(token) or report,
     )
+    monkeypatch.setattr(module, "current_git_head", lambda _root: "abc123")
 
     assert module.main() == 0
     assert seen_tokens == ["file-token"]
+    dump_dir = tmp_path / "tmp" / "sonarqube-findings"
+    latest = dump_dir / "latest.json"
+    assert latest.is_file()
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    assert payload["summary"]["total"] == 0
+    assert "JSON archive:" in capsys.readouterr().out
+
+
+def test_main_no_dump_skips_archive(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(sys, "argv", ["report_local_sonarqube_issues.py", "--no-dump"])
+    report = module.SonarReport(
+        project_key="dicom-viewer-v3",
+        analysis=module.AnalysisMetadata(date="2026-07-18", revision="abc123"),
+        issues=(),
+    )
+    monkeypatch.setattr(module, "get_server_status", lambda _host: "UP")
+    monkeypatch.setattr(module, "collect_reported_findings", lambda *_args: report)
+
+    assert module.main() == 0
+    assert not (tmp_path / "tmp" / "sonarqube-findings").exists()
+    assert "JSON archive skipped" in capsys.readouterr().out
+
+
+def test_main_custom_dump_dir_and_markdown_output(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "report_local_sonarqube_issues.py",
+            "--dump-dir",
+            "tmp/custom-findings",
+            "--output",
+            "tmp/priority.md",
+        ],
+    )
+    report = _sample_report(module)
+    monkeypatch.setattr(module, "get_server_status", lambda _host: "UP")
+    monkeypatch.setattr(module, "collect_reported_findings", lambda *_args: report)
+    monkeypatch.setattr(module, "current_git_head", lambda _root: "abc123")
+
+    assert module.main() == 0
+    assert (tmp_path / "tmp" / "custom-findings" / "latest.json").is_file()
+    assert (tmp_path / "tmp" / "priority.md").is_file()
+    output = capsys.readouterr().out
+    assert "JSON archive:" in output
+    assert "Markdown report written" in output
+
+
+def test_write_text_atomically_closes_fd_when_chmod_fails(monkeypatch, tmp_path):
+    module = _load_module()
+    closed: list[int] = []
+    real_close = module.os.close
+
+    def tracking_close(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    def boom_chmod(_path, _mode):
+        raise OSError("chmod denied")
+
+    monkeypatch.setattr(module.os, "chmod", boom_chmod)
+    monkeypatch.setattr(module.os, "close", tracking_close)
+    target = tmp_path / "out.json"
+    with pytest.raises(module.SonarReportError, match="could not write"):
+        module.write_text_atomically(target, "{}\n", purpose="test dump")
+    assert closed
+    assert not target.exists()
+    assert not list(tmp_path.glob(".out.json.*.tmp"))
+
+
+def test_main_rejects_bad_output_before_writing_dump(monkeypatch, tmp_path):
+    module = _load_module()
+    (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "report_local_sonarqube_issues.py",
+            "--output",
+            "outside.md",
+        ],
+    )
+    report = _sample_report(module)
+    archive_calls: list[object] = []
+    monkeypatch.setattr(module, "get_server_status", lambda _host: "UP")
+    monkeypatch.setattr(module, "collect_reported_findings", lambda *_args: report)
+    monkeypatch.setattr(module, "current_git_head", lambda _root: "abc123")
+    monkeypatch.setattr(
+        module,
+        "archive_findings_json",
+        lambda *_args, **_kwargs: archive_calls.append(True) or (tmp_path, tmp_path),
+    )
+
+    assert module.main() == 2
+    assert archive_calls == []
+    assert not (tmp_path / "tmp" / "sonarqube-findings").exists()
