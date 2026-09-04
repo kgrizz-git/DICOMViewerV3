@@ -17,7 +17,7 @@ and re-verify **ACR CT + ACR MRI Large** before merging.
 
 | Package | Current | Target | Notes |
 |---|---|---|---|
-| `pylinac` | `==3.43.2` | `3.45.0` | Exact pin; current verified ACR CT/MRI integration version. Dependabot opens this as the `python-patch-minor` group PR. Re-verify ACR QA after bump. |
+| `pylinac` | `==3.43.2` | `3.47.0` | Exact pin; current verified ACR CT/MRI integration version. **Ungrouped in `.github/dependabot.yml`** (solo Dependabot PRs). Re-verify ACR QA via `DEPENDENCY_BUMP_VERIFICATION_PLAN.md` before merging. |
 | `scikit-image` | `>=0.22.0` | `>=0.26.0` | `pylinac` image-processing dependency; several minor versions of drift. Bump alongside / after the `pylinac` verification, not independently. |
 
 ## Blocked upstream (tracked elsewhere)

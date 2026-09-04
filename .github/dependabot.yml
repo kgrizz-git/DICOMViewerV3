@@ -22,11 +22,16 @@ updates:
     groups:
       # Bundle routine patch/minor bumps into one weekly PR; majors (e.g. a
       # pydicom 2->3 jump) still open individually since they need review.
+      # pylinac needs ACR QA re-verify; typer is pinned for phi-scan ~=0.24.1 —
+      # both stay ungrouped so they get solo PRs instead of riding with safe bumps.
       python-patch-minor:
         applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
+        exclude-patterns:
+          - "pylinac"
+          - "typer"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
