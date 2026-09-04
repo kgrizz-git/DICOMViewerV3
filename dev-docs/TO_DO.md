@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-04
 
 ---
 
@@ -37,7 +37,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    alternative) for producing both in-repository developer documentation and
    user-facing docs. Record source/privacy behavior, generated-output review
    workflow, maintenance burden, and a recommendation before adopting or
-   adding a tool.
+   adding a tool. **Plan:** [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md).
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
 
@@ -84,7 +84,7 @@ Release blockers (license compliance, versioned executables) live in
 ## Static analysis
 
 - [ ] **[P2]** **Reduce CI and local test wall time without weakening test or coverage guarantees.** Profile and remove redundant full-app setup, then shard CI only if measurements justify it; preserve the complete test selection, xdist coverage union, 80% floor, and SonarQube XML artifact. **Plan:** [CI test runtime and coverage integrity](plans/CI_TEST_RUNTIME_AND_COVERAGE_INTEGRITY_PLAN.md). Added 2026-08-14.
-- [ ] **[P2]** **Lift `.coveragerc` omit for `src/main_app_*.py` after coverage paydown.** The main.py mixin split quarantines extracted facade modules (Option A) so CI `--cov-fail-under=80` stays green. Do not leave them omitted permanently — expand safety-net / facade tests until un-omitting does not drop below 80%. See [MAIN_PY_REFACTOR_PLAN](plans/supporting/MAIN_PY_REFACTOR_PLAN.md) Coverage Strategy.
+- [ ] **[P2]** **Lift `.coveragerc` omit for `src/main_app_*.py` after coverage paydown.** The main.py mixin split quarantines extracted facade modules (Option A) so CI `--cov-fail-under=80` stays green. Do not leave them omitted permanently — expand safety-net / facade tests until un-omitting does not drop below 80%. See the archived [MAIN_PY_REFACTOR_PLAN](plans/completed/MAIN_PY_REFACTOR_PLAN.md) Coverage Strategy.
 - [ ] **[P2]** **Raise test coverage (ongoing).** Tests-only coverage boost across `tests/` (Phases 1–4 complete; Phase 5 partial + deferred dialog/high-miss slices); local Sonar remeasured +7–8 pp line vs baseline. Branch `test/coverage-boost`. **Plan:** [Raise test coverage](plans/TEST_COVERAGE_BOOST_PLAN.md). Surfaced 2026-08-11.
 - [ ] **[P2]** **Refactor high-complexity functions identified by local
   SonarQube or Lizard.** Prioritize bounded, characterized slices in
