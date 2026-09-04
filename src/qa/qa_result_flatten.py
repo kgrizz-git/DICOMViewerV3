@@ -26,6 +26,10 @@ Merge rule (locked, OQ-5):
     3. On a genuine dotted-key collision, metrics wins (provenance-curated scalars).
        Wide rows from ``build_tabular_run`` overlay flatten keys onto provenance
        **in place** (same win rule, keys stay top-level — no ``metric.`` rename).
+       Exception: audit list keys ``warnings`` / ``errors`` are owned by
+       :func:`build_run_provenance` (preflight + runner). Pylinac dumps always
+       expose top-level ``warnings`` (often ``[]``); those must not clobber the
+       merged ``QAResult`` lists when building batch CSV rows.
 
 Requirements:
     - Do not put ``analyzed_image_path`` or any filesystem path into flatten output.
@@ -46,10 +50,19 @@ _PATH_FIELD_DENYLIST = frozenset(
     {"analyzed_image_path", "analyzed_module_images", "pdf_report_path"}
 )
 
+# Provenance audit lists belong in the compact audit block, rather than the
+# metric flatten. Pylinac results_data always includes top-level ``warnings``
+# (often empty); walking that key into flatten would overwrite preflight/runner
+# warnings in build_tabular_run. build_run_provenance retains non-empty pylinac
+# messages alongside the normalized QAResult audit lists.
+_PROVENANCE_AUDIT_DENYLIST = frozenset({"warnings", "errors"})
+
+_FLATTEN_DENYLIST = _PATH_FIELD_DENYLIST | _PROVENANCE_AUDIT_DENYLIST
+
 
 def _is_denied_key(key: Any) -> bool:
-    """Return True when *key* is a denylisted path-bearing field name."""
-    return str(key) in _PATH_FIELD_DENYLIST
+    """Return True when *key* must not appear in flatten metric rows."""
+    return str(key) in _FLATTEN_DENYLIST
 
 
 def _walk_raw_pylinac(data: Any, prefix: str) -> dict[str, Any]:
@@ -58,7 +71,8 @@ def _walk_raw_pylinac(data: Any, prefix: str) -> dict[str, Any]:
 
     Nested dicts are expanded with dotted keys; lists/tuples are joined with
     ``"; "``; ``None`` becomes ``""``; scalars pass through unchanged.
-    Keys named in ``_PATH_FIELD_DENYLIST`` (and their subtrees) are skipped.
+    Keys named in the flatten denylist (path-bearing fields and provenance
+    audit lists ``warnings`` / ``errors``) and their subtrees are skipped.
     """
     rows: dict[str, Any] = {}
     if isinstance(data, dict):
@@ -110,14 +124,35 @@ def build_metric_rows(result: QAResult) -> list[tuple[str, Any]]:
     return sorted(flat.items(), key=lambda kv: str(kv[0]))
 
 
+def _merged_audit_messages(result: QAResult, key: str) -> list[Any]:
+    """Return deduplicated normalized and raw-pylinac audit messages.
+
+    ``QAResult`` is the canonical home for runner and preflight messages.
+    Pylinac's ``results_data`` can additionally contain non-empty top-level
+    ``warnings`` or ``errors``. Keep both sources in provenance while keeping
+    those audit lists out of the metric flatten, where they could clobber the
+    canonical fields during wide-row construction. Normalized messages come
+    first, followed by previously unseen raw-pylinac messages.
+    """
+    messages = list(getattr(result, key) or [])
+    raw = result.raw_pylinac or {}
+    raw_value = raw.get(key) if isinstance(raw, dict) else None
+    raw_messages = raw_value if isinstance(raw_value, (list, tuple)) else (raw_value,)
+    for message in raw_messages:
+        if message and message not in messages:
+            messages.append(message)
+    return messages
+
+
 def build_run_provenance(result: QAResult, label: str | None = None) -> dict[str, Any]:
     """
     Build a compact provenance/audit dict for a QA run.
 
     Includes analysis type, success, pylinac version, study/series UIDs,
-    modality, num_images, optional label, errors, and warnings. Deliberately
-    compact — not the full JSON document. ``analyzed_image_path`` and other
-    filesystem paths are never included.
+    modality, num_images, optional label, errors, and warnings. Audit lists
+    merge normalized QAResult messages with non-empty top-level pylinac
+    messages. Deliberately compact — not the full JSON document.
+    ``analyzed_image_path`` and other filesystem paths are never included.
     """
     prov: dict[str, Any] = {
         "analysis_type": result.analysis_type,
@@ -128,8 +163,8 @@ def build_run_provenance(result: QAResult, label: str | None = None) -> dict[str
         "modality": result.modality,
         "num_images": result.num_images,
         "label": label,
-        "errors": list(result.errors) if result.errors else [],
-        "warnings": list(result.warnings) if result.warnings else [],
+        "errors": _merged_audit_messages(result, "errors"),
+        "warnings": _merged_audit_messages(result, "warnings"),
     }
     return prov
 
@@ -142,9 +177,12 @@ def build_tabular_run(result: QAResult, label: str | None = None) -> dict[str, A
     keys come first (in insertion order); metric rows are then overlaid in
     place. On a key collision the flatten/metrics value **wins** and the key
     stays **top-level** (locked merge rule — no ``metric.`` / ``metrics.``
-    rename). Typical overlap is ``num_images``.
+    rename), except ``warnings`` / ``errors`` which stay provenance-owned.
+    Typical metric overlap is ``num_images``.
     """
     row: dict[str, Any] = build_run_provenance(result, label=label)
     for key, value in build_metric_rows(result):
+        if key in _PROVENANCE_AUDIT_DENYLIST:
+            continue
         row[key] = value
     return row

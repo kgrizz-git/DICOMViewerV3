@@ -340,6 +340,59 @@ def test_warnings_empty_when_none() -> None:
     assert prov["warnings"] == []
 
 
+def test_tabular_run_keeps_result_warnings_when_raw_pylinac_has_empty_warnings() -> None:
+    """Pylinac dumps always include top-level warnings=[]; must not clobber QAResult."""
+    result = _ct_result()
+    result.warnings = ["Slice spacing irregular: expected 5.00 mm"]
+    result.raw_pylinac = {**result.raw_pylinac, "warnings": []}
+    rows = dict(build_metric_rows(result))
+    assert "warnings" not in rows
+    tab = build_tabular_run(result, label="CT-1")
+    assert tab["warnings"] == ["Slice spacing irregular: expected 5.00 mm"]
+
+
+def test_provenance_keeps_raw_pylinac_audit_messages_when_result_is_silent() -> None:
+    """Non-empty raw audit lists remain exportable even without runner messages."""
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        raw_pylinac={
+            "warnings": ["pylinac: low contrast"],
+            "errors": ["pylinac: incomplete module"],
+        },
+    )
+    provenance = build_run_provenance(result)
+    assert provenance["warnings"] == ["pylinac: low contrast"]
+    assert provenance["errors"] == ["pylinac: incomplete module"]
+
+
+def test_tabular_run_keeps_result_errors_when_raw_pylinac_has_errors_key() -> None:
+    """Raw audit messages augment, rather than replace, runner/preflight messages."""
+    result = QAResult(
+        success=False,
+        analysis_type="acr_ct",
+        errors=["physical scan extent too short"],
+        warnings=["preflight: duplicate ImagePositionPatient"],
+        raw_pylinac={
+            "num_images": 10,
+            "warnings": ["pylinac: low contrast"],
+            "errors": ["pylinac: incomplete module"],
+        },
+        metrics={},
+    )
+    tab = build_tabular_run(result)
+    assert tab["errors"] == [
+        "physical scan extent too short",
+        "pylinac: incomplete module",
+    ]
+    assert tab["warnings"] == [
+        "preflight: duplicate ImagePositionPatient",
+        "pylinac: low contrast",
+    ]
+    assert "warnings" not in dict(build_metric_rows(result))
+    assert "errors" not in dict(build_metric_rows(result))
+
+
 # ---------------------------------------------------------------------------
 # Stable sort order
 # ---------------------------------------------------------------------------

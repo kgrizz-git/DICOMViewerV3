@@ -2,7 +2,7 @@
 
 All notable changes to DICOM Viewer V3 are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increment rules.
 
-**Current version:** `0.4.4` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
+**Current version:** `0.4.5` — kept in sync with [`src/version.py`](src/version.py) (`__version__`). This is the canonical app version even when changes are only listed under **[Unreleased]** between formal tagged releases; bump both together when you cut a release or intentionally advance the project version.
 
 ## [Unreleased]
 
@@ -14,6 +14,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
 
 ### Fixed
+- **ACR batch CSV dropped audit warnings:** `build_tabular_run` / `build_metric_rows` keep `QAResult` geometry-preflight and runner audit lists while retaining non-empty pylinac `results_data` warnings/errors, rather than letting empty top-level lists overwrite them. **Semantic versioning note: patch.**
 - **Local SonarQube reporter write hygiene:** Close the temp FD if `chmod` fails before `fdopen`, and resolve `--dump-dir` / `--output` before any archive or Markdown write so a bad `--output` cannot leave a partial JSON dump. **Semantic versioning note: patch** (developer tooling only).
 - **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**
 
