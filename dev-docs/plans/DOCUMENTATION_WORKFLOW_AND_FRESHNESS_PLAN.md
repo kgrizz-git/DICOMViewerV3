@@ -108,6 +108,17 @@ findings only—no content fixes mixed into the assessment.
   rationale, relevant inventory ID, exact canonical destination, and a
   repository-relative follow-up when it is not resolved in the same change.
   `pending-triage` is an intake state, not a resolution.
+- [ ] When resolving triage rows, replace the shared Phase 0 Follow-up pointer
+  (`TO_DO.md#documentation`) with a per-row, discriminating follow-up (exact
+  canonical path/section, issue, or bounded batch) so the Follow-up column is
+  no longer identical across open rows.
+- [ ] Revisit inventory **DOC-03** (Quick Start): confirm whether the canonical
+  source should remain a `USER_GUIDE.md` section plus linked topics, or whether
+  the hub section and
+  [`resources/help/quick_start_guide.html`](../../resources/help/quick_start_guide.html)
+  roles should be restated (for example, HTML as primary in-app surface with
+  the hub as mirror, or a dedicated Markdown canonical). Update the inventory
+  row and any mirrors only after that decision.
 - [ ] Separate findings by user risk and freshness urgency, then schedule
   documentation edits as bounded follow-up batches.
 
