@@ -27,5 +27,5 @@ fixtures only.
 - [ ] Documentation impact recorded: relevant `DOC-###` rows in `dev-docs/DOCUMENTATION_INVENTORY.md` were reviewed; canonical docs and mirrors were updated, or a `TRIAGE-###` deferred follow-up is linked.
 - [ ] For new/changed visible actions or workflows, `python scripts/check_doc_feature_coverage.py` was reviewed and any decision is in `dev-docs/DOCUMENTATION_TRIAGE.md`; for user-doc changes, `python scripts/check_user_docs_links.py` passes.
 - [ ] Public or high-risk contract docstrings changed in this PR were verified against code and tests.
-- [ ] For a minor/major release or substantial UI/Help change, a timestamped documentation assessment is linked; otherwise an explicit dated waiver and bounded follow-up are recorded.
+- [ ] Documentation assessment: for a minor/major release or substantial UI/Help change, link a timestamped assessment under `dev-docs/doc-assessments/` (or record a dated waiver with reason and bounded follow-up only when that triggered assessment cannot be completed); otherwise record a dated N/A documentation-impact decision.
 - [ ] Commits use the GitHub noreply author email.

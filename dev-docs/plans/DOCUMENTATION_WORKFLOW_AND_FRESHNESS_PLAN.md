@@ -137,8 +137,8 @@ complete until the listed fixes are reviewed and merged.
 - [ ] Keep `check_user_docs_links.py` mandatory after user-doc edits; use
   `check_doc_feature_coverage.py` as a triage report rather than an automatic
   truth test.
-- [ ] Re-run the full assessment after each minor release or substantial UI
-  workflow change, as already required by release guidance.
+- [ ] Re-run the full assessment before each minor/major release tag or
+  substantial UI/Help merge, as already required by release guidance.
 
 **Exit:** feature changes have a repeatable documentation decision and named
 sources, not a best-effort post-release sweep.
@@ -150,7 +150,7 @@ sources, not a best-effort post-release sweep.
 | Any `user-docs/` or `dev-docs/README.md` edit | Check all relative links | `python scripts/check_user_docs_links.py` (already a CI gate) |
 | New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps |
 | Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required |
-| Minor/major release or substantial UI/Help change | Inventory and audit user, developer, in-app, and relevant code documentation before a fix batch | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` |
+| Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` |
 
 ### Living records and history
 

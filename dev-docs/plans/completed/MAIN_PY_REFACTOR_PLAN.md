@@ -555,7 +555,7 @@ python scripts/check_user_docs_links.py
 2. ~~**Complete Phase 0** (test safety net)~~ — **Done** 2026-08-08
 3. ~~Phase 2 scaffolding (empty mixins, coverage omit, architecture boundaries)~~ — **Done** 2026-08-08
 4. ~~Extraction Phases 3–5 using Appendix A; Phase 6 cleanup; Phase 7 CCN regression sweep~~ — **Done** 2026-08-08
-5. Human commit on `refactor/main-split` when ready (see Progress ledger resume point)
+5. ~~Human commit on `refactor/main-split`~~ — **Done** in `1df5616` (2026-08-08)
 6. ~~Update `ARCHITECTURE.md` / `SOURCE_LAYOUT.md` during Phase 6~~ — **Done** 2026-08-08 (Phase 6)
 7. Create/update tracking note in `dev-docs/TO_DO.md` if desired (optional post-merge)
 
