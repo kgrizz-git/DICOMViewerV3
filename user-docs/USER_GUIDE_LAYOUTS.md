@@ -4,7 +4,7 @@
 
 The viewer shows your images in **panes** (subwindows). You can split the viewing area into several panes, put a different series in each, and move between slices and frames. This guide covers the pane layouts, how to fill and focus panes, and the basics of slice/cine navigation.
 
-> Looking for the key bindings only? See the [keyboard-shortcut reference](USER_GUIDE_SHORTCUTS.md). For drawing tools see [Measurements & annotations](USER_GUIDE_ANNOTATIONS.md).
+> Looking for the key bindings only? See the [keyboard-shortcut reference](USER_GUIDE_SHORTCUTS.md). For drawing tools see [Measurements & annotations](USER_GUIDE_ANNOTATIONS.md). Pane and overlay defaults that persist between sessions live in [Configuration and settings](CONFIGURATION.md) under **View → Overlay Settings** and **View → Slice Sync**.
 
 ## Choosing a layout
 
@@ -71,7 +71,7 @@ Under **View → Show Slice Location Lines** (persisted; also styled under **Vie
 ## Slice & cine navigation
 
 - **Next / previous slice:** **↑ / ↓** arrow keys, or the **mouse wheel** over the focused pane. (Arrow keys move the cursor instead while you are editing a text annotation.)
-- **In-window slice/frame slider:** multi-slice and multi-frame series show a slider you can drag to scrub through the stack.
+- **In-window slice/frame slider:** multi-slice and multi-frame series show a slider you can drag to scrub through the stack. Show/hide, **Placement**, and **Direction** live under **View → In-Window Slice/Frame Slider**; **View → Image Smoothing** is documented in [CONFIGURATION.md](CONFIGURATION.md#image-smoothing).
 - **Cine:** play multi-frame series from the left-pane **Cine Playback** group (**Play / Pause**, **Stop**, **Loop**, plus speed and frame slider), or with **Ctrl+Space**. On multi-frame series the image **right-click** menu offers the same play/pause, stop, and loop. See the [hub's *General viewing* section](USER_GUIDE.md#general-viewing-2d) for exporting a cine loop.
 - **Cine loop bounds:** on the left-pane **frame slider**, **right-click** a frame to **Set Cine Start**, **Set Cine End**, or **Clear Cine Bounds**. Playback honors those bounds when set. **File → Export Cine As…** uses them when **Use cine loop range (A–B markers)** is checked (checked by default when bounds exist).
 
@@ -81,6 +81,10 @@ Under **View → Show Slice Location Lines** (persisted; also styled under **Vie
 - **Reset all views:** **Shift+A**.
 
 These reset pan/zoom for the pane(s); they do not change which series is assigned.
+
+## Orientation (flip / rotate)
+
+**View → Orientation** (also on the image right-click menu) flips and rotates the **focused** pane only. **Flip Horizontal** / **Flip Vertical**, **Rotate 90° CW** / **Rotate 90° CCW**, **Rotate 180°** (menu only), and **Reset Orientation** are all **non-destructive** — they change the on-screen orientation of the active pane, not the underlying DICOM data, and each pane keeps its own orientation until you reset it. See [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) for the keyboard bindings (Alt+H / Alt+V / Alt+R / Shift+Alt+R / Shift+Alt+O).
 
 ## Limitations
 

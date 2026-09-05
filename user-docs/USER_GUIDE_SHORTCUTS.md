@@ -4,6 +4,8 @@
 
 A consolidated reference for every keyboard shortcut. The app also shows a built-in list at **Help → Keyboard Shortcuts…** (or **F1**).
 
+> This page lists keys. For the **View** menu actions they map to (overlay settings, scale markers, slice sync, side panes), see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md) and [Configuration and settings](CONFIGURATION.md).
+
 > **Single-key shortcuts** (tool modes, layout keys, `I`, `N`, `C`, `D`, `V`, `Q`) are ignored while you are **editing a text annotation**, so typing those letters inserts characters as expected. Tool keys are also passed through to Qt when **Ctrl/Cmd** is held (so `Ctrl+S`, `Ctrl+W`, etc. keep their standard meaning).
 
 ## File
@@ -42,7 +44,7 @@ These switch the active mouse tool (see [Measurements & annotations](USER_GUIDE_
 | Arrow annotation | **A** |
 | Crosshair | **H** |
 | Zoom | **Z** |
-| Magnifier | **G** |
+| **Magnifier** (toolbar: **Magnify**) | **G** |
 | Window/Level from ROI | **W** |
 | Quick Window/Level | **Q** |
 
@@ -66,8 +68,8 @@ These switch the active mouse tool (see [Measurements & annotations](USER_GUIDE_
 | Cycle overlay detail (Simple → Detailed → Hidden, all panes) | **Space** |
 | Legacy overlay-visibility cycle (focused pane) | **Shift+Space** |
 | Overlay Tags Configuration | **Ctrl+Shift+L** |
-| Decrease corner-overlay text | **Ctrl/Cmd+-** or **Shift+scroll down** over an image pane |
-| Increase corner-overlay text | **Ctrl/Cmd++** or **Shift+scroll up** over an image pane |
+| **Decrease Font Size** (corner overlay; View → Overlay Text) | **Ctrl/Cmd+-** or **Shift+scroll down** over an image pane |
+| **Increase Font Size** (corner overlay; View → Overlay Text) | **Ctrl/Cmd++** or **Shift+scroll up** over an image pane |
 | DICOM File Info (About this file) | **Ctrl+I** |
 | Histogram | **Ctrl+Shift+H** |
 | Flip horizontal | **Alt+H** |

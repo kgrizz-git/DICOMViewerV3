@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-09-05
 
-This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features).
+This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features). For pane, slice-sync, and slice-location-line behavior that overlaps with this guide, see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md); for the keyboard shortcuts that drive these menus, see [Keyboard shortcuts](USER_GUIDE_SHORTCUTS.md).
 
 ## Edit → Settings…
 
@@ -40,7 +40,7 @@ Do not edit the JSON by hand unless you know the schema; invalid files fall back
 **View → Overlay Settings…** opens the **Overlay Settings** dialog (window title **Overlay Settings**). Groups include:
 
 - **Overlay Settings** — font size, family, variant, and text color for corner/metadata overlay text.
-- **Viewer Overlay Elements** — scale markers and patient direction labels (show/hide, colors, sizes, tick intervals). The same show/hide and color actions are also available under the **View** menu.
+- **Viewer Overlay Elements** — scale markers and patient direction labels (show/hide, colors, sizes, tick intervals). The same show/hide and color actions are also available directly under the **View** menu: **View → Show Scale Markers**, **View → Scale Markers Color...**, **View → Show Direction Labels**, and **View → Direction Labels Color...**. Related View-menu layout controls (slice sync, slice location lines, side panes) are documented in [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md).
 - **Slice Location Lines** (UI menu: **View → Show Slice Location Lines**) — how slice-location lines are drawn (mode and width), including centre line vs slab begin/end boundaries, plus slice-sync strip height where applicable. See [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md#show-slice-location-lines) for the View-menu toggles.
 
 Changes apply to the live view (with cancel restoring prior values). These map to keys under the **overlay** and related sections of the JSON config (see `OverlayConfigMixin` and related getters in `src/utils/config_manager.py`).
@@ -90,6 +90,10 @@ For key-level detail, developers can inspect **`src/utils/config_manager.py`** (
 ## View menu and related dialogs
 
 Many visual and interaction options open dedicated dialogs (persisted in config). Use the **View** menu and image **right-click** menus in the running app; narrative documentation is in **[USER_GUIDE.md](USER_GUIDE.md)** (for example corner overlays, themes, layout, scroll-wheel mode).
+
+### Theme (View → Theme)
+
+**View → Theme → Light** / **View → Theme → Dark** switches the application theme. Your choice is saved between launches and is part of the bulk **File → Export Customizations… / Import Customizations…** JSON when present.
 
 ### Image smoothing
 

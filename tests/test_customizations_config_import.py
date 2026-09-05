@@ -283,10 +283,18 @@ def test_non_dict_section_is_ignored(tmp_path):
     assert cfg.calls == []
 
 
-def test_non_numeric_color_component_propagates_type_error(tmp_path):
-    """Documents current behaviour: TypeError is not caught by the OSError/JSON handler."""
-    path = tmp_path / "custom.json"
-    path.write_text(json.dumps({"overlay": {"font_color": {"r": "x"}}}), encoding="utf-8")
-    cfg = RecordingConfig()
-    with pytest.raises(TypeError):
-        cfg.import_customizations(str(path))
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"r": "x", "g": 0, "b": 0},
+        {"r": 1.5, "g": 0, "b": 0},
+        {"r": True, "g": 0, "b": 0},
+        {"r": None, "g": 0, "b": 0},
+    ],
+)
+def test_non_numeric_overlay_font_color_is_skipped(tmp_path, bad):
+    """Non-numeric RGB components must not raise; import stays best-effort."""
+    cfg, ok = _import(tmp_path, {"overlay": {"font_color": bad, "font_size": 16}})
+    assert ok is True
+    assert not cfg.was_called("set_overlay_font_color")
+    assert cfg.called("set_overlay_font_size") == [(16,)]
