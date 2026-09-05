@@ -37,9 +37,10 @@ assessment must list the triage IDs it sampled or changed.
 Source: `python scripts/check_doc_feature_coverage.py` at revision `b5dc73a`,
 with dispositions from
 [`doc-assessment-2026-09-05-111057.md`](doc-assessments/doc-assessment-2026-09-05-111057.md).
-The script remains a lower-bound heuristic. Rows stay open until the listed
-`document` follow-up is merged; `duplicate` / `intentionally-omit` rows are
-resolved decisions (no further content work required unless discovery fails).
+The script remains a lower-bound heuristic. `document` follow-ups for TRIAGE-001–036
+listed below were applied on branch `docs/documentation-phase1-accuracy-audit`
+(commits from 2026-09-05 Phase 1 first slice + Muse review fixes). Keep the row
+for history; do not reopen unless the shipped text drifts again.
 
 | ID | Signal / source | Inventory ID | Disposition | Required decision evidence / likely destination | Follow-up | Last reviewed |
 | --- | --- | --- | --- | --- | --- | --- |

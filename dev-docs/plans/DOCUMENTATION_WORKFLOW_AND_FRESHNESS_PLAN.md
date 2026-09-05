@@ -101,9 +101,13 @@ findings only—no content fixes mixed into the assessment.
   tests, and release behavior.
   First-slice record:
   [`doc-assessment-2026-09-05-111057.md`](../doc-assessments/doc-assessment-2026-09-05-111057.md).
-- [ ] Review public docstrings and selected internal contracts for accurate
+- [x] Review public docstrings and selected internal contracts for accurate
   signatures, parameters, return values, exceptions, side effects, ownership,
   and initialization/order assumptions.
+  First high-risk pass recorded in
+  [`doc-assessment-2026-09-05-111057.md`](../doc-assessments/doc-assessment-2026-09-05-111057.md)
+  (privacy, study index, customizations, MPR cache limits); further modules
+  may still need review.
 - [x] Triage each feature→doc candidate gap in
   [`DOCUMENTATION_TRIAGE.md`](../DOCUMENTATION_TRIAGE.md) as: `document`,
   `intentionally-omit`, `duplicate`, `obsolete`, or `deferred`; record the

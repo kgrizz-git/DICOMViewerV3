@@ -40,7 +40,7 @@ Switching layouts keeps each pane's assigned series — the 3-pane layouts simpl
 
 - **Focus:** click a pane to focus it (its border highlights). Slice navigation, window/level, tools, and most single-target actions act on the focused pane.
 - **Expand to single pane (double-click):** double-click the image or background of a pane to blow it up to **1×1**. Double-click again to **revert** to the layout you were just in (or 2×2 if there was none). This is a quick way to inspect one pane full-size and jump back.
-- **Swap panes:** the image **right-click** menu offers **Swap with View …** to exchange the contents of two panes (their slot positions swap in every layout; focus stays put). In **2×2** only, you can also use the dedicated **Swap** path from the layout menus where available.
+- **Swap panes:** when a pane has a subwindow index, the image **right-click** menu offers **Swap** → **Show Window Map** and **Swap with Window 1–4** to exchange slot positions with another pane (works in multi-pane layouts; focus stays put).
 - **Clear This Window:** **right-click** the image background (not on an ROI) → **Clear This Window** removes the series from **that pane only**. Loaded studies and series remain in the navigator.
 
 ## Side panes
@@ -73,7 +73,7 @@ Under **View → Show Slice Location Lines** (persisted; also styled under **Vie
 - **Next / previous slice:** **↑ / ↓** arrow keys, or the **mouse wheel** over the focused pane. (Arrow keys move the cursor instead while you are editing a text annotation.)
 - **In-window slice/frame slider:** multi-slice and multi-frame series show a slider you can drag to scrub through the stack.
 - **Cine:** play multi-frame series from the left-pane **Cine Playback** group (**Play / Pause**, **Stop**, **Loop**, plus speed and frame slider), or with **Ctrl+Space**. On multi-frame series the image **right-click** menu offers the same play/pause, stop, and loop. See the [hub's *General viewing* section](USER_GUIDE.md#general-viewing-2d) for exporting a cine loop.
-- **Cine loop bounds:** on the left-pane **frame slider**, **right-click** a frame to **Set Cine Start**, **Set Cine End**, or **Clear Cine Bounds**. Playback and cine export honor those bounds when set.
+- **Cine loop bounds:** on the left-pane **frame slider**, **right-click** a frame to **Set Cine Start**, **Set Cine End**, or **Clear Cine Bounds**. Playback honors those bounds when set. **File → Export Cine As…** uses them when **Use cine loop range (A–B markers)** is checked (checked by default when bounds exist).
 
 ## Resetting the view
 

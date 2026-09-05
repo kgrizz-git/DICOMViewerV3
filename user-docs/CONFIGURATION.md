@@ -85,7 +85,7 @@ For key-level detail, developers can inspect **`src/utils/config_manager.py`** (
 
 ## Import & export customizations
 
-**File → Export Customizations…** writes a JSON file of visual/UI customization sections (for example overlay tags and appearance, annotation defaults, metadata panel column widths, and theme when present). **File → Import Customizations…** merges sections from a previously exported JSON into the live config and applies them immediately. Invalid or incomplete files produce an error dialog; review exports before sharing (they are not a de-identification workflow).
+**File → Export Customizations…** writes a JSON file of visual/UI customization sections (for example overlay tags and appearance, annotation defaults, metadata panel column widths, and theme when present). **File → Import Customizations…** merges sections from a previously exported JSON into the live config and applies them immediately. Unparseable or invalid JSON produces an error dialog; files with missing sections merge only the sections present. Review exports before sharing (they are not a de-identification workflow).
 
 ## View menu and related dialogs
 

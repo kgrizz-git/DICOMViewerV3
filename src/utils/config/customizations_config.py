@@ -310,14 +310,17 @@ class CustomizationsConfigMixin:
         """
         Import customisation settings from a JSON file.
 
-        Validates file structure and updates config with imported values.
-        Does NOT import disclaimer_accepted or other non-customisation settings.
+        Requires a top-level JSON object. Known sections are applied best-effort
+        (invalid or out-of-range fields are skipped; missing sections leave
+        current values unchanged). Does not import disclaimer_accepted or other
+        non-customisation settings. Returns True when the file was parsed and
+        section handlers ran, not when every field passed a full schema check.
 
         Args:
             file_path: Path to the customisation file to import
 
         Returns:
-            True if import was successful, False otherwise
+            True if import completed without I/O/JSON errors, False otherwise
         """
         h = cast(_CustomizationsHost, cast(object, self))
         try:
