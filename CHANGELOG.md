@@ -55,6 +55,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 - **Dependency floor raises:** `matplotlib>=3.11.1`, `pypdf>=6.16.2` (security/merge fixes for compare PDF assembly), `Pygments>=2.21.0`, `scipy>=1.18.1`. SimpleITK left at `>=2.5.5` pending MPR/fusion smoke. **Semantic versioning note: patch.**
 
 ### Fixed
+- **Customizations import:** non-numeric RGB components in colour objects are skipped (best-effort) instead of raising `TypeError` during `import_customizations`. **Semantic versioning note: patch**.
 - **ACR batch CSV dropped audit warnings:** `build_tabular_run` / `build_metric_rows` keep `QAResult` geometry-preflight and runner audit lists while retaining non-empty pylinac `results_data` warnings/errors, rather than letting empty top-level lists overwrite them. **Semantic versioning note: patch.**
 - **Local SonarQube reporter write hygiene:** Close the temp FD if `chmod` fails before `fdopen`, and resolve `--dump-dir` / `--output` before any archive or Markdown write so a bad `--output` cannot leave a partial JSON dump. **Semantic versioning note: patch** (developer tooling only).
 - **SonarCloud new-code reliability gate (identical DICOM save branches):** Collapse leftover `dataset_pre_anonymized` if/else shells in `ExportManager.export_slice` that both only called `save_as` after the legacy `anonymize=True` path was removed. Restores New Code Reliability Rating A. **Semantic versioning note: patch.**

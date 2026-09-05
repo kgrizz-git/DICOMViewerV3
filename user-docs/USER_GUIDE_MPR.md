@@ -1,6 +1,6 @@
 # User guide — MPR (multi-planar reformation)
 
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-05
 
 MPR lets you build **orthogonal views** (e.g. sagittal / coronal) from an axial stack (or another base orientation), shown inside a viewer pane.
 
