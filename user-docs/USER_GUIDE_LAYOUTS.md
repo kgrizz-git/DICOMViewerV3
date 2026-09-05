@@ -40,7 +40,7 @@ Switching layouts keeps each pane's assigned series — the 3-pane layouts simpl
 
 - **Focus:** click a pane to focus it (its border highlights). Slice navigation, window/level, tools, and most single-target actions act on the focused pane.
 - **Expand to single pane (double-click):** double-click the image or background of a pane to blow it up to **1×1**. Double-click again to **revert** to the layout you were just in (or 2×2 if there was none). This is a quick way to inspect one pane full-size and jump back.
-- **Swap panes:** when a pane has a subwindow index, the image **right-click** menu offers **Swap** → **Show Window Map** and **Swap with Window 1–4** to exchange slot positions with another pane (works in multi-pane layouts; focus stays put).
+- **Swap panes:** when a pane has a subwindow index, the image **right-click** menu offers **Swap** → **Show Window Map** and **Swap with Window 1–4** to exchange slot positions with another pane (works in multi-pane layouts such as 1×2 / 2×1 / 3-pane / 2×2 — see [Choosing a layout](#choosing-a-layout); focus stays put).
 - **Clear This Window:** **right-click** the image background (not on an ROI) → **Clear This Window** removes the series from **that pane only**. Loaded studies and series remain in the navigator.
 
 ## Side panes

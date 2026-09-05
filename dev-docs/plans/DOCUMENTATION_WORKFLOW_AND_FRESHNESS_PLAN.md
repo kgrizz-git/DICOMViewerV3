@@ -1,7 +1,8 @@
 # Documentation workflow, freshness, and publication plan
 
 **Created:** 2026-09-04
-**Status:** Phase 0 complete; Phase 1 first slice in progress (assessment + High remediation batch on branch `docs/documentation-phase1-accuracy-audit`) — no documentation platform selected or installed
+**Last updated:** 2026-09-05
+**Status:** Phase 0 complete; Phase 1 complete (first-slice accuracy audit, TRIAGE-001–036 dispositions + High remediation, high-risk docstring pass; Muse + MiniMax reviews approved) — next is Phase 2 freshness controls. No documentation platform selected or installed.
 **Priority:** P2 evaluation; ongoing user-documentation completeness remains P1
 
 ## Goal
@@ -104,10 +105,11 @@ findings only—no content fixes mixed into the assessment.
 - [x] Review public docstrings and selected internal contracts for accurate
   signatures, parameters, return values, exceptions, side effects, ownership,
   and initialization/order assumptions.
-  First high-risk pass recorded in
+  High-risk first pass recorded in
   [`doc-assessment-2026-09-05-111057.md`](../doc-assessments/doc-assessment-2026-09-05-111057.md)
-  (privacy, study index, customizations, MPR cache limits); further modules
-  may still need review.
+  (privacy, study index, customizations, MPR cache limits, `doc_urls`, QA
+  types/workers sampled accurate). Broader module coverage is deferred to
+  normal Phase 2 freshness work, not a Phase 1 blocker.
 - [x] Triage each feature→doc candidate gap in
   [`DOCUMENTATION_TRIAGE.md`](../DOCUMENTATION_TRIAGE.md) as: `document`,
   `intentionally-omit`, `duplicate`, `obsolete`, or `deferred`; record the
@@ -129,10 +131,13 @@ findings only—no content fixes mixed into the assessment.
   hub orientation + `doc_urls.py`.
 - [x] Separate findings by user risk and freshness urgency, then schedule
   documentation edits as bounded follow-up batches.
-  High batch applied on this branch; docstring audit remains open.
+  High batch applied and re-reviewed (Muse + MiniMax free); Swap UI accuracy
+  fixes included.
 
 **Exit:** an approved, prioritized finding list; no claim that all docs are
-complete until the listed fixes are reviewed and merged.
+complete until the listed fixes are reviewed and merged. **Met for Phase 1
+scope** (TRIAGE-001–036 + first-slice surfaces + high-risk docstring pass).
+Ongoing completeness remains the P1 `TO_DO.md` documentation items and Phase 2+.
 
 ## Phase 2 — Freshness controls in normal feature work
 
