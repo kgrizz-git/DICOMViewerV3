@@ -1,6 +1,6 @@
 # Multi-window layouts & navigation
 
-**Last updated:** 2026-06-16
+**Last updated:** 2026-09-05
 
 The viewer shows your images in **panes** (subwindows). You can split the viewing area into several panes, put a different series in each, and move between slices and frames. This guide covers the pane layouts, how to fill and focus panes, and the basics of slice/cine navigation.
 
@@ -40,18 +40,40 @@ Switching layouts keeps each pane's assigned series — the 3-pane layouts simpl
 
 - **Focus:** click a pane to focus it (its border highlights). Slice navigation, window/level, tools, and most single-target actions act on the focused pane.
 - **Expand to single pane (double-click):** double-click the image or background of a pane to blow it up to **1×1**. Double-click again to **revert** to the layout you were just in (or 2×2 if there was none). This is a quick way to inspect one pane full-size and jump back.
-- **Swap panes:** the image **right-click** menu offers **Swap with View …** to exchange the contents of two panes (their slot positions swap in every layout; focus stays put).
+- **Swap panes:** the image **right-click** menu offers **Swap with View …** to exchange the contents of two panes (their slot positions swap in every layout; focus stays put). In **2×2** only, you can also use the dedicated **Swap** path from the layout menus where available.
 - **Clear This Window:** **right-click** the image background (not on an ROI) → **Clear This Window** removes the series from **that pane only**. Loaded studies and series remain in the navigator.
+
+## Side panes
+
+Use **View → Show/Hide Left Pane** and **View → Show/Hide Right Pane** (also on the image **right-click** menu) to collapse or restore the side panels. The app remembers splitter sizes between sessions.
 
 ## Series navigator
 
-- Toggle the series navigator with **N** (or the View menu / toolbar). It lists loaded studies and series; double-click or drag entries to load them into a pane.
+- Toggle the series navigator with **N**, **View → Show/Hide Series Navigator**, or the toolbar. It lists loaded studies and series; double-click or drag entries to load them into a pane.
+- **View → Show Slice/Frame Count on Navigator Thumbnails** (default on) shows compact instance/frame counts on series and MPR thumbnails.
+- **View → Show Window Assignment Thumbnail** shows a small clickable window-slot map on the navigator bar so you can focus or assign panes quickly.
+- **View → Show Instances Separately** expands multi-frame series into per-instance navigator entries when enabled (also available from the navigator context menu). That changes how ← / → series navigation steps through multi-frame content.
+
+## Linked navigation (slice sync)
+
+- **View → Slice Sync → Enable Slice Sync** links scrolling across panes that share a sync group (also available from the image context menu).
+- **View → Slice Sync → Manage Sync Groups…** opens the dialog that assigns panes to linked scroll groups.
+
+## Show Slice Location Lines
+
+Under **View → Show Slice Location Lines** (persisted; also styled under **View → Overlay Settings…**):
+
+- **Enable/Disable** — show or hide the intersection of other views' slice planes on the current image.
+- **Only Show For Same Group** — limit lines to panes in the same slice-sync group.
+- **Show Only For Focused Window** — show lines originating from the focused pane only.
+- **Show Slab Boundaries (Begin/End) Instead of Centre** — draw ±½-thickness boundary lines instead of a centre line when a slab/projection thickness applies.
 
 ## Slice & cine navigation
 
 - **Next / previous slice:** **↑ / ↓** arrow keys, or the **mouse wheel** over the focused pane. (Arrow keys move the cursor instead while you are editing a text annotation.)
 - **In-window slice/frame slider:** multi-slice and multi-frame series show a slider you can drag to scrub through the stack.
 - **Cine:** play multi-frame series from the left-pane **Cine Playback** group (**Play / Pause**, **Stop**, **Loop**, plus speed and frame slider), or with **Ctrl+Space**. On multi-frame series the image **right-click** menu offers the same play/pause, stop, and loop. See the [hub's *General viewing* section](USER_GUIDE.md#general-viewing-2d) for exporting a cine loop.
+- **Cine loop bounds:** on the left-pane **frame slider**, **right-click** a frame to **Set Cine Start**, **Set Cine End**, or **Clear Cine Bounds**. Playback and cine export honor those bounds when set.
 
 ## Resetting the view
 
@@ -66,4 +88,4 @@ These reset pan/zoom for the pane(s); they do not change which series is assigne
 
 ---
 
-See also: [USER_GUIDE.md](USER_GUIDE.md) (hub) · [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) · [USER_GUIDE_ANNOTATIONS.md](USER_GUIDE_ANNOTATIONS.md).
+See also: [USER_GUIDE.md](USER_GUIDE.md) (hub) · [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) · [USER_GUIDE_ANNOTATIONS.md](USER_GUIDE_ANNOTATIONS.md) · [CONFIGURATION.md](CONFIGURATION.md).

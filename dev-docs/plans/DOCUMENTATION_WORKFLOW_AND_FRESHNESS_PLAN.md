@@ -1,7 +1,7 @@
 # Documentation workflow, freshness, and publication plan
 
 **Created:** 2026-09-04
-**Status:** Phase 0 complete; Phase 1 not started — no documentation platform selected or installed
+**Status:** Phase 0 complete; Phase 1 first slice in progress (assessment + High remediation batch on branch `docs/documentation-phase1-accuracy-audit`) — no documentation platform selected or installed
 **Priority:** P2 evaluation; ongoing user-documentation completeness remains P1
 
 ## Goal
@@ -95,32 +95,37 @@ findings only—no content fixes mixed into the assessment.
 
 ## Phase 1 — Accuracy and completeness audit
 
-- [ ] Use the documentation-assessment template
+- [x] Use the documentation-assessment template
   ([`templates-generalized/doc-assessment-template.md`](../templates-generalized/doc-assessment-template.md))
   to compare docs with code, UI labels/menu paths, configuration defaults,
   tests, and release behavior.
+  First-slice record:
+  [`doc-assessment-2026-09-05-111057.md`](../doc-assessments/doc-assessment-2026-09-05-111057.md).
 - [ ] Review public docstrings and selected internal contracts for accurate
   signatures, parameters, return values, exceptions, side effects, ownership,
   and initialization/order assumptions.
-- [ ] Triage each feature→doc candidate gap in
+- [x] Triage each feature→doc candidate gap in
   [`DOCUMENTATION_TRIAGE.md`](../DOCUMENTATION_TRIAGE.md) as: `document`,
   `intentionally-omit`, `duplicate`, `obsolete`, or `deferred`; record the
   rationale, relevant inventory ID, exact canonical destination, and a
   repository-relative follow-up when it is not resolved in the same change.
   `pending-triage` is an intake state, not a resolution.
-- [ ] When resolving triage rows, replace the shared Phase 0 Follow-up pointer
+- [x] When resolving triage rows, replace the shared Phase 0 Follow-up pointer
   (`TO_DO.md#documentation`) with a per-row, discriminating follow-up (exact
   canonical path/section, issue, or bounded batch) so the Follow-up column is
   no longer identical across open rows.
-- [ ] Revisit inventory **DOC-03** (Quick Start): confirm whether the canonical
+- [x] Revisit inventory **DOC-03** (Quick Start): confirm whether the canonical
   source should remain a `USER_GUIDE.md` section plus linked topics, or whether
   the hub section and
   [`resources/help/quick_start_guide.html`](../../resources/help/quick_start_guide.html)
   roles should be restated (for example, HTML as primary in-app surface with
   the hub as mirror, or a dedicated Markdown canonical). Update the inventory
   row and any mirrors only after that decision.
-- [ ] Separate findings by user risk and freshness urgency, then schedule
+  **Decision:** canonical = `resources/help/quick_start_guide.html`; mirrors =
+  hub orientation + `doc_urls.py`.
+- [x] Separate findings by user risk and freshness urgency, then schedule
   documentation edits as bounded follow-up batches.
+  High batch applied on this branch; docstring audit remains open.
 
 **Exit:** an approved, prioritized finding list; no claim that all docs are
 complete until the listed fixes are reviewed and merged.
