@@ -19,11 +19,13 @@
             <ul>
                 <li><a href="{doc_USER_GUIDE}">User guide hub</a> &mdash; table of topics and long-form 2D topics</li>
                 <li><a href="{doc_CONFIGURATION}">Configuration and settings</a> &mdash; Edit &rarr; Settings, local study index</li>
+                <li><a href="{doc_USER_GUIDE_SHORTCUTS}">Keyboard shortcuts</a> &mdash; consolidated key reference</li>
                 <li><a href="{doc_USER_GUIDE_MPR}">MPR (multi-planar views)</a></li>
                 <li><a href="{doc_USER_GUIDE_3D}">3D volume rendering (VTK)</a></li>
                 <li><a href="{doc_USER_GUIDE_QA_PYLINAC}">ACR phantom QA (pylinac)</a></li>
-                <li><a href="{doc_IMAGE_FUSION}">Image fusion (technical)</a></li>
+                <li><a href="{doc_IMAGE_FUSION}">Image fusion (technical)</a> &mdash; PET/SPECT on CT/MR, alignment, accuracy</li>
             </ul>
+            <p><strong>More guides</strong> &mdash; <a href="{doc_USER_GUIDE}">user guide hub</a> &rarr; <em>Topics</em> table for <strong>Layouts &amp; navigation</strong>, <strong>Measurements &amp; annotations</strong>, <strong>Exporting images &amp; data</strong>, <strong>DICOM tag viewer &amp; editor</strong>, and <strong>Metadata de-identification export</strong>.</p>
             <p>You can also use <strong>Help &rarr; Documentation</strong> in the menu to open the user guide hub.</p>
 
             <h2 id="table-of-contents">Table of Contents</h2>
@@ -62,17 +64,20 @@
             <ul>
                 <li><strong>Space</strong> cycles corner overlay density <strong>Simple &rarr; Detailed &rarr; Hidden</strong> on <strong>all</strong> panes (same as the user guide hub). <strong>Shift+Space</strong> uses the older <strong>focused-pane-only</strong> cycle (corner text first, then measurement/ROI text).</li>
                 <li>Fine-tune tags under <strong>View &rarr; Overlay Tags Configuration</strong>; other overlay options under <strong>View &rarr; Overlay Settings</strong>. See the <a href="{doc_USER_GUIDE}">user guide hub</a> for full detail.</li>
+                <li>Resize corner-overlay text with <strong>View &rarr; Overlay Text &rarr; Increase Font Size</strong> / <strong>Decrease Font Size</strong>, or with <strong>Ctrl/Cmd++</strong> / <strong>Ctrl/Cmd+-</strong> (also <strong>Shift+scroll</strong> over a pane).</li>
+                <li>Show or hide scale markers and patient direction labels with <strong>View &rarr; Show Scale Markers</strong>, <strong>View &rarr; Scale Markers Color&hellip;</strong>, <strong>View &rarr; Show Direction Labels</strong>, and <strong>View &rarr; Direction Labels Color&hellip;</strong>.</li>
             </ul>
 
             <h2 id="tools-and-more">Tools and more features</h2>
             <ul>
-                <li><strong>ROIs / measure / annotations:</strong> toolbar modes or keys <strong>H R E M S T A G</strong> (<strong>H</strong> = crosshair for pixel values and coordinates; <strong>R E M S T A</strong> = rectangle, ellipse, measure, select, text, arrow; <strong>G</strong> = magnify/loupe). Crosshairs behave as a ROI type.</li>
+                <li><strong>ROIs / measure / annotations:</strong> toolbar modes or keys <strong>H R E M S T A G</strong> (<strong>H</strong> = crosshair for pixel values and coordinates; <strong>R E M S T A</strong> = rectangle, ellipse, measure, select, text, arrow; <strong>G</strong> = magnify loupe, toolbar label <strong>Magnify</strong>). Crosshairs behave as a ROI type.</li>
                 <li><strong>MPR:</strong> right-click &rarr; <strong>Create MPR View&hellip;</strong> (see user guide link above).</li>
                 <li><strong>3D volume:</strong> toolbar <strong>3D View</strong> or <strong>Tools &rarr; 3D Volume Render&hellip;</strong> for the focused multi-slice series (requires VTK).</li>
-                <li><strong>Fusion:</strong> right panel <strong>Image Fusion</strong>; full detail in the fusion doc link above.</li>
+                <li><strong>Fusion:</strong> right panel <strong>Image Fusion</strong> group &mdash; focus the base series in a pane (the <strong>Base Series</strong> line is read-only), toggle <strong>Enable Fusion</strong>, then pick an <strong>Overlay Series</strong> and adjust <strong>Opacity</strong>, <strong>Threshold</strong>, <strong>Colormap</strong>, and the overlay W/L. See the <a href="{doc_IMAGE_FUSION}">image fusion guide</a> &rarr; <em>Using fusion</em> for the step-by-step.</li>
                 <li><strong>ACR QA:</strong> <strong>Tools</strong> menu &rarr; ACR CT / ACR MRI (pylinac). See QA guide link above.</li>
                 <li><strong>Histogram:</strong> <strong>Ctrl+Shift+H</strong> / <strong>Cmd+Shift+H</strong>.</li>
                 <li><strong>Structured Report:</strong> for SR instances, <strong>Tools &rarr; Structured Report&hellip;</strong> (or image context menu when available). See the user guide hub for dose events and exports.</li>
+                <li><strong>Recent files:</strong> <strong>File &rarr; Recent</strong> lists recently opened paths; <strong>File &rarr; Edit Recent List&hellip;</strong> reorders, <strong>Remove This Item</strong> (right-click), or clears them.</li>
             </ul>
 
             <h2 id="export-and-reports">Export, cine, and structured reports</h2>

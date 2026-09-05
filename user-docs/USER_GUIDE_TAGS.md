@@ -1,6 +1,6 @@
 # DICOM tag viewer & editor
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-09-05
 
 The **DICOM Tag Viewer/Editor** is a separate, resizable window that lists every tag in the current image, lets you search tags and values, copy them, and edit individual tag values (with undo/redo). To **export** tags to a file instead, see the [export guide](USER_GUIDE_EXPORT.md#other-export-paths).
 
@@ -8,6 +8,10 @@ The **DICOM Tag Viewer/Editor** is a separate, resizable window that lists every
 
 - **Tools → View/Edit DICOM Tags…** (**Ctrl+T**).
 - Also reachable from the **Structured Report** browser via **Raw tags → Open DICOM Tag Viewer**.
+
+## DICOM File Info (summary dialog)
+
+For a short path/identity summary without opening the tag list, use **Tools → DICOM File Info…** (**Ctrl+I**; dialog title **DICOM File Info**). The full searchable editor remains **Tools → View/Edit DICOM Tags…**.
 
 The window is **non-modal** — it stays open while you work, and it **follows the focused image**: switch the series or instance shown in the focused pane and the tag list updates to match. Your search filter is kept when the dataset changes.
 
