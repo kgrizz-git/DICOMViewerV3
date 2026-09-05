@@ -1,10 +1,18 @@
 # DICOM Viewer V3 — User guide
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-09-05
 
 **Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](../CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
 
 This hub links topic guides for the application. **In the running app**, use **Help → Quick Start Guide** for a short overview (with a table of contents and links that open these pages in your browser when you are online).
+
+## Safety / disclaimer
+
+**Help → Disclaimer** (also linked from **Help → About**) states that this application is **not intended for diagnostic purposes**. Read that dialog before clinical or research use, and follow your organization's review policies for any exported data.
+
+## Recent files
+
+**File → Recent** lists recently opened paths. Use **File → Edit Recent List…** to reorder entries (**Move Up** / **Move Down**), remove selected items, or clear the list. An empty recent menu shows a disabled **No recent files** placeholder.
 
 ## Topics
 

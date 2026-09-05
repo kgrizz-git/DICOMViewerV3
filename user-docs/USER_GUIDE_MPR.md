@@ -33,7 +33,7 @@ de-identification** settings and presets as the normal DICOM export path.
 
 - MPR uses the same **window/level** and navigation patterns as other viewers where applicable; exact behavior follows the focused pane.
 - **Direction labels** (if enabled under **View**) follow the **reformatted MPR plane** (patient LPS, from the output row/column directions), not the original series orientation. On strongly **oblique** planes, a side may show **two letters** (e.g. anterior and right) when the in-plane direction lines up between two anatomical axes.
-- For **slice sync** or advanced layout behavior, see the application **View** menu and multi-window layout shortcuts (`1`–`4`).
+- For **slice sync**, **cine loop bounds**, **side panes**, and navigator options, see [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md) (and the application **View** menu). Multi-window layout shortcuts remain `1`–`4`.
 
 ## Technical and roadmap detail
 

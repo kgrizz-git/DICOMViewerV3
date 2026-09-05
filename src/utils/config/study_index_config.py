@@ -3,6 +3,8 @@ Study index configuration mixin.
 
 Persists optional encrypted local study index settings: database file path
 (user-configurable), and whether successful opens are recorded automatically.
+Automatic indexing is effective only when both the on-open preference and an
+explicit consent flag are true (see ``get_study_index_auto_add_on_open``).
 
 Expects ``self.config`` and ``self.save_config()`` from ConfigManager.
 """
@@ -74,6 +76,12 @@ class StudyIndexConfigMixin:
         return False
 
     def get_study_index_auto_add_on_open(self) -> bool:
+        """
+        Return whether successful opens should be indexed automatically.
+
+        Requires an explicit boolean consent flag and the on-open preference
+        both set to True; missing or legacy consent yields False.
+        """
         consent = self._config().get("study_index_auto_add_consent")
         if not isinstance(consent, bool):
             return False

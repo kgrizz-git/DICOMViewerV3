@@ -1,6 +1,6 @@
 # Keyboard shortcuts
 
-**Last updated:** 2026-08-06
+**Last updated:** 2026-09-05
 
 A consolidated reference for every keyboard shortcut. The app also shows a built-in list at **Help → Keyboard Shortcuts…** (or **F1**).
 
@@ -74,6 +74,7 @@ These switch the active mouse tool (see [Measurements & annotations](USER_GUIDE_
 | Flip vertical | **Alt+V** |
 | Rotate 90° CW | **Alt+R** |
 | Rotate 90° CCW | **Shift+Alt+R** |
+| Rotate 180° | **View → Orientation → Rotate 180°** (menu only; no default shortcut) |
 | Reset orientation | **Shift+Alt+O** |
 | Toggle series navigator | **N** |
 

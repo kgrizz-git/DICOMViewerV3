@@ -108,6 +108,13 @@ class LocalStudyIndexService:
         limit: int = 500,
         privacy_mode: bool = False,
     ) -> list[dict[str, Any]]:
+        """
+        Search indexed instances and optionally redact patient identifiers.
+
+        When ``privacy_mode`` is True, each returned row has ``patient_name``,
+        ``patient_id``, and ``accession_number`` replaced with ``"***"``. Default
+        ``limit`` is 500.
+        """
         store = self._get_ready_store()
         rows = store.search(
             patient_name_contains=patient_name_contains,
@@ -148,6 +155,12 @@ class LocalStudyIndexService:
         descending: bool = True,
         privacy_mode: bool = False,
     ) -> list[dict[str, Any]]:
+        """
+        Search grouped studies and optionally redact patient identifiers.
+
+        When ``privacy_mode`` is True, each returned row has ``patient_name``,
+        ``patient_id``, and ``accession_number`` replaced with ``"***"``.
+        """
         store = self._get_ready_store()
         rows = store.search_grouped_studies(
             patient_name_contains=patient_name_contains,
@@ -393,6 +406,9 @@ class LocalStudyIndexService:
         When *force* is True (e.g. the user chose "Add this one time" at the
         first-open prompt), this batch is indexed even though the persistent
         auto-add-on-open preference is off/unrecorded.
+
+        If a write thread is already running, this schedule is dropped (MVP
+        avoids overlapping writes).
         """
         if was_cancelled:
             _logger.info("Skipping auto-index: load was cancelled by user")
@@ -431,7 +447,12 @@ class LocalStudyIndexService:
         on_finished=None,
         on_failed=None,
     ) -> None:
-        """Start background folder crawl (single active job)."""
+        """
+        Start background folder crawl (single active job).
+
+        If a folder-index thread is already running, returns immediately without
+        starting a new job or rewiring callbacks.
+        """
         self._folder_cancel = False
         if self._folder_thread and self._folder_thread.isRunning():
             return

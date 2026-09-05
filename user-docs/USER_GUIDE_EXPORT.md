@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-05
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -81,6 +81,7 @@ These are separate from the main Export Images dialog:
 - **Select All** / **Deselect All** buttons and the **Select All** checkbox above the tag tree apply only to **visible** leaf tags (the search filter is respected). Sequence/Item parent rows stay independently checkable when you want a summary column.
 - The bottom label shows how many tags are selected (`No tags selected` / `1 tag selected` / `N tags selected`).
 - **Presets:** choosing a preset in the dropdown **loads it immediately** (browsing names in the list applies the selection — it is no longer browse-only). Use **Reload** to discard unsaved tag-check edits and re-apply the currently selected preset. **Save** overwrites the selected preset; **Save As…** creates a new named preset. Saving always keeps every checked tag, including ones hidden by the current filter.
+- **Bulk preset files:** **File → Export Tag Presets…** writes all saved tag-export presets to a JSON file. **File → Import Tag Presets…** merges presets from a JSON file into the app; presets whose names already exist are skipped (no overwrite). This is separate from **Save** / **Save As…** inside the export dialog.
 
 ---
 
