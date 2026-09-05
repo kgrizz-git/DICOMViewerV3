@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-04
 
 ---
 
@@ -37,7 +37,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    alternative) for producing both in-repository developer documentation and
    user-facing docs. Record source/privacy behavior, generated-output review
    workflow, maintenance burden, and a recommendation before adopting or
-   adding a tool.
+   adding a tool. **Plan:** [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md).
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
 
@@ -84,7 +84,7 @@ Release blockers (license compliance, versioned executables) live in
 ## Static analysis
 
 - [ ] **[P2]** **Reduce CI and local test wall time without weakening test or coverage guarantees.** Profile and remove redundant full-app setup, then shard CI only if measurements justify it; preserve the complete test selection, xdist coverage union, 80% floor, and SonarQube XML artifact. **Plan:** [CI test runtime and coverage integrity](plans/CI_TEST_RUNTIME_AND_COVERAGE_INTEGRITY_PLAN.md). Added 2026-08-14.
-- [ ] **[P2]** **Lift `.coveragerc` omit for `src/main_app_*.py` after coverage paydown.** The main.py mixin split quarantines extracted facade modules (Option A) so CI `--cov-fail-under=80` stays green. Do not leave them omitted permanently — expand safety-net / facade tests until un-omitting does not drop below 80%. See [MAIN_PY_REFACTOR_PLAN](plans/supporting/MAIN_PY_REFACTOR_PLAN.md) Coverage Strategy.
+- [ ] **[P2]** **Lift `.coveragerc` omit for `src/main_app_*.py` after coverage paydown.** The main.py mixin split quarantines extracted facade modules (Option A) so CI `--cov-fail-under=80` stays green. Do not leave them omitted permanently — expand safety-net / facade tests until un-omitting does not drop below 80%. See the archived [MAIN_PY_REFACTOR_PLAN](plans/completed/MAIN_PY_REFACTOR_PLAN.md) Coverage Strategy.
 - [ ] **[P2]** **Raise test coverage (ongoing).** Tests-only coverage boost across `tests/` (Phases 1–4 complete; Phase 5 partial + deferred dialog/high-miss slices); local Sonar remeasured +7–8 pp line vs baseline. Branch `test/coverage-boost`. **Plan:** [Raise test coverage](plans/TEST_COVERAGE_BOOST_PLAN.md). Surfaced 2026-08-11.
 - [ ] **[P2]** **Refactor high-complexity functions identified by local
   SonarQube or Lizard.** Prioritize bounded, characterized slices in
@@ -261,7 +261,7 @@ Moved to [`COMPETITIVE_FEATURE_BACKLOG.md`](COMPETITIVE_FEATURE_BACKLOG.md) (46 
 - [ ] **[P2]** **README feature screenshots — fusion and slab/MIP:** capture PHI-reviewed QC-phantom screenshots of (1) PET/SPECT–CT or MR fusion with opacity/alignment controls visible and (2) slab / intensity projection (AIP, MIP, or MinIP) in the multi-pane or MPR workspace; resize for README display, admit hashes in [`security/approved-media-sha256.json`](../security/approved-media-sha256.json), and add them to the root [`README.md`](../README.md) feature gallery. Text already mentions fusion and slab projections; images are the gap. Surfaced 2026-08-25.
 - [ ] **[P1]** **User-facing documentation — completeness, navigability, and discoverability:** improve end-user docs under [`user-docs/`](../user-docs/) so shipped features are covered, easy to find, and linked from obvious entry points. **Completeness:** close gaps vs current UI (menus, shortcuts, Settings, study index, fusion, 3D, SR, export, QA); keep topic guides (`USER_GUIDE.md`, `USER_GUIDE_MPR.md`, `USER_GUIDE_3D.md`, `USER_GUIDE_QA_PYLINAC.md`, `CONFIGURATION.md`, etc.) aligned when features change. **Navigability:** clear hub/TOC, consistent headings, cross-links between hub and topic guides, working in-app **Help** paths where they exist. **Discoverability:** surface docs from the app (Help menu, 3D **Help…**, About/links), bundled Quick Guide parity, and searchable structure; run `python scripts/check_user_docs_links.py` after edits. **Partial:** Phases 1–3 of [DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md) shipped; ongoing drift and missing topics remain. **Related:** structure/discoverability item below, documentation audit, offline bundle, [doc-assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md).
 - [ ] **[P1]** Documentation structure, Quick Guide alignment, settings reference, and discoverability — **Partial:** [DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md) Phases 1–3 complete; keep aligned as features ship. ([assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md)).
-- [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date. — **Partial:** harness + topic guides exist; `scripts/check_doc_feature_coverage.py` now gives an automated feature→doc gap report (menu/`QAction` labels vs `user-docs/` mentions, ~70% covered at last run). Remaining: triage the candidate-gap list and document or consciously skip each item.
+- [ ] **[P1]** Conduct documentation audit to ensure all features are documented and up to date. — **Partial:** harness + topic guides exist; [`DOCUMENTATION_INVENTORY.md`](DOCUMENTATION_INVENTORY.md) now records canonical sources, mirrors, triggers, and evidence, while [`DOCUMENTATION_TRIAGE.md`](DOCUMENTATION_TRIAGE.md) records the feature→doc decisions. `scripts/check_doc_feature_coverage.py` gives a lower-bound menu/`QAction` report (70.7% at the 2026-09-04 baseline). Remaining: review each pending triage row against code/UI and document, consciously omit, consolidate, mark obsolete, or defer it with a bounded follow-up.
 - [ ] **[P1]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. — **Partial:** policy documented; actual offline bundle not built in installer.
 - [ ] **[P2]** **Make `user-docs/` fully self-contained (no dev-docs links).** Currently `user-docs/` links into `dev-docs/info/` for advanced reference material (pylinac integration, DICOM GSPS/KO/SC, etc.). Evaluate whether to inline or relocate that content into `user-docs/` so the user-facing docs can be published standalone without broken links. Consider tooling to detect or prevent cross-boundary links: the existing `check_user_docs_links.py` guard, markdown linters (e.g. `markdown-link-check`, `lychee`, `mlc`), or doc-publish pipelines that fail on dangling refs. May also need a staleness check if content is duplicated — tools like `mdbook`, `mkdocs`, or custom scripts could flag when a `user-docs/` copy drifts from the `dev-docs/` source of truth. Surfaced 2026-08-11.
 

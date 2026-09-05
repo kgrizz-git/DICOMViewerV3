@@ -1,6 +1,6 @@
 # Release checklist (semantic versioning)
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-09-04
 
 Use this checklist when cutting a new release so version, changelog, and Git tags stay in sync. The app version is defined in **`src/version.py`** (`__version__`); **`CHANGELOG.md`** repeats it in the **Current version** line at the top for readability—keep those two in sync whenever you bump the version.
 
@@ -83,6 +83,13 @@ When **keyboard shortcuts**, **menus**, or **Help HTML** (`resources/help/quick_
 
 ## Documentation maintenance cadence
 
-After each **minor** or **major** release—or after a large UI or Help change—run a new copy of [`templates-generalized/doc-assessment-template.md`](templates-generalized/doc-assessment-template.md) into `doc-assessments/` and work through the checklist so drift is caught before the next release.
+Before tagging each **minor** or **major** release—or before merging a large
+UI or Help change—create a new timestamped assessment under `doc-assessments/`,
+work through the relevant checklist, and link that assessment from the release
+(or feature) PR. Confirm the relevant rows in
+[`DOCUMENTATION_INVENTORY.md`](DOCUMENTATION_INVENTORY.md) and
+[`DOCUMENTATION_TRIAGE.md`](DOCUMENTATION_TRIAGE.md) are current. If a triggered
+assessment cannot be completed before tag or merge, record an explicit, dated
+waiver with its reason and bounded follow-up in the PR and the next assessment.
 
 **Relative links in user docs:** CI runs the `user-docs-links` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (`python scripts/check_user_docs_links.py`). Locally: `python scripts/check_user_docs_links.py` or `python -m pytest tests/test_user_docs_links.py -q`.

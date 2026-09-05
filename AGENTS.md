@@ -117,7 +117,7 @@ run at the end of the completed batch.
 | Architecture boundaries | `python scripts/check_architecture_boundaries.py` |
 | Agent smoke | `python scripts/agent_smoke_harness.py` |
 
-After editing `user-docs/` or `dev-docs/README.md`, run the link checker (CI: **User docs links**).
+After editing `user-docs/` or `dev-docs/README.md`, run the link checker (CI: **User docs links**). For user-visible changes, contract docstrings, and release assessments, follow [`DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](dev-docs/plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md).
 
 ## CI (summary)
 

@@ -1,8 +1,8 @@
 # Refactor Plan: Split main.py into Multiple Files
 
 **Created:** 2026-08-07  
-**Last updated:** 2026-08-30
-**Status:** Complete pending human commit (gate remediation done 2026-08-08)  
+**Last updated:** 2026-09-04
+**Status:** Complete and archived — merged in `1df5616` (2026-08-08)
 **Target:** `src/main.py` (~334 lines) + 5 mixin modules under `src/main_app_*.py` (each ≤750 lines; largest ~642)
 
 > **Readiness (2026-08-08):** Strategy approved. Start with **Phase 0** (test safety net), then Phase 2 scaffolding, then extraction (Phases 3–5). Appendix A/B are populated. CCN reduction is a regression check only (zero methods currently ≥ 20). Phase numbering is 0, then 2–7 (Phase 1 unused).
@@ -23,7 +23,9 @@
 | Phase 6–7 extraction + cleanup | **Done** | Imports pruned; grandfather regenerated; docs/changelog; **gate remediation** (PERF_LOG crash, basedpyright pragmas, ruff) |
 | Gate remediation (post-review) | **Done** | C1 `_log_startup_perf`; basedpyright 0 via ImageViewer-style pragmas (not `self: DICOMViewerApp` — invalid under pyright); ruff 0; `StudiesNestedDict` consolidated; TO_DO coverage-omit lift |
 
-**Resume point:** Human commit on `refactor/main-split` when ready.
+**Archive note (2026-09-04):** The extraction and gate remediation are complete;
+this plan remains the ownership and verification record. The separate
+coverage-paydown follow-up remains active in `dev-docs/TO_DO.md`.
 
 ### Typing deviation (recorded 2026-08-08)
 
@@ -553,7 +555,7 @@ python scripts/check_user_docs_links.py
 2. ~~**Complete Phase 0** (test safety net)~~ — **Done** 2026-08-08
 3. ~~Phase 2 scaffolding (empty mixins, coverage omit, architecture boundaries)~~ — **Done** 2026-08-08
 4. ~~Extraction Phases 3–5 using Appendix A; Phase 6 cleanup; Phase 7 CCN regression sweep~~ — **Done** 2026-08-08
-5. Human commit on `refactor/main-split` when ready (see Progress ledger resume point)
+5. ~~Human commit on `refactor/main-split`~~ — **Done** in `1df5616` (2026-08-08)
 6. ~~Update `ARCHITECTURE.md` / `SOURCE_LAYOUT.md` during Phase 6~~ — **Done** 2026-08-08 (Phase 6)
 7. Create/update tracking note in `dev-docs/TO_DO.md` if desired (optional post-merge)
 
