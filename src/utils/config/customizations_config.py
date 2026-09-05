@@ -82,15 +82,19 @@ def _apply_rgb(raw: Any, setter: Any, defaults: RGB) -> None:
     """
     Apply an ``{"r": .., "g": .., "b": ..}`` colour object via ``setter(r, g, b)``.
 
-    Missing components fall back to ``defaults``. Out-of-range components cause the
-    colour to be *rejected* (setter not called), leaving the existing value intact —
-    values are never clamped.
+    Missing components fall back to ``defaults``. Non-numeric, bool, or out-of-range
+    components cause the colour to be *rejected* (setter not called), leaving the
+    existing value intact — values are never clamped. Rejection is silent so
+    ``import_customizations`` stays best-effort.
     """
     if not isinstance(raw, dict):
         return
     r = raw.get("r", defaults[0])
     g = raw.get("g", defaults[1])
     b = raw.get("b", defaults[2])
+    # Require plain ints: bool is a subclass of int and must not pass as RGB.
+    if not all(isinstance(c, int) and not isinstance(c, bool) for c in (r, g, b)):
+        return
     if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
         setter(r, g, b)
 
