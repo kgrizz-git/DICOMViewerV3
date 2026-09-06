@@ -1,6 +1,6 @@
 # Measurements & annotations
 
-**Last updated:** 2026-06-16
+**Last updated:** 2026-09-05
 
 The viewer provides ROIs, measurements, and annotations you draw directly on an image, plus per-ROI statistics. Tools are on the **main toolbar**; each has a single-key shortcut and they are **mutually exclusive** — picking one leaves the others off until you switch back to **Pan** or **Select**.
 
@@ -18,7 +18,7 @@ The viewer provides ROIs, measurements, and annotations you draw directly on an 
 | **Arrow annotation** | **A** | Drag to place an arrow. |
 | **Crosshair** | **H** | Place a crosshair marker (reports the pixel value/position). |
 | **Zoom** | **Z** | Drag to zoom the image. |
-| **Magnifier** | **G** | Hover a movable magnifier loupe over the image. |
+| **Magnifier** (toolbar label: **Magnify**) | **G** | Hover a movable magnifier loupe over the image. |
 | **Window/Level from ROI** | **W** | Drag a region; the viewer auto-sets window/level from the pixels inside it. |
 
 ROIs, measurements, and annotations are tracked **per slice/frame** and persist as you scroll back to that image.
@@ -60,4 +60,4 @@ Units follow the viewer's **Raw / Rescaled** mode and the dataset's `RescaleType
 
 ---
 
-See also: [USER_GUIDE.md](USER_GUIDE.md) (hub) · [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) · [CONFIGURATION.md](CONFIGURATION.md).
+See also: [USER_GUIDE.md](USER_GUIDE.md) (hub) · [USER_GUIDE_SHORTCUTS.md](USER_GUIDE_SHORTCUTS.md) · [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md) · [CONFIGURATION.md](CONFIGURATION.md).
