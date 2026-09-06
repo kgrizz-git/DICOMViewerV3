@@ -1,8 +1,12 @@
 # Documentation workflow, freshness, and publication plan
 
 **Created:** 2026-09-04
-**Last updated:** 2026-09-05
-**Status:** Phase 0 complete; Phase 1 complete (first-slice accuracy audit, TRIAGE-001–036 dispositions + High remediation, high-risk docstring pass; Muse + MiniMax reviews approved) — next is Phase 2 freshness controls. No documentation platform selected or installed.
+**Last updated:** 2026-09-06
+**Status:** Phase 0 complete. Phase 1 complete **for its first slice only**
+(TRIAGE-001–036 dispositions + High remediation, high-risk docstring pass; Muse +
+MiniMax reviews approved). The audit as a whole is **not** complete: 15 of the 23
+inventory rows have never been assessed. Next is Phase 2, which finishes them. No
+documentation platform selected or installed.
 **Priority:** P2 evaluation; ongoing user-documentation completeness remains P1
 
 ## Goal
@@ -94,7 +98,7 @@ connection.
 **Exit:** a dated assessment exists under `dev-docs/doc-assessments/`, with
 findings only—no content fixes mixed into the assessment.
 
-## Phase 1 — Accuracy and completeness audit
+## Phase 1 — Accuracy and completeness audit (first slice)
 
 - [x] Use the documentation-assessment template
   ([`templates-generalized/doc-assessment-template.md`](../templates-generalized/doc-assessment-template.md))
@@ -135,11 +139,52 @@ findings only—no content fixes mixed into the assessment.
   fixes included.
 
 **Exit:** an approved, prioritized finding list; no claim that all docs are
-complete until the listed fixes are reviewed and merged. **Met for Phase 1
-scope** (TRIAGE-001–036 + first-slice surfaces + high-risk docstring pass).
-Ongoing completeness remains the P1 `TO_DO.md` documentation items and Phase 2+.
+complete until the listed fixes are reviewed and merged. **Met for the first
+slice** (TRIAGE-001–036 + first-slice surfaces + high-risk docstring pass).
 
-## Phase 2 — Freshness controls in normal feature work
+This exit does **not** mean the audit is finished. The slice covered 8 of 23
+inventory rows. The remaining 15 are the subject of Phase 2 and are tracked as
+TRIAGE-038; they are not left to be picked up incidentally.
+
+## Phase 2 — Complete the accuracy audit
+
+Phase 1 sampled a first slice. This phase clears the rest of the register so the
+inventory stops carrying rows whose accuracy nobody has checked. Work in bounded
+slices, each with its own timestamped assessment, so a slice can land without
+waiting on the others.
+
+- [ ] **Slice 2a — user-facing surfaces (highest user risk).** Assess DOC-01
+  (overview/install/first launch), DOC-06 (annotations), DOC-07 (MPR/cine),
+  DOC-08 (3D), DOC-09 (fusion), DOC-10 (anonymization), DOC-18 (export/SR), and
+  DOC-19 (pylinac QA) against the shipped UI, using each row's own verification
+  recipe. These are the rows where a wrong claim reaches a user directly.
+- [ ] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
+  (contributing), DOC-15 (releasing), DOC-20 (developer setup), and DOC-21
+  (agent harness) by executing the documented commands in a clean venv, not by
+  reading them.
+- [ ] **Slice 2c — developer reference.** Assess DOC-14 (architecture map),
+  DOC-22 (source layout), and DOC-23 (code documentation index) against the
+  current module tree and `check_architecture_boundaries.py`.
+- [ ] Close the outstanding DOC-11 deferral (TRIAGE-037) by exercising each Help
+  action and confirming its resolved URL / offline path and anchor, or by
+  re-deferring it with a new bounded date.
+- [ ] For every row assessed, move its inventory review state to `Assessed
+  <date>` with an assessment link, or record a `deferred` triage row with a
+  bounded follow-up. Neither state may be left implicit.
+
+**Exit:** every row in [`DOCUMENTATION_INVENTORY.md`](../DOCUMENTATION_INVENTORY.md)
+is either `Assessed` with a dated assessment link, or carries an open `deferred`
+triage row with a bounded follow-up. No row sits at `Baseline` by default, and
+no deferral exists only as prose in an inventory cell.
+
+## Standing practice — freshness controls in normal feature work
+
+**This is not a phase.** It has no exit criterion and is never "done". It applies
+continuously from 2026-09-06 onward, in parallel with every phase below, and it
+does not wait for Phase 2 to finish. It was previously numbered as a phase, which
+wrongly implied that routine documentation maintenance completes and is then
+superseded by the tooling phases.
+
 
 - [ ] Add/update contributor guidance requiring a docs-impact decision for
   user-visible behavior, UI labels/shortcuts, configuration, exports, privacy
@@ -154,17 +199,24 @@ Ongoing completeness remains the P1 `TO_DO.md` documentation items and Phase 2+.
 - [ ] Re-run the full assessment before each minor/major release tag or
   substantial UI/Help merge, as already required by release guidance.
 
-**Exit:** feature changes have a repeatable documentation decision and named
-sources, not a best-effort post-release sweep.
+**Intent:** feature changes have a repeatable documentation decision and named
+sources, not a best-effort post-release sweep. Because this is standing practice
+rather than a phase, the measure is whether the trigger matrix below is actually
+enforced — not whether the checklist above has been ticked once.
 
 ### Trigger matrix
 
-| Change | Required review/action | Flag or command |
-|---|---|---|
-| Any `user-docs/` or `dev-docs/README.md` edit | Check all relative links | `python scripts/check_user_docs_links.py` (already a CI gate) |
-| New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps |
-| Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required |
-| Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` |
+The **Enforcement today** column records what actually stops a change, as opposed
+to what this plan asks for. Only one row is machine-enforced. The rest depend on a
+reviewer remembering, which is why the gaps below are tracked as real work rather
+than as an optional follow-up.
+
+| Change | Required review/action | Flag or command | Enforcement today |
+|---|---|---|---|
+| Any `user-docs/` or `dev-docs/README.md` edit | Check all relative links | `python scripts/check_user_docs_links.py` | **Enforced** — blocking CI job, [`ci.yml:311`](../../.github/workflows/ci.yml) |
+| New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps | **Self-attested** — PR-template checkbox only, [`PULL_REQUEST_TEMPLATE.md:28`](../../.github/PULL_REQUEST_TEMPLATE.md); nothing runs the report |
+| Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required | **Not enforced** — no scoped baseline is wired to CI; human review only |
+| Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` | **Not enforced** — no check asserts an assessment exists; this is the trigger that would otherwise have caught the 15 unassessed rows |
 
 ### Living records and history
 
@@ -178,10 +230,14 @@ sources, not a best-effort post-release sweep.
   evidence, findings, and waivers. Keep all snapshots; any exceptional pruning
   needs a dated decision in a later assessment.
 
-### Automation follow-up
+### Enforcement gaps to build
 
-- [ ] Keep the link check as the blocking CI gate; it already runs on every CI
-  pass and needs no path-based reminder.
+These are the difference between the two right-hand columns above. Until they
+exist, the trigger matrix is guidance rather than control, and documentation drift
+is caught only when someone happens to look.
+
+- [x] Keep the link check as the blocking CI gate; it already runs on every CI
+  pass and needs no path-based reminder. **Done** — [`ci.yml:311`](../../.github/workflows/ci.yml).
 - [ ] Add a **warning-only** documentation-impact report to pull requests. It
   should inspect the diff for UI/actions, settings, export, privacy, build, and
   public-contract paths, then require either a related documentation change or
@@ -194,7 +250,13 @@ sources, not a best-effort post-release sweep.
 - [ ] Add a release-checklist assertion that a documentation assessment exists
   after the previous minor/major release (or record an explicit waiver with a
   reason). This is the reminder for periodic accuracy review, not an automated
-  substitute for it.
+  substitute for it. **Highest priority of the four:** it is the only standing
+  trigger that would surface rows nothing else touches, and its absence is why
+  15 rows sat unassessed without anything flagging it.
+- [ ] Add a check that fails, or at minimum warns, when an inventory row is left
+  at `Baseline` with no corresponding open `deferred` triage row. This makes the
+  Phase 2 exit condition self-policing instead of a one-time cleanup that can
+  silently regress.
 
 ## Phase 3 — Local static documentation pilot
 
@@ -233,6 +295,9 @@ only reviewed source/configuration with an explicit decision.
 
 Adopt a platform only when all of the following are true:
 
+- [ ] Phase 2 is complete: every inventory row is `Assessed` or carries an open
+  bounded `deferred` row. A platform cannot be adopted on top of a register that
+  is two-thirds unverified, since the pilot would publish unchecked claims.
 - [ ] The audit’s high-priority accuracy/completeness findings have owners and
   planned remediation.
 - [ ] Canonical source, generated output, release/version behavior, and
