@@ -9,7 +9,7 @@ The right-panel **Image Fusion** group lets you overlay a functional series (typ
 1. **Focus the base series.** Load the anatomical / structural series you want underneath into the focused pane. In the **Image Fusion** group, the **Base Series** line is **read-only** — it shows that focused series (it is not a dropdown you pick from).
 2. **Enable fusion.** Toggle the **Enable Fusion** checkbox. Overlay controls (including the overlay series list) stay hidden until fusion is enabled.
 3. **Pick the overlay series.** Choose the **Overlay Series** from its dropdown (typically PET or SPECT from the **same study** so geometry metadata is comparable). The blended image appears in the focused 2D pane; scrolling on the base series scrubs the overlay in lockstep when geometry lines up.
-4. **Tune the blend.** Adjust **Opacity** (how strongly the overlay shows through), **Threshold** (0–100% cutoff in normalized overlay space — push it up to suppress low-intensity overlay signal), **Colormap** (the lookup table applied to the overlay), and the **Overlay Window/Level** to bring the right intensity range into view. The base pane's W/L stays independent.
+4. **Tune the blend.** Adjust **Opacity** (how strongly the overlay shows through), **Threshold** (0–100% cutoff in normalized overlay space — push it up to suppress low-intensity overlay signal), **Color Map** (the lookup table applied to the overlay), and the **Overlay Window/Level** to bring the right intensity range into view. The base pane's W/L stays independent.
 5. **Choose 2D vs 3D fusion.** Prefer **Fast Mode (2D)** for quick, slice-by-slice blending. Switch to **High Accuracy (3D)** when the overlay needs volume resampling onto the base plane; expect a longer first build and higher memory use.
 6. **Fine-tune alignment.** If the overlay does not line up perfectly, type values into the X/Y **offset** spinboxes (or use their arrow buttons) to nudge it. When you are done, click **Reset to Calculated** to return to the algorithm's initial alignment.
 7. **Heads-up — Frame of Reference.** Fusion assumes the base and overlay share a **FrameOfReferenceUID** (the same patient positioning frame). If the status area reports mismatched frames, the series were acquired in different coordinate spaces and the alignment is best-effort only — review the overlay carefully before drawing any clinical conclusions.
@@ -70,7 +70,7 @@ User Selection → FusionHandler → Slice Matching → Resampling Decision
    - Creates binary mask: `mask = (overlay_normalized >= threshold)`
    - Default: 0.2 (20% of normalized range)
 
-3. **Colormap**: Visualization scheme for overlay
+3. **Color Map**: Visualization scheme for overlay
    - Available: hot, jet, viridis, plasma, inferno, rainbow, cool, spring
    - Applied to normalized overlay values (0-1 range)
    - Default: 'hot' (red-yellow, good for PET)

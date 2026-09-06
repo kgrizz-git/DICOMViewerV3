@@ -5,7 +5,7 @@
 A consolidated reference for every keyboard shortcut. The app also shows a built-in list at **Help → Keyboard Shortcuts…** (or **F1**).
 
 > This page lists keys. For the **View** menu actions they map to (overlay settings, scale markers, slice sync, side panes), see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md) and [Configuration and settings](CONFIGURATION.md).
-
+>
 > **Single-key shortcuts** (tool modes, layout keys, `I`, `N`, `C`, `D`, `V`, `Q`) are ignored while you are **editing a text annotation**, so typing those letters inserts characters as expected. Tool keys are also passed through to Qt when **Ctrl/Cmd** is held (so `Ctrl+S`, `Ctrl+W`, etc. keep their standard meaning).
 
 ## File
