@@ -250,13 +250,26 @@ is caught only when someone happens to look.
 - [ ] Add a release-checklist assertion that a documentation assessment exists
   after the previous minor/major release (or record an explicit waiver with a
   reason). This is the reminder for periodic accuracy review, not an automated
-  substitute for it. **Highest priority of the four:** it is the only standing
-  trigger that would surface rows nothing else touches, and its absence is why
-  15 rows sat unassessed without anything flagging it.
-- [ ] Add a check that fails, or at minimum warns, when an inventory row is left
+  substitute for it. **Highest priority of the remaining items:** it is the only
+  standing trigger that would surface rows nothing else touches, and its absence
+  is why 15 rows sat unassessed without anything flagging it.
+  **Blocked on tagging:** this repository currently has no Git tags, so there is
+  no release boundary to anchor the assertion to.
+  `check_documentation_freshness.py` uses a 90-day cadence as an interim proxy;
+  switch it to compare against the most recent tag once releases are tagged.
+- [x] Add a check that fails, or at minimum warns, when an inventory row is left
   at `Baseline` with no corresponding open `deferred` triage row. This makes the
   Phase 2 exit condition self-policing instead of a one-time cleanup that can
-  silently regress.
+  silently regress. **Done** — `scripts/check_documentation_freshness.py`, wired
+  into CI as an advisory step. It also verifies that every `deferred` row carries
+  the bounded follow-up the ledger requires, and reports assessment age. Run
+  against `main` before this branch it reports all 15 unowned rows, which is the
+  regression it exists to catch.
+- [ ] Promote `check_documentation_freshness.py` to `--strict` (blocking) once
+  Phase 2 has cleared the `Baseline` rows and the finding rate has been reviewed.
+  Advisory-first is deliberate: a blocking check landed on top of 15 known-open
+  rows would have to be waived immediately, which teaches contributors to ignore
+  it.
 
 ## Phase 3 — Local static documentation pilot
 

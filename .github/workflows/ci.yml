@@ -310,6 +310,12 @@ jobs:
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
 
+      # Warning-only by default: the script exits 0 unless --strict is passed.
+      # Promote to --strict once the Phase 2 audit has cleared the Baseline rows
+      # and the finding rate has been reviewed.
+      - name: Report documentation freshness (advisory)
+        run: python scripts/check_documentation_freshness.py --root "${{ github.workspace }}"
+
   # ── Security scanners — cloud-uploading, gated ────────────────────────────
 
   semgrep:
