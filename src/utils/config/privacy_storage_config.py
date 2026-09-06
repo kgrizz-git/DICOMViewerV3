@@ -44,6 +44,11 @@ class PrivacyStorageConfigMixin:
         return self._persist_privacy_value("mpr_cache_enabled", enabled is True)
 
     def get_mpr_cache_max_mb(self) -> int:
+        """
+        Return the MPR cache size limit in MB, clamped to 16–4096.
+
+        Invalid stored types fall back to 500.
+        """
         raw = self._config().get("mpr_cache_max_mb", 500)
         try:
             return max(16, min(4096, int(raw)))
@@ -51,6 +56,12 @@ class PrivacyStorageConfigMixin:
             return 500
 
     def set_mpr_cache_max_mb(self, max_mb: int) -> bool:
+        """
+        Persist the MPR cache size limit (clamped to 16–4096 MB).
+
+        Returns True on successful save; rolls back the in-memory value on
+        persistence failure.
+        """
         return self._persist_privacy_value(
             "mpr_cache_max_mb", max(16, min(4096, int(max_mb)))
         )
@@ -61,7 +72,12 @@ class PrivacyStorageConfigMixin:
         return self._privacy_storage_root() / "mpr-cache"
 
     def clear_mpr_cache_storage(self) -> DeletionResult:
-        """Delete owned cache files and report successful and failed removals."""
+        """
+        Delete owned MPR cache files and report successful and failed removals.
+
+        Cleans both the private ``mpr-cache`` path and the legacy
+        ``config_dir / "mpr_cache"`` tree when present.
+        """
 
         removed = 0
         failed = 0

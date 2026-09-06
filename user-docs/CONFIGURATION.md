@@ -1,6 +1,6 @@
 # Configuration and preferences
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-09-05
 
 This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features).
 
@@ -40,8 +40,8 @@ Do not edit the JSON by hand unless you know the schema; invalid files fall back
 **View → Overlay Settings…** opens the **Overlay Settings** dialog (window title **Overlay Settings**). Groups include:
 
 - **Overlay Settings** — font size, family, variant, and text color for corner/metadata overlay text.
-- **Viewer Overlay Elements** — scale markers and patient direction labels (show/hide, colors, sizes, tick intervals).
-- **Slice Position Lines** — how slice-location lines are drawn (mode and width), plus slice-sync strip height where applicable.
+- **Viewer Overlay Elements** — scale markers and patient direction labels (show/hide, colors, sizes, tick intervals). The same show/hide and color actions are also available under the **View** menu.
+- **Slice Location Lines** (UI menu: **View → Show Slice Location Lines**) — how slice-location lines are drawn (mode and width), including centre line vs slab begin/end boundaries, plus slice-sync strip height where applicable. See [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md#show-slice-location-lines) for the View-menu toggles.
 
 Changes apply to the live view (with cancel restoring prior values). These map to keys under the **overlay** and related sections of the JSON config (see `OverlayConfigMixin` and related getters in `src/utils/config_manager.py`).
 
@@ -73,8 +73,8 @@ The following are saved in the same JSON file but are usually changed from toolb
 | Cine | **`cine_default_speed`**, **`cine_default_loop`** |
 | Metadata panel | **`metadata_panel_column_widths`** |
 | Tag export | **`tag_export_*`** presets (managed in the tag export UI) |
-| Customizations | Bulk **import/export visual customizations** (JSON) |
-| Slice sync | **`slice_sync_enabled`**, **`slice_sync_groups`**, slice-location line visibility flags |
+| Customizations | Bulk **File → Import Customizations…** / **File → Export Customizations…** (JSON covering overlay, annotation, metadata columns, and theme sections when present) |
+| Slice sync | **`slice_sync_enabled`**, **`slice_sync_groups`**, slice-location line visibility flags (**View → Slice Sync** / **View → Show Slice Location Lines**) |
 | ACR / pylinac | **`acr_mri_low_contrast_*`**, **`acr_qa_vanilla_pylinac`**, **`acr_qa_embed_module_images_in_xlsx`** (default **true** — when on, XLSX **Images** sheet embeds per-module PNGs for PDF-parity output; unchecking skips the sheet. Set from the ACR CT / ACR MRI / CT batch options dialogs.) |
 | MPR | **`mpr_cache_max_mb`** |
 | 3D volume render | Requires **VTK** (`vtk` package); not a persisted Settings field — launched from toolbar **3D View** or **Tools → 3D Volume Render…** |
@@ -82,6 +82,10 @@ The following are saved in the same JSON file but are usually changed from toolb
 | Study index — auto-add on open | **`study_index_auto_add_on_open`** — when enabled, completed folder/file loads are indexed in the background. If you **cancel** a load after some files were read, those files may appear in the viewer but are **not** written to the index (status bar: *Study index update skipped*; centered warning toast: *Folder loading canceled — study not added to index*). Opening a study from the index rescans its **study folder** on disk when that folder still exists (not only the paths stored at index time). |
 
 For key-level detail, developers can inspect **`src/utils/config_manager.py`** (`default_config`) and the mixins under **`src/utils/config/`**.
+
+## Import & export customizations
+
+**File → Export Customizations…** writes a JSON file of visual/UI customization sections (for example overlay tags and appearance, annotation defaults, metadata panel column widths, and theme when present). **File → Import Customizations…** merges sections from a previously exported JSON into the live config and applies them immediately. Unparseable or invalid JSON produces an error dialog; files with missing sections merge only the sections present. Review exports before sharing (they are not a de-identification workflow).
 
 ## View menu and related dialogs
 

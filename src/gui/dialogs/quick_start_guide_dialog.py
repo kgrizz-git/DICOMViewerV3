@@ -254,6 +254,7 @@ class QuickStartGuideDialog(QDialog):
             "doc_USER_GUIDE_MPR": user_doc_url("USER_GUIDE_MPR.md"),
             "doc_USER_GUIDE_3D": user_doc_url("USER_GUIDE_3D.md"),
             "doc_USER_GUIDE_QA_PYLINAC": user_doc_url("USER_GUIDE_QA_PYLINAC.md"),
+            "doc_USER_GUIDE_SHORTCUTS": user_doc_url("USER_GUIDE_SHORTCUTS.md"),
             "doc_IMAGE_FUSION": user_doc_url("IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md"),
         }
         for key, val in doc_placeholders.items():

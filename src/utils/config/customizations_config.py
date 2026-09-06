@@ -82,15 +82,19 @@ def _apply_rgb(raw: Any, setter: Any, defaults: RGB) -> None:
     """
     Apply an ``{"r": .., "g": .., "b": ..}`` colour object via ``setter(r, g, b)``.
 
-    Missing components fall back to ``defaults``. Out-of-range components cause the
-    colour to be *rejected* (setter not called), leaving the existing value intact —
-    values are never clamped.
+    Missing components fall back to ``defaults``. Non-numeric, bool, or out-of-range
+    components cause the colour to be *rejected* (setter not called), leaving the
+    existing value intact — values are never clamped. Rejection is silent so
+    ``import_customizations`` stays best-effort.
     """
     if not isinstance(raw, dict):
         return
     r = raw.get("r", defaults[0])
     g = raw.get("g", defaults[1])
     b = raw.get("b", defaults[2])
+    # Require plain ints: bool is a subclass of int and must not pass as RGB.
+    if not all(isinstance(c, int) and not isinstance(c, bool) for c in (r, g, b)):
+        return
     if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
         setter(r, g, b)
 
@@ -310,14 +314,17 @@ class CustomizationsConfigMixin:
         """
         Import customisation settings from a JSON file.
 
-        Validates file structure and updates config with imported values.
-        Does NOT import disclaimer_accepted or other non-customisation settings.
+        Requires a top-level JSON object. Known sections are applied best-effort
+        (invalid or out-of-range fields are skipped; missing sections leave
+        current values unchanged). Does not import disclaimer_accepted or other
+        non-customisation settings. Returns True when the file was parsed and
+        section handlers ran, not when every field passed a full schema check.
 
         Args:
             file_path: Path to the customisation file to import
 
         Returns:
-            True if import was successful, False otherwise
+            True if import completed without I/O/JSON errors, False otherwise
         """
         h = cast(_CustomizationsHost, cast(object, self))
         try:

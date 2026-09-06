@@ -162,6 +162,13 @@ class StudyIndexStore:
         conn.commit()
 
     def init_schema(self) -> None:
+        """
+        Create or migrate the encrypted study-index schema on disk.
+
+        Runs DDL for a new database (user_version 0) or migrations from older
+        versions up to ``SCHEMA_VERSION``. Raises ``sqlite3.OperationalError``
+        when the on-disk ``user_version`` is newer than this code supports.
+        """
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute("PRAGMA user_version;")
@@ -524,6 +531,13 @@ class StudyIndexStore:
         global_fts_query: str = "",
         limit: int = 500,
     ) -> list[dict[str, Any]]:
+        """
+        Return matching instance rows ordered by study date (desc), patient name.
+
+        Filter strings are substring matches unless empty. ``global_fts_query``
+        uses FTS5 via ``normalize_user_fts_query``; invalid FTS syntax raises
+        ``ValueError`` with a user-facing message. Default ``limit`` is 500.
+        """
         where, params = self._search_filter_clauses(
             patient_name_contains=patient_name_contains,
             patient_id_contains=patient_id_contains,
@@ -673,9 +687,11 @@ def is_plain_sqlite_readable(path: str) -> bool:
 
 def verify_encrypted_header(path: str) -> bool:
     """
-    Best-effort check: file exists and does not start with the standard SQLite magic.
+    Best-effort check that an existing file is not plain (unencrypted) SQLite.
 
-    SQLCipher files are not valid plain SQLite; stdlib ``sqlite3`` should fail to read.
+    Returns True when the path is missing (vacuous pass) or when the file does
+    not open as plain SQLite. Returns False when a readable plain-SQLite header
+    is detected. SQLCipher files are not valid plain SQLite.
     """
     if not os.path.isfile(path):
         return True

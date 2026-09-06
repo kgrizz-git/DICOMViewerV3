@@ -2,9 +2,11 @@
 Privacy controller.
 
 Owns privacy-mode propagation when the user toggles privacy view. Called from
-DICOMViewerApp._on_privacy_view_toggled. Propagates the enabled flag to
-metadata panel, shared and per-subwindow overlay managers, crosshair managers,
-and all image viewers; then refreshes overlays for subwindows with loaded data.
+DICOMViewerApp._on_privacy_view_toggled. Propagates the enabled flag to the
+metadata panel, shared and per-subwindow overlay managers, optional dialog
+coordinator, and all image viewers; then refreshes overlays for subwindows with
+loaded data. Crosshair managers are intentionally left unchanged (they always
+show full pixel/coordinate content).
 """
 
 from collections.abc import Callable
@@ -36,7 +38,8 @@ class PrivacyController:
         Initialize the privacy controller.
 
         Args:
-            config_manager: Application config manager (for persist/load if needed).
+            config_manager: Application config manager (retained for callers;
+                this class does not persist privacy state itself).
             metadata_controller: Metadata controller; must have set_privacy_mode(enabled).
             overlay_manager: Shared (focused) overlay manager; must have set_privacy_mode(enabled).
             dialog_coordinator: Dialog coordinator; may expose apply_privacy_mode(enabled).
@@ -58,9 +61,11 @@ class PrivacyController:
         """
         Propagate privacy mode to all components and refresh overlays.
 
-        Updates metadata panel, shared overlay manager, per-subwindow overlay
-        and crosshair managers, and all image viewer privacy state; then
-        calls refresh_overlays() so overlays reflect the new mode.
+        Updates the metadata panel, shared overlay manager, optional dialog
+        coordinator, per-subwindow overlay managers, and all image viewer
+        privacy state; then calls refresh_overlays() so overlays reflect the
+        new mode. Crosshair managers are not updated (they always show full
+        content and do not hide values in privacy mode).
 
         Args:
             enabled: True if privacy view is enabled, False otherwise.
