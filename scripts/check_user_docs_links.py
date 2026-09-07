@@ -39,11 +39,18 @@ from pathlib import Path
 
 # [any](path) — path may include #anchor; exclude images ![alt](url) by requiring [ not preceded by !
 LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
-# `src/pkg/module.py` written as inline code. Only .py paths, so prose naming a
-# directory or a glob is not treated as a claim about one exact file. Path
-# segments may not contain dots, which keeps illustrative prose such as
+# `src/pkg/module.py` written as inline code, optionally with a `:line` or
+# `:line-range` suffix, which is how this repository cites code. Only .py paths,
+# so prose naming a directory or a glob is not treated as a claim about one exact
+# file. Path segments may not contain dots, which keeps illustrative prose such as
 # `src/...py` from being read as a claim that a file exists.
-SRC_PATH_PATTERN = re.compile(r"`(src/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)`")
+#
+# Note the deliberate limit: a name written as inline code is read as a claim that
+# the file exists *now*. Prose proposing a file to create ("add `src/my_thing.py`")
+# will be flagged. Write such names as a directory, a glob, or plain prose.
+SRC_PATH_PATTERN = re.compile(
+    r"`(src/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)(?::\d+(?:[-,]\d+)*)?`"
+)
 
 
 def iter_markdown_files(repo_root: Path) -> list[Path]:
@@ -52,11 +59,19 @@ def iter_markdown_files(repo_root: Path) -> list[Path]:
     user_docs = repo_root / "user-docs"
     if user_docs.is_dir():
         paths.extend(sorted(user_docs.rglob("*.md")))
-    # Living dev docs only. dev-docs/plans/ is history and is not checked.
+    # Living dev docs only. dev-docs/plans/ is history and is not checked; nor is
+    # CHANGELOG.md, whose released entries describe the tree as it was at each
+    # release and legitimately name modules that have since moved. Resolve before
+    # excluding so a symlink in dev-docs/ cannot pull historical content back in.
+    plans_root = (repo_root / "dev-docs" / "plans").resolve()
     for subdir in ("dev-docs", "dev-docs/info"):
         directory = repo_root / subdir
-        if directory.is_dir():
-            paths.extend(sorted(directory.glob("*.md")))
+        if not directory.is_dir():
+            continue
+        for candidate in sorted(directory.glob("*.md")):
+            if candidate.resolve().is_relative_to(plans_root):
+                continue
+            paths.append(candidate)
     for rel in ("README.md", "ARCHITECTURE.md", "AGENTS.md"):
         candidate = repo_root / rel
         if candidate.is_file():

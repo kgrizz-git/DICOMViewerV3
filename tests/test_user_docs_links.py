@@ -246,6 +246,41 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
             self.assertIn("src/GUI/mpr_controller.py", proc.stderr)
 
+    def test_line_suffix_reference_is_checked(self) -> None:
+        """`src/x.py:42` is how this repo cites code; the suffix must not hide it."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "See `src/core/mpr_controller.py:34` for the import.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn("src/core/mpr_controller.py", proc.stderr)
+
+    def test_line_suffix_on_existing_file_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "See `src/gui/mpr_controller.py:34-38` and `src/gui/mpr_controller.py:9`.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_symlink_cannot_pull_plans_content_into_scope(self) -> None:
+        """A symlink in dev-docs/ must not defeat the plans/ exclusion."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "plans").mkdir()
+            (dev_docs / "plans" / "OLD.md").write_text(
+                "Back then it was `src/core/mpr_controller.py`.\n"
+            )
+            (dev_docs / "NOTE.md").symlink_to(Path("plans") / "OLD.md")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
     def test_plans_directory_is_not_checked(self) -> None:
         """dev-docs/plans/ is historical record; stale paths there are expected."""
         with tempfile.TemporaryDirectory() as d:
