@@ -179,6 +179,27 @@ def test_separator_rows_are_not_parsed_as_data(tmp_path):
     assert states == {"DOC-01": "Assessed 2026-09-05"}
 
 
+@pytest.mark.parametrize(
+    "row,expected",
+    [
+        # Odd backslash count: the pipe is escaped and stays inside the cell.
+        (r"| a | b\| c |", ["a", "b| c"]),
+        # Even count: the backslash is itself escaped, so the pipe separates.
+        (r"| a | b\\| c |", ["a", "b\\", "c"]),
+        (r"| a | b | c |", ["a", "b", "c"]),
+        (r"| a | | c |", ["a", "", "c"]),
+        (r"| a | b", ["a", "b"]),
+    ],
+)
+def test_split_row_pipe_escaping_is_parity_aware(row, expected):
+    r"""``\|`` keeps the cell open; ``\\|`` does not.
+
+    A lookbehind for one backslash gets the even case wrong, merging two columns
+    and shifting every field after it.
+    """
+    assert freshness.split_row(row) == expected
+
+
 def test_escaped_pipe_does_not_shift_cells():
     r"""A cell may embed a literal pipe as ``\|``; splitting on it corrupts the row.
 
