@@ -7,6 +7,7 @@ success, cancel, and failure signal paths without touching disk or SQLCipher.
 
 from __future__ import annotations
 
+import contextlib
 import os
 from unittest.mock import MagicMock, patch
 
@@ -46,9 +47,15 @@ def _run(thread: StudyIndexFolderThread, qapp) -> str:
         # session-scoped, so an unstopped timer outlives this call and can fire
         # ``qapp.exit()`` into a later test's event loop.
         timer.stop()
-        timer.timeout.disconnect(qapp.exit)
-        thread.finished_ok.disconnect(_on_ok)
-        thread.failed.disconnect(_on_fail)
+        # Never let cleanup raise: PySide6 raises if a slot is not connected,
+        # and an exception here would replace the assertion above.
+        for signal, slot in (
+            (timer.timeout, qapp.exit),
+            (thread.finished_ok, _on_ok),
+            (thread.failed, _on_fail),
+        ):
+            with contextlib.suppress(RuntimeError, TypeError):
+                signal.disconnect(slot)
     return outcome["signal"]
 
 

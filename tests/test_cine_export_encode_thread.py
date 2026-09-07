@@ -7,6 +7,7 @@ and cancellation signal paths without invoking FFmpeg.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -59,10 +60,15 @@ def _run_and_wait(thread: CineVideoEncodeThread, qapp) -> tuple[bool, list[str]]
         # still armed on the success path, and qapp is session-scoped, so it
         # must be stopped rather than left for the garbage collector.
         deadline.stop()
-        deadline.timeout.disconnect(qapp.exit)
-        thread.succeeded.disconnect(_on_ok)
-        thread.failed.disconnect(_on_fail)
-        thread.finished.disconnect(qapp.exit)
+        # Cleanup must not raise; see the note in tests/test_index_folder_thread.py.
+        for signal, slot in (
+            (deadline.timeout, qapp.exit),
+            (thread.succeeded, _on_ok),
+            (thread.failed, _on_fail),
+            (thread.finished, qapp.exit),
+        ):
+            with contextlib.suppress(RuntimeError, TypeError):
+                signal.disconnect(slot)
     return bool(succeeded), failed
 
 
