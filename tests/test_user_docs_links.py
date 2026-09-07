@@ -1,5 +1,6 @@
 """
-Regression test for user-docs (and dev-docs README) relative Markdown links.
+Regression tests for documentation references: relative Markdown links, the
+user-docs/dev-docs boundary rules, and inline ``src/...`` code paths.
 
 Runs ``scripts/check_user_docs_links.py`` so CI and local pytest stay aligned.
 """
@@ -157,6 +158,153 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             user_docs, dev_docs = self._make_repo(tmp)
             (dev_docs / "README.md").write_text(
                 "Plan index: [plan](plans/SOME_PLAN.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class TestInlineSrcCodePaths(unittest.TestCase):
+    """A doc naming `src/pkg/module.py` must name one that exists.
+
+    This is the check that a core/ to gui/ package move defeats: the prose stays
+    syntactically fine and every Markdown link still resolves, but the module it
+    names has moved. Seventeen such references were stale before this existed.
+    """
+
+    def _run_on_tree(self, tree_root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(tree_root)],
+            cwd=str(tree_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _make_repo(self, tmp: Path) -> Path:
+        (tmp / "user-docs").mkdir()
+        (tmp / "dev-docs").mkdir()
+        (tmp / "src" / "gui").mkdir(parents=True)
+        (tmp / "src" / "gui" / "mpr_controller.py").write_text("")
+        return tmp / "dev-docs"
+
+    def test_moved_module_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "MPR lives in `src/core/mpr_controller.py` today.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("src/core/mpr_controller.py", proc.stderr)
+            self.assertIn("names a source file that does not exist", proc.stderr)
+
+    def test_correct_module_path_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "MPR lives in `src/gui/mpr_controller.py` today.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_illustrative_ellipsis_path_is_not_a_claim(self) -> None:
+        """`src/...py` is prose, not an assertion that a file exists."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "The check also validates inline `src/...py` paths.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_directory_and_glob_mentions_are_not_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "See `src/gui/` and `src/gui/main_window_*_builder.py` for detail.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_wrong_case_is_reported_on_any_platform(self) -> None:
+        """macOS and Windows resolve paths case-insensitively; Linux CI does not.
+
+        Without an exact-case comparison a mis-cased path passes the pre-commit
+        hook on a Mac and then fails the same check on CI.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "MPR lives in `src/GUI/mpr_controller.py`.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn("src/GUI/mpr_controller.py", proc.stderr)
+
+    def test_line_suffix_reference_is_checked(self) -> None:
+        """`src/x.py:42` is how this repo cites code; the suffix must not hide it."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "See `src/core/mpr_controller.py:34` for the import.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn("src/core/mpr_controller.py", proc.stderr)
+
+    def test_line_suffix_on_existing_file_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "See `src/gui/mpr_controller.py:34-38` and `src/gui/mpr_controller.py:9`.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_symlink_cannot_pull_plans_content_into_scope(self) -> None:
+        """A symlink in dev-docs/ must not defeat the plans/ exclusion."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "plans").mkdir()
+            (dev_docs / "plans" / "OLD.md").write_text(
+                "Back then it was `src/core/mpr_controller.py`.\n"
+            )
+            (dev_docs / "NOTE.md").symlink_to(Path("plans") / "OLD.md")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_symlink_cannot_pull_changelog_into_scope(self) -> None:
+        """CHANGELOG.md is excluded by omission; a symlink must not re-add it.
+
+        Its released entries name modules that have since moved and were correct
+        at the time, so scanning it would report accurate history as rot.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (tmp / "CHANGELOG.md").write_text(
+                "Once lived at `src/core/mpr_controller.py`.\n"
+            )
+            (dev_docs / "NOTE.md").symlink_to(Path("..") / "CHANGELOG.md")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_plans_directory_is_not_checked(self) -> None:
+        """dev-docs/plans/ is historical record; stale paths there are expected."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "plans").mkdir()
+            (dev_docs / "plans" / "OLD_PLAN.md").write_text(
+                "Back then it was `src/core/mpr_controller.py`.\n"
             )
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)

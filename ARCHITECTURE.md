@@ -30,21 +30,39 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 | **Study index** | `src/core/study_index/` | SQLCipher + FTS5 local index |
 | **QA (pylinac)** | `src/qa/`, `qa_app_facade.py` | ACR CT/MRI workflows |
 | **Export / cine** | `export_*`, `cine_*`, `roi_export_service.py`, `spreadsheet_safety.py` | Static images, video, MPR DICOM save, ROI statistics export (TXT/CSV/XLSX) |
+| **3-D volume rendering** | `src/gui/volume_viewer_widget.py`, `src/gui/volume/` | Render surface, interactor bridge, first-paint path, presets, overlay text |
+| **Privacy / PHI** | `src/utils/privacy/`, `src/core/privacy_controller.py` | Redaction, privacy-mode propagation, PHI-safe output boundaries |
 | **Config / utils** | `src/utils/config/`, `config_manager.py` | Persisted preferences by feature mixin |
 
 ---
 
-## Dependency rules (enforced by convention)
+## Dependency rules (partly machine-enforced)
 
 Agents should respect these edges when adding imports or new modules:
 
-```
-utils/          →  (stdlib, third-party only; no gui/, no main)
-core/           →  utils/, other core/; NOT gui/ (keep Qt out of pure modules)
-gui/            →  core/, utils/, roi/, metadata/, tools/
-roi/, metadata/ →  core/, utils/, gui/ (widgets), tools/
+```text
+utils/          →  (stdlib, third-party only; no gui/, core/, main, roi/, metadata/, tools/)
+core/           →  utils/, other core/, tools/; NOT gui/ (keep Qt out of pure modules)
+gui/            →  core/, utils/, roi/, metadata/, tools/; NOT main
+roi/, metadata/ →  core/, utils/, gui/ (widgets), tools/; NOT main
+tools/          →  core/, utils/; Qt widgets permitted (ROI and measurement items are QGraphicsItems)
+qa/             →  utils/, other qa/; entry points reached through `src/gui/qa_app_facade.py`
 main.py         →  all domains; thin delegation preferred (facades)
 ```
+
+**What is actually enforced.** `scripts/check_architecture_boundaries.py` runs in
+CI and on pre-commit, but it rejects only these edges: `core/ → gui/`,
+`utils/ → {gui, core, main, roi, metadata, tools}`, `gui/ → main`, and
+`{roi, metadata} → main`. Everything else above is convention that no check will
+catch, so a reviewer has to. It also supports a baseline file
+([`dev-docs/architecture_boundary_baseline.txt`](dev-docs/architecture_boundary_baseline.txt))
+for grandfathering pre-existing edges; that file currently holds no entries, so
+every enforced edge above is clean.
+
+The `core/ → tools/` edge is deliberate rather than aspirational:
+`src/core/roi_export_service.py` imports `tools.measurement_items` and
+`tools.angle_measurement_items`. Do not "fix" it by tightening the rule without
+first moving that dependency.
 
 | Rule | Rationale |
 |------|-----------|
@@ -68,13 +86,13 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 
 | Task | Start here |
 |------|------------|
-| New menu action / shortcut | `src/core/actions/`, `src/gui/main_window_menu_builder.py`, then `app_signal_wiring.py` |
+| New menu action / shortcut | `src/gui/actions/` (view/dialog actions; `src/core/actions/` holds only customization actions), `src/gui/main_window_menu_builder.py`, then `app_signal_wiring.py` |
 | File open / folder load | `FileOperationsHandler`, loading pipeline, `DICOMOrganizer` |
 | Compressed DICOM decode errors | `decoder_capabilities.py`, `dicom_loader.py`, `dicom_pixel_array.py` |
 | Frozen-build decoder smoke | `decoder_fixture_smoke.py`, `decoder_fixture_contract.py`, `tests/fixtures/dicom_decoder/` |
 | Navigator / thumbnails | `src/gui/series_navigator_*` |
 | Overlay text / Spacebar cycle | `overlay_config`, `KeyboardEventHandler`, `OverlayManager` |
-| MPR behavior | `src/core/mpr_controller.py`, `mpr_navigator_thumbnail.py` |
+| MPR behavior | `src/gui/mpr_controller.py`, `mpr_navigator_thumbnail.py` |
 | Slice sync / linked groups | `slice_sync_coordinator.py`, `utils/config/slice_sync_config.py`, `gui/dialogs/slice_sync_dialog.py` |
 | Slice location reference lines | `slice_location_line_helper.py`, `gui/slice_location_line_coordinator.py`, `gui/slice_location_line_manager.py` |
 | ROI statistics export | `roi_export_service.py`, `gui/dialogs/export_roi_statistics_dialog.py` |

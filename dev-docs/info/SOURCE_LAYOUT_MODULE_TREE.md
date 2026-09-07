@@ -18,15 +18,15 @@
 
 | Area | Key paths |
 |---|---|
-| Action/signal infrastructure | `src/core/actions/`, `src/core/app_handler_bootstrap.py`, `src/core/app_signal_wiring.py`, `src/core/session_reset_controller.py` |
+| Action/signal infrastructure | `src/core/actions/`, `src/gui/app_handler_bootstrap.py`, `src/gui/app_signal_wiring.py`, `src/core/session_reset_controller.py` |
 | Loading/decoding | `src/core/dicom_loader_file.py`, `src/core/dicom_loader.py`, `src/core/dicom_pixel_array.py`, `src/core/decoder_capabilities.py`, `src/core/decoder_fixture_*.py`, `src/core/loading_progress_manager.py` |
 | Display/window level | `src/core/slice_display_*.py`, `src/core/slice_window_level_resolver.py`, `src/core/dicom_window_level.py`, `src/core/wl_preset_catalog.py`, `src/core/window_level_preset_handler.py` |
-| MPR/slice coordination | `src/core/mpr_controller.py`, `src/core/mpr_geometry.py`, `src/core/mpr_navigator_thumbnail.py`, `src/core/slice_geometry.py`, `src/core/slice_sync_coordinator.py`, `src/core/slice_location_line_helper.py` |
-| Per-pane lifecycle | `src/core/subwindow_lifecycle_controller.py`, `src/core/subwindow_manager_factory.py`, `src/core/subwindow_image_viewer_sync.py`, `src/core/layout_window_slot_controller.py` |
-| Export/tags | `src/core/export_manager.py`, `src/core/export_rendering.py`, `src/core/export_app_facade.py`, `src/core/tag_export_*.py`, `src/core/roi_export_*.py`, `src/core/spreadsheet_safety.py` |
+| MPR/slice coordination | `src/gui/mpr_controller.py`, `src/core/mpr_geometry.py`, `src/core/mpr_navigator_thumbnail.py`, `src/core/slice_geometry.py`, `src/core/slice_sync_coordinator.py`, `src/core/slice_location_line_helper.py` |
+| Per-pane lifecycle | `src/core/subwindow_lifecycle_controller.py`, `src/gui/subwindow_manager_factory.py`, `src/gui/subwindow_image_viewer_sync.py`, `src/gui/layout_window_slot_controller.py` |
+| Export/tags | `src/gui/export_manager.py`, `src/gui/export_rendering.py`, `src/gui/export_app_facade.py`, `src/core/tag_export_*.py`, `src/core/roi_export_*.py`, `src/core/spreadsheet_safety.py` |
 | Privacy | `src/core/privacy_controller.py`; shared privacy helpers remain in `src/utils/privacy/` |
 | Study index/SR | `src/core/study_index/`, `src/core/study_navigation_handlers.py`, `src/core/sr_*.py`, `src/core/rdsr_*.py` |
-| QA/cine/projection | `src/core/qa_app_facade.py`, `src/core/cine_app_facade.py`, `src/core/projection_app_facade.py` |
+| QA/cine/projection | `src/gui/qa_app_facade.py`, `src/core/cine_app_facade.py`, `src/core/projection_app_facade.py` |
 
 ## Qt interface and feature controllers
 
@@ -38,12 +38,13 @@
 | Dialogs | `src/gui/dialogs/`; inspect the named dialog before changing its action/controller path |
 | Metadata and ROI controllers | `src/metadata/metadata_controller.py`, `src/roi/roi_measurement_controller.py` |
 | Tools | `src/tools/` for ROI, measurement, annotation, crosshair, and clipboard persistence |
+| 3-D volume rendering | `src/gui/volume_viewer_widget.py`; `src/gui/volume/` for the render surface, interactor bridge, first-paint path, presets, and overlay text |
 
 ## QA and shared utilities
 
 | Area | Key paths |
 |---|---|
-| Pylinac/medical physics | `src/qa/`; app entry points in `src/core/qa_app_facade.py` |
+| Pylinac/medical physics | `src/qa/`; app entry points in `src/gui/qa_app_facade.py` |
 | Config persistence | `src/utils/config_manager.py`, `src/utils/config/` feature mixins |
 | Diagnostics | `src/utils/debug_flags.py` (all flags default to `False`) |
 | User-doc links | `src/utils/doc_urls.py` |

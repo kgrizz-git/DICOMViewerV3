@@ -92,4 +92,4 @@ work through the relevant checklist, and link that assessment from the release
 assessment cannot be completed before tag or merge, record an explicit, dated
 waiver with its reason and bounded follow-up in the PR and the next assessment.
 
-**Relative links in user docs:** CI runs the `user-docs-links` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (`python scripts/check_user_docs_links.py`). Locally: `python scripts/check_user_docs_links.py` or `python -m pytest tests/test_user_docs_links.py -q`.
+**Documentation references:** CI runs the `user-docs-links` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (`python scripts/check_user_docs_links.py`). Despite the job name it covers `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, and `AGENTS.md`, and it checks both relative Markdown links and inline `src/...py` code paths. `dev-docs/plans/` is excluded as historical. Locally: `python scripts/check_user_docs_links.py` or `python -m pytest tests/test_user_docs_links.py -q`.

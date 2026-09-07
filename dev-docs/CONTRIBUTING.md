@@ -58,7 +58,7 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
 
 ## CI and GitHub Actions
 
-- Workflows live under **`.github/workflows/`**. Use current **major tags** for first-party actions (`actions/checkout@v6`, `actions/upload-artifact@v7`, `github/codeql-action/*@v4`) so Dependabot can propose updates. Pin **third-party** actions to release tags when reproducibility matters (e.g. `trufflesecurity/trufflehog@v3.x.x` plus matching `version:` for the scanner image).
+- Workflows live under **`.github/workflows/`**. First-party actions are pinned to a **full commit SHA** with the major version in a trailing comment (currently `actions/checkout@…  # v7`, `actions/upload-artifact@…  # v7`, `github/codeql-action/*@…  # v4`). Keep that form: Dependabot still proposes updates against a SHA pin, and the comment records which release the SHA is. Pin **third-party** actions the same way when reproducibility matters (e.g. `trufflesecurity/trufflehog` plus a matching `version:` for the scanner image).
 - **Storage / billing:** artifact and cache usage accrues in **GB-hours**; see **`info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`**. The **Build Executables** workflow uploads **`dist/`** (and the Linux AppImage) only — **not** PyInstaller’s **`build/`** folder. **`actions-cache-prune.yml`** (weekly + manual) prunes stale Actions caches on non-protected refs while keeping the default branch, **`develop`**, and optional extra refs.
 - **macOS PySide6 submodule excludes** were a `PYINSTALLER_MACOS_SLIM` opt-in that measured **0 MB saved** (same-commit A/B on macOS: 1,178,268 KB for both standard and slim `.app`); the excludes were never collected by the import graph, so the flag was retired (D1, 2026-08-22) — see the plan history in **`info/BUILDING_EXECUTABLES.md`** / **`info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. The import-audit guard **`tests/test_pyinstaller_exclude_audit.py`** remains in force (it covers matplotlib backend, PIL/Tk, and shared exclude names against **`src/`** and **`tests/`** imports).
 - **`actions/upload-artifact` v6+** and related actions may require **self-hosted runners ≥ 2.327.1** (Node 24); GitHub-hosted **`ubuntu-latest`** satisfies this.
@@ -90,7 +90,7 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
 
 ## User documentation links
 
-After editing files under **`user-docs/`** (or **`dev-docs/README.md`**), run:
+After editing files under **`user-docs/`** or the living **`dev-docs/`** (its top level and **`info/`**), or after moving a module under **`src/`**, run:
 
 ```bash
 python scripts/check_user_docs_links.py
@@ -102,7 +102,7 @@ or:
 python -m pytest tests/test_user_docs_links.py -q
 ```
 
-CI runs the **`user-docs-links`** job in **`.github/workflows/ci.yml`** on **`main`** / **`develop`**.
+CI runs the **`user-docs-links`** job in **`.github/workflows/ci.yml`** on **`main`** / **`develop`**. Despite the job name, the check also validates inline **`src/...py`** paths written in those docs, so a module moved between packages fails CI until the prose that names it is updated. **`dev-docs/plans/`** is excluded as historical record.
 
 ## Module layout and optional delegation
 

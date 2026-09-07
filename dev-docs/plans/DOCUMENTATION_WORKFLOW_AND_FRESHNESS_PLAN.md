@@ -158,13 +158,22 @@ waiting on the others.
   DOC-08 (3D), DOC-09 (fusion), DOC-10 (anonymization), DOC-18 (export/SR), and
   DOC-19 (pylinac QA) against the shipped UI, using each row's own verification
   recipe. These are the rows where a wrong claim reaches a user directly.
-- [ ] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
+- [x] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
   (contributing), DOC-15 (releasing), DOC-20 (developer setup), and DOC-21
   (agent harness) by executing the documented commands in a clean venv, not by
-  reading them.
-- [ ] **Slice 2c — developer reference.** Assess DOC-14 (architecture map),
+  reading them. **Done 2026-09-06** —
+  [`doc-assessment-2026-09-06-234253.md`](../doc-assessments/doc-assessment-2026-09-06-234253.md).
+  Executing rather than reading was the point: one documented diagnostic command
+  fails outright as written, the privacy gate was attributed to the wrong script,
+  and HARNESS.md omitted the ~20 checks the git hooks actually run.
+- [x] **Slice 2c — developer reference.** Assess DOC-14 (architecture map),
   DOC-22 (source layout), and DOC-23 (code documentation index) against the
-  current module tree and `check_architecture_boundaries.py`.
+  current module tree and `check_architecture_boundaries.py`. **Done
+  2026-09-06** — [`doc-assessment-2026-09-06-234253.md`](../doc-assessments/doc-assessment-2026-09-06-234253.md).
+  All three needed corrections: a `core/` to `gui/` package move had left 17
+  source paths wrong across six documents, the index had 12 broken links, and
+  the stated dependency rules both contradicted shipped code and claimed more
+  enforcement than exists.
 - [ ] Close the outstanding DOC-11 deferral (TRIAGE-037) by exercising each Help
   action and confirming its resolved URL / offline path and anchor, or by
   re-deferring it with a new bounded date.
@@ -216,7 +225,7 @@ follow-up.
 
 | Change | Required review/action | Flag or command | Enforcement today |
 |---|---|---|---|
-| Any `user-docs/` or `dev-docs/README.md` edit | Check all relative links | `python scripts/check_user_docs_links.py` | **Enforced** — blocking CI job, [`ci.yml:311`](../../.github/workflows/ci.yml) |
+| Any edit to a Markdown file the checker scans — `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, `AGENTS.md` — or any move of a module under `src/` | Check all relative links, and every inline `` `src/...py` `` path named in prose | `python scripts/check_user_docs_links.py` | **Enforced** — blocking CI job, [`ci.yml:311`](../../.github/workflows/ci.yml) |
 | New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps | **Self-attested** — PR-template checkbox only, [`PULL_REQUEST_TEMPLATE.md:28`](../../.github/PULL_REQUEST_TEMPLATE.md); nothing runs the report |
 | Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required | **Not enforced** — no scoped baseline is wired to CI; human review only |
 | Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` | **Advisory only** — `check_documentation_freshness.py` reports assessment age and unowned `Baseline` rows on every CI run but never fails; nothing asserts an assessment exists at a release boundary, and this is the trigger that would otherwise have caught the 15 unassessed rows |
@@ -241,6 +250,14 @@ is caught only when someone happens to look.
 
 - [x] Keep the link check as the blocking CI gate; it already runs on every CI
   pass and needs no path-based reminder. **Done** — [`ci.yml:311`](../../.github/workflows/ci.yml).
+- [x] Extend the link check beyond `user-docs/`. It read 14 files and never
+  looked at the developer documentation, which is why a package move left 17
+  stale source paths and an index accumulated 12 dead links with CI green
+  throughout. **Done 2026-09-06** — `check_user_docs_links.py` now covers the
+  living `dev-docs/`, `ARCHITECTURE.md`, and `AGENTS.md` (69 files) and also
+  validates inline `` `src/...py` `` paths, so a module that moves fails CI
+  until the prose naming it is updated. `dev-docs/plans/` stays excluded as
+  historical record.
 - [ ] Add a **warning-only** documentation-impact report to pull requests. It
   should inspect the diff for UI/actions, settings, export, privacy, build, and
   public-contract paths, then require either a related documentation change or

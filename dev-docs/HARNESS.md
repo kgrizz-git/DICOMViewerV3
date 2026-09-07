@@ -38,7 +38,7 @@ for full regression after cross-cutting changes.
 | Main-window actions, shortcuts, or signal wiring | `src/main.py`, `src/main_app_*.py`, `src/gui/main_window_menu_builder.py` | `tests/test_main_signal_wiring.py`, `tests/test_main_signals_view.py`, then the relevant manual smoke step |
 | Loading, parsing, or decoder behavior | `FileOperationsHandler`, loading pipeline, `dicom_loader.py`, `dicom_pixel_array.py` | `tests/test_dicom_loader.py`, `tests/test_dicom_parser.py`; run decoder fixture smoke after decoder or frozen-build changes |
 | Navigator, overlays, or keyboard handling | `src/gui/series_navigator_*`, `overlay_config`, `KeyboardEventHandler` | `tests/test_series_navigator_tooltips.py`, `tests/test_keyboard_overlay_shortcuts.py`; smoke Space on normal and MPR panes |
-| MPR, geometry, or export | `src/core/mpr_controller.py`, `mpr_*` modules | `tests/test_mpr_core.py`, `tests/test_mpr_geometry.py`, `tests/test_mpr_overlay_and_rescale.py`, plus MPR manual smoke when UI-visible |
+| MPR, geometry, or export | `src/gui/mpr_controller.py`, `mpr_*` modules | `tests/test_mpr_core.py`, `tests/test_mpr_geometry.py`, `tests/test_mpr_overlay_and_rescale.py`, plus MPR manual smoke when UI-visible |
 | Privacy display, storage, or output | `privacy_controller.py`, `src/utils/privacy/` | targeted `tests/test_privacy_*.py`, `tests/test_main_privacy_lifecycle.py`, and the required privacy hook lane |
 | Study index, SR/RDSR, or QA/pylinac | `src/core/study_index/`, `rdsr_dose_sr.py`, `src/qa/` | corresponding `tests/test_study_index_*.py`, `tests/test_rdsr_*.py`, or `tests/test_pylinac_*.py`; use optional deep smoke when behavior is UI-visible |
 
@@ -77,13 +77,30 @@ raw-output path for every output filter.
 
 | Script | What it validates |
 |--------|-------------------|
-| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links in `user-docs/` and `dev-docs/README.md` |
+| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline `src/` code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, and `AGENTS.md`. `dev-docs/plans/` is excluded as historical record |
 | [`scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files present, `AGENTS.md` not bloated, `TO_DO.md` freshness, plan paths in `TO_DO.md`, links in harness docs, required **user-docs** topic guides linked from `USER_GUIDE.md` hub |
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
 | [`scripts/check_doc_feature_coverage.py`](../scripts/check_doc_feature_coverage.py) | Report-only: maps `QAction` labels in `src/` to mentions in `user-docs/` and lists candidate documentation gaps (heuristic; exit 0 unless `--fail-under RATIO`) |
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+
+### Git hooks (the blocking local layer)
+
+The table above is not the whole picture. The version-controlled hooks in
+[`.githooks/`](../.githooks) are installed by
+[`scripts/setup-hooks.sh`](../scripts/setup-hooks.sh) and run considerably more,
+mostly blocking. Know what they run before wondering why a commit was rejected.
+
+| Hook | Runs, in order |
+|------|----------------|
+| `pre-commit` | `git-hook-prune-backups.py`, `git_hook_line_complexity.py --staged`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --staged`, `check_gitleaks_staged.py`, `run_conditional_privacy_reviews.py`, `check_repo_harness.py`, `check_architecture_boundaries.py`, `agent_smoke_harness.py`, `ruff`, `check_dependency_licenses.py`, `git-hook-security-gate.py` |
+| `commit-msg` | `git_hook_commit_message_privacy.py` |
+| `pre-push` | `git_hook_pre_push_privacy.py`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --all --critical`, `check_gitleaks_history.py`, `check_basedpyright_errors.py`, `ruff`, `lizard` (advisory), `git-hook-security-gate.py`, `privacy_tool_review.py`, `run_local_sonarqube.py --check-freshness-days` (advisory), `check_local_sonarqube_updates.py` (advisory) |
+
+`git-hook-security-gate.py` runs `run_security_scan.py` and is **branch-gated to
+`main`**, so it is silent on feature branches. The full pytest suite is **not** run
+on pre-push; CI owns the suite and the 80% coverage gate (`ci.yml`, `--cov-fail-under=80`).
 
 **Pytest:** `tests/test_user_docs_links.py`, `tests/test_repo_harness.py`, `tests/test_architecture_boundaries.py`, `tests/test_agent_smoke_harness.py`, `tests/test_doc_feature_coverage.py`.
 

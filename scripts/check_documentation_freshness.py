@@ -80,8 +80,41 @@ PLACEHOLDER_FOLLOW_UPS = {
 
 
 def split_row(line: str) -> list[str]:
-    """Cells of a Markdown table row, outer pipes stripped and cells trimmed."""
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+    r"""Cells of a Markdown table row, outer pipes stripped and cells trimmed.
+
+    Honours Markdown escaping. ``\|`` is a literal pipe inside a cell (a shell
+    pipeline in inline code, for example) and does not end it; ``\\`` is a
+    literal backslash, so the pipe in ``\\|`` *does* end the cell. Deciding that
+    by parity matters: a lookbehind for a single backslash gets ``\\|`` wrong and
+    silently merges two columns, which shifts every later cell and makes
+    ``inventory_states`` and ``deferred_rows`` read the wrong field.
+    """
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+
+    cells: list[str] = []
+    current: list[str] = []
+    index = 0
+    while index < len(stripped):
+        char = stripped[index]
+        if char == "\\" and index + 1 < len(stripped) and stripped[index + 1] in "\\|":
+            current.append(stripped[index + 1])
+            index += 2
+        elif char == "|":
+            cells.append("".join(current))
+            current = []
+            index += 1
+        else:
+            current.append(char)
+            index += 1
+    cells.append("".join(current))
+
+    # A row normally ends with a closing pipe, which leaves one empty trailing
+    # cell. Drop only that one; a genuinely empty final column is preserved.
+    if len(cells) > 1 and not cells[-1].strip():
+        cells.pop()
+    return [cell.strip() for cell in cells]
 
 
 def is_table_row(line: str) -> bool:

@@ -67,7 +67,7 @@ ResponsiblePersonRole, EmergencyContactTelephoneNumber
 **Next steps for user:**
 1. Review all current exception handlers in critical files:
    - `src/core/dicom_loader.py` (many `traceback.print_exc()` calls)
-   - `src/core/export_manager.py`
+   - `src/gui/export_manager.py`
    - `src/tools/annotation_manager.py`
 2. Replace `traceback.print_exc()` with sanitized logging
 3. Import `os.path.basename()` instead of full paths in messages
@@ -207,7 +207,7 @@ In GitHub repository settings:
 - **Hook system:** Prevents deployment with debug logs enabled
 
 **Action items:**
-1. Review `src/debug_log.py` to ensure logs only written when explicitly enabled
+1. Review `src/utils/debug_log.py` to ensure logs only written when explicitly enabled
 2. Migrate debug-088dbc.log writes to `.cursor/debug.log` (controlled location)
 3. Add `debug.log` to `.gitignore`
 
