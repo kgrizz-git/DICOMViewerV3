@@ -281,6 +281,22 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
+    def test_symlink_cannot_pull_changelog_into_scope(self) -> None:
+        """CHANGELOG.md is excluded by omission; a symlink must not re-add it.
+
+        Its released entries name modules that have since moved and were correct
+        at the time, so scanning it would report accurate history as rot.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (tmp / "CHANGELOG.md").write_text(
+                "Once lived at `src/core/mpr_controller.py`.\n"
+            )
+            (dev_docs / "NOTE.md").symlink_to(Path("..") / "CHANGELOG.md")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
     def test_plans_directory_is_not_checked(self) -> None:
         """dev-docs/plans/ is historical record; stale paths there are expected."""
         with tempfile.TemporaryDirectory() as d:

@@ -64,12 +64,14 @@ def iter_markdown_files(repo_root: Path) -> list[Path]:
     # release and legitimately name modules that have since moved. Resolve before
     # excluding so a symlink in dev-docs/ cannot pull historical content back in.
     plans_root = (repo_root / "dev-docs" / "plans").resolve()
+    changelog = (repo_root / "CHANGELOG.md").resolve()
     for subdir in ("dev-docs", "dev-docs/info"):
         directory = repo_root / subdir
         if not directory.is_dir():
             continue
         for candidate in sorted(directory.glob("*.md")):
-            if candidate.resolve().is_relative_to(plans_root):
+            resolved = candidate.resolve()
+            if resolved.is_relative_to(plans_root) or resolved == changelog:
                 continue
             paths.append(candidate)
     for rel in ("README.md", "ARCHITECTURE.md", "AGENTS.md"):
