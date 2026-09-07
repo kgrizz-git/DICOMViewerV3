@@ -1,8 +1,26 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-07
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-07
+
+- **Dependency audit split, and a Qt test watchdog leak fixed:** `pip-audit`
+  became two CI jobs — a blocking application audit and an advisory PHI-tooling
+  audit — because the PHI tooling resolves a git-URL dependency and had been
+  failing for non-security reasons under a check named "dependency CVEs". Four
+  of five `--ignore-vuln` suppressions were confirmed stale and removed. While
+  landing that, CI hit an intermittent xdist worker segfault in
+  `tests/test_index_folder_thread.py`, seen three times over two days and never
+  reproducible in isolation. Cause: three Qt test helpers armed a five-second
+  `QTimer` watchdog and never stopped it, because a terminal signal ends the
+  event loop first. Against the session-scoped `qapp` fixture (and, in
+  `test_loader_worker.py`, a local `QEventLoop` the caller then drops), a
+  leaked timer can fire into a later test. The helpers in
+  `test_index_folder_thread.py`, `test_cine_export_encode_thread.py`, and
+  `core/test_loader_worker.py` now stop the timer and disconnect their signals
+  in a `finally`.
 
 ## 2026-09-05
 

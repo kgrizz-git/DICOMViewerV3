@@ -47,9 +47,19 @@ def _run_worker(worker, timeout_ms=5000):
     worker.finished.connect(loop.quit)  # type: ignore[arg-type]
     worker.organized.connect(loop.quit)  # type: ignore[arg-type]
     worker.error.connect(loop.quit)  # type: ignore[arg-type]
-    timer.start(timeout_ms)
-    worker.start()
-    loop.exec()
+    try:
+        timer.start(timeout_ms)
+        worker.start()
+        loop.exec()
+    finally:
+        # A terminal signal quits the loop well inside the timeout, so the
+        # watchdog is normally still armed here. Left running it outlives this
+        # call and fires into ``loop``, which the caller is about to drop.
+        timer.stop()
+        timer.timeout.disconnect(loop.quit)
+        worker.finished.disconnect(loop.quit)  # type: ignore[arg-type]
+        worker.organized.disconnect(loop.quit)  # type: ignore[arg-type]
+        worker.error.disconnect(loop.quit)  # type: ignore[arg-type]
     # Ensure run() has returned before the caller drops its reference,
     # otherwise Qt aborts on destroying a still-running QThread.
     worker.wait(timeout_ms)

@@ -32,13 +32,23 @@ def _run(thread: StudyIndexFolderThread, qapp) -> str:
 
     thread.finished_ok.connect(_on_ok)
     thread.failed.connect(_on_fail)
-    thread.start()
     timer = QTimer()
     timer.setSingleShot(True)
     timer.timeout.connect(qapp.exit)
-    timer.start(5000)
-    qapp.exec()
-    assert thread.wait(5000), "indexing thread did not finish within five seconds"
+    try:
+        thread.start()
+        timer.start(5000)
+        qapp.exec()
+        assert thread.wait(5000), "indexing thread did not finish within five seconds"
+    finally:
+        # The watchdog is still armed on the normal path, because a terminal
+        # signal ends the loop long before five seconds elapse. ``qapp`` is
+        # session-scoped, so an unstopped timer outlives this call and can fire
+        # ``qapp.exit()`` into a later test's event loop.
+        timer.stop()
+        timer.timeout.disconnect(qapp.exit)
+        thread.finished_ok.disconnect(_on_ok)
+        thread.failed.disconnect(_on_fail)
     return outcome["signal"]
 
 
