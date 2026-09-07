@@ -18,7 +18,7 @@ In standard ACR MRI phantom protocols, the acquisition consists of several serie
 The `pylinac` ACR MRI analysis attempts to analyze the sagittal localizer image if it is present in the provided dataset. If found, it calculates geometric distortion metrics for that slice (e.g., phantom length measurements).
 
 ### 2. Integration Logic
-In the current implementation of `QAAppFacade` (see `src/core/qa_app_facade.py`), the viewer passes the **focused series** to the pylinac runner:
+In the current implementation of `QAAppFacade` (see `src/gui/qa_app_facade.py`), the viewer passes the **focused series** to the pylinac runner:
 ```python
 study_uid, series_uid, modality, ordered_paths, datasets = (
     app._resolve_focused_series_ordered_paths()

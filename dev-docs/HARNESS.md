@@ -38,7 +38,7 @@ for full regression after cross-cutting changes.
 | Main-window actions, shortcuts, or signal wiring | `src/main.py`, `src/main_app_*.py`, `src/gui/main_window_menu_builder.py` | `tests/test_main_signal_wiring.py`, `tests/test_main_signals_view.py`, then the relevant manual smoke step |
 | Loading, parsing, or decoder behavior | `FileOperationsHandler`, loading pipeline, `dicom_loader.py`, `dicom_pixel_array.py` | `tests/test_dicom_loader.py`, `tests/test_dicom_parser.py`; run decoder fixture smoke after decoder or frozen-build changes |
 | Navigator, overlays, or keyboard handling | `src/gui/series_navigator_*`, `overlay_config`, `KeyboardEventHandler` | `tests/test_series_navigator_tooltips.py`, `tests/test_keyboard_overlay_shortcuts.py`; smoke Space on normal and MPR panes |
-| MPR, geometry, or export | `src/core/mpr_controller.py`, `mpr_*` modules | `tests/test_mpr_core.py`, `tests/test_mpr_geometry.py`, `tests/test_mpr_overlay_and_rescale.py`, plus MPR manual smoke when UI-visible |
+| MPR, geometry, or export | `src/gui/mpr_controller.py`, `mpr_*` modules | `tests/test_mpr_core.py`, `tests/test_mpr_geometry.py`, `tests/test_mpr_overlay_and_rescale.py`, plus MPR manual smoke when UI-visible |
 | Privacy display, storage, or output | `privacy_controller.py`, `src/utils/privacy/` | targeted `tests/test_privacy_*.py`, `tests/test_main_privacy_lifecycle.py`, and the required privacy hook lane |
 | Study index, SR/RDSR, or QA/pylinac | `src/core/study_index/`, `rdsr_dose_sr.py`, `src/qa/` | corresponding `tests/test_study_index_*.py`, `tests/test_rdsr_*.py`, or `tests/test_pylinac_*.py`; use optional deep smoke when behavior is UI-visible |
 

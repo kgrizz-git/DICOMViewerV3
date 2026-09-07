@@ -168,9 +168,9 @@ Unlike GSPS/KO, SC **is** the pixels other systems will show as the image.
 | Feature | Behavior |
 |---------|----------|
 | **File → Save MPR as DICOM…** | [`mpr_dicom_export.py`](../../src/core/mpr_dicom_export.py) writes one file per MPR plane. SOP class: **CT** or **MR** storage if template modality matches; otherwise **Secondary Capture Image Storage**. Sets derived series description, rescale slope/intercept, optional anonymize. |
-| **File → Export → DICOM** | [`export_manager.py`](../../src/core/export_manager.py) writes the **original** source instance (`dataset.save_as`), **not** the fused or annotated view. |
+| **File → Export → DICOM** | [`export_manager.py`](../../src/gui/export_manager.py) writes the **original** source instance (`dataset.save_as`), **not** the fused or annotated view. |
 | **File → Export Screenshots** | Raster PNG/JPG (and composite/window capture) — **not** SC DICOM. |
-| **Fusion save** | **Not implemented** — fusion is computed in memory in [`fusion_coordinator.py`](../../src/gui/fusion_coordinator.py) / [`slice_display_manager.py`](../../src/core/slice_display_manager.py); only screenshots capture the blended picture. |
+| **Fusion save** | **Not implemented** — fusion is computed in memory in [`fusion_coordinator.py`](../../src/gui/fusion_coordinator.py) / [`slice_display_manager.py`](../../src/gui/slice_display_manager.py); only screenshots capture the blended picture. |
 
 A future **Save fused view as DICOM** ([TO_DO](../TO_DO.md#dicom-write--pacs-interchange-annotations--derived-objects)) would mirror the MPR exporter pattern:
 

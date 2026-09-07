@@ -1,11 +1,24 @@
 #!/usr/bin/env python3
 """
-Verify relative Markdown links under user-docs/, the root README.md, and
-dev-docs/README.md.
+Verify documentation references resolve: relative Markdown links, and inline
+code paths pointing into src/.
 
-Scans inline links of the form [text](url). Skips http(s), mailto, and bare
-fragment-only targets. Resolves each relative URL against the source file's
-directory and fails if the target path does not exist.
+Covered files are user-docs/, the root README.md and ARCHITECTURE.md, AGENTS.md,
+the top level of dev-docs/, and dev-docs/info/. dev-docs/plans/ is deliberately
+excluded: completed and supporting plans are historical records that describe the
+tree as it was when they were written, so link rot there is expected rather than a
+defect.
+
+Two checks run over those files:
+
+1. **Relative Markdown links.** Scans inline links of the form [text](url). Skips
+   http(s), mailto, and bare fragment-only targets. Resolves each relative URL
+   against the source file's directory and fails if the target does not exist.
+2. **Inline `src/...py` code paths.** A path written in backticks, such as
+   `src/core/mpr_controller.py`, must exist. This catches the failure mode where a
+   module moves between packages and prose that names it silently goes stale; a
+   core/ to gui/ move left 17 such references wrong across the living docs before
+   this check existed.
 
 Usage (from repository root):
     python scripts/check_user_docs_links.py
@@ -26,19 +39,42 @@ from pathlib import Path
 
 # [any](path) — path may include #anchor; exclude images ![alt](url) by requiring [ not preceded by !
 LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
+# `src/pkg/module.py` written as inline code. Only .py paths, so prose naming a
+# directory or a glob is not treated as a claim about one exact file. Path
+# segments may not contain dots, which keeps illustrative prose such as
+# `src/...py` from being read as a claim that a file exists.
+SRC_PATH_PATTERN = re.compile(r"`(src/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)`")
 
 
 def iter_markdown_files(repo_root: Path) -> list[Path]:
-    """Markdown files to validate (user-facing docs + root and dev-docs indexes)."""
+    """Markdown files to validate (user docs plus the living developer docs)."""
     paths: list[Path] = []
     user_docs = repo_root / "user-docs"
     if user_docs.is_dir():
         paths.extend(sorted(user_docs.rglob("*.md")))
-    for rel in ("README.md", "dev-docs/README.md"):
+    # Living dev docs only. dev-docs/plans/ is history and is not checked.
+    for subdir in ("dev-docs", "dev-docs/info"):
+        directory = repo_root / subdir
+        if directory.is_dir():
+            paths.extend(sorted(directory.glob("*.md")))
+    for rel in ("README.md", "ARCHITECTURE.md", "AGENTS.md"):
         candidate = repo_root / rel
         if candidate.is_file():
             paths.append(candidate)
-    return paths
+    return sorted(set(paths))
+
+
+def check_src_paths(md_path: Path, repo_root: Path) -> list[str]:
+    """Return errors for inline `src/....py` paths that do not exist."""
+    errors: list[str] = []
+    text = md_path.read_text(encoding="utf-8")
+    for src_path in SRC_PATH_PATTERN.findall(text):
+        if not (repo_root / src_path).is_file():
+            errors.append(
+                f"{md_path.relative_to(repo_root)}: names a source file that does "
+                f"not exist: {src_path!r}"
+            )
+    return errors
 
 
 def split_anchor(url: str) -> tuple[str, str]:
@@ -109,17 +145,19 @@ def main() -> int:
     for md in iter_markdown_files(repo_root):
         is_user_doc = md.is_relative_to(user_docs_root)
         all_errors.extend(check_file(md, repo_root, is_user_doc=is_user_doc))
+        all_errors.extend(check_src_paths(md, repo_root))
 
     if all_errors:
-        print("Broken relative Markdown links:", file=sys.stderr)
+        print("Broken documentation references:", file=sys.stderr)
         for line in all_errors:
             print(f"  {line}", file=sys.stderr)
         return 1
 
     n_files = len(iter_markdown_files(repo_root))
     print(
-        f"OK: checked links in {n_files} Markdown file(s) under "
-        "user-docs/, README.md, and dev-docs/README.md."
+        f"OK: checked links and src/ code paths in {n_files} Markdown file(s) "
+        "under user-docs/, the living dev-docs/, README.md, ARCHITECTURE.md, "
+        "and AGENTS.md."
     )
     return 0
 

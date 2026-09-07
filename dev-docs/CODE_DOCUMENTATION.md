@@ -22,21 +22,21 @@ This file lists documentation that explains how the application works or serves 
 
 | Document | Description |
 |----------|-------------|
-| [DICOM_SUPPORT_ANALYSIS.md](DICOM_SUPPORT_ANALYSIS.md) | Analysis of DICOM support in the codebase (includes compressed-decoder stack in §3). |
+| [DICOM_SUPPORT_ANALYSIS.md](info/DICOM_SUPPORT_ANALYSIS.md) | Analysis of DICOM support in the codebase (includes compressed-decoder stack in §3). |
 | [PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) | Selected `python-gdcm` decoder strategy, transfer-syntax coverage, and release validation notes. |
-| [IMAGE_FUSION_RESEARCH.md](IMAGE_FUSION_RESEARCH.md) | Research and background for image fusion. |
-| [IMAGE_FUSION_IMPLEMENTATION_PLAN.md](IMAGE_FUSION_IMPLEMENTATION_PLAN.md) | Implementation plan for image fusion. |
-| [KO_PR_OVERLAYS_EXPLANATION.md](KO_PR_OVERLAYS_EXPLANATION.md) | Key Object and PR overlays in the viewer. |
-| [MULTI_FRAME_DICOM_RESEARCH.md](MULTI_FRAME_DICOM_RESEARCH.md) | Multi-frame DICOM handling and research. |
-| [MULTI_FRAME_FIX_SUMMARY.md](MULTI_FRAME_FIX_SUMMARY.md) | Summary of multi-frame fixes. |
-| [PYLINAC_INTEGRATION_OVERVIEW.md](PYLINAC_INTEGRATION_OVERVIEW.md) | Pylinac integration overview. |
+| [IMAGE_FUSION_RESEARCH.md](info/IMAGE_FUSION_RESEARCH.md) | Research and background for image fusion. |
+| [IMAGE_FUSION_IMPLEMENTATION_PLAN.md](plans/completed/IMAGE_FUSION_IMPLEMENTATION_PLAN.md) | Implementation plan for image fusion. |
+| [KO_PR_OVERLAYS_EXPLANATION.md](info/KO_PR_OVERLAYS_EXPLANATION.md) | Key Object and PR overlays in the viewer. |
+| [MULTI_FRAME_DICOM_RESEARCH.md](info/MULTI_FRAME_DICOM_RESEARCH.md) | Multi-frame DICOM handling and research. |
+| [MULTI_FRAME_FIX_SUMMARY.md](info/MULTI_FRAME_FIX_SUMMARY.md) | Summary of multi-frame fixes. |
+| [PYLINAC_INTEGRATION_OVERVIEW.md](info/PYLINAC_INTEGRATION_OVERVIEW.md) | Pylinac integration overview. |
 | [BUILDING_EXECUTABLES.md](info/BUILDING_EXECUTABLES.md) | Building executables (e.g. PyInstaller). |
 | [PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md](info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md) | PyInstaller bundle size estimates, per-OS measurement, baseline table. |
-| [APPIMAGE_CREATION_GUIDE.md](APPIMAGE_CREATION_GUIDE.md) | Creating AppImage builds. |
-| [CODE_SIGNING_AND_NOTARIZATION.md](CODE_SIGNING_AND_NOTARIZATION.md) | Code signing and notarization. |
-| [GITHUB_RELEASES_AND_VERSIONING.md](GITHUB_RELEASES_AND_VERSIONING.md) | GitHub releases and versioning. |
-| [SEMANTIC_VERSIONING_GUIDE.md](SEMANTIC_VERSIONING_GUIDE.md) | Semantic versioning for the project. |
-| [CROSSHAIR_AND_PATIENT_COORDINATES.md](CROSSHAIR_AND_PATIENT_COORDINATES.md) | How crosshair ROI displayed coordinates (x, y, z) and patient coordinates are determined; how `pixel_to_patient_coordinates` works for axial, sagittal, and coronal views. |
+| [APPIMAGE_CREATION_GUIDE.md](info/APPIMAGE_CREATION_GUIDE.md) | Creating AppImage builds. |
+| [CODE_SIGNING_AND_NOTARIZATION.md](info/CODE_SIGNING_AND_NOTARIZATION.md) | Code signing and notarization. |
+| [GITHUB_RELEASES_AND_VERSIONING.md](info/GITHUB_RELEASES_AND_VERSIONING.md) | GitHub releases and versioning. |
+| [SEMANTIC_VERSIONING_GUIDE.md](info/SEMANTIC_VERSIONING_GUIDE.md) | Semantic versioning for the project. |
+| [CROSSHAIR_AND_PATIENT_COORDINATES.md](info/CROSSHAIR_AND_PATIENT_COORDINATES.md) | How crosshair ROI displayed coordinates (x, y, z) and patient coordinates are determined; how `pixel_to_patient_coordinates` works for axial, sagittal, and coronal views. |
 
 ---
 

@@ -555,7 +555,7 @@ The following files have been modified:
 ### Priority 3: Enhanced Features
 
 7. **Color Image Detection in UI**
-   - **Files**: `src/gui/window_level_controls.py`, `src/core/view_state_manager.py`
+   - **Files**: `src/gui/window_level_controls.py`, `src/gui/view_state_manager.py`
    - **Action**: Disable or modify window/level controls for color images
    - **Impact**: Better user experience, prevents confusion
    - **Effort**: Medium

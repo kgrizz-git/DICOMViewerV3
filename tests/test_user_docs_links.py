@@ -1,5 +1,6 @@
 """
-Regression test for user-docs (and dev-docs README) relative Markdown links.
+Regression tests for documentation references: relative Markdown links, the
+user-docs/dev-docs boundary rules, and inline ``src/...`` code paths.
 
 Runs ``scripts/check_user_docs_links.py`` so CI and local pytest stay aligned.
 """
@@ -157,6 +158,86 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             user_docs, dev_docs = self._make_repo(tmp)
             (dev_docs / "README.md").write_text(
                 "Plan index: [plan](plans/SOME_PLAN.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class TestInlineSrcCodePaths(unittest.TestCase):
+    """A doc naming `src/pkg/module.py` must name one that exists.
+
+    This is the check that a core/ to gui/ package move defeats: the prose stays
+    syntactically fine and every Markdown link still resolves, but the module it
+    names has moved. Seventeen such references were stale before this existed.
+    """
+
+    def _run_on_tree(self, tree_root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(tree_root)],
+            cwd=str(tree_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _make_repo(self, tmp: Path) -> Path:
+        (tmp / "user-docs").mkdir()
+        (tmp / "dev-docs").mkdir()
+        (tmp / "src" / "gui").mkdir(parents=True)
+        (tmp / "src" / "gui" / "mpr_controller.py").write_text("")
+        return tmp / "dev-docs"
+
+    def test_moved_module_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "MPR lives in `src/core/mpr_controller.py` today.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("src/core/mpr_controller.py", proc.stderr)
+            self.assertIn("names a source file that does not exist", proc.stderr)
+
+    def test_correct_module_path_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "MPR lives in `src/gui/mpr_controller.py` today.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_illustrative_ellipsis_path_is_not_a_claim(self) -> None:
+        """`src/...py` is prose, not an assertion that a file exists."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "The check also validates inline `src/...py` paths.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_directory_and_glob_mentions_are_not_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "See `src/gui/` and `src/gui/main_window_*_builder.py` for detail.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_plans_directory_is_not_checked(self) -> None:
+        """dev-docs/plans/ is historical record; stale paths there are expected."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "plans").mkdir()
+            (dev_docs / "plans" / "OLD_PLAN.md").write_text(
+                "Back then it was `src/core/mpr_controller.py`.\n"
             )
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)

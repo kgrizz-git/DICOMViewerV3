@@ -161,10 +161,17 @@ waiting on the others.
 - [ ] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
   (contributing), DOC-15 (releasing), DOC-20 (developer setup), and DOC-21
   (agent harness) by executing the documented commands in a clean venv, not by
-  reading them.
-- [ ] **Slice 2c — developer reference.** Assess DOC-14 (architecture map),
+  reading them. **DOC-13, DOC-15, and DOC-21 done 2026-09-06**
+  ([assessment](../doc-assessments/doc-assessment-2026-09-06-234253.md));
+  DOC-20 remains.
+- [x] **Slice 2c — developer reference.** Assess DOC-14 (architecture map),
   DOC-22 (source layout), and DOC-23 (code documentation index) against the
-  current module tree and `check_architecture_boundaries.py`.
+  current module tree and `check_architecture_boundaries.py`. **Done
+  2026-09-06** — [`doc-assessment-2026-09-06-234253.md`](../doc-assessments/doc-assessment-2026-09-06-234253.md).
+  All three needed corrections: a `core/` to `gui/` package move had left 17
+  source paths wrong across six documents, the index had 12 broken links, and
+  the stated dependency rules both contradicted shipped code and claimed more
+  enforcement than exists.
 - [ ] Close the outstanding DOC-11 deferral (TRIAGE-037) by exercising each Help
   action and confirming its resolved URL / offline path and anchor, or by
   re-deferring it with a new bounded date.
@@ -241,6 +248,14 @@ is caught only when someone happens to look.
 
 - [x] Keep the link check as the blocking CI gate; it already runs on every CI
   pass and needs no path-based reminder. **Done** — [`ci.yml:311`](../../.github/workflows/ci.yml).
+- [x] Extend the link check beyond `user-docs/`. It read 14 files and never
+  looked at the developer documentation, which is why a package move left 17
+  stale source paths and an index accumulated 12 dead links with CI green
+  throughout. **Done 2026-09-06** — `check_user_docs_links.py` now covers the
+  living `dev-docs/`, `ARCHITECTURE.md`, and `AGENTS.md` (69 files) and also
+  validates inline `` `src/...py` `` paths, so a module that moves fails CI
+  until the prose naming it is updated. `dev-docs/plans/` stays excluded as
+  historical record.
 - [ ] Add a **warning-only** documentation-impact report to pull requests. It
   should inspect the diff for UI/actions, settings, export, privacy, build, and
   public-contract paths, then require either a related documentation change or
