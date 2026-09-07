@@ -248,8 +248,9 @@ jobs:
   # developer-only environment that installs a dependency straight from a GitHub
   # URL, so it can fail for reasons that are not vulnerabilities at all — a
   # resolution conflict, or that third-party repository being unreachable. Those
-  # two failure modes were previously reported under one check called
-  # "dependency CVEs", which made a non-security failure look like a CVE.
+  # two failure modes were previously reported under one check named
+  # "pip-audit (dependency CVEs)", which made a non-security failure look like
+  # a CVE.
   pip-audit:
     name: pip-audit (app dependencies)
     needs: [privacy-gates]

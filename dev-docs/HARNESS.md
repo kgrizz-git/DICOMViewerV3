@@ -98,7 +98,8 @@ The PHI-tooling audit is advisory because it resolves an isolated developer-only
 environment that installs a dependency from a GitHub URL, so it can fail without
 any vulnerability existing — a dependency resolution conflict, or that
 third-party repository being unreachable. Both previously reported under a single
-check named "dependency CVEs", so a resolution conflict looked like a CVE.
+check named "pip-audit (dependency CVEs)", so a resolution conflict looked
+like a CVE.
 
 **Suppressions.** `--ignore-vuln` entries on the application audit each need a
 reason and an unblock condition, recorded next to the flag in `ci.yml`, and are
