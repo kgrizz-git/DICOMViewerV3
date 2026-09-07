@@ -112,6 +112,18 @@ def test_deferral_without_followup_is_reported(tmp_path, capsys):
     assert "has no follow-up" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("follow_up", ["TBD", "later", "todo", "N/A", "?", "none"])
+def test_deferral_with_placeholder_followup_is_reported(tmp_path, capsys, follow_up):
+    """A placeholder bounds the deferral no better than an empty cell."""
+    repo = build_repo(
+        tmp_path,
+        "| DOC-01 | Users | a.md | \u2014 | \u2014 | \u2014 | Baseline 2026-09-04 |\n",
+        f"| TRIAGE-038 | unassessed | DOC-01 | deferred | why | {follow_up} | 2026-09-06 |\n",
+    )
+    assert run(repo, "--strict") == 1
+    assert "has no follow-up" in capsys.readouterr().out
+
+
 def test_deferral_naming_no_inventory_id_is_reported(tmp_path, capsys):
     repo = build_repo(
         tmp_path,

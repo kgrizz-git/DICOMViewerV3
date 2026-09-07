@@ -16,7 +16,9 @@ Three checks:
    explicitly deferred has no owner and is the state this check exists to catch.
 2. **Unbounded deferrals.** The triage ledger's own rules make a
    repository-relative follow-up mandatory for a ``deferred`` row. This verifies
-   that, so a deferral cannot silently become permanent.
+   that, so a deferral cannot silently become permanent. A placeholder such as
+   ``TBD`` or ``later`` is treated the same as an empty cell, since it bounds the
+   deferral no better.
 3. **Assessment cadence.** Reports the age of the newest
    ``dev-docs/doc-assessments/doc-assessment-*.md``.
 
@@ -55,6 +57,26 @@ DOC_ID = re.compile(r"DOC-\d+")
 TRIAGE_ID = re.compile(r"TRIAGE-\d+")
 ASSESSMENT_DATE = re.compile(r"doc-assessment-(\d{4})-(\d{2})-(\d{2})")
 DEFAULT_MAX_AGE_DAYS = 90
+
+# A follow-up cell that is present but says nothing. These satisfy a naive
+# "is the cell non-empty" test while leaving the deferral just as unbounded as an
+# empty cell, so they are treated the same way.
+PLACEHOLDER_FOLLOW_UPS = {
+    "",
+    "\u2014",
+    "-",
+    "--",
+    "?",
+    "tbd",
+    "tba",
+    "todo",
+    "later",
+    "n/a",
+    "na",
+    "none",
+    "pending",
+    "unknown",
+}
 
 
 def split_row(line: str) -> list[str]:
@@ -139,10 +161,11 @@ def check_deferrals(deferrals: list[tuple[str, list[str], str]]) -> list[str]:
     """Findings for deferred rows that are unbounded or unlinked."""
     findings: list[str] = []
     for triage_id, docs, follow_up in deferrals:
-        if not follow_up or follow_up == "\u2014":
+        if follow_up.strip().rstrip(".").lower() in PLACEHOLDER_FOLLOW_UPS:
             findings.append(
-                f"{triage_id} is deferred but has no follow-up. The triage ledger "
-                f"requires a bounded repository-relative follow-up."
+                f"{triage_id} is deferred but has no follow-up (found "
+                f"{follow_up or 'an empty cell'!r}). The triage ledger requires a "
+                f"bounded repository-relative follow-up, not a placeholder."
             )
         if not docs:
             findings.append(

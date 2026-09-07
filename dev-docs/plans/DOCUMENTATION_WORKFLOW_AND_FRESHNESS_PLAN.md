@@ -207,16 +207,19 @@ enforced — not whether the checklist above has been ticked once.
 ### Trigger matrix
 
 The **Enforcement today** column records what actually stops a change, as opposed
-to what this plan asks for. Only one row is machine-enforced. The rest depend on a
-reviewer remembering, which is why the gaps below are tracked as real work rather
-than as an optional follow-up.
+to what this plan asks for. Exactly one row is *blocking*: the link check. One
+more is *advisory* — `check_documentation_freshness.py` reports unowned
+`Baseline` rows and assessment age on every CI run, but exits 0, so it informs
+without stopping anything. The remaining rows depend on a reviewer remembering,
+which is why the gaps below are tracked as real work rather than as an optional
+follow-up.
 
 | Change | Required review/action | Flag or command | Enforcement today |
 |---|---|---|---|
 | Any `user-docs/` or `dev-docs/README.md` edit | Check all relative links | `python scripts/check_user_docs_links.py` | **Enforced** — blocking CI job, [`ci.yml:311`](../../.github/workflows/ci.yml) |
 | New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps | **Self-attested** — PR-template checkbox only, [`PULL_REQUEST_TEMPLATE.md:28`](../../.github/PULL_REQUEST_TEMPLATE.md); nothing runs the report |
 | Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required | **Not enforced** — no scoped baseline is wired to CI; human review only |
-| Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` | **Not enforced** — no check asserts an assessment exists; this is the trigger that would otherwise have caught the 15 unassessed rows |
+| Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` | **Advisory only** — `check_documentation_freshness.py` reports assessment age and unowned `Baseline` rows on every CI run but never fails; nothing asserts an assessment exists at a release boundary, and this is the trigger that would otherwise have caught the 15 unassessed rows |
 
 ### Living records and history
 
@@ -251,8 +254,9 @@ is caught only when someone happens to look.
   after the previous minor/major release (or record an explicit waiver with a
   reason). This is the reminder for periodic accuracy review, not an automated
   substitute for it. **Highest priority of the remaining items:** it is the only
-  standing trigger that would surface rows nothing else touches, and its absence
-  is why 15 rows sat unassessed without anything flagging it.
+  standing trigger that would *block* on rows nothing else touches, and its
+  absence is why 15 rows sat unassessed without anything flagging it. The
+  advisory freshness check now surfaces that state, but cannot stop a release.
   **Blocked on tagging:** this repository currently has no Git tags, so there is
   no release boundary to anchor the assertion to.
   `check_documentation_freshness.py` uses a 90-day cadence as an interim proxy;

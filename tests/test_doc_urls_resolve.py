@@ -34,6 +34,19 @@ PLACEHOLDER = re.compile(r"\{(doc_[A-Za-z0-9_]+)\}")
 PLACEHOLDER_KEY = re.compile(r"""["'](doc_[A-Za-z0-9_]+)["']\s*:""")
 
 
+def resolve_user_doc(filename: str) -> Path | None:
+    """Resolve a filename under user-docs/, or None if it escapes that directory.
+
+    A call site that passes ``../README.md`` or a leading-slash path is itself a
+    bug; returning None makes the caller report it as missing rather than letting
+    ``Path`` quietly resolve outside the documentation tree.
+    """
+    candidate = (USER_DOCS / filename.strip().lstrip("/")).resolve()
+    if candidate != USER_DOCS and USER_DOCS not in candidate.parents:
+        return None
+    return candidate
+
+
 def referenced_doc_filenames() -> dict[str, list[str]]:
     """Map each filename passed to user_doc_url() to the files referencing it."""
     referenced: dict[str, list[str]] = {}
@@ -56,7 +69,8 @@ def test_every_linked_user_doc_exists():
     """A Help link must not resolve to a file that is not in the repository."""
     missing: list[str] = []
     for filename, sources in sorted(referenced_doc_filenames().items()):
-        if not (USER_DOCS / filename).is_file():
+        resolved = resolve_user_doc(filename)
+        if resolved is None or not resolved.is_file():
             missing.append(f"{filename} (referenced by {', '.join(sources)})")
     assert not missing, "in-app Help links point at missing user-docs files: " + "; ".join(
         missing
@@ -80,11 +94,22 @@ def test_quick_start_placeholders_are_all_substituted():
 def test_quick_start_substitutions_target_real_docs():
     """Every placeholder the dialog can substitute must resolve to a real file."""
     dialog = QUICK_START_DIALOG.read_text(encoding="utf-8")
-    missing = [
-        filename
-        for filename in USER_DOC_URL_CALL.findall(dialog)
-        if not (USER_DOCS / filename).is_file()
-    ]
+    missing = []
+    for filename in USER_DOC_URL_CALL.findall(dialog):
+        resolved = resolve_user_doc(filename)
+        if resolved is None or not resolved.is_file():
+            missing.append(filename)
     assert not missing, "Quick Start substitutions point at missing files: " + ", ".join(
         missing
     )
+
+
+def test_paths_escaping_user_docs_are_rejected():
+    """A call site must never resolve to a file outside user-docs/.
+
+    An absolute-looking path is re-rooted under user-docs/ (and so reported as
+    missing); a traversal is rejected outright.
+    """
+    assert resolve_user_doc("../README.md") is None
+    assert resolve_user_doc("/etc/passwd") == USER_DOCS / "etc" / "passwd"
+    assert resolve_user_doc("USER_GUIDE.md") == USER_DOCS / "USER_GUIDE.md"
