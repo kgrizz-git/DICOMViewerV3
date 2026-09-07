@@ -1,6 +1,6 @@
 # Documentation triage ledger
 
-**Last updated:** 2026-09-05  
+**Last updated:** 2026-09-06  
 **Status:** Living, current-state register. Git history preserves decision
 history; do not delete a resolved row without recording the replacement or why
 the signal ceased to apply.
@@ -86,7 +86,13 @@ claims, mirror drift, missing docstrings, broken support paths, or a required
 assessment was waived. A `deferred` row must be revisited at the next relevant
 assessment and cannot be silently carried forward.
 
+TRIAGE-037 and TRIAGE-038 are the ledger's first `deferred` rows. Both record
+audit scope that was previously deferred in prose only, which is exactly the
+silent carry-forward this section forbids.
+
 | ID | Signal / source | Inventory ID | Disposition | Required decision evidence / likely destination | Follow-up | Last reviewed |
 | --- | --- | --- | --- | --- | --- | --- |
 | TRIAGE-035 | Quick Start HTML omits 3-pane layouts / Magnify **G** / wrong shortcuts pointer | DOC-03 | document | Align `resources/help/quick_start_guide.html` with layouts + shortcuts guides. | [quick_start_guide.html](../resources/help/quick_start_guide.html); [doc-assessment-2026-09-05-111057.md](doc-assessments/doc-assessment-2026-09-05-111057.md) | 2026-09-05 |
 | TRIAGE-036 | CONFIGURATION “Slice Position Lines” vs UI “Show Slice Location Lines” | DOC-04 | document | Rename/align terminology in CONFIGURATION Overlay Settings. | [CONFIGURATION.md](../user-docs/CONFIGURATION.md#view--overlay-settings) | 2026-09-05 |
+| TRIAGE-037 | DOC-11 marked `Assessed` on evidence of code inspection only; the row's own recipe (exercise every Help action, verify resolved URL/offline path and anchor) was not executed | DOC-11 | deferred | **Narrowed 2026-09-06:** link-target resolution is now machine-verified by `tests/test_doc_urls_resolve.py` (every `user_doc_url()` filename exists under `user-docs/`; every Quick Start `{doc_*}` placeholder is substituted). What remains deferred is only launching the app and exercising each Help action in the running UI. | [DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md — Phase 2](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md#phase-2--complete-the-accuracy-audit) | 2026-09-06 |
+| TRIAGE-038 | 15 of 23 inventory rows remain at `Baseline`, never assessed: DOC-01, 06, 07, 08, 09, 10, 13, 14, 15, 18, 19, 20, 21, 22, 23 | DOC-01, DOC-06, DOC-07, DOC-08, DOC-09, DOC-10, DOC-13, DOC-14, DOC-15, DOC-18, DOC-19, DOC-20, DOC-21, DOC-22, DOC-23 | deferred | Phase 1 audited a first slice by design, but no phase or trigger was assigned to clear the remainder, so the rows had no owner. Assess in slices 2a/2b/2c; each slice lands its own timestamped assessment. | [DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md — Phase 2](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md#phase-2--complete-the-accuracy-audit) | 2026-09-06 |
