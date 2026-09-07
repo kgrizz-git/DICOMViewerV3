@@ -230,6 +230,22 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_wrong_case_is_reported_on_any_platform(self) -> None:
+        """macOS and Windows resolve paths case-insensitively; Linux CI does not.
+
+        Without an exact-case comparison a mis-cased path passes the pre-commit
+        hook on a Mac and then fails the same check on CI.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._make_repo(tmp)
+            (dev_docs / "GUIDE.md").write_text(
+                "MPR lives in `src/GUI/mpr_controller.py`.\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn("src/GUI/mpr_controller.py", proc.stderr)
+
     def test_plans_directory_is_not_checked(self) -> None:
         """dev-docs/plans/ is historical record; stale paths there are expected."""
         with tempfile.TemporaryDirectory() as d:

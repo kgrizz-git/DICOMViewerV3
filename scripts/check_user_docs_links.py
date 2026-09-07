@@ -64,12 +64,33 @@ def iter_markdown_files(repo_root: Path) -> list[Path]:
     return sorted(set(paths))
 
 
+def exists_with_exact_case(repo_root: Path, relative: str) -> bool:
+    """True when ``relative`` names a file that exists with exactly this casing.
+
+    ``Path.is_file()`` follows the filesystem, which is case-insensitive on macOS
+    and Windows. A doc naming ``src/GUI/main_window.py`` would therefore pass the
+    pre-commit hook on a developer's Mac and then fail the same check on Linux
+    CI. Comparing each component against the real directory listing makes local
+    and CI agree.
+    """
+    current = repo_root
+    for part in Path(relative).parts:
+        try:
+            names = {entry.name for entry in current.iterdir()}
+        except (NotADirectoryError, PermissionError, FileNotFoundError):
+            return False
+        if part not in names:
+            return False
+        current = current / part
+    return current.is_file()
+
+
 def check_src_paths(md_path: Path, repo_root: Path) -> list[str]:
     """Return errors for inline `src/....py` paths that do not exist."""
     errors: list[str] = []
     text = md_path.read_text(encoding="utf-8")
     for src_path in SRC_PATH_PATTERN.findall(text):
-        if not (repo_root / src_path).is_file():
+        if not exists_with_exact_case(repo_root, src_path):
             errors.append(
                 f"{md_path.relative_to(repo_root)}: names a source file that does "
                 f"not exist: {src_path!r}"
