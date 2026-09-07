@@ -158,12 +158,14 @@ waiting on the others.
   DOC-08 (3D), DOC-09 (fusion), DOC-10 (anonymization), DOC-18 (export/SR), and
   DOC-19 (pylinac QA) against the shipped UI, using each row's own verification
   recipe. These are the rows where a wrong claim reaches a user directly.
-- [ ] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
+- [x] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
   (contributing), DOC-15 (releasing), DOC-20 (developer setup), and DOC-21
   (agent harness) by executing the documented commands in a clean venv, not by
-  reading them. **DOC-13, DOC-15, and DOC-21 done 2026-09-06**
-  ([assessment](../doc-assessments/doc-assessment-2026-09-06-234253.md));
-  DOC-20 remains.
+  reading them. **Done 2026-09-06** —
+  [`doc-assessment-2026-09-06-234253.md`](../doc-assessments/doc-assessment-2026-09-06-234253.md).
+  Executing rather than reading was the point: one documented diagnostic command
+  fails outright as written, the privacy gate was attributed to the wrong script,
+  and HARNESS.md omitted the ~20 checks the git hooks actually run.
 - [x] **Slice 2c — developer reference.** Assess DOC-14 (architecture map),
   DOC-22 (source layout), and DOC-23 (code documentation index) against the
   current module tree and `check_architecture_boundaries.py`. **Done

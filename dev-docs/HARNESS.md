@@ -77,13 +77,30 @@ raw-output path for every output filter.
 
 | Script | What it validates |
 |--------|-------------------|
-| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links in `user-docs/` and `dev-docs/README.md` |
+| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline `src/` code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, and `AGENTS.md`. `dev-docs/plans/` is excluded as historical record |
 | [`scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files present, `AGENTS.md` not bloated, `TO_DO.md` freshness, plan paths in `TO_DO.md`, links in harness docs, required **user-docs** topic guides linked from `USER_GUIDE.md` hub |
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
 | [`scripts/check_doc_feature_coverage.py`](../scripts/check_doc_feature_coverage.py) | Report-only: maps `QAction` labels in `src/` to mentions in `user-docs/` and lists candidate documentation gaps (heuristic; exit 0 unless `--fail-under RATIO`) |
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+
+### Git hooks (the blocking local layer)
+
+The table above is not the whole picture. The version-controlled hooks in
+[`.githooks/`](../.githooks) are installed by
+[`scripts/setup-hooks.sh`](../scripts/setup-hooks.sh) and run considerably more,
+mostly blocking. Know what they run before wondering why a commit was rejected.
+
+| Hook | Runs, in order |
+|------|----------------|
+| `pre-commit` | `git-hook-prune-backups.py`, `git_hook_line_complexity.py --staged`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --staged`, `check_gitleaks_staged.py`, `run_conditional_privacy_reviews.py`, `check_repo_harness.py`, `check_architecture_boundaries.py`, `agent_smoke_harness.py`, `ruff`, `check_dependency_licenses.py`, `git-hook-security-gate.py` |
+| `commit-msg` | `git_hook_commit_message_privacy.py` |
+| `pre-push` | `git_hook_pre_push_privacy.py`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --all --critical`, `check_gitleaks_history.py`, `check_basedpyright_errors.py`, `ruff`, `lizard` (advisory), `git-hook-security-gate.py`, `privacy_tool_review.py`, `run_local_sonarqube.py --check-freshness-days` (advisory), `check_local_sonarqube_updates.py` (advisory) |
+
+`git-hook-security-gate.py` runs `run_security_scan.py` and is **branch-gated to
+`main`**, so it is silent on feature branches. The full pytest suite is **not** run
+on pre-push; CI owns the suite and the 80% coverage gate (`ci.yml`, `--cov-fail-under=80`).
 
 **Pytest:** `tests/test_user_docs_links.py`, `tests/test_repo_harness.py`, `tests/test_architecture_boundaries.py`, `tests/test_agent_smoke_harness.py`, `tests/test_doc_feature_coverage.py`.
 
