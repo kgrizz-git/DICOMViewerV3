@@ -6,6 +6,8 @@ Uses a QApplication; no DICOM files required (all data is synthetic/mocked).
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
 from core.loader_worker import LoaderWorker
@@ -47,9 +49,25 @@ def _run_worker(worker, timeout_ms=5000):
     worker.finished.connect(loop.quit)  # type: ignore[arg-type]
     worker.organized.connect(loop.quit)  # type: ignore[arg-type]
     worker.error.connect(loop.quit)  # type: ignore[arg-type]
-    timer.start(timeout_ms)
-    worker.start()
-    loop.exec()
+    try:
+        timer.start(timeout_ms)
+        worker.start()
+        loop.exec()
+    finally:
+        # A terminal signal quits the loop well inside the timeout, so the
+        # watchdog is still armed here. It only outlives this call if the frame
+        # does -- see the note in tests/test_index_folder_thread.py -- but then
+        # it fires into ``loop``, which this function is about to drop.
+        timer.stop()
+        # Cleanup must not raise; see the note in tests/test_index_folder_thread.py.
+        for signal, slot in (
+            (timer.timeout, loop.quit),
+            (worker.finished, loop.quit),
+            (worker.organized, loop.quit),
+            (worker.error, loop.quit),
+        ):
+            with contextlib.suppress(RuntimeError, TypeError):
+                signal.disconnect(slot)
     # Ensure run() has returned before the caller drops its reference,
     # otherwise Qt aborts on destroying a still-running QThread.
     worker.wait(timeout_ms)

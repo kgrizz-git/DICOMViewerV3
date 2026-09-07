@@ -3,7 +3,8 @@ name: CI
 # Job DAG (privacy-first):
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
-#      repo-harness, user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
+#      pip-audit-phi-tools, repo-harness, user-docs-links, semgrep, codeql,
+#      grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
 # rename or restructure jobs:
@@ -11,6 +12,12 @@ name: CI
 #   "privacy-gates / No PHI artifacts tracked"    → privacy-gates.yml: phi-artifact-scan
 #   "privacy-gates / Blocking Privacy Output Scan"→ privacy-gates.yml: privacy-output-scan
 #   "Semgrep Security Audit"                      → ci.yml: semgrep
+#
+# Proposed addition, needs a ruleset change in repository settings:
+#   "pip-audit (app dependencies)"                → ci.yml: pip-audit
+# Until it is added there, that job fails loudly but can still be merged past.
+# Do NOT add "pip-audit (PHI tooling, advisory)"; it is continue-on-error by
+# design and audits an isolated developer environment that is never shipped.
 #
 # Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
 # privacy checks pass via needs: [privacy-gates].
@@ -235,8 +242,17 @@ jobs:
           PY
           (lizard src/ --CCN 15 --length 200 -w 2>&1 || true) | python3 /tmp/lizard_report.py
 
+  # Split into two jobs deliberately. The application audit is a clean security
+  # signal and is the one to gate merges on. The PHI-tooling audit shares the
+  # name "pip-audit" but not the reliability: it resolves an isolated
+  # developer-only environment that installs a dependency straight from a GitHub
+  # URL, so it can fail for reasons that are not vulnerabilities at all — a
+  # resolution conflict, or that third-party repository being unreachable. Those
+  # two failure modes were previously reported under one check named
+  # "pip-audit (dependency CVEs)", which made a non-security failure look like
+  # a CVE.
   pip-audit:
-    name: pip-audit (dependency CVEs)
+    name: pip-audit (app dependencies)
     needs: [privacy-gates]
     runs-on: ubuntu-latest
 
@@ -254,16 +270,53 @@ jobs:
       - name: Install pip-audit
         run: pip install "pip-audit>=2.10.1"
 
+      # Suppressions are reviewed on the date below. Each needs a reason and an
+      # unblock condition; do not add one without both. Audited 2026-09-07:
+      # four entries (PYSEC-2026-2132, CVE-2026-52870, CVE-2026-52869,
+      # CVE-2026-59950) matched nothing in the current dependency set and were
+      # removed. Re-run without --ignore-vuln to re-check.
+      #
+      # PYSEC-2026-2266 — pydicom 2.4.5, fixed in 3.0.2. Cannot upgrade: pylinac
+      # caps pydicom<3 (confirmed still true in pylinac 3.47.0), and
+      # requirements.txt records that moving to pydicom 3 needs a coordinated
+      # pylinac bump plus ACR QA re-verification. Unblocks when pylinac ships a
+      # release allowing pydicom>=3. Review by 2026-12-31.
       - name: Run pip-audit
         run: >-
           pip-audit --requirement requirements.txt --requirement requirements-dev.txt
-          --requirement requirements-build.txt --ignore-vuln PYSEC-2026-2266
-          --ignore-vuln PYSEC-2026-2132
-          --ignore-vuln CVE-2026-52870 --ignore-vuln CVE-2026-52869
-          --ignore-vuln CVE-2026-59950
+          --requirement requirements-build.txt
+          --ignore-vuln PYSEC-2026-2266
+
+  # Advisory: reports, never blocks. See the note above the pip-audit job.
+  pip-audit-phi-tools:
+    name: pip-audit (PHI tooling, advisory)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.10.1"
 
       - name: Run pip-audit for isolated PHI tooling
-        run: pip-audit --requirement requirements-phi-tools.txt
+        run: |
+          if ! pip-audit --requirement requirements-phi-tools.txt; then
+            echo "::warning title=PHI tooling audit::pip-audit could not clear \
+          requirements-phi-tools.txt. This is advisory and does not block the \
+          merge, but check whether it is a real vulnerability, a dependency \
+          resolution conflict, or the git-URL dependency being unreachable."
+            exit 1
+          fi
 
   repo-harness:
     name: Harness docs and agent smoke

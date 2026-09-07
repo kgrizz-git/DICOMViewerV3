@@ -7,6 +7,7 @@ success, cancel, and failure signal paths without touching disk or SQLCipher.
 
 from __future__ import annotations
 
+import contextlib
 import os
 from unittest.mock import MagicMock, patch
 
@@ -32,13 +33,32 @@ def _run(thread: StudyIndexFolderThread, qapp) -> str:
 
     thread.finished_ok.connect(_on_ok)
     thread.failed.connect(_on_fail)
-    thread.start()
     timer = QTimer()
     timer.setSingleShot(True)
     timer.timeout.connect(qapp.exit)
-    timer.start(5000)
-    qapp.exec()
-    assert thread.wait(5000), "indexing thread did not finish within five seconds"
+    try:
+        thread.start()
+        timer.start(5000)
+        qapp.exec()
+        assert thread.wait(5000), "indexing thread did not finish within five seconds"
+    finally:
+        # A terminal signal ends the loop long before five seconds elapse, so
+        # the watchdog is still armed here. Returning without stopping it is
+        # harmless when this helper succeeds -- the unparented timer is
+        # destroyed on return and Qt stops it. It is not harmless when the
+        # helper raises: pytest retains the traceback, which retains this
+        # frame, which keeps the timer alive and armed. It would then fire
+        # ``qapp.exit()`` into a later test, because ``qapp`` is session-scoped.
+        timer.stop()
+        # Never let cleanup raise: PySide6 raises if a slot is not connected,
+        # and an exception here would replace the assertion above.
+        for signal, slot in (
+            (timer.timeout, qapp.exit),
+            (thread.finished_ok, _on_ok),
+            (thread.failed, _on_fail),
+        ):
+            with contextlib.suppress(RuntimeError, TypeError):
+                signal.disconnect(slot)
     return outcome["signal"]
 
 

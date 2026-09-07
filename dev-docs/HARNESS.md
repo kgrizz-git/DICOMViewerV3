@@ -85,6 +85,29 @@ raw-output path for every output filter.
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
+### Dependency vulnerability audits
+
+Two separate jobs, because they have different reliability:
+
+| Job | Scope | Blocks? |
+|-----|-------|---------|
+| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt` | Fails the job. Add it to the required-check ruleset to make it block merges |
+| `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
+
+The PHI-tooling audit is advisory because it resolves an isolated developer-only
+environment that installs a dependency from a GitHub URL, so it can fail without
+any vulnerability existing — a dependency resolution conflict, or that
+third-party repository being unreachable. Both previously reported under a single
+check named "pip-audit (dependency CVEs)", so a resolution conflict looked
+like a CVE.
+
+**Suppressions.** `--ignore-vuln` entries on the application audit each need a
+reason and an unblock condition, recorded next to the flag in `ci.yml`, and are
+reviewed on the date noted there. Audited 2026-09-07: four of the five entries
+matched nothing in the current dependency set and were removed. The one that
+remains is `PYSEC-2026-2266` (pydicom 2.4.5, fixed in 3.0.2), which cannot be
+cleared while pylinac caps `pydicom<3`.
+
 ### Git hooks (the blocking local layer)
 
 The table above is not the whole picture. The version-controlled hooks in
