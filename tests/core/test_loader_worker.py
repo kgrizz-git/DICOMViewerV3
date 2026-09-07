@@ -55,8 +55,9 @@ def _run_worker(worker, timeout_ms=5000):
         loop.exec()
     finally:
         # A terminal signal quits the loop well inside the timeout, so the
-        # watchdog is normally still armed here. Left running it outlives this
-        # call and fires into ``loop``, which the caller is about to drop.
+        # watchdog is still armed here. It only outlives this call if the frame
+        # does -- see the note in tests/test_index_folder_thread.py -- but then
+        # it fires into ``loop``, which this function is about to drop.
         timer.stop()
         # Cleanup must not raise; see the note in tests/test_index_folder_thread.py.
         for signal, slot in (

@@ -6,21 +6,32 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-07
 
-- **Dependency audit split, and a Qt test watchdog leak fixed:** `pip-audit`
+- **Dependency audit split into blocking and advisory jobs:** `pip-audit`
   became two CI jobs — a blocking application audit and an advisory PHI-tooling
   audit — because the PHI tooling resolves a git-URL dependency and had been
-  failing for non-security reasons under a check named "dependency CVEs". Four
-  of five `--ignore-vuln` suppressions were confirmed stale and removed. While
-  landing that, CI hit an intermittent xdist worker segfault in
-  `tests/test_index_folder_thread.py`, seen three times over two days and never
-  reproducible in isolation. Cause: three Qt test helpers armed a five-second
-  `QTimer` watchdog and never stopped it, because a terminal signal ends the
-  event loop first. Against the session-scoped `qapp` fixture (and, in
-  `test_loader_worker.py`, a local `QEventLoop` the caller then drops), a
-  leaked timer can fire into a later test. The helpers in
-  `test_index_folder_thread.py`, `test_cine_export_encode_thread.py`, and
-  `core/test_loader_worker.py` now stop the timer and disconnect their signals
-  in a `finally`.
+  failing for non-security reasons under a check named "pip-audit (dependency
+  CVEs)". Four of five `--ignore-vuln` suppressions were confirmed stale and
+  removed.
+
+- **Qt test watchdog timers leak on the failure path:** Three test helpers armed
+  a five-second `QTimer` deadline and returned without stopping it. External
+  review (agy gemini-3.8-flash-high) correctly challenged the original diagnosis
+  here, and the corrected behaviour was then confirmed by experiment. On the
+  passing path there is no leak: the unparented timer is destroyed when the
+  helper returns, and `~QObject` stops it. The leak is real only when the helper
+  raises — pytest retains the traceback, which retains the frame, which keeps
+  the timer armed. It can then fire `qapp.exit()` into an unrelated test, since
+  the `qapp` fixture is session-scoped, or call `quit()` on the local
+  `QEventLoop` that `core/test_loader_worker.py` has already dropped. All three
+  helpers now stop the timer and disconnect in a `finally`, wrapped in
+  `contextlib.suppress` so cleanup cannot mask the assertion that triggered it.
+
+  This was found while chasing an intermittent CI crash (`[gw2] node down: Not
+  properly terminated` in `tests/test_index_folder_thread.py`, three times in
+  two days, never reproducible locally). **It does not explain that crash**: the
+  crashing test passes, and no test failed ahead of it in that run, so the
+  frame-retention path was never taken. The crash cause is still unknown. If it
+  recurs, do not treat the timer work as having ruled anything out.
 
 ## 2026-09-05
 

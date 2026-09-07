@@ -42,10 +42,13 @@ def _run(thread: StudyIndexFolderThread, qapp) -> str:
         qapp.exec()
         assert thread.wait(5000), "indexing thread did not finish within five seconds"
     finally:
-        # The watchdog is still armed on the normal path, because a terminal
-        # signal ends the loop long before five seconds elapse. ``qapp`` is
-        # session-scoped, so an unstopped timer outlives this call and can fire
-        # ``qapp.exit()`` into a later test's event loop.
+        # A terminal signal ends the loop long before five seconds elapse, so
+        # the watchdog is still armed here. Returning without stopping it is
+        # harmless when this helper succeeds -- the unparented timer is
+        # destroyed on return and Qt stops it. It is not harmless when the
+        # helper raises: pytest retains the traceback, which retains this
+        # frame, which keeps the timer alive and armed. It would then fire
+        # ``qapp.exit()`` into a later test, because ``qapp`` is session-scoped.
         timer.stop()
         # Never let cleanup raise: PySide6 raises if a slot is not connected,
         # and an exception here would replace the assertion above.
