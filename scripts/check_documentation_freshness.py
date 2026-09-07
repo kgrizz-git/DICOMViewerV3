@@ -80,8 +80,19 @@ PLACEHOLDER_FOLLOW_UPS = {
 
 
 def split_row(line: str) -> list[str]:
-    """Cells of a Markdown table row, outer pipes stripped and cells trimmed."""
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+    r"""Cells of a Markdown table row, outer pipes stripped and cells trimmed.
+
+    Honours the Markdown escape ``\|``, which is how a cell embeds a literal
+    pipe (a shell pipeline in inline code, for example). Splitting on raw ``|``
+    would silently shift every later cell and misread the row.
+    """
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    cells = re.split(r"(?<!\\)\|", stripped)
+    return [cell.replace("\\|", "|").strip() for cell in cells]
 
 
 def is_table_row(line: str) -> bool:

@@ -1,6 +1,6 @@
 # Documentation inventory and review register
 
-**Last updated:** 2026-09-05  
+**Last updated:** 2026-09-06  
 **Status:** Living register — update it in the pull request that changes a
 listed product surface, or record an explicit deferral in
 [`DOCUMENTATION_TRIAGE.md`](DOCUMENTATION_TRIAGE.md).

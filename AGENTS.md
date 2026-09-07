@@ -38,7 +38,7 @@ From project root, after activation:
 
 - Run the app: `python src/main.py`
 - Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v` (**`tests/README.md`**). `pytest.ini` sets `-n auto`, so runs are parallel; add `-n 0` for serial/single-test iteration. Never construct a `QCoreApplication` in a test — depend on the session `qapp` fixture.
-- **basedpyright vs PySide6:** CI installs fresh deps (`PySide6>=6.11.1` may resolve 6.11.2+). If local basedpyright suddenly reports many `QTreeWidgetItem | None` errors after `pip install -r requirements-dev.txt`, upgrade PySide6 to match CI and re-run `python scripts/check_basedpyright_errors.py` (tree code uses `gui.qt_tree_widget_utils.iter_tree_children`).
+- **basedpyright vs PySide6:** CI installs fresh deps, so it may resolve a newer PySide6 than your venv holds (the pin in `requirements.txt` is a `>=` floor). If local basedpyright suddenly reports many `QTreeWidgetItem | None` errors after `pip install -r requirements-dev.txt`, upgrade PySide6 to match CI and re-run `python scripts/check_basedpyright_errors.py` (tree code uses `gui.qt_tree_widget_utils.iter_tree_children`).
 - Agent smoke: `python scripts/agent_smoke_harness.py`
 - Harness docs check: `python scripts/check_repo_harness.py`
 - Architecture boundaries: `python scripts/check_architecture_boundaries.py`

@@ -40,7 +40,7 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 
 Agents should respect these edges when adding imports or new modules:
 
-```
+```text
 utils/          →  (stdlib, third-party only; no gui/, core/, main, roi/, metadata/, tools/)
 core/           →  utils/, other core/, tools/; NOT gui/ (keep Qt out of pure modules)
 gui/            →  core/, utils/, roi/, metadata/, tools/; NOT main

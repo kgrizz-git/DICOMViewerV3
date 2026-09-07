@@ -179,6 +179,29 @@ def test_separator_rows_are_not_parsed_as_data(tmp_path):
     assert states == {"DOC-01": "Assessed 2026-09-05"}
 
 
+def test_escaped_pipe_does_not_shift_cells():
+    r"""A cell may embed a literal pipe as ``\|``; splitting on it corrupts the row.
+
+    TRIAGE-039 records shell pipelines in inline code. Without escape handling the
+    follow-up column was read from the middle of the evidence text, and the row
+    silently passed validation on the wrong cell.
+    """
+    cells = freshness.split_row(r"| TRIAGE-039 | `git tag \| wc -l` -> 0 | DOC-15 |")
+    assert cells == ["TRIAGE-039", "`git tag | wc -l` -> 0", "DOC-15"]
+
+
+def test_deferred_row_with_escaped_pipe_is_parsed(tmp_path):
+    """End to end: an escaped pipe in the evidence cell must not hide the follow-up."""
+    repo = build_repo(
+        tmp_path,
+        "| DOC-01 | Users | a.md | \u2014 | \u2014 | \u2014 | Baseline 2026-09-04 |\n",
+        r"| TRIAGE-039 | sig | DOC-01 | deferred | ran `git tag \| wc -l` | [plan](p.md) | 2026-09-06 |"
+        + "\n",
+    )
+    assert run(repo, "--strict") == 0
+    assert freshness.deferred_rows(repo)[0][2] == "[plan](p.md)"
+
+
 @pytest.mark.parametrize(
     "state,expected_baseline",
     [("Baseline 2026-09-04", True), ("Assessed 2026-09-05 (scope note)", False)],
