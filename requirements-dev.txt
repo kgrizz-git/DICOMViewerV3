@@ -23,7 +23,7 @@ pip-audit>=2.10.1
 pip-licenses>=5.5.5
 # Type checker CLI (matches common IDE Pyright/Based Pyright settings); run from repo root:
 #   basedpyright [files...]
-basedpyright>=1.39.9
+basedpyright>=1.39.10
 # Coverage for local + CI summaries; reports are not uploaded to third parties.
 pytest-cov>=7.1.0
 # Parallel test execution (pytest-xdist): splits tests across workers.
