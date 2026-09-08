@@ -45,7 +45,7 @@ scipy>=1.18.1  # pylinac numerical dependency
 scikit-image>=0.22.0  # pylinac image processing dependency
 pypdf>=6.16.2  # PDF merging for compare-mode combined PDF report
 # HTTP(S) client for local SonarQube utilities and public update metadata checks.
-requests>=2.32.5
+requests>=2.34.2
 
 # Compressed DICOM support
 # `python-gdcm` is the selected classic JPEG Baseline/Extended/Lossless decoder.
