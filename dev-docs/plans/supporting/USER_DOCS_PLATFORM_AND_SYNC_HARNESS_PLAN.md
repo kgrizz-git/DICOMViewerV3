@@ -2,10 +2,12 @@
 
 **Created:** 2026-09-11  
 **Last updated:** 2026-09-11  
-**Status:** Not started  
+**Status:** Not started (DeepSeek plan review applied 2026-09-11)  
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
-**TO_DO ref:** Next up slot 3; [Documentation](#documentation) (user-facing completeness).
+**TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
+
+**Review:** OpenCode Nvidia DeepSeek V4 Pro 0813 (2026-09-11) — verdict **ready-with-fixes**; M1–M2 / S1–S3 applied below before Phase A.
 
 ---
 
@@ -43,6 +45,10 @@ documentation GitHub App on this application repository.
    new checks start **advisory** until false-positive rates are reviewed.
 4. **In-app Help parity:** `resources/help/quick_start_guide.html` and
    `doc_urls.py` remain first-class mirrors; the pilot must not orphan them.
+5. **URL alignment:** MkDocs `repo_url` / `edit_uri` must target the **same**
+   `main` + `user-docs/` paths as `USER_DOCS_GITHUB_PREFIX` in
+   [`src/utils/doc_urls.py`](../../../src/utils/doc_urls.py)
+   (`https://github.com/kgrizz-git/DICOMViewerV3/blob/main/user-docs`).
 
 ---
 
@@ -62,35 +68,69 @@ Phase 2 slice **2a** (eight user-facing inventory rows needing a running UI)
 remains open in the parent plan — complete in parallel, not blocked by this
 pilot.
 
+**Known MkDocs gap (M1):** `user-docs/` is **not** self-contained. Four
+cross-boundary links point at `../dev-docs/info/` (see
+[`TO_DO.md`](../../TO_DO.md) P2 “Make `user-docs/` fully self-contained”):
+
+| Source | Target |
+|--------|--------|
+| `USER_GUIDE.md` | `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` |
+| `USER_GUIDE_3D.md` | `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md` |
+| `USER_GUIDE_QA_PYLINAC.md` | `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md` |
+| `USER_GUIDE_QA_PYLINAC.md` | `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` |
+
+With `docs_dir: user-docs`, MkDocs will **not** copy those targets into `site/`,
+so the generated site has dead links. `check_user_docs_links.py` still passes
+because it resolves against the repo source tree. Phase A must **record** this
+as a known adoption blocker (do not “fix” by rewriting guides in the PoC);
+closing it is a separate TO_DO / Phase C precondition, not a Phase A rewrite.
+
 ---
 
 ## Phase A — MkDocs Material proof of concept
 
 **Implements:** parent plan [Phase 3 — Local static documentation pilot](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md#phase-3--local-static-documentation-pilot).
 
-Work in an **isolated worktree or branch**; do not rewrite source guides until
-navigation structure is approved.
+Work on the current docs branch (or an isolated worktree); do not rewrite source
+guides until navigation structure is approved.
+
+**Intentional omission vs parent Phase 3:** no `mkdocstrings` sample in this
+pilot (API reference is out of scope for end-user docs). Parent Phase 3’s
+`mkdocstrings` checkbox remains deferred, not silently claimed done.
 
 ### A1. Scaffold (read-only pilot)
 
-- [ ] Add `mkdocs.yml` at repo root (or `docs/mkdocs.yml` if preferred) with:
-  - `site_name`, repo URL, edit-uri pointing at `user-docs/` paths.
-  - **Navigation** mirroring the hub Topics table in `USER_GUIDE.md` (Getting
-    started, Layouts, Shortcuts, Configuration, MPR, 3D, Fusion, Export, Tags,
-    Anonymization, QA/pylinac, technical fusion doc as appendix or excluded).
-  - MkDocs Material theme: search, tabs, dark mode, table of contents depth.
+- [ ] Confirm `site/` is gitignored (`/site` already in `.gitignore`). Do **not**
+  stage generated output. Add `docs/site/` only if a nested config is used.
 - [ ] Pin doc-build dependencies in `requirements-dev.txt` only (`mkdocs`,
-  `mkdocs-material`); document local preview command in this plan's
-  Verification section.
-- [ ] Confirm `user-docs/` cross-links render without broken anchors; run
-  `python scripts/check_user_docs_links.py` after any nav/path tweaks.
+  `mkdocs-material`); document local preview in Verification below.
+- [ ] Add `mkdocs.yml` at repo root with:
+  - `docs_dir: user-docs`
+  - `site_name` matching the product name
+  - `repo_url: https://github.com/kgrizz-git/DICOMViewerV3`
+  - `edit_uri: edit/main/user-docs/` (same repo/branch/path family as
+    `USER_DOCS_GITHUB_PREFIX` / `doc_urls.py` — Constraint 5)
+  - **Navigation** from the hub Topics table in `USER_GUIDE.md`:
+    - **Home / hub** → `USER_GUIDE.md` (this is “Getting started” for the PoC;
+      in-app Quick Start HTML is out-of-tree and is **not** a MkDocs page —
+      mention it in the hub prose only)
+    - Configuration, Layouts, Annotations, Export, Tags, Shortcuts,
+      Anonymization, MPR, 3D, QA/pylinac, Fusion technical doc
+  - MkDocs Material theme: search, dark mode, table of contents depth
+- [ ] After scaffold: run `python scripts/check_user_docs_links.py` (source-tree
+  links). Separately, after `mkdocs build`, **list** dead `../dev-docs/` (and
+  `../CHANGELOG.md`) links in the generated site and record them in A3 — do not
+  treat source-link CI as proof that the site is clean.
 
 ### A2. Evaluate pilot quality
 
-- [ ] Local preview: sidebar discoverability, full-text search, mobile width,
-  code blocks, and heading hierarchy vs flat GitHub rendering.
-- [ ] **Offline bundle:** `mkdocs build` → static `site/`; open `index.html`
-  via `file://` or serve locally; note any assets that require network.
+- [ ] Local preview (`mkdocs serve`): sidebar discoverability, full-text search,
+  mobile width, code blocks, heading hierarchy vs flat GitHub rendering.
+- [ ] **Offline bundle:** `mkdocs build` → static `site/`. Open `index.html`
+  via **`file://`** and confirm (1) pages render and (2) **client-side search
+  works** (Material’s `search_index.json` can fail under `file://` CORS — treat
+  that as a measured finding for the offline/installer argument). Also try a
+  local static server for comparison.
 - [ ] Accessibility spot-check (heading order, contrast in dark mode, keyboard
   nav to search).
 - [ ] Estimate maintainer cost: edit workflow, build time, release packaging
@@ -98,14 +138,19 @@ navigation structure is approved.
 
 ### A3. Pilot exit artifact
 
-- [ ] Write a short **pilot result** section at the bottom of this plan (or a
-  dated note in `dev-docs/doc-assessments/`) with screenshots paths under
-  `tmp/` only — **never commit PHI screenshots**.
-- [ ] Recommendation: **adopt MkDocs locally**, **defer**, or **needs different
-  presentation** (triggers Phase C Mintlify evaluation).
+- [ ] Write a short **Pilot result (Phase A)** section at the bottom of this
+  plan (or a dated note in `dev-docs/doc-assessments/`) with screenshot paths
+  under `tmp/` only — **never commit PHI screenshots**. Cross-ref
+  [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../../PHI_PII_REPOSITORY_GUARDRAILS.md)
+  before any future README/media admit.
+- [ ] Explicitly list cross-boundary / out-of-tree link findings from A1.
+- [ ] **Provisional** recommendation only: lean **adopt MkDocs locally**,
+  **defer**, or **needs different presentation** (Mintlify). Config may be
+  **retained provisionally** or removed; the binding adopt/defer/reject
+  decision is **Phase C**, not A3.
 
-**Exit:** pilot builds reproducibly; recommendation recorded; pilot config
-either removed or retained behind explicit adoption decision (Phase C).
+**Exit:** pilot builds reproducibly; provisional recommendation + known-gap
+list recorded; config retained provisionally or removed pending Phase C.
 
 ---
 
@@ -120,10 +165,17 @@ either removed or retained behind explicit adoption decision (Phase C).
   - `src/gui/`, `src/main_app_*.py`, `main_window_menu_builder.py`
   - `src/utils/config/`, shortcut registration, export/privacy dialogs
   - `resources/help/`, `src/utils/doc_urls.py`
-- [ ] When matched, require **either**:
-  - a change under `user-docs/`, `resources/help/`, or `CHANGELOG.md` (user-visible), **or**
-  - an explicit PR-body declaration: `docs-impact: not needed — <reason>`
-    (parse from `GITHUB_PR_BODY` in CI or `--pr-body-file` locally).
+- [ ] Path matching is intentionally coarse (comment-only edits under `src/gui/`
+  may warn). That is acceptable while advisory.
+- [ ] When matched, **warn and request** (do **not** hard-require until
+  promoted) **either**:
+  - a change under `user-docs/`, `resources/help/`, or `CHANGELOG.md`
+    (user-visible), **or**
+  - an explicit declaration: `docs-impact: not needed — <reason>`
+    - Prefer parsing from `--pr-body-file` or `GITHUB_PR_BODY` in CI
+    - Document that **local/pre-push runs without a PR body** should pass the
+      same line via `--pr-body-file` or a commit/topic note; without it the
+      check only **warns** (exit 0) unless `--strict`
 - [ ] Exit **0** with warnings by default; optional `--strict` for local/pre-push
   use after false-positive review.
 - [ ] Add `tests/test_check_docs_impact.py` with synthetic diffs.
@@ -153,7 +205,8 @@ either removed or retained behind explicit adoption decision (Phase C).
   Phase 2 clears unowned `Baseline` rows.
 
 **Exit:** advisory docs-impact check runs in CI on relevant diffs; tests green;
-maintainers know the `docs-impact:` escape hatch.
+maintainers know the `docs-impact:` escape hatch (PR body **or** local
+`--pr-body-file`).
 
 ---
 
@@ -161,25 +214,37 @@ maintainers know the `docs-impact:` escape hatch.
 
 **Implements:** parent plan [Phase 4–5 adoption gate](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md#phase-4--conditional-externalgenerative-tool-evaluation) in minimal form.
 
-After Phase A pilot and Phase B harness land, record an evidence-backed decision:
+After Phase A pilot and Phase B harness land, record an evidence-backed decision.
+
+**Phase 5 gate inheritance:** a provisional “lean adopt” from A3 is **not**
+sufficient to adopt. C2 must explicitly check parent Phase 5 preconditions
+(inventory assessed or bounded deferred, high-priority accuracy findings owned,
+canonical vs generated/rollback documented, privacy/licensing review, build/link
+checks preserved, maintainer owner/cadence). Slice **2a** still open means any
+MkDocs “adopt” stays **contingent** on that gate — pilot look-and-feel alone
+cannot clear it.
 
 ### C1. Decision matrix
 
 | Criterion | MkDocs Material (local) | Mintlify (hosted, docs-only repo) | Status quo (Markdown + in-app HTML) |
 |-----------|-------------------------|-----------------------------------|-------------------------------------|
 | Professional appearance | Good | Excellent | Adequate in GitHub / plain files |
-| Offline / bundled in installer | Strong | Weaker; export-dependent | Strong for HTML; weak for full guide set |
+| Offline / bundled in installer | Strong (verify `file://` search) | Weaker; export-dependent | Strong for HTML; weak for full guide set |
 | Privacy / repo access | No external access | Requires review + separate repo | No external access |
 | Maintainer cost | Low (pip, local build) | Medium (sync + hosted pipeline) | Lowest |
 | Search / nav | Strong | Strong | Weak without a viewer |
+| Self-contained `user-docs/` | Gap until TO_DO P2 closed | Same content gap | Source links OK in-repo |
 
 ### C2. Record outcome
 
 - [ ] Add a **Platform decision** section to this plan (or a subsection in the
   parent plan) with: **adopt / defer / reject** per candidate, owner, and next
-  action.
+  action — and a checkbox that **parent Phase 5 preconditions** are met or
+  explicitly waived with reason.
 - [ ] If **MkDocs adopted:** add offline bundle step to release docs
-  (`BUILDING_EXECUTABLES.md`); keep generated `site/` gitignored.
+  (`BUILDING_EXECUTABLES.md`); keep generated `site/` gitignored; address or
+  schedule the cross-boundary link gap before shipping a bundled site as
+  “complete.”
 - [ ] If **Mintlify deferred:** document trigger to re-evaluate (e.g. after
   first public release or when a docs-only mirror repo is approved).
 - [ ] Update Next up slot 3 and parent plan Phase 3/4 checkboxes accordingly.
@@ -215,10 +280,12 @@ python -m pytest tests/test_user_docs_links.py tests/test_doc_urls_resolve.py -q
 
 # Phase A (from repo root, after pip install -r requirements-dev.txt)
 mkdocs serve    # local preview
-mkdocs build    # offline site/ artifact
+mkdocs build    # offline site/ artifact (gitignored)
+# Then open site/index.html via file:// and confirm search
 
 # Phase B
 python scripts/check_docs_impact.py
+python scripts/check_docs_impact.py --pr-body-file /path/to/body.txt
 python -m pytest tests/test_check_docs_impact.py -q
 ```
 
@@ -231,13 +298,20 @@ Before adopting MkDocs in CI or release packaging: update
 ## Completion criteria
 
 - [ ] Phase A pilot result recorded; MkDocs builds from current `user-docs/`
-      without moving canonical sources.
+      without moving canonical sources; known dead-link list captured.
 - [ ] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
-- [ ] Phase C platform decision recorded (MkDocs / Mintlify / status quo).
+- [ ] Phase C platform decision recorded (MkDocs / Mintlify / status quo),
+      including Phase 5 gate status.
 - [ ] `HARNESS.md`, `dev-docs/README.md`, and parent workflow plan cross-links
       updated.
 - [ ] Next up slot 3 in `TO_DO.md` updated to point at this plan's status.
 
 When all criteria are met, archive or narrow this plan per
-[`TO_DO.md`](../TO_DO.md) tracking rules and continue standing freshness
+[`TO_DO.md`](../../TO_DO.md) tracking rules and continue standing freshness
 practice in the parent plan.
+
+---
+
+## Pilot result (Phase A)
+
+*(Filled when Phase A exits.)*
