@@ -26,9 +26,9 @@ This plan bundles three related workstreams that were discussed together:
    `user-docs/` with search, sidebar nav, and offline preview.
 2. **Docs-impact sync harness** — advisory automation so UI/help changes surface
    missing documentation updates before merge.
-3. **Platform decision record** — written adopt/defer/reject outcome after the
-   pilot (MkDocs vs Mintlify vs status quo), including privacy and offline
-   bundle implications.
+3. **Platform decision + self-contained user-docs** — close out-of-tree links
+   in Phase C0, then record adopt/defer/reject (MkDocs vs Mintlify vs status
+   quo), including privacy and offline bundle implications.
 
 Human review remains authoritative for user-facing claims. No third-party
 documentation GitHub App on this application repository.
@@ -222,11 +222,12 @@ maintainers know the `docs-impact:` escape hatch (PR body **or** local
 
 ---
 
-## Phase C — Platform decision record
+## Phase C — Self-contained user-docs + platform decision
 
-**Implements:** parent plan [Phase 4–5 adoption gate](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md#phase-4--conditional-externalgenerative-tool-evaluation) in minimal form.
+**Implements:** parent plan [Phase 4–5 adoption gate](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md#phase-4--conditional-externalgenerative-tool-evaluation) in minimal form, **and** the former TO_DO “Make `user-docs/` fully self-contained” item (folded here — not a separate backlog track).
 
-After Phase A pilot and Phase B harness land, record an evidence-backed decision.
+After Phase A pilot and Phase B harness land, **first close the generated-site
+link gap (C0)**, then record an evidence-backed platform decision (C1–C2).
 
 **Phase 5 gate inheritance:** a provisional “lean adopt” from A3 is **not**
 sufficient to adopt. C2 must explicitly check parent Phase 5 preconditions
@@ -234,35 +235,86 @@ sufficient to adopt. C2 must explicitly check parent Phase 5 preconditions
 canonical vs generated/rollback documented, privacy/licensing review, build/link
 checks preserved, maintainer owner/cadence). Slice **2a** still open means any
 MkDocs “adopt” stays **contingent** on that gate — pilot look-and-feel alone
-cannot clear it.
+cannot clear it. **C0 is required regardless** of whether MkDocs is adopted:
+`user-docs/` must not ship relative links that leave the user-docs tree.
+
+### C0. Make `user-docs/` self-contained (required)
+
+Close every out-of-tree relative link listed in the Phase A pilot result. Do
+**not** leave this as a floating TO_DO.
+
+For each link, choose **one** disposition and apply it in the same Phase C
+batch:
+
+| Disposition | When to use |
+|-------------|-------------|
+| **Remove** | Optional “further reading” that is developer-only; replace with one short user-facing sentence if needed |
+| **Rewrite in-place** | User needs the fact — put a brief summary in the guide (no `../dev-docs/` pointer) |
+| **GitHub absolute URL** | Optional deep dive that may stay online-only; must be `https://github.com/...` (not `../`), and prose must say it needs network / is for contributors |
+
+**Inventory to clear (from Phase A build warnings):**
+
+- [ ] `USER_GUIDE.md` → `../CHANGELOG.md` (×2)
+- [ ] `USER_GUIDE.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
+- [ ] `USER_GUIDE_3D.md` → `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md`
+- [ ] `USER_GUIDE_ANONYMIZATION.md` → `../CHANGELOG.md`
+- [ ] `USER_GUIDE_QA_PYLINAC.md` → `../CHANGELOG.md`
+- [ ] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md`
+- [ ] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
+
+**Preferred defaults (unless a better rewrite is obvious):**
+
+- `../CHANGELOG.md` → point at the GitHub `CHANGELOG.md` on `main` **or**
+  “Help → About / release notes on GitHub” without a broken relative path.
+- `../dev-docs/info/...` “further reading” → **remove** or replace with a
+  one-line user summary; keep developer detail only under `dev-docs/`.
+
+**Regression guard (required with C0):**
+
+- [ ] Extend `scripts/check_user_docs_links.py` (or add a sibling check) so
+  Markdown under `user-docs/` **fails** on relative links that escape
+  `user-docs/` (e.g. `](../dev-docs/`, `](../CHANGELOG`, `](../../`). Absolute
+  `https://` links remain allowed. Wire into the existing user-docs CI job.
+- [ ] Re-run `mkdocs build` with **no** “target is not found among documentation
+  files” warnings for those paths; record clean build in C2 notes.
+- [ ] Interactive offline/search smoke deferred from Phase A: open built
+  `site/index.html` via local static server (and `file://` if useful); confirm
+  nav + search behave; note whether `unpkg` iframe-worker still blocks pure
+  `file://` search.
+
+**Exit for C0:** zero escaping relative links under `user-docs/`; CI guard green;
+MkDocs build clean of those warnings; search smoke notes recorded.
 
 ### C1. Decision matrix
 
 | Criterion | MkDocs Material (local) | Mintlify (hosted, docs-only repo) | Status quo (Markdown + in-app HTML) |
 |-----------|-------------------------|-----------------------------------|-------------------------------------|
 | Professional appearance | Good | Excellent | Adequate in GitHub / plain files |
-| Offline / bundled in installer | Strong (verify `file://` search) | Weaker; export-dependent | Strong for HTML; weak for full guide set |
+| Offline / bundled in installer | Strong (verify search after C0) | Weaker; export-dependent | Strong for HTML; weak for full guide set |
 | Privacy / repo access | No external access | Requires review + separate repo | No external access |
 | Maintainer cost | Low (pip, local build) | Medium (sync + hosted pipeline) | Lowest |
 | Search / nav | Strong | Strong | Weak without a viewer |
-| Self-contained `user-docs/` | Gap until TO_DO P2 closed | Same content gap | Source links OK in-repo |
+| Self-contained `user-docs/` | **Must be true after C0** | Same C0 content required | C0 still required for any publish path |
 
 ### C2. Record outcome
 
+- [ ] Confirm **C0 exit** met (self-containment + regression guard + smoke notes).
 - [ ] Add a **Platform decision** section to this plan (or a subsection in the
   parent plan) with: **adopt / defer / reject** per candidate, owner, and next
   action — and a checkbox that **parent Phase 5 preconditions** are met or
   explicitly waived with reason.
 - [ ] If **MkDocs adopted:** add offline bundle step to release docs
-  (`BUILDING_EXECUTABLES.md`); keep generated `site/` gitignored; address or
-  schedule the cross-boundary link gap before shipping a bundled site as
-  “complete.”
+  (`BUILDING_EXECUTABLES.md`); keep generated `site/` gitignored. Do **not**
+  ship a bundled site until C0 is green.
 - [ ] If **Mintlify deferred:** document trigger to re-evaluate (e.g. after
   first public release or when a docs-only mirror repo is approved).
 - [ ] Update Next up slot 3 and parent plan Phase 3/4 checkboxes accordingly.
+- [ ] Remove any remaining “self-contained user-docs” pointer from
+  [`TO_DO.md`](../../TO_DO.md) Documentation once C0 is checked off.
 
-**Exit:** written decision linked from `TO_DO.md` and parent workflow plan; no
-ambiguous "still evaluating" state.
+**Exit:** C0 complete; written platform decision linked from `TO_DO.md` and
+parent workflow plan; no ambiguous "still evaluating" state; no separate
+self-containment backlog item left open.
 
 ---
 
@@ -270,15 +322,17 @@ ambiguous "still evaluating" state.
 
 ```mermaid
 flowchart LR
-  A[Phase A MkDocs PoC] --> C[Phase C Decision record]
-  B[Phase B Sync harness] --> C
-  P[Parent Phase 2 slice 2a] -.-> C
+  A[Phase A MkDocs PoC] --> C0[Phase C0 Self-contain links]
+  B[Phase B Sync harness] --> C0
+  C0 --> C2[Phase C2 Platform decision]
+  P[Parent Phase 2 slice 2a] -.-> C2
 ```
 
 - **Phase A and B can proceed in parallel** (different files; no conflict).
-- **Phase C** requires A's pilot artifact and B's harness at least at advisory
-  CI wiring; parent Phase 2 slice 2a can continue in parallel but should be
-  noted in the decision if accuracy gaps remain.
+- **Phase C0** (self-contain `user-docs/`) runs after A and B and is **required**
+  before C2 adopt/defer — not optional scheduling.
+- Parent Phase 2 slice 2a can continue in parallel but should be noted in the
+  C2 decision if accuracy gaps remain.
 
 ---
 
@@ -290,10 +344,10 @@ python scripts/check_user_docs_links.py
 python scripts/check_doc_feature_coverage.py
 python -m pytest tests/test_user_docs_links.py tests/test_doc_urls_resolve.py -q
 
-# Phase A (from repo root, after pip install -r requirements-dev.txt)
-mkdocs serve    # local preview
-mkdocs build    # offline site/ artifact (gitignored)
-# Then open site/index.html via file:// and confirm search
+# Phase A / C0 verification
+python scripts/check_user_docs_links.py
+# After C0: also assert no escaping relative links (exact flag TBD when implemented)
+mkdocs build    # must be clean of ../dev-docs and ../CHANGELOG warnings
 
 # Phase B
 python scripts/check_docs_impact.py
@@ -312,10 +366,12 @@ Before adopting MkDocs in CI or release packaging: update
 - [x] Phase A pilot result recorded; MkDocs builds from current `user-docs/`
       without moving canonical sources; known dead-link list captured.
 - [ ] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
-- [ ] Phase C platform decision recorded (MkDocs / Mintlify / status quo),
-      including Phase 5 gate status.
+- [ ] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
+      guard + offline/search smoke notes.
+- [ ] Phase C2: platform decision recorded (MkDocs / Mintlify / status quo),
+      including Phase 5 gate status; no separate self-containment TO_DO left.
 - [x] `HARNESS.md`, `dev-docs/README.md`, and parent workflow plan cross-links
-      updated.
+      updated (refresh again when C0/C2 land).
 - [x] Next up slot 3 in `TO_DO.md` updated to point at this plan's status.
 
 When all criteria are met, archive or narrow this plan per
@@ -385,8 +441,8 @@ Also out-of-tree by design: in-app Quick Start
 ### Provisional recommendation (not Phase C)
 
 **Lean adopt MkDocs Material locally** as the end-user docs viewer/offline-bundle
-path, **contingent on** parent Phase 5 (including Phase 2 slice 2a accuracy) and
-closing or explicitly scheduling the self-contained `user-docs/` gap.
+path, **contingent on** Phase **C0** (self-contained `user-docs/`), parent Phase 5
+(including Phase 2 slice 2a accuracy), and C2’s binding decision.
 
 **Do not** connect Mintlify (or any hosted doc app) to this repository on the
 basis of this pilot. Revisit Mintlify only if Material’s presentation is
