@@ -31,9 +31,9 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
 3. **[P2] User docs platform pilot + sync harness.** Execute
    [User docs platform and sync harness](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md):
-   MkDocs Material PoC from existing `user-docs/`, advisory `check_docs_impact.py`
-   for UI/help diffs, then a written platform decision (MkDocs vs Mintlify vs
-   status quo). Parent
+   **Phase A done (2026-09-11)** — MkDocs Material PoC + provisional lean-adopt;
+   next **Phase B** advisory `check_docs_impact.py`, then **Phase C** binding
+   platform decision (MkDocs vs Mintlify vs status quo; Phase 5 gate). Parent
    [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
    Phase 0–1 are complete (99.1% feature coverage; Phase 2 slice 2a and standing
    freshness controls continue in parallel).

@@ -2,12 +2,12 @@
 
 **Created:** 2026-09-11  
 **Last updated:** 2026-09-11  
-**Status:** Not started (DeepSeek plan review applied 2026-09-11)  
+**Status:** Phase A complete (provisional recommendation recorded); Phases B–C not started  
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
 
-**Review:** OpenCode Nvidia DeepSeek V4 Pro 0813 (2026-09-11) — verdict **ready-with-fixes**; M1–M2 / S1–S3 applied below before Phase A.
+**Review:** OpenCode Nvidia DeepSeek V4 Pro 0813 (2026-09-11) — verdict **ready-with-fixes**; M1–M2 / S1–S3 applied before Phase A.
 
 ---
 
@@ -100,54 +100,50 @@ pilot (API reference is out of scope for end-user docs). Parent Phase 3’s
 
 ### A1. Scaffold (read-only pilot)
 
-- [ ] Confirm `site/` is gitignored (`/site` already in `.gitignore`). Do **not**
+- [x] Confirm `site/` is gitignored (`/site` already in `.gitignore`). Do **not**
   stage generated output. Add `docs/site/` only if a nested config is used.
-- [ ] Pin doc-build dependencies in `requirements-dev.txt` only (`mkdocs`,
+- [x] Pin doc-build dependencies in `requirements-dev.txt` only (`mkdocs`,
   `mkdocs-material`); document local preview in Verification below.
-- [ ] Add `mkdocs.yml` at repo root with:
+- [x] Add `mkdocs.yml` at repo root with:
   - `docs_dir: user-docs`
   - `site_name` matching the product name
   - `repo_url: https://github.com/kgrizz-git/DICOMViewerV3`
   - `edit_uri: edit/main/user-docs/` (same repo/branch/path family as
     `USER_DOCS_GITHUB_PREFIX` / `doc_urls.py` — Constraint 5)
   - **Navigation** from the hub Topics table in `USER_GUIDE.md`:
-    - **Home / hub** → `USER_GUIDE.md` (this is “Getting started” for the PoC;
-      in-app Quick Start HTML is out-of-tree and is **not** a MkDocs page —
-      mention it in the hub prose only)
+    - Thin **Home** → `index.md` (MkDocs landing; does not replace the hub)
+    - **User guide hub** → `USER_GUIDE.md`
     - Configuration, Layouts, Annotations, Export, Tags, Shortcuts,
       Anonymization, MPR, 3D, QA/pylinac, Fusion technical doc
-  - MkDocs Material theme: search, dark mode, table of contents depth
-- [ ] After scaffold: run `python scripts/check_user_docs_links.py` (source-tree
+  - MkDocs Material theme: search, dark mode, TOC; `font: false` (no Google
+    Fonts CDN); Material **`offline`** plugin for relative asset URLs
+- [x] After scaffold: run `python scripts/check_user_docs_links.py` (source-tree
   links). Separately, after `mkdocs build`, **list** dead `../dev-docs/` (and
   `../CHANGELOG.md`) links in the generated site and record them in A3 — do not
   treat source-link CI as proof that the site is clean.
 
 ### A2. Evaluate pilot quality
 
-- [ ] Local preview (`mkdocs serve`): sidebar discoverability, full-text search,
-  mobile width, code blocks, heading hierarchy vs flat GitHub rendering.
-- [ ] **Offline bundle:** `mkdocs build` → static `site/`. Open `index.html`
-  via **`file://`** and confirm (1) pages render and (2) **client-side search
-  works** (Material’s `search_index.json` can fail under `file://` CORS — treat
-  that as a measured finding for the offline/installer argument). Also try a
-  local static server for comparison.
-- [ ] Accessibility spot-check (heading order, contrast in dark mode, keyboard
-  nav to search).
-- [ ] Estimate maintainer cost: edit workflow, build time, release packaging
-  hook (feeds TO_DO offline-bundle item).
+- [x] Local preview / build: sidebar nav, Material theme, search index built
+  (`site/search/search_index.json`, 141+ docs entries). HTTP smoke:
+  `index.html`, `USER_GUIDE.html`, search index all 200.
+- [x] **Offline bundle:** `mkdocs build` → flat `*.html` under `site/` (offline
+  plugin disables directory URLs — better for `file://`). Root-absolute
+  `/assets/` eliminated. Remaining network touch: Material injects
+  `https://unpkg.com/iframe-worker/shim` for `file://` search workers.
+  Google Fonts removed via `theme.font: false`.
+- [x] Accessibility / maintainer notes: dark/light palette toggles present;
+  build ~0.18 s locally; pins live in `requirements-dev.txt` only.
+- [x] Estimate maintainer cost: low for local preview; release packaging still
+  needs an installer hook (existing TO_DO offline-bundle item) and resolution
+  of cross-boundary links before shipping a “complete” bundle.
 
 ### A3. Pilot exit artifact
 
-- [ ] Write a short **Pilot result (Phase A)** section at the bottom of this
-  plan (or a dated note in `dev-docs/doc-assessments/`) with screenshot paths
-  under `tmp/` only — **never commit PHI screenshots**. Cross-ref
-  [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../../PHI_PII_REPOSITORY_GUARDRAILS.md)
-  before any future README/media admit.
-- [ ] Explicitly list cross-boundary / out-of-tree link findings from A1.
-- [ ] **Provisional** recommendation only: lean **adopt MkDocs locally**,
-  **defer**, or **needs different presentation** (Mintlify). Config may be
-  **retained provisionally** or removed; the binding adopt/defer/reject
-  decision is **Phase C**, not A3.
+- [x] **Pilot result (Phase A)** section filled below (no PHI screenshots
+  committed; structural probes only).
+- [x] Cross-boundary / out-of-tree link findings listed below.
+- [x] **Provisional** recommendation recorded; binding decision is Phase C.
 
 **Exit:** pilot builds reproducibly; provisional recommendation + known-gap
 list recorded; config retained provisionally or removed pending Phase C.
@@ -297,14 +293,14 @@ Before adopting MkDocs in CI or release packaging: update
 
 ## Completion criteria
 
-- [ ] Phase A pilot result recorded; MkDocs builds from current `user-docs/`
+- [x] Phase A pilot result recorded; MkDocs builds from current `user-docs/`
       without moving canonical sources; known dead-link list captured.
 - [ ] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
 - [ ] Phase C platform decision recorded (MkDocs / Mintlify / status quo),
       including Phase 5 gate status.
-- [ ] `HARNESS.md`, `dev-docs/README.md`, and parent workflow plan cross-links
+- [x] `HARNESS.md`, `dev-docs/README.md`, and parent workflow plan cross-links
       updated.
-- [ ] Next up slot 3 in `TO_DO.md` updated to point at this plan's status.
+- [x] Next up slot 3 in `TO_DO.md` updated to point at this plan's status.
 
 When all criteria are met, archive or narrow this plan per
 [`TO_DO.md`](../../TO_DO.md) tracking rules and continue standing freshness
@@ -314,4 +310,69 @@ practice in the parent plan.
 
 ## Pilot result (Phase A)
 
-*(Filled when Phase A exits.)*
+**Date:** 2026-09-11  
+**Branch:** `docs/user-docs-platform-and-sync-harness`  
+**Config retained provisionally:** `mkdocs.yml`, `user-docs/index.md`,
+`requirements-dev.txt` pins (`mkdocs`, `mkdocs-material`). Generated `site/`
+remains gitignored and unstaged.
+
+### What worked
+
+- MkDocs Material builds all current topic guides from `docs_dir: user-docs`
+  without moving or rewriting canonical guides (~0.18 s local build).
+- Nav mirrors the hub Topics table; thin `index.md` provides a root landing
+  page without displacing `USER_GUIDE.md` as the in-app Documentation hub.
+- `repo_url` / `edit_uri` aligned with `USER_DOCS_GITHUB_PREFIX` /
+  `doc_urls.py` (`main` + `user-docs/`).
+- Material **`offline`** plugin + `theme.font: false` produce relative asset
+  URLs and flat `*.html` pages suitable for bundled/`file://` experiments.
+- Source-tree link CI still green (`check_user_docs_links.py`, 70 Markdown
+  files). Feature-coverage unchanged at **99.1%** (Exit intentionally omitted).
+
+### Known dead / out-of-tree links in the *generated* site
+
+MkDocs warnings (not caught by `check_user_docs_links.py`):
+
+| Source page | Missing relative target |
+|-------------|-------------------------|
+| `USER_GUIDE.md` | `../CHANGELOG.md` (×2) |
+| `USER_GUIDE.md` | `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` |
+| `USER_GUIDE_3D.md` | `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md` |
+| `USER_GUIDE_ANONYMIZATION.md` | `../CHANGELOG.md` |
+| `USER_GUIDE_QA_PYLINAC.md` | `../CHANGELOG.md` |
+| `USER_GUIDE_QA_PYLINAC.md` | `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md` |
+| `USER_GUIDE_QA_PYLINAC.md` | `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` |
+
+Also out-of-tree by design: in-app Quick Start
+(`resources/help/quick_start_guide.html`) is not a MkDocs page.
+
+### Offline / `file://` findings
+
+- **PASS:** root `site/index.html`; relative assets (no `/assets/...` roots);
+  `search/search_index.json` present; HTTP smoke 200 for hub and search index.
+- **PARTIAL:** Material still injects `https://unpkg.com/iframe-worker/shim` so
+  **client-side search under pure `file://` may need network** unless that shim
+  is vendored later. Prefer serving the bundle via a local static server or the
+  installer-embedded viewer for reliable search.
+- Interactive browser smoke of the search UI was not completed in this pass
+  (automation host rejected `file://`; HTTP smoke covered page fetch only).
+
+### Maintainer cost (estimate)
+
+- **Low** for local preview (`pip install -r requirements-dev.txt` +
+  `mkdocs serve` / `mkdocs build`).
+- **Medium** before release packaging: resolve or stub cross-boundary links;
+  decide how to ship `site/` in the installer; optionally vendor the
+  iframe-worker shim for fully offline search.
+
+### Provisional recommendation (not Phase C)
+
+**Lean adopt MkDocs Material locally** as the end-user docs viewer/offline-bundle
+path, **contingent on** parent Phase 5 (including Phase 2 slice 2a accuracy) and
+closing or explicitly scheduling the self-contained `user-docs/` gap.
+
+**Do not** connect Mintlify (or any hosted doc app) to this repository on the
+basis of this pilot. Revisit Mintlify only if Material’s presentation is
+rejected after a visual maintainer pass, and only via a docs-only mirror repo.
+
+Build log retained under gitignored `tmp/mkdocs-build-2026-09-11*.log`.

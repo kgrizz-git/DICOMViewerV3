@@ -1,0 +1,76 @@
+# MkDocs Material pilot for end-user docs (Phase A).
+# Canonical sources remain under user-docs/; this file only configures rendering.
+# Generated output: site/ (gitignored). Do not treat the site as editable source.
+#
+# Preview:  mkdocs serve
+# Build:    mkdocs build
+#
+# repo_url / edit_uri align with USER_DOCS_GITHUB_PREFIX in src/utils/doc_urls.py
+# (same repo, main branch, user-docs/ paths).
+
+site_name: DICOM Viewer V3
+site_description: End-user documentation for DICOM Viewer V3
+docs_dir: user-docs
+site_dir: site
+
+repo_url: https://github.com/kgrizz-git/DICOMViewerV3
+edit_uri: edit/main/user-docs/
+
+theme:
+  name: material
+  # Avoid Google Fonts CDN so offline/file:// bundles do not depend on network.
+  font: false
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - toc.follow
+
+plugins:
+  - search
+  # Rewrites asset URLs for file:// / bundled offline use (pilot A2 requirement).
+  - offline
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+# Navigation mirrors USER_GUIDE.md Topics table.
+# Landing index.md is a thin hub pointer (does not replace USER_GUIDE.md).
+# In-app Quick Start HTML is out-of-tree (resources/help/quick_start_guide.html).
+nav:
+  - Home: index.md
+  - User guide hub: USER_GUIDE.md
+  - Configuration: CONFIGURATION.md
+  - Layouts & navigation: USER_GUIDE_LAYOUTS.md
+  - Measurements & annotations: USER_GUIDE_ANNOTATIONS.md
+  - Export: USER_GUIDE_EXPORT.md
+  - DICOM tags: USER_GUIDE_TAGS.md
+  - Keyboard shortcuts: USER_GUIDE_SHORTCUTS.md
+  - Anonymization: USER_GUIDE_ANONYMIZATION.md
+  - MPR: USER_GUIDE_MPR.md
+  - 3D volume rendering: USER_GUIDE_3D.md
+  - Automated QA (pylinac): USER_GUIDE_QA_PYLINAC.md
+  - Image fusion (technical): IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md

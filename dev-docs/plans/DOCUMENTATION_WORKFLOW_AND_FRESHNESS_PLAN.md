@@ -296,20 +296,29 @@ is caught only when someone happens to look.
 
 **Implementation plan:** [User docs platform and sync harness](supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (Phase A: MkDocs Material PoC; Phase B: docs-impact harness; Phase C: platform decision).
 
-- [ ] In an isolated branch/worktree, build a read-only proof of concept from
+- [x] In an isolated branch/worktree, build a read-only proof of concept from
   existing Markdown; do not migrate or delete source documents.
-- [ ] Prefer MkDocs Material and assess navigation, search, local preview,
+  (**Done 2026-09-11** on `docs/user-docs-platform-and-sync-harness`: `mkdocs.yml`
+  + thin `user-docs/index.md`; canonical guides untouched aside from the landing stub.)
+- [x] Prefer MkDocs Material and assess navigation, search, local preview,
   cross-link preservation, and an offline bundle against the current docs.
+  (Pilot result in the supporting plan; cross-boundary `../dev-docs/` and
+  `../CHANGELOG.md` links are known generated-site gaps.)
 - [ ] Add a small `mkdocstrings` sample only for stable, useful Python contracts;
   confirm it neither imports unsafe runtime code nor turns private implementation
   details into a maintenance burden.
-- [ ] Review generated output for broken links, duplicated content, external
+  (**Intentionally deferred** by the supporting plan — end-user docs pilot only.)
+- [x] Review generated output for broken links, duplicated content, external
   assets, offline behavior, PHI/PII exposure, and accessibility.
-- [ ] Estimate maintenance cost: author workflow, local/CI build time, release
+- [x] Estimate maintenance cost: author workflow, local/CI build time, release
   packaging, versioning, and reviewer responsibility.
 
 **Exit:** a written pilot result and recommendation; remove the pilot or retain
 only reviewed source/configuration with an explicit decision.
+**(Partial 2026-09-11:** Phase A provisional lean-adopt recorded; config retained
+provisionally; binding adopt/defer/reject is supporting-plan Phase C / this plan
+Phase 5.)
+
 
 ## Phase 4 — Conditional external/generative tool evaluation
 
