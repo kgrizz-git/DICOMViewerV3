@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-10
+**Last updated:** 2026-09-11
 
 ---
 
@@ -29,8 +29,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-3. **Split the Features and UX sections by theme** — those two hold ~60% of the backlog and are the main thing still hard to read — [UX / Workflow](#ux--workflow)
-4. **[P2] Evaluate a documentation-generation workflow.** Phase 0–1 of the
+3. **[P2] Evaluate a documentation-generation workflow.** Phase 0–1 of the
    [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
    plan are complete (inventory, triage, first-slice accuracy audit, high-risk
    docstring pass). **Pass 1 (2026-09-05)** closed the remaining non-omit
@@ -135,63 +134,115 @@ Release blockers (license compliance, versioned executables) live in
 
 ## UX / Workflow
 
+### Menus, toolbar, settings & commands
+
 - [ ] **[P2]** **Consider moving remaining export actions from Tools to the File menu** (consistency). **Export DICOM Tags…** now lives under File (see [Tag Export UX Improvements](plans/completed/TAG_EXPORT_UX_IMPROVEMENTS.md)). This item covers **Export ROI Statistics…** (`export_roi_stats_action`) still under **Tools**, and whether remaining/future exports should sit in a **File → Export ▸** submenu so File does not get crowded. Keep keyboard shortcuts and update `user-docs` accordingly. Surfaced 2026-06-16.
+
+- [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/supporting/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
+
+- [ ] **[P2]** Make a Settings menu for grouping lots of options? — **Partial:** **Edit → Settings…** centralizes accent, toolbar style, W/L preset link, study-index path/auto-add; many options remain under View/File/Tools dialogs.
+
+- [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs. — **Partial:** per-analysis ACR CT/MRI dialogs + `qa_pylinac_config.py` only; no central Pylinac settings dialog.
+
+### Metadata panel, tag tree & tag panels
 
 - [ ] **[P2]** **Tag tree — tier orientation & navigation backbone (Phase C):** tier language / mono / filter highlight / dimmed empties on the **metadata panel**; export gets **navigation only** (Expand/Collapse etc.), because the Phase B appearance gate chose **(c) none** — no rich export chrome. Depends on completed Phase B. **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Plan:** [Tier orientation & nav](plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md).
 
-- [ ] **[P2]** **Pane focus & toolbar active-state visual cues:** restrained accent treatment for active toolbar toggles; focused image pane accent frame (start with frame only). Split out of tag-tree investigation (P4/C3) — wrong scope for that branch. **Plan:** [Pane & toolbar state visual](plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md). **Investigation (origin):** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md). **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md).
+- [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
+
+- [ ] **[P2]** Allow showing DICOM tags for more than just the focused window in the left pane: support up to 4 tag panels, where each panel can be assigned either to a fixed window or to follow whichever window is currently focused
+
+### Overlays, sliders & viewport text
 
 - [ ] **[P1]** **Overlay slice/frame/instance position labels (remaining):** Phase 1 shipped 2026-06-03 — the `Slice X/Y` numerator is the loaded-stack position with an `(Instance N)` suffix only when the DICOM `InstanceNumber` differs, so incoherent fractions like `Slice 104/11` can no longer occur (`tests/test_overlay_position_labels.py` green). Remaining (deferred/optional): cine readout alignment (Phase 2 T8, tracked with cine-axis item) and optional `overlay_position_label_mode` preference (Phase 3); unify frame vs instance vs slice wording per [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md#differentiating-frame--vs-slice--vs-instance-). **Plan:** [Overlay position labels](plans/supporting/OVERLAY_SLICE_FRAME_POSITION_LABEL_PLAN.md). **Related:** [Multi-frame instance navigation (completed)](plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md), [In-window slice/frame slider polish](plans/supporting/IN_WINDOW_SLICE_FRAME_SLIDER_POLISH_PLAN.md), [Cine playback axes](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md), scroll-by-IPP item under Features (Near-Term) below.
+
 - [ ] **[P2]** **In-window slider vs overlays:** narrow the bar further and/or compute inset geometry so the slider track does not overlap **corner metadata overlays** or **direction / scale-marker** labels (today fixed 50% centering can still collide on dense layouts). **Plan:** [In-window slice/frame slider polish](plans/supporting/IN_WINDOW_SLICE_FRAME_SLIDER_POLISH_PLAN.md) Phase 3b.
+
 - [ ] **[P2]** **Scale overlay / annotation / ROI text with viewport size and layout.** Today text is a fixed point size regardless of how narrow a pane is, so side-by-side layouts crowd or clip it. Use the 1-window layout size as **nominal** and scale **sub-linearly** as horizontal pane size shrinks (a floor is needed — text must stay readable, and clinical labels must never become illegible). Alternative or complementary approach: **collision detection**, scaling down only when overlay text would actually overlap other text or chrome. Decide between size-driven and collision-driven before implementing; collision-driven is more precise but harder to keep stable across resize. **Related:** in-window slider vs overlays item above (same collision surface). Added 2026-08-23.
-- [ ] **[P2]** **Histogram window should stay above the main window, not fall behind it.** Clicking back onto the main window drops the histogram behind it, so the user has to re-raise it to keep watching values while navigating. `HistogramDialog` is a non-modal `QDialog` parented to `main_window` with **no window flags set** (`histogram_dialog.py:116` only calls `setModal(False)`), which is exactly the configuration that lets a child dialog sink behind its parent on macOS. Candidate fix: `Qt.WindowType.Tool` (stays above its parent, does not float above unrelated apps) rather than `WindowStaysOnTopHint`, which would sit above everything system-wide. Verify on macOS *and* Windows — the two platforms differ here — and check the other non-modal dialogs for the same problem. Added 2026-08-23.
-- [ ] **[P0/P1/P2]** Address UX assessment findings (icons, toolbar overflow, shortcut conflicts, splitter handles, menu reorganization, design system) — **Plan:** [UX Assessment Remediation & Design System Plan](plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md); **Design spec:** [DESIGN.md](../DESIGN.md); **Assessment summary:** [ux-summary.md](ux-assessments/ux-summary.md). Start with Part A (design system / DESIGN.md) before implementing any visual fixes.
-- [ ] **[P2]** **App-name string consistency (B8):** the window title, About box, and string literals use slightly different forms ("DICOM Viewer V3", "DICOMViewerV3", etc.). Decide on the canonical product name and do a search-and-replace pass across UI strings, docs, and metadata.
-- [ ] **[P2]** **User-selectable icon sets (F5):** allow the user to choose between icon themes (e.g. Tabler vs Material) from Settings; low priority, defer until a second icon set exists.
-- [ ] **[P2]** Make an "ultra-dark" or "black" theme as a new option - similar to current dark there but all greys get darker
-- [ ] **[P2]** **Show/hide key objects, key images, DICOM annotations, and presentation states.** Add a control (toggle/menu) to show or hide **Key Object Selection (KO)**, **key images**, **DICOM annotations**, and **Presentation States (GSPS/PR)** overlays. Make it **clearly indicated when they are shown vs hidden**, and **where each comes from** (a separate DICOM file vs the same image as the base vs an app-generated add-on). **Related:** [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md); folder/file map item below (dependency display).
-- [ ] **[P2]** **Folder / loaded-files map dialog.** Add a dialog showing a table or map of either a chosen **folder** or the **currently loaded files**, with columns for **modality, series number, accession number, number of frames** (if multiframe), and **any dependency or link between files** — e.g. when a **PR (Presentation State)** or **KO (Key Object)** is stored as a separate file but references/displays an image from another file. Should make cross-file references explicit. **Related:** show/hide KO/PR item above; [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).
-- [ ] **[P2]** **Study index — relative file paths:** consider storing paths relative to a user-chosen root (or index folder) so index + DICOM tree can live on a USB/removable drive; define rebind rules when drive letter or mount point changes
-- [ ] **[P2]** Make the study index encryption passphrase user-configurable (currently auto-generated and stored only in the OS credential store; user has no way to set or export it within the app itself) — **Partial:** OS credential store only (`keyring_storage.py`); no in-app passphrase UI.
-- [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
+
 - [ ] **[P2]** Give option (on by default) to suppress certain tag names (not values) on overlay - StudyDescription, SeriesDescription, InstitutionName, PatientName; abbreviate ImagePositionPatient as IPP and ImageOrientationPatient as IOP.
+
+### Dialogs, themes & design system
+
+- [ ] **[P2]** **Histogram window should stay above the main window, not fall behind it.** Clicking back onto the main window drops the histogram behind it, so the user has to re-raise it to keep watching values while navigating. `HistogramDialog` is a non-modal `QDialog` parented to `main_window` with **no window flags set** (`histogram_dialog.py:116` only calls `setModal(False)`), which is exactly the configuration that lets a child dialog sink behind its parent on macOS. Candidate fix: `Qt.WindowType.Tool` (stays above its parent, does not float above unrelated apps) rather than `WindowStaysOnTopHint`, which would sit above everything system-wide. Verify on macOS *and* Windows — the two platforms differ here — and check the other non-modal dialogs for the same problem. Added 2026-08-23.
+
+- [ ] **[P0/P1/P2]** Address UX assessment findings (icons, toolbar overflow, shortcut conflicts, splitter handles, menu reorganization, design system) — **Plan:** [UX Assessment Remediation & Design System Plan](plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md); **Design spec:** [DESIGN.md](../DESIGN.md); **Assessment summary:** [ux-summary.md](ux-assessments/ux-summary.md). Start with Part A (design system / DESIGN.md) before implementing any visual fixes.
+
+- [ ] **[P2]** **App-name string consistency (B8):** the window title, About box, and string literals use slightly different forms ("DICOM Viewer V3", "DICOMViewerV3", etc.). Decide on the canonical product name and do a search-and-replace pass across UI strings, docs, and metadata.
+
+- [ ] **[P2]** **User-selectable icon sets (F5):** allow the user to choose between icon themes (e.g. Tabler vs Material) from Settings; low priority, defer until a second icon set exists.
+
+- [ ] **[P2]** Make an "ultra-dark" or "black" theme as a new option - similar to current dark there but all greys get darker
+
+- [ ] **[P1]** Make separators, borders, etc thinner to reclaim real estate
+
+- [ ] **[P2]** **Pane focus & toolbar active-state visual cues:** restrained accent treatment for active toolbar toggles; focused image pane accent frame (start with frame only). Split out of tag-tree investigation (P4/C3) — wrong scope for that branch. **Plan:** [Pane & toolbar state visual](plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md). **Investigation (origin):** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md). **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md).
+
+### KO / PR / annotations & file map
+
+- [ ] **[P2]** **Show/hide key objects, key images, DICOM annotations, and presentation states.** Add a control (toggle/menu) to show or hide **Key Object Selection (KO)**, **key images**, **DICOM annotations**, and **Presentation States (GSPS/PR)** overlays. Make it **clearly indicated when they are shown vs hidden**, and **where each comes from** (a separate DICOM file vs the same image as the base vs an app-generated add-on). **Related:** [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md); folder/file map item below (dependency display).
+
+- [ ] **[P2]** **Folder / loaded-files map dialog.** Add a dialog showing a table or map of either a chosen **folder** or the **currently loaded files**, with columns for **modality, series number, accession number, number of frames** (if multiframe), and **any dependency or link between files** — e.g. when a **PR (Presentation State)** or **KO (Key Object)** is stored as a separate file but references/displays an image from another file. Should make cross-file references explicit. **Related:** show/hide KO/PR item above; [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).
+
+### Study index UI
+
+- [ ] **[P2]** **Study index — relative file paths:** consider storing paths relative to a user-chosen root (or index folder) so index + DICOM tree can live on a USB/removable drive; define rebind rules when drive letter or mount point changes
+
+- [ ] **[P2]** Make the study index encryption passphrase user-configurable (currently auto-generated and stored only in the OS credential store; user has no way to set or export it within the app itself) — **Partial:** OS credential store only (`keyring_storage.py`); no in-app passphrase UI.
+
+- [ ] **[P2]** Allow filtering of columns in study index (some, anyway) and sorting — **Partial:** FTS5 "search all text" + per-field filters + movable columns; column filter/sort not implemented.
+
+### SR browsing & MPR workspace
+
 - [ ] **[P0]** Full-fidelity Structured Report browsing: dynamic `ContentSequence` tree (all value types), template-aware **RDSR** views with **per-event** rows (fluoroscopy / TID 10003 family), registry for major **SR SOP classes**, not only the fixed dose-summary table or flat tags. **Partial:** `StructuredReportBrowserDialog`, `sr_document_tree.py`, RDSR per-event table, dose/CT tabs, JSON/CSV/XLSX export, Tools menu entry shipped; gaps: lazy tree model, extra template plugins (TID 1500/CAD), rich SCOORD/WAVEFORM presentation, highdicom backend. **Plan:** [SR full fidelity browser](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md).
+
 - [ ] **[P1]** Expand Structured Report support beyond dose SR: classify major SR families more clearly in UI/status, identify text-centric / radiologist-style SRs when possible, and add a roadmap for report-specific handling (narrative sections, KO/CAD/procedure-log workflows, measurement-report plugins) while preserving generic tree fallback. **Plan:** [SR expanded support](plans/supporting/SR_EXPANDED_SUPPORT_PLAN.md).
+
 - [ ] **[P1]** Allow MPRs to be loaded to multiple windows, and allow more than one MPR to be constructed and detached. **Plan:** [MPR multi-window + multiple detached](plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#mpr-multi-window-detached).
+
 - [ ] **[P2]** When the MPR builder dialog opens, include a control for choosing which window to assign the new MPR to, instead of always using whichever window is focused when the user launches the dialog
+
 - [ ] **[P2]** **Text/arrow annotations on MPR + right-pane "Combine Slices" for MPR.** Enable text and arrow annotations on MPR subwindows (slice-scoped, navigator/focus parity with non-MPR views) and let the right-panel **Combine Slices** control (AIP/MIP/MinIP, slice count) drive MPR slab preview without reopening the Create MPR dialog. **Plan:** [MPR annotations + right-pane combine slices](plans/MPR_ANNOTATIONS_AND_RIGHT_PANE_COMBINE_SLICES_PLAN.md). Surfaced 2026-08-11.
+
 - [ ] **[P2]** If a series's first image is totally empty (or perhaps has less than 0.1% contrast or something), instead of using that for the thumbnail in the navigator, use the middle image of the series. **Plan:** [Navigator thumbnail fallback](plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#navigator-thumbnail-fallback).
-- [ ] **[P2]** Make toolbar contents and ordering customizable ([plan](plans/supporting/UX_IMPROVEMENTS_BATCH1_PLAN.md#2-toolbar-customization))
+
+### Image interaction & loading
+
 - [ ] **[P2]** Improve discoverability/documentation of existing window/level drag interaction ([plan](plans/supporting/UX_IMPROVEMENTS_BATCH1_PLAN.md#3-alternative-windowlevel-interaction))
+
 - [ ] **[P1]** Set min/max window width/level using min/max pixel value possible (raw or rescaled) based on bit depth ([plan](plans/supporting/UX_IMPROVEMENTS_BATCH1_PLAN.md#4-minmax-windowlevel-from-bit-depth))
+
 - [ ] **[P2]** Follow-up for multi-frame instance navigation: audit ROI / measurement / annotation / cine / projection code paths that use `current_slice_index` as slice identity before attempting bounded per-instance scrolling — **Partial:** Tiers 1–2 + "Show Instances Separately" shipped per [MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md](plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md); this item is the pre-scroll audit/follow-up. **Related:** [Overlay position labels](plans/supporting/OVERLAY_SLICE_FRAME_POSITION_LABEL_PLAN.md).
-- [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
+
 - [ ] **[P2]** Consider more sophisticated smoothing (PIL/NumPy) vs Qt-only scaling
+
 - [ ] **[P1]** Make the large-file warning (and any related file handling checks) trigger for >50 MB instead of 25 MB ([plan](plans/supporting/NAVIGATOR_AND_FILE_LOADING_FEEDBACK_PLAN.md#3-large-file-warning-threshold-50-mb)) - *NOTE: maybe hold off on this for now - 50 might be too high?*
+
+### Layout, export & cine
+
+- [ ] **[P2]** Make right pane minimum width before collapsing 250 instead of 200
+
 - [ ] **[P2]** Allow further subdivision of subwindows into up to 4 "tiles"? ([plan](plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md#1-subwindow-further-subdivision-up-to-4-tiles))
+
 - [ ] **[P2]** When exporting PNG or JPG, allow anonymization and make using embedded window/level the default option ([plan](plans/supporting/EXPORT_PRIVACY_AND_WL_DEFAULT_PLAN.md#goal)) — **Partial:** DICOM export supports anonymize; PNG/JPG anonymize not implemented; PNG/JPG W/L defaults to current viewer W/L, not embedded dataset W/L.
+
 - [ ] **[P2]** Make default pixel size and slice thickness more reasonable and make editing them easier (default to 1.0 mm, 1.0 mm?)
-- [ ] **[P2]** Make a Settings menu for grouping lots of options? — **Partial:** **Edit → Settings…** centralizes accent, toolbar style, W/L preset link, study-index path/auto-add; many options remain under View/File/Tools dialogs.
-- [ ] **[P2]** Consider a dedicated **Pylinac Configuration...** menu/dialog if more persisted QA customization options are added (likely), so pylinac/site defaults do not keep expanding the per-analysis Tools dialogs. — **Partial:** per-analysis ACR CT/MRI dialogs + `qa_pylinac_config.py` only; no central Pylinac settings dialog.
+
 - [ ] **[P2]** Allow dragging window dividers to make unequal divisions ([implementation notes](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md#1-unequal-divisions-between-image-panes))
+
 - [ ] **[P1]** Differentiate between frames, instances, and slices in the **cine player** (playback axis modes, not just labels) — [implementation notes](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md#2-frames-instances-and-slices-in-the-cine-player). **Partial:** multi-frame corner overlay labels shipped (Tier 1–2); cine player still slice-index oriented. **Corner overlay / stack numbering (incl. `Slice 104/11` fix):** [Overlay position labels](plans/supporting/OVERLAY_SLICE_FRAME_POSITION_LABEL_PLAN.md).
     - [ ] **[P2]** Confirm and document which tag drives cine frame rate (`CineRate` vs `FrameTime` vs `RecommendedDisplayFrameRate`) and the fallback when absent.
-- [ ] **[P1]** Should we block showing DICOM tags when an MPR window is selected (show just "MPR")? Or add some kind of warning that it is the underlying series data somehow?
-- [ ] **[P2]** Allow showing DICOM tags for more than just the focused window in the left pane: support up to 4 tag panels, where each panel can be assigned either to a fixed window or to follow whichever window is currently focused
-- [ ] **[P2]** Allow filtering of columns in study index (some, anyway) and sorting — **Partial:** FTS5 "search all text" + per-field filters + movable columns; column filter/sort not implemented.
 
 ## Features (Near-Term)
 
-- [ ] **[P2]** **General DICOM tag editor with risk-aware warnings.** Long-term goal: every valid DICOM tag row should be editable when there is a well-defined write target, including root, nested sequence leaves, and later file-meta rows where appropriate. Build this as a follow-up after path-addressed nested editing, with explicit warning/confirmation tiers before editing high-risk tags: patient/PHI tags while privacy mode is off, identity/linkage UIDs, file-meta and transfer syntax fields, pixel geometry/calibration (`PixelSpacing`, orientation/position, slice thickness), modality/acquisition identifiers, required Type 1/2 fields, and tags that affect decoding or interoperability. The warning should explain likely consequences (PACS mismatch, broken references, invalid DICOM, changed measurements), offer cancel/continue, and record enough audit/history context to undo safely. Do not make delete/reorder sequence-item operations part of this item without a separate plan.
+### Automated QA & pylinac
+
 - [ ] **[P2]** **In-app access to demo/sample DICOM data.** Add a Help/menu item (and/or a popup where ACR/QA analyses need input) that lists where to get demo/test data — public demo-data URLs (pylinac demo bucket, `pydicom-data`) plus any bundled-in-repo samples — with one-click open/download or copy-path. Pair with **user-docs** listing the same URLs and what each dataset is (ACR CT/MRI Large, CatPhan, Quart, transfer-syntax samples). Note: pylinac provides **no** ACR CT/MRI demo, so for ACR the docs must point to user-supplied or third-party phantom data. Depends on the curated set from the "Collect & curate demo/test DICOM image set" item (Validation/QA).
+
 - [ ] **[P1]** Integrate with PySkinDose? — **Plan:** [PySkinDose integration](plans/supporting/PYSKINDOSE_INTEGRATION_PLAN.md).
+
 - [ ] **[P1]** Add highdicom and further SR support — **Partial:** pydicom-only dose normalization (Stage 1) production-ready; `highdicom` not pinned; Stage 2 backend switch deferred. **Phased rollout:** [normalization & highdicom (Stage 1 → Stage 2)](plans/supporting/SR_DOSE_EVENTS_NORMALIZATION_AND_HIGHDICOM_PLAN.md); umbrella [SR full fidelity plan](plans/supporting/SR_FULL_FIDELITY_BROWSER_PLAN.md#4-dependencies---highdicom-allowed); [research: capabilities & fit](info/HIGHDICOM_OVERVIEW.md)
-- [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing?(hopefully fast and efficient)
-- [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
-- [ ] **[P1]** Add support for opening/displaying selected non-DICOM medical image formats, starting with NIfTI (`.nii`, `.nii.gz`) and then evaluating NRRD/MHA/Analyze as warranted; include explicit DICOM-to-NIfTI and NIfTI-to-DICOM conversion workflows only after dependency, licensing, metadata-loss, and packaging review. **Plan:** [Non-DICOM format import and conversion](plans/supporting/NONDICOM_FORMAT_IMPORT_AND_CONVERSION_PLAN.md)
-- [ ] **[P1]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
-- [ ] **[P1]** Add pixel-wise image arithmetic for derived images/series: subtraction, addition, multiplication, and division between single images or across whole series; allow choosing a specific slice/frame as the source image, support within-series frame-to-next-frame operations, and let the user choose the pairing method for series operations (`ImagePositionPatient`, `SliceLocation`, cardiac phase, or slice/frame index); allow saving results as standard image exports or derived DICOM. **Plan:** [Pixel arithmetic & derived images](plans/supporting/PIXEL_ARITHMETIC_DERIVED_IMAGES_PLAN.md)
-- [ ] **[P1]** **Line profile tool and CT film beam-width analysis:** add an interactive line profile measurement tool plus an automated workflow for scanned film CT beam-width analysis. The automated workflow should detect the direction where radiation darkening rises/falls, derive a baseline-corrected profile, report FWHM and FWTM using a local-window maximum rather than a single-pixel max, read DPI when available or prompt/report pixels when unavailable, and report calibrated width in mm when possible. Users should also be able to manually place and measure profiles. **Plan:** [Line profile and CT film beam-width analysis](plans/supporting/LINE_PROFILE_AND_CT_FILM_BEAM_WIDTH_PLAN.md).
+
 - [ ] **[P1]** Further integrate pylinac and other automated QC analysis tools — **Partial:** Stage 1 spine plus the ACR CT/MRI full-metrics, batch, and MRI-SNR slice shipped; CatPhan/Nuclear/Stage 2+ remain open. The completed ACR slice is recorded in [Pylinac ACR full metrics export and MRI batch](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md). ([details](FUTURE_WORK_DETAIL_NOTES.md#integrating-pylinac-and-other-automated-qc-tools), [pylinac integration overview](info/PYLINAC_INTEGRATION_OVERVIEW.md), [additional automated QA analysis (ACR gaps + CT checks)](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md), [Stage 1 implementation plan](plans/completed/PYLINAC_AND_AUTOMATED_QA_STAGE1_PLAN.md))
     - [ ] **[P2]** [Catphan module](info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md#1-catphan-and-related-ct-phantom-classes-pylinacct-quartdvt)
     - [ ] **[P1]** [Nuclear module](info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md#2-nuclear-module-pylinacnuclear) — **Partial:** all nine `pylinac.nuclear` tests shipped (Tools → Automated QA → **Nuclear Medicine QC (pylinac)…**; per-test parameter dialog, result tables, JSON/CSV/PNG export). Only **pass/fail thresholds (Gate C)** remain. **Plans:** [PlanarUniformity](plans/supporting/PYLINAC_NUCLEAR_MEDICINE_MODULE_INTEGRATION_PLAN.md), [FourBarResolution](plans/supporting/PYLINAC_NUCLEAR_FOURBAR_RESOLUTION_PLAN.md), [SPECT tests](plans/supporting/PYLINAC_NUCLEAR_SPECT_TESTS_PLAN.md).
@@ -203,9 +254,13 @@ Release blockers (license compliance, versioned executables) live in
     - [ ] **[P2]** **ACR spatial resolution (deferred)** — MTF interpret UI + assisted visual hole/line scoring after export plan; see [gaps doc §Direct resolution reads](info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md#direct-resolution-reads--investigation-avenues-deferred) and [interpreting MTF results](FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results). **Related:** [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md) **C2**, **C24**.
     - [ ] **[P1]** **QA CLI / batch runner:** add a GUI-free command-line interface for pylinac/automated-QA analyses so folders or manifests can be processed in batches/automation, producing JSON/PDF/CSV/XLSX outputs with deterministic exit codes and the same `QARequest`/`QAResult` provenance as GUI runs. **Plan:** [QA results export, CLI, and history](plans/supporting/QA_RESULTS_EXPORT_CLI_AND_HISTORY_PLAN.md).
     - [ ] **[P1]** **QC results history database:** keep a local database of QA/QC analysis runs by station/equipment identity (especially DICOM `StationName`), modality, phantom/analysis type, acquisition/run date, app/pylinac version, metrics, warnings/errors, and source study/series identifiers where appropriate; add UI for viewing, filtering, plotting trends, and comparing runs. **Plan:** [QA results export, CLI, and history](plans/supporting/QA_RESULTS_EXPORT_CLI_AND_HISTORY_PLAN.md).
+
 - [ ] **[P2]** Make more robust to pylinac errors and processing limitations—for example, if pylinac expects at least a 100 mm scan extent but the scan extent is 99.5 mm, find a way to still run analysis and report results (see [pylinac flexibility & workarounds](info/PYLINAC_FLEXIBILITY_AND_WORKAROUNDS.md)). — **Partial:** extent relax helpers + viewer subclasses in `src/qa/`; not all edge cases exposed in UI.
-- [ ] **[P2]** Interactive oblique rotation on MPR (drag handles/crosshairs) — **Gap:** [analysis §3](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md#3-linked-navigation-2d--mpr--3d). ([details](FUTURE_WORK_DETAIL_NOTES.md#interactive-oblique-rotation-on-mpr))
-- [ ] **[P2]** Fusion overlays on MPR views — **Gap:** [analysis §3](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md#3-linked-navigation-2d--mpr--3d). ([details](FUTURE_WORK_DETAIL_NOTES.md#fusion-on-mpr))
+
+- [ ] **[P1]** Allow configuration to interpret MTF results (MRI and CT): user-defined **visibility cutoff** on pylinac **rMTF** (persist per site); optional assisted visual scoring for hole/line pairs. **Details:** [interpreting MTF results](FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results); [gaps doc deferred roadmap](info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md#direct-resolution-reads--investigation-avenues-deferred); catalog **C2** / **C24** in [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md).
+
+### ROI & contouring
+
 - [ ] **[P2]** Advanced ROI/contouring abilities (contouring, auto-detect ROI, 3D ROI across views) ([details](FUTURE_WORK_DETAIL_NOTES.md#advanced-roi-and-contouring)) — **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md)
     - [ ] **[P1]** **Propagate 2D ROIs across slices:** copy or link a selected 2D ROI across a user-selected slice/frame range in the same series, preserving slice/frame identity and allowing per-slice edits. **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
     - [ ] **[P1]** **Plot ROI statistics across slices:** for propagated ROI groups, plot ROI metrics across stack index and physical slice position when available, similar to PET viewer workflows; support metric selection and CSV/XLSX export of slice-profile statistics. **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
@@ -216,13 +271,9 @@ Release blockers (license compliance, versioned executables) live in
     - [ ] **[P2]** **Structure-generation presets:** add reusable presets for generating structures, starting with CT and MRI body contour generation using modality-aware thresholding/cleanup plus preview/accept and recorded parameters; later consider more detailed anatomy/site-specific presets after validation. **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
     - [ ] **[P2]** **Advanced ROI editing controls:** add finer controls such as add/remove contour points, smooth/simplify boundary, split/merge contours, nudge/scale/rotate, interpolate between key slices, boolean union/intersection/subtract, mask cleanup, lock visibility/editing, and contour display presets. **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
     - [ ] **[P1]** **Export ROIs/contoured structures:** export ROI/structure data as appropriate DICOM objects and practical non-DICOM formats, with explicit target semantics: DICOM SEG for masks/segmentations, optional RTSTRUCT for contour sets, GSPS for display annotations, SR/measurement reports for derived metrics, app-native JSON plus metadata sidecars, CSV/XLSX statistics, and research labelmaps/masks such as NIfTI, NRRD/.seg.nrrd, and MHA/MHD. Prioritize labelmaps plus JSON sidecars and an early mesh/vector export path: per-slice contour JSON/CSV, STL, OBJ+MTL, and PLY first; keep glTF/GLB, VTK PolyData (.vtp/.vtk), and optional per-slice SVG on deck after geometry, metadata, and external-tool validation. **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
-- [ ] **[P1]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded — **Gap analysis:** Tier A §2. ([plan](plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#1-hanging-protocols))
-- [ ] **[P1]** Once database is added, allow pulling priors — **Partial:** local study index DB exists; priors pull/hanging not wired. **Gap analysis:** Tier A §2. ([plan](plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#2-pulling-priors-after-local-database))
-- [ ] **[P1]** Allow configuration to interpret MTF results (MRI and CT): user-defined **visibility cutoff** on pylinac **rMTF** (persist per site); optional assisted visual scoring for hole/line pairs. **Details:** [interpreting MTF results](FUTURE_WORK_DETAIL_NOTES.md#interpreting-mtf-results); [gaps doc deferred roadmap](info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md#direct-resolution-reads--investigation-avenues-deferred); catalog **C2** / **C24** in [AUTOMATED_QA_ADDITIONAL_ANALYSIS.md](info/AUTOMATED_QA_ADDITIONAL_ANALYSIS.md).
-- [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
-- [ ] **[P2]** Add toggle/preference to have up/down keys and scroll wheel up/down navigate by slice # or image position patient (eg, if increasing slice # has decreasing image position patient along the orientation vector, allow choosing whether up moves up in slice number (and lower on patient), or up in image position patient (and lower on slice number)). **Related (overlay display):** [Overlay position labels](plans/supporting/OVERLAY_SLICE_FRAME_POSITION_LABEL_PLAN.md) Phase 3 spatial mode.
-- [ ] **[P2]** Do we allow cine playback of multiple windows? We should be able to play each window's cine in sync, or independently, or a combination of both, ideally
-- [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
+
+### 3D volume rendering
+
 - [ ] **[P1]** 3D visualization of DICOM datasets — **Partial:** VTK volume render shipped (`volume_renderer.py`, `VolumeRenderDialog`, toolbar **3D View**): presets (CT/MR + threshold), global opacity, W/L sync on preset change, modality-aware default preset, trackball navigation, background volume build. Open plan items below. **Plan:** [3D Volume Rendering](plans/3D_VOLUME_RENDERING_PLAN.md)
     - [ ] **[P2]** **3D viewer per-control parity walk on native macOS.** The macOS hard-freeze itself is fixed (offscreen render surface, merged in PR #78) and smoke-passed on both native macOS and Windows/Parallels, so the P0 is closed. What was never walked control-by-control on native macOS is the rest of the panel: blend mode, crop-box drag, the standard view buttons, auto-rotate, and export. Do that walk and record the result before retiring the escape hatch below. **Plan:** [3D viewer native macOS rendering](plans/3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md) Phase 3 Steps 4-5
     - [ ] **[P2]** **Retire the 3D legacy-interactor escape hatch:** delete `DICOMVIEWER_3D_LEGACY_INTERACTOR`, `src/gui/volume/legacy_surface.py`, and the fallback branch in `surface_factory.py`, then drop the now-dead Parallels workarounds it protects (blank-frame GPU fallback tuning, the `Parallels/software GL` overlay notes). **Recommended trigger:** after **one full release** has shipped with the offscreen surface as default *and* a Windows-native + Windows-under-Parallels 3D smoke has passed on that release with no user reports of the hatch being needed. **Do not retire earlier** — the hatch exists precisely because the historical verification environment (Parallels) differs from the new default path. If anyone does set the variable in the field, treat that as a P1 bug against the offscreen surface rather than a reason to keep the hatch. **Plan:** [3D viewer native macOS rendering](plans/3D_VIEWER_MACOS_NATIVE_RENDERING_PLAN.md) Phase 4
@@ -237,7 +288,46 @@ Release blockers (license compliance, versioned executables) live in
     - [ ] **[P2]** **3D viewer minimize button:** add a standard minimize control to the volume-render window (non-modal dialog should minimize to taskbar like other top-level windows).
     - [ ] **[P2]** **3D viewer visibility and pinning:** add a View-menu show/hide action and a “Keep 3D Viewer in Front” setting, **on by default** now that users can minimize it. Reopening must restore the existing dialog rather than rebuilding the volume.
     - [ ] **[P2]** **GPU jittering (`SetUseJittering`):** randomize ray-start offsets so wood-grain banding becomes fine noise instead of concentric rings. **GPU-path only** — no effect on Parallels/CPU fallback; needs native-GPU verification. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) T7C
+
+### DICOM editing & derived images
+
+- [ ] **[P2]** **General DICOM tag editor with risk-aware warnings.** Long-term goal: every valid DICOM tag row should be editable when there is a well-defined write target, including root, nested sequence leaves, and later file-meta rows where appropriate. Build this as a follow-up after path-addressed nested editing, with explicit warning/confirmation tiers before editing high-risk tags: patient/PHI tags while privacy mode is off, identity/linkage UIDs, file-meta and transfer syntax fields, pixel geometry/calibration (`PixelSpacing`, orientation/position, slice thickness), modality/acquisition identifiers, required Type 1/2 fields, and tags that affect decoding or interoperability. The warning should explain likely consequences (PACS mismatch, broken references, invalid DICOM, changed measurements), offer cancel/continue, and record enough audit/history context to undo safely. Do not make delete/reorder sequence-item operations part of this item without a separate plan.
+
+- [ ] **[P1]** Add basic image processing for creating new DICOMs (kernels, smoothing, edge enhancement, sharpening, custom kernels) ([details](FUTURE_WORK_DETAIL_NOTES.md#basic-image-processing-and-creating-new-dicoms))
+
+- [ ] **[P1]** Add pixel-wise image arithmetic for derived images/series: subtraction, addition, multiplication, and division between single images or across whole series; allow choosing a specific slice/frame as the source image, support within-series frame-to-next-frame operations, and let the user choose the pairing method for series operations (`ImagePositionPatient`, `SliceLocation`, cardiac phase, or slice/frame index); allow saving results as standard image exports or derived DICOM. **Plan:** [Pixel arithmetic & derived images](plans/supporting/PIXEL_ARITHMETIC_DERIVED_IMAGES_PLAN.md)
+
+### Formats, interop, priors & navigation
+
+- [ ] **[P1]** Add a simple "DICOM metadata browser" mode that can ingest, browse, and export DICOM metadata, without any image display or processing?(hopefully fast and efficient)
+
+- [ ] **[P1]** Be able to associate with DICOM extension and add to Open With menus ([details](FUTURE_WORK_DETAIL_NOTES.md#file-association-and-open-with-integration))
+
+- [ ] **[P1]** Add support for opening/displaying selected non-DICOM medical image formats, starting with NIfTI (`.nii`, `.nii.gz`) and then evaluating NRRD/MHA/Analyze as warranted; include explicit DICOM-to-NIfTI and NIfTI-to-DICOM conversion workflows only after dependency, licensing, metadata-loss, and packaging review. **Plan:** [Non-DICOM format import and conversion](plans/supporting/NONDICOM_FORMAT_IMPORT_AND_CONVERSION_PLAN.md)
+
+- [ ] **[P1]** Allow hanging protocols? Configuration of windows/tiles, certain views/phases/priors loaded — **Gap analysis:** Tier A §2. ([plan](plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#1-hanging-protocols))
+
+- [ ] **[P1]** Once database is added, allow pulling priors — **Partial:** local study index DB exists; priors pull/hanging not wired. **Gap analysis:** Tier A §2. ([plan](plans/supporting/HANGING_PROTOCOLS_PRIORS_RDSR_PLAN.md#2-pulling-priors-after-local-database))
+
+- [ ] **[P2]** Add toggle/preference to have up/down keys and scroll wheel up/down navigate by slice # or image position patient (eg, if increasing slice # has decreasing image position patient along the orientation vector, allow choosing whether up moves up in slice number (and lower on patient), or up in image position patient (and lower on slice number)). **Related (overlay display):** [Overlay position labels](plans/supporting/OVERLAY_SLICE_FRAME_POSITION_LABEL_PLAN.md) Phase 3 spatial mode.
+
+- [ ] **[P2]** Do we allow cine playback of multiple windows? We should be able to play each window's cine in sync, or independently, or a combination of both, ideally
+
+### Measurements, projections, histograms & LUTs
+
+- [ ] **[P1]** **Line profile tool and CT film beam-width analysis:** add an interactive line profile measurement tool plus an automated workflow for scanned film CT beam-width analysis. The automated workflow should detect the direction where radiation darkening rises/falls, derive a baseline-corrected profile, report FWHM and FWTM using a local-window maximum rather than a single-pixel max, read DPI when available or prompt/report pixels when unavailable, and report calibrated width in mm when possible. Users should also be able to manually place and measure profiles. **Plan:** [Line profile and CT film beam-width analysis](plans/supporting/LINE_PROFILE_AND_CT_FILM_BEAM_WIDTH_PLAN.md).
+
+- [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
+
+- [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
+
 - [ ] **[P1]** Add ability to apply different look-up tables besides just linear (w/l), and ability to overlay LUT on histograms — **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md)
+
+### MPR & fusion views
+
+- [ ] **[P2]** Interactive oblique rotation on MPR (drag handles/crosshairs) — **Gap:** [analysis §3](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md#3-linked-navigation-2d--mpr--3d). ([details](FUTURE_WORK_DETAIL_NOTES.md#interactive-oblique-rotation-on-mpr))
+
+- [ ] **[P2]** Fusion overlays on MPR views — **Gap:** [analysis §3](info/DICOM_VIEWER_COMPETITIVE_FEATURE_GAP_ANALYSIS.md#3-linked-navigation-2d--mpr--3d). ([details](FUTURE_WORK_DETAIL_NOTES.md#fusion-on-mpr))
 
 ## Competitive feature gaps (vs other DICOM viewers)
 
