@@ -295,6 +295,7 @@ Read paths exist for **GSPS** and **KO** on load (`presentation_state_handler`, 
 - [ ] **[P0]** Make versioned release with exectutables — **Plan:** [Versioned release](plans/supporting/VERSIONED_RELEASE_PLAN.md)
 
 **Product / outreach** (post-release track):
+
 - [ ] **[P2]** Announce on LinkedIn and share with people
 - [ ] **[P2]** Build a technical guide ([details](FUTURE_WORK_DETAIL_NOTES.md#technical-guide-scope))
 - [ ] **[P2]** Naming exploration: "DICOM Viewer + ?" ([details](FUTURE_WORK_DETAIL_NOTES.md#product-naming-exploration))
