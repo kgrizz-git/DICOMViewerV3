@@ -49,8 +49,6 @@ disappear.
 
 - [ ] **[P3]** **Explore [awesome-medphys](https://github.com/jrkerns/awesome-medphys) for useful open-source tools.** Curated medical-physics tooling list; candidates to evaluate include **deidentifier** utilities and other DICOM/QA helpers that might complement or inform our PS3.15 de-identification engine, pylinac QA workflows, or import/export paths. Spike only: survey, note which tools are Python/license-compatible, and decide whether any are worth integrating vs. our existing implementations.
 
-- [ ] **[P2]** See if https://github.com/DCMTK/dcmtk has anything useful (looks like it is C++) or https://github.com/fo-dicom/fo-dicom (C#)
-
 ## From: Static analysis
 
 - [ ] **[P3]** **Pytest warning wall — Pillow `getdata`, Qt `QMouseEvent`, NumPy/VTK shape, histogram ylim (2026-09-03, 403 warnings).** `full pytest` green but noisy: `Pillow 14` `Image.getdata` (`tests/core/test_mpr_view_math.py:316,325,337`) → `get_flattened_data`; `PySide6` `QMouseEvent.pos()` (`src/gui/mpr_thumbnail_widget.py:339,348,357`, `src/gui/series_navigator_view.py:282,269`) + 5-arg ctor (`tests/gui/test_image_viewer_item_context_menu.py:95`, `tests/gui/test_series_navigator_view.py:186`) → `position()`/`QPointF` API (Qt6, ~40 warnings); `numpy 2.5` `ndarray.shape` setter via `vtkmodules/util/numpy_support.py:244` + `SimpleITK/extra.py:284` (upstream VTK/SimpleITK, ~15 warnings, silenced until VTK ≥9.8/SimpleITK bump); `src/tools/histogram_widget.py:247` `identical low and high ylims` on empty histogram. All non-blocking, test/runtime behavior unchanged. Triage when bumping those floors; suppress per-module via `pytest.ini` `filterwarnings` if noise hides real warnings. Source: `chore/dependabot-ungroup-pylinac-typer` `c92e1df` `pytest` 2026-09-03.

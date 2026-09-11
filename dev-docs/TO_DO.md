@@ -109,6 +109,7 @@ Release blockers (license compliance, versioned executables) live in
     - [P2] Particularly with large datasets (large files or many files): would loading compressed initially save time? If we add a database, keep a compressed cache?
 - [ ] **[P0]** See if executables can be made smaller (especially on macOS) ([details](FUTURE_WORK_DETAIL_NOTES.md#executable-size-especially-on-macos)) — **Plan:** [Executable size reduction](plans/supporting/EXECUTABLE_SIZE_REDUCTION_PLAN.md)
 - [ ] **[P1]** Check fusion responsiveness on Parallels with 3D fusion
+- [ ] **[P2]** See if https://github.com/DCMTK/dcmtk has anything useful (looks like it is C++) or https://github.com/fo-dicom/fo-dicom (C#)
 
 ## Maintenance
 
