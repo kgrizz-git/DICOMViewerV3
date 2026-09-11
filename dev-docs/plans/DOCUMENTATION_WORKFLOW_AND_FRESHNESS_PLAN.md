@@ -294,16 +294,19 @@ is caught only when someone happens to look.
 
 ## Phase 3 — Local static documentation pilot
 
-**Implementation plan:** [User docs platform and sync harness](supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (Phase A: MkDocs Material PoC; Phase B: docs-impact harness; Phase C: platform decision).
+**Implementation plan:** [User docs platform and sync harness](supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (Phase A: MkDocs Material **reference** PoC only — not for adoption; Phase B: docs-impact harness; Phase C0 self-contain links; Phase CZ Zensical pilot; Phase C2 platform decision).
 
 - [x] In an isolated branch/worktree, build a read-only proof of concept from
   existing Markdown; do not migrate or delete source documents.
   (**Done 2026-09-11** on `docs/user-docs-platform-and-sync-harness`: `mkdocs.yml`
   + thin `user-docs/index.md`; canonical guides untouched aside from the landing stub.)
-- [x] Prefer MkDocs Material and assess navigation, search, local preview,
-  cross-link preservation, and an offline bundle against the current docs.
-  (Pilot result in the supporting plan; cross-boundary `../dev-docs/` and
-  `../CHANGELOG.md` links are known generated-site gaps.)
+- [x] Use MkDocs Material as a **reference layout pilot** (not the preferred
+  long-term platform) and assess navigation, search, local preview, cross-link
+  preservation, and an offline bundle against the current docs. **Adoption is
+  deferred to supporting-plan Phase CZ (Zensical pilot) / C2 (binding decision)**;
+  do not treat this checkbox as selecting Material. (Pilot result in the
+  supporting plan; cross-boundary `../dev-docs/` and `../CHANGELOG.md` links are
+  known generated-site gaps. Material EOL ~2026-11-05.)
 - [ ] Add a small `mkdocstrings` sample only for stable, useful Python contracts;
   confirm it neither imports unsafe runtime code nor turns private implementation
   details into a maintenance burden.
@@ -319,10 +322,11 @@ is caught only when someone happens to look.
 
 **Exit:** a written pilot result and recommendation; remove the pilot or retain
 only reviewed source/configuration with an explicit decision.
-**(Partial 2026-09-11:** Phase A Material layout pilot recorded; **do not adopt
-Material** — EOL ~2026-11-05. Preferred publisher path is **Zensical** (supporting
-plan Phase CZ). Config retained as disposable reference until CZ/C2. Binding
-adopt/defer/reject is supporting-plan Phase C2 / this plan Phase 5.)
+**(Partial 2026-09-11:** Phase A Material **reference** layout pilot recorded;
+**do not adopt Material** — EOL ~2026-11-05. Preferred publisher path is
+**Zensical** (supporting plan Phase CZ). Config retained as disposable reference
+until CZ/C2. Binding adopt/defer/reject is supporting-plan Phase C2 / this plan
+Phase 5.)
 
 
 ## Phase 4 — Conditional external/generative tool evaluation
