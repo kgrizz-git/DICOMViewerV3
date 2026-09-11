@@ -2,7 +2,8 @@
 
 **Created:** 2026-09-11  
 **Last updated:** 2026-09-11  
-**Status:** Phase A complete (provisional recommendation recorded); Phases B–C not started  
+**Status:** Phase A complete; **do not adopt MkDocs Material** (EOL ~2026-11-05).
+Preferred next publisher pilot: **Zensical**. Phases B–C not started.  
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
@@ -11,6 +12,14 @@
 **ready-with-fixes** (applied); Phase A implementation review
 **accept-with-fixes** (parent Phase 3 accessibility checkbox marked partial;
 M1 out-of-tree framing includes `../CHANGELOG.md`).
+
+**Platform longevity (2026-09-11):** MkDocs **1.x** is effectively unmaintained
+(last release 1.6.1, Aug 2024). **Material for MkDocs** is in maintenance mode
+with scheduled **EOL 2026-11-05** (critical fixes only until then). That is too
+short a runway to adopt for this project. Phase A remains a useful *layout*
+pilot; the adoption target shifts to **[Zensical](https://zensical.org)** (same
+authors; reads existing `mkdocs.yml`; `classic` theme variant preserves Material
+look). See Phase **CZ** and updated C1/C2.
 
 ---
 
@@ -22,13 +31,15 @@ in-app HTML; any site generator is **generated output only**.
 
 This plan bundles three related workstreams that were discussed together:
 
-1. **MkDocs Material proof of concept** — local static site from existing
-   `user-docs/` with search, sidebar nav, and offline preview.
+1. **Static-site proof of concept** — Phase A used MkDocs Material against
+   existing `user-docs/` (nav/search/offline lessons). **Adoption target is no
+   longer Material** (EOL ~2026-11); Phase **CZ** evaluates **Zensical** on the
+   same `mkdocs.yml` / Markdown sources.
 2. **Docs-impact sync harness** — advisory automation so UI/help changes surface
    missing documentation updates before merge.
-3. **Platform decision + self-contained user-docs** — close out-of-tree links
-   in Phase C0, then record adopt/defer/reject (MkDocs vs Mintlify vs status
-   quo), including privacy and offline bundle implications.
+3. **Self-contained user-docs + platform decision** — Phase C0 closes out-of-tree
+   links; Phase CZ pilots Zensical; Phase C2 records adopt/defer/reject
+   (Zensical vs Mintlify vs status quo — **not** MkDocs Material).
 
 Human review remains authoritative for user-facing claims. No third-party
 documentation GitHub App on this application repository.
@@ -48,10 +59,13 @@ documentation GitHub App on this application repository.
    new checks start **advisory** until false-positive rates are reviewed.
 4. **In-app Help parity:** `resources/help/quick_start_guide.html` and
    `doc_urls.py` remain first-class mirrors; the pilot must not orphan them.
-5. **URL alignment:** MkDocs `repo_url` / `edit_uri` must target the **same**
-   `main` + `user-docs/` paths as `USER_DOCS_GITHUB_PREFIX` in
-   [`src/utils/doc_urls.py`](../../../src/utils/doc_urls.py)
+5. **URL alignment:** Publisher `repo_url` / `edit_uri` (or Zensical equivalents)
+   must target the **same** `main` + `user-docs/` paths as `USER_DOCS_GITHUB_PREFIX`
+   in [`src/utils/doc_urls.py`](../../../src/utils/doc_urls.py)
    (`https://github.com/kgrizz-git/DICOMViewerV3/blob/main/user-docs`).
+6. **No short-lived publisher adoption:** do not adopt a docs stack whose
+   maintainers have announced EOL inside ~one quarter. Prefer actively
+   maintained Open Source builders that remain self-hostable / offline-friendly.
 
 ---
 
@@ -229,13 +243,13 @@ maintainers know the `docs-impact:` escape hatch (PR body **or** local
 After Phase A pilot and Phase B harness land, **first close the generated-site
 link gap (C0)**, then record an evidence-backed platform decision (C1–C2).
 
-**Phase 5 gate inheritance:** a provisional “lean adopt” from A3 is **not**
+**Phase 5 gate inheritance:** a provisional lean from A3/CZ is **not**
 sufficient to adopt. C2 must explicitly check parent Phase 5 preconditions
 (inventory assessed or bounded deferred, high-priority accuracy findings owned,
 canonical vs generated/rollback documented, privacy/licensing review, build/link
 checks preserved, maintainer owner/cadence). Slice **2a** still open means any
-MkDocs “adopt” stays **contingent** on that gate — pilot look-and-feel alone
-cannot clear it. **C0 is required regardless** of whether MkDocs is adopted:
+publisher “adopt” stays **contingent** on that gate — look-and-feel alone
+cannot clear it. **C0 is required regardless** of which publisher is adopted:
 `user-docs/` must not ship relative links that leave the user-docs tree.
 
 ### C0. Make `user-docs/` self-contained (required)
@@ -275,45 +289,77 @@ batch:
   Markdown under `user-docs/` **fails** on relative links that escape
   `user-docs/` (e.g. `](../dev-docs/`, `](../CHANGELOG`, `](../../`). Absolute
   `https://` links remain allowed. Wire into the existing user-docs CI job.
-- [ ] Re-run `mkdocs build` with **no** “target is not found among documentation
-  files” warnings for those paths; record clean build in C2 notes.
-- [ ] Interactive offline/search smoke deferred from Phase A: open built
-  `site/index.html` via local static server (and `file://` if useful); confirm
-  nav + search behave; note whether `unpkg` iframe-worker still blocks pure
-  `file://` search.
+- [ ] Re-run the **chosen** publisher build (`zensical build` preferred;
+  `mkdocs build` only as a temporary cross-check) with **no** “target is not
+  found among documentation files” warnings for those paths; record clean build
+  in C2 notes.
+- [ ] Interactive offline/search smoke: open built `site/` via local static
+  server (and `file://` if useful); confirm nav + search; record any CDN/shim
+  dependencies (Material’s `unpkg` iframe-worker was a Phase A finding — confirm
+  whether Zensical improves this).
 
 **Exit for C0:** zero escaping relative links under `user-docs/`; CI guard green;
-MkDocs build clean of those warnings; search smoke notes recorded.
+publisher build clean of those warnings; search smoke notes recorded.
+
+### CZ. Zensical pilot (preferred publisher path)
+
+**Why:** Material for MkDocs EOL ~**2026-11-05**; MkDocs 1.x unmaintained. Zensical
+is the successor from the same authors, Open Source, self-hostable, and can build
+an existing Material project from `mkdocs.yml` ([migration guide](https://zensical.org/docs/compatibility/mkdocs/migration/)).
+
+- [ ] Add `zensical` to `requirements-dev.txt` (dev-only); document `zensical serve`
+  / `zensical build` in Verification and `HARNESS.md`.
+- [ ] Build this repo’s existing `mkdocs.yml` with Zensical **without** rewriting
+  canonical guides; use theme `variant: classic` if needed for Material-like look
+  ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)).
+- [ ] Compare vs Phase A Material build: nav, search, dark mode, offline/`file://`
+  or local-server behavior, external network deps, build time.
+- [ ] Audit plugins we use (`search`, Material `offline`, etc.) against Zensical’s
+  [supported MkDocs plugins](https://zensical.org/docs/compatibility/mkdocs/plugins/);
+  drop or replace unsupported ones.
+- [ ] Privacy/tooling: if Zensical adds telemetry or cloud features, record and
+  keep local-only defaults; update `security/security-tool-inventory.json` if
+  required before CI adoption.
+- [ ] Write a short **Zensical pilot result** subsection (or update A3) with
+  adopt-lean / defer / reject for Zensical specifically.
+
+**Exit for CZ:** reproducible Zensical build from current sources; written
+comparison to Phase A; clear input to C2.
 
 ### C1. Decision matrix
 
-| Criterion | MkDocs Material (local) | Mintlify (hosted, docs-only repo) | Status quo (Markdown + in-app HTML) |
-|-----------|-------------------------|-----------------------------------|-------------------------------------|
-| Professional appearance | Good | Excellent | Adequate in GitHub / plain files |
-| Offline / bundled in installer | Strong (verify search after C0) | Weaker; export-dependent | Strong for HTML; weak for full guide set |
-| Privacy / repo access | No external access | Requires review + separate repo | No external access |
-| Maintainer cost | Low (pip, local build) | Medium (sync + hosted pipeline) | Lowest |
-| Search / nav | Strong | Strong | Weak without a viewer |
-| Self-contained `user-docs/` | **Must be true after C0** | Same C0 content required | C0 still required for any publish path |
+| Criterion | **Zensical** (preferred) | Mintlify (hosted, docs-only repo) | Status quo (Markdown + in-app HTML) | MkDocs Material (Phase A only) |
+|-----------|--------------------------|-----------------------------------|-------------------------------------|--------------------------------|
+| Longevity | Active successor to Material | SaaS product | Stable | **EOL ~2026-11-05 — reject for adopt** |
+| Professional appearance | Good (`classic` / `modern`) | Excellent | Adequate in GitHub | Good (pilot only) |
+| Offline / bundled | Evaluate in CZ | Weaker; export-dependent | Strong for HTML; weak for full guide set | Pilot: partial (`unpkg` search shim) |
+| Privacy / repo access | Local/self-host (verify) | Requires review + separate repo | No external access | Local |
+| Maintainer cost | Low–medium (new toolchain) | Medium (sync + hosted) | Lowest | N/A — do not adopt |
+| Self-contained `user-docs/` | **Must be true after C0** | Same C0 | C0 still required | Same C0 |
 
 ### C2. Record outcome
 
-- [ ] Confirm **C0 exit** met (self-containment + regression guard + smoke notes).
-- [ ] Add a **Platform decision** section to this plan (or a subsection in the
-  parent plan) with: **adopt / defer / reject** per candidate, owner, and next
-  action — and a checkbox that **parent Phase 5 preconditions** are met or
-  explicitly waived with reason.
-- [ ] If **MkDocs adopted:** add offline bundle step to release docs
-  (`BUILDING_EXECUTABLES.md`); keep generated `site/` gitignored. Do **not**
-  ship a bundled site until C0 is green.
-- [ ] If **Mintlify deferred:** document trigger to re-evaluate (e.g. after
-  first public release or when a docs-only mirror repo is approved).
+- [ ] Confirm **C0** and **CZ** exits met (or CZ explicitly deferred with reason).
+- [ ] Add a **Platform decision** section with: **adopt / defer / reject** for
+  **Zensical**, Mintlify, and status quo — and **reject MkDocs Material for
+  adoption** (keep Phase A config only as a disposable reference until CZ
+  replaces commands).
+- [ ] Checkbox that **parent Phase 5 preconditions** are met or explicitly
+  waived with reason.
+- [ ] If **Zensical adopted:** switch local/CI docs build commands; add offline
+  bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored; do not ship
+  a bundled site until C0 is green. Optionally migrate to `zensical.toml` later
+  (not required on day one).
+- [ ] If **Mintlify deferred:** document re-evaluate trigger (docs-only mirror
+  repo + privacy approval).
+- [ ] If **status quo:** keep Markdown + in-app HTML only; remove or archive
+  provisional `mkdocs.yml` / Material pins after CZ decision.
 - [ ] Update Next up slot 3 and parent plan Phase 3/4 checkboxes accordingly.
 - [ ] Remove any remaining “self-contained user-docs” pointer from
   [`TO_DO.md`](../../TO_DO.md) Documentation once C0 is checked off.
 
-**Exit:** C0 complete; written platform decision linked from `TO_DO.md` and
-parent workflow plan; no ambiguous "still evaluating" state; no separate
+**Exit:** C0 complete; CZ result recorded; written platform decision linked from
+`TO_DO.md` and parent workflow plan; **MkDocs Material not adopted**; no separate
 self-containment backlog item left open.
 
 ---
@@ -322,15 +368,19 @@ self-containment backlog item left open.
 
 ```mermaid
 flowchart LR
-  A[Phase A MkDocs PoC] --> C0[Phase C0 Self-contain links]
+  A[Phase A Material PoC] --> C0[Phase C0 Self-contain links]
   B[Phase B Sync harness] --> C0
-  C0 --> C2[Phase C2 Platform decision]
+  C0 --> CZ[Phase CZ Zensical pilot]
+  CZ --> C2[Phase C2 Platform decision]
   P[Parent Phase 2 slice 2a] -.-> C2
 ```
 
 - **Phase A and B can proceed in parallel** (different files; no conflict).
 - **Phase C0** (self-contain `user-docs/`) runs after A and B and is **required**
-  before C2 adopt/defer — not optional scheduling.
+  before C2 adopt/defer.
+- **Phase CZ** (Zensical) may start after A (can reuse `mkdocs.yml`); prefer
+  after C0 so the Zensical build is not full of known dead links. Can overlap
+  C0 if needed.
 - Parent Phase 2 slice 2a can continue in parallel but should be noted in the
   C2 decision if accuracy gaps remain.
 
@@ -344,10 +394,12 @@ python scripts/check_user_docs_links.py
 python scripts/check_doc_feature_coverage.py
 python -m pytest tests/test_user_docs_links.py tests/test_doc_urls_resolve.py -q
 
-# Phase A / C0 verification
+# Phase A / C0 / CZ verification
 python scripts/check_user_docs_links.py
 # After C0: also assert no escaping relative links (exact flag TBD when implemented)
-mkdocs build    # must be clean of ../dev-docs and ../CHANGELOG warnings
+mkdocs build       # Phase A reference only — not an adoption path
+zensical build     # Phase CZ preferred publisher
+zensical serve
 
 # Phase B
 python scripts/check_docs_impact.py
@@ -368,10 +420,12 @@ Before adopting MkDocs in CI or release packaging: update
 - [ ] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
 - [ ] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
       guard + offline/search smoke notes.
-- [ ] Phase C2: platform decision recorded (MkDocs / Mintlify / status quo),
-      including Phase 5 gate status; no separate self-containment TO_DO left.
+- [ ] Phase CZ: Zensical pilot result recorded (preferred publisher path).
+- [ ] Phase C2: platform decision recorded (**reject MkDocs Material**;
+      Zensical / Mintlify / status quo), including Phase 5 gate status; no
+      separate self-containment TO_DO left.
 - [x] `HARNESS.md`, `dev-docs/README.md`, and parent workflow plan cross-links
-      updated (refresh again when C0/C2 land).
+      updated (refresh again when CZ/C0/C2 land).
 - [x] Next up slot 3 in `TO_DO.md` updated to point at this plan's status.
 
 When all criteria are met, archive or narrow this plan per
@@ -438,14 +492,20 @@ Also out-of-tree by design: in-app Quick Start
   decide how to ship `site/` in the installer; optionally vendor the
   iframe-worker shim for fully offline search.
 
-### Provisional recommendation (not Phase C)
+### Provisional recommendation (superseded 2026-09-11)
 
-**Lean adopt MkDocs Material locally** as the end-user docs viewer/offline-bundle
-path, **contingent on** Phase **C0** (self-contained `user-docs/`), parent Phase 5
-(including Phase 2 slice 2a accuracy), and C2’s binding decision.
+**Original A3 lean (same day):** lean adopt MkDocs Material locally — **withdrawn**
+after confirming Material **EOL ~2026-11-05** and MkDocs 1.x unmaintained.
 
-**Do not** connect Mintlify (or any hosted doc app) to this repository on the
-basis of this pilot. Revisit Mintlify only if Material’s presentation is
-rejected after a visual maintainer pass, and only via a docs-only mirror repo.
+**Current stance:**
+
+- **Reject MkDocs Material for adoption.** Keep Phase A `mkdocs.yml` only as a
+  disposable layout/reference config until Zensical (or status quo) replaces it.
+- **Preferred next step:** Phase **CZ** — pilot **[Zensical](https://zensical.org)**
+  on the same `user-docs/` + `mkdocs.yml` (reads existing config; `classic`
+  theme variant for Material-like look). Binding adopt/defer is **C2**, after
+  **C0** self-containment and parent Phase 5 gates.
+- **Do not** connect Mintlify (or any hosted doc app) to this application
+  repository without a docs-only mirror + privacy approval.
 
 Build log retained under gitignored `tmp/mkdocs-build-2026-09-11*.log`.

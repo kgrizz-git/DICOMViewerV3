@@ -42,8 +42,9 @@ interrogate>=1.7.0
 # Pin h11 to mitigate CVE-2024-27306 / Aikido scanner flags (transitive via semgrep/uvicorn)
 h11>=0.16.0
 
-# Local static user-docs pilot (MkDocs Material). Generated site/ is gitignored.
-# Preview: mkdocs serve   Build: mkdocs build
-# See dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md Phase A.
+# Local static user-docs layout pilot (MkDocs Material) — Phase A only.
+# Do NOT adopt Material long-term (EOL ~2026-11-05). Preferred next: Zensical
+# (plan Phase CZ). Preview: mkdocs serve / mkdocs build. site/ is gitignored.
+# See dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md.
 mkdocs>=1.6.0
 mkdocs-material>=9.5.0

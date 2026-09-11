@@ -1,4 +1,8 @@
-# MkDocs Material pilot for end-user docs (Phase A).
+# MkDocs Material layout pilot for end-user docs (Phase A only).
+# NOT an adoption path: Material for MkDocs EOL ~2026-11-05; MkDocs 1.x unmaintained.
+# Preferred next publisher pilot: Zensical (reads this mkdocs.yml) — see
+# dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md Phase CZ.
+#
 # Canonical sources remain under user-docs/; this file only configures rendering.
 # Generated output: site/ (gitignored). Do not treat the site as editable source.
 #

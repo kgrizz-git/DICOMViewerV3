@@ -46,7 +46,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 |----------|---------|
 | [`plans/`](plans/) | Active, supporting, and archived implementation plans |
 | [`plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) | Documentation freshness workflow, assessment cadence, and platform-evaluation gate |
-| [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) | MkDocs pilot, docs-impact CI harness, and platform decision (MkDocs vs Mintlify) |
+| [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) | User-docs publisher path: Material layout PoC (not for adopt), Zensical preferred pilot, docs-impact harness, self-contain links, platform decision |
 | [`plans/supporting/`](plans/supporting/) | Ongoing dependency/reference plans that still support open backlog work |
 | [`plans/completed/`](plans/completed/) | Completed implementation plan records; move finished plans here when closing their backlog items |
 | [`TO_DO.md`](TO_DO.md) | Active product and engineering backlog |
@@ -86,7 +86,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | [`../scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary guard against new high-risk layer violations (`architecture_boundary_baseline.txt` tracks current legacy edges) |
 | [`../scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Imports, version, committed DICOM fixture; optional `--qt-smoke` |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI: user-docs links, harness docs, architecture boundaries, and agent smoke on `main` / `develop` |
-| `mkdocs serve` / `mkdocs build` (dev deps) | Provisional MkDocs Material pilot for `user-docs/` — see [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md); `site/` gitignored |
+| `mkdocs serve` / `mkdocs build` (dev deps) | Phase A Material layout pilot only — **not for adoption** (EOL ~2026-11); preferred next path is Zensical (plan Phase CZ). See [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md); `site/` gitignored |
 
 ## Agent smoke verification
 

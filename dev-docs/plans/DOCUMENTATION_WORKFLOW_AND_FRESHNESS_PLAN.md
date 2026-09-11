@@ -319,9 +319,10 @@ is caught only when someone happens to look.
 
 **Exit:** a written pilot result and recommendation; remove the pilot or retain
 only reviewed source/configuration with an explicit decision.
-**(Partial 2026-09-11:** Phase A provisional lean-adopt recorded; config retained
-provisionally; binding adopt/defer/reject is supporting-plan Phase C / this plan
-Phase 5.)
+**(Partial 2026-09-11:** Phase A Material layout pilot recorded; **do not adopt
+Material** — EOL ~2026-11-05. Preferred publisher path is **Zensical** (supporting
+plan Phase CZ). Config retained as disposable reference until CZ/C2. Binding
+adopt/defer/reject is supporting-plan Phase C2 / this plan Phase 5.)
 
 
 ## Phase 4 — Conditional external/generative tool evaluation
