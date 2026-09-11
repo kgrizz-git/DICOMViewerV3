@@ -7,7 +7,10 @@
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
 
-**Review:** OpenCode Nvidia DeepSeek V4 Pro 0813 (2026-09-11) — verdict **ready-with-fixes**; M1–M2 / S1–S3 applied before Phase A.
+**Review:** OpenCode Nvidia DeepSeek V4 Pro 0813 (2026-09-11) — plan review
+**ready-with-fixes** (applied); Phase A implementation review
+**accept-with-fixes** (parent Phase 3 accessibility checkbox marked partial;
+M1 out-of-tree framing includes `../CHANGELOG.md`).
 
 ---
 
@@ -68,9 +71,15 @@ Phase 2 slice **2a** (eight user-facing inventory rows needing a running UI)
 remains open in the parent plan — complete in parallel, not blocked by this
 pilot.
 
-**Known MkDocs gap (M1):** `user-docs/` is **not** self-contained. Four
-cross-boundary links point at `../dev-docs/info/` (see
-[`TO_DO.md`](../../TO_DO.md) P2 “Make `user-docs/` fully self-contained”):
+**Known MkDocs gap (M1):** `user-docs/` is **not** self-contained. Relative
+links that leave `docs_dir: user-docs` become dead in the generated site.
+`check_user_docs_links.py` still passes because it resolves against the repo
+source tree. Phase A must **record** these as known adoption blockers (do not
+“fix” by rewriting guides in the PoC); closing them is a separate TO_DO /
+Phase C precondition, not a Phase A rewrite.
+
+**Out-of-tree `../dev-docs/info/` (4 links)** — also tracked as
+[`TO_DO.md`](../../TO_DO.md) P2 “Make `user-docs/` fully self-contained”:
 
 | Source | Target |
 |--------|--------|
@@ -79,11 +88,18 @@ cross-boundary links point at `../dev-docs/info/` (see
 | `USER_GUIDE_QA_PYLINAC.md` | `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md` |
 | `USER_GUIDE_QA_PYLINAC.md` | `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` |
 
-With `docs_dir: user-docs`, MkDocs will **not** copy those targets into `site/`,
-so the generated site has dead links. `check_user_docs_links.py` still passes
-because it resolves against the repo source tree. Phase A must **record** this
-as a known adoption blocker (do not “fix” by rewriting guides in the PoC);
-closing it is a separate TO_DO / Phase C precondition, not a Phase A rewrite.
+**Out-of-tree `../CHANGELOG.md` (4 link sites)** — same MkDocs failure mode
+(repo-root file not copied into `site/`):
+
+| Source | Notes |
+|--------|--------|
+| `USER_GUIDE.md` | two occurrences |
+| `USER_GUIDE_ANONYMIZATION.md` | one |
+| `USER_GUIDE_QA_PYLINAC.md` | one |
+
+Together with in-app Quick Start HTML (out-of-tree by design), these are the
+full self-containment gap for a bundled site. The A3 dead-link table lists
+every generated-site warning observed in the pilot build.
 
 ---
 
@@ -314,7 +330,8 @@ practice in the parent plan.
 **Branch:** `docs/user-docs-platform-and-sync-harness`  
 **Config retained provisionally:** `mkdocs.yml`, `user-docs/index.md`,
 `requirements-dev.txt` pins (`mkdocs`, `mkdocs-material`). Generated `site/`
-remains gitignored and unstaged.
+remains gitignored and unstaged — any local `site/` tree is
+**repeatable-from-source** via `mkdocs build`, not a committed artifact.
 
 ### What worked
 

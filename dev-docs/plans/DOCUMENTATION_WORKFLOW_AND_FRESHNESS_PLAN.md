@@ -310,6 +310,10 @@ is caught only when someone happens to look.
   (**Intentionally deferred** by the supporting plan — end-user docs pilot only.)
 - [x] Review generated output for broken links, duplicated content, external
   assets, offline behavior, PHI/PII exposure, and accessibility.
+  (**Partial 2026-09-11:** structural review + HTTP page fetch smoke done;
+  interactive browser smoke of Material **search UI** under `file://` / local
+  server **not** completed — deferred to supporting-plan Phase C offline
+  verification. See pilot result “Offline / `file://` findings”.)
 - [x] Estimate maintenance cost: author workflow, local/CI build time, release
   packaging, versioning, and reviewer responsibility.
 
