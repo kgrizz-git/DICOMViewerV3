@@ -1,6 +1,6 @@
 # Icebox
 
-**Last updated:** 2026-08-25
+**Last updated:** 2026-09-10
 
 Parked work, split out of [`TO_DO.md`](TO_DO.md) on 2026-08-23. Everything here
 is **self-labelled** in its own text as P3, Optional, Deferred, or a spike — it
@@ -40,15 +40,33 @@ disappear.
 
 - [ ] **[P3] Deferred:** **Trial agent navigation / output-efficiency tools without adopting a stack.** Start with a user-level Serena semantic-navigation trial and, separately, an RTK CLI-output trial; use the non-gating protocol in [`HARNESS.md`](HARNESS.md#agent-tool-trial-protocol). Compare against a no-tool baseline on representative Python/PySide6 tasks and record task completion, focused-test results, elapsed time, and lost diagnostics/source detail. Do not install tools into the application `.venv`, commit shared MCP/hook configuration, or add a project dependency unless a trial demonstrates a durable benefit and its source, license, data handling, and maintenance cost have been reviewed. Consider Graphify/other graph tools only if Serena does not adequately support a demonstrated navigation need.
 
+From Build Executables workflow follow-ups (`TO_DO.md` Maintenance):
+
+  - [ ] **[P3]** Replace `prepare_release` `actions/checkout` + `git ls-remote` tag peel with authenticated `gh api` ref lookups (avoid persisting checkout credentials).
+  - [ ] **[P3]** Consolidate duplicated release-version selection (`publish` tag vs git tag vs `latest`) into one early matrix step with a `pkgver` output reused by AppImage, Windows ZIP, and DMG steps.
+  - [ ] **[P3]** Mark body sections of [completed macOS bundle-size plan](plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md) as historical where they still read like active `PYINSTALLER_MACOS_SLIM` guidance (retirement note at top exists).
+
 ## From: Performance / Packaging
 
 - [ ] **[P3]** **Explore [awesome-medphys](https://github.com/jrkerns/awesome-medphys) for useful open-source tools.** Curated medical-physics tooling list; candidates to evaluate include **deidentifier** utilities and other DICOM/QA helpers that might complement or inform our PS3.15 de-identification engine, pylinac QA workflows, or import/export paths. Spike only: survey, note which tools are Python/license-compatible, and decide whether any are worth integrating vs. our existing implementations.
+
+- [ ] **[P2]** See if https://github.com/DCMTK/dcmtk has anything useful (looks like it is C++) or https://github.com/fo-dicom/fo-dicom (C#)
+
+## From: Static analysis
+
+- [ ] **[P3]** **Pytest warning wall — Pillow `getdata`, Qt `QMouseEvent`, NumPy/VTK shape, histogram ylim (2026-09-03, 403 warnings).** `full pytest` green but noisy: `Pillow 14` `Image.getdata` (`tests/core/test_mpr_view_math.py:316,325,337`) → `get_flattened_data`; `PySide6` `QMouseEvent.pos()` (`src/gui/mpr_thumbnail_widget.py:339,348,357`, `src/gui/series_navigator_view.py:282,269`) + 5-arg ctor (`tests/gui/test_image_viewer_item_context_menu.py:95`, `tests/gui/test_series_navigator_view.py:186`) → `position()`/`QPointF` API (Qt6, ~40 warnings); `numpy 2.5` `ndarray.shape` setter via `vtkmodules/util/numpy_support.py:244` + `SimpleITK/extra.py:284` (upstream VTK/SimpleITK, ~15 warnings, silenced until VTK ≥9.8/SimpleITK bump); `src/tools/histogram_widget.py:247` `identical low and high ylims` on empty histogram. All non-blocking, test/runtime behavior unchanged. Triage when bumping those floors; suppress per-module via `pytest.ini` `filterwarnings` if noise hides real warnings. Source: `chore/dependabot-ungroup-pylinac-typer` `c92e1df` `pytest` 2026-09-03.
+
+- [ ] **[P3]** **Pydicom synthetic UID `VR UI` warnings in tests (~180 warnings).** `pydicom/valuerep.py:443` `Invalid value for VR UI` from fake UIDs (`FOR1`, `ABC`, `study1`, `S1`, etc. in `tests/core/test_slice_location_line_helper_logic.py:1`, `tests/test_study_cache.py:9`, `tests/test_series_navigation_controller.py:38`). Fixtures intentionally non-conformant for isolated logic. Non-blocking. Options: use valid dotted-numeric fakes (`1.2.3.4.5`-style roots) or add `pytest.ini` `filterwarnings = ignore::UserWarning:pydicom` for the `valuerep` module only. Keep explicit, don't blanket-silence real UID validation. Source: same `pytest` 2026-09-03 wall.
 
 ## From: UX / Workflow
 
 - [ ] **[P3]** **More visual-orientation variety in UI chrome:** consider broader use of font color, size, weight, and icon/border color/styling to help users orient visually (e.g. distinct section/group emphasis, status-weighted emphasis). First concrete remaining case: Phase C of the tag-tree workstream; whole-app proposals and deferrals in the investigation. Broader design-system pass remains under UX remediation / `DESIGN.md`. Surfaced 2026-08-11. **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Investigation:** [tag-tree visual hierarchy investigation](ux-assessments/tag-tree-visual-hierarchy-investigation-2026-08-16.md). **Related plans:** [Phase C tier/nav](plans/supporting/TAG_TREE_TIER_ORIENTATION_AND_NAV_PLAN.md), [Phase D follow-ups](plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md), [Pane & toolbar state](plans/supporting/PANE_AND_TOOLBAR_STATE_VISUAL_PLAN.md).
 
 - [ ] **[P3]** **Study index — optional encryption toggle — DEFERRED (decided 2026-07-21).** A user-facing setting to migrate the PHI index to **plaintext** was judged closer to a footgun than a feature: it downgrades at-rest protection for patient names/IDs/descriptions/paths with little practical upside, and needs a non-trivial migration + irreversible-warning surface. Index stays **always SQLCipher-encrypted**. Revisit only if a concrete need appears (e.g. a platform without an OS keyring); the explicit **turn-OFF at-rest-exposure warning** wording is already drafted in the plan (Phase 1b). **Plan:** [Study index portability & encryption UI — Phase 1 (deferred)](plans/supporting/STUDY_INDEX_PORTABILITY_AND_ENCRYPTION_UI_PLAN.md)
+
+- [ ] **[P3]** **Tag tree visual follow-ups (Phase D):** remaining subsections include selected/edited state colors (`D-P2`), `series_tree` decision (`D-series`), select-group (`D-select`), P5 phase 2, and the privacy-gated private-tag marker. Export richer formatting is **decided (c) none**, not an open question. Prefer one small PR per subsection. **Hub:** [Tag tree visual hierarchy](plans/supporting/TAG_TREE_VISUAL_HIERARCHY_PLAN.md). **Plan:** [Tag tree visual follow-ups](plans/supporting/TAG_TREE_VISUAL_FOLLOWUPS_PLAN.md).
+
+- [ ] **[P3]** **Overlay setting: show or hide the tag name alongside the tag value.** Let the user choose per-overlay (or globally) whether a configured overlay line renders as `Value` or `TagName: Value`. Useful for dense layouts where the label costs more space than it adds clarity, and for users who already know the field positions. Added 2026-08-23.
 
 ## From: Validation / QA
 
