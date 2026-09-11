@@ -1,7 +1,7 @@
 # Documentation workflow, freshness, and publication plan
 
 **Created:** 2026-09-04
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-11
 **Status:** Phase 0 complete. Phase 1 complete **for its first slice only**
 (TRIAGE-001–036 dispositions + High remediation, high-risk docstring pass; Muse +
 MiniMax reviews approved). The audit as a whole is **not** complete: 15 of the 23
@@ -293,6 +293,8 @@ is caught only when someone happens to look.
   it.
 
 ## Phase 3 — Local static documentation pilot
+
+**Implementation plan:** [User docs platform and sync harness](supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (Phase A: MkDocs Material PoC; Phase B: docs-impact harness; Phase C: platform decision).
 
 - [ ] In an isolated branch/worktree, build a read-only proof of concept from
   existing Markdown; do not migrate or delete source documents.

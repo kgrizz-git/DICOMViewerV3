@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-11 (Next up slots 4–5; TruffleHog watch-only clarification)
+**Last updated:** 2026-09-11
 
 ---
 
@@ -29,15 +29,14 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-3. **[P2] Evaluate a documentation-generation workflow.** Phase 0–1 of the
+3. **[P2] User docs platform pilot + sync harness.** Execute
+   [User docs platform and sync harness](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md):
+   MkDocs Material PoC from existing `user-docs/`, advisory `check_docs_impact.py`
+   for UI/help diffs, then a written platform decision (MkDocs vs Mintlify vs
+   status quo). Parent
    [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
-   plan are complete (inventory, triage, first-slice accuracy audit, high-risk
-   docstring pass). **Pass 1 (2026-09-05)** closed the remaining non-omit
-   feature-coverage gaps and added LAYOUTS↔SHORTCUTS↔CONFIGURATION cross-links
-   (coverage 92.2% → 99.1%; only **Exit** intentionally omitted). Pass 2 closed Medium narrative/navigability gaps. Remaining:
-   workflow-plan Phase 2 freshness controls in normal feature work, then optional
-   local/static and external tool evaluation (MkDocs, Mintlify, etc.) before
-   adopting a publisher.
+   Phase 0–1 are complete (99.1% feature coverage; Phase 2 slice 2a and standing
+   freshness controls continue in parallel).
 4. **[P1] Derived-image export batch — 3D + projection stacks.** **3D:** export the
    current volume render as **PNG/JPG** (reuse the offscreen `QImage`; plan:
    [3D Volume Rendering](plans/3D_VOLUME_RENDERING_PLAN.md)); SC DICOM can follow in
