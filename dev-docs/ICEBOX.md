@@ -40,8 +40,7 @@ disappear.
 
 - [ ] **[P3] Deferred:** **Trial agent navigation / output-efficiency tools without adopting a stack.** Start with a user-level Serena semantic-navigation trial and, separately, an RTK CLI-output trial; use the non-gating protocol in [`HARNESS.md`](HARNESS.md#agent-tool-trial-protocol). Compare against a no-tool baseline on representative Python/PySide6 tasks and record task completion, focused-test results, elapsed time, and lost diagnostics/source detail. Do not install tools into the application `.venv`, commit shared MCP/hook configuration, or add a project dependency unless a trial demonstrates a durable benefit and its source, license, data handling, and maintenance cost have been reviewed. Consider Graphify/other graph tools only if Serena does not adequately support a demonstrated navigation need.
 
-From Build Executables workflow follow-ups (`TO_DO.md` Maintenance):
-
+- From Build Executables workflow follow-ups (`TO_DO.md` Maintenance):
   - [ ] **[P3]** Replace `prepare_release` `actions/checkout` + `git ls-remote` tag peel with authenticated `gh api` ref lookups (avoid persisting checkout credentials).
   - [ ] **[P3]** Consolidate duplicated release-version selection (`publish` tag vs git tag vs `latest`) into one early matrix step with a `pkgver` output reused by AppImage, Windows ZIP, and DMG steps.
   - [ ] **[P3]** Mark body sections of [completed macOS bundle-size plan](plans/completed/pyinstaller-bundle-size-macos-2026-04-09.md) as historical where they still read like active `PYINSTALLER_MACOS_SLIM` guidance (retirement note at top exists).
