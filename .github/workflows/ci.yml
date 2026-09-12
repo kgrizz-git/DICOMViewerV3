@@ -359,6 +359,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          # Full history so docs-impact can diff against the PR base / default branch.
+          fetch-depth: 0
 
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
@@ -368,6 +370,43 @@ jobs:
       # and the finding rate has been reviewed.
       - name: Report documentation freshness (advisory)
         run: python scripts/check_documentation_freshness.py --root "${{ github.workspace }}"
+
+      # Advisory docs-impact: warn when UI/help-sensitive paths change without
+      # user-docs/help/CHANGELOG updates or a "docs-impact: not needed — …" waiver.
+      # Range selection is in scripts/check_docs_impact.py --resolve-ci-range
+      # (PR base.sha; push before SHA / empty-tree / default-branch fallback;
+      # schedule/dispatch vs origin/<default>). Non-blocking continue-on-error.
+      - name: Report documentation impact (advisory)
+        env:
+          GITHUB_PR_BODY: ${{ github.event.pull_request.body }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # Use || so bash -e (GHA default) does not abort before RANGE_EC is read.
+          DIFF_RANGE=""
+          RANGE_EC=0
+          DIFF_RANGE="$(python scripts/check_docs_impact.py \
+            --root "${{ github.workspace }}" \
+            --resolve-ci-range \
+            --event-name "$EVENT_NAME" \
+            --pr-base-sha "$PR_BASE_SHA" \
+            --push-before-sha "$PUSH_BEFORE_SHA" \
+            --default-branch "${DEFAULT_BRANCH:-main}")" || RANGE_EC=$?
+          if [ "$RANGE_EC" -eq 2 ]; then
+            # SKIP already printed by the resolver on stderr
+            exit 0
+          fi
+          if [ "$RANGE_EC" -ne 0 ]; then
+            # ERROR already printed; fail this step (continue-on-error softens)
+            exit 1
+          fi
+          python scripts/check_docs_impact.py \
+            --root "${{ github.workspace }}" \
+            --diff-range "$DIFF_RANGE" \
+            --with-feature-coverage
+        continue-on-error: true
 
   # ── Security scanners — cloud-uploading, gated ────────────────────────────
 
