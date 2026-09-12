@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-12
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -77,7 +77,7 @@ raw-output path for every output filter.
 
 | Script | What it validates |
 |--------|-------------------|
-| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline `src/` code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, and `AGENTS.md`. `dev-docs/plans/` is excluded as historical record |
+| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline `src/` code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, and `AGENTS.md`. Under `user-docs/`, relative links that resolve outside that tree fail (Phase C0 escape guard). `dev-docs/plans/` is excluded as historical record |
 | [`scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files present, `AGENTS.md` not bloated, `TO_DO.md` freshness, plan paths in `TO_DO.md`, links in harness docs, required **user-docs** topic guides linked from `USER_GUIDE.md` hub |
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
