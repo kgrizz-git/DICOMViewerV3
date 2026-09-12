@@ -281,6 +281,86 @@ def test_resolve_ci_range_push_missing_before_errors_without_fallback(
     assert "unavailable" in msg
 
 
+def test_resolve_ci_range_pull_request_ok(tmp_path, monkeypatch):
+    base = "d" * 40
+    monkeypatch.setattr(ci_range, "git_commit_exists", lambda _r, oid: oid == base)
+    monkeypatch.setattr(
+        ci_range, "git_merge_base_exists", lambda _r, a, b="HEAD": a == base
+    )
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="pull_request",
+        pr_base_sha=base,
+    )
+    assert status == "ok"
+    assert rng == f"{base}...HEAD"
+    assert "PR base" in msg
+
+
+def test_resolve_ci_range_pull_request_missing_base_skips(tmp_path):
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="pull_request",
+        pr_base_sha="",
+    )
+    assert status == "skip"
+    assert rng is None
+    assert "missing PR base" in msg
+
+
+def test_resolve_ci_range_schedule_ok(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        ci_range, "git_rev_parse_ok", lambda _r, ref: ref == "origin/main"
+    )
+    monkeypatch.setattr(
+        ci_range,
+        "git_merge_base_exists",
+        lambda _r, a, b="HEAD": a == "origin/main",
+    )
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="schedule",
+        default_branch="main",
+    )
+    assert status == "ok"
+    assert rng == "origin/main...HEAD"
+
+
+def test_resolve_ci_range_workflow_dispatch_missing_origin_skips(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_range, "git_rev_parse_ok", lambda _r, _ref: False)
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="workflow_dispatch",
+        default_branch="main",
+    )
+    assert status == "skip"
+    assert rng is None
+    assert "missing origin/main" in msg
+
+
+def test_resolve_ci_range_unsupported_event_skips(tmp_path):
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="issue_comment",
+    )
+    assert status == "skip"
+    assert rng is None
+    assert "unsupported event" in msg
+
+
+def test_fallback_origin_default_errors_without_merge_base(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        ci_range, "git_rev_parse_ok", lambda _r, ref: ref == "origin/main"
+    )
+    monkeypatch.setattr(ci_range, "git_merge_base_exists", lambda *_a, **_k: False)
+    status, rng, msg = ci_range._fallback_origin_default(
+        tmp_path, "main", why="push before SHA unavailable"
+    )
+    assert status == "error"
+    assert rng is None
+    assert "no merge-base" in msg
+
+
 def test_resolve_ci_range_cli_exit_codes(tmp_path, monkeypatch, capsys):
     """CLI maps resolve status to exit 0 (ok), 2 (skip), 1 (error)."""
 
