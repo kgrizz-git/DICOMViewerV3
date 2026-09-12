@@ -71,8 +71,9 @@ DOCS_SATISFACTION_EXACT: frozenset[str] = frozenset({"CHANGELOG.md"})
 
 # Require a reason with at least two same-line whitespace-separated tokens.
 # Use [ \t] (not \s) between tokens so a newline cannot complete the reason.
+# Optional trailing \\r before end-of-line covers CRLF PR bodies explicitly.
 DOCS_IMPACT_WAIVER = re.compile(
-    r"(?m)^docs-impact:[ \t]*not needed[ \t]*[—\-–][ \t]+\S+[ \t]+\S+[^\n]*$",
+    r"(?m)^docs-impact:[ \t]*not needed[ \t]*[—\-–][ \t]+\S+[ \t]+\S+[^\r\n]*\r?$",
     re.IGNORECASE,
 )
 

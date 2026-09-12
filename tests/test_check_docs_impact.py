@@ -78,13 +78,17 @@ def test_waiver_parsing_variants():
     assert impact.has_docs_impact_waiver(
         "Preface\ndocs-impact: not needed – refactor only\n"
     )
+    assert impact.has_docs_impact_waiver(
+        "Preface\r\ndocs-impact: not needed – refactor only\r\n"
+    )
+    assert impact.has_docs_impact_waiver("docs-impact: not needed — foo bar\r\n")
     assert not impact.has_docs_impact_waiver("docs-impact: not needed")
     assert not impact.has_docs_impact_waiver("docs-impact: not needed — alone")
     assert not impact.has_docs_impact_waiver("docs-impact: not needed — x")
     assert not impact.has_docs_impact_waiver("docs-impact: not needed — x\ny")
-    assert not impact.has_docs_impact_waiver("docs-impact: not needed — x\r\ny")
+    assert not impact.has_docs_impact_waiver("docs-impact: not needed — x\r\ny\r\n")
     assert not impact.has_docs_impact_waiver("no waiver here")
-    # Leading spaces on the declaration line are not accepted (line-anchored).
+    # Indented declarations are rejected (line-anchored at column 0).
     assert not impact.has_docs_impact_waiver(
         "  docs-impact: not needed — indented false positive"
     )
