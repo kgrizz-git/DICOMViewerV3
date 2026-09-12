@@ -12,8 +12,9 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   URLs (aligned with `GITHUB_BLOB_BASE` in `src/utils/doc_urls.py`) or brief
   in-guide summaries so the user-docs tree no longer depends on out-of-tree
   relative paths. `scripts/check_user_docs_links.py` now fails any `user-docs/`
-  relative link whose resolved target escapes that tree (absolute `https://`
-  links remain allowed). Plan:
+  relative link whose resolved target escapes that tree (absolute `http://` /
+  `https://` links remain allowed) and asserts `user-docs/` GitHub blob links
+  share `GITHUB_BLOB_BASE`. Plan:
   [`USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
   **Semantic versioning note: patch** (documentation / developer tooling only).
 

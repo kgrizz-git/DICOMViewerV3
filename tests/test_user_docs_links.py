@@ -125,8 +125,12 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             self.assertIn("escapes user-docs/", proc.stderr)
 
     def test_symlink_in_user_docs_to_dev_docs_plan_is_classified_as_user_doc(self) -> None:
-        """A symlink inside user-docs/ pointing to dev-docs/plans/ must still
-        be classified as a user-doc so boundary checks apply to its links."""
+        """Symlinked Markdown under user-docs/ is still classified as a user doc.
+
+        ``is_user_doc`` uses the apparent path under ``user-docs/`` (not the
+        symlink target), so escape-guard rules still apply to links in that
+        file's content even when the symlink points into ``dev-docs/plans/``.
+        """
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             user_docs, dev_docs = self._make_repo(tmp)
@@ -134,13 +138,8 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             plan.write_text("# plan\n")
             link = user_docs / "guide.md"
             link.symlink_to(Path("..") / "dev-docs" / "plans" / "REAL_PLAN.md")
-            # Content with a link that resolves into dev-docs/ from user-docs/.
+            # Content with a link that resolves outside user-docs/.
             plan.write_text("See [todo](../dev-docs/TO_DO.md).\n")
-            # Without the fix, is_user_doc=False (resolved path is in
-            # dev-docs/plans/) and the boundary check is skipped, so the
-            # script exits 0 despite the forbidden link content.
-            # With the fix, is_user_doc=True (apparent path in user-docs/)
-            # and the boundary check rejects the TO_DO.md link.
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1, proc.stderr)
             self.assertIn("escapes user-docs/", proc.stderr)
@@ -223,6 +222,17 @@ class TestUserDocsEscapeGuard(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_absolute_http_link_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "guide.md").write_text(
+                "See [remote](http://example.com/page).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_mailto_and_bare_fragment_are_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
@@ -261,6 +271,68 @@ class TestUserDocsEscapeGuard(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1, proc.stderr)
             self.assertIn("escapes user-docs/", proc.stderr)
+
+
+class TestGithubBlobBaseAlignment(unittest.TestCase):
+    """user-docs GitHub blob links must match GITHUB_BLOB_BASE."""
+
+    def _run_on_tree(self, tree_root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(tree_root)],
+            cwd=str(tree_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _write_doc_urls(self, tmp: Path, blob_base: str) -> None:
+        utils = tmp / "src" / "utils"
+        utils.mkdir(parents=True)
+        (utils / "__init__.py").write_text("")
+        (utils / "doc_urls.py").write_text(
+            f'GITHUB_BLOB_BASE = "{blob_base}"\n'
+            f'USER_DOCS_GITHUB_PREFIX = f"{{GITHUB_BLOB_BASE}}/user-docs"\n'
+        )
+
+    def test_matching_blob_link_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            base = "https://github.com/example/repo/blob/main"
+            self._write_doc_urls(tmp, base)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "guide.md").write_text(
+                f"See [changelog]({base}/CHANGELOG.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_mismatched_blob_link_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            base = "https://github.com/example/repo/blob/main"
+            self._write_doc_urls(tmp, base)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "guide.md").write_text(
+                "See [old](https://github.com/example/repo/blob/v1.0/CHANGELOG.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("GITHUB_BLOB_BASE", proc.stderr)
+
+    def test_non_blob_github_link_is_not_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            base = "https://github.com/example/repo/blob/main"
+            self._write_doc_urls(tmp, base)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "guide.md").write_text(
+                "See [issues](https://github.com/example/repo/issues).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
 class TestInlineSrcCodePaths(unittest.TestCase):
