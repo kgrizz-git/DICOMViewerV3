@@ -238,7 +238,7 @@ def test_resolve_ci_range_push_first_empty_before(tmp_path, monkeypatch):
         default_branch="main",
     )
     assert status == "ok"
-    assert rng == "emptytree...HEAD"
+    assert rng == "emptytree..HEAD"
     assert "empty" in msg.lower()
 
 

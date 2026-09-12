@@ -1,7 +1,7 @@
 """
 CI diff-range resolution for ``check_docs_impact``.
 
-Selects the three-dot git range used by the advisory docs-impact GitHub Actions
+Selects the git diff range used by the advisory docs-impact GitHub Actions
 step. Push events prefer ``github.event.before``; all-zero before uses the empty
 tree; unavailable before tips are fetched when possible, then fall back to the
 local ``origin/<default_branch>`` ref (error if that ref is also missing — never
@@ -122,7 +122,7 @@ def _resolve_push(
             empty = git_empty_tree_oid(repo_root)
         except RuntimeError as exc:
             return "error", None, str(exc)
-        return "ok", f"{empty}...HEAD", "first push / empty before (empty tree)"
+        return "ok", f"{empty}..HEAD", "first push / empty before (empty tree)"
     if not try_fetch_commit(repo_root, before):
         return _fallback_origin_default(
             repo_root,
@@ -154,7 +154,7 @@ def resolve_ci_diff_range(
     push_before_sha: str = "",
     default_branch: str = "main",
 ) -> tuple[str, str | None, str]:
-    """Resolve the git three-dot range for CI docs-impact.
+    """Resolve the git diff range for CI docs-impact.
 
     Returns:
         ``(status, diff_range_or_none, message)`` where status is

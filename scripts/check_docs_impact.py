@@ -390,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         "--resolve-ci-range",
         action="store_true",
         help=(
-            "Print the CI three-dot diff range for --event-name and exit "
+            "Print the CI git diff range for --event-name and exit "
             "(0=ok, 2=skip, 1=error). Used by GitHub Actions."
         ),
     )
