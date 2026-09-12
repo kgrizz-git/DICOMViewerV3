@@ -373,14 +373,16 @@ jobs:
 
       # Advisory docs-impact: warn when UI/help-sensitive paths change without
       # user-docs/help/CHANGELOG updates or a "docs-impact: not needed — …" waiver.
-      # PRs diff against pull_request.base.sha (works for fork PRs). Pushes diff
-      # tip vs origin/<default_branch>. Explicit SKIP if merge-base is missing.
+      # PRs: pull_request.base.sha...HEAD (fork-safe). Pushes: event.before...HEAD
+      # (all-zero before → empty-tree...HEAD). schedule/workflow_dispatch: tip vs
+      # origin/<default_branch>. Explicit SKIP if merge-base/object is missing.
       # Non-blocking (continue-on-error); script is also warning-only without --strict.
       - name: Report documentation impact (advisory)
         env:
           GITHUB_PR_BODY: ${{ github.event.pull_request.body }}
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -400,7 +402,25 @@ jobs:
               echo "  status: SKIP (no merge-base with PR base SHA)"
               exit 0
             fi
-          elif [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          elif [ "$EVENT_NAME" = "push" ]; then
+            # New branch / first push: github.event.before is all zeros.
+            if [ -z "$PUSH_BEFORE_SHA" ] || printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+              EMPTY_TREE="$(git hash-object -t tree /dev/null)"
+              DIFF_RANGE="${EMPTY_TREE}...HEAD"
+            else
+              if ! git cat-file -e "${PUSH_BEFORE_SHA}^{commit}" 2>/dev/null; then
+                echo "Docs-impact report:"
+                echo "  status: SKIP (push before SHA not present in checkout)"
+                exit 0
+              fi
+              DIFF_RANGE="${PUSH_BEFORE_SHA}...HEAD"
+              if ! git merge-base "$PUSH_BEFORE_SHA" HEAD >/dev/null 2>&1; then
+                echo "Docs-impact report:"
+                echo "  status: SKIP (no merge-base with push before SHA)"
+                exit 0
+              fi
+            fi
+          elif [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             BASE_REF="${DEFAULT_BRANCH:-main}"
             DIFF_RANGE="origin/${BASE_REF}...HEAD"
             if ! git rev-parse --verify "origin/${BASE_REF}" >/dev/null 2>&1; then

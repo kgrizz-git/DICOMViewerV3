@@ -143,6 +143,10 @@ def load_pr_body(pr_body_file: Path | None, env: dict[str, str] | None = None) -
     return environ.get("GITHUB_PR_BODY", "")
 
 
+# Include deletions: removing UI/help surfaces still warrants a docs decision.
+_GIT_DIFF_NAME_FILTER = "ACMRD"
+
+
 def changed_files_from_git(
     repo_root: Path,
     *,
@@ -151,9 +155,21 @@ def changed_files_from_git(
 ) -> list[str]:
     """Return name-only paths from git for staged files or a diff range."""
     if staged:
-        cmd = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"]
+        cmd = [
+            "git",
+            "diff",
+            "--cached",
+            "--name-only",
+            f"--diff-filter={_GIT_DIFF_NAME_FILTER}",
+        ]
     elif diff_range:
-        cmd = ["git", "diff", "--name-only", "--diff-filter=ACMR", diff_range]
+        cmd = [
+            "git",
+            "diff",
+            "--name-only",
+            f"--diff-filter={_GIT_DIFF_NAME_FILTER}",
+            diff_range,
+        ]
     else:
         raise ValueError("Either staged=True or diff_range must be set")
 

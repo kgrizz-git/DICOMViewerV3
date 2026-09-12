@@ -148,7 +148,10 @@ without a PR body, pass `--pr-body-file` containing
 warning (exit 0). Use `--strict` only after reviewing false positives. CI runs
 it advisory under the user-docs-links job: PRs use `pull_request.base.sha...HEAD`
 (with an explicit SKIP if there is no merge-base); pushes use
-`origin/<default_branch>...HEAD`; `--with-feature-coverage` on UI risk paths.
+`github.event.before...HEAD` (all-zero before → empty-tree root comparison);
+`schedule` / `workflow_dispatch` use `origin/<default_branch>...HEAD`;
+`--with-feature-coverage` on UI risk paths. Name-only diffs include deletions
+(`ACMRD`) so removed GUI/help paths still surface.
 
 **Tracking split / plan archive:** keep [`TO_DO.md`](TO_DO.md) limited to active and near-term backlog items. Remove fully completed rows after the outcome is captured in the right durable place: [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible release changes, [`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md) for CI / harness / static-analysis / dependency-verification / repo-maintenance history, and `plans/completed/`, `plans/supporting/`, `info/`, or `bug-investigations/` for detailed implementation or investigation records. Move finished implementation plans to `plans/completed/`; leave plans in `plans/supporting/` only when they remain active as dependencies, reference material, or future-scope support for open backlog work.
 

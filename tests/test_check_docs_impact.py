@@ -157,6 +157,44 @@ def test_no_risk_paths_ok(tmp_path, capsys):
     assert "no docs-risk paths" in out
 
 
+def test_deleted_gui_path_triggers_attention(tmp_path, capsys):
+    """Name-only diffs with ``D`` still list removed GUI paths as docs-risk."""
+    assert (
+        run(
+            tmp_path,
+            files=["src/gui/legacy_export_dialog.py"],
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "ATTENTION" in out
+    assert "src/gui/legacy_export_dialog.py" in out
+
+
+def test_git_diff_filter_includes_deletions(tmp_path, monkeypatch):
+    seen: list[list[str]] = []
+
+    class _Result:
+        returncode = 0
+        stdout = "src/gui/removed_widget.py\n"
+        stderr = ""
+
+    def _fake_run(cmd, **_kwargs):
+        seen.append(list(cmd))
+        return _Result()
+
+    monkeypatch.setattr(impact.subprocess, "run", _fake_run)
+    files = impact.changed_files_from_git(tmp_path, diff_range="abc...HEAD")
+    assert files == ["src/gui/removed_widget.py"]
+    assert seen and f"--diff-filter={impact._GIT_DIFF_NAME_FILTER}" in seen[0]
+    assert impact._GIT_DIFF_NAME_FILTER == "ACMRD"
+
+    seen.clear()
+    files = impact.changed_files_from_git(tmp_path, staged=True)
+    assert files == ["src/gui/removed_widget.py"]
+    assert seen and f"--diff-filter={impact._GIT_DIFF_NAME_FILTER}" in seen[0]
+
+
 def test_github_pr_body_env(tmp_path, monkeypatch):
     monkeypatch.setenv(
         "GITHUB_PR_BODY",
