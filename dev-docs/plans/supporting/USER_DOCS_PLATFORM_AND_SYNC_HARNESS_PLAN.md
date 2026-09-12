@@ -2,8 +2,7 @@
 
 **Created:** 2026-09-11  
 **Last updated:** 2026-09-12  
-**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/`
-+ escape-link CI guard). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
+**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
 Preferred next publisher pilot: **Zensical**. Next: **CZ** → **C2**.
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
@@ -270,12 +269,12 @@ batch:
 **Inventory to clear (from Phase A build warnings):**
 
 - [x] `USER_GUIDE.md` → `../CHANGELOG.md` (×2) — GitHub absolute URL on `main`
-- [x] `USER_GUIDE.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` — removed; one-line summary
-- [x] `USER_GUIDE_3D.md` → `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md` — removed; one-line summary
+- [x] `USER_GUIDE.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` — GitHub absolute URL (online; contributors)
+- [x] `USER_GUIDE_3D.md` → `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md` — GitHub absolute URL (online; contributors)
 - [x] `USER_GUIDE_ANONYMIZATION.md` → `../CHANGELOG.md` — GitHub absolute URL
 - [x] `USER_GUIDE_QA_PYLINAC.md` → `../CHANGELOG.md` — GitHub absolute URL
-- [x] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md` — removed; one-line summary
-- [x] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` — removed; one-line summary
+- [x] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md` — GitHub absolute URL (online; contributors)
+- [x] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` — GitHub absolute URL (online; contributors)
 
 **Preferred defaults (unless a better rewrite is obvious):**
 
