@@ -130,8 +130,8 @@ The **`pylinac.nuclear`** module follows **IAEA NMQC (ImageJ)**–style tests. T
 
 Unzip into e.g. **`SampleDICOMData/pylinac_demo_data/nm_nmqc_simulated/`** and point **`pylinac.nuclear`** classes at the appropriate **`.dcm`** paths, or load slices in the viewer for visual checks. **Licensing and use** are governed by the **IAEA** / NMQC distribution, not this project.
 
-Developer-facing notes on test inputs, class lists, and integration details are maintained in the repository's developer docs.
+Developer-facing notes on test inputs, class lists, and integration details (online; requires network): [CatPhan and nuclear modules](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md).
 
 ## Integration details (developers)
 
-Architecture, version pin rationale, and roadmap details are maintained in the repository's developer docs.
+Architecture, version pin rationale, and roadmap details (online; requires network): [PYLINAC integration overview](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).

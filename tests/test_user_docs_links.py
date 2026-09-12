@@ -223,6 +223,17 @@ class TestUserDocsEscapeGuard(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_mailto_and_bare_fragment_are_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "guide.md").write_text(
+                "Email [us](mailto:docs@example.com) or jump to [here](#section).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_subdir_parent_link_inside_user_docs_is_accepted(self) -> None:
         """A link using .. that stays under user-docs/ after resolution is OK."""
         with tempfile.TemporaryDirectory() as d:

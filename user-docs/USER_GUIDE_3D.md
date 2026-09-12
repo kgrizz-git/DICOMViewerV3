@@ -82,4 +82,4 @@ curve editor are tracked as roadmap items above. See the in-repo user documentat
 for the current feature list; implementation-plan and design notes are maintained
 separately from these user docs.
 
-Secondary Capture background (for planned DICOM export): DICOM Secondary Capture export is tracked as a roadmap item; implementation detail is maintained in the repository's developer docs.
+Secondary Capture background (for planned DICOM export): DICOM Secondary Capture export is tracked as a roadmap item. Online contributor notes (requires network): [DICOM GSPS / KO / Secondary Capture](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).

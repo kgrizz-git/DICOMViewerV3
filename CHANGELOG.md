@@ -9,10 +9,11 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ### Changed
 - **User-docs self-contained (Phase C0):** Relative links from `user-docs/` to
   `../CHANGELOG.md` and `../dev-docs/...` were replaced with GitHub absolute
-  CHANGELOG URLs or brief in-guide summaries so the user-docs tree no longer
-  depends on out-of-tree relative paths. `scripts/check_user_docs_links.py` now
-  fails any `user-docs/` relative link whose resolved target escapes that tree
-  (absolute `https://` links remain allowed). Plan:
+  URLs (aligned with `GITHUB_BLOB_BASE` in `src/utils/doc_urls.py`) or brief
+  in-guide summaries so the user-docs tree no longer depends on out-of-tree
+  relative paths. `scripts/check_user_docs_links.py` now fails any `user-docs/`
+  relative link whose resolved target escapes that tree (absolute `https://`
+  links remain allowed). Plan:
   [`USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
   **Semantic versioning note: patch** (documentation / developer tooling only).
 
