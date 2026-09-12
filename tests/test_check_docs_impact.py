@@ -46,6 +46,10 @@ def test_normalize_repo_path():
     assert impact.normalize_repo_path(r"src\gui\foo.py") == "src/gui/foo.py"
     assert impact.normalize_repo_path("./user-docs/USER_GUIDE.md") == "user-docs/USER_GUIDE.md"
     assert impact.normalize_repo_path("src/gui/foo.py") == "src/gui/foo.py"
+    assert impact.normalize_repo_path(".github/workflows/ci.yml") == ".github/workflows/ci.yml"
+    assert impact.normalize_repo_path("./.github/PULL_REQUEST_TEMPLATE.md") == (
+        ".github/PULL_REQUEST_TEMPLATE.md"
+    )
 
 
 def test_gui_path_is_docs_risk():
@@ -77,7 +81,13 @@ def test_waiver_parsing_variants():
     assert not impact.has_docs_impact_waiver("docs-impact: not needed")
     assert not impact.has_docs_impact_waiver("docs-impact: not needed — alone")
     assert not impact.has_docs_impact_waiver("docs-impact: not needed — x")
+    assert not impact.has_docs_impact_waiver("docs-impact: not needed — x\ny")
+    assert not impact.has_docs_impact_waiver("docs-impact: not needed — x\r\ny")
     assert not impact.has_docs_impact_waiver("no waiver here")
+    # Leading spaces on the declaration line are not accepted (line-anchored).
+    assert not impact.has_docs_impact_waiver(
+        "  docs-impact: not needed — indented false positive"
+    )
 
 
 def test_empty_changed_files_ok(tmp_path, capsys):

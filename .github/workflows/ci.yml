@@ -383,14 +383,24 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if [ -z "$PR_BASE_SHA" ]; then
+              echo "Docs-impact report:"
+              echo "  status: SKIP (missing PR base SHA)"
+              exit 0
+            fi
+            if ! git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
+              echo "Docs-impact report:"
+              echo "  status: SKIP (PR base SHA not present in checkout)"
+              exit 0
+            fi
             DIFF_RANGE="${PR_BASE_SHA}...HEAD"
             if ! git merge-base "$PR_BASE_SHA" HEAD >/dev/null 2>&1; then
               echo "Docs-impact report:"
               echo "  status: SKIP (no merge-base with PR base SHA)"
               exit 0
             fi
-          else
+          elif [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             BASE_REF="${DEFAULT_BRANCH:-main}"
             DIFF_RANGE="origin/${BASE_REF}...HEAD"
             if ! git rev-parse --verify "origin/${BASE_REF}" >/dev/null 2>&1; then
@@ -403,6 +413,10 @@ jobs:
               echo "  status: SKIP (no merge-base with origin/${BASE_REF})"
               exit 0
             fi
+          else
+            echo "Docs-impact report:"
+            echo "  status: SKIP (unsupported event: ${EVENT_NAME})"
+            exit 0
           fi
           python scripts/check_docs_impact.py \
             --root "${{ github.workspace }}" \

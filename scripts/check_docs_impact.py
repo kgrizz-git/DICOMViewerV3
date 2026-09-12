@@ -69,10 +69,11 @@ DOCS_SATISFACTION_PREFIXES: tuple[str, ...] = (
 )
 DOCS_SATISFACTION_EXACT: frozenset[str] = frozenset({"CHANGELOG.md"})
 
-# Require a reason with at least two whitespace-separated tokens after the dash.
+# Require a reason with at least two same-line whitespace-separated tokens.
+# Use [ \t] (not \s) between tokens so a newline cannot complete the reason.
 DOCS_IMPACT_WAIVER = re.compile(
-    r"docs-impact:\s*not needed\s*[—\-–]\s*\S+\s+\S+",
-    re.IGNORECASE | re.MULTILINE,
+    r"(?m)^docs-impact:[ \t]*not needed[ \t]*[—\-–][ \t]+\S+[ \t]+\S+[^\n]*$",
+    re.IGNORECASE,
 )
 
 # Paths that trigger the optional feature-coverage report (UI surface).
@@ -86,8 +87,11 @@ UI_FEATURE_COVERAGE_GLOBS: tuple[str, ...] = (
 
 
 def normalize_repo_path(path: str) -> str:
-    """Normalize a git path to forward slashes without a leading ``./``."""
-    return path.replace("\\", "/").lstrip("./")
+    """Normalize a git path to forward slashes without a leading ``./`` prefix."""
+    normalized = path.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
 
 
 def is_docs_risk_path(path: str) -> bool:
@@ -281,7 +285,7 @@ def format_report(
             "  request: update user-docs/, resources/help/, or CHANGELOG.md in this"
         )
         lines.append(
-            "           change, or add: docs-impact: not needed — <reason>"
+            "           change, or add: docs-impact: not needed — <multi-word reason>"
         )
         lines.append(
             "  local tip: pass --pr-body-file with that line when no PR body exists"
