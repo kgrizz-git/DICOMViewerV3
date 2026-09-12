@@ -384,18 +384,18 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          set +e
+          # Use || so bash -e (GHA default) does not abort before RANGE_EC is read.
+          DIFF_RANGE=""
+          RANGE_EC=0
           DIFF_RANGE="$(python scripts/check_docs_impact.py \
             --root "${{ github.workspace }}" \
             --resolve-ci-range \
             --event-name "$EVENT_NAME" \
             --pr-base-sha "$PR_BASE_SHA" \
             --push-before-sha "$PUSH_BEFORE_SHA" \
-            --default-branch "${DEFAULT_BRANCH:-main}")"
-          RANGE_EC=$?
-          set -e
+            --default-branch "${DEFAULT_BRANCH:-main}")" || RANGE_EC=$?
           if [ "$RANGE_EC" -eq 2 ]; then
-            # SKIP already printed by the resolver
+            # SKIP already printed by the resolver on stderr
             exit 0
           fi
           if [ "$RANGE_EC" -ne 0 ]; then

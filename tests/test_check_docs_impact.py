@@ -281,6 +281,62 @@ def test_resolve_ci_range_push_missing_before_errors_without_fallback(
     assert "unavailable" in msg
 
 
+def test_resolve_ci_range_cli_exit_codes(tmp_path, monkeypatch, capsys):
+    """CLI maps resolve status to exit 0 (ok), 2 (skip), 1 (error)."""
+
+    def _ok(_root, **_kwargs):
+        return "ok", "abc...HEAD", "unit"
+
+    def _skip(_root, **_kwargs):
+        return "skip", None, "missing PR base SHA"
+
+    def _err(_root, **_kwargs):
+        return "error", None, "push before SHA unavailable"
+
+    monkeypatch.setattr(impact, "resolve_ci_diff_range", _ok)
+    assert (
+        impact.main(
+            [
+                "--root",
+                str(tmp_path),
+                "--resolve-ci-range",
+                "--event-name",
+                "push",
+            ]
+        )
+        == 0
+    )
+    assert "abc...HEAD" in capsys.readouterr().out
+
+    monkeypatch.setattr(impact, "resolve_ci_diff_range", _skip)
+    assert (
+        impact.main(
+            [
+                "--root",
+                str(tmp_path),
+                "--resolve-ci-range",
+                "--event-name",
+                "pull_request",
+            ]
+        )
+        == 2
+    )
+
+    monkeypatch.setattr(impact, "resolve_ci_diff_range", _err)
+    assert (
+        impact.main(
+            [
+                "--root",
+                str(tmp_path),
+                "--resolve-ci-range",
+                "--event-name",
+                "push",
+            ]
+        )
+        == 1
+    )
+
+
 def test_github_pr_body_env(tmp_path, monkeypatch):
     monkeypatch.setenv(
         "GITHUB_PR_BODY",

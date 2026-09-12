@@ -3,8 +3,9 @@ CI diff-range resolution for ``check_docs_impact``.
 
 Selects the three-dot git range used by the advisory docs-impact GitHub Actions
 step. Push events prefer ``github.event.before``; all-zero before uses the empty
-tree; unavailable before tips are fetched, then fall back to
-``origin/<default_branch>`` (error if neither works — never silent SKIP).
+tree; unavailable before tips are fetched when possible, then fall back to the
+local ``origin/<default_branch>`` ref (error if that ref is also missing — never
+silent SKIP). No remote fetch of the default branch is attempted.
 
 Inputs: repository root + CI event fields. Outputs: ``(status, range, message)``
 with status ``ok`` / ``skip`` / ``error``. Requirements: Python 3.9+; ``git`` on
