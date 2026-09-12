@@ -2,8 +2,9 @@
 
 **Created:** 2026-09-11  
 **Last updated:** 2026-09-11  
-**Status:** Phase A complete; **do not adopt MkDocs Material** (EOL ~2026-11-05).
-Preferred next publisher pilot: **Zensical**. Phases B–C not started.  
+**Status:** Phase A complete; **Phase B complete** (advisory `check_docs_impact.py`).
+**Do not adopt MkDocs Material** (EOL ~2026-11-05). Preferred next publisher
+pilot: **Zensical**. Next: **C0** → **CZ** → **C2**.  
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
@@ -186,14 +187,14 @@ list recorded; config retained provisionally or removed pending Phase C.
 
 ### B1. `scripts/check_docs_impact.py` (new)
 
-- [ ] Inspect `git diff` (staged or `origin/main...HEAD`) for paths that imply
+- [x] Inspect `git diff` (staged or `origin/main...HEAD`) for paths that imply
   user-visible documentation risk, for example:
   - `src/gui/`, `src/main_app_*.py`, `main_window_menu_builder.py`
   - `src/utils/config/`, shortcut registration, export/privacy dialogs
   - `resources/help/`, `src/utils/doc_urls.py`
-- [ ] Path matching is intentionally coarse (comment-only edits under `src/gui/`
+- [x] Path matching is intentionally coarse (comment-only edits under `src/gui/`
   may warn). That is acceptable while advisory.
-- [ ] When matched, **warn and request** (do **not** hard-require until
+- [x] When matched, **warn and request** (do **not** hard-require until
   promoted) **either**:
   - a change under `user-docs/`, `resources/help/`, or `CHANGELOG.md`
     (user-visible), **or**
@@ -202,25 +203,25 @@ list recorded; config retained provisionally or removed pending Phase C.
     - Document that **local/pre-push runs without a PR body** should pass the
       same line via `--pr-body-file` or a commit/topic note; without it the
       check only **warns** (exit 0) unless `--strict`
-- [ ] Exit **0** with warnings by default; optional `--strict` for local/pre-push
+- [x] Exit **0** with warnings by default; optional `--strict` for local/pre-push
   use after false-positive review.
-- [ ] Add `tests/test_check_docs_impact.py` with synthetic diffs.
+- [x] Add `tests/test_check_docs_impact.py` with synthetic diffs.
 
 ### B2. Feature-coverage on UI changes
 
-- [ ] When Phase B1 triggers on UI paths, also run
+- [x] When Phase B1 triggers on UI paths, also run
   `check_doc_feature_coverage.py` and print uncovered action labels (no blanket
   `--fail-under` threshold).
-- [ ] Wire into CI as a **non-blocking** step (or PR comment when available);
+- [x] Wire into CI as a **non-blocking** step (or PR comment when available);
   mirror pattern of advisory `check_documentation_freshness.py`.
 
 ### B3. Harness documentation
 
-- [ ] Document commands in [`HARNESS.md`](../../HARNESS.md) and
+- [x] Document commands in [`HARNESS.md`](../../HARNESS.md) and
   [`dev-docs/README.md`](../../README.md#quality-checks-documentation).
-- [ ] Add PR template reminder cross-link if not already satisfied by B1's
+- [x] Add PR template reminder cross-link if not already satisfied by B1's
   `docs-impact` convention.
-- [ ] Add tool to `security/security-tool-inventory.json` only if the check
+- [x] Add tool to `security/security-tool-inventory.json` only if the check
   invokes external services (it should not).
 
 ### B4. Optional follow-up (not required for this plan's exit)
@@ -417,7 +418,7 @@ Before adopting MkDocs in CI or release packaging: update
 
 - [x] Phase A pilot result recorded; MkDocs builds from current `user-docs/`
       without moving canonical sources; known dead-link list captured.
-- [ ] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
+- [x] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
 - [ ] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
       guard + offline/search smoke notes.
 - [ ] Phase CZ: Zensical pilot result recorded (preferred publisher path).

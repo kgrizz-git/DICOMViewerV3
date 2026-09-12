@@ -1,8 +1,17 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-11
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-11
+
+- **Docs-impact sync harness (Phase B):** Added `scripts/check_docs_impact.py`
+  with unit tests, advisory CI step on the user-docs-links job
+  (`fetch-depth: 0`, `GITHUB_PR_BODY`, `--with-feature-coverage`,
+  `continue-on-error`), HARNESS/README/PR-template guidance, and parent-plan
+  enforcement-gap checkboxes closed for docs-impact + feature-coverage
+  surfacing. Escape hatch: `docs-impact: not needed — <reason>`.
 
 ## 2026-09-07
 

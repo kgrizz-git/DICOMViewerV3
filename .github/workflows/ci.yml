@@ -359,6 +359,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          # Full history so docs-impact can diff against the PR base / default branch.
+          fetch-depth: 0
 
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
@@ -368,6 +370,21 @@ jobs:
       # and the finding rate has been reviewed.
       - name: Report documentation freshness (advisory)
         run: python scripts/check_documentation_freshness.py --root "${{ github.workspace }}"
+
+      # Advisory docs-impact: warn when UI/help-sensitive paths change without
+      # user-docs/help/CHANGELOG updates or a "docs-impact: not needed — …" waiver.
+      # Non-blocking (continue-on-error); script is also warning-only without --strict.
+      - name: Report documentation impact (advisory)
+        env:
+          GITHUB_PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          BASE_REF="${{ github.base_ref || github.event.repository.default_branch || 'main' }}"
+          git fetch --no-tags --depth=1 origin "$BASE_REF" 2>/dev/null || true
+          python scripts/check_docs_impact.py \
+            --root "${{ github.workspace }}" \
+            --diff-range "origin/${BASE_REF}...HEAD" \
+            --with-feature-coverage
+        continue-on-error: true
 
   # ── Security scanners — cloud-uploading, gated ────────────────────────────
 

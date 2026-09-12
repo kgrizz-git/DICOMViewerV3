@@ -195,9 +195,10 @@ wrongly implied that routine documentation maintenance completes and is then
 superseded by the tooling phases.
 
 
-- [ ] Add/update contributor guidance requiring a docs-impact decision for
+- [x] Add/update contributor guidance requiring a docs-impact decision for
   user-visible behavior, UI labels/shortcuts, configuration, exports, privacy
-  workflows, and build/install paths.
+  workflows, and build/install paths. **Done** — PR template + `HARNESS.md` /
+  `check_docs_impact.py` waiver convention (Phase B).
 - [ ] For each accepted feature batch, update the mapped canonical docs and any
   declared mirror (Quick Guide, in-app HTML, README) in the same pull request,
   update the relevant inventory review state, or record an explicit deferred
@@ -226,7 +227,7 @@ follow-up.
 | Change | Required review/action | Flag or command | Enforcement today |
 |---|---|---|---|
 | Any edit to a Markdown file the checker scans — `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, `AGENTS.md` — or any move of a module under `src/` | Check all relative links, and every inline `` `src/...py` `` path named in prose | `python scripts/check_user_docs_links.py` | **Enforced** — blocking CI job, [`ci.yml:311`](../../.github/workflows/ci.yml) |
-| New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps | **Self-attested** — PR-template checkbox only, [`PULL_REQUEST_TEMPLATE.md:28`](../../.github/PULL_REQUEST_TEMPLATE.md); nothing runs the report |
+| New/changed visible action, toolbar/context-menu item, shortcut, setting, or user workflow | Update the ownership map and canonical docs/mirrors, or record a bounded deferral | `python scripts/check_doc_feature_coverage.py`; review its candidate gaps; `python scripts/check_docs_impact.py` | **Advisory CI** — docs-impact warns on UI/help-sensitive diffs without docs or a `docs-impact: not needed — …` waiver; feature-coverage prints on UI risk paths via `--with-feature-coverage`. PR-template checkbox remains for triage ledger updates |
 | Public interface or high-risk internal contract change | Verify the docstring against code and tests; update it in the same change when behavior changes | Scoped `interrogate` regression check where a baseline exists; human accuracy review is required | **Not enforced** — no scoped baseline is wired to CI; human review only |
 | Minor/major release or substantial UI/Help change | Create, complete, and link a timestamped assessment before tagging (or before merging a substantial UI/Help change); inventory and audit user, developer, in-app, and relevant code documentation | New timestamped `dev-docs/doc-assessments/doc-assessment-*.md` | **Advisory only** — `check_documentation_freshness.py` reports assessment age and unowned `Baseline` rows on every CI run but never fails; nothing asserts an assessment exists at a release boundary, and this is the trigger that would otherwise have caught the 15 unassessed rows |
 
@@ -258,15 +259,19 @@ is caught only when someone happens to look.
   validates inline `` `src/...py` `` paths, so a module that moves fails CI
   until the prose naming it is updated. `dev-docs/plans/` stays excluded as
   historical record.
-- [ ] Add a **warning-only** documentation-impact report to pull requests. It
+- [x] Add a **warning-only** documentation-impact report to pull requests. It
   should inspect the diff for UI/actions, settings, export, privacy, build, and
   public-contract paths, then require either a related documentation change or
   a concise `docs-impact: not needed — <reason>` declaration in the PR body.
   Start warning-only; do not make it blocking until false positives and the
-  ownership map have been reviewed.
-- [ ] Surface `check_doc_feature_coverage.py` as a PR artifact/comment when a
+  ownership map have been reviewed. **Done** — `scripts/check_docs_impact.py`,
+  advisory CI step under user-docs-links (`continue-on-error`), PR template
+  reminder; optional `--strict`.
+- [x] Surface `check_doc_feature_coverage.py` as a PR artifact/comment when a
   relevant UI path changes. Do not impose a blanket percentage threshold: the
-  report is label-based and must be triaged by a reviewer.
+  report is label-based and must be triaged by a reviewer. **Done** — printed
+  under the docs-impact CI step via `--with-feature-coverage` when UI risk
+  paths are present (log output; not a separate PR comment bot).
 - [ ] Add a release-checklist assertion that a documentation assessment exists
   after the previous minor/major release (or record an explicit waiver with a
   reason). This is the reminder for periodic accuracy review, not an automated
