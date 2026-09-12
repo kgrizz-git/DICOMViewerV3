@@ -1,8 +1,8 @@
 # DICOM Viewer V3 — User guide
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-12
 
-**Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](../CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
+**Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
 
 This hub links topic guides for the application. **In the running app**, use **Help → Quick Start Guide** for a short overview (with a table of contents and links that open these pages in your browser when you are online).
 
@@ -56,8 +56,8 @@ Treat the database like other clinical metadata: back up and secure appropriatel
 
 ## Source and versioning
 
-These files live in the repository under `user-docs/` and track the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3) for online **Help → Documentation** links. **Compiled releases** may correspond to an **older** tag than `main`; for behavior tied to a specific build, read **[CHANGELOG.md](../CHANGELOG.md)** and the **release notes** for that version on GitHub.
+These files live in the repository under `user-docs/` and track the **main** branch on [GitHub](https://github.com/kgrizz-git/DICOMViewerV3) for online **Help → Documentation** links. **Compiled releases** may correspond to an **older** tag than `main`; for behavior tied to a specific build, read **[CHANGELOG.md](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/CHANGELOG.md)** and the **release notes** for that version on GitHub.
 
 ## Further reading (developers / deep dives)
 
-Implementation notes, research, and plans live in the project's developer documentation (the `dev-docs/` tree), maintained separately from these user guides. For an example, see [PYLINAC_INTEGRATION_OVERVIEW.md](../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
+Implementation notes, research, and plans live in the project's developer documentation (the `dev-docs/` tree), maintained separately from these user guides.
