@@ -15,10 +15,20 @@ from pathlib import Path
 import pytest
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "check_docs_impact.py"
+_RANGE_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "scripts" / "docs_impact_ci_range.py"
+)
 _spec = importlib.util.spec_from_file_location("check_docs_impact", _SCRIPT)
 assert _spec and _spec.loader
 impact = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(impact)
+
+_range_spec = importlib.util.spec_from_file_location(
+    "docs_impact_ci_range", _RANGE_SCRIPT
+)
+assert _range_spec and _range_spec.loader
+ci_range = importlib.util.module_from_spec(_range_spec)
+_range_spec.loader.exec_module(ci_range)
 
 
 def run(
@@ -157,8 +167,8 @@ def test_no_risk_paths_ok(tmp_path, capsys):
     assert "no docs-risk paths" in out
 
 
-def test_deleted_gui_path_triggers_attention(tmp_path, capsys):
-    """Name-only diffs with ``D`` still list removed GUI paths as docs-risk."""
+def test_injected_gui_path_triggers_attention(tmp_path, capsys):
+    """Synthetic changed-files lists treat GUI paths as docs-risk (incl. removals)."""
     assert (
         run(
             tmp_path,
@@ -193,6 +203,82 @@ def test_git_diff_filter_includes_deletions(tmp_path, monkeypatch):
     files = impact.changed_files_from_git(tmp_path, staged=True)
     assert files == ["src/gui/removed_widget.py"]
     assert seen and f"--diff-filter={impact._GIT_DIFF_NAME_FILTER}" in seen[0]
+
+
+def test_is_all_zero_oid():
+    assert ci_range.is_all_zero_oid("0" * 40)
+    assert ci_range.is_all_zero_oid("0" * 64)
+    assert not ci_range.is_all_zero_oid("")
+    assert not ci_range.is_all_zero_oid("a" + "0" * 39)
+
+
+def test_resolve_ci_range_push_normal(tmp_path, monkeypatch):
+    before = "a" * 40
+    monkeypatch.setattr(ci_range, "try_fetch_commit", lambda _r, oid: oid == before)
+    monkeypatch.setattr(
+        ci_range, "git_merge_base_exists", lambda _r, a, b="HEAD": a == before
+    )
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="push",
+        push_before_sha=before,
+        default_branch="main",
+    )
+    assert status == "ok"
+    assert rng == f"{before}...HEAD"
+    assert "push before" in msg
+
+
+def test_resolve_ci_range_push_first_empty_before(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_range, "git_empty_tree_oid", lambda _r: "emptytree")
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="push",
+        push_before_sha="0" * 40,
+        default_branch="main",
+    )
+    assert status == "ok"
+    assert rng == "emptytree...HEAD"
+    assert "empty" in msg.lower()
+
+
+def test_resolve_ci_range_push_missing_before_falls_back(tmp_path, monkeypatch):
+    before = "b" * 40
+    monkeypatch.setattr(ci_range, "try_fetch_commit", lambda _r, _oid: False)
+    monkeypatch.setattr(
+        ci_range, "git_rev_parse_ok", lambda _r, ref: ref == "origin/main"
+    )
+    monkeypatch.setattr(
+        ci_range,
+        "git_merge_base_exists",
+        lambda _r, a, b="HEAD": a == "origin/main",
+    )
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="push",
+        push_before_sha=before,
+        default_branch="main",
+    )
+    assert status == "ok"
+    assert rng == "origin/main...HEAD"
+    assert "fell back" in msg
+
+
+def test_resolve_ci_range_push_missing_before_errors_without_fallback(
+    tmp_path, monkeypatch
+):
+    before = "c" * 40
+    monkeypatch.setattr(ci_range, "try_fetch_commit", lambda _r, _oid: False)
+    monkeypatch.setattr(ci_range, "git_rev_parse_ok", lambda _r, _ref: False)
+    status, rng, msg = ci_range.resolve_ci_diff_range(
+        tmp_path,
+        event_name="push",
+        push_before_sha=before,
+        default_branch="main",
+    )
+    assert status == "error"
+    assert rng is None
+    assert "unavailable" in msg
 
 
 def test_github_pr_body_env(tmp_path, monkeypatch):

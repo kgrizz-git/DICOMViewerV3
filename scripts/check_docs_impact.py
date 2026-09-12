@@ -44,12 +44,18 @@ import sys
 from pathlib import Path
 
 try:
+    from scripts.docs_impact_ci_range import resolve_ci_diff_range
     from scripts.stdio_utf8 import ensure_stdout_utf8
 except ModuleNotFoundError as exc:
     # Only fall back when the package path is unavailable (script invoked as
-    # ``python scripts/...``). Do not mask errors inside stdio_utf8 itself.
-    if exc.name not in {"scripts", "scripts.stdio_utf8"}:
+    # ``python scripts/...``). Do not mask errors inside helper modules.
+    if exc.name not in {
+        "scripts",
+        "scripts.stdio_utf8",
+        "scripts.docs_impact_ci_range",
+    }:
         raise
+    from docs_impact_ci_range import resolve_ci_diff_range
     from stdio_utf8 import ensure_stdout_utf8
 
 # Paths that often imply end-user doc updates (coarse; advisory).
@@ -327,6 +333,34 @@ def format_report(
     return lines
 
 
+def _run_resolve_ci_range_cli(
+    repo_root: Path,
+    *,
+    event_name: str,
+    pr_base_sha: str,
+    push_before_sha: str,
+    default_branch: str,
+) -> int:
+    """Print a CI diff range and return 0 (ok), 2 (skip), or 1 (error)."""
+    status, diff_range, message = resolve_ci_diff_range(
+        repo_root,
+        event_name=event_name,
+        pr_base_sha=pr_base_sha,
+        push_before_sha=push_before_sha,
+        default_branch=default_branch,
+    )
+    if status == "ok" and diff_range:
+        print(diff_range)
+        if message:
+            print(f"Docs-impact range: {message}", file=sys.stderr)
+        return 0
+    print(
+        f"Docs-impact report:\n  status: {status.upper()} ({message})",
+        file=sys.stderr,
+    )
+    return 1 if status == "error" else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns 0 unless ``--strict`` and attention is needed."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -352,6 +386,34 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Read changed paths from a file (one per line). For tests/CI injection.",
     )
+    mode.add_argument(
+        "--resolve-ci-range",
+        action="store_true",
+        help=(
+            "Print the CI three-dot diff range for --event-name and exit "
+            "(0=ok, 2=skip, 1=error). Used by GitHub Actions."
+        ),
+    )
+    parser.add_argument(
+        "--event-name",
+        default="",
+        help="CI event name for --resolve-ci-range (pull_request/push/…)",
+    )
+    parser.add_argument(
+        "--pr-base-sha",
+        default="",
+        help="pull_request.base.sha for --resolve-ci-range",
+    )
+    parser.add_argument(
+        "--push-before-sha",
+        default="",
+        help="github.event.before for --resolve-ci-range",
+    )
+    parser.add_argument(
+        "--default-branch",
+        default="main",
+        help="Repository default branch name for --resolve-ci-range",
+    )
     parser.add_argument(
         "--pr-body-file",
         type=Path,
@@ -372,6 +434,15 @@ def main(argv: list[str] | None = None) -> int:
 
     # Em dashes / non-ASCII in reports; avoid mojibake on a cp1252 console.
     ensure_stdout_utf8()
+
+    if args.resolve_ci_range:
+        return _run_resolve_ci_range_cli(
+            repo_root,
+            event_name=args.event_name,
+            pr_base_sha=args.pr_base_sha,
+            push_before_sha=args.push_before_sha,
+            default_branch=args.default_branch,
+        )
 
     mode_label: str
     if args.changed_files_file is not None:
