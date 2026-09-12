@@ -346,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     repo_root: Path = args.root.resolve()
 
     try:
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # pyright: ignore[reportAttributeAccessIssue]
     except (AttributeError, ValueError):
         pass
 
