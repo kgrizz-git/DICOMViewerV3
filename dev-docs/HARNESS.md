@@ -140,7 +140,15 @@ on pre-push; CI owns the suite and the 80% coverage gate (`ci.yml`, `--cov-fail-
 
 **Feature → doc coverage:** `python scripts/check_doc_feature_coverage.py` lists menu/`QAction` labels not yet mentioned anywhere under `user-docs/` — a heuristic worklist for the documentation audit (some labels are trivial or documented under different wording). Add `--show-covered` to see what is matched, or `--fail-under 0.5` to gate in CI.
 
-**Docs-impact (UI diffs):** `python scripts/check_docs_impact.py` (default: `origin/main...HEAD` or `main...HEAD`) warns when docs-risk paths lack a same-diff docs update or waiver. Locally without a PR body, pass `--pr-body-file` containing `docs-impact: not needed — <reason>`, or leave the warning (exit 0). Use `--strict` only after reviewing false positives. CI runs it advisory under the user-docs-links job with `--with-feature-coverage`.
+**Docs-impact (UI diffs):** `python scripts/check_docs_impact.py` (default:
+`origin/<default>...HEAD` via `origin/HEAD`, with `main`/`develop` fallbacks)
+warns when docs-risk paths lack a same-diff docs update or waiver. Locally
+without a PR body, pass `--pr-body-file` containing
+`docs-impact: not needed — <reason with at least two words>`, or leave the
+warning (exit 0). Use `--strict` only after reviewing false positives. CI runs
+it advisory under the user-docs-links job: PRs use `pull_request.base.sha...HEAD`
+(with an explicit SKIP if there is no merge-base); pushes use
+`origin/<default_branch>...HEAD`; `--with-feature-coverage` on UI risk paths.
 
 **Tracking split / plan archive:** keep [`TO_DO.md`](TO_DO.md) limited to active and near-term backlog items. Remove fully completed rows after the outcome is captured in the right durable place: [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible release changes, [`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md) for CI / harness / static-analysis / dependency-verification / repo-maintenance history, and `plans/completed/`, `plans/supporting/`, `info/`, or `bug-investigations/` for detailed implementation or investigation records. Move finished implementation plans to `plans/completed/`; leave plans in `plans/supporting/` only when they remain active as dependencies, reference material, or future-scope support for open backlog work.
 

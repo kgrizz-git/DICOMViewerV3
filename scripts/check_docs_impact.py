@@ -7,7 +7,7 @@ When a change touches paths that often imply user-visible documentation work
 the same diff also updates user-facing docs **or** the PR/commit body declares
 an explicit waiver:
 
-    docs-impact: not needed — <reason>
+    docs-impact: not needed — <multi-word reason>
 
 Path matching is intentionally coarse (e.g. a comment-only edit under
 ``src/gui/`` still warns). That is acceptable while the check remains advisory.
@@ -61,15 +61,17 @@ DOCS_RISK_GLOBS: tuple[str, ...] = (
 )
 
 # Same-diff paths that satisfy the “docs were considered” side of the check.
+# ``resources/help/`` is intentionally both risk and satisfaction: editing Help
+# HTML in the same change counts as addressing docs impact for UI work.
 DOCS_SATISFACTION_PREFIXES: tuple[str, ...] = (
     "user-docs/",
     "resources/help/",
 )
 DOCS_SATISFACTION_EXACT: frozenset[str] = frozenset({"CHANGELOG.md"})
 
-# Allow em dash, en dash, or ASCII hyphen after "not needed".
+# Require a reason with at least two whitespace-separated tokens after the dash.
 DOCS_IMPACT_WAIVER = re.compile(
-    r"docs-impact:\s*not needed\s*[—\-–]\s*\S.+",
+    r"docs-impact:\s*not needed\s*[—\-–]\s*\S+\s+\S+",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -159,8 +161,36 @@ def changed_files_from_git(
 
 
 def default_diff_range(repo_root: Path) -> str | None:
-    """Pick ``origin/main...HEAD`` or ``main...HEAD`` when those refs exist."""
-    for candidate in ("origin/main...HEAD", "main...HEAD"):
+    """Pick ``origin/<default>...HEAD`` (or local fallbacks) when those refs exist."""
+    candidates: list[str] = []
+    sym = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if sym.returncode == 0:
+        ref = (sym.stdout or "").strip()
+        # refs/remotes/origin/main -> origin/main
+        if ref.startswith("refs/remotes/"):
+            remote_branch = ref[len("refs/remotes/") :]
+            candidates.append(f"{remote_branch}...HEAD")
+            if "/" in remote_branch:
+                candidates.append(f"{remote_branch.split('/', 1)[1]}...HEAD")
+    for name in (
+        "origin/main",
+        "main",
+        "origin/master",
+        "master",
+        "origin/develop",
+        "develop",
+    ):
+        candidate = f"{name}...HEAD"
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    for candidate in candidates:
         base = candidate.split("...", 1)[0]
         probe = subprocess.run(
             ["git", "rev-parse", "--verify", base],
@@ -196,20 +226,22 @@ def run_feature_coverage_report(repo_root: Path) -> list[str]:
     script = repo_root / "scripts" / "check_doc_feature_coverage.py"
     if not script.is_file():
         return [f"(skip feature coverage: missing {script.as_posix()})"]
+    cmd = [sys.executable, str(script), "--root", str(repo_root)]
     result = subprocess.run(
-        [sys.executable, str(script), "--root", str(repo_root)],
+        cmd,
         cwd=repo_root,
         check=False,
         capture_output=True,
         text=True,
     )
     out = (result.stdout or "").rstrip()
-    err = (result.stderr or "").rstrip()
     lines = out.splitlines() if out else []
     if result.returncode != 0:
-        lines.append(f"(feature coverage exit {result.returncode})")
-        if err:
-            lines.extend(err.splitlines())
+        lines.append(
+            f"(feature coverage failed: exit {result.returncode}; "
+            f"cmd={' '.join(cmd)})"
+        )
+        # Do not merge stderr into the report (noise / privacy); stdout only.
     return lines or ["(feature coverage produced no output)"]
 
 

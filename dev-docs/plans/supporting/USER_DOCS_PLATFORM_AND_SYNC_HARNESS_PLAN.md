@@ -4,7 +4,7 @@
 **Last updated:** 2026-09-11  
 **Status:** Phase A complete; **Phase B complete** (advisory `check_docs_impact.py`).
 **Do not adopt MkDocs Material** (EOL ~2026-11-05). Preferred next publisher
-pilot: **Zensical**. Next: **C0** → **CZ** → **C2**.  
+pilot: **Zensical**. Next: **C0** → **CZ** → **C2**.
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).

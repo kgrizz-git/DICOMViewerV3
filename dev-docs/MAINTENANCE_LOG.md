@@ -11,7 +11,9 @@ This file records development and repository-maintenance history that is useful 
   (`fetch-depth: 0`, `GITHUB_PR_BODY`, `--with-feature-coverage`,
   `continue-on-error`), HARNESS/README/PR-template guidance, and parent-plan
   enforcement-gap checkboxes closed for docs-impact + feature-coverage
-  surfacing. Escape hatch: `docs-impact: not needed — <reason>`.
+  surfacing. Escape hatch: `docs-impact: not needed — <reason>`. Review follow-up:
+  PR `base.sha` diffs + merge-base SKIP (fork-safe), default-branch detection,
+  multi-word waiver, no feature-coverage stderr merge, extra tests.
 
 ## 2026-09-07
 

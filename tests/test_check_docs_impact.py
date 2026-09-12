@@ -2,7 +2,8 @@
 Tests for scripts/check_docs_impact.py.
 
 Covers path classification, waiver parsing, advisory vs ``--strict`` exit codes,
-and the synthetic ``--changed-files-file`` injection path used in CI-less tests.
+feature-coverage wiring, and the synthetic ``--changed-files-file`` injection
+path used in CI-less tests.
 """
 
 from __future__ import annotations
@@ -41,6 +42,12 @@ def run(
         return impact.main()
 
 
+def test_normalize_repo_path():
+    assert impact.normalize_repo_path(r"src\gui\foo.py") == "src/gui/foo.py"
+    assert impact.normalize_repo_path("./user-docs/USER_GUIDE.md") == "user-docs/USER_GUIDE.md"
+    assert impact.normalize_repo_path("src/gui/foo.py") == "src/gui/foo.py"
+
+
 def test_gui_path_is_docs_risk():
     assert impact.is_docs_risk_path("src/gui/main_window_menu_builder.py")
     assert impact.is_docs_risk_path("src/main_app_file_ops.py")
@@ -68,7 +75,15 @@ def test_waiver_parsing_variants():
         "Preface\ndocs-impact: not needed – refactor only\n"
     )
     assert not impact.has_docs_impact_waiver("docs-impact: not needed")
+    assert not impact.has_docs_impact_waiver("docs-impact: not needed — alone")
+    assert not impact.has_docs_impact_waiver("docs-impact: not needed — x")
     assert not impact.has_docs_impact_waiver("no waiver here")
+
+
+def test_empty_changed_files_ok(tmp_path, capsys):
+    assert run(tmp_path, "--strict", files=[]) == 0
+    out = capsys.readouterr().out
+    assert "no docs-risk paths" in out
 
 
 def test_risk_without_docs_or_waiver_is_attention_advisory_zero(tmp_path, capsys):
@@ -159,3 +174,64 @@ def test_evaluate_wants_feature_coverage_for_gui():
         ["src/utils/doc_urls.py"], ""
     )
     assert want2 is False
+
+
+def test_with_feature_coverage_includes_helper_output(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(
+        impact,
+        "run_feature_coverage_report",
+        lambda _root: ["FEATURE_COVERAGE_STUB_LINE"],
+    )
+    code = run(
+        tmp_path,
+        "--with-feature-coverage",
+        files=["src/gui/foo.py", "user-docs/USER_GUIDE.md"],
+    )
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "feature-coverage" in out
+    assert "FEATURE_COVERAGE_STUB_LINE" in out
+
+
+def test_with_feature_coverage_skipped_for_non_ui_risk(tmp_path, capsys, monkeypatch):
+    called: list[int] = []
+
+    def _stub(_root: Path) -> list[str]:
+        called.append(1)
+        return ["SHOULD_NOT_APPEAR"]
+
+    monkeypatch.setattr(impact, "run_feature_coverage_report", _stub)
+    code = run(
+        tmp_path,
+        "--with-feature-coverage",
+        files=["src/utils/doc_urls.py"],
+        body="docs-impact: not needed — doc_urls comment only",
+    )
+    assert code == 0
+    assert called == []
+    out = capsys.readouterr().out
+    assert "SHOULD_NOT_APPEAR" not in out
+
+
+def test_feature_coverage_failure_does_not_include_stderr(tmp_path, monkeypatch):
+    """Failed helper: surface exit/cmd on stdout path only; never merge stderr."""
+
+    class _Result:
+        returncode = 2
+        stdout = "partial stdout line\n"
+        stderr = "secret-looking stderr\n"
+
+    monkeypatch.setattr(
+        impact.subprocess,
+        "run",
+        lambda *_a, **_k: _Result(),
+    )
+    # Ensure the script path is considered present.
+    script = tmp_path / "scripts" / "check_doc_feature_coverage.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("# stub\n", encoding="utf-8")
+    lines = impact.run_feature_coverage_report(tmp_path)
+    joined = "\n".join(lines)
+    assert "partial stdout line" in joined
+    assert "secret-looking stderr" not in joined
+    assert "feature coverage failed: exit 2" in joined
