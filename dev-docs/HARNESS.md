@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-09-11
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -82,6 +82,13 @@ raw-output path for every output filter.
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
 | [`scripts/check_doc_feature_coverage.py`](../scripts/check_doc_feature_coverage.py) | Report-only: maps `QAction` labels in `src/` to mentions in `user-docs/` and lists candidate documentation gaps (heuristic; exit 0 unless `--fail-under RATIO`) |
+
+**Local user-docs site pilot (Phase A, Material only — not for adoption):** after
+`pip install -r requirements-dev.txt`, `mkdocs serve` / `mkdocs build` still work
+(`mkdocs.yml`, `docs_dir: user-docs`). **Do not treat this as the long-term
+publisher** — Material EOL ~2026-11-05; preferred next pilot is **Zensical**
+(plan Phase CZ). Generated `site/` is gitignored. See
+[`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
