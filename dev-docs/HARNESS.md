@@ -82,6 +82,8 @@ raw-output path for every output filter.
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
 | [`scripts/check_doc_feature_coverage.py`](../scripts/check_doc_feature_coverage.py) | Report-only: maps `QAction` labels in `src/` to mentions in `user-docs/` and lists candidate documentation gaps (heuristic; exit 0 unless `--fail-under RATIO`) |
+| [`scripts/check_docs_impact.py`](../scripts/check_docs_impact.py) | Advisory: when UI/help-sensitive paths change, warn unless the same diff updates `user-docs/` / `resources/help/` / `CHANGELOG.md` or the PR body declares `docs-impact: not needed — <reason>` (optional `--strict`; CI step is non-blocking and may also print feature-coverage on UI diffs) |
+| [`scripts/check_documentation_freshness.py`](../scripts/check_documentation_freshness.py) | Advisory: inventory/triage consistency and assessment age (CI warning-only; optional `--strict`) |
 
 **Local user-docs site pilot (Phase A, Material only — not for adoption):** after
 `pip install -r requirements-dev.txt`, `mkdocs serve` / `mkdocs build` still work
@@ -132,11 +134,26 @@ mostly blocking. Know what they run before wondering why a commit was rejected.
 `main`**, so it is silent on feature branches. The full pytest suite is **not** run
 on pre-push; CI owns the suite and the 80% coverage gate (`ci.yml`, `--cov-fail-under=80`).
 
-**Pytest:** `tests/test_user_docs_links.py`, `tests/test_repo_harness.py`, `tests/test_architecture_boundaries.py`, `tests/test_agent_smoke_harness.py`, `tests/test_doc_feature_coverage.py`.
+**Pytest:** `tests/test_user_docs_links.py`, `tests/test_repo_harness.py`, `tests/test_architecture_boundaries.py`, `tests/test_agent_smoke_harness.py`, `tests/test_doc_feature_coverage.py`, `tests/test_check_docs_impact.py`.
 
 **Doc garden:** `python scripts/check_repo_harness.py --doc-garden` prints a non-blocking report for stale harness dates, open TO_DO count, and duplicate `[Unreleased]` changelog headings. Treat it as a triage aid, not a merge gate.
 
 **Feature → doc coverage:** `python scripts/check_doc_feature_coverage.py` lists menu/`QAction` labels not yet mentioned anywhere under `user-docs/` — a heuristic worklist for the documentation audit (some labels are trivial or documented under different wording). Add `--show-covered` to see what is matched, or `--fail-under 0.5` to gate in CI.
+
+**Docs-impact (UI diffs):** `python scripts/check_docs_impact.py` (default:
+`origin/<default>...HEAD` via `origin/HEAD`, with `main`/`develop` fallbacks)
+warns when docs-risk paths lack a same-diff docs update or waiver. Locally
+without a PR body, pass `--pr-body-file` containing
+`docs-impact: not needed — <reason with at least two words>`, or leave the
+warning (exit 0). Use `--strict` only after reviewing false positives. CI runs
+it advisory under the user-docs-links job via
+`check_docs_impact.py --resolve-ci-range`: PRs use `pull_request.base.sha...HEAD`;
+pushes use `github.event.before...HEAD` (all-zero before → empty-tree root
+comparison; unavailable before tries fetch then falls back to
+`origin/<default_branch>...HEAD` or errors); `schedule` / `workflow_dispatch`
+use `origin/<default_branch>...HEAD`. Name-only diffs include deletions
+(`ACMRD`) so removed GUI/help paths still surface. `--with-feature-coverage`
+runs on UI risk paths.
 
 **Tracking split / plan archive:** keep [`TO_DO.md`](TO_DO.md) limited to active and near-term backlog items. Remove fully completed rows after the outcome is captured in the right durable place: [`../CHANGELOG.md`](../CHANGELOG.md) for user-visible release changes, [`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md) for CI / harness / static-analysis / dependency-verification / repo-maintenance history, and `plans/completed/`, `plans/supporting/`, `info/`, or `bug-investigations/` for detailed implementation or investigation records. Move finished implementation plans to `plans/completed/`; leave plans in `plans/supporting/` only when they remain active as dependencies, reference material, or future-scope support for open backlog work.
 
