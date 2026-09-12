@@ -30,7 +30,11 @@ from pathlib import Path
 
 try:
     from scripts.stdio_utf8 import ensure_stdout_utf8
-except ModuleNotFoundError:  # `python scripts/check_doc_feature_coverage.py`
+except ModuleNotFoundError as exc:
+    # Only fall back when the package path is unavailable (script invoked as
+    # ``python scripts/...``). Do not mask errors inside stdio_utf8 itself.
+    if exc.name not in {"scripts", "scripts.stdio_utf8"}:
+        raise
     from stdio_utf8 import ensure_stdout_utf8
 
 # First string-literal argument of a QAction(...) constructor. ``\s`` spans the

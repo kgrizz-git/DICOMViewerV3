@@ -45,7 +45,11 @@ from pathlib import Path
 
 try:
     from scripts.stdio_utf8 import ensure_stdout_utf8
-except ModuleNotFoundError:  # `python scripts/check_docs_impact.py`
+except ModuleNotFoundError as exc:
+    # Only fall back when the package path is unavailable (script invoked as
+    # ``python scripts/...``). Do not mask errors inside stdio_utf8 itself.
+    if exc.name not in {"scripts", "scripts.stdio_utf8"}:
+        raise
     from stdio_utf8 import ensure_stdout_utf8
 
 # Paths that often imply end-user doc updates (coarse; advisory).
