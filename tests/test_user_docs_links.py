@@ -35,8 +35,7 @@ class TestUserDocsRelativeLinks(unittest.TestCase):
 
 
 class TestUserDocsDevDocsBoundary(unittest.TestCase):
-    """user-docs/ must not link into dev-docs/plans/ or dev-docs/TO_DO.md.
-    Links into dev-docs/info/ and other dev-docs/ root files are allowed."""
+    """user-docs/ must not link outside user-docs/ via relative links."""
 
     def _run_on_tree(self, tree_root: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -67,9 +66,9 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             )
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1)
-            self.assertIn("user-docs must not link into dev-docs/plans", proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
-    def test_user_doc_link_into_dev_docs_info_is_accepted(self) -> None:
+    def test_user_doc_link_into_dev_docs_info_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             user_docs, _ = self._make_repo(tmp)
@@ -77,7 +76,8 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
                 "See [info](../dev-docs/info/SOME_INFO.md).\n"
             )
             proc = self._run_on_tree(tmp)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
     def test_user_doc_link_into_dev_docs_todo_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as d:
@@ -88,9 +88,9 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             )
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1)
-            self.assertIn("user-docs must not link into dev-docs/TO_DO.md", proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
-    def test_user_doc_link_into_nested_todo_in_info_is_accepted(self) -> None:
+    def test_user_doc_link_into_nested_todo_in_info_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             user_docs, _ = self._make_repo(tmp)
@@ -98,9 +98,10 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
                 "See [nested](../dev-docs/info/TO_DO.md).\n"
             )
             proc = self._run_on_tree(tmp)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
-    def test_user_doc_link_into_dev_docs_root_other_than_todo_is_accepted(self) -> None:
+    def test_user_doc_link_into_dev_docs_root_other_than_todo_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             user_docs, _ = self._make_repo(tmp)
@@ -108,7 +109,8 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
                 "See [releasing](../dev-docs/RELEASING.md).\n"
             )
             proc = self._run_on_tree(tmp)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
     def test_user_doc_link_to_dev_docs_directory_does_not_crash(self) -> None:
         with tempfile.TemporaryDirectory() as d:
@@ -120,7 +122,7 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertNotEqual(proc.returncode, 139, "script crashed")
             self.assertNotIn("IndexError", proc.stderr)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
     def test_symlink_in_user_docs_to_dev_docs_plan_is_classified_as_user_doc(self) -> None:
         """A symlink inside user-docs/ pointing to dev-docs/plans/ must still
@@ -141,7 +143,7 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             # and the boundary check rejects the TO_DO.md link.
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1, proc.stderr)
-            self.assertIn("user-docs must not link into dev-docs/TO_DO.md", proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
     def test_user_doc_link_to_another_user_doc_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as d:
@@ -161,6 +163,93 @@ class TestUserDocsDevDocsBoundary(unittest.TestCase):
             )
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class TestUserDocsEscapeGuard(unittest.TestCase):
+    """Focused C0 escape-guard tests for user-docs/."""
+
+    def _run_on_tree(self, tree_root: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(tree_root)],
+            cwd=str(tree_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_in_tree_relative_link_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "OTHER.md").write_text("# other\n")
+            (user_docs / "guide.md").write_text("See [other](OTHER.md).\n")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_escaping_to_changelog_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (tmp / "CHANGELOG.md").write_text("# changelog\n")
+            (user_docs / "guide.md").write_text("See [changelog](../CHANGELOG.md).\n")
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
+
+    def test_escaping_to_dev_docs_info_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (tmp / "dev-docs" / "info").mkdir(parents=True)
+            (tmp / "dev-docs" / "info" / "foo.md").write_text("# foo\n")
+            (user_docs / "guide.md").write_text(
+                "See [info](../dev-docs/info/foo.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
+
+    def test_absolute_https_link_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "guide.md").write_text(
+                "See [remote](https://example.com/page).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_subdir_parent_link_inside_user_docs_is_accepted(self) -> None:
+        """A link using .. that stays under user-docs/ after resolution is OK."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (user_docs / "OTHER.md").write_text("# other\n")
+            (user_docs / "subdir").mkdir()
+            (user_docs / "subdir" / "guide.md").write_text(
+                "See [other](../OTHER.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_subdir_parent_link_escaping_user_docs_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            user_docs = tmp / "user-docs"
+            user_docs.mkdir()
+            (tmp / "README.md").write_text("# readme\n")
+            (user_docs / "subdir").mkdir()
+            (user_docs / "subdir" / "guide.md").write_text(
+                "See [readme](../../README.md).\n"
+            )
+            proc = self._run_on_tree(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("escapes user-docs/", proc.stderr)
 
 
 class TestInlineSrcCodePaths(unittest.TestCase):

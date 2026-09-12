@@ -12,13 +12,16 @@ defect.
 Two checks run over those files:
 
 1. **Relative Markdown links.** Scans inline links of the form [text](url). Skips
-   http(s), mailto, and bare fragment-only targets. Resolves each relative URL
-   against the source file's directory and fails if the target does not exist.
+    http(s), mailto, and bare fragment-only targets. Resolves each relative URL
+    against the source file's directory and fails if the target does not exist.
+    For files under ``user-docs/``, a relative link whose resolved target falls
+    outside ``user-docs/`` also fails, even if the target exists elsewhere in the
+    repository.
 2. **Inline `src/...py` code paths.** A path written in backticks, such as
-   `src/core/mpr_controller.py`, must exist. This catches the failure mode where a
-   module moves between packages and prose that names it silently goes stale; a
-   core/ to gui/ move left 17 such references wrong across the living docs before
-   this check existed.
+    `src/core/mpr_controller.py`, must exist. This catches the failure mode where a
+    module moves between packages and prose that names it silently goes stale; a
+    core/ to gui/ move left 17 such references wrong across the living docs before
+    this check existed.
 
 Usage (from repository root):
     python scripts/check_user_docs_links.py
@@ -125,15 +128,15 @@ def split_anchor(url: str) -> tuple[str, str]:
 def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> list[str]:
     """Return list of error messages for broken links in one file.
 
-    When ``is_user_doc`` is True (the file lives under ``user-docs/``), links
-    that resolve into ``dev-docs/plans/`` or ``dev-docs/TO_DO.md`` are rejected.
-    Links into ``dev-docs/info/`` and other ``dev-docs/`` root-level files are
-    allowed (they contain useful reference material for advanced users).
+    When ``is_user_doc`` is True (the file lives under ``user-docs/``), relative
+    links whose resolved target is outside ``user-docs/`` are rejected, even when
+    the target exists elsewhere in the repository. Absolute ``https://``,
+    ``http://``, ``mailto:``, and bare fragment-only targets remain allowed.
     """
     errors: list[str] = []
     text = md_path.read_text(encoding="utf-8")
     base_dir = md_path.parent
-    dev_docs_root = repo_root / "dev-docs"
+    user_docs_root = (repo_root / "user-docs").resolve()
 
     for _label, raw_url in LINK_PATTERN.findall(text):
         url = raw_url.strip()
@@ -148,12 +151,12 @@ def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> lis
         except ValueError:
             errors.append(f"{md_path.relative_to(repo_root)}: link escapes repo: {raw_url!r}")
             continue
-        if is_user_doc and target.is_relative_to(dev_docs_root.resolve()):
-            rel = target.relative_to(dev_docs_root.resolve())
-            if (rel.parts and rel.parts[0] == "plans") or rel == Path("TO_DO.md"):
-                label = rel.parts[0] if rel.parts else "TO_DO.md"
+        if is_user_doc:
+            try:
+                target.relative_to(user_docs_root)
+            except ValueError:
                 errors.append(
-                    f"{md_path.relative_to(repo_root)}: user-docs must not link into dev-docs/{label}: {raw_url!r}"
+                    f"{md_path.relative_to(repo_root)}: link escapes user-docs/: {raw_url!r}"
                 )
                 continue
         if not target.exists():
