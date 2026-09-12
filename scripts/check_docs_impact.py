@@ -43,6 +43,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from scripts.stdio_utf8 import ensure_stdout_utf8
+except ModuleNotFoundError:  # `python scripts/check_docs_impact.py`
+    from stdio_utf8 import ensure_stdout_utf8
+
 # Paths that often imply end-user doc updates (coarse; advisory).
 DOCS_RISK_PREFIXES: tuple[str, ...] = (
     "src/gui/",
@@ -345,10 +350,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     repo_root: Path = args.root.resolve()
 
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # pyright: ignore[reportAttributeAccessIssue]
-    except (AttributeError, ValueError):
-        pass
+    # Em dashes / non-ASCII in reports; avoid mojibake on a cp1252 console.
+    ensure_stdout_utf8()
 
     mode_label: str
     if args.changed_files_file is not None:

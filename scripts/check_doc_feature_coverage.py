@@ -28,6 +28,11 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    from scripts.stdio_utf8 import ensure_stdout_utf8
+except ModuleNotFoundError:  # `python scripts/check_doc_feature_coverage.py`
+    from stdio_utf8 import ensure_stdout_utf8
+
 # First string-literal argument of a QAction(...) constructor. ``\s`` spans the
 # newline so multi-line constructors (label on the following line) still match.
 ACTION_PATTERN = re.compile(
@@ -150,10 +155,7 @@ def main() -> int:
     repo_root: Path = args.root.resolve()
 
     # Labels contain non-ASCII (×, °, —); avoid mojibake on a cp1252 console.
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # pyright: ignore[reportAttributeAccessIssue]
-    except (AttributeError, ValueError):
-        pass
+    ensure_stdout_utf8()
 
     report, fraction = build_coverage_report(repo_root, show_covered=args.show_covered)
     for line in report:
