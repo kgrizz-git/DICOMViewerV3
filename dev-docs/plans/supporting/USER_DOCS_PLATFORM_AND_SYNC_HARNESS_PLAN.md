@@ -308,37 +308,54 @@ publisher cross-check clean of those warnings; C0 smoke notes recorded
 is the successor from the same authors, Open Source, self-hostable, and can build
 an existing Material project from `mkdocs.yml` ([migration guide](https://zensical.org/docs/compatibility/mkdocs/migration/)).
 
-- [ ] Add `zensical` to `requirements-dev.txt` (dev-only) with a version floor
-  checked against PyPI at implementation time (no unpinned docs toolchain);
-  document `zensical serve` / `zensical build` in Verification, `HARNESS.md`,
+- [ ] Add `zensical` to `requirements-dev.txt` (dev-only) as a bounded range
+  resolved from PyPI at implementation time (e.g. `zensical>=X,<Y`,
+  consistent with the `mkdocs>=1.6.0,<2` precedent — a bare `>=` floor floats
+  and violates the no-unpinned-toolchain rule); document `zensical serve` /
+  `zensical build` in Verification, `HARNESS.md`,
   and `dev-docs/README.md` (its tool table still names `mkdocs serve / build`).
 - [ ] Build this repo’s existing `mkdocs.yml` with Zensical **without** rewriting
   canonical guides. Set `theme: variant: classic` for the Material-like look
   ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)), then
   confirm `mkdocs build` still stays green (Material is expected to ignore the
   unknown key) so the MkDocs safety net holds until C2; if it errors, test the
-  variant via a temporary config copy instead.
-- [ ] First `zensical build` runs in a **clean venv with only `zensical`
-  installed** (no `mkdocs-material`): proves no hidden reliance on Material’s
-  transitive packages. Our `pymdownx.details` / `pymdownx.superfences`
-  extensions are natively implemented by Zensical (not the Python
-  `pymdown-extensions` package — pinning it would be a placebo), so an
-  extension failure here is a Zensical bug: record it under the failure path
-  below, do not paper over it with a pip pin.
+  variant via a temporary config copy instead. Note the coexistence tradeoff:
+  while `mkdocs.yml` carries both Material keys (`name`, `palette`, `features`)
+  and the Zensical key (`variant`), one builder always ignores keys — tie the
+  dark/light toggle check below explicitly to this interaction.
+- [ ] First `zensical build` runs in a **clean venv with `zensical` (plus its
+  declared deps) but without `mkdocs-material`**: proves the Material-authored
+  `theme: name: material` config builds with no hidden reliance on Material
+  itself. Our `pymdownx.details` / `pymdownx.superfences` extensions are
+  provided by the `pymdown-extensions` package that Zensical lists as an
+  explicit dependency (auto-installed, supported version) — no separate pin
+  needed. An extension failure here is likely a dependency/version issue, not
+  proof of a Zensical bug: record it under the failure path below.
 - [ ] Compare vs Phase A Material build with a concrete checklist (record each
-  pass/fail, not just prose): build exit 0 with zero warnings — Zensical has
-  no `--strict` flag, so capture the build log and assert zero warning lines;
-  all 14 nav entries resolve; nav **behavior** matches (sections / expand /
-  top — Zensical promises the `classic` look, not flag-for-flag `features:`
-  behavior); search index present and searchable; dark/light toggle works;
-  offline output stays flat-HTML suitable for `file://`; edit links render
-  and point at `…/edit/main/user-docs/<file>.md` (Constraint 5 — enable the
-  `content.action.edit` theme feature if the buttons do not render, and parse
+  pass/fail, not just prose): `zensical build --strict` exits 0 (strict mode
+  is a link/anchor validation gate — `invalid_links` / `invalid_link_anchors`,
+  exit 1 on issue — not general warnings; keep the build log as a secondary
+  artifact and assert zero warning lines in it); all 13 nav entries resolve
+  (Home + 12 topics — recount from `mkdocs.yml` if it changed, do not reuse a
+  stale count); nav **behavior** matches (sections / expand / top — Zensical
+  promises the `classic` look, not flag-for-flag `features:` behavior;
+  verify the dark/light toggle against the `variant`+`palette` coexistence
+  note above); built-in search works in a browser smoke (Zensical search is
+  its own engine, no Lunr pipeline — do not reuse Phase A’s
+  `search_index.json` figure as the criterion); dark/light toggle works;
+  offline output stays flat-HTML suitable for `file://`; `font: false` still
+  honored (grep rendered HTML for `fonts.googleapis.com`); edit links render
+  and point at `…/edit/main/user-docs/<file>.md` (Constraint 5 — first add
+  the `content.action.edit` theme feature, which our `features:` list
+  currently lacks so the buttons will not render without it, then parse
   `site/*.html` edit-link `href`s against `USER_DOCS_GITHUB_PREFIX`);
-  no new external network deps — explicitly re-check Phase A’s `unpkg`
-  iframe-worker shim **and** the GitHub API calls Zensical makes in-browser
-  for stars/forks/release when `repo_url` is set; `use_directory_urls`
-  behavior noted; build time recorded.
+  no new external network deps — Zensical ships the **same** `unpkg`
+  iframe-worker shim as Material (vendor via `extra.polyfills` with an
+  `iframe-worker` filename, or accept network-dependent search under
+  `file://` as Phase A did), and note the GitHub API calls Zensical makes
+  in-browser for stars/forks/release when `repo_url` is set (offline mode
+  requires disabling repo/analytics/comment/instant-navigation features);
+  `use_directory_urls` behavior noted; build time recorded.
 - [ ] Add a config-URL alignment test (extend `tests/test_user_docs_links.py`
   or a sibling): parse `mkdocs.yml` (and later `zensical.toml`, if adopted)
   and statically assert `repo_url` / `edit_uri` match the `USER_DOCS_GITHUB_PREFIX`
@@ -436,11 +453,11 @@ python scripts/check_user_docs_links.py
 python scripts/check_doc_feature_coverage.py
 python -m pytest tests/test_user_docs_links.py tests/test_doc_urls_resolve.py -q
 
-# Phase A / C0 / CZ verification
+# Phase A / C0 / CZ verification (both builders during the CZ transition)
 python scripts/check_user_docs_links.py
 # C0 guard is built into check_user_docs_links.py (escaping relative links fail by default)
-mkdocs build       # Phase A reference only — not an adoption path
-zensical build     # Phase CZ preferred publisher
+mkdocs build                # Phase A reference / safety net — not an adoption path
+zensical build --strict     # Phase CZ preferred publisher (link/anchor gate, exit 1 on issue)
 zensical serve
 
 # Phase B
