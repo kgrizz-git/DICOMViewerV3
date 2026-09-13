@@ -406,9 +406,19 @@ comparison checklist above recorded pass/fail per item; clear input to C2.
 - [ ] If **Zensical adopted:** switch local/CI docs build commands (CI side is
   the `user-docs-links` job in `.github/workflows/ci.yml` — no publisher
   build exists in CI today, only the link checker + docs-impact harness);
-  add offline bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored; do not ship
+  add offline bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored
+  (generated output is never committed — see below); do not ship
   a bundled site until C0 is green. Optionally migrate to `zensical.toml` later
   (not required on day one).
+  - **End-user integration sketch** (implemented under the TO_DO offline-bundle
+    item, not here): (1) release-time build — run `zensical build --strict`
+    during release packaging and treat the output as a build artifact like the
+    frozen executable; (2) installer payload — ship the built `site/` tree with
+    the app (mechanism TBD in `BUILDING_EXECUTABLES.md` / installer notes);
+    (3) Help-menu wiring — open the local bundle from Help when present, fall
+    back to the existing GitHub blob URLs when absent (dev runs from source,
+    missing/stale bundle); (4) keep the in-app Quick Start HTML as the
+    always-available baseline regardless of bundle state.
 - [ ] If **Mintlify deferred:** document re-evaluate trigger (docs-only mirror
   repo + privacy approval).
 - [ ] If **status quo:** keep Markdown + in-app HTML only; remove or archive
