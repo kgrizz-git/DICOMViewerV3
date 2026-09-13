@@ -943,3 +943,12 @@ The following build-related files and directories should be in `.gitignore`:
 Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. **Help → Documentation** and links inside the Quick Start guide open **GitHub** (`user-docs/` on `main`) in the default browser and require network access.
 
 For a future **offline** doc pack (e.g. generated HTML under `resources/help/docs/` and `file://` URLs), record the packaging choice here and gate URL schemes in `QuickStartGuideDialog` / `DialogCoordinator` accordingly.
+
+### Release step: staging the offline doc bundle
+
+At release time, populate `resources/help/docs/` before freezing:
+
+1. Install the dev requirements including the zensical pin (`pip install -r requirements-dev.txt`).
+2. Run `python scripts/build_offline_docs.py` from the repo root. It runs `zensical build --strict` (any warning fails the release step), copies `site/` into `resources/help/docs/` (cleaned first), and verifies `index.html` plus every `mkdocs.yml` nav target is present.
+3. Run PyInstaller as usual (`pyinstaller DICOMViewerV3.spec --clean --noconfirm`). The existing `('resources', 'resources')` datas entry picks up `resources/help/docs/` with no spec changes.
+4. Verify the frozen bundle contains `resources/help/docs/index.html` alongside the nav pages before distributing.
