@@ -1,6 +1,6 @@
 # De-identification (anonymized export)
 
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-12
 
 The viewer offers DICOM **metadata de-identification** settings that remove or
 replace selected identifiers during the DICOM export workflows described below.
@@ -84,4 +84,4 @@ following factual transformation detail:
 
 ---
 
-See also: [USER_GUIDE.md](USER_GUIDE.md) (hub) · [CONFIGURATION.md](CONFIGURATION.md) · [CHANGELOG.md](../CHANGELOG.md).
+See also: [USER_GUIDE.md](USER_GUIDE.md) (hub) · [CONFIGURATION.md](CONFIGURATION.md) · [CHANGELOG.md](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/CHANGELOG.md).

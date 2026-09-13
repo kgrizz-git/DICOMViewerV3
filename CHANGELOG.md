@@ -6,6 +6,18 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed
+- **User-docs self-contained (Phase C0):** Relative links from `user-docs/` to
+  `../CHANGELOG.md` and `../dev-docs/...` were replaced with GitHub absolute
+  URLs (aligned with `GITHUB_BLOB_BASE` in `src/utils/doc_urls.py`) or brief
+  in-guide summaries so the user-docs tree no longer depends on out-of-tree
+  relative paths. `scripts/check_user_docs_links.py` now fails any `user-docs/`
+  relative link whose resolved target escapes that tree (absolute `http://` /
+  `https://` links remain allowed) and asserts `user-docs/` GitHub blob links
+  share `GITHUB_BLOB_BASE`. Plan:
+  [`USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
+  **Semantic versioning note: patch** (documentation / developer tooling only).
+
 ### Added
 - **Docs-impact sync harness (developer tooling only):** New `scripts/check_docs_impact.py` warns when UI/help-sensitive paths (`src/gui/`, `src/utils/config/`, `resources/help/`, `doc_urls.py`, `main_app_*.py`, menu builder) change without a same-diff update to `user-docs/` / `resources/help/` / `CHANGELOG.md` or a PR-body waiver `docs-impact: not needed — <multi-word reason>`. Advisory by default (`--strict` optional); CI runs it non-blocking under the user-docs-links job via `--resolve-ci-range` (PR `base.sha`; push `event.before` with empty-tree first-push and default-branch fallback when before is unavailable — no silent SKIP; schedule/dispatch vs `origin/<default_branch>`; `--with-feature-coverage` on UI diffs). Diff filter includes deletions (`ACMRD`). Shared `scripts/stdio_utf8.py` narrows `sys.stdout` via `isinstance(..., io.TextIOWrapper)` before `reconfigure` (no pyright ignores). Documented in `HARNESS.md` / `dev-docs/README.md`; PR template reminder added. Plan Phase B: [`USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md). **Semantic versioning note: patch** (developer tooling / process only).
 - **MkDocs Material user-docs pilot (developer tooling / docs presentation):** Provisional local static site from existing `user-docs/` via root `mkdocs.yml` (Material theme, offline plugin, `edit_uri` aligned with `doc_urls.py`), thin landing `user-docs/index.md`, and `mkdocs` / `mkdocs-material` in `requirements-dev.txt`. Generated `site/` stays gitignored. **Do not adopt Material** — maintainers schedule EOL ~2026-11-05; MkDocs 1.x is effectively unmaintained. Plan pivots to a **Zensical** pilot (Phase CZ) before any publisher adopt decision. Pilot result and known cross-boundary link gaps: [`USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](dev-docs/plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md). Canonical guides unchanged aside from the landing stub. **Semantic versioning note: patch** (docs tooling / presentation only).

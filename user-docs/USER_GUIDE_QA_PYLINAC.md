@@ -1,6 +1,6 @@
 # User guide — ACR phantom QA (pylinac)
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-09-12
 
 The viewer can run **automated ACR phantom analysis** using the **pylinac** library (pinned in `requirements.txt`, currently **3.43.2**). This is **optional QA tooling**; the app still runs if pylinac is missing until you use these menus.
 
@@ -38,7 +38,7 @@ The MRI dialog can include:
 
 - **Echo** (default **highest** when the box is checked): dual-echo ACR **T2** series should use **echo 2** (T2-weighted, typically TE≈80). Echo 1 is proton-density and is not used for ACR QC. Uncheck the box to type a specific echo number. ``echo_number is None`` on the request means the runner resolves the **highest** ``EchoNumber`` from the series headers before calling pylinac (stock pylinac would otherwise pick the **lowest** echo).
 - **Low-contrast detectability:** method (e.g. Weber), **visibility threshold**, **sanity multiplier** (persisted in config).
-- **Compare mode:** run up to **three** low-contrast configurations and compare scores; combined **PDF** and JSON (`schema_version` **1.2**) may be produced (see [CHANGELOG.md](../CHANGELOG.md)). Each run in the **`runs`** array includes **`vanilla_pylinac`** on its **`run`** object (and in **`pylinac_analysis_profile`**) when relevant.
+- **Compare mode:** run up to **three** low-contrast configurations and compare scores; combined **PDF** and JSON (`schema_version` **1.2**) may be produced (see [CHANGELOG.md](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/CHANGELOG.md)). Each run in the **`runs`** array includes **`vanilla_pylinac`** on its **`run`** object (and in **`pylinac_analysis_profile`**) when relevant.
 - **Scan-extent tolerance:** If pylinac rejects the volume for strict physical extent, you can retry with an optional **0.5–2.0 mm** tolerance; runs record a **`pylinac_analysis_profile`** for audit.
 
 ### ACR CT
@@ -130,8 +130,8 @@ The **`pylinac.nuclear`** module follows **IAEA NMQC (ImageJ)**–style tests. T
 
 Unzip into e.g. **`SampleDICOMData/pylinac_demo_data/nm_nmqc_simulated/`** and point **`pylinac.nuclear`** classes at the appropriate **`.dcm`** paths, or load slices in the viewer for visual checks. **Licensing and use** are governed by the **IAEA** / NMQC distribution, not this project.
 
-**Further reading (tests, inputs, class list):** [PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md](../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md).
+Developer-facing notes on test inputs, class lists, and integration details (online; requires network): [CatPhan and nuclear modules](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md).
 
 ## Integration details (developers)
 
-For architecture, version pin rationale, and roadmap (CatPhan, overlays, batch, etc.), see [PYLINAC_INTEGRATION_OVERVIEW.md](../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
+Architecture, version pin rationale, and roadmap details (online; requires network): [PYLINAC integration overview](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).

@@ -1,6 +1,6 @@
 # User guide — 3D volume rendering
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-09-12
 
 The viewer can open a **GPU-accelerated 3D volume render** of the **focused** 2D subwindow’s series. This is a **separate** non-modal dialog; it does not replace the multi-pane 2D layout.
 
@@ -82,4 +82,4 @@ curve editor are tracked as roadmap items above. See the in-repo user documentat
 for the current feature list; implementation-plan and design notes are maintained
 separately from these user docs.
 
-Secondary Capture background (for planned DICOM export): [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).
+Secondary Capture background (for planned DICOM export): DICOM Secondary Capture export is tracked as a roadmap item. Online contributor notes (requires network): [DICOM GSPS / KO / Secondary Capture](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).

@@ -1,10 +1,9 @@
 # User docs platform pilot and sync harness plan
 
 **Created:** 2026-09-11  
-**Last updated:** 2026-09-11  
-**Status:** Phase A complete; **Phase B complete** (advisory `check_docs_impact.py`).
-**Do not adopt MkDocs Material** (EOL ~2026-11-05). Preferred next publisher
-pilot: **Zensical**. Next: **C0** → **CZ** → **C2**.
+**Last updated:** 2026-09-12  
+**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
+Preferred next publisher pilot: **Zensical**. Next: **CZ** → **C2**.
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
@@ -269,13 +268,13 @@ batch:
 
 **Inventory to clear (from Phase A build warnings):**
 
-- [ ] `USER_GUIDE.md` → `../CHANGELOG.md` (×2)
-- [ ] `USER_GUIDE.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
-- [ ] `USER_GUIDE_3D.md` → `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md`
-- [ ] `USER_GUIDE_ANONYMIZATION.md` → `../CHANGELOG.md`
-- [ ] `USER_GUIDE_QA_PYLINAC.md` → `../CHANGELOG.md`
-- [ ] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md`
-- [ ] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`
+- [x] `USER_GUIDE.md` → `../CHANGELOG.md` (×2) — GitHub absolute URL on `main`
+- [x] `USER_GUIDE.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` — GitHub absolute URL (online; contributors)
+- [x] `USER_GUIDE_3D.md` → `../dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md` — GitHub absolute URL (online; contributors)
+- [x] `USER_GUIDE_ANONYMIZATION.md` → `../CHANGELOG.md` — GitHub absolute URL
+- [x] `USER_GUIDE_QA_PYLINAC.md` → `../CHANGELOG.md` — GitHub absolute URL
+- [x] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_CATPHAN_AND_NUCLEAR_MODULES.md` — GitHub absolute URL (online; contributors)
+- [x] `USER_GUIDE_QA_PYLINAC.md` → `../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md` — GitHub absolute URL (online; contributors)
 
 **Preferred defaults (unless a better rewrite is obvious):**
 
@@ -286,21 +285,22 @@ batch:
 
 **Regression guard (required with C0):**
 
-- [ ] Extend `scripts/check_user_docs_links.py` (or add a sibling check) so
-  Markdown under `user-docs/` **fails** on relative links that escape
-  `user-docs/` (e.g. `](../dev-docs/`, `](../CHANGELOG`, `](../../`). Absolute
-  `https://` links remain allowed. Wire into the existing user-docs CI job.
-- [ ] Re-run the **chosen** publisher build (`zensical build` preferred;
-  `mkdocs build` only as a temporary cross-check) with **no** “target is not
-  found among documentation files” warnings for those paths; record clean build
-  in C2 notes.
-- [ ] Interactive offline/search smoke: open built `site/` via local static
-  server (and `file://` if useful); confirm nav + search; record any CDN/shim
-  dependencies (Material’s `unpkg` iframe-worker was a Phase A finding — confirm
-  whether Zensical improves this).
+- [x] Extend `scripts/check_user_docs_links.py` so Markdown under `user-docs/`
+  **fails** on relative links that escape `user-docs/` (resolved target outside
+  the tree). Absolute `https://` links remain allowed. Existing user-docs CI job
+  already runs this script. Tests in `tests/test_user_docs_links.py`.
+- [x] Temporary publisher cross-check (2026-09-12): `mkdocs build` produced
+  `site/index.html` with **no** “target is not found” warnings for the former
+  escaping paths (Material EOL banner only). Prefer `zensical build` when CZ
+  lands; record that clean build in C2 notes.
+- [x] C0 smoke notes (2026-09-12): local `mkdocs build` site artifact present;
+  link-checker exit 0; no escaping relative links under `user-docs/`. Full
+  offline/search + CDN/shim comparison vs Material is deferred to **Phase CZ**
+  (Zensical pilot), where Material’s `unpkg` iframe-worker finding is re-checked.
 
 **Exit for C0:** zero escaping relative links under `user-docs/`; CI guard green;
-publisher build clean of those warnings; search smoke notes recorded.
+publisher cross-check clean of those warnings; C0 smoke notes recorded
+(Zensical offline/search deferred to CZ).
 
 ### CZ. Zensical pilot (preferred publisher path)
 
@@ -419,8 +419,8 @@ Before adopting MkDocs in CI or release packaging: update
 - [x] Phase A pilot result recorded; MkDocs builds from current `user-docs/`
       without moving canonical sources; known dead-link list captured.
 - [x] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
-- [ ] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
-      guard + offline/search smoke notes.
+- [x] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
+      guard + C0 smoke notes (Zensical offline/search deferred to CZ).
 - [ ] Phase CZ: Zensical pilot result recorded (preferred publisher path).
 - [ ] Phase C2: platform decision recorded (**reject MkDocs Material**;
       Zensical / Mintlify / status quo), including Phase 5 gate status; no

@@ -12,22 +12,28 @@ defect.
 Two checks run over those files:
 
 1. **Relative Markdown links.** Scans inline links of the form [text](url). Skips
-   http(s), mailto, and bare fragment-only targets. Resolves each relative URL
-   against the source file's directory and fails if the target does not exist.
+    http(s), mailto, and bare fragment-only targets. Resolves each relative URL
+    against the source file's directory and fails if the target does not exist.
+    For files under ``user-docs/``, a relative link whose resolved target falls
+    outside ``user-docs/`` also fails, even if the target exists elsewhere in the
+    repository. Absolute ``https://github.com/.../blob/...`` links under
+    ``user-docs/`` must share the ``GITHUB_BLOB_BASE`` prefix from
+    ``src/utils/doc_urls.py`` (so forks/tags stay aligned with in-app Help).
 2. **Inline `src/...py` code paths.** A path written in backticks, such as
-   `src/core/mpr_controller.py`, must exist. This catches the failure mode where a
-   module moves between packages and prose that names it silently goes stale; a
-   core/ to gui/ move left 17 such references wrong across the living docs before
-   this check existed.
+    `src/core/mpr_controller.py`, must exist. This catches the failure mode where a
+    module moves between packages and prose that names it silently goes stale; a
+    core/ to gui/ move left 17 such references wrong across the living docs before
+    this check existed.
 
 Usage (from repository root):
     python scripts/check_user_docs_links.py
 
 Exit code: 0 if all links resolve, 1 if any are broken (prints details).
 
-Inputs: Markdown files on disk under the repo.
+Inputs: Markdown files on disk under the repo; ``GITHUB_BLOB_BASE`` from
+``src/utils/doc_urls.py``.
 Outputs: stdout messages; non-zero exit on failure.
-Requirements: Python 3.9+ standard library only.
+Requirements: Python 3.9+; repository ``src/`` importable for ``utils.doc_urls``.
 """
 
 from __future__ import annotations
@@ -51,6 +57,8 @@ LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 SRC_PATH_PATTERN = re.compile(
     r"`(src/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)(?::\d+(?:[-,]\d+)*)?`"
 )
+# Absolute GitHub blob links under user-docs/ must share GITHUB_BLOB_BASE.
+GITHUB_BLOB_LINK_HINT = re.compile(r"https://github\.com/[^)\s]+/blob/")
 
 
 def iter_markdown_files(repo_root: Path) -> list[Path]:
@@ -122,18 +130,48 @@ def split_anchor(url: str) -> tuple[str, str]:
     return url, ""
 
 
+def load_github_blob_base(repo_root: Path) -> str:
+    """Return ``GITHUB_BLOB_BASE`` from ``src/utils/doc_urls.py`` (no trailing slash)."""
+    src_root = str(repo_root / "src")
+    if src_root not in sys.path:
+        sys.path.insert(0, src_root)
+    from utils.doc_urls import GITHUB_BLOB_BASE
+
+    return GITHUB_BLOB_BASE.rstrip("/")
+
+
+def check_github_blob_base_alignment(
+    md_path: Path, repo_root: Path, blob_base: str
+) -> list[str]:
+    """Fail user-docs GitHub blob links that diverge from ``GITHUB_BLOB_BASE``."""
+    errors: list[str] = []
+    text = md_path.read_text(encoding="utf-8")
+    for _label, raw_url in LINK_PATTERN.findall(text):
+        url = raw_url.strip()
+        if not GITHUB_BLOB_LINK_HINT.match(url):
+            continue
+        path_part, _anchor = split_anchor(url)
+        if path_part == blob_base or path_part.startswith(blob_base + "/"):
+            continue
+        errors.append(
+            f"{md_path.relative_to(repo_root)}: GitHub blob link {raw_url!r} "
+            f"does not use GITHUB_BLOB_BASE ({blob_base!r})"
+        )
+    return errors
+
+
 def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> list[str]:
     """Return list of error messages for broken links in one file.
 
-    When ``is_user_doc`` is True (the file lives under ``user-docs/``), links
-    that resolve into ``dev-docs/plans/`` or ``dev-docs/TO_DO.md`` are rejected.
-    Links into ``dev-docs/info/`` and other ``dev-docs/`` root-level files are
-    allowed (they contain useful reference material for advanced users).
+    When ``is_user_doc`` is True (the file lives under ``user-docs/``), relative
+    links whose resolved target is outside ``user-docs/`` are rejected, even when
+    the target exists elsewhere in the repository. Absolute ``https://``,
+    ``http://``, ``mailto:``, and bare fragment-only targets remain allowed.
     """
     errors: list[str] = []
     text = md_path.read_text(encoding="utf-8")
     base_dir = md_path.parent
-    dev_docs_root = repo_root / "dev-docs"
+    user_docs_root = (repo_root / "user-docs").resolve()
 
     for _label, raw_url in LINK_PATTERN.findall(text):
         url = raw_url.strip()
@@ -148,12 +186,12 @@ def check_file(md_path: Path, repo_root: Path, is_user_doc: bool = False) -> lis
         except ValueError:
             errors.append(f"{md_path.relative_to(repo_root)}: link escapes repo: {raw_url!r}")
             continue
-        if is_user_doc and target.is_relative_to(dev_docs_root.resolve()):
-            rel = target.relative_to(dev_docs_root.resolve())
-            if (rel.parts and rel.parts[0] == "plans") or rel == Path("TO_DO.md"):
-                label = rel.parts[0] if rel.parts else "TO_DO.md"
+        if is_user_doc:
+            try:
+                target.relative_to(user_docs_root)
+            except ValueError:
                 errors.append(
-                    f"{md_path.relative_to(repo_root)}: user-docs must not link into dev-docs/{label}: {raw_url!r}"
+                    f"{md_path.relative_to(repo_root)}: link escapes user-docs/: {raw_url!r}"
                 )
                 continue
         if not target.exists():
@@ -179,11 +217,19 @@ def main() -> int:
         return 1
 
     user_docs_root = repo_root / "user-docs"
+    doc_urls_path = repo_root / "src" / "utils" / "doc_urls.py"
+    blob_base = (
+        load_github_blob_base(repo_root) if doc_urls_path.is_file() else None
+    )
     all_errors: list[str] = []
     for md in iter_markdown_files(repo_root):
         is_user_doc = md.is_relative_to(user_docs_root)
         all_errors.extend(check_file(md, repo_root, is_user_doc=is_user_doc))
         all_errors.extend(check_src_paths(md, repo_root))
+        if is_user_doc and blob_base is not None:
+            all_errors.extend(
+                check_github_blob_base_alignment(md, repo_root, blob_base)
+            )
 
     if all_errors:
         print("Broken documentation references:", file=sys.stderr)
