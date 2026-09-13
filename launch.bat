@@ -27,14 +27,16 @@ echo.
 echo   1  Run DICOM Viewer
 echo   2  Reinstall / update requirements
 echo   3  Delete virtual environment
-echo   4  Exit
+echo   4  Build documentation and open in browser
+echo   5  Exit
 echo.
 set "CHOICE="
-set /p "CHOICE=Choose [1-4]: "
+set /p "CHOICE=Choose [1-5]: "
 if "%CHOICE%"=="1" goto :RUN
 if "%CHOICE%"=="2" goto :REINSTALL
 if "%CHOICE%"=="3" goto :DELETE
-if "%CHOICE%"=="4" goto :END
+if "%CHOICE%"=="4" goto :BUILD_DOCS
+if "%CHOICE%"=="5" goto :END
 goto :MENU
 
 :MENU_MISSING
@@ -179,6 +181,48 @@ if exist "%VENV%" (
 )
 echo Virtual environment deleted.
 call :RESOLVE_VENV
+pause
+goto :MENU
+
+:BUILD_DOCS
+if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :BUILD_DOCS_PY_OK
+    echo ERROR: Virtual environment python not found:
+    echo   %VENV_PY%
+    pause
+    goto :MENU
+:BUILD_DOCS_PY_OK
+echo.
+echo Installing documentation builder (zensical)...
+set "ZENSICAL_PIN="
+for /f "delims=" %%Z in ('findstr /B "zensical" "%ROOT%requirements-dev.txt"') do set "ZENSICAL_PIN=%%Z"
+if not defined ZENSICAL_PIN (
+    echo ERROR: Could not read the zensical pin from requirements-dev.txt.
+    pause
+    goto :MENU
+)
+"%VENV_PY%" -m pip install -q "%ZENSICAL_PIN%"
+if errorlevel 1 (
+    echo ERROR: Failed to install the documentation builder into the virtual environment.
+    pause
+    goto :MENU
+)
+echo.
+echo Building documentation...
+"%VENV_PY%" "%ROOT%scripts\build_offline_docs.py"
+if errorlevel 1 (
+    echo ERROR: Documentation build failed. The browser was not opened.
+    pause
+    goto :MENU
+)
+start "" "%ROOT%site\index.html"
+if errorlevel 1 (
+    echo ERROR: Documentation was built, but the browser could not be opened.
+    echo Open this file manually:
+    echo   %ROOT%site\index.html
+    pause
+    goto :MENU
+)
+echo Documentation built and opened in the browser.
 pause
 goto :MENU
 

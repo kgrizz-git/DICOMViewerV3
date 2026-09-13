@@ -147,6 +147,38 @@ delete_venv() {
     return 0
 }
 
+build_docs() {
+    if [[ ! -f "$VENV_PY" ]]; then
+        echo "ERROR: Virtual environment python not found:"
+        echo "  $VENV_PY"
+        return 1
+    fi
+    echo ""
+    echo "Installing documentation builder (zensical)..."
+    local pin
+    pin="$(grep '^zensical' "$SCRIPT_DIR/requirements-dev.txt")" || {
+        echo "ERROR: Could not read the zensical pin from requirements-dev.txt."
+        return 1
+    }
+    "$VENV_PY" -m pip install -q "$pin" || {
+        echo "ERROR: Failed to install the documentation builder into the virtual environment."
+        return 1
+    }
+    echo ""
+    echo "Building documentation..."
+    "$VENV_PY" "$SCRIPT_DIR/scripts/build_offline_docs.py" || {
+        echo "ERROR: Documentation build failed. The browser was not opened."
+        return 1
+    }
+    open "$SCRIPT_DIR/site/index.html" || {
+        echo "ERROR: Documentation was built, but the browser could not be opened."
+        echo "Open this file manually:"
+        echo "  $SCRIPT_DIR/site/index.html"
+        return 1
+    }
+    return 0
+}
+
 menu_loop() {
     local choice
     while true; do
@@ -163,14 +195,16 @@ menu_loop() {
             echo "  1  Run DICOM Viewer"
             echo "  2  Reinstall / update requirements"
             echo "  3  Delete virtual environment"
-            echo "  4  Exit"
+            echo "  4  Build documentation and open in browser"
+            echo "  5  Exit"
             echo ""
-            read -rp "Choose [1-4]: " choice
+            read -rp "Choose [1-5]: " choice
             case "$choice" in
                 1) run_with_check ;;
                 2) reinstall ;;
                 3) delete_venv ;;
-                4) exit 0 ;;
+                4) build_docs ;;
+                5) exit 0 ;;
                 *) continue ;;
             esac
         else
