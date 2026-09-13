@@ -49,7 +49,7 @@ h11>=0.16.0
 # Cap mkdocs<2: Material / this pilot config target the 1.x plugin surface;
 # MkDocs 2.x is not a drop-in. See USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md.
 mkdocs>=1.6.0,<2
-mkdocs-material>=9.5.0
+mkdocs-material>=9.5.0,<10
 # Phase CZ Zensical pilot (dev-only): cap <0.1 so 0.0.x patches float but a
 # 0.1/1.x release (likely breaking at this maturity) needs explicit review.
 zensical>=0.0.61,<0.1
