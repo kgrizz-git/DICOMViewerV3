@@ -1,9 +1,9 @@
 # User docs platform pilot and sync harness plan
 
 **Created:** 2026-09-11  
-**Last updated:** 2026-09-12  
-**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
-Preferred next publisher pilot: **Zensical**. Next: **CZ** → **C2**.
+**Last updated:** 2026-09-13
+**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard); **Phase CZ complete** (Zensical strict-green pilot, lean adopt — binding decision pending). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
+Next: **C2**.
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
@@ -308,24 +308,80 @@ publisher cross-check clean of those warnings; C0 smoke notes recorded
 is the successor from the same authors, Open Source, self-hostable, and can build
 an existing Material project from `mkdocs.yml` ([migration guide](https://zensical.org/docs/compatibility/mkdocs/migration/)).
 
-- [ ] Add `zensical` to `requirements-dev.txt` (dev-only); document `zensical serve`
-  / `zensical build` in Verification and `HARNESS.md`.
-- [ ] Build this repo’s existing `mkdocs.yml` with Zensical **without** rewriting
-  canonical guides; use theme `variant: classic` if needed for Material-like look
-  ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)).
-- [ ] Compare vs Phase A Material build: nav, search, dark mode, offline/`file://`
-  or local-server behavior, external network deps, build time.
-- [ ] Audit plugins we use (`search`, Material `offline`, etc.) against Zensical’s
+- [x] Add `zensical` to `requirements-dev.txt` (dev-only) as a bounded range
+  resolved from PyPI at implementation time (e.g. `zensical>=X,<Y`,
+  consistent with the `mkdocs>=1.6.0,<2` precedent — a bare `>=` floor floats
+  and violates the no-unpinned-toolchain rule); document `zensical serve` /
+  `zensical build` in Verification, `HARNESS.md`,
+  and `dev-docs/README.md` (its tool table still names `mkdocs serve / build`).
+- [x] Build this repo’s existing `mkdocs.yml` with Zensical **without** rewriting
+  canonical guides. Set `theme: variant: classic` for the Material-like look
+  ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)), then
+  confirm `mkdocs build` still stays green (Material is expected to ignore the
+  unknown key) so the MkDocs safety net holds until C2; if it errors, test the
+  variant via a temporary config copy instead. Note the coexistence tradeoff:
+  while `mkdocs.yml` carries both Material keys (`name`, `palette`, `features`)
+  and the Zensical key (`variant`), one builder always ignores keys — tie the
+  dark/light toggle check below explicitly to this interaction.
+- [x] First `zensical build` runs in a **clean venv with `zensical` (plus its
+  declared deps) but without `mkdocs-material`**: proves the Material-authored
+  `theme: name: material` config builds with no hidden reliance on Material
+  itself. Our `pymdownx.details` / `pymdownx.superfences` extensions are
+  provided by the `pymdown-extensions` package that Zensical lists as an
+  explicit dependency (auto-installed, supported version) — no separate pin
+  needed. An extension failure here is likely a dependency/version issue, not
+  proof of a Zensical bug: record it under the failure path below.
+- [x] Compare vs Phase A Material build with a concrete checklist (record each
+  pass/fail, not just prose): `zensical build --strict` exits 0 (strict mode
+  is a link/anchor validation gate — `invalid_links` / `invalid_link_anchors`,
+  exit 1 on issue — not general warnings; keep the build log as a secondary
+  artifact and assert zero warning lines in it); all 13 nav entries resolve
+  (Home + 12 topics — recount from `mkdocs.yml` if it changed, do not reuse a
+  stale count); nav **behavior** matches (sections / expand / top — Zensical
+  promises the `classic` look, not flag-for-flag `features:` behavior;
+  verify the dark/light toggle against the `variant`+`palette` coexistence
+  note above); built-in search works in a browser smoke (Zensical search is
+  its own engine, no Lunr pipeline — do not reuse Phase A’s
+  `search_index.json` figure as the criterion); dark/light toggle works;
+  offline output stays flat-HTML suitable for `file://`; `font: false` still
+  honored (grep rendered HTML for `fonts.googleapis.com`); edit links render
+  and point at `…/edit/main/user-docs/<file>.md` (Constraint 5 — first add
+  the `content.action.edit` theme feature, which our `features:` list
+  currently lacks so the buttons will not render without it, then parse
+  `site/*.html` edit-link `href`s against `USER_DOCS_GITHUB_PREFIX`);
+  no new external network deps — Zensical ships the **same** `unpkg`
+  iframe-worker shim as Material (vendor via `extra.polyfills` with an
+  `iframe-worker` filename, or accept network-dependent search under
+  `file://` as Phase A did), and note the GitHub API calls Zensical makes
+  in-browser for stars/forks/release when `repo_url` is set (offline mode
+  requires disabling repo/analytics/comment/instant-navigation features);
+  `use_directory_urls` behavior noted; build time recorded.
+- [x] Add a config-URL alignment test (extend `tests/test_user_docs_links.py`
+  or a sibling): parse `mkdocs.yml` (and later `zensical.toml`, if adopted)
+  and statically assert `repo_url` / `edit_uri` match the `USER_DOCS_GITHUB_PREFIX`
+  / `GITHUB_BLOB_BASE` constants in `src/utils/doc_urls.py`, so Constraint 5
+  cannot silently drift the way relative links once did.
+- [x] Audit plugins we use (`search`, Material `offline`, etc.) against Zensical’s
   [supported MkDocs plugins](https://zensical.org/docs/compatibility/mkdocs/plugins/);
-  drop or replace unsupported ones.
-- [ ] Privacy/tooling: if Zensical adds telemetry or cloud features, record and
-  keep local-only defaults; update `security/security-tool-inventory.json` if
-  required before CI adoption.
-- [ ] Write a short **Zensical pilot result** subsection (or update A3) with
-  adopt-lean / defer / reject for Zensical specifically.
+  drop or replace unsupported ones. (Verified 2026-09-13: both `search` and
+  `offline` have native Zensical implementations; `search` supports only
+  `enabled` / `separator` options — we set none. Ship this matrix as a dated
+  snapshot in the pilot result; if the support list moves before the build
+  comparison runs, re-review before proceeding.)
+- [x] Privacy/tooling: if Zensical adds telemetry or cloud features, record and
+  keep local-only defaults (check site analytics / comment-system settings are
+  off by default); update `security/security-tool-inventory.json` if
+  required before CI adoption. No inventory entry needed for a local-only
+  build (same posture as the MkDocs pilot — confirmed no mkdocs/zensical
+  entries present).
+- [x] Write a short **Zensical pilot result** subsection (or update A3) with
+  adopt-lean / defer / reject for Zensical specifically. If any checklist
+  item fails, record the observed behavior (build log snippet, nav diff,
+  missing asset) per item — structured like the pass record — so C2 can
+  distinguish “feature gap” from “blocker”.
 
-**Exit for CZ:** reproducible Zensical build from current sources; written
-comparison to Phase A; clear input to C2.
+**Exit for CZ:** reproducible Zensical build from current sources (clean venv);
+comparison checklist above recorded pass/fail per item; clear input to C2.
 
 ### C1. Decision matrix
 
@@ -347,10 +403,22 @@ comparison to Phase A; clear input to C2.
   replaces commands).
 - [ ] Checkbox that **parent Phase 5 preconditions** are met or explicitly
   waived with reason.
-- [ ] If **Zensical adopted:** switch local/CI docs build commands; add offline
-  bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored; do not ship
+- [ ] If **Zensical adopted:** switch local/CI docs build commands (CI side is
+  the `user-docs-links` job in `.github/workflows/ci.yml` — no publisher
+  build exists in CI today, only the link checker + docs-impact harness);
+  add offline bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored
+  (generated output is never committed — see below); do not ship
   a bundled site until C0 is green. Optionally migrate to `zensical.toml` later
   (not required on day one).
+  - **End-user integration sketch** (implemented under the TO_DO offline-bundle
+    item, not here): (1) release-time build — run `zensical build --strict`
+    during release packaging and treat the output as a build artifact like the
+    frozen executable; (2) installer payload — ship the built `site/` tree with
+    the app (mechanism TBD in `BUILDING_EXECUTABLES.md` / installer notes);
+    (3) Help-menu wiring — open the local bundle from Help when present, fall
+    back to the existing GitHub blob URLs when absent (dev runs from source,
+    missing/stale bundle); (4) keep the in-app Quick Start HTML as the
+    always-available baseline regardless of bundle state.
 - [ ] If **Mintlify deferred:** document re-evaluate trigger (docs-only mirror
   repo + privacy approval).
 - [ ] If **status quo:** keep Markdown + in-app HTML only; remove or archive
@@ -395,11 +463,11 @@ python scripts/check_user_docs_links.py
 python scripts/check_doc_feature_coverage.py
 python -m pytest tests/test_user_docs_links.py tests/test_doc_urls_resolve.py -q
 
-# Phase A / C0 / CZ verification
+# Phase A / C0 / CZ verification (both builders during the CZ transition)
 python scripts/check_user_docs_links.py
-# After C0: also assert no escaping relative links (exact flag TBD when implemented)
-mkdocs build       # Phase A reference only — not an adoption path
-zensical build     # Phase CZ preferred publisher
+# C0 guard is built into check_user_docs_links.py (escaping relative links fail by default)
+mkdocs build                # Phase A reference / safety net — not an adoption path
+zensical build --strict     # Phase CZ preferred publisher (link/anchor gate, exit 1 on issue)
 zensical serve
 
 # Phase B
@@ -408,7 +476,7 @@ python scripts/check_docs_impact.py --pr-body-file /path/to/body.txt
 python -m pytest tests/test_check_docs_impact.py -q
 ```
 
-Before adopting MkDocs in CI or release packaging: update
+Before adopting Zensical in CI or release packaging: update
 `security/security-tool-inventory.json` if required and run
 `python scripts/check_security_tool_inventory.py`.
 
@@ -421,7 +489,7 @@ Before adopting MkDocs in CI or release packaging: update
 - [x] Phase B `check_docs_impact.py` merged with tests and advisory CI step.
 - [x] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
       guard + C0 smoke notes (Zensical offline/search deferred to CZ).
-- [ ] Phase CZ: Zensical pilot result recorded (preferred publisher path).
+- [x] Phase CZ: Zensical pilot result recorded (preferred publisher path).
 - [ ] Phase C2: platform decision recorded (**reject MkDocs Material**;
       Zensical / Mintlify / status quo), including Phase 5 gate status; no
       separate self-containment TO_DO left.
@@ -510,3 +578,52 @@ after confirming Material **EOL ~2026-11-05** and MkDocs 1.x unmaintained.
   repository without a docs-only mirror + privacy approval.
 
 Build log retained under gitignored `tmp/mkdocs-build-2026-09-11*.log`.
+
+---
+
+## Pilot result (Phase CZ)
+
+**Date:** 2026-09-13
+**Branch:** `docs/phase-cz-zensical-pilot`
+**Zensical version:** 0.0.61 (isolated `tmp/cz-venv`; no `mkdocs-material`
+installed — clean-venv proof holds from prior chunk). Project `.venv` keeps
+`mkdocs` 1.6.1 + Material as the safety net.
+**Config change for this pass:** one `features:` addition in `mkdocs.yml`
+(`content.action.edit`); `mkdocs build` stays exit 0 with it.
+
+### Plugin snapshot (dated 2026-09-13)
+
+Both `search` and `offline` have native Zensical implementations; `search`
+supports only `enabled` / `separator` options — we set **none**. No
+`zensical.toml` adopted; the shared `mkdocs.yml` builds under both publishers.
+
+### Comparison checklist (Zensical `site/` output)
+
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | `zensical build --strict` exit 0, zero warnings | **PASS** | `tmp/cz-chunk3-zensical-build.log`: `Build started / No issues found / Build finished in 0.31s` (final re-run: 0.21 s). Prior chunks: clean-venv `--strict` exit 0 with unchanged config |
+| 2 | All 13 nav entries resolve (Home + 12 topics, recounted) | **PASS** | Recount from `mkdocs.yml` nav = 13 `.md` targets; all 13 have `site/*.html` counterparts, missing = NONE. File lists mkdocs vs zensical `diff`-identical (14 HTML = 13 nav + `404.html`): `tmp/cz-chunk3-site-mkdocs-html.txt`, `tmp/cz-chunk3-site-zensical-html.txt` |
+| 3 | Nav behavior matches (sections / expand / top / TOC follow) | **PASS** | `md-nav`, back-to-top, `__palette` toggle counts match Material baseline (`tmp/cz-chunk3-material-index.html` 18320 B vs `tmp/cz-chunk3-zensical-index.html` 16898 B). All 13 nav hrefs present in both (Zensical prefixes `./`, still relative). `palette` blocks diff-identical — `variant: classic` + `palette` coexist: dark/light toggle markup renders under both builders |
+| 4 | Search works (fetch-level only; Zensical engine, no Lunr) | **PARTIAL** | `site/search.js` + `site/search.json` present and HTTP 200; `index.html` + 2 topic pages HTTP 200 (`tmp/cz-chunk3-http-smoke.txt`). No `search_index.json` — EXPECTED (Zensical engine, not Lunr); not a failure. Interactive search-UI typing NOT exercised (no long-lived servers per instructions) — deferred to C2 / manual smoke; C2 must not read this row as full search coverage |
+| 5 | Offline flat-HTML + `font: false` honored | **PASS** | Flat `*.html`, no nested `index.html` dirs, no root-absolute asset URLs. `fonts.googleapis.com`: zero hits in `site/` |
+| 6 | `unpkg` shim | **PASS (expected)** | Only `https://unpkg.com/iframe-worker/shim` as a `<script src>` in HTML — same as Phase A Material. Extra `unpkg`/`jsdelivr` strings (ace, glightbox, mermaid, pyodide, resize-observer) live inside the JS/CSS bundles as optional/lazy references; Material's bundle contains the same pattern (mermaid, resize-observer verified). Recorded, not "fixed" |
+| 7 | Edit links render and match Constraint 5 | **PASS** | All 13 nav pages carry per-page `…/edit/main/user-docs/<file>.md` hrefs (`tmp/cz-chunk3-edit-links.txt`), consistent with `USER_DOCS_GITHUB_PREFIX` (`…/blob/main/user-docs`) + `edit_uri: edit/main/user-docs/` in `src/utils/doc_urls.py` (read-only check). Only possible because of the new `content.action.edit` feature |
+| 8 | No new external network deps | **PASS (classified)** | Full list in `tmp/cz-chunk3-external-urls.txt`: `unpkg` shim + bundle-lazy refs (above); GitHub API template strings in bundle (stars/forks/release for `repo_url`); repo links (`github.com/...`, `/issues`, `/releases`); content links (pylinac readthedocs, storage.googleapis demo zips, IAEA zip); `zensical.org/` self-reference; fontawesome license strings in bundle. Nothing beyond the Material-baseline classes |
+| 9 | `use_directory_urls` behavior | **NOTED** | Key unset (default true) yet BOTH builders emit flat `*.html` here — the `offline` plugin flattens Material output, and Zensical mirrors that layout file-for-file (lists identical). `file://`-suitable either way |
+| 10 | Build times | **NOTED** | mkdocs 0.18–0.19 s; zensical 0.21–0.31 s (same machine, same sources). Same order of magnitude |
+
+### Failures
+
+**None.** Every checklist item passed or was noted-as-expected above, except
+item 4 (search), which is **PARTIAL** — fetch-level only, interactive typing
+deferred; no failure log snippets to record.
+
+### Lean (not the C2 decision)
+
+**Lean adopt Zensical** as the preferred publisher: strict build green from a
+clean venv with no Material installed, nav/offline/edit-link parity with the
+Phase A baseline (search parity fetch-level only — interactive search-UI
+typing deferred), no new network-dependency class, sub-second
+builds. Binding adopt/defer/reject stays with **C2** after C0 and parent
+Phase 5 gates. `mkdocs.yml` keeps both Material keys and the Zensical
+`variant: classic` key until C2 replaces the commands.

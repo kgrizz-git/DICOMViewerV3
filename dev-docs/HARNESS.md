@@ -85,11 +85,12 @@ raw-output path for every output filter.
 | [`scripts/check_docs_impact.py`](../scripts/check_docs_impact.py) | Advisory: when UI/help-sensitive paths change, warn unless the same diff updates `user-docs/` / `resources/help/` / `CHANGELOG.md` or the PR body declares `docs-impact: not needed — <reason>` (optional `--strict`; CI step is non-blocking and may also print feature-coverage on UI diffs) |
 | [`scripts/check_documentation_freshness.py`](../scripts/check_documentation_freshness.py) | Advisory: inventory/triage consistency and assessment age (CI warning-only; optional `--strict`) |
 
-**Local user-docs site pilot (Phase A, Material only — not for adoption):** after
-`pip install -r requirements-dev.txt`, `mkdocs serve` / `mkdocs build` still work
-(`mkdocs.yml`, `docs_dir: user-docs`). **Do not treat this as the long-term
-publisher** — Material EOL ~2026-11-05; preferred next pilot is **Zensical**
-(plan Phase CZ). Generated `site/` is gitignored. See
+**Local user-docs site pilot (Phase A + CZ; Material not for adoption):** after
+`pip install -r requirements-dev.txt`, `mkdocs serve` / `mkdocs build` (Material
+reference / safety net) and `zensical serve` / `zensical build --strict`
+(preferred publisher pilot) both build the shared `mkdocs.yml`
+(`docs_dir: user-docs`). **Do not adopt Material** — EOL ~2026-11-05; CZ pilot
+green, binding decision is C2. Generated `site/` is gitignored. See
 [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).

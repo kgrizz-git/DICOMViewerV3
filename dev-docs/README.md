@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-13
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -88,7 +88,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | [`../scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary guard against new high-risk layer violations (`architecture_boundary_baseline.txt` tracks current legacy edges) |
 | [`../scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Imports, version, committed DICOM fixture; optional `--qt-smoke` |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI: user-docs links, harness docs, architecture boundaries, and agent smoke on `main` / `develop` |
-| `mkdocs serve` / `mkdocs build` (dev deps) | Phase A Material layout pilot only — **not for adoption** (EOL ~2026-11); preferred next path is Zensical (plan Phase CZ). See [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md); `site/` gitignored |
+| `mkdocs serve` / `mkdocs build` (reference); `zensical serve` / `zensical build --strict` (dev deps) | Phase A Material layout pilot only — **not for adoption** (EOL ~2026-11); Zensical pilot green (Phase CZ complete, preferred path; binding decision C2). See [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md); `site/` gitignored |
 
 ## Agent smoke verification
 
