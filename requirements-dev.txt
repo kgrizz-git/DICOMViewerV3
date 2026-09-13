@@ -43,9 +43,13 @@ interrogate>=1.7.0
 h11>=0.16.0
 
 # Local static user-docs layout pilot (MkDocs Material) — Phase A only.
-# Do NOT adopt Material long-term (EOL ~2026-11-05). Preferred next: Zensical
-# (plan Phase CZ). Preview: mkdocs serve / mkdocs build. site/ is gitignored.
+# Do NOT adopt Material long-term (EOL ~2026-11-05). Phase CZ Zensical pilot:
+# zensical is the candidate successor; mkdocs/mkdocs-material pins stay as a
+# safety net until C2. Preview: mkdocs serve / mkdocs build. site/ is gitignored.
 # Cap mkdocs<2: Material / this pilot config target the 1.x plugin surface;
 # MkDocs 2.x is not a drop-in. See USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md.
 mkdocs>=1.6.0,<2
 mkdocs-material>=9.5.0
+# Phase CZ Zensical pilot (dev-only): cap <0.1 so 0.0.x patches float but a
+# 0.1/1.x release (likely breaking at this maturity) needs explicit review.
+zensical>=0.0.61,<0.1
