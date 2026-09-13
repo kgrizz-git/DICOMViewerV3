@@ -365,6 +365,15 @@ jobs:
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
 
+      # Publisher build gate (C2 adopted Zensical): the release-time offline
+      # bundle builds from this same config, so keep it warning-free. Pin is
+      # sourced from requirements-dev.txt (single source of truth).
+      # `python -m` (not the bare binary) so no PATH assumptions are needed.
+      - name: Build docs with Zensical (strict)
+        run: |
+          pip install "$(grep '^zensical' requirements-dev.txt)"
+          python -m zensical build --strict
+
       # Warning-only by default: the script exits 0 unless --strict is passed.
       # Promote to --strict once the Phase 2 audit has cleared the Baseline rows
       # and the finding rate has been reviewed.

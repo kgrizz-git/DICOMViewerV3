@@ -404,8 +404,9 @@ comparison checklist above recorded pass/fail per item; clear input to C2.
 - [x] Checkbox that **parent Phase 5 preconditions** are met or explicitly
   waived with reason.
 - [x] If **Zensical adopted:** switch local/CI docs build commands (CI side is
-  the `user-docs-links` job in `.github/workflows/ci.yml` — no publisher
-  build exists in CI today, only the link checker + docs-impact harness);
+  the `user-docs-links` job in `.github/workflows/ci.yml`: link checker plus
+  a blocking `zensical build --strict` step, pin sourced from
+  `requirements-dev.txt`);
   add offline bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored
   (generated output is never committed — see below); do not ship
   a bundled site until C0 is green. Optionally migrate to `zensical.toml` later
