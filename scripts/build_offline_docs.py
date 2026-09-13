@@ -25,7 +25,8 @@ under the running interpreter (``python -m zensical``), or a ``zensical``
 executable on ``PATH`` as fallback.
 Outputs: ``site/`` (normal build output, gitignored) and
 ``resources/help/docs/`` (generated bundle, gitignored).
-Requirements: Python 3.9+; zensical (see ``requirements-dev.txt`` pin).
+Requirements: Python 3.10+ (zensical declares ``requires-python >= 3.10``);
+zensical (see ``requirements-dev.txt`` pin).
 """
 
 from __future__ import annotations

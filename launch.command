@@ -153,6 +153,12 @@ build_docs() {
         echo "  $VENV_PY"
         return 1
     fi
+    if ! "$VENV_PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+        echo "ERROR: Documentation build needs Python 3.10 or newer (zensical requirement)."
+        echo "This virtual environment uses an older Python. Delete it (option 3)"
+        echo "and create it again with a newer python3."
+        return 1
+    fi
     echo ""
     echo "Installing documentation builder (zensical)..."
     local pin

@@ -191,6 +191,14 @@ if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :BUILD_DOCS_PY_OK
     pause
     goto :MENU
 :BUILD_DOCS_PY_OK
+"%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"
+if errorlevel 1 (
+    echo ERROR: Documentation build needs Python 3.10 or newer (zensical requirement).
+    echo This virtual environment uses an older Python. Delete it and create it
+    echo again with a newer Python.
+    pause
+    goto :MENU
+)
 echo.
 echo Installing documentation builder (zensical)...
 set "ZENSICAL_PIN="

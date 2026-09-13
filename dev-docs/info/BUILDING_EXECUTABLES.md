@@ -940,9 +940,7 @@ The following build-related files and directories should be in `.gitignore`:
 
 ## Bundled vs online documentation (executables)
 
-Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. **Help → Documentation** and links inside the Quick Start guide open **GitHub** (`user-docs/` on `main`) in the default browser and require network access.
-
-For a future **offline** doc pack (e.g. generated HTML under `resources/help/docs/` and `file://` URLs), record the packaging choice here and gate URL schemes in `QuickStartGuideDialog` / `DialogCoordinator` accordingly.
+Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. When a release stages the offline bundle (`resources/help/docs/`, see release step below), **Help → Documentation**, the 3D help button, and the Quick Start `{doc_*}` links open the bundled pages via `file://`; when the bundle is absent (e.g. a build that skipped the staging step), those same entry points fall back to **GitHub** (`user-docs/` on `main`) in the default browser, which requires network access. Scheme gating lives in `QuickStartGuideDialog` (`file` handled alongside `http(s)`) and in `DialogCoordinator` / the 3D viewer (local-first with online fallback); URL construction in `src/utils/doc_urls.py`.
 
 ### Release step: staging the offline doc bundle
 
