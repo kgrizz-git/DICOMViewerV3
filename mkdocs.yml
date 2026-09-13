@@ -22,6 +22,7 @@ edit_uri: edit/main/user-docs/
 
 theme:
   name: material
+  variant: classic
   # Avoid Google Fonts CDN so offline/file:// bundles do not depend on network.
   font: false
   palette:
