@@ -568,3 +568,50 @@ after confirming Material **EOL ~2026-11-05** and MkDocs 1.x unmaintained.
   repository without a docs-only mirror + privacy approval.
 
 Build log retained under gitignored `tmp/mkdocs-build-2026-09-11*.log`.
+
+---
+
+## Pilot result (Phase CZ)
+
+**Date:** 2026-09-13  
+**Branch:** `docs/phase-cz-zensical-pilot`  
+**Zensical version:** 0.0.61 (isolated `tmp/cz-venv`; no `mkdocs-material`
+installed — clean-venv proof holds from prior chunk). Project `.venv` keeps
+`mkdocs` 1.6.1 + Material as the safety net.  
+**Config change for this pass:** one `features:` addition in `mkdocs.yml`
+(`content.action.edit`); `mkdocs build` stays exit 0 with it.
+
+### Plugin snapshot (dated 2026-09-13)
+
+Both `search` and `offline` have native Zensical implementations; `search`
+supports only `enabled` / `separator` options — we set **none**. No
+`zensical.toml` adopted; the shared `mkdocs.yml` builds under both publishers.
+
+### Comparison checklist (Zensical `site/` output)
+
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | `zensical build --strict` exit 0, zero warnings | **PASS** | `tmp/cz-chunk3-zensical-build.log`: `Build started / No issues found / Build finished in 0.31s` (final re-run: 0.21 s). Prior chunks: clean-venv `--strict` exit 0 with unchanged config |
+| 2 | All 13 nav entries resolve (Home + 12 topics, recounted) | **PASS** | Recount from `mkdocs.yml` nav = 13 `.md` targets; all 13 have `site/*.html` counterparts, missing = NONE. File lists mkdocs vs zensical `diff`-identical (14 HTML = 13 nav + `404.html`): `tmp/cz-chunk3-site-mkdocs-html.txt`, `tmp/cz-chunk3-site-zensical-html.txt` |
+| 3 | Nav behavior matches (sections / expand / top / TOC follow) | **PASS** | `md-nav`, back-to-top, `__palette` toggle counts match Material baseline (`tmp/cz-chunk3-material-index.html` 18320 B vs `tmp/cz-chunk3-zensical-index.html` 16898 B). All 13 nav hrefs present in both (Zensical prefixes `./`, still relative). `palette` blocks diff-identical — `variant: classic` + `palette` coexist: dark/light toggle markup renders under both builders |
+| 4 | Search works (browser smoke; Zensical engine, no Lunr) | **PASS (fetch-level)** | `site/search.js` + `site/search.json` present and HTTP 200; `index.html` + 2 topic pages HTTP 200 (`tmp/cz-chunk3-http-smoke.txt`). No `search_index.json` — EXPECTED (Zensical engine, not Lunr); not a failure. Interactive search-UI typing not exercised (no long-lived servers per instructions) |
+| 5 | Offline flat-HTML + `font: false` honored | **PASS** | Flat `*.html`, no nested `index.html` dirs, no root-absolute asset URLs. `fonts.googleapis.com`: zero hits in `site/` |
+| 6 | `unpkg` shim | **PASS (expected)** | Only `https://unpkg.com/iframe-worker/shim` as a `<script src>` in HTML — same as Phase A Material. Extra `unpkg`/`jsdelivr` strings (ace, glightbox, mermaid, pyodide, resize-observer) live inside the JS/CSS bundles as optional/lazy references; Material's bundle contains the same pattern (mermaid, resize-observer verified). Recorded, not "fixed" |
+| 7 | Edit links render and match Constraint 5 | **PASS** | All 13 nav pages carry per-page `…/edit/main/user-docs/<file>.md` hrefs (`tmp/cz-chunk3-edit-links.txt`), consistent with `USER_DOCS_GITHUB_PREFIX` (`…/blob/main/user-docs`) + `edit_uri: edit/main/user-docs/` in `src/utils/doc_urls.py` (read-only check). Only possible because of the new `content.action.edit` feature |
+| 8 | No new external network deps | **PASS (classified)** | Full list in `tmp/cz-chunk3-external-urls.txt`: `unpkg` shim + bundle-lazy refs (above); GitHub API template strings in bundle (stars/forks/release for `repo_url`); repo links (`github.com/...`, `/issues`, `/releases`); content links (pylinac readthedocs, storage.googleapis demo zips, IAEA zip); `zensical.org/` self-reference; fontawesome license strings in bundle. Nothing beyond the Material-baseline classes |
+| 9 | `use_directory_urls` behavior | **NOTED** | Key unset (default true) yet BOTH builders emit flat `*.html` here — the `offline` plugin flattens Material output, and Zensical mirrors that layout file-for-file (lists identical). `file://`-suitable either way |
+| 10 | Build times | **NOTED** | mkdocs 0.18–0.19 s; zensical 0.21–0.31 s (same machine, same sources). Same order of magnitude |
+
+### Failures
+
+**None.** Every checklist item passed or was noted-as-expected above; no
+failure log snippets to record.
+
+### Lean (not the C2 decision)
+
+**Lean adopt Zensical** as the preferred publisher: strict build green from a
+clean venv with no Material installed, nav/search/offline/edit-link parity
+with the Phase A baseline, no new network-dependency class, sub-second
+builds. Binding adopt/defer/reject stays with **C2** after C0 and parent
+Phase 5 gates. `mkdocs.yml` keeps both Material keys and the Zensical
+`variant: classic` key until C2 replaces the commands.

@@ -46,6 +46,7 @@ theme:
     - navigation.top
     - search.highlight
     - search.suggest
+    - content.action.edit
     - content.code.copy
     - toc.follow
 
