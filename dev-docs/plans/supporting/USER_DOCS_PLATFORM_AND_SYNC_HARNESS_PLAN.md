@@ -1,7 +1,7 @@
 # User docs platform pilot and sync harness plan
 
 **Created:** 2026-09-11  
-**Last updated:** 2026-09-13  
+**Last updated:** 2026-09-13
 **Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard); **Phase CZ complete** (Zensical strict-green pilot, lean adopt — binding decision pending). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
 Next: **C2**.
 **Priority:** P2 (Next up slot 3)  
@@ -573,11 +573,11 @@ Build log retained under gitignored `tmp/mkdocs-build-2026-09-11*.log`.
 
 ## Pilot result (Phase CZ)
 
-**Date:** 2026-09-13  
-**Branch:** `docs/phase-cz-zensical-pilot`  
+**Date:** 2026-09-13
+**Branch:** `docs/phase-cz-zensical-pilot`
 **Zensical version:** 0.0.61 (isolated `tmp/cz-venv`; no `mkdocs-material`
 installed — clean-venv proof holds from prior chunk). Project `.venv` keeps
-`mkdocs` 1.6.1 + Material as the safety net.  
+`mkdocs` 1.6.1 + Material as the safety net.
 **Config change for this pass:** one `features:` addition in `mkdocs.yml`
 (`content.action.edit`); `mkdocs build` stays exit 0 with it.
 

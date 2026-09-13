@@ -16,6 +16,7 @@ import is used here instead of a regex fallback.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -33,14 +34,22 @@ USER_DOCS = REPO_ROOT / "user-docs"
 SAMPLE_TARGETS = ["index.md", "USER_GUIDE.md"]
 
 
-def _load_mkdocs_config() -> dict:
+def _load_mkdocs_config() -> dict[str, Any]:
     text = MKDOCS_YML.read_text(encoding="utf-8")
     config = yaml.safe_load(text)
     assert isinstance(config, dict), "mkdocs.yml must parse to a mapping"
     return config
 
 
-def _nav_targets(config: dict) -> list[str]:
+def _docs_dir(config: dict[str, Any]) -> Path:
+    docs_dir = config.get("docs_dir", "docs")
+    assert docs_dir == "user-docs", f"docs_dir drifted: {docs_dir!r}"
+    resolved = (REPO_ROOT / str(docs_dir)).resolve()
+    assert resolved == USER_DOCS.resolve(), f"docs_dir does not resolve to user-docs/: {resolved}"
+    return resolved
+
+
+def _nav_targets(config: dict[str, Any]) -> list[str]:
     targets: list[str] = []
     nav = config.get("nav", [])
     assert isinstance(nav, list) and nav, "mkdocs.yml nav must be a non-empty list"
@@ -78,6 +87,7 @@ def test_edit_uri_targets_same_user_docs_tree():
 def test_sample_nav_targets_align_with_doc_urls():
     """Edit-link and blob URLs agree per nav target (index + USER_GUIDE)."""
     config = _load_mkdocs_config()
+    docs_root = _docs_dir(config)
     repo_url = str(config["repo_url"]).rstrip("/")
     edit_uri = str(config["edit_uri"]).strip("/")
     edit_base = f"{repo_url}/{edit_uri}"
@@ -86,9 +96,8 @@ def test_sample_nav_targets_align_with_doc_urls():
         assert filename in targets, (
             f"{filename} missing from mkdocs.yml nav: {targets}"
         )
-        assert user_doc_url(filename) == f"{USER_DOCS_GITHUB_PREFIX}/{filename}"
-        assert f"{edit_base}/{filename}" == (
-            f"{repo_url}/edit/main/user-docs/{filename}"
-        )
-        resolved = (USER_DOCS / filename).resolve()
-        assert resolved.is_file(), f"nav target not found under user-docs/: {filename}"
+        blob_url = f"{USER_DOCS_GITHUB_PREFIX}/{filename}"
+        assert user_doc_url(filename) == blob_url
+        assert f"{edit_base}/{filename}" == blob_url.replace("/blob/", "/edit/")
+        resolved = (docs_root / filename).resolve()
+        assert resolved.is_file(), f"nav target not found under docs_dir: {filename}"
