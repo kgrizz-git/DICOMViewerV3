@@ -40,7 +40,7 @@ from gui.dialogs.tag_export_dialog import TagExportDialog
 from gui.dialogs.tag_viewer_dialog import TagViewerDialog
 from gui.main_window import MainWindow
 from utils.config_manager import ConfigManager
-from utils.doc_urls import user_guide_hub_url
+from utils.doc_urls import local_doc_url, user_guide_hub_url
 from utils.privacy.safe_storage import DeletionResult
 
 _MSG_NO_DATA_LOADED = "No Data Loaded"
@@ -206,8 +206,8 @@ class DialogCoordinator:
         dialog.exec()
 
     def open_user_documentation_in_browser(self) -> None:
-        """Open the user guide hub in the system default web browser (https only)."""
-        QDesktopServices.openUrl(QUrl(user_guide_hub_url()))
+        """Open the user guide hub locally when bundled, else on GitHub (https)."""
+        QDesktopServices.openUrl(QUrl(local_doc_url("USER_GUIDE.md") or user_guide_hub_url()))
 
     def open_fusion_technical_doc(self) -> None:
         """Handle Fusion Technical Documentation dialog request."""
