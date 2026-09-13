@@ -308,24 +308,47 @@ publisher cross-check clean of those warnings; C0 smoke notes recorded
 is the successor from the same authors, Open Source, self-hostable, and can build
 an existing Material project from `mkdocs.yml` ([migration guide](https://zensical.org/docs/compatibility/mkdocs/migration/)).
 
-- [ ] Add `zensical` to `requirements-dev.txt` (dev-only); document `zensical serve`
-  / `zensical build` in Verification and `HARNESS.md`.
+- [ ] Add `zensical` to `requirements-dev.txt` (dev-only) with a version floor
+  checked against PyPI at implementation time (no unpinned docs toolchain);
+  document `zensical serve` / `zensical build` in Verification and `HARNESS.md`.
 - [ ] Build this repo’s existing `mkdocs.yml` with Zensical **without** rewriting
-  canonical guides; use theme `variant: classic` if needed for Material-like look
+  canonical guides **and without mutating `mkdocs.yml` itself** (test the
+  `variant: classic` theme variant via a temporary config copy so the
+  `mkdocs build` safety net stays green until C2, per Zensical’s gradual-adoption
+  guidance).
   ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)).
-- [ ] Compare vs Phase A Material build: nav, search, dark mode, offline/`file://`
-  or local-server behavior, external network deps, build time.
+- [ ] First `zensical build` runs in a **clean venv with only `zensical`
+  installed** (no `mkdocs-material`): proves no hidden reliance on Material’s
+  transitive packages. Our `pymdownx.details` / `pymdownx.superfences`
+  extensions currently resolve via Material; if the clean build fails on them,
+  pin `pymdown-extensions` explicitly in `requirements-dev.txt`.
+- [ ] Compare vs Phase A Material build with a concrete checklist (record each
+  pass/fail, not just prose): build exit 0 with zero warnings (use
+  warnings-as-errors / `--strict` if the installed Zensical supports it);
+  all 14 nav entries resolve; nav **behavior** matches (sections / expand /
+  top — Zensical promises the `classic` look, not flag-for-flag `features:`
+  behavior); search index present and searchable; dark/light toggle works;
+  offline output stays flat-HTML suitable for `file://`; `repo_url` /
+  `edit_uri` edit links render (Constraint 5); no new external network deps —
+  explicitly re-check Phase A’s `unpkg` iframe-worker shim; `use_directory_urls`
+  behavior noted; build time recorded.
 - [ ] Audit plugins we use (`search`, Material `offline`, etc.) against Zensical’s
   [supported MkDocs plugins](https://zensical.org/docs/compatibility/mkdocs/plugins/);
-  drop or replace unsupported ones.
+  drop or replace unsupported ones. (Verified 2026-09-13: both `search` and
+  `offline` have native Zensical implementations; `search` supports only
+  `enabled` / `separator` options — we set none. Re-confirm at pilot time in
+  case the support list moved.)
 - [ ] Privacy/tooling: if Zensical adds telemetry or cloud features, record and
-  keep local-only defaults; update `security/security-tool-inventory.json` if
-  required before CI adoption.
+  keep local-only defaults (check site analytics / comment-system settings are
+  off by default); update `security/security-tool-inventory.json` if
+  required before CI adoption. No inventory entry needed for a local-only
+  build (same posture as the MkDocs pilot — confirmed no mkdocs/zensical
+  entries present).
 - [ ] Write a short **Zensical pilot result** subsection (or update A3) with
   adopt-lean / defer / reject for Zensical specifically.
 
-**Exit for CZ:** reproducible Zensical build from current sources; written
-comparison to Phase A; clear input to C2.
+**Exit for CZ:** reproducible Zensical build from current sources (clean venv);
+comparison checklist above recorded pass/fail per item; clear input to C2.
 
 ### C1. Decision matrix
 
@@ -397,7 +420,7 @@ python -m pytest tests/test_user_docs_links.py tests/test_doc_urls_resolve.py -q
 
 # Phase A / C0 / CZ verification
 python scripts/check_user_docs_links.py
-# After C0: also assert no escaping relative links (exact flag TBD when implemented)
+# C0 guard is built into check_user_docs_links.py (escaping relative links fail by default)
 mkdocs build       # Phase A reference only — not an adoption path
 zensical build     # Phase CZ preferred publisher
 zensical serve
