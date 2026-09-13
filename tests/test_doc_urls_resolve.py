@@ -9,8 +9,9 @@ This closes the mechanical half of TRIAGE-037 (DOC-11). What remains deferred is
 launching the app and clicking each Help action; these tests instead pin the two
 things that can be checked statically and would otherwise rot silently:
 
-1. Every filename passed to ``user_doc_url(...)`` anywhere in ``src/`` exists
-   under ``user-docs/``.
+1. Every filename passed to ``user_doc_url(...)`` — or to the offline-bundle
+   variants ``local_doc_url(...)`` / ``local_doc_file(...)`` — anywhere in
+   ``src/`` exists under ``user-docs/``.
 2. Every ``{doc_*}`` placeholder in ``resources/help/quick_start_guide.html`` has
    a substitution in ``QuickStartGuideDialog``. An unmapped placeholder ships to
    the user as literal ``{doc_FOO}`` text in the Quick Start window.
@@ -27,9 +28,13 @@ SRC = REPO_ROOT / "src"
 QUICK_START_HTML = REPO_ROOT / "resources" / "help" / "quick_start_guide.html"
 QUICK_START_DIALOG = SRC / "gui" / "dialogs" / "quick_start_guide_dialog.py"
 
-# user_doc_url("SOMETHING.md") — literal arguments only, which is how every
-# current call site is written.
-USER_DOC_URL_CALL = re.compile(r"""user_doc_url\(\s*["']([^"']+)["']\s*\)""")
+# user_doc_url("SOMETHING.md") and the offline-bundle variants
+# local_doc_url("...") / local_doc_file("...") — literal arguments only, which
+# is how every current call site is written. The local variants resolve into
+# the release-built bundle, so a rename must trip this scan too.
+DOC_FILENAME_CALL = re.compile(
+    r"""(?:user_doc_url|local_doc_url|local_doc_file)\(\s*["']([^"']+)["']\s*\)"""
+)
 PLACEHOLDER = re.compile(r"\{(doc_[A-Za-z0-9_]+)\}")
 PLACEHOLDER_KEY = re.compile(r"""["'](doc_[A-Za-z0-9_]+)["']\s*:""")
 
@@ -52,7 +57,7 @@ def referenced_doc_filenames() -> dict[str, list[str]]:
     referenced: dict[str, list[str]] = {}
     for path in sorted(SRC.rglob("*.py")):
         text = path.read_text(encoding="utf-8")
-        for filename in USER_DOC_URL_CALL.findall(text):
+        for filename in DOC_FILENAME_CALL.findall(text):
             rel = str(path.relative_to(REPO_ROOT))
             referenced.setdefault(filename, []).append(rel)
     return referenced
@@ -95,7 +100,7 @@ def test_quick_start_substitutions_target_real_docs():
     """Every placeholder the dialog can substitute must resolve to a real file."""
     dialog = QUICK_START_DIALOG.read_text(encoding="utf-8")
     missing = []
-    for filename in USER_DOC_URL_CALL.findall(dialog):
+    for filename in DOC_FILENAME_CALL.findall(dialog):
         resolved = resolve_user_doc(filename)
         if resolved is None or not resolved.is_file():
             missing.append(filename)

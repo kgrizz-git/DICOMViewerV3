@@ -362,6 +362,11 @@ jobs:
           # Full history so docs-impact can diff against the PR base / default branch.
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
 
