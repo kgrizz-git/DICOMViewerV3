@@ -9,6 +9,7 @@ placeholders. No Qt widgets are instantiated here.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -42,6 +43,15 @@ def test_help_dir_resolves_to_resources_help() -> None:
     assert resolved.is_absolute()
     assert resolved.name == "help"
     assert resolved.parent.name == "resources"
+
+
+def test_help_dir_frozen_uses_meipass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Frozen builds resolve ``resources/help/`` under ``sys._MEIPASS``."""
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert help_dir() == tmp_path / "resources" / "help"
 
 
 def test_md_filename_maps_to_bundle_html(
