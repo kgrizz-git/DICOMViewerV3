@@ -946,7 +946,9 @@ For a future **offline** doc pack (e.g. generated HTML under `resources/help/doc
 
 ### Release step: staging the offline doc bundle
 
-At release time, populate `resources/help/docs/` before freezing:
+**Gate:** do not stage or distribute the bundle until documentation-audit
+slice 2a clears (TRIAGE-038) — the C2 adopt decision is contingent on it.
+Once clear, populate `resources/help/docs/` before freezing:
 
 1. Install the dev requirements including the zensical pin (`pip install -r requirements-dev.txt`).
 2. Run `python scripts/build_offline_docs.py` from the repo root. It runs `zensical build --strict` (any warning fails the release step), copies `site/` into `resources/help/docs/` (cleaned first), and verifies `index.html` plus every `mkdocs.yml` nav target is present.

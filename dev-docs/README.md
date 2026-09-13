@@ -88,7 +88,7 @@ Deep dives on pylinac, DICOM behavior, GitHub Actions billing, fusion, SR, etc.:
 | [`../scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary guard against new high-risk layer violations (`architecture_boundary_baseline.txt` tracks current legacy edges) |
 | [`../scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Imports, version, committed DICOM fixture; optional `--qt-smoke` |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI: user-docs links + Zensical strict build, harness docs, architecture boundaries, and agent smoke on `main` / `develop` |
-| `mkdocs serve` / `mkdocs build` (reference); `zensical serve` / `zensical build --strict` (dev deps) | Phase A Material layout pilot only — **not for adoption** (EOL ~2026-11); Zensical pilot green (Phase CZ complete, preferred path; binding decision C2). See [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md); `site/` gitignored |
+| `mkdocs serve` / `mkdocs build` (reference); `zensical serve` / `zensical build --strict` (dev deps) | Phase A Material layout pilot only — **not for adoption** (EOL ~2026-11); Zensical adopted (Phase C2; published/bundled site gated on slice 2a). See [`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md); `site/` gitignored |
 
 ## Agent smoke verification
 

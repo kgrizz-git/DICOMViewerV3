@@ -20,9 +20,9 @@ Exit code: 0 when the strict build succeeds and every ``mkdocs.yml`` nav
 target is present in the output; non-zero otherwise (prints details).
 The script fails loudly on any strict-build warning.
 
-Inputs: ``user-docs/`` sources plus ``mkdocs.yml``; a ``zensical``
-executable on ``PATH``, or ``zensical`` importable under the running
-interpreter (``python -m zensical`` fallback).
+Inputs: ``user-docs/`` sources plus ``mkdocs.yml``; ``zensical`` importable
+under the running interpreter (``python -m zensical``), or a ``zensical``
+executable on ``PATH`` as fallback.
 Outputs: ``site/`` (normal build output, gitignored) and
 ``resources/help/docs/`` (generated bundle, gitignored).
 Requirements: Python 3.9+; zensical (see ``requirements-dev.txt`` pin).
@@ -44,24 +44,30 @@ NAV_SOURCE_PATTERN = re.compile(r"([A-Za-z0-9_-]+\.md)")
 
 
 def find_zensical_command() -> list[str]:
-    """Locate the zensical executable, preferring ``PATH`` over ``-m``."""
-    on_path = shutil.which("zensical")
-    if on_path:
-        return [on_path]
+    """Locate zensical for the running interpreter first, ``PATH`` second.
+
+    Callers (launchers, CI) install the pinned zensical into an environment
+    and invoke this script with that environment's python, so
+    ``sys.executable -m zensical`` is the version they mean; a global binary
+    on ``PATH`` may be any version and is only a fallback.
+    """
     probe = subprocess.run(
         [sys.executable, "-m", "zensical", "--version"],
         capture_output=True,
         text=True,
     )
-    if probe.returncode != 0:
-        print(
-            "error: no 'zensical' on PATH and "
-            f"'{sys.executable} -m zensical' is not usable "
-            "(install the requirements-dev.txt zensical pin)",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return [sys.executable, "-m", "zensical"]
+    if probe.returncode == 0:
+        return [sys.executable, "-m", "zensical"]
+    on_path = shutil.which("zensical")
+    if on_path:
+        return [on_path]
+    print(
+        "error: no 'zensical' on PATH and "
+        f"'{sys.executable} -m zensical' is not usable "
+        "(install the requirements-dev.txt zensical pin)",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 def nav_sources(repo_root: Path) -> list[str]:
