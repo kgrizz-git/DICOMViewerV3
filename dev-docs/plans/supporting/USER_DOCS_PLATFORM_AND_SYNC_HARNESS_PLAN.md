@@ -310,34 +310,47 @@ an existing Material project from `mkdocs.yml` ([migration guide](https://zensic
 
 - [ ] Add `zensical` to `requirements-dev.txt` (dev-only) with a version floor
   checked against PyPI at implementation time (no unpinned docs toolchain);
-  document `zensical serve` / `zensical build` in Verification and `HARNESS.md`.
+  document `zensical serve` / `zensical build` in Verification, `HARNESS.md`,
+  and `dev-docs/README.md` (its tool table still names `mkdocs serve / build`).
 - [ ] Build this repo’s existing `mkdocs.yml` with Zensical **without** rewriting
-  canonical guides **and without mutating `mkdocs.yml` itself** (test the
-  `variant: classic` theme variant via a temporary config copy so the
-  `mkdocs build` safety net stays green until C2, per Zensical’s gradual-adoption
-  guidance).
-  ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)).
+  canonical guides. Set `theme: variant: classic` for the Material-like look
+  ([docs](https://zensical.org/docs/compatibility/mkdocs/migration/)), then
+  confirm `mkdocs build` still stays green (Material is expected to ignore the
+  unknown key) so the MkDocs safety net holds until C2; if it errors, test the
+  variant via a temporary config copy instead.
 - [ ] First `zensical build` runs in a **clean venv with only `zensical`
   installed** (no `mkdocs-material`): proves no hidden reliance on Material’s
   transitive packages. Our `pymdownx.details` / `pymdownx.superfences`
-  extensions currently resolve via Material; if the clean build fails on them,
-  pin `pymdown-extensions` explicitly in `requirements-dev.txt`.
+  extensions are natively implemented by Zensical (not the Python
+  `pymdown-extensions` package — pinning it would be a placebo), so an
+  extension failure here is a Zensical bug: record it under the failure path
+  below, do not paper over it with a pip pin.
 - [ ] Compare vs Phase A Material build with a concrete checklist (record each
-  pass/fail, not just prose): build exit 0 with zero warnings (use
-  warnings-as-errors / `--strict` if the installed Zensical supports it);
+  pass/fail, not just prose): build exit 0 with zero warnings — Zensical has
+  no `--strict` flag, so capture the build log and assert zero warning lines;
   all 14 nav entries resolve; nav **behavior** matches (sections / expand /
   top — Zensical promises the `classic` look, not flag-for-flag `features:`
   behavior); search index present and searchable; dark/light toggle works;
-  offline output stays flat-HTML suitable for `file://`; `repo_url` /
-  `edit_uri` edit links render (Constraint 5); no new external network deps —
-  explicitly re-check Phase A’s `unpkg` iframe-worker shim; `use_directory_urls`
+  offline output stays flat-HTML suitable for `file://`; edit links render
+  and point at `…/edit/main/user-docs/<file>.md` (Constraint 5 — enable the
+  `content.action.edit` theme feature if the buttons do not render, and parse
+  `site/*.html` edit-link `href`s against `USER_DOCS_GITHUB_PREFIX`);
+  no new external network deps — explicitly re-check Phase A’s `unpkg`
+  iframe-worker shim **and** the GitHub API calls Zensical makes in-browser
+  for stars/forks/release when `repo_url` is set; `use_directory_urls`
   behavior noted; build time recorded.
+- [ ] Add a config-URL alignment test (extend `tests/test_user_docs_links.py`
+  or a sibling): parse `mkdocs.yml` (and later `zensical.toml`, if adopted)
+  and statically assert `repo_url` / `edit_uri` match the `USER_DOCS_GITHUB_PREFIX`
+  / `GITHUB_BLOB_BASE` constants in `src/utils/doc_urls.py`, so Constraint 5
+  cannot silently drift the way relative links once did.
 - [ ] Audit plugins we use (`search`, Material `offline`, etc.) against Zensical’s
   [supported MkDocs plugins](https://zensical.org/docs/compatibility/mkdocs/plugins/);
   drop or replace unsupported ones. (Verified 2026-09-13: both `search` and
   `offline` have native Zensical implementations; `search` supports only
-  `enabled` / `separator` options — we set none. Re-confirm at pilot time in
-  case the support list moved.)
+  `enabled` / `separator` options — we set none. Ship this matrix as a dated
+  snapshot in the pilot result; if the support list moves before the build
+  comparison runs, re-review before proceeding.)
 - [ ] Privacy/tooling: if Zensical adds telemetry or cloud features, record and
   keep local-only defaults (check site analytics / comment-system settings are
   off by default); update `security/security-tool-inventory.json` if
@@ -345,7 +358,10 @@ an existing Material project from `mkdocs.yml` ([migration guide](https://zensic
   build (same posture as the MkDocs pilot — confirmed no mkdocs/zensical
   entries present).
 - [ ] Write a short **Zensical pilot result** subsection (or update A3) with
-  adopt-lean / defer / reject for Zensical specifically.
+  adopt-lean / defer / reject for Zensical specifically. If any checklist
+  item fails, record the observed behavior (build log snippet, nav diff,
+  missing asset) per item — structured like the pass record — so C2 can
+  distinguish “feature gap” from “blocker”.
 
 **Exit for CZ:** reproducible Zensical build from current sources (clean venv);
 comparison checklist above recorded pass/fail per item; clear input to C2.
@@ -370,8 +386,10 @@ comparison checklist above recorded pass/fail per item; clear input to C2.
   replaces commands).
 - [ ] Checkbox that **parent Phase 5 preconditions** are met or explicitly
   waived with reason.
-- [ ] If **Zensical adopted:** switch local/CI docs build commands; add offline
-  bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored; do not ship
+- [ ] If **Zensical adopted:** switch local/CI docs build commands (CI side is
+  the `user-docs-links` job in `.github/workflows/ci.yml` — no publisher
+  build exists in CI today, only the link checker + docs-impact harness);
+  add offline bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored; do not ship
   a bundled site until C0 is green. Optionally migrate to `zensical.toml` later
   (not required on day one).
 - [ ] If **Mintlify deferred:** document re-evaluate trigger (docs-only mirror
@@ -431,7 +449,7 @@ python scripts/check_docs_impact.py --pr-body-file /path/to/body.txt
 python -m pytest tests/test_check_docs_impact.py -q
 ```
 
-Before adopting MkDocs in CI or release packaging: update
+Before adopting Zensical in CI or release packaging: update
 `security/security-tool-inventory.json` if required and run
 `python scripts/check_security_tool_inventory.py`.
 
