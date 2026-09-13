@@ -2,8 +2,8 @@
 
 **Created:** 2026-09-11  
 **Last updated:** 2026-09-13
-**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard); **Phase CZ complete** (Zensical strict-green pilot, lean adopt — binding decision pending). **Do not adopt MkDocs Material** (EOL ~2026-11-05).
-Next: **C2**.
+**Status:** Phase A–B complete; **Phase C0 complete** (self-contained `user-docs/` and escape-link CI guard); **Phase CZ complete** (Zensical strict-green pilot, lean adopt); **Phase C2 complete — ADOPT Zensical** (contingent: published/bundled site gated on slice 2a; toolchain effective now). **MkDocs Material rejected for adoption** (EOL ~2026-11-05).
+Next: **implementation backlog** (offline bundle, launcher docs option).
 **Priority:** P2 (Next up slot 3)  
 **Parent plan:** [Documentation workflow and freshness](DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) — implements Phase 3 pilot, one enforcement gap, and the platform decision record for Phase 4–5.  
 **TO_DO ref:** Next up slot 3; Documentation section in [`TO_DO.md`](../../TO_DO.md).
@@ -396,14 +396,14 @@ comparison checklist above recorded pass/fail per item; clear input to C2.
 
 ### C2. Record outcome
 
-- [ ] Confirm **C0** and **CZ** exits met (or CZ explicitly deferred with reason).
-- [ ] Add a **Platform decision** section with: **adopt / defer / reject** for
+- [x] Confirm **C0** and **CZ** exits met (or CZ explicitly deferred with reason).
+- [x] Add a **Platform decision** section with: **adopt / defer / reject** for
   **Zensical**, Mintlify, and status quo — and **reject MkDocs Material for
   adoption** (keep Phase A config only as a disposable reference until CZ
   replaces commands).
-- [ ] Checkbox that **parent Phase 5 preconditions** are met or explicitly
+- [x] Checkbox that **parent Phase 5 preconditions** are met or explicitly
   waived with reason.
-- [ ] If **Zensical adopted:** switch local/CI docs build commands (CI side is
+- [x] If **Zensical adopted:** switch local/CI docs build commands (CI side is
   the `user-docs-links` job in `.github/workflows/ci.yml` — no publisher
   build exists in CI today, only the link checker + docs-impact harness);
   add offline bundle step to `BUILDING_EXECUTABLES.md`; keep `site/` gitignored
@@ -419,17 +419,46 @@ comparison checklist above recorded pass/fail per item; clear input to C2.
     back to the existing GitHub blob URLs when absent (dev runs from source,
     missing/stale bundle); (4) keep the in-app Quick Start HTML as the
     always-available baseline regardless of bundle state.
-- [ ] If **Mintlify deferred:** document re-evaluate trigger (docs-only mirror
+- [x] If **Mintlify deferred:** document re-evaluate trigger (docs-only mirror
   repo + privacy approval).
 - [ ] If **status quo:** keep Markdown + in-app HTML only; remove or archive
-  provisional `mkdocs.yml` / Material pins after CZ decision.
-- [ ] Update Next up slot 3 and parent plan Phase 3/4 checkboxes accordingly.
-- [ ] Remove any remaining “self-contained user-docs” pointer from
+  provisional `mkdocs.yml` / Material pins after CZ decision. *(N/A —
+  Zensical adopted; mkdocs safety net retained until C2 replaces commands.)*
+- [x] Update Next up slot 3 and parent plan Phase 3/4 checkboxes accordingly.
+- [x] Remove any remaining “self-contained user-docs” pointer from
   [`TO_DO.md`](../../TO_DO.md) Documentation once C0 is checked off.
 
 **Exit:** C0 complete; CZ result recorded; written platform decision linked from
 `TO_DO.md` and parent workflow plan; **MkDocs Material not adopted**; no separate
 self-containment backlog item left open.
+
+### Platform decision (Phase C2) — recorded 2026-09-13
+
+**Decision: ADOPT Zensical** (branch `docs/phase-c2-platform-decision`).
+
+- **Zensical — adopt.** CZ evidence: `zensical build --strict` exit 0 from a
+  clean venv with no Material installed; 13/13 nav entries resolve with
+  nav/offline/edit-link parity (search fetch-level only, typing deferred);
+  no new network-dependency class; sub-second builds; MIT license confirmed
+  2026-09-13 via PyPI metadata; local-only defaults verified (analytics /
+  comments off). **Contingency:** serving a published or bundled site waits on
+  parent-plan slice 2a (8 user-facing rows, TRIAGE-038) — look-and-feel alone
+  cannot clear the accuracy gate. Toolchain adoption (local build commands,
+  `--strict` gate, alignment test) is effective immediately.
+- **Mintlify — defer.** Re-evaluate trigger: docs-only mirror repository plus
+  explicit privacy approval (parent plan Phase 4 preconditions unchanged).
+- **Status quo (Markdown + in-app HTML) — interim serving path, rejected
+  long-term.** Remains what users get until the offline bundle ships; not the
+  platform.
+- **MkDocs Material — reject for adoption** (EOL ~2026-11-05; Phase A config
+  retained only as a disposable reference until commands are replaced).
+
+**Parent Phase 5 gate status:** slice 2a open (contingency above); high-priority
+findings owned via bounded triage rows (TRIAGE-001–039); canonical vs
+generated/rollback documented (generated-only, `site/` gitignored, mkdocs
+safety net); privacy/licensing review complete for a local-only toolchain;
+build/link/offline checks reproducible (`--strict`, link checker, alignment
+test); maintenance owner/cadence is standing freshness practice.
 
 ---
 
@@ -490,9 +519,9 @@ Before adopting Zensical in CI or release packaging: update
 - [x] Phase C0: `user-docs/` self-contained (links fixed/removed) + regression
       guard + C0 smoke notes (Zensical offline/search deferred to CZ).
 - [x] Phase CZ: Zensical pilot result recorded (preferred publisher path).
-- [ ] Phase C2: platform decision recorded (**reject MkDocs Material**;
-      Zensical / Mintlify / status quo), including Phase 5 gate status; no
-      separate self-containment TO_DO left.
+- [x] Phase C2: platform decision recorded (**reject MkDocs Material**;
+  Zensical / Mintlify / status quo), including Phase 5 gate status; no
+  separate self-containment TO_DO left.
 - [x] `HARNESS.md`, `dev-docs/README.md`, and parent workflow plan cross-links
       updated (refresh again when CZ/C0/C2 land).
 - [x] Next up slot 3 in `TO_DO.md` updated to point at this plan's status.

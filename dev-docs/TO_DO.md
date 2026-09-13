@@ -31,11 +31,13 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
 3. **[P2] User docs platform pilot + sync harness.** Execute
    [User docs platform and sync harness](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md):
-   **Phase A + B + C0 + CZ done** — Material layout PoC only (**do not adopt**; EOL
-   ~2026-11-05); advisory `check_docs_impact.py` in CI; `user-docs/` self-contained
+   **Phase A + B + C0 + CZ + C2 done** — Material layout PoC only (**rejected**;
+   EOL ~2026-11-05); advisory `check_docs_impact.py` in CI; `user-docs/` self-contained
    with escape-link CI guard; Zensical pilot green (`--strict` build, `classic`
-   variant, edit-link / `content.action.edit`, pilot result in plan). Next **C2**
-   binding decision (Zensical vs Mintlify vs status quo).
+   variant, edit-link / `content.action.edit`, pilot result in plan); **C2:
+   ADOPT Zensical** (contingent — published/bundled site gated on slice 2a;
+   toolchain effective now). Next: implementation backlog (offline bundle,
+   launcher docs option) in [Documentation](#documentation) below.
    Parent [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
    Phase 0–1 are complete (99.1% feature coverage; Phase 2 slice 2a and standing
    freshness controls continue in parallel).
