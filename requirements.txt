@@ -5,7 +5,7 @@
 # Installation: pip install -r requirements.txt
 #
 # Python version (especially Windows):
-# - The full stack requires Python >= 3.12 because numpy>=2.5.1 requires it.
+# - The full stack requires Python >= 3.12 because numpy>=2.5.3 requires it.
 # - Python 3.12 is the CI and recommended version. Wheels exist for native deps (e.g. pyjpegls).
 # - 3.14+ may have no pyjpegls wheel on Windows yet; pip then builds from source and needs
 #   Microsoft C++ Build Tools (https://visualstudio.microsoft.com/visual-cpp-build-tools/).
@@ -26,7 +26,7 @@ PySide6>=6.11.2
 # pydicom 3 requires a coordinated pylinac bump + ACR QA re-verify. See
 # dev-docs/info/HIGHDICOM_OVERVIEW.md and PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md.
 pydicom>=2.4.5,<3
-numpy>=2.5.1
+numpy>=2.5.3
 Pillow>=12.3.0
 # Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
 imageio==2.37.4
