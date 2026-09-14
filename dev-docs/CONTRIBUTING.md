@@ -43,7 +43,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 ## Versioning and changelog
 
 - Application version lives in **`src/version.py`** (`__version__`). Follow **[`info/SEMANTIC_VERSIONING_GUIDE.md`](info/SEMANTIC_VERSIONING_GUIDE.md)** and **[`RELEASING.md`](RELEASING.md)** when cutting releases (changelog, tags, **Current version** line in **`CHANGELOG.md`**).
-- Use **`CHANGELOG.md`** for user-visible product and release history. Use **[`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md)** for developer-maintenance history such as CI, harness, static-analysis, dependency-verification, and repo-hygiene changes. Keep **[`TO_DO.md`](TO_DO.md)** limited to active backlog items; remove fully completed rows once the outcome is captured in the changelog, maintenance log, or a plan/info/bug-investigation note.
+- Use **`CHANGELOG.md`** for user-visible product and release history. Use **[`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md)** for developer-maintenance history such as CI, harness, static-analysis, dependency-verification, and repo-hygiene changes. Keep **[`TO_DO.md`](TO_DO.md)** limited to active backlog items; remove fully completed rows once the outcome is captured in the changelog, maintenance log, or a plan/info/bug-investigation note. Do the closeout in the same PR that finishes the work (TO_DO removal, changelog / maintenance-log entries, plan archiving) — not a follow-up.
 
 ## Pylinac pin and QA documentation
 

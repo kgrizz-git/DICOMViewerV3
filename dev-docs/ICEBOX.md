@@ -1,6 +1,6 @@
 # Icebox
 
-**Last updated:** 2026-09-10
+**Last updated:** 2026-09-14
 
 Parked work, split out of [`TO_DO.md`](TO_DO.md) on 2026-08-23. Everything here
 is **self-labelled** in its own text as P3, Optional, Deferred, or a spike — it
@@ -21,6 +21,8 @@ disappear.
 - [ ] **[P3]** **Export Key Object Selection (KO) document (optional):** let user save a **curated set** of key instances (e.g. current series/slices with annotations) as a KO SOP with **CurrentRequestedProcedureEvidenceSequence** / **ContentSequence** references — useful for “key images” workflows in PACS, **not** full geometry interchange (prefer GSPS for that). **Partial (read only today):** KO loads on open via `key_object_handler.py`; **writer** not implemented. Lower priority unless product asks for KO specifically — see [KO section](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#key-object-selection-ko-document).
 
 ## From: Documentation
+
+- [ ] **[P3] Deferred:** **Vendor the iframe-worker shim for offline `file://` search (`extra.polyfills`).** Today the bundled user-docs pages read offline but search falls back to unpkg at runtime; vendoring the shim needs third-party-JS license review plus an update mechanism before vendored code is committed. Surfaced from the offline doc bundle work (PR #147, 2026-09-14). **Depends on** Phase C of [user docs platform plan](plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (C0 + CZ done; **C2 adopted Zensical**).
 
 - README end-user polish and the initial approved hero/gallery screenshots shipped
   (2026-08-24 / 2026-08-25). Remaining screenshot gap (fusion + slab/MIP) is tracked
