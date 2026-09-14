@@ -1,12 +1,16 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-14
 
 ---
 
 ## Purpose
 
-This file tracks active and near-term tasks.
+This file tracks active and near-term tasks. It is not a completion log:
+remove fully completed items once the outcome is captured in
+[`CHANGELOG.md`](../CHANGELOG.md), [`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md),
+or a plan/info/bug-investigation note — never mark them Done inline. Do that
+closeout in the same PR that finishes the work, not a follow-up.
 
 - Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md); **multi-pane splitters + cine axes:** [plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md)
 - **Parked / someday:** [ICEBOX.md](ICEBOX.md) — self-labelled P3, Optional, Deferred, and spike items. Promote back here when one becomes real work.
@@ -29,11 +33,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-3. **[P1] Offline doc bundle — installer/release integration (now unblocked).** Slice 2a cleared 2026-09-14, lifting the C2 contingency: wire the staged bundle (`scripts/build_offline_docs.py` → `resources/help/docs/`) into the release procedure in [`BUILDING_EXECUTABLES.md`](info/BUILDING_EXECUTABLES.md) and verify `index.html` in the frozen payload. Details in [Documentation](#documentation) below.
-   Parent [Documentation workflow and freshness](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
-   Phase 0–1 are complete (99.1% feature coverage; Phase 2 slice 2a and standing
-   freshness controls continue in parallel).
-4. **[P1] Derived-image export batch — 3D + projection stacks.** **3D:** export the
+3. **[P1] Derived-image export batch — 3D + projection stacks.** **3D:** export the
    current volume render as **PNG/JPG** (reuse the offscreen `QImage`; plan:
    [3D Volume Rendering](plans/3D_VOLUME_RENDERING_PLAN.md)); SC DICOM can follow in
    the same slice once image export lands. **Projection:** export **AIP / MIP /
@@ -41,7 +41,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
-5. **[P2] MONOCHROME1 for MPR and on-screen projection panes** — extend
+4. **[P2] MONOCHROME1 for MPR and on-screen projection panes** — extend
    `mpr_view_math` and `slice_display_pixels` (and the export-projection path) so
    MPR/projection polarity matches the corrected single-slice viewer. See
    [Bugs / Correctness](#bugs--correctness) and the archived
@@ -350,17 +350,7 @@ Moved to [`COMPETITIVE_FEATURE_BACKLOG.md`](COMPETITIVE_FEATURE_BACKLOG.md) (46 
 
 - [ ] **[P2]** **README feature screenshots — fusion and slab/MIP:** capture PHI-reviewed QC-phantom screenshots of (1) PET/SPECT–CT or MR fusion with opacity/alignment controls visible and (2) slab / intensity projection (AIP, MIP, or MinIP) in the multi-pane or MPR workspace; resize for README display, admit hashes in [`security/approved-media-sha256.json`](../security/approved-media-sha256.json), and add them to the root [`README.md`](../README.md) feature gallery. Text already mentions fusion and slab projections; images are the gap. Surfaced 2026-08-25.
 - [ ] **[P1]** **User-facing documentation — completeness, audit, navigability, and discoverability:** improve end-user docs under [`user-docs/`](../user-docs/) so shipped features are covered, easy to find, and linked from obvious entry points. **Completeness:** close gaps vs current UI (menus, shortcuts, Settings, study index, fusion, 3D, SR, export, QA); keep topic guides (`USER_GUIDE.md`, `USER_GUIDE_MPR.md`, `USER_GUIDE_3D.md`, `USER_GUIDE_QA_PYLINAC.md`, `CONFIGURATION.md`, Quick Guide, settings reference, etc.) aligned when features change. **Navigability:** clear hub/TOC, consistent headings, cross-links between hub and topic guides, working in-app **Help** paths where they exist. **Discoverability:** surface docs from the app (Help menu, 3D **Help…**, About/links), bundled Quick Guide parity, and searchable structure; run `python scripts/check_user_docs_links.py` after edits. **Partial:** Phases 1–3 of [DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md](plans/completed/DOCUMENTATION_STRUCTURE_AND_COMPLETENESS_PLAN.md) shipped; feature-coverage heuristic **99.1%** (only **Exit** intentionally omitted) after Pass 1–2 (2026-09-05). **Audit remainder:** Phase 2 slices 2b and 2c landed 2026-09-06 ([assessment](doc-assessments/doc-assessment-2026-09-06-234253.md)); slice 2a cleared 2026-09-14 (manual UI pass on DOC-01, 06–10, 18, 19; no corrections; TRIAGE-038 closed) — the C2 bundle contingency is lifted. Remaining audit tail: the DOC-11 per-action Help check (TRIAGE-037), CHANGELOG compare links pointing at tags that were never created (TRIAGE-039), the remaining enforcement gap (release-assessment assertion; `Baseline`-without-deferral check blocking once Phase 2 clears; docs-impact advisory harness **shipped** Phase B), and broader docstring coverage beyond the high-risk pass. First-slice assessment: [`doc-assessment-2026-09-05-111057.md`](doc-assessments/doc-assessment-2026-09-05-111057.md). Freshness control is standing practice. Remaining: Phase 2 freshness controls in the workflow plan; offline bundle; ongoing drift as features ship. **Related:** offline bundle item below, [doc-assessment inputs](doc-assessments/doc-assessment-2026-04-20-002224.md).
-- [ ] **[P1]** implement offline doc bundle + `file://` and policy in `BUILDING_EXECUTABLES.md` / installer notes. — **Partial:** staging script (`scripts/build_offline_docs.py`) + release step + in-app `file://` fallback shipped on this branch; installer/release integration remains (slice-2a gate cleared 2026-09-14 — may proceed). Follow-up (deferred): vendor the iframe-worker shim via `extra.polyfills` so `file://` search works with no network (today search falls back to unpkg at runtime while pages read offline); needs third-party-JS license review plus an update mechanism before vendored code is committed. **Depends on** Phase C of [user docs platform plan](plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (C0 + CZ done; **C2 adopted Zensical**; MkDocs Material rejected).
-- **Launcher docs option — build + open the user-docs site:** **Done** on this
-  branch — option 4 in `launch.command` / `launch.bat` (venv menu) installs the
-  `requirements-dev.txt` zensical pin, runs `scripts/build_offline_docs.py`,
-  and opens `site/index.html` (`user-docs/index.md` landing). Menus kept in
-  sync; browser never opens on build failure.
 - [ ] **[P2]** **User-docs readability pass — headings, emphasis, and block separation:** the topic guides are dense and hard to scan. Per-guide pass adding sub-section headings where long prose runs unbroken, bold lead-ins for key facts/paths/labels, and blank-line separation between distinct blocks (no content changes, no nav changes). Heaviest files first: `IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md` (564 lines), `USER_GUIDE_QA_PYLINAC.md`, `CONFIGURATION.md`. Verify with `check_user_docs_links.py` after edits. Surfaced 2026-09-14 (manual slice-2a read-through).
-- **Self-contained `user-docs/` (no escaping relative links):** **Done** in
-  [user docs platform plan](plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md)
-  **Phase C0** — escaping `../dev-docs/` / `../CHANGELOG.md` links cleared; CI
-  escape guard in `check_user_docs_links.py`.
 
 ## Data / Platform (Future)
 

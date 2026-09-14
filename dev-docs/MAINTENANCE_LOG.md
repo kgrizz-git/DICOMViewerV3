@@ -6,6 +6,16 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-14
 
+- **Offline docs bundle wired into release builds (PR #147):** `build.yml`
+  installs the `requirements-dev.txt` zensical pin, runs
+  `scripts/build_offline_docs.py` before PyInstaller, and verifies
+  `resources/help/docs/index.html` in the frozen payload on all three
+  platforms; `BUILDING_EXECUTABLES.md` documents the automated behavior
+  (manual steps now local-build only). Closes the TO_DO Next-up slot 3
+  installer/release integration item. Reviews: APPROVE from Kilo
+  stepfun 3.7 flash (free), Cursor Composer 2.5, and Devin SWE-1.6 Slow
+  (all read-only, no blocking findings).
+
 - **Documentation audit slice 2a cleared:** manual UI pass over DOC-01, 06, 07,
   08, 09, 10, 18, 19 found no corrections; inventory rows marked Assessed,
   TRIAGE-038 closed. Lifts the C2 contingency — the offline doc bundle may now
