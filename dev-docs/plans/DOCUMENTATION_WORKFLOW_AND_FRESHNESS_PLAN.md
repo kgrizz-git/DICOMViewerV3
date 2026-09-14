@@ -349,6 +349,10 @@ Phase 5.)
   human editing and ownership.
 
 **Exit:** an evidence-backed adopt/defer/reject decision for each candidate.
+**(Done 2026-09-13:** supporting-plan Phase C2 adopted **Zensical**
+(contingent — published/bundled site gated on slice 2a), deferred Mintlify,
+rejected Material; see Platform decision section. Sphinx/DeepWiki-RS/Litho
+trials were never triggered — no evaluation owed.)
 
 ## Phase 5 — Adoption gate
 

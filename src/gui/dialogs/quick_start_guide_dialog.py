@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from utils.config_manager import ConfigManager
-from utils.doc_urls import user_doc_url
+from utils.doc_urls import local_doc_url, user_doc_url
 
 _HELP_DIR = Path(__file__).parent.parent.parent.parent / "resources" / "help"
 
@@ -249,13 +249,16 @@ class QuickStartGuideDialog(QDialog):
         for key, val in colors.items():
             content = content.replace(f"{{{key}}}", val)
         doc_placeholders = {
-            "doc_USER_GUIDE": user_doc_url("USER_GUIDE.md"),
-            "doc_CONFIGURATION": user_doc_url("CONFIGURATION.md"),
-            "doc_USER_GUIDE_MPR": user_doc_url("USER_GUIDE_MPR.md"),
-            "doc_USER_GUIDE_3D": user_doc_url("USER_GUIDE_3D.md"),
-            "doc_USER_GUIDE_QA_PYLINAC": user_doc_url("USER_GUIDE_QA_PYLINAC.md"),
-            "doc_USER_GUIDE_SHORTCUTS": user_doc_url("USER_GUIDE_SHORTCUTS.md"),
-            "doc_IMAGE_FUSION": user_doc_url("IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md"),
+            "doc_USER_GUIDE": local_doc_url("USER_GUIDE.md") or user_doc_url("USER_GUIDE.md"),
+            "doc_CONFIGURATION": local_doc_url("CONFIGURATION.md") or user_doc_url("CONFIGURATION.md"),
+            "doc_USER_GUIDE_MPR": local_doc_url("USER_GUIDE_MPR.md") or user_doc_url("USER_GUIDE_MPR.md"),
+            "doc_USER_GUIDE_3D": local_doc_url("USER_GUIDE_3D.md") or user_doc_url("USER_GUIDE_3D.md"),
+            "doc_USER_GUIDE_QA_PYLINAC": local_doc_url("USER_GUIDE_QA_PYLINAC.md")
+            or user_doc_url("USER_GUIDE_QA_PYLINAC.md"),
+            "doc_USER_GUIDE_SHORTCUTS": local_doc_url("USER_GUIDE_SHORTCUTS.md")
+            or user_doc_url("USER_GUIDE_SHORTCUTS.md"),
+            "doc_IMAGE_FUSION": local_doc_url("IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md")
+            or user_doc_url("IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md"),
         }
         for key, val in doc_placeholders.items():
             content = content.replace(f"{{{key}}}", val)
@@ -317,9 +320,9 @@ class QuickStartGuideDialog(QDialog):
         self._update_navigation_buttons()
 
     def _on_anchor_clicked(self, url: QUrl) -> None:
-        """Scroll to in-page anchors; open http(s) links in the system browser."""
+        """Scroll to in-page anchors; open http(s)/file links in the system browser."""
         scheme = (url.scheme() or "").lower()
-        if scheme in ("http", "https"):
+        if scheme in ("http", "https", "file"):
             QDesktopServices.openUrl(url)
             return
         anchor = url.fragment()

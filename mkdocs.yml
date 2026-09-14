@@ -16,6 +16,10 @@ site_name: DICOM Viewer V3
 site_description: End-user documentation for DICOM Viewer V3
 docs_dir: user-docs
 site_dir: site
+# Pinned flat-URL layout: the offline bundle resolver
+# (src/utils/doc_urls.py local_doc_file) addresses docs/FOO.html, so both
+# builders must emit flat files regardless of offline-plugin defaults.
+use_directory_urls: false
 
 repo_url: https://github.com/kgrizz-git/DICOMViewerV3
 edit_uri: edit/main/user-docs/

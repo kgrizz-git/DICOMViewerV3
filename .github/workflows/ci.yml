@@ -362,8 +362,22 @@ jobs:
           # Full history so docs-impact can diff against the PR base / default branch.
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
+
+      # Publisher build gate (C2 adopted Zensical): the release-time offline
+      # bundle builds from this same config, so keep it warning-free. Pin is
+      # sourced from requirements-dev.txt (single source of truth).
+      # `python -m` (not the bare binary) so no PATH assumptions are needed.
+      - name: Build docs with Zensical (strict)
+        run: |
+          pip install "$(grep '^zensical' requirements-dev.txt)"
+          python -m zensical build --strict
 
       # Warning-only by default: the script exits 0 unless --strict is passed.
       # Promote to --strict once the Phase 2 audit has cleared the Baseline rows

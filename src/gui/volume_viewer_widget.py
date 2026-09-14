@@ -101,7 +101,7 @@ from gui.volume.overlay_text import build_overlay_text
 from gui.volume.render_status import memory_guard_status_lines
 from gui.volume.shortcuts import handle_shortcut
 from utils.debug_flags import DEBUG_VOLUME_3D
-from utils.doc_urls import user_doc_url
+from utils.doc_urls import local_doc_url, user_doc_url
 
 _log = logging.getLogger(__name__)
 
@@ -1327,8 +1327,8 @@ class VolumeViewerWidget(QWidget):
         self._surface.render_frame()
 
     def _on_open_documentation(self) -> None:
-        """Open the 3D volume rendering user guide in the default web browser."""
-        url = QUrl(user_doc_url("USER_GUIDE_3D.md"))
+        """Open the 3D volume rendering user guide (local bundle first, else GitHub)."""
+        url = QUrl(local_doc_url("USER_GUIDE_3D.md") or user_doc_url("USER_GUIDE_3D.md"))
         if not QDesktopServices.openUrl(url):
             QMessageBox.warning(
                 self,
