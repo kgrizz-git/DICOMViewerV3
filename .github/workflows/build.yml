@@ -138,6 +138,17 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-build.txt
 
+      - name: Stage offline documentation bundle
+        shell: bash
+        run: |
+          # Pin sourced from requirements-dev.txt (single source of truth;
+          # same pattern as the user-docs-links job in ci.yml). The script
+          # runs `zensical build --strict` and stages the site into
+          # resources/help/docs/, picked up by the spec's resources datas entry.
+          python -m pip install "$(grep '^zensical' requirements-dev.txt)"
+          python scripts/build_offline_docs.py
+          test -f resources/help/docs/index.html
+
       - name: Remove typing package if present (PyInstaller compatibility)
         run: |
           python -m pip uninstall -y typing || true
@@ -146,6 +157,20 @@ jobs:
         shell: bash
         run: |
           pyinstaller DICOMViewerV3.spec --clean --noconfirm
+
+      - name: Verify offline docs in frozen bundle
+        shell: bash
+        run: |
+          # resources/ ships via the ('resources', 'resources') spec datas entry,
+          # but the frozen layout differs per platform (macOS .app bundle vs
+          # one-folder), so search instead of hard-coding a path.
+          BUNDLED_INDEX="$(find dist -path '*resources/help/docs/index.html' -print -quit)"
+          if [ -z "$BUNDLED_INDEX" ]; then
+            echo "Error: offline docs bundle (resources/help/docs/index.html) missing from frozen output" >&2
+            exit 1
+          fi
+          echo "Offline docs bundle present: $BUNDLED_INDEX"
+          echo "Bundled HTML pages: $(find dist -path '*resources/help/docs/*.html' | wc -l)"
 
       - name: Download AppImageTool
         if: matrix.os == 'ubuntu-latest'
