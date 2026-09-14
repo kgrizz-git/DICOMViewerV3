@@ -46,8 +46,8 @@ constrained for readability; full assets live under
       <em>Optional 3D volume rendering with presets and display controls.</em>
     </td>
     <td align="center" valign="top" width="50%">
-      <img src="resources/readme-screenshots/annotation-customization.png" width="480" alt="Annotation options and color picker for ROI, measurement, text, and arrow styling."><br>
-      <em>Customize ROI, measurement, and annotation appearance.</em>
+      <img src="resources/readme-screenshots/dicom-tag-editor.png" width="480" alt="DICOM Tag Viewer/Editor dialog with searchable hierarchical tag groups."><br>
+      <em>Search, inspect, and edit DICOM tags.</em>
     </td>
   </tr>
   <tr>
@@ -56,8 +56,8 @@ constrained for readability; full assets live under
       <em>Pixel-value histogram alongside cine and tag inspection.</em>
     </td>
     <td align="center" valign="top" width="50%">
-      <img src="resources/readme-screenshots/dicom-tag-editor.png" width="480" alt="DICOM Tag Viewer/Editor dialog with searchable hierarchical tag groups."><br>
-      <em>Search, inspect, and edit DICOM tags.</em>
+      <img src="resources/readme-screenshots/annotation-customization.png" width="480" alt="Annotation options and color picker for ROI, measurement, text, and arrow styling."><br>
+      <em>Customize ROI, measurement, and annotation appearance.</em>
     </td>
   </tr>
   <tr>
