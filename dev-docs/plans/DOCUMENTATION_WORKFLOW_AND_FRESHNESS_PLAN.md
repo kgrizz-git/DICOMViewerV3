@@ -299,7 +299,7 @@ is caught only when someone happens to look.
 
 ## Phase 3 — Local static documentation pilot
 
-**Implementation plan:** [User docs platform and sync harness](supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (Phase A: MkDocs Material **reference** PoC only — not for adoption; Phase B: docs-impact harness; Phase C0 self-contain links; Phase CZ Zensical pilot; Phase C2 platform decision).
+**Implementation plan:** [User docs platform and sync harness](completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) (Phase A: MkDocs Material **reference** PoC only — not for adoption; Phase B: docs-impact harness; Phase C0 self-contain links; Phase CZ Zensical pilot; Phase C2 platform decision).
 
 - [x] In an isolated branch/worktree, build a read-only proof of concept from
   existing Markdown; do not migrate or delete source documents.

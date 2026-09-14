@@ -92,7 +92,7 @@ reference / safety net only — rejected for adoption, EOL ~2026-11-05) and
 shared `mkdocs.yml` (`docs_dir: user-docs`). CI blocks on the strict build.
 Shipping a published/bundled site still waits on audit slice 2a.
 Generated `site/` is gitignored. See
-[`plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/supporting/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
+[`plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md).
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
