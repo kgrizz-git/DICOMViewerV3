@@ -1,8 +1,16 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-14
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-14
+
+- **Documentation audit slice 2a cleared:** manual UI pass over DOC-01, 06, 07,
+  08, 09, 10, 18, 19 found no corrections; inventory rows marked Assessed,
+  TRIAGE-038 closed. Lifts the C2 contingency — the offline doc bundle may now
+  ship. Remaining audit tail: DOC-11 per-action Help check (TRIAGE-037),
+  CHANGELOG compare links (TRIAGE-039).
 
 ## 2026-09-13
 

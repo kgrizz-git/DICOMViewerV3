@@ -153,11 +153,13 @@ inventory stops carrying rows whose accuracy nobody has checked. Work in bounded
 slices, each with its own timestamped assessment, so a slice can land without
 waiting on the others.
 
-- [ ] **Slice 2a — user-facing surfaces (highest user risk).** Assess DOC-01
+- [x] **Slice 2a — user-facing surfaces (highest user risk).** Assess DOC-01
   (overview/install/first launch), DOC-06 (annotations), DOC-07 (MPR/cine),
   DOC-08 (3D), DOC-09 (fusion), DOC-10 (anonymization), DOC-18 (export/SR), and
   DOC-19 (pylinac QA) against the shipped UI, using each row's own verification
   recipe. These are the rows where a wrong claim reaches a user directly.
+  (**Done 2026-09-14:** manual UI pass; no corrections. C2 contingency lifts —
+  the offline bundle may now ship.)
 - [x] **Slice 2b — contributor and maintainer surfaces.** Assess DOC-13
   (contributing), DOC-15 (releasing), DOC-20 (developer setup), and DOC-21
   (agent harness) by executing the documented commands in a clean venv, not by

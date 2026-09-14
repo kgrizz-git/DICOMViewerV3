@@ -944,9 +944,8 @@ Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. When a 
 
 ### Release step: staging the offline doc bundle
 
-**Gate:** do not stage or distribute the bundle until documentation-audit
-slice 2a clears (TRIAGE-038) — the C2 adopt decision is contingent on it.
-Once clear, populate `resources/help/docs/` before freezing:
+**Gate cleared 2026-09-14** (audit slice 2a assessed, TRIAGE-038 closed).
+Populate `resources/help/docs/` before freezing:
 
 1. Install the dev requirements including the zensical pin (`pip install -r requirements-dev.txt`).
 2. Run `python scripts/build_offline_docs.py` from the repo root. It runs `zensical build --strict` (any warning fails the release step), copies `site/` into `resources/help/docs/` (cleaned first), and verifies `index.html` plus every `mkdocs.yml` nav target is present.
