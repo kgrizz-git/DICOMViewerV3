@@ -12,7 +12,8 @@ those strings in sync when editing the constant.
 
 Release builds also ship a pre-rendered offline copy of the user docs under
 ``resources/help/docs/`` (flat ``FOO.html`` files plus an ``index.html``
-landing, populated by ``scripts/build_offline_docs.py``). Callers that can open
+landing — flat layout pinned by ``use_directory_urls: false`` in ``mkdocs.yml``,
+populated by ``scripts/build_offline_docs.py``). Callers that can open
 a local file prefer ``local_doc_url(...)`` and fall back to the GitHub URL when
 it returns None (bundle absent, e.g. a source checkout without a build step).
 

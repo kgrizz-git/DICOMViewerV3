@@ -83,9 +83,10 @@ def nav_sources(repo_root: Path) -> list[str]:
 def expected_output_relatives(sources: list[str]) -> list[str]:
     """Map each nav ``.md`` source to its built HTML path (descriptive label).
 
-    Material-style directory URLs render ``FOO.md`` as ``FOO/index.html``
-    (``index.md`` as ``index.html``); some builds emit flat ``FOO.html``
-    instead, so verification accepts either form.
+    ``use_directory_urls: false`` is pinned in ``mkdocs.yml``, so the offline
+    build emits flat ``FOO.html`` (``index.md`` as ``index.html``); the
+    directory-URL form is accepted defensively in case a builder default
+    ever changes.
     """
     relatives: list[str] = []
     for source in sources:
@@ -93,17 +94,17 @@ def expected_output_relatives(sources: list[str]) -> list[str]:
         if stem.lower() == "index":
             relatives.append("index.html")
         else:
-            relatives.append(f"{stem}/index.html")
+            relatives.append(f"{stem}.html")
     return relatives
 
 
 def page_present(output_dir: Path, relative: str) -> bool:
-    """True when a built page exists in directory-URL or flat form."""
+    """True when a built page exists in flat or directory-URL form."""
     if (output_dir / relative).is_file():
         return True
-    if relative.endswith("/index.html"):
-        flat = output_dir / (relative[: -len("/index.html")] + ".html")
-        return flat.is_file()
+    if relative.endswith(".html") and relative != "index.html":
+        directory = output_dir / relative[: -len(".html")] / "index.html"
+        return directory.is_file()
     return False
 
 
