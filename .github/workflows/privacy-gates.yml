@@ -114,7 +114,7 @@ jobs:
 
       - name: Run TruffleHog secret scanner
         if: steps.trufflehog_range.outputs.should_scan == 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
-        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
+        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
         with:
           path: ./
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
@@ -124,7 +124,7 @@ jobs:
 
       - name: Run TruffleHog full-tree scanner for initial/new-ref push
         if: steps.trufflehog_range.outputs.tree_scan == 'true'
-        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
+        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
         with:
           path: ./
           version: "3.95.8"
