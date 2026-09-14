@@ -47,6 +47,11 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    [Bugs / Correctness](#bugs--correctness) and the archived
    [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
    §Follow-up.
+5. **[P1] Propagate 2D ROIs across slices** — copy or link a selected 2D ROI
+   across a user-selected slice/frame range in the same series, preserving
+   slice/frame identity and allowing per-slice edits. First slice of the ROI
+   roadmap (slice-profile stats plotting, 3D ROIs, and structure export
+   follow). **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
