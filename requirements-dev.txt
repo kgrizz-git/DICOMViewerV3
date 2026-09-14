@@ -14,7 +14,7 @@
 
 -r requirements.txt
 
-semgrep>=1.175.0
+semgrep>=1.176.1
 detect-secrets>=1.5.0
 pip-audit>=2.10.1
 # Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
@@ -29,7 +29,7 @@ pytest-cov>=7.1.0
 # Parallel test execution (pytest-xdist): splits tests across workers.
 pytest-xdist>=3.8.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
-ruff>=0.16.5
+ruff>=0.16.6
 # Complexity analysis (cyclomatic complexity, NLOC, etc.). Pin to keep the
 # grandfathered CCN baseline reproducible in local checks and CI.
 lizard==1.24.0
@@ -48,7 +48,7 @@ h11>=0.16.0
 # safety net until C2. Preview: mkdocs serve / mkdocs build. site/ is gitignored.
 # Cap mkdocs<2: Material / this pilot config target the 1.x plugin surface;
 # MkDocs 2.x is not a drop-in. See USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md.
-mkdocs>=1.6.0,<2
+mkdocs>=1.6.1,<2
 mkdocs-material>=9.5.0,<10
 # Phase CZ Zensical pilot (dev-only): cap <0.1 so 0.0.x patches float but a
 # 0.1/1.x release (likely breaking at this maturity) needs explicit review.
@@ -56,4 +56,4 @@ zensical>=0.0.61,<0.1
 # Direct test dependency (tests/test_docs_config_alignment.py parses mkdocs.yml).
 # Resolves transitively via mkdocs today; pinned explicit so the suite does not
 # depend on that chain.
-PyYAML>=6.0
+PyYAML>=6.0.3
