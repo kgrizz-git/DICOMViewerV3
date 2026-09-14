@@ -9,8 +9,9 @@
 This file tracks active and near-term tasks. It is not a completion log:
 remove fully completed items once the outcome is captured in
 [`CHANGELOG.md`](../CHANGELOG.md), [`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md),
-or a plan/info/bug-investigation note — never mark them Done inline. Do that
-closeout in the same PR that finishes the work, not a follow-up.
+or a plan/info/bug-investigation note — never mark them Done inline. Do the
+closeout in the same PR that finishes the work (TO_DO removal, changelog /
+maintenance-log entries, plan archiving) — not a follow-up.
 
 - Detailed implementation notes and tradeoffs: [FUTURE_WORK_DETAIL_NOTES.md](FUTURE_WORK_DETAIL_NOTES.md); **multi-pane splitters + cine axes:** [plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md](plans/supporting/SPLITTER_UNEQUAL_PANES_AND_CINE_PLAYBACK_AXES.md)
 - **Parked / someday:** [ICEBOX.md](ICEBOX.md) — self-labelled P3, Optional, Deferred, and spike items. Promote back here when one becomes real work.
