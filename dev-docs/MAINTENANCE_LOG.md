@@ -1,8 +1,25 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-14
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-14
+
+- **Documentation audit slice 2a cleared:** manual UI pass over DOC-01, 06, 07,
+  08, 09, 10, 18, 19 found no corrections; inventory rows marked Assessed,
+  TRIAGE-038 closed. Lifts the C2 contingency — the offline doc bundle may now
+  ship. Remaining audit tail: DOC-11 per-action Help check (TRIAGE-037),
+  CHANGELOG compare links (TRIAGE-039).
+
+## 2026-09-13
+
+- **User-docs platform plan archived (A+B+C0+CZ+C2):** adopted Zensical
+  (contingent — bundled-site distribution gated on audit slice 2a), CI blocks
+  on `zensical build --strict`, shipped the offline-bundle staging script +
+  local-first Help fallback + launcher docs option. Plan moved to
+  `plans/completed/`; TO_DO slot 3 now tracks slice 2a (TRIAGE-038), the
+  remaining distribution gate. PRs #137 (CZ pilot) and #138 (C2 + integration).
 
 ## 2026-09-11
 
