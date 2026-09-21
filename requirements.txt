@@ -31,7 +31,7 @@ Pillow>=12.3.0
 # Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
 imageio==2.37.4
 imageio-ffmpeg==0.6.0
-matplotlib>=3.11.1
+matplotlib>=3.11.2
 openpyxl>=3.1.5
 # Local encrypted study index (SQLCipher-compatible Python binding; wheels on Windows/macOS/Linux for supported Python versions)
 sqlcipher3>=0.6.2
