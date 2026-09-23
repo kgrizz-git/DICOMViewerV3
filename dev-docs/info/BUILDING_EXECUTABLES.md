@@ -1,6 +1,6 @@
 # Building Executables for DICOM Viewer V3
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-23
 
 This guide explains how to compile the DICOM Viewer V3 application into standalone executables for macOS, Windows, and Linux.
 
@@ -259,21 +259,35 @@ For macOS Catalina (10.15) and later, you may need to notarize your application 
 
 ### Windows
 
-#### Code Signing (Optional but Recommended)
+#### Unsigned today: SmartScreen / MotW, not admin rights
 
-Code signing helps avoid false positive antivirus warnings:
+The current CI zip is **not signed**, and signing is not required for portability — extraction and execution already work without administrator rights. What an unsigned build *does* trigger: because users download it from the internet, Windows flags the download with a Mark-of-the-Web and shows the blue **"Windows protected your PC"** [Microsoft Defender SmartScreen](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/windows-defender-smartscreen/) prompt (**More info → Run anyway**). That's user dismissible; it is a trust/friction issue, not an installation blocker.
 
-1. Obtain a code signing certificate (from a Certificate Authority or self-signed for testing)
-2. Sign the executable:
-   ```bash
-   signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com dist/DICOMViewerV3.exe
-   ```
+#### Code Signing (Optional, but removes SmartScreen friction)
+
+Code signing is tracked as a commercial-release item — see [`COMMERCIAL_RELEASE_READINESS.md`](../COMMERCIAL_RELEASE_READINESS.md) (#10 code signing, #12 signed installer pipeline). Signing approaches for Windows (Authenticode), in increasing order of adoption cost:
+
+1. **Self-signed certificate — testing only.** `signtool` (Windows SDK) or PowerShell `New-SelfSignedCertificate -Type CodeSigning`. The chain isn't trusted by SmartScreen, so it does **not** remove the SmartScreen prompt; useful only to exercise the signing pipeline. See [Microsoft signtool docs](https://learn.microsoft.com/en-us/windows/win32/seccrypto/cryptography-tools).
+2. **Commercial CA — OV vs EV.**
+   - **OV (Organization Validation)** certs — a few hundred USD/year. Signature is trusted, but SmartScreen is *reputation-based*: a brand-new OV certificate has no reputation, so the SmartScreen prompt persists until the cert/app accrues reputation over time (or you submit for whitelisting).
+   - **EV (Extended Validation)** certs — hardware-token/HSM only, pricier; EV signatures get **instant** SmartScreen reputation (and still accrue reputation after cert renewals). Standard tool: `signtool sign /fd sha256 /tr <timestamp-url> /td sha256 ...`.
+   - Note: **UPX-compressed binaries should not be signed** — compress-then-sign breaks the ability to verify/modify later and AV heuristics are harsher on UPX-packed signed binaries. `DICOMViewerV3.spec` sets `USE_UPX = not IS_DARWIN`, so signing on Windows would likely require `USE_UPX=False` there (larger `dist/`).
+   - Our layout is **one-folder**, so signing covers all `*.exe` / `*.dll` / pyd binaries in `dist/DICOMViewerV3/`, not just the launcher; use `signtool` with recursive enumeration (or script it) — see also onefile discussion in Step 5.
+3. **Azure Trusted Signing (now "Artifact Signing") — recommended low-cost option** ([overview](https://learn.microsoft.com/en-us/azure/artifact-signing/overview), [quickstart](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart)). Microsoft's fully managed CA: certificates live in FIPS 140-3 HSMs, ~$10/month (price note: verify current SKU pricing in Azure before budgeting — it has changed since the "Trusted Signing" rename), and its certs carry **instant SmartScreen reputation**. Works with individuals (US/Canada) and orgs in supported regions, and integrates with CI via the [azure/trusted-signing-action](https://github.com/Azure/trusted-signing-action) GitHub Action — no PFX secrets to store. This is the most practical route for this repo (no legal entity required if US/Canada, no hardware token).
+4. **SignPath — free for vetted open-source projects** ([SignPath open source/community program](https://signpath.io/solutions/open-source-community)). Managed signing-as-a-service with CI connectors (GitHub Actions), policy enforcement, audit trail, and Authenticode support — $0 for approved OSS projects. Application and approval required.
+
+**If/when signing is adopted (high-level steps):**
+
+1. Acquire the cert/service (options above; for Artifact Signing: create account → identity validation → Public Trust certificate profile → assign `Artifact Signing Certificate Profile Signer` role).
+2. Sign every binary in `dist/DICOMViewerV3/` (Authenticode) **and** the final zip or installer, always with an RFC 3161 timestamp server (`/tr http://timestamp.digicert.com /td sha256`) so the signature outlives the cert.
+3. Extend `.github/workflows/build.yml` — for Artifact Signing, add the `azure/trusted-signing-action` step on `windows-latest` with OIDC (`id-token: write`) and Azure credentials stored as repo secrets; never commit a PFX or password.
+4. Bump/release per [RELEASING.md](../RELEASING.md) and update this doc.
 
 #### Antivirus False Positives
 
 PyInstaller executables sometimes trigger false positives from antivirus software. Code signing helps reduce this, but it may still occur. Consider:
-- Submitting your executable to antivirus vendors for whitelisting
-- Using a code signing certificate from a trusted CA
+- Submitting your executable to antivirus vendors for whitelisting (e.g. [Microsoft Security Intelligence submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission))
+- Using a code signing certificate from a trusted CA (see above)
 - Providing clear download instructions to users
 
 ### Linux
@@ -295,9 +309,9 @@ Consider creating distribution packages:
 
 ## Step 5: One-File vs One-Folder Distribution
 
-The project’s **`DICOMViewerV3.spec`** already uses a **one-folder** layout: `EXE` with **`exclude_binaries=True`**, then **`COLLECT`**, then **`BUNDLE`** on macOS. Distribute the whole `dist/DICOMViewerV3/` directory (or the `.app` on macOS).
+The project’s **`DICOMViewerV3.spec`** already uses a **one-folder** (`onedir`) layout: `EXE` with **`exclude_binaries=True`**, then **`COLLECT`**, then **`BUNDLE`** on macOS. Distribute the whole `dist/DICOMViewerV3/` directory (or the `.app` on macOS). The **Build Executables** workflow already packages this as a portable, no-install zip (`DICOMViewerV3-<version>-Windows.zip` — extract and run `DICOMViewerV3.exe`; no administrator rights required).
 
-For a **single-file** executable you would change the spec (different `EXE` / no `COLLECT` pattern than this repo ships). The structural idea for a one-folder build matches:
+The structural idea for the shipped one-folder build matches:
 
 ```python
 exe = EXE(
@@ -325,9 +339,35 @@ coll = COLLECT(
 )
 ```
 
-**Trade-offs:**
-- **One-file**: Easier distribution, but slower startup (extracts to temp directory)
-- **One-folder**: Faster startup, but requires distributing the entire folder
+### Onefile investigation (2026-09): could we ship a single `.exe`?
+
+We investigated switching the Windows build to PyInstaller **onefile** mode (a single `DICOMViewerV3.exe` users can copy anywhere). Summary: **feasible but not currently recommended**; the existing one-folder zip is already fully portable and avoids the onefile trade-offs below.
+
+**Pros** ([PyInstaller docs — What PyInstaller Does and How It Does It](https://pyinstaller.org/en/stable/operating-mode.html)):
+
+- Single file to download, copy, and double-click — the most familiar "portable" shape for users.
+- No zip-extraction step where a user might move the `exe` away from its `dist/` dependencies (a real support failure mode for one-folder zips).
+- Onefile extracts to a per-launch temp folder (`_MEI*xxxxxx*`), so multiple copies can run side by side without interfering.
+
+**Cons / risks:**
+
+- **Slower startup.** The bootloader decompresses every bundled file (Python runtime, all of Qt/PySide6, VTK, pylinac, `resources/`) into `%TEMP%\_MEI*xxxxxx*` on every launch. For a bundle of this size (~1.1 GB on the macOS baseline; see [`PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`](PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md)) this extraction would likely add seconds to every cold start, and the whole bundle is rewritten to the temp directory each run.
+- **Security floor.** Onefile mode has a history of bootloader environment-spoofing / local privilege-escalation issues: [GHSA-9fxf-4qw3-ghmr](https://github.com/pyinstaller/pyinstaller/security/advisories/GHSA-9fxf-4qw3-ghmr) (CVSS 7.8, High) affects onefile executables on `pyinstaller < 6.22.1`. Our `requirements-build.txt` floor (`pyinstaller>=6.22.2`) already covers this, but it illustrates that onefile carries a larger bootloader attack surface than onedir; the PyInstaller docs also warn against giving a onefile executable administrator privileges.
+- **Antivirus / SmartScreen noise.** Onefile executables that self-extract to `%TEMP%` at launch are a pattern some antivirus engines flag more aggressively than a plain folder of files; the self-extraction behaviour cannot be disabled.
+- **Leftover temp folders.** Per the PyInstaller docs, the `_MEI*xxxxxx*` folder is *not* removed if the app crashes or is killed (Task Manager / Force Quit), so users leak disk space on abnormal termination.
+- **Code signing scope narrows** (sign one file instead of hundreds — a genuine pro for onefile), but UPX-compressed binaries cannot be Authenticode-signed reliably, so signing would push toward `USE_UPX=False` on Windows (larger exe; see signing section above).
+- **macOS stays one-folder.** A macOS `.app` bundle is inherently one-folder (`BUNDLE` requires `COLLECT`); onefile would be a Windows-only divergence, doubling the maintenance surface.
+
+**Work required if we ever adopt onefile (Windows only):**
+
+1. **Spec change** in `DICOMViewerV3.spec`: build a platform-conditional onefile `EXE` — remove `exclude_binaries=True`, pass `a.binaries`, `a.zipfiles`, `a.datas` directly to `EXE`, and skip `COLLECT`/`BUNDLE` on Windows. Keep the current one-folder path for macOS (and probably Linux/AppImage).
+2. **CI updates** in `.github/workflows/build.yml`: the Windows *Verify executable* step expects `dist/DICOMViewerV3/DICOMViewerV3.exe`; onefile outputs `dist/DICOMViewerV3.exe`. The packaging step (`python -m zipfile -c ... dist/DICOMViewerV3`) and artifact upload would need a onefile variant (or skip zipping and upload the raw exe).
+3. **Smoke-test path updates**: the decoder fixture smoke and GDCM inventory commands in this doc reference the one-folder path; onefile would run `dist/DICOMViewerV3.exe --decoder-fixture-smoke tests/fixtures/dicom_decoder`.
+4. **App-code check**: resource loading already resolves `sys._MEIPASS` for bundled resources (`gui/main_window_theme.py` and similar loaders), which works identically in onefile — spot-check on a real build before shipping.
+5. **Re-verify AV/SmartScreen behaviour** on the packed onefile exe and measure startup regression on a cold machine.
+6. **Security posture note**: the [PHI/PII guardrails](../PHI_PII_REPOSITORY_GUARDRAILS.md) and release reporting assume the one-folder layout for bundle inventory (`scripts/report_gdcm_bundle_inventory.py`); the script would need to tolerate a onefile layout or keep shipping one-folder for release evidence.
+
+**Decision (2026-09):** stay with one-folder + zip for all platforms. Revisit onefile only if support overhead from "user moved the exe out of the folder" becomes significant, or if code signing makes "one signed file" compelling (see Step 4 → Windows → Code Signing).
 
 ## Step 6: Quick Start (Alternative Method)
 
@@ -825,7 +865,11 @@ If Qt-related errors occur:
 - [PyInstaller Manual](https://pyinstaller.org/en/stable/man/pyinstaller.html)
 - [PySide6 Deployment Guide](https://doc.qt.io/qtforpython/deployment.html)
 - [macOS Code Signing Guide](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)
-- [Windows Code Signing Guide](https://docs.microsoft.com/en-us/windows/win32/seccrypto/cryptography-tools)
+- [Windows Code Signing / signtool Guide](https://learn.microsoft.com/en-us/windows/win32/seccrypto/cryptography-tools)
+- [Microsoft Defender SmartScreen overview](https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/windows-defender-smartscreen/)
+- [Azure Artifact Signing (formerly Trusted Signing)](https://learn.microsoft.com/en-us/azure/artifact-signing/overview) and its [GitHub Action](https://github.com/Azure/trusted-signing-action)
+- [SignPath open-source program](https://signpath.io/solutions/open-source-community)
+- [PyInstaller GHSA-9fxf-4qw3-ghmr](https://github.com/pyinstaller/pyinstaller/security/advisories/GHSA-9fxf-4qw3-ghmr) (onefile LPE; floor `pyinstaller>=6.22.1`)
 
 ## Build Scripts (Optional)
 
