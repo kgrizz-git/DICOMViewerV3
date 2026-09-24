@@ -17,7 +17,7 @@ route through `render_grayscale_image`, so they still show MONOCHROME1 at the wr
 | Path | Builder | Site |
 |------|---------|------|
 | MPR panes | `mpr_view_math.array_to_pil` | `src/core/mpr_view_math.py:82-99` |
-| On-screen projection panes (AIP/MIP/MinIP) | `slice_display_pixels.create_slice_projection_pil_image` | `src/core/slice_display_pixels.py:19-113` |
+| On-screen projection panes (AIP/MIP/MinIP) | `slice_display_pixels.create_slice_projection_pil_image` | `src/core/slice_display_pixels.py:19-114` |
 | Export + cine projection frames | `export_rendering.create_projection_for_export` | `src/gui/export_rendering.py:289-396` |
 
 The export/cine projection path is now **doubly** wrong: it never inverted MONOCHROME1 itself,
@@ -132,7 +132,8 @@ that in the field docstring.
 to `""`, so a cache hit would render the *uninverted* image while a fresh build renders the
 inverted one — same series, polarity depending on cache state, which is the worst possible
 failure mode because it is intermittent. Persist `photometric_interpretation` in the cache meta
-(`src/core/mpr_cache.py:125` save / `:294` load) and read it back at `mpr_controller.py:1349`, in
+(meta is a plain dict built at `src/core/mpr_cache.py:301-332`, read back at `:252-276`,
+with `rescale_slope`/`rescale_intercept` as the precedent at `:330-331`) and read it back at `mpr_controller.py:1349`, in
 the same commit as §1.1. It is re-derivable at save time from
 `result.source_volume.source_datasets`, so old entries can also simply be invalidated — pick one
 and say which. Test: a cache-hit render and a cold-build render of the same MONOCHROME1 series
@@ -329,8 +330,9 @@ Worth stating plainly, because it should shape how much effort goes where.
   and do not spend smoke-test effort hunting for a real MONOCHROME1 volume study.
 - **Projection panes: genuinely reachable.** On-screen projection only needs two or more datasets
   in a series, and multi-frame XA/RF — which really do use MONOCHROME1 — are split into per-frame
-  `FrameDatasetWrapper` objects (`src/core/multiframe_handler.py:540`) that proxy
-  `PhotometricInterpretation` from the parent. So a MONOCHROME1 multi-frame fluoro run lands
+  `FrameDatasetWrapper` objects **appended into the same series list**
+  (`src/core/dicom_organizer.py:247-264`), and those wrappers proxy `PhotometricInterpretation`
+  to the parent dataset through `__getattr__` (`src/core/multiframe_handler.py:710-726`). So a MONOCHROME1 multi-frame fluoro run lands
   directly in `create_slice_projection_pil_image` with more than one "slice". This is where the
   real defect lives and where the manual smoke should focus.
 
