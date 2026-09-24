@@ -315,7 +315,6 @@ def create_projection_for_export(
         total_slices = len(series_datasets)
 
         if total_slices < 2:
-            # Need at least 2 slices for projection
             return None
 
         # Calculate slice range - match viewer behavior
@@ -369,7 +368,8 @@ def create_projection_for_export(
             processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
 
         # Polarity last, on the finalized uint8 array, so export matches the on-screen pane.
-        processed_array = apply_monochrome1_polarity(processed_array, dataset_photometric_interpretation(dataset))
+        # Series-first PI, matching the on-screen builder, so mixed-PI cannot diverge.
+        processed_array = apply_monochrome1_polarity(processed_array, dataset_photometric_interpretation(series_datasets[0]))
 
         # Convert to PIL Image
         if len(processed_array.shape) == 2:

@@ -116,6 +116,47 @@ def test_screen_and_export_projections_match(
     assert np.array_equal(np.array(on_screen), np.array(exported))
 
 
+@pytest.mark.parametrize("photometric_interpretation", ["MONOCHROME1", "MONOCHROME2"])
+def test_screen_and_export_match_on_the_normalize_branch(
+    patched_processor, photometric_interpretation
+):
+    """No window/level: both builders normalize to uint8, and polarity must still agree."""
+    dataset = _dataset(photometric_interpretation)
+    on_screen = _screen(dataset, wc=None, ww=None)
+    exported = _export(dataset, wc=None, ww=None)
+    assert on_screen is not None and exported is not None
+    assert np.array_equal(np.array(on_screen), np.array(exported))
+
+
+def test_export_reads_photometric_interpretation_from_series_first_dataset(patched_processor):
+    """Both builders use the series-first dataset, so a mixed-PI series cannot diverge."""
+    first = _dataset("MONOCHROME1")
+    later = _dataset("MONOCHROME2")
+    studies = {"st": {"sr": [first, later, later]}}
+
+    # The current dataset passed to export is the MONOCHROME2 one; series-first must win.
+    exported = _er.create_projection_for_export(
+        later, studies, "st", "sr", 1, "aip", 3, 40.0, 400.0, False
+    )
+    on_screen = sdp.create_slice_projection_pil_image(
+        dicom_processor=_FakeProc(),
+        projection_type="aip",
+        projection_slice_count=3,
+        current_studies=studies,
+        current_study_uid="st",
+        current_series_uid="sr",
+        current_slice_index=1,
+        window_center=40.0,
+        window_width=400.0,
+        use_rescaled_values=False,
+        rescale_slope=None,
+        rescale_intercept=None,
+    )
+    assert exported is not None and on_screen is not None
+    assert np.array_equal(np.array(exported), np.array(on_screen))
+    assert np.array_equal(np.array(exported), 255 - np.array(_export(_dataset("MONOCHROME2"))))
+
+
 def test_photometric_helper_still_does_not_invert_monochrome1():
     """Guards the predecessor plan's invariant: export must not re-invert on top of the builder."""
     from PIL import Image
