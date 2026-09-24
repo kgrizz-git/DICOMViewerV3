@@ -56,6 +56,7 @@ from core.mpr_geometry import (
     standard_slice_planes_lps,
 )
 from core.mpr_volume import MprVolume, MprVolumeError
+from core.photometric_polarity import dataset_photometric_interpretation
 from core.slice_geometry import SlicePlane, SliceStack
 from utils.debug_flags import DEBUG_MPR
 
@@ -93,6 +94,12 @@ class MprResult:
             RescaleSlope from the source series first dataset (if present).
         rescale_intercept (Optional[float]):
             RescaleIntercept from the source series first dataset (if present).
+        photometric_interpretation (str):
+            Normalized PhotometricInterpretation of the source series, taken from the first
+            source dataset (same first-dataset-wins rule as the rescale values above; a
+            mixed-PI series is pathological). Empty string when unknown, which renders as
+            MONOCHROME2. Consumed only at display time — ``slices`` always stay in
+            stored-value polarity.
     """
     slices: list[np.ndarray]
     slice_stack: SliceStack
@@ -102,6 +109,7 @@ class MprResult:
     interpolation: str
     rescale_slope: float | None = None
     rescale_intercept: float | None = None
+    photometric_interpretation: str = ""
     combine_mode: str = "none"
     slab_thickness_mm: float = 0.0
 
@@ -377,6 +385,7 @@ class MprBuilderWorker(QThread):
             interpolation=self._interpolation,
             rescale_slope=rescale_slope,
             rescale_intercept=rescale_intercept,
+            photometric_interpretation=self._get_photometric_interpretation(),
             combine_mode="none",
             slab_thickness_mm=0.0,
         )
@@ -451,6 +460,19 @@ class MprBuilderWorker(QThread):
         except Exception as exc:
             _mpr_log(f"Resample failed: {exc}")
             return None
+
+    def _get_photometric_interpretation(self) -> str:
+        """
+        Normalized PhotometricInterpretation of the source series.
+
+        Mirrors :meth:`_get_rescale_params` — first source dataset wins.
+
+        Returns:
+            Upper-case PI string, or "" when there are no source datasets.
+        """
+        if not self._volume.source_datasets:
+            return ""
+        return dataset_photometric_interpretation(self._volume.source_datasets[0])
 
     def _get_rescale_params(
         self,

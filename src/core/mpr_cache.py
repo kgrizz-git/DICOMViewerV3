@@ -329,6 +329,7 @@ class MprCache:
             ],
             "rescale_slope": result.rescale_slope,
             "rescale_intercept": result.rescale_intercept,
+            "photometric_interpretation": result.photometric_interpretation,
         }
 
         path_npz = self._cache_dir / (key + self._NPZ_SUFFIX)

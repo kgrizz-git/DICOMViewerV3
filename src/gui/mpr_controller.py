@@ -1327,7 +1327,6 @@ class MprController(QObject):
         if self._cache is None:
             return False
         try:
-            cache_normal = request.output_plane.normal
             n_ds = len(datasets_to_use)
             try:
                 series_uid = str(datasets_to_use[0].SeriesInstanceUID)
@@ -1336,7 +1335,7 @@ class MprController(QObject):
             from core.mpr_cache import _make_cache_key
             key = _make_cache_key(
                 series_uid=series_uid,
-                normal=cache_normal,
+                normal=request.output_plane.normal,
                 output_spacing_mm=request.output_spacing_mm,
                 output_thickness_mm=request.output_thickness_mm,
                 interpolation=request.interpolation,
@@ -1355,6 +1354,7 @@ class MprController(QObject):
                     interpolation=meta["interpolation"],
                     rescale_slope=meta.get("rescale_slope"),
                     rescale_intercept=meta.get("rescale_intercept"),
+                    photometric_interpretation=meta.get("photometric_interpretation", ""),
                     combine_mode=meta.get("combine_mode", "none"),
                     slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
                 )
