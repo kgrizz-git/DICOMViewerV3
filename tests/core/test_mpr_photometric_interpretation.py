@@ -7,6 +7,8 @@ cache is warm.
 
 from __future__ import annotations
 
+import json
+import pathlib
 import tempfile
 
 import numpy as np
@@ -111,14 +113,36 @@ def test_photometric_interpretation_survives_the_disk_cache():
         assert meta.get("photometric_interpretation") == "MONOCHROME1"
 
 
-def test_cache_entry_without_the_field_defaults_to_empty():
-    """Entries written before this change read back as MONOCHROME2, the prior behaviour."""
+def test_legacy_cache_entry_on_disk_reads_back_as_empty():
+    """An entry written before this change has no such key; loading it must not fail, and the
+    reconstruction must fall back to "", which is the pre-change (MONOCHROME2) behaviour."""
     result = _build("MONOCHROME1")
     with tempfile.TemporaryDirectory() as tmpdir:
         cache = MprCache(cache_dir=tmpdir, max_size_mb=50)
         assert cache.save(result)
-        loaded = cache.load(make_result_key(result))
+        key = make_result_key(result)
+
+        # Rewrite the on-disk meta as a pre-change entry.
+        meta_path = pathlib.Path(tmpdir) / (key + "_meta.json")
+        stored = json.loads(meta_path.read_text(encoding="utf-8"))
+        del stored["photometric_interpretation"]
+        meta_path.write_text(json.dumps(stored), encoding="utf-8")
+
+        loaded = cache.load(key)
         assert loaded is not None
-        _, _, meta = loaded
-        meta.pop("photometric_interpretation")
-        assert meta.get("photometric_interpretation", "") == ""
+        slices, stack, meta = loaded
+        assert "photometric_interpretation" not in meta
+
+        # Same reconstruction the controller performs on a cache hit.
+        rebuilt = MprResult(
+            slices=slices,
+            slice_stack=stack,
+            output_spacing_mm=tuple(meta["output_spacing_mm"]),
+            output_thickness_mm=float(meta["output_thickness_mm"]),
+            source_volume=result.source_volume,
+            interpolation=meta["interpolation"],
+            rescale_slope=meta.get("rescale_slope"),
+            rescale_intercept=meta.get("rescale_intercept"),
+            photometric_interpretation=meta.get("photometric_interpretation", ""),
+        )
+        assert rebuilt.photometric_interpretation == ""
