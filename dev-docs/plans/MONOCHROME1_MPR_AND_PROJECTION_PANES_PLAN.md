@@ -134,9 +134,10 @@ inverted one — same series, polarity depending on cache state, which is the wo
 failure mode because it is intermittent. Persist `photometric_interpretation` in the cache meta
 (meta is a plain dict built at `src/core/mpr_cache.py:301-332`, read back at `:252-276`,
 with `rescale_slope`/`rescale_intercept` as the precedent at `:330-331`) and read it back at `mpr_controller.py:1349`, in
-the same commit as §1.1. It is re-derivable at save time from
-`result.source_volume.source_datasets`, so old entries can also simply be invalidated — pick one
-and say which. Test: a cache-hit render and a cold-build render of the same MONOCHROME1 series
+the same commit as §1.1. **Persist rather than invalidate**: the save side can derive it from
+`result.source_volume.source_datasets`, and an entry written before this change simply reads back
+as `""`, which is the pre-change behavior. Invalidation would flush the whole MPR disk cache for
+an affected series, which is a heavier hammer for no extra safety. Test: a cache-hit render and a cold-build render of the same MONOCHROME1 series
 produce identical pixels.
 
 ### 1.2 Extend `array_to_pil`
@@ -401,7 +402,11 @@ acceptable and must live under `tmp/`, never staged):
 2. Enable projection (AIP, then MIP, then MinIP); confirm each pane matches the slice polarity.
 3. Export a still with projection on; confirm the PNG matches the screen.
 4. Export a short cine with projection on; confirm frames match.
-5. Open MPR; confirm all three planes and the MPR thumbnails match the slice polarity.
+5. **MPR: expected to be unverifiable, and that is fine.** Per the reachability section, CT/MR
+   store MONOCHROME2 in practice, so there is likely no real MONOCHROME1 volume to open. Attempt
+   this step only if a synthesized MONOCHROME1 volume fixture already exists; otherwise record it
+   as "not smoke-tested — no MONOCHROME1 volume available, covered by unit tests only" and move
+   on. Do not hunt for a fixture.
 6. Toggle manual Invert in each mode; confirm it flips relative to the baseline (XOR), and that
    the context-menu checkbox reflects the user half only. Note that the MPR pane's toggle is
    per-viewer local and is never seeded from `series_defaults`, unlike the main pane — so its
