@@ -296,7 +296,8 @@ corresponds to depends on (0028,1041) and is not knowable from the polarity tag 
 **AIP is unaffected and must not be "fixed" later.** The mean commutes with `255 - x`, so
 `255 - mean(x) == mean(255 - x)` exactly. Only MIP and MinIP are order-sensitive.
 
-**Recommendation for this plan: keep the operator on stored values (Invariant #5).** Reasons:
+**Decision (ratified by the maintainer, 2026-09-24): keep the operator on stored values
+(Invariant #5).** Reasons:
 
 - It preserves the slice/projection/export contract the predecessor plan established: one
   window/level pipeline, one polarity flip at the end. Swapping the operator would make the
@@ -315,6 +316,27 @@ fold it into this fix. That TO_DO must record two constraints: the swap has to a
 the on-screen and the export-projection operator selection or export diverges from screen
 (Invariant #6), and brightness-domain semantics will inherently disagree with the raw-histogram
 path (Invariant #4), which is a deliberate trade the user has to accept.
+
+---
+
+## How reachable is each half of this fix?
+
+Worth stating plainly, because it should shape how much effort goes where.
+
+- **MPR panes: probably unreachable in practice.** MPR needs a 3-D volume, so CT and MR, and both
+  conventionally store MONOCHROME2. The DICOM standard permits MONOCHROME1 there but it is not
+  what vendors emit. Treat Phase 1 as correctness-for-consistency, not a user-visible bug fix,
+  and do not spend smoke-test effort hunting for a real MONOCHROME1 volume study.
+- **Projection panes: genuinely reachable.** On-screen projection only needs two or more datasets
+  in a series, and multi-frame XA/RF — which really do use MONOCHROME1 — are split into per-frame
+  `FrameDatasetWrapper` objects (`src/core/multiframe_handler.py:540`) that proxy
+  `PhotometricInterpretation` from the parent. So a MONOCHROME1 multi-frame fluoro run lands
+  directly in `create_slice_projection_pil_image` with more than one "slice". This is where the
+  real defect lives and where the manual smoke should focus.
+
+Implementation note following from the above: the PI lookup must work through
+`FrameDatasetWrapper`'s metadata proxy, not assume a plain `Dataset`. `dataset_photometric_
+interpretation` uses `getattr`, which the wrapper handles, but pin it with a test.
 
 ---
 
