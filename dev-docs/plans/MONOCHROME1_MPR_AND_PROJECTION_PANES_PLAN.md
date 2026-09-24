@@ -228,11 +228,19 @@ series claims otherwise.
 
 ### 2.2 Caller
 
-`slice_display_manager._create_projection_image` (`src/gui/slice_display_manager.py:328-372`)
-already takes `_dataset` (currently unused, prefixed). Use it: pass
-`photometric_interpretation=dataset_photometric_interpretation(_dataset)` and rename the
-parameter to `dataset`. Check for other callers first (`rg "create_slice_projection_pil_image" src`
-— currently only this one).
+**Superseded during implementation: the caller needs no change at all.**
+
+The original intent was for `slice_display_manager._create_projection_image`
+(`src/gui/slice_display_manager.py:328-372`) to pass
+`photometric_interpretation=dataset_photometric_interpretation(dataset)`, using its
+currently-unused `_dataset` parameter. That is wrong on the rule this plan settled on: `_dataset`
+is the dataset for the *current slice*, whereas §2.1 requires the **series-first** dataset, so
+passing it would contradict the MPR rule and reintroduce a slab-dependent answer.
+
+The fallback inside `create_slice_projection_pil_image` already reads `series_datasets[0]`, which
+is exactly right, so the caller is left untouched and `_dataset` stays unused. The explicit
+keyword remains on the function for tests and any future caller that has a better answer. This
+also keeps a 1600-line grandfathered file from growing, which the line-complexity gate blocks.
 
 ### 2.3 Leave the raw path alone
 
