@@ -10,7 +10,8 @@ so they are unit-testable without Qt/VTK:
 - :func:`compute_mpr_combine_range` — slab [start, end] for AIP/MIP/MinIP combine,
 - :func:`build_mpr_banner_text` — active-MPR banner text,
 - :func:`auto_window_level` — percentile (2–98) auto window/level,
-- :func:`array_to_pil` — linear window/level mapping of a 2-D array to 8-bit gray.
+- :func:`array_to_pil` — linear window/level mapping of a 2-D array to 8-bit gray,
+  with MONOCHROME1 display polarity applied last.
 
 The controller keeps thin static-method wrappers (preserving its public API and
 existing tests) that delegate here.
@@ -23,6 +24,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from core.photometric_polarity import apply_monochrome1_polarity
 from utils.privacy.console import print_redacted
 
 
@@ -80,12 +82,20 @@ def auto_window_level(array: np.ndarray) -> tuple[float, float]:
 
 
 def array_to_pil(
-    array: np.ndarray, window_center: float, window_width: float
+    array: np.ndarray,
+    window_center: float,
+    window_width: float,
+    *,
+    photometric_interpretation: str | None = None,
 ) -> Image.Image | None:
     """Convert a 2-D array to an 8-bit grayscale PIL image via linear window/level.
 
     Mapping: ``out = clip((val - (wc - ww/2)) / ww * 255, 0, 255)``. Returns the
     image, or ``None`` on failure.
+
+    When *photometric_interpretation* is ``MONOCHROME1`` the finalized 8-bit array is inverted,
+    matching ``render_grayscale_image`` so MPR panes agree with the single-slice viewer. The
+    caller's *array* is never modified — the inversion applies to the mapped copy only.
     """
     try:
         lo = window_center - window_width / 2.0
@@ -93,6 +103,7 @@ def array_to_pil(
         mapped = (array - lo) * scale  # array is already float
         np.clip(mapped, 0.0, 255.0, out=mapped)
         uint8_arr = mapped.astype(np.uint8)
+        uint8_arr = apply_monochrome1_polarity(uint8_arr, photometric_interpretation)
         return Image.fromarray(uint8_arr, mode="L")
     except Exception as exc:
         print_redacted(f"[mpr_view_math] array_to_pil failed: {exc}")
