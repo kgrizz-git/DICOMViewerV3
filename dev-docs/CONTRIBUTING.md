@@ -12,7 +12,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 ## Branches and commits
 
-- Never commit directly on `main` unless the maintainer explicitly says to do so. Start ordinary work on a named feature or plan branch, commit and push there, and open a pull request.
+- Never commit directly on `main` unless the maintainer explicitly says to do so. Start ordinary work on a named feature, plan, or hotfix branch, commit and push there, and open a pull request.
 - A general request to commit, push, update a PR, or finish work is not permission to commit on `main`. Do not merge without explicit instruction.
 
 ## Refactor backups and Git hooks
