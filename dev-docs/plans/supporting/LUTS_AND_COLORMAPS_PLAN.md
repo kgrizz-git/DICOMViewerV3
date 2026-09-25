@@ -285,6 +285,10 @@ needs to see which part of the curve moved.
   ```
 - [ ] Unknown/missing `interpolation` falls back to `linear`; a LUT that fails
   validation is skipped with a warning rather than aborting app data load.
+- [ ] `tests/core/test_lut_persistence.py` (Phase 4a): `to_dict()` /
+  `from_dict()` round-trip preserves control points, interpolation, and
+  parameters; an unknown `interpolation` falls back to `linear`; an invalid LUT
+  is skipped with a warning rather than aborting the load.
 
 ---
 
@@ -313,9 +317,10 @@ needs to see which part of the curve moved.
   by a default Linear LUT.
 - [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
   freehand draw → simplified control points; interpolation switch; undo/redo;
-  gamma slider re-samples; a saved-and-reloaded custom LUT keeps its name/source
-  and stays selected; the three-curve overlay renders W/L, LUT, and composed
-  result and collapses to one line for a Linear LUT.
+  gamma slider re-samples; a LUT loaded into the selector keeps its name/source
+  and reopens in the editor; the three-curve overlay renders W/L, LUT, and
+  composed result and collapses to one line for a Linear LUT. Save/load
+  round-trip is covered in Phase 4a (`tests/core/test_lut_persistence.py`).
 - [ ] Follow [`dev-docs/info/TESTING_GUIDANCE.md`](../../info/TESTING_GUIDANCE.md)
   tiers; never construct a `QCoreApplication` in a test — use the session `qapp`
   fixture.
@@ -393,6 +398,7 @@ needs to see which part of the curve moved.
 | `tests/core/test_lut_engine.py` | **New** |
 | `tests/core/test_lut_curve.py` | **New** — control-point interpolation and sampling |
 | `tests/core/test_lut_transfer.py` | **New** — `composed(x) == LUT(WL(x))` composition tests |
-| `tests/gui/test_lut_curve_editor.py` | **New** — breakpoint editing, freehand, loaded-LUT display, and persistence |
+| `tests/gui/test_lut_curve_editor.py` | **New** — breakpoint editing, freehand, and loaded-LUT display (Phase 3b) |
 | `tests/gui/test_lut_transfer_overlay.py` | **New** — three-curve overlay rendering and Linear collapse |
+| `tests/core/test_lut_persistence.py` | **New** — `to_dict`/`from_dict` round-trip and fallback (Phase 4a) |
 | `user-docs/` (display + LUT pages) | User documentation for the selector, editor, and overlay |
