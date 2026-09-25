@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.photometric_polarity import (
+    MONOCHROME1,
+    dataset_photometric_interpretation,
+)
 from utils.dicom_utils import get_composite_series_key
 
 
@@ -122,15 +126,4 @@ def update_zoom_wl_status_from_view_state(vsm: Any) -> None:
 
 def _is_dataset_monochrome1(dataset: Any) -> bool:
     """Return True if the dataset has PhotometricInterpretation == MONOCHROME1."""
-    if dataset is None:
-        return False
-    pi = getattr(dataset, "PhotometricInterpretation", None)
-    if pi is None:
-        return False
-    if isinstance(pi, (list, tuple)):
-        if not pi:
-            return False
-        pi = str(pi[0]).strip()
-    else:
-        pi = str(pi).strip()
-    return pi.upper() == "MONOCHROME1"
+    return dataset_photometric_interpretation(dataset) == MONOCHROME1

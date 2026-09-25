@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-25
 
 ---
 
@@ -42,12 +42,10 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
-4. **[P2] MONOCHROME1 for MPR and on-screen projection panes** — extend
-   `mpr_view_math` and `slice_display_pixels` (and the export-projection path) so
-   MPR/projection polarity matches the corrected single-slice viewer. See
-   [Bugs / Correctness](#bugs--correctness) and the archived
-   [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
-   §Follow-up.
+4. **[P1] More and custom look-up tables (LUTs & colormaps)** — add
+   non-linear grayscale transfer functions, built-in colormaps, and a path for
+   user-defined custom LUTs beyond the current linear W/L ramp; overlay the
+   active LUT on histograms. **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
 5. **[P1] Propagate 2D ROIs across slices** — copy or link a selected 2D ROI
    across a user-selected slice/frame range in the same series, preserving
    slice/frame identity and allowing per-slice edits. First slice of the ROI
@@ -82,6 +80,7 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P1]** **Blank-frame GPU-fallback false positive** — **Env:** Windows under Parallels and/or native-GPU macOS/Windows with VTK. **Steps:** open a bone-free CT (QC/water phantom) with **CT Bone** preset — GPU path retained, no false CPU fallback, no hardware-blaming status. If reproducible in your env, also confirm a genuine GPU blank failure still falls back to CPU. **Pass:** expected-blank frames stay on GPU; real failures still fall back. **Archived plan:** [Volume render fallback & memory hardening](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md) §Verification gate
 - [ ] **[P2]** **Volume build memory amplification (~8× measured)** — **Env:** Windows/Parallels 3D. **Steps:** open **3D View** on a large multiframe CT (800+ slices if available); watch Task Manager during build; confirm peak RSS is materially lower than pre-fix and a downsampling notice appears when the guard triggers. **Pass:** no OOM; guard message accurate. **Archived plan:** [Volume render fallback & memory hardening](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md) §Task B
+- [ ] **[P2]** **MONOCHROME1 polarity — projection, export, cine, MPR** — **Env:** needs a MONOCHROME1 series; multi-frame **XA/RF** is the realistic case (CR/DX are usually single-image, and CT/MR store MONOCHROME2, so the MPR half may be unverifiable — record it as "not smoke-tested, unit tests only" rather than hunting for a fixture). A synthesized fixture made by flipping `PhotometricInterpretation` on an existing series is acceptable and must live under `tmp/`, never staged. **Steps:** confirm single-slice polarity first as the reference; then AIP/MIP/MinIP panes; then a still export and a short cine export with projection on; then MPR panes and navigator thumbnails; toggle manual **Invert** in each mode; open the histogram with "Use intensity projection pixels". **Pass:** every mode matches the single-slice polarity, exports match the screen, Invert flips relative to the baseline (XOR) with the context-menu checkbox reflecting only the user half, and the histogram is unchanged by this work. **Archived plan:** [MONOCHROME1 MPR + projection panes](plans/completed/MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md) §Verification
 - [ ] **[P2]** **Large multi-frame load — first paint** — **Steps:** open one large single-file enhanced CT or XA sample; accept the large-file warning; confirm the first image, metadata panel, and series navigator render correctly without an apparent post-Continue stall (automated GUI benchmark and focused regressions already pass). **Archived plan:** [Slow post-load first paint](plans/completed/POST_LOAD_FIRST_PAINT_PERFORMANCE_PLAN.md)
 - [ ] **[P2]** **W/L presets (US, CR, DX)** — **Steps:** load representative **US**, **CR**, and **DX** studies at available stored bit depths, including **MONOCHROME1** and **MONOCHROME2**; verify Default and Wide presets are sensible, manual Invert remains a user offset, and still/cine exports match the single-slice display. Record fixture coverage and modality-specific findings. **Related:** [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
 - [ ] **[P2]** **Pylinac ACR export and MRI batch (optional real-phantom smoke)** — **Env:** local de-identified CT and MRI ACR phantoms. **Steps:** verify single-run CT/MRI CSV and XLSX export, CT batch CSV, and MRI batch CSV/JSON/XLSX; with module images enabled, compare the XLSX Images module set with the PDF figures. **Pass:** exports are complete, readable, and consistent with the visible analysis; disabled images omit the sheet cleanly. **Archived plan:** [Pylinac ACR full metrics export and MRI batch](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) §G3.
@@ -115,7 +114,9 @@ Release blockers (license compliance, versioned executables) live in
 
 
 <!-- OverlayConfigDialog findings — corrected 2026-07-10 after reviewer pushback on original #1/#2/#4. See tmp/overlay-config-dialog-test-review-2026-07-10.md -->
-- [ ] **[P2]** **MONOCHROME1 for MPR and on-screen projection panes (follow-up to the on-screen viewer fix).** MPR panes render via `mpr_view_math.array_to_pil` (`mpr_view_math.py:87-94`) and on-screen projections via `slice_display_pixels.create_slice_projection_pil_image` (`slice_display_manager.py` ~line 359); neither routes through `render_grayscale_image`, so the core-routed MONOCHROME1 inversion does **not** reach them. The single-slice viewer fix shipped 2026-08-16; extend `mpr_view_math` + `slice_display_pixels` projection path (and the export-projection path) so MPR/projection polarity matches the corrected slice view. Tracked from [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md) §Follow-up.
+- [ ] **[P2]** **MIP/MinIP operator semantics under MONOCHROME1.** Projection operators run on **stored** values, so under MONOCHROME1 — where the highest stored value displays darkest — a user-selected **MIP** returns the stored maximum and therefore displays as the *darkest* pixel in the slab, behaving like a MinIP in the displayed domain (and vice versa). Polarity itself is now correct; this is the separate question of whether the operator should mean "maximum brightness" instead. **Deliberately deferred** when the polarity fix shipped, because swapping silently would change the meaning of already-exported images. **If implemented:** swap `mip`↔`minip` selection at the controller level for MONOCHROME1 series, apply it identically to the **on-screen and export-projection** paths or export diverges from screen, label it in the overlay, and accept that brightness-domain semantics will disagree with the raw-histogram path (which reads stored values). **AIP needs no change ever** — the mean commutes with `255 - x`. Most realistically exercised by multi-frame MONOCHROME1 XA/RF, though any multi-image MONOCHROME1 series can reach `create_slice_projection_pil_image`; still low priority. **Origin:** [MONOCHROME1 MPR + projection panes plan](plans/completed/MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md) §Decision: MIP semantics.
+
+- [ ] **[P2]** **MONOCHROME1 fusion blend and `(MI)` marker follow-ups.** The polarity fix changes the base image entering fusion, while the overlay half remains windowed from stored values without a polarity concept; if a fusion-capable MONOCHROME1 pair is observed, confirm the fused composite polarity and the manual **Invert** XOR. Separately, the `(MI)` status-bar marker currently reaches the single-slice pane only; extend it to MPR/projection panes if a real use case justifies the status-plumbing change. **Evidence-conditioned:** do not hunt for a fixture or implement speculatively. **Origin:** [MONOCHROME1 MPR + projection panes plan](plans/completed/MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md) §Deferred.
 
 - **W/L preset smoke (US, CR, DX):** tracked in [Manual Smoke Checks](#manual-smoke-checks).
 
@@ -337,8 +338,6 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
 
 - [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
-
-- [ ] **[P1]** Add ability to apply different look-up tables besides just linear (w/l), and ability to overlay LUT on histograms — **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md)
 
 ### MPR & fusion views
 

@@ -28,6 +28,7 @@ from core.dicom_window_level import (
     apply_color_window_level_luminance,
     apply_window_level,
 )
+from core.photometric_polarity import apply_monochrome1_polarity
 from utils.log_sanitizer import sanitized_format_exc
 from utils.privacy.console import print_redacted
 
@@ -214,18 +215,7 @@ def render_grayscale_image(
         # Take first frame (fallback - should not normally happen if organizer worked correctly)
         processed_array = processed_array[0]
 
-    pi_upper = ""
-    if photometric_interpretation:
-        pi_val = photometric_interpretation
-        if isinstance(pi_val, (list, tuple)):
-            pi_val = str(pi_val[0]).strip()
-        else:
-            pi_val = str(pi_val).strip()
-        pi_upper = pi_val.upper()
-
-    if pi_upper == "MONOCHROME1":
-        processed_array = processed_array.astype(np.uint8)
-        processed_array = 255 - processed_array
+    processed_array = apply_monochrome1_polarity(processed_array, photometric_interpretation)
 
     try:
         if len(processed_array.shape) == 2:

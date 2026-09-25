@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 
 from core.dicom_parser import DICOMParser
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
-from core.mpr_cache import MprCache
+from core.mpr_cache import MprCache, resolve_cached_photometric_interpretation
 from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
 from core.mpr_dicom_export import (
     MprDicomExportError,
@@ -989,7 +989,7 @@ class MprController(QObject):
             wl_controls,
             array,
         )
-        pil_image = self._array_to_pil(array, wc, ww)
+        pil_image = self._array_to_pil(array, wc, ww, photometric_interpretation=result.photometric_interpretation)
         if pil_image is None:
             return
 
@@ -1327,7 +1327,6 @@ class MprController(QObject):
         if self._cache is None:
             return False
         try:
-            cache_normal = request.output_plane.normal
             n_ds = len(datasets_to_use)
             try:
                 series_uid = str(datasets_to_use[0].SeriesInstanceUID)
@@ -1336,7 +1335,7 @@ class MprController(QObject):
             from core.mpr_cache import _make_cache_key
             key = _make_cache_key(
                 series_uid=series_uid,
-                normal=cache_normal,
+                normal=request.output_plane.normal,
                 output_spacing_mm=request.output_spacing_mm,
                 output_thickness_mm=request.output_thickness_mm,
                 interpolation=request.interpolation,
@@ -1355,6 +1354,7 @@ class MprController(QObject):
                     interpolation=meta["interpolation"],
                     rescale_slope=meta.get("rescale_slope"),
                     rescale_intercept=meta.get("rescale_intercept"),
+                    photometric_interpretation=resolve_cached_photometric_interpretation(meta, volume.source_datasets),
                     combine_mode=meta.get("combine_mode", "none"),
                     slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
                 )
@@ -1902,20 +1902,12 @@ class MprController(QObject):
 
     @staticmethod
     def _array_to_pil(
-        array: np.ndarray, window_center: float, window_width: float
+        array: np.ndarray, window_center: float, window_width: float,
+        *, photometric_interpretation: str | None = None,
     ) -> Image.Image | None:
         """
-        Convert a 2-D float32 array to an 8-bit grayscale PIL Image.
-
-        Applies a linear window/level mapping:
-            out = clip((val - (wc - ww/2)) / ww * 255, 0, 255).
-
-        Args:
-            array:         2-D float32 pixel array.
-            window_center: Window centre (HU or raw value).
-            window_width:  Window width (> 0).
-
-        Returns:
-            8-bit grayscale PIL Image, or None on failure.
+        Thin wrapper over :func:`core.mpr_view_math.array_to_pil`, which owns the linear
+        window/level mapping and the MONOCHROME1 polarity. Kept as a static method because it
+        is part of this controller's established API and is patched by existing tests.
         """
-        return array_to_pil(array, window_center, window_width)
+        return array_to_pil(array, window_center, window_width, photometric_interpretation=photometric_interpretation)

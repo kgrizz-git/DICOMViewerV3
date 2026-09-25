@@ -21,6 +21,10 @@ from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
+from core.photometric_polarity import (
+    apply_monochrome1_polarity,
+    dataset_photometric_interpretation,
+)
 from gui.overlay_text_builder import get_corner_text, get_modality
 from tools.angle_measurement_items import AngleMeasurementItem
 from utils.bundled_fonts import DEFAULT_FONT_FAMILY, DEFAULT_FONT_VARIANT
@@ -203,27 +207,13 @@ def process_image_by_photometric_interpretation(image: Image.Image, dataset: Dat
         Processed PIL Image ready for export
     """
     try:
-        # Get PhotometricInterpretation tag (default to MONOCHROME2)
-        photometric_interpretation = getattr(dataset, 'PhotometricInterpretation', 'MONOCHROME2')
+        # Normalized upper-case PI, defaulting to MONOCHROME2 when absent or empty.
+        # MONOCHROME1 inversion is owned by the core render layer; export must not re-invert.
+        pi_upper = dataset_photometric_interpretation(dataset) or 'MONOCHROME2'
+        photometric_interpretation = pi_upper
 
-        # Handle string or list/tuple values
-        if isinstance(photometric_interpretation, (list, tuple)):
-            photometric_interpretation = str(next(iter(photometric_interpretation), '')).strip()
-        else:
-            photometric_interpretation = str(photometric_interpretation).strip()
-
-        if not photometric_interpretation:
-            photometric_interpretation = 'MONOCHROME2'  # Default
-
-        pi_upper = photometric_interpretation.upper()
-
-        # MONOCHROME1 inversion is now owned by the core render layer
-        # (render_grayscale_image). Export no longer re-inverts.
-
-        # Handle MONOCHROME2: No inversion needed (standard grayscale)
         if pi_upper == 'MONOCHROME2':
-            # No processing needed - MONOCHROME2 is the standard format
-            pass
+            pass  # Standard grayscale: nothing to do.
 
         # Handle RGB: Check for JPEGLS-RGB channel order issues
         elif pi_upper == 'RGB':
@@ -325,7 +315,6 @@ def create_projection_for_export(
         total_slices = len(series_datasets)
 
         if total_slices < 2:
-            # Need at least 2 slices for projection
             return None
 
         # Calculate slice range - match viewer behavior
@@ -377,6 +366,10 @@ def create_projection_for_export(
                 processed_array = ((processed_array - processed_array.min()) /
                                  (processed_array.max() - processed_array.min()) * 255.0)
             processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
+
+        # Polarity last, on the finalized uint8 array, so export matches the on-screen pane.
+        # Series-first PI, matching the on-screen builder, so mixed-PI cannot diverge.
+        processed_array = apply_monochrome1_polarity(processed_array, dataset_photometric_interpretation(series_datasets[0]))
 
         # Convert to PIL Image
         if len(processed_array.shape) == 2:

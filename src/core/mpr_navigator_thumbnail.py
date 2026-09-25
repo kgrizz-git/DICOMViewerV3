@@ -79,6 +79,17 @@ def get_subwindow_mpr_thumbnail_pixel_array(app: DICOMViewerApp, idx: int):
     return get_subwindow_mpr_pixel_array(app, idx, middle_index)
 
 
+def _result_photometric_interpretation(result: object | None) -> str | None:
+    """Source-series PI carried on an MprResult, or None when unavailable.
+
+    Keeps the thumbnail at the same polarity as the pane it previews.
+    """
+    if result is None:
+        return None
+    value = getattr(result, "photometric_interpretation", None)
+    return str(value) if value else None
+
+
 def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
     """
     Show or refresh the MPR thumbnail in the series navigator for subwindow *idx*.
@@ -130,6 +141,7 @@ def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
         wc,
         ww,
         n_slices,
+        _result_photometric_interpretation(result),
     )
 
 
@@ -199,6 +211,7 @@ def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
         wc,
         ww,
         n_slices,
+        _result_photometric_interpretation(payload.get("mpr_result") if isinstance(payload, dict) else None),
     )
 
 

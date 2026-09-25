@@ -137,6 +137,7 @@ class TestUpdateMprNavigatorThumbnail:
             40.0,
             400.0,
             9,
+            None,
         )
 
     def test_skips_set_when_pixels_missing_and_tolerates_bad_window_level(self, monkeypatch) -> None:
@@ -159,6 +160,7 @@ class TestUpdateMprNavigatorThumbnail:
             "pixels",
             "",
             "",
+            None,
             None,
             None,
             None,
@@ -199,6 +201,7 @@ class TestFloatingMprThumbnail:
             40.0,
             400.0,
             11,
+            None,
         )
 
     def test_skips_when_floating_pixels_missing_or_payload_invalid(self) -> None:
@@ -220,6 +223,7 @@ class TestFloatingMprThumbnail:
             "pixels",
             "",
             "",
+            None,
             None,
             None,
             None,
