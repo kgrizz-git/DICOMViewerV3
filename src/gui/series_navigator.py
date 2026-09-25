@@ -163,9 +163,8 @@ class SeriesNavigator(QWidget):
         pixel_array: np.ndarray | None,
         study_uid: str,
         source_series_uid: str,
-        window_center: float | None = None,
-        window_width: float | None = None,
-        n_slices: int | None = None,
+        window_center: float | None = None, window_width: float | None = None,
+        n_slices: int | None = None, photometric_interpretation: str | None = None,
     ) -> None:
         """
         Show or update an MPR thumbnail for *subwindow_index*.
@@ -183,6 +182,7 @@ class SeriesNavigator(QWidget):
             window_width:    W/L width for rendering (optional, must be > 0).
             n_slices:        Number of planes in the MPR stack for the navigator
                              slice-count badge (optional).
+            photometric_interpretation: Source PI, so the thumbnail matches the pane.
         """
         if pixel_array is None:
             self.clear_mpr_thumbnail(subwindow_index)
@@ -195,6 +195,7 @@ class SeriesNavigator(QWidget):
             "window_center": window_center,
             "window_width": window_width,
             "n_slices": n_slices,
+            "photometric_interpretation": photometric_interpretation,
         }
         self._rebuild_from_cached_studies()
 
@@ -659,10 +660,8 @@ class SeriesNavigator(QWidget):
                 thumbnails_container,
             )
             mpr_widget.update_preview(
-                mpr_spec.get("pixel_array"),
-                mpr_spec.get("window_center"),
-                mpr_spec.get("window_width"),
-            )
+                mpr_spec.get("pixel_array"), mpr_spec.get("window_center"),
+                mpr_spec.get("window_width"), mpr_spec.get("photometric_interpretation"))
             mpr_widget.set_slice_count(mpr_spec.get("n_slices"))
             mpr_widget.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
             thumbnails_layout.addWidget(mpr_widget)

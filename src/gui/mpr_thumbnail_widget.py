@@ -40,6 +40,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
+from core.photometric_polarity import apply_monochrome1_polarity
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
 from utils.privacy.console import print_redacted
 
@@ -122,6 +123,7 @@ class MprThumbnailWidget(QWidget):
         pixel_array: np.ndarray | None,
         window_center: float | None = None,
         window_width: float | None = None,
+        photometric_interpretation: str | None = None,
     ) -> None:
         """
         Render a new preview from a 2-D float pixel array.
@@ -133,6 +135,8 @@ class MprThumbnailWidget(QWidget):
             pixel_array: 2-D float32 MPR slice array, or None to clear.
             window_center: Window centre for display (optional).
             window_width: Window width for display (optional, must be > 0).
+            photometric_interpretation: Source series PI; MONOCHROME1 inverts the
+                finalized 8-bit array so the thumbnail matches the pane it previews.
         """
         if pixel_array is None or pixel_array.size == 0:
             self._preview_pixmap = None
@@ -152,7 +156,9 @@ class MprThumbnailWidget(QWidget):
             else:
                 arr = np.zeros_like(arr)
 
-        uint8_arr = arr.astype(np.uint8)
+        uint8_arr = apply_monochrome1_polarity(
+            arr.astype(np.uint8), photometric_interpretation
+        )
 
         try:
             # Convert via PIL for high-quality resize while preserving aspect ratio.

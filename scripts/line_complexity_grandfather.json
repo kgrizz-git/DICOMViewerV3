@@ -26,7 +26,7 @@
     "src/gui/overlay_manager.py": 1111,
     "src/gui/qa_app_facade.py": 1217,
     "src/gui/roi_coordinator.py": 1138,
-    "src/gui/series_navigator.py": 1158,
+    "src/gui/series_navigator.py": 1157,
     "src/gui/slice_display_manager.py": 1628,
     "src/gui/view_state_manager.py": 1204,
     "src/gui/volume_viewer_widget.py": 1650,
