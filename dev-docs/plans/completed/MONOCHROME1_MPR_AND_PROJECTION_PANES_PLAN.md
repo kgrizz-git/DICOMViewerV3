@@ -1,9 +1,9 @@
 # Plan: MONOCHROME1 Polarity for MPR and Projection Panes
 
-**Date:** 2026-09-24 · **Status:** Planned · **Priority:** P2
+**Date:** 2026-09-24 · **Status:** Implemented 2026-09-24 · **Priority:** P2
 **Branch:** `plan/monochrome1-mpr-projection-panes`
 **TO_DO item:** "[P2] MONOCHROME1 for MPR and on-screen projection panes (follow-up to the on-screen viewer fix)" (`dev-docs/TO_DO.md:118`)
-**Predecessor:** [`WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md`](completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md) §Follow-up (shipped 2026-08-16)
+**Predecessor:** [`WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md`](WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md) §Follow-up (shipped 2026-08-16)
 
 ---
 
@@ -476,7 +476,7 @@ claims above; re-read them before changing any inversion behavior.
 - Remove the MONOCHROME1 MPR/projection item from `dev-docs/TO_DO.md:118`.
 - Add the new "MIP/MinIP operator semantics under MONOCHROME1" TO_DO item (see Decision above).
 - Add a `CHANGELOG.md` entry (user-visible display fix) and bump `src/version.py` per
-  [`SEMANTIC_VERSIONING_GUIDE.md`](../info/SEMANTIC_VERSIONING_GUIDE.md) — patch-level.
+  [`SEMANTIC_VERSIONING_GUIDE.md`](../../info/SEMANTIC_VERSIONING_GUIDE.md) — patch-level.
 - Append the manual smoke steps above to **Manual Smoke Checks** in `TO_DO.md` if they are not
   all completed in-PR.
 - Move this plan to `dev-docs/plans/completed/` and update the predecessor plan's §Follow-up

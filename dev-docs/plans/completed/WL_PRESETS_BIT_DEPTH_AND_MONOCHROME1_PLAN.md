@@ -324,3 +324,7 @@ MONOCHROME1 renders correctly, and the manual Invert toggle flips without double
 MPR pane (`mpr_view_math.array_to_pil`) and on-screen projection pane
 (`slice_display_pixels.create_slice_projection_pil_image`) MONOCHROME1 inversion: extend those paths
 (and the export-projection path) so polarity matches the corrected slice view.
+
+**Done 2026-09-24** in [`MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md`](MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md).
+All three paths now route through a shared owner, `src/core/photometric_polarity.py`, which also
+absorbed the duplicated PI parsing this plan's W2.1 left inline in `render_grayscale_image`.
