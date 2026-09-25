@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 
 from core.dicom_parser import DICOMParser
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
-from core.mpr_cache import MprCache
+from core.mpr_cache import MprCache, resolve_cached_photometric_interpretation
 from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
 from core.mpr_dicom_export import (
     MprDicomExportError,
@@ -1354,7 +1354,7 @@ class MprController(QObject):
                     interpolation=meta["interpolation"],
                     rescale_slope=meta.get("rescale_slope"),
                     rescale_intercept=meta.get("rescale_intercept"),
-                    photometric_interpretation=meta.get("photometric_interpretation", ""),
+                    photometric_interpretation=resolve_cached_photometric_interpretation(meta, volume.source_datasets),
                     combine_mode=meta.get("combine_mode", "none"),
                     slab_thickness_mm=float(meta.get("slab_thickness_mm", 0.0)),
                 )

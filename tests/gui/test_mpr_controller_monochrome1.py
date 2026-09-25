@@ -21,13 +21,14 @@ from core.slice_geometry import SlicePlane, SliceStack
 from gui.mpr_controller import MprController
 
 
-def _source_dataset() -> Dataset:
+def _source_dataset(photometric_interpretation: str = "MONOCHROME1") -> Dataset:
     ds = Dataset()
     ds.StudyInstanceUID = generate_uid()
     ds.SeriesInstanceUID = generate_uid()
     ds.SOPInstanceUID = generate_uid()
     ds.InstanceNumber = 1
     ds.Modality = "CR"
+    ds.PhotometricInterpretation = photometric_interpretation
     ds.SliceThickness = 2.0
     ds.PixelSpacing = [1.0, 1.0]
     ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -60,7 +61,9 @@ def _make_result(photometric_interpretation: str, n_slices: int = 3) -> MprResul
         slice_stack=stack,
         output_spacing_mm=(0.5, 0.5),
         output_thickness_mm=1.25,
-        source_volume=SimpleNamespace(source_datasets=[_source_dataset()]),  # type: ignore[arg-type]
+        source_volume=SimpleNamespace(
+            source_datasets=[_source_dataset(photometric_interpretation)]
+        ),  # type: ignore[arg-type]
         interpolation="linear",
         rescale_slope=1.0,
         rescale_intercept=0.0,
@@ -157,3 +160,78 @@ def test_wrapper_delegates_polarity_to_the_shared_builder():
     assert not np.array_equal(
         np.array(via_wrapper), np.array(array_to_pil(arr, 127.5, 255.0))
     )
+
+
+def _cache_request() -> SimpleNamespace:
+    return SimpleNamespace(
+        output_plane=SimpleNamespace(normal=np.array([0.0, 0.0, 1.0])),
+        output_spacing_mm=0.5,
+        output_thickness_mm=1.25,
+        interpolation="linear",
+        orientation_label="Axial",
+    )
+
+
+def _cache_meta(result: MprResult) -> dict[str, Any]:
+    return {
+        "output_spacing_mm": list(result.output_spacing_mm),
+        "output_thickness_mm": result.output_thickness_mm,
+        "interpolation": result.interpolation,
+        "rescale_slope": result.rescale_slope,
+        "rescale_intercept": result.rescale_intercept,
+    }
+
+
+def test_cache_hit_recovers_legacy_polarity_and_matches_cold_build():
+    """A legacy cache hit must render the same pixels as a cold MONOCHROME1 build."""
+    ctrl, _ = _make_controller()
+    result = _make_result("MONOCHROME1")
+    request = _cache_request()
+    ctrl._cache = MagicMock()
+    ctrl._cache.load.return_value = (result.slices, result.slice_stack, _cache_meta(result))
+
+    with patch.object(ctrl, "_activate_mpr") as activate:
+        assert ctrl._mpr_request_try_cache(
+            0,
+            request,
+            result.source_volume,
+            [result.source_volume.source_datasets[0]],
+        )
+
+    cached_result = activate.call_args.args[1]
+    assert cached_result.photometric_interpretation == "MONOCHROME1"
+    cold_image = array_to_pil(
+        result.slices[0],
+        0.0,
+        255.0,
+        photometric_interpretation=result.photometric_interpretation,
+    )
+    warm_image = array_to_pil(
+        cached_result.slices[0],
+        0.0,
+        255.0,
+        photometric_interpretation=cached_result.photometric_interpretation,
+    )
+    assert cold_image is not None and warm_image is not None
+    assert np.array_equal(np.array(cold_image), np.array(warm_image))
+
+
+def test_cache_hit_preserves_polarity_when_metadata_present():
+    """A cache entry written by this change keeps its stored interpretation."""
+    ctrl, _ = _make_controller()
+    result = _make_result("MONOCHROME1")
+    request = _cache_request()
+    meta = _cache_meta(result) | {"photometric_interpretation": "MONOCHROME2"}
+    ctrl._cache = MagicMock()
+    ctrl._cache.load.return_value = (result.slices, result.slice_stack, meta)
+
+    with patch.object(ctrl, "_activate_mpr") as activate:
+        assert ctrl._mpr_request_try_cache(
+            0,
+            request,
+            result.source_volume,
+            [result.source_volume.source_datasets[0]],
+        )
+
+    cached_result = activate.call_args.args[1]
+    assert cached_result.photometric_interpretation == "MONOCHROME2"

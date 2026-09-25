@@ -41,6 +41,7 @@ from typing import Any
 import numpy as np
 
 from core.mpr_builder import MprResult
+from core.photometric_polarity import dataset_photometric_interpretation
 from core.slice_geometry import SlicePlane, SliceStack
 from utils.privacy.safe_storage import (
     assert_safe_internal_path,
@@ -139,6 +140,18 @@ def make_result_key(result: MprResult) -> str:
         interpolation=result.interpolation,
         source_dataset_count=len(ds_list),
     )
+
+
+def resolve_cached_photometric_interpretation(
+    meta: dict[str, Any], source_datasets: Any
+) -> str:
+    """Return cached polarity, recovering it from the source for legacy entries."""
+    cached = meta.get("photometric_interpretation")
+    if isinstance(cached, str):
+        return cached
+    if not source_datasets:
+        return ""
+    return dataset_photometric_interpretation(source_datasets[0])
 
 
 # ---------------------------------------------------------------------------

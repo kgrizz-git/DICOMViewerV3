@@ -17,7 +17,11 @@ from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
 from core.mpr_builder import MprBuilder, MprResult
-from core.mpr_cache import MprCache, make_result_key
+from core.mpr_cache import (
+    MprCache,
+    make_result_key,
+    resolve_cached_photometric_interpretation,
+)
 from core.mpr_volume import MprVolume
 
 # Built locally rather than imported from tests/test_mpr_core.py: reaching that module needs a
@@ -113,9 +117,8 @@ def test_photometric_interpretation_survives_the_disk_cache():
         assert meta.get("photometric_interpretation") == "MONOCHROME1"
 
 
-def test_legacy_cache_entry_on_disk_reads_back_as_empty():
-    """An entry written before this change has no such key; loading it must not fail, and the
-    reconstruction must fall back to "", which is the pre-change (MONOCHROME2) behaviour."""
+def test_legacy_cache_entry_lacks_photometric_interpretation():
+    """An entry written before this change has no such key; loading it must not fail."""
     result = _build("MONOCHROME1")
     with tempfile.TemporaryDirectory() as tmpdir:
         cache = MprCache(cache_dir=tmpdir, max_size_mb=50)
@@ -130,19 +133,11 @@ def test_legacy_cache_entry_on_disk_reads_back_as_empty():
 
         loaded = cache.load(key)
         assert loaded is not None
-        slices, stack, meta = loaded
+        _, _, meta = loaded
         assert "photometric_interpretation" not in meta
-
-        # Same reconstruction the controller performs on a cache hit.
-        rebuilt = MprResult(
-            slices=slices,
-            slice_stack=stack,
-            output_spacing_mm=tuple(meta["output_spacing_mm"]),
-            output_thickness_mm=float(meta["output_thickness_mm"]),
-            source_volume=result.source_volume,
-            interpolation=meta["interpolation"],
-            rescale_slope=meta.get("rescale_slope"),
-            rescale_intercept=meta.get("rescale_intercept"),
-            photometric_interpretation=meta.get("photometric_interpretation", ""),
+        assert (
+            resolve_cached_photometric_interpretation(
+                meta, result.source_volume.source_datasets
+            )
+            == "MONOCHROME1"
         )
-        assert rebuilt.photometric_interpretation == ""
