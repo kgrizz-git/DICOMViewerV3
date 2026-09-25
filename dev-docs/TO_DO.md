@@ -43,8 +43,10 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
 4. **[P1] More and custom look-up tables (LUTs & colormaps)** — add
-   non-linear grayscale transfer functions, built-in colormaps, and a path for
-   user-defined custom LUTs beyond the current linear W/L ramp; overlay the
+   non-linear grayscale transfer functions, built-in colormaps, and an
+   interactive custom LUT editor that supports drawing freehand curves or
+   moving breakpoints, with straight-line and smooth interpolation; display
+   the active/loaded LUT and its curve or colormap preview, and overlay the
    active LUT on histograms. **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
 5. **[P1] Propagate 2D ROIs across slices** — copy or link a selected 2D ROI
    across a user-selected slice/frame range in the same series, preserving

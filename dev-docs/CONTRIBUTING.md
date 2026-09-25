@@ -10,6 +10,11 @@ This guide is for **human contributors**: workflows, hooks, CI expectations, and
 
 Activate a virtual environment before installing or running (see **`AGENTS.md`**).
 
+## Branches and commits
+
+- Never commit directly on `main` unless the maintainer explicitly says to do so. Start ordinary work on a named feature or plan branch, commit and push there, and open a pull request.
+- A general request to commit, push, update a PR, or finish work is not permission to commit on `main`. Do not merge without explicit instruction.
+
 ## Refactor backups and Git hooks
 
 - See **`.cursor/rules`** and project user rules. **Before major refactors only**, copy files to **`backups/`** with an ISO-like date in the name; do not proceed until the backup exists or the user has waived it. See **`scripts/git-hook-prune-backups.py`** for how **`backups/`** is pruned.

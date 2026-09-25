@@ -2,13 +2,13 @@
 
 **Status:** Not started  
 **Priority:** P1  
-**TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "Add more and custom look-up tables (LUTs & colormaps) beyond linear W/L, with an active-LUT overlay on histograms."
+**TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "Add more and custom look-up tables (LUTs & colormaps) beyond linear W/L, including an interactive custom curve editor, with an active-LUT overlay on histograms."
 
 ---
 
 ## Goal
 
-Extend the display pipeline beyond the current **linear** window/level ramp to support **non-linear look-up tables** (sigmoid, logarithmic, exponential, gamma) and **color look-up tables / colormaps** (hot, cool, rainbow, bone, etc.) for grayscale DICOM images. Also overlay the active LUT curve on the histogram widget.
+Extend the display pipeline beyond the current **linear** window/level ramp to support **non-linear look-up tables** (sigmoid, logarithmic, exponential, gamma) and **color look-up tables / colormaps** (hot, cool, rainbow, bone, etc.) for grayscale DICOM images. Also provide an interactive custom curve editor with draggable breakpoints, freehand drawing, and straight-line or smooth interpolation; display the active/loaded LUT with its curve or colormap preview; and overlay the active LUT curve on the histogram widget.
 
 ### Current state
 
@@ -30,6 +30,8 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
       lut_type: str  # "grayscale_ramp", "colormap"
       transfer_fn: Callable | None  # for non-linear grayscale
       colormap: np.ndarray | None   # (256, 3) uint8 for color LUTs
+      control_points: tuple[tuple[float, float], ...] | None
+      interpolation: str  # "linear", "monotone_cubic", or "bezier"
 
   def apply_lut(
       pixel_array: np.ndarray,
@@ -41,6 +43,11 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   ) -> np.ndarray:
       """Apply W/L then LUT. Returns uint8 (grayscale) or (H,W,3) uint8 (color)."""
   ```
+
+Custom curves are first-class data, not a raster-only editor state: keep ordered
+control points plus an interpolation mode in the LUT model, then sample them to
+a 256-entry LUT for the fast display path. The editor, histogram overlay, and
+persistence format should all share this representation.
 
 ### 1b. Built-in grayscale transfer functions
 
@@ -59,6 +66,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   - Generate `(256, 3)` uint8 arrays at init time: `(plt.cm.get_cmap(name)(np.linspace(0, 1, 256))[:, :3] * 255).astype(np.uint8)`.
 - [ ] Store as `LookUpTable` instances in a registry (`src/core/lut_catalog.py`).
 - [ ] Allow user-defined colormaps from a `.csv` or `.json` file (future — Phase 4).
+- [ ] Keep custom grayscale curves in the same control-point representation as color maps so an editable curve can be sampled and applied through the same fast LUT path.
 
 ### 1d. Tests
 
@@ -69,6 +77,11 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   - Inverse flips values.
   - Color LUT output is (H,W,3).
   - Edge cases: all-zero image, single-value image.
+- [ ] `tests/core/test_lut_curve.py`:
+  - Piecewise-linear control points sample exactly between breakpoints.
+  - Monotone-cubic and Bezier interpolation stay within the endpoint range.
+  - Clamping, duplicate-point rejection, and 256-entry sampling are deterministic.
+  - Freehand samples simplify to a stable, editable control-point set.
 
 ---
 
@@ -102,6 +115,8 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   - Icon swatches showing a mini gradient preview for each LUT.
 - [ ] Also accessible from **View → Look-Up Table** submenu and from the image context menu.
 - [ ] Active LUT is persisted per-pane (so different panes can have different LUTs).
+- [ ] Selecting a custom LUT opens the Phase 4 curve/colormap editor.
+- [ ] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a saved LUT immediately selects it and updates the histogram overlay.
 - [ ] Gamma LUT: show a slider for the gamma parameter (default 1.0).
 
 ### 3b. Histogram LUT overlay
@@ -124,7 +139,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 
 ## Phase 4 — Advanced (future)
 
-- [ ] **Custom colormap editor:** Let user define a colormap by placing color stops on a gradient bar. Save/load as JSON.
+- [ ] **Interactive custom LUT/curve editor:** edit grayscale transfer curves and color colormaps. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Bezier); clamp or snap endpoints to the valid range; preview the result; undo/redo edits; and save/load the control points as JSON. Freehand input should simplify into editable control points rather than becoming a raster-only map. A loaded LUT must remain visible in the selector with its name/source and be reopenable in the editor.
 - [ ] **DICOM Modality LUT Sequence:** Parse `ModalityLUTSequence` (0028,3000) and `VOILUTSequence` (0028,3010) from datasets that embed non-linear LUTs — use them as an additional "From DICOM" option.
 - [ ] **Per-series default LUT:** E.g., always use "Hot" for PET, "Bone" for CT.
 
@@ -136,6 +151,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 2. **Performance:** Applying a 256-entry LUT to a large image is a vectorized `np.take` — should be fast. Color LUTs require 1→3 channel expansion; measure impact on large images.
 3. **DICOM VOI LUT Sequence:** Some DICOM datasets embed non-linear LUTs. Should we automatically use them if present? Recommend: offer as a choice ("From DICOM" in the dropdown).
 4. **Overlay text:** Should the overlay show which LUT is active? E.g., "LUT: Sigmoid" or "LUT: Hot". Recommend yes, small text in corner.
+5. **Custom curve editing:** Should freehand drawing create a dense point set or simplify into a small set of editable control points? Recommend editable control points, optional freehand sampling, monotone-cubic smoothing, and undo/redo; keep endpoints clamped to the valid range.
 
 ---
 
@@ -144,6 +160,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 | File | Change |
 |------|--------|
 | `src/core/lut_engine.py` | **New** — LUT application logic |
+| `src/core/lut_curve.py` | **New** — control-point storage, interpolation, and 256-entry sampling |
 | `src/core/lut_catalog.py` | **New** — built-in LUT registry |
 | `src/core/dicom_window_level.py` | Refactor: `apply_window_level` delegates to `lut_engine` |
 | `src/core/slice_display_manager.py` | Use active LUT in display path |
@@ -153,6 +170,9 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 | `src/gui/main_window_menu_builder.py` | View → Look-Up Table submenu |
 | `src/gui/image_viewer_context_menu.py` | LUT submenu |
 | `src/gui/dialogs/histogram_dialog.py` | LUT curve overlay |
+| `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve/colormap editor |
 | `src/gui/overlay_text_builder.py` | Active LUT label |
 | `src/core/export_rendering.py` | Apply LUT on export |
 | `tests/test_lut_engine.py` | **New** |
+| `tests/core/test_lut_curve.py` | **New** — control-point interpolation and sampling |
+| `tests/gui/test_lut_curve_editor.py` | **New** — breakpoint editing, freehand, loaded-LUT display, and persistence |
