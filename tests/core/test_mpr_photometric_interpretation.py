@@ -80,6 +80,7 @@ def test_default_is_empty_string():
     assert MprResult.__dataclass_fields__["photometric_interpretation"].default == ""
 
 
+@pytest.mark.filterwarnings("ignore:Invalid value for VR CS")
 @pytest.mark.parametrize(
     ("stored", "expected"),
     [("MONOCHROME1", "MONOCHROME1"), ("MONOCHROME2", "MONOCHROME2"), ("monochrome1", "MONOCHROME1")],
