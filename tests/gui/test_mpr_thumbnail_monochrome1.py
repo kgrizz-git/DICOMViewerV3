@@ -103,20 +103,45 @@ def test_navigator_stores_and_forwards_the_photometric_interpretation(qapp):
     assert spec["photometric_interpretation"] == "MONOCHROME1"
 
 
+def _mean_luminance(widget) -> float:
+    """Mean grey level of a rendered thumbnail pixmap."""
+    image = widget._preview_pixmap.toImage()
+    total = 0
+    for y in range(image.height()):
+        for x in range(image.width()):
+            total += image.pixelColor(x, y).value()
+    return total / (image.width() * image.height())
+
+
 def test_widget_inverts_for_monochrome1(qapp):
-    """Link 5: the widget's own inline windowing applies the polarity."""
+    """Link 5: the widget's own inline windowing applies the polarity, in the right direction.
+
+    The input is chosen so the assertion actually discriminates, which took two attempts. A
+    window *centred on zero* is useless here: negating the source before windowing is then
+    algebraically the same as inverting the output, so both a correct and a broken
+    implementation produce the same picture (verified by mutation — the first version of this
+    test passed against a deliberately broken widget). The window below is off-centre and the
+    source saturates below it, so inverting the floats before windowing collapses everything to
+    black while inverting the uint8 array after it yields mostly white.
+
+    Mean brightness then pins the direction. Letterboxing and the LANCZOS resize rule out an
+    exact 255-x comparison, but the background is identical in both, so the ordering survives.
+    """
     from gui.mpr_thumbnail_widget import MprThumbnailWidget
 
+    # Window [150, 250]: the first two samples clip low, the third clips high.
+    saturating = np.array([[100.0, 150.0, 900.0]], dtype=np.float32)
     mono1 = MprThumbnailWidget(0)
     mono2 = MprThumbnailWidget(0)
-    mono1.update_preview(_ARRAY, 127.5, 255.0, "MONOCHROME1")
-    mono2.update_preview(_ARRAY, 127.5, 255.0, "MONOCHROME2")
+    mono1.update_preview(saturating, 200.0, 100.0, "MONOCHROME1")
+    mono2.update_preview(saturating, 200.0, 100.0, "MONOCHROME2")
 
     assert mono1._preview_pixmap is not None
     assert mono2._preview_pixmap is not None
-    a = mono1._preview_pixmap.toImage()
-    b = mono2._preview_pixmap.toImage()
-    assert a != b, "MONOCHROME1 thumbnail must not render identically to MONOCHROME2"
+    assert mono1._preview_pixmap.toImage() != mono2._preview_pixmap.toImage()
+    assert _mean_luminance(mono1) > _mean_luminance(mono2), (
+        "MONOCHROME1 must invert the windowed result, not the source before windowing"
+    )
 
 
 def test_widget_default_matches_monochrome2(qapp):
