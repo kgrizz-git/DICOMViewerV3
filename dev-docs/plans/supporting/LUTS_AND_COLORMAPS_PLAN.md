@@ -2,13 +2,14 @@
 
 **Status:** Not started  
 **Priority:** P1  
+**Last updated:** 2026-09-25  
 **TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "Add more and custom look-up tables (LUTs & colormaps) beyond linear W/L, including an interactive custom curve editor, with an active-LUT overlay on histograms."
 
 ---
 
 ## Goal
 
-Extend the display pipeline beyond the current **linear** window/level ramp to support **non-linear look-up tables** (sigmoid, logarithmic, exponential, gamma) and **color look-up tables / colormaps** (hot, cool, rainbow, bone, etc.) for grayscale DICOM images. Also provide an interactive custom curve editor with draggable breakpoints, freehand drawing, and straight-line or smooth interpolation; display the active/loaded LUT with its curve or colormap preview; and overlay the active LUT curve on the histogram widget.
+Extend the display pipeline beyond the current **linear** window/level ramp to support **non-linear look-up tables** (sigmoid, logarithmic, exponential, gamma) and **color look-up tables / colormaps** (hot, cool, rainbow, bone, etc.) for grayscale DICOM images. Also provide an interactive custom curve editor with draggable breakpoints, freehand drawing, and straight-line or smooth interpolation; display the active/loaded LUT with its curve or colormap preview; and show the **active window/level ramp, the LUT, and their composed result** together as a transfer-function display, since the LUT is a separate processing step applied *after* window/level (`final(x) = LUT(WL(x))`).
 
 ### Current state
 
@@ -204,19 +205,50 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] Gamma / sigmoid parameter controls live in this dialog as well as the toolbar.
 - [ ] Live preview uses the same `apply_lut` path as the viewport (no separate preview renderer).
 
-### 3c. Histogram LUT overlay
+### 3c. Transfer-function display: W/L ramp, LUT, and the composed result
 
-- [ ] Draw the active LUT transfer curve as an overlay, painted in
-  `HistogramWidget`'s paint path (`src/tools/histogram_widget.py`) so every host
-  — including `src/gui/dialogs/histogram_dialog.py` — inherits it, rather than
+**The pipeline is a composition, not a convolution.** The LUT is a *separate
+processing step applied after* window/level, so the mapping a viewer sees is
+
+```
+final(x) = LUT(WL(x))          # composition: LUT ∘ W/L
+```
+
+where `WL(x)` is today's linear clamp+normalize from the current window
+center/width, and `LUT(·)` is the 256-entry table from the active `LookUpTable`.
+There is no spatial kernel and no convolution anywhere in this path — the two
+stages are independent 1-D functions of intensity, composed by function
+application. Every display surface should make that composition visible rather
+than showing the LUT alone, because a user who changes W/L under a steep LUT
+needs to see which part of the curve moved.
+
+- [ ] Draw all three curves together, painted once in `HistogramWidget`'s paint
+  path (`src/tools/histogram_widget.py`) so every host — including
+  `src/gui/dialogs/histogram_dialog.py` — inherits them, rather than
   duplicating the overlay per dialog:
-  - X-axis = pixel value (or HU if rescaled).
-  - Y-axis = output intensity (0–255).
-  - Linear: straight diagonal line.
-  - Sigmoid: S-curve.
-  - Color LUT: draw a colored gradient bar along the x-axis showing the colormap.
-- [ ] Update the overlay when W/L or LUT changes.
-- [ ] Allow interactive W/L adjustment by dragging the curve endpoints (stretch goal).
+  1. **W/L ramp alone** — the plain `WL(x)` diagonal clipped to the current
+     window, i.e. the "simple window/level" reference. Neutral gray, dashed.
+  2. **LUT alone** — the active LUT's own transfer function over a unit
+     (0–255 → 0–255) input range. Saturated, solid. Color LUTs draw a colored
+     gradient bar along the x-axis instead of a line.
+  3. **Composed result** — `LUT(WL(x))` over the histogram's real x-range:
+     the curve the viewport actually applies. Bold, topmost, and the one that
+     updates on W/L drags.
+  - X-axis = pixel/stored value (or HU if rescaled), Y-axis = output intensity
+    (0–255). Linear LUT ⇒ the composed curve coincides with the W/L ramp;
+    show a single line rather than two overlapping ones.
+  - A legend labels the three curves, and the active LUT name/source appears
+    alongside it so the overlay is self-describing.
+- [ ] Update the overlay when W/L or LUT changes (W/L drag re-samples the
+  composed curve; LUT or gamma change re-samples the LUT and composed curves).
+- [ ] The editor (3b) shows the same three-curve arrangement: the edited curve
+  is the **LUT (post-W/L)** curve, with the composed result drawn behind it as
+  a live preview against the current W/L, so editing stays in LUT space while
+  the preview remains in display space.
+- [ ] Allow interactive W/L adjustment by dragging the composed curve's
+  endpoints (stretch goal).
+- [ ] The same three-curve widget is reused for the toolbar dropdown swatches
+  and the LUT name/source readout (3a) so there is one implementation.
 
 ### 3d. Keyboard shortcut
 
@@ -256,6 +288,69 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 
 ---
 
+## Test plan (all phases)
+
+- [ ] **Unit — engine** (`tests/core/test_lut_engine.py`): linear LUT byte-identical
+  to `apply_window_level`; `lut=None` unchanged behavior; sigmoid steepness → step;
+  `gamma=1.0` == linear; inverse flips; color LUT `(H, W, 3)`; all-zero and
+  single-value images.
+- [ ] **Unit — curve model** (`tests/core/test_lut_curve.py`): piecewise-linear
+  sampling exact between breakpoints; every interpolation mode passes through
+  each control point; monotone-cubic and Catmull–Rom stay in the endpoint range
+  after clamping; clamping / duplicate-point rejection / 256-entry sampling
+  deterministic; RDP simplification (`epsilon = 2.0`, endpoints pinned) is
+  deterministic and idempotent.
+- [ ] **Unit — composition** (new, `tests/core/test_lut_transfer.py`): the
+  composed curve satisfies `composed(x) == LUT(WL(x))` for both a linear and a
+  non-linear LUT; a linear LUT's composed curve equals the W/L ramp exactly;
+  `composed` is monotonically non-decreasing for a monotone LUT; composition is
+  order-sensitive (asserting it is LUT-after-W/L, never W/L-after-LUT).
+- [ ] **Regression — display path**: existing slice-display, MPR, projection, and
+  export tests stay green with a Linear LUT selected
+  (`tests/core/test_mpr_photometric_interpretation.py`,
+  `tests/gui/test_mpr_controller_monochrome1.py`, and the projection/export
+  image tests) — the polarity and `Format_Grayscale8` invariants are unchanged
+  by a default Linear LUT.
+- [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
+  freehand draw → simplified control points; interpolation switch; undo/redo;
+  gamma slider re-samples; a saved-and-reloaded custom LUT keeps its name/source
+  and stays selected; the three-curve overlay renders W/L, LUT, and composed
+  result and collapses to one line for a Linear LUT.
+- [ ] Follow [`dev-docs/info/TESTING_GUIDANCE.md`](../../info/TESTING_GUIDANCE.md)
+  tiers; never construct a `QCoreApplication` in a test — use the session `qapp`
+  fixture.
+
+---
+
+## Documentation and docstrings
+
+- [ ] **Contract docstrings** on the new/changed public functions —
+  `apply_lut()`, `LookUpTable.__post_init__`/`to_dict`/`from_dict`, the
+  interpolation and RDP helpers, and `apply_window_level(..., lut=None)` —
+  stating the composition order (`LUT ∘ W/L`, applied after window/level, not a
+  convolution), the `lut=None` equivalence guarantee, output dtype/shape for
+  grayscale vs color, and the accepted parameter ranges (`gamma` 0.1–5.0,
+  `sigmoid_k`).
+- [ ] Update the docstring on every signature this plan changes
+  (`apply_window_level`, the projection-image builder, `export_rendering`'s
+  rasterization entry point, the MPR reslice/thumbnail entry points) so callers
+  reading only docstrings know a LUT is applied and where it comes from.
+- [ ] **User docs** (`user-docs/`): document the LUT selector, the three-curve
+  transfer-function display, the editor, keyboard shortcut, and the explicit
+  statement that PNG/JPG export bakes the LUT while DICOM export does not.
+  Follow [`dev-docs/plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](../../DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
+  and run `python scripts/check_user_docs_links.py`.
+- [ ] **Dev docs**: refresh
+  [`dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`](../../info/PYLINAC_INTEGRATION_OVERVIEW.md)
+  only if a DICOM LUT source lands; add a CHANGELOG entry for the user-visible
+  feature; keep `dev-docs/TO_DO.md` and the plan status in sync in the same PR.
+- [ ] **Manual smoke** steps for the AGENTS.md smoke harness
+  (`dev-docs/orchestration/AGENT_SMOKE.md`): select Linear (no visible change),
+  select a color LUT (RGB output, correct orientation), open the editor, draw
+  freehand, save/reload, and confirm export matches the viewport.
+
+---
+
 ## Open questions
 
 1. **Interaction with fusion:** Fusion already uses colormaps for the overlay series. Should the base image LUT apply independently? Probably yes — the fusion overlay has its own color pipeline.
@@ -287,8 +382,9 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 | `src/gui/main_window_toolbar_builder.py` | LUT dropdown |
 | `src/gui/main_window_menu_builder.py` | View → Look-Up Table submenu |
 | `src/gui/image_viewer_context_menu.py` | LUT submenu |
-| `src/tools/histogram_widget.py` | LUT curve overlay (painted once, inherited by the dialog) |
+| `src/tools/histogram_widget.py` | Three-curve transfer-function overlay: W/L ramp, LUT, composed result |
 | `src/gui/dialogs/histogram_dialog.py` | Host the overlay; no duplicate painting |
+| `src/gui/widgets/lut_transfer_function_widget.py` | **New** — reusable W/L + LUT + composed curve canvas (histogram overlay, dropdown swatches, editor preview) |
 | `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve/colormap editor |
 | `src/gui/overlay_text_builder.py` | Active LUT label |
 | `src/gui/export_rendering.py` | Apply LUT on PNG/JPG export |
@@ -296,4 +392,7 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 | `src/utils/config_manager.py` | Persist `custom_luts.json` |
 | `tests/core/test_lut_engine.py` | **New** |
 | `tests/core/test_lut_curve.py` | **New** — control-point interpolation and sampling |
+| `tests/core/test_lut_transfer.py` | **New** — `composed(x) == LUT(WL(x))` composition tests |
 | `tests/gui/test_lut_curve_editor.py` | **New** — breakpoint editing, freehand, loaded-LUT display, and persistence |
+| `tests/gui/test_lut_transfer_overlay.py` | **New** — three-curve overlay rendering and Linear collapse |
+| `user-docs/` (display + LUT pages) | User documentation for the selector, editor, and overlay |
