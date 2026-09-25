@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-24
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-24
+
+- **MONOCHROME1 MPR/projection backlog closeout:** The implementation plan is archived under `plans/completed/`; its detailed manual verification remains in [`TO_DO.md`](TO_DO.md#manual-smoke-checks), while the stale duplicate Next-up implementation entry was removed. The queue now promotes the P1 LUT/colormaps plan and retains the separate stored-value MIP/MinIP semantics follow-up under Bugs / Correctness. No new user documentation or tests were needed; the existing focused polarity tests and changelog entry cover the shipped implementation.
 
 ## 2026-09-14
 

@@ -42,12 +42,10 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
-4. **[P2] MONOCHROME1 for MPR and on-screen projection panes** — extend
-   `mpr_view_math` and `slice_display_pixels` (and the export-projection path) so
-   MPR/projection polarity matches the corrected single-slice viewer. See
-   [Bugs / Correctness](#bugs--correctness) and the archived
-   [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
-   §Follow-up.
+4. **[P1] More and custom look-up tables (LUTs & colormaps)** — add
+   non-linear grayscale transfer functions, built-in colormaps, and a path for
+   user-defined custom LUTs beyond the current linear W/L ramp; overlay the
+   active LUT on histograms. **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
 5. **[P1] Propagate 2D ROIs across slices** — copy or link a selected 2D ROI
    across a user-selected slice/frame range in the same series, preserving
    slice/frame identity and allowing per-slice edits. First slice of the ROI
@@ -338,8 +336,6 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
 
 - [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
-
-- [ ] **[P1]** Add ability to apply different look-up tables besides just linear (w/l), and ability to overlay LUT on histograms — **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md)
 
 ### MPR & fusion views
 

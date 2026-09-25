@@ -2,7 +2,7 @@
 
 **Status:** Not started  
 **Priority:** P1  
-**TO_DO ref:** Features (Near-Term) — "Add ability to apply different look-up tables besides just linear (w/l), and ability to overlay LUT on histograms"
+**TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "Add more and custom look-up tables (LUTs & colormaps) beyond linear W/L, with an active-LUT overlay on histograms."
 
 ---
 

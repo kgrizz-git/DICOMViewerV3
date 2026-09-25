@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-24 · **Status:** Implemented 2026-09-24 · **Priority:** P2
 **Branch:** `plan/monochrome1-mpr-projection-panes`
-**TO_DO item:** "[P2] MONOCHROME1 for MPR and on-screen projection panes (follow-up to the on-screen viewer fix)" (`dev-docs/TO_DO.md:118`)
+**TO_DO item:** "[P2] MONOCHROME1 for MPR and on-screen projection panes (follow-up to the on-screen viewer fix)" (removed from the active backlog on 2026-09-24; remaining manual verification is tracked in [`TO_DO.md` → **Manual Smoke Checks**](../../TO_DO.md#manual-smoke-checks))
 **Predecessor:** [`WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md`](WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md) §Follow-up (shipped 2026-08-16)
 
 ---
@@ -473,7 +473,7 @@ claims above; re-read them before changing any inversion behavior.
 
 ## Closeout (same PR, per AGENTS.md)
 
-- Remove the MONOCHROME1 MPR/projection item from `dev-docs/TO_DO.md:118`.
+- Remove the MONOCHROME1 MPR/projection item from `dev-docs/TO_DO.md` (completed 2026-09-24).
 - Add the new "MIP/MinIP operator semantics under MONOCHROME1" TO_DO item (see Decision above).
 - Add a `CHANGELOG.md` entry (user-visible display fix) and bump `src/version.py` per
   [`SEMANTIC_VERSIONING_GUIDE.md`](../../info/SEMANTIC_VERSIONING_GUIDE.md) — patch-level.
