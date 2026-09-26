@@ -3,7 +3,7 @@
 **Status:** Not started  
 **Priority:** P1  
 **Last updated:** 2026-09-25  
-**TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "Add more and custom look-up tables (LUTs & colormaps) beyond linear W/L, including an interactive custom curve editor, with an active-LUT overlay on histograms."
+**TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
 
@@ -20,7 +20,12 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   - `src/core/slice_display_pixels.py:110` (AIP/MIP/MinIP projections — **not** via `SliceDisplayManager`)
   - `src/gui/export_rendering.py:357` (export rasterization — **not** via `SliceDisplayManager`)
 - `src/core/slice_display_lut.py` is **not** a LUT system — it is W/L rescale-alignment (`apply_window_level_rescale_conversion`). It is reused, not replaced, by this plan; the new engine must not shadow its name/purpose.
-- Fusion uses colormaps via `src/core/fusion_processor.py` / `fusion_handler.py` (`cv2.applyColorMap`, and `matplotlib.colormaps.get_cmap(...)` for overlay blending at `fusion_processor.py:117-120`).
+- Fusion applies colormaps through `FusionProcessor.apply_colormap()`
+  (`src/core/fusion_processor.py:100-124`), which is **matplotlib-only** and
+  memoizes into a module-level `_COLORMAP_CACHE` (`fusion_processor.py:28`,
+  `:113-121`); `fusion_handler.py:78` holds only the colormap *name* string.
+  There is **no** `cv2.applyColorMap` call anywhere in `src/` (and no `cv2`
+  import at all), so do not look for an OpenCV colormap path.
 - No general-purpose LUT system for single-series grayscale display.
 - Histogram widget (`src/gui/dialogs/histogram_dialog.py`, drawing in `src/tools/histogram_widget.py`) does not show the transfer function.
 
@@ -56,12 +61,20 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
       pixel_array: np.ndarray,
       window_center: float,
       window_width: float,
-      lut: LookUpTable,
+      lut: LookUpTable | None = None,
       rescale_slope: float | None = None,
       rescale_intercept: float | None = None,
   ) -> np.ndarray:
-      """Apply W/L then LUT. Returns uint8 (grayscale) or (H,W,3) uint8 (color)."""
+      """Apply W/L then LUT. Returns uint8 (grayscale) or (H,W,3) uint8 (color).
+
+      ``lut=None`` (or a linear LUT) is a passthrough that reproduces today's
+      linear clamp+normalize byte-for-byte.
+      """
   ```
+
+`lut` is optional from Phase 1 so the engine is testable on its own, before
+Phase 2 threads it through the display path; `apply_window_level()` gains the
+same optional parameter in Phase 2a.
 
 Custom curves are first-class data, not a raster-only editor state: keep ordered
 control points plus an interpolation mode in the LUT model, then sample them to
@@ -84,12 +97,17 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 ### 1b. Built-in grayscale transfer functions
 
 - [ ] **Linear** (current behavior, default).
-- [ ] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` — adjustable steepness `k`.
+- [ ] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` on normalized `x` in [0, 1],
+  `center = 0.5` — adjustable steepness `k` (bound to `LookUpTable.sigmoid_k`).
 - [ ] **Logarithmic:** `log(1 + x)` normalized.
 - [ ] **Exponential:** `exp(k * x)` normalized.
-- [ ] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0).
+- [ ] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
+  `LookUpTable.gamma`).
 - [ ] **Inverse:** `255 - x` (simple invert after W/L).
-- [ ] Each function maps the [0, 255] post-W/L range to [0, 255].
+- [ ] Each function maps the [0, 255] post-W/L range to [0, 255]. Formulas above
+  are written on normalized [0, 1] input for clarity; `lut_engine` samples them
+  at 256 points and scales to [0, 255], so `transfer_fn` is called with
+  normalized values only.
 
 ### 1c. Built-in colormaps
 
@@ -104,15 +122,18 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] Share the colormap cache/lookup already present in `src/core/fusion_processor.py`
   rather than adding a second matplotlib colormap cache and a second import path.
 - [ ] Built-in colormaps stay as pre-sampled `(256, 3)` arrays for performance;
-  the control-point representation is the editable/persisted form for
-  user-defined curves (Phase 4), and sampling converts between the two.
+  the control-point representation is the **editable** form for user-defined
+  curves (Phase 3b) and the **persisted** form once Phase 4a lands — sampling
+  converts between the two.
 - [ ] Allow user-defined colormaps from a `.csv` or `.json` file (future — Phase 4).
 
 ### 1d. Tests
 
 - [ ] `tests/core/test_lut_engine.py`:
   - Linear LUT matches current `apply_window_level` output.
-  - `apply_lut(..., lut=None)` / `apply_window_level(..., lut=None)` is byte-identical to today.
+  - `apply_lut(..., lut=None)` is byte-identical to today (Phase 1 covers
+    `apply_lut`; the matching `apply_window_level(..., lut=None)` assertion
+    belongs to Phase 2a, once that parameter exists).
   - Sigmoid with high steepness approximates a step function.
   - Gamma=1.0 matches linear.
   - Inverse flips values.
@@ -133,9 +154,18 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 
 ### 2a. Wire LUT into slice display
 
-- [ ] Add `current_lut: LookUpTable` to the per-pane view state
-  (`src/gui/view_state_manager.py`, with `src/core/view_state_handlers.py` for
-  the per-series/per-pane getters used by the display path).
+- [ ] Add `current_lut: LookUpTable` alongside the existing W/L fields in the
+  per-series state dict on `ViewStateManager`
+  (`src/gui/view_state_manager.py:112` — `series_defaults`, keyed by series
+  identifier: "window_center, window_width, zoom, … image_inverted"), and to
+  `_user_wl_cache`-style per-series LUT restore.
+  `src/core/view_state_handlers.py` is **event glue** (`on_rescale_toggle_changed`,
+  `on_reset_all_views`, `update_zoom_wl_status_from_view_state`), not a state
+  store — extend it only where a LUT change must fan out to status text/reset.
+- [ ] Per-**pane** state (MPR subwindows) is separate: it lives in
+  `app.subwindow_data` / `app.subwindow_managers` (see
+  `src/core/mpr_navigator_thumbnail.py:57-61`), so "one LUT per pane" is stored
+  there, not on the per-series dict. See 2b.
 - [ ] **Signature contract:** `apply_window_level()` gains an optional
   `lut: LookUpTable | None = None` parameter. When `None` (or a linear LUT), the
   output is byte-identical to the current linear clamp+normalize. `apply_window_level`
@@ -161,13 +191,22 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   pass it at the `apply_window_level` call site (`slice_display_pixels.py:110`).
   Source: `src/core/dicom_projections.py` / `src/core/projection_app_facade.py`
   / `src/gui/intensity_projection_controls_widget.py`.
-- [ ] MPR: thread `current_lut` from `ViewStateManager` through the subwindow
-  manager into `src/core/mpr_builder.py` (reslice) and
-  `src/core/mpr_navigator_thumbnail.py` / `src/gui/mpr_thumbnail_widget.py`
-  (navigator thumbnail). Both call `apply_lut` with the active LUT.
-- [ ] MPR cache (`src/core/mpr_cache.py`) stores volume/slice data, not rendered
-  pixels — do **not** bake the LUT into cached arrays; apply it per render so
-  changing the LUT does not require a cache invalidation.
+- [ ] MPR: `src/core/mpr_builder.py` stays **LUT-free**. `MprResult.slices` are raw
+  stored-value float32 "consumed only at display time"
+  (`mpr_builder.py:101-104`), and `mpr_cache.save(result: MprResult)`
+  (`mpr_cache.py:291`) persists exactly what the builder produced — applying the
+  LUT at reslice time would bake it into cached arrays, force a cache
+  invalidation on every LUT change, and push display work into the builder
+  worker thread. Apply the LUT only at the **display/consumption** points,
+  alongside the rescale step that already lives there:
+  - `get_subwindow_mpr_pixel_array` (`src/core/mpr_navigator_thumbnail.py:32`),
+    which already calls `result.apply_rescale(raw)` at `:62-63`;
+  - `MprThumbnailWidget`'s internal render (`src/gui/mpr_thumbnail_widget.py:189`,
+    `QPixmap.fromImage`);
+  - the MPR pane's QImage conversion path.
+- [ ] The active LUT for an MPR pane is read from that pane's subwindow state
+  (`app.subwindow_data` / `app.subwindow_managers`), falling back to the
+  per-series `ViewStateManager` LUT when the pane has no explicit override.
 - [ ] 3D volume rendering has its own transfer function system — LUTs here are for 2D display only.
 
 ### 2c. Export with LUT
@@ -191,7 +230,7 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] The dropdown entry for "Custom…" is present but **disabled/grayed out** until
   the Phase 3b curve editor lands (see sequencing note below) — Phase 3 is
   completable on its own.
-- [ ] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a saved LUT immediately selects it and updates the histogram overlay.
+- [ ] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a LUT immediately selects it and updates the histogram overlay. (Loading a **saved** LUT depends on Phase 4a persistence; until that ships there is nothing to load from disk, so this bullet covers in-session selection only.)
 - [ ] Gamma LUT: show a slider for the gamma parameter (default 1.0) bound to
   `LookUpTable.gamma`, so changing it re-samples and re-renders.
 
@@ -377,12 +416,12 @@ needs to see which part of the curve moved.
 | `src/core/dicom_processor.py` | Pass LUT through processing |
 | `src/core/dicom_image_render.py` | Pass active LUT at the direct `apply_window_level` call |
 | `src/core/slice_display_pixels.py` | Pass active LUT into AIP/MIP/MinIP projection rendering |
-| `src/core/mpr_builder.py` | Apply active LUT to MPR reslice panes |
-| `src/core/mpr_navigator_thumbnail.py` | Apply active LUT to the navigator thumbnail |
-| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT to the thumbnail widget |
+| `src/core/mpr_builder.py` | **Stays LUT-free** — cached `MprResult` slices remain raw stored values |
+| `src/core/mpr_navigator_thumbnail.py` | Apply active LUT at display, next to the existing rescale step |
+| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT in the thumbnail's internal render |
 | `src/gui/slice_display_manager.py` | Use active LUT in display path |
-| `src/gui/view_state_manager.py` | Store active LUT per pane |
-| `src/core/view_state_handlers.py` | Expose active LUT to the display/projection/MPR paths |
+| `src/gui/view_state_manager.py` | Store active LUT per series in `series_defaults` |
+| `src/core/view_state_handlers.py` | Event glue only — fan LUT changes out to status text/reset |
 | `src/core/view_state_inversion.py` | Respect LUT when inverting |
 | `src/gui/main_window_toolbar_builder.py` | LUT dropdown |
 | `src/gui/main_window_menu_builder.py` | View → Look-Up Table submenu |
