@@ -103,11 +103,13 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] **Exponential:** `exp(k * x)` normalized.
 - [ ] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
   `LookUpTable.gamma`).
-- [ ] **Inverse:** `255 - x` (simple invert after W/L).
-- [ ] Each function maps the [0, 255] post-W/L range to [0, 255]. Formulas above
-  are written on normalized [0, 1] input for clarity; `lut_engine` samples them
-  at 256 points and scales to [0, 255], so `transfer_fn` is called with
-  normalized values only.
+- [ ] **Inverse:** `1 - x` on normalized input. (Written normalized, **not** `255 - x`:
+  the engine samples at 256 points on [0, 1] and scales to [0, 255], so a
+  `255 - x` formula here would double-scale and produce the wrong range.)
+- [ ] Each function maps the [0, 255] post-W/L range to [0, 255]. Every formula
+  above is written on **normalized [0, 1] input**; `transfer_fn` is only ever
+  called with normalized values, and `lut_engine` owns the single scale to
+  [0, 255]. Do not mix byte-range and normalized forms in the same function.
 
 ### 1c. Built-in colormaps
 
@@ -167,10 +169,28 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   `src/core/mpr_navigator_thumbnail.py:57-61`), so "one LUT per pane" is stored
   there, not on the per-series dict. See 2b.
 - [ ] **Signature contract:** `apply_window_level()` gains an optional
-  `lut: LookUpTable | None = None` parameter. When `None` (or a linear LUT), the
-  output is byte-identical to the current linear clamp+normalize. `apply_window_level`
-  then delegates to `lut_engine.apply_lut()`. Because the parameter is optional
-  and defaults to `None`, existing callers stay source- and behavior-compatible.
+  `lut: LookUpTable | None = None` parameter **after** the existing
+  `rescale_slope` / `rescale_intercept` parameters, and it is **keyword-only**
+  (either keyword-only in the signature or declared after `*`). Today
+  `dicom_image_render.py:204-206` calls it positionally with five arguments
+  (`apply_window_level(pixel_array, window_center, window_width, rescale_slope,
+  rescale_intercept)`), so inserting `lut` in 4th position would silently bind
+  a `LookUpTable` to `rescale_slope` at every existing call site. Keyword-only
+  keeps all existing positional calls source- and behavior-compatible:
+  ```python
+  def apply_window_level(
+      pixel_array: np.ndarray,
+      window_center: float,
+      window_width: float,
+      rescale_slope: float | None = None,
+      rescale_intercept: float | None = None,
+      *,
+      lut: LookUpTable | None = None,
+  ) -> np.ndarray:
+  ```
+  When `lut` is `None` (or a linear LUT), the output is byte-identical to the
+  current linear clamp+normalize. `apply_window_level` then delegates to
+  `lut_engine.apply_lut()`.
 - [ ] Replace direct calls to `apply_window_level()` with `apply_lut()` in the
   display path (`src/gui/slice_display_manager.py` → `src/core/dicom_processor.py`),
   passing the active LUT from per-pane state.
@@ -178,8 +198,41 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   state source: `src/core/dicom_image_render.py:204` and
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
 - [ ] When LUT is "Linear" (default), behavior is identical to today.
-- [ ] When LUT produces RGB (colormap), the display path must handle `(H, W, 3)`
-  → `QImage.Format_RGB888` instead of `Format_Grayscale8`. Single-slice analysis
+- [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
+  `render_grayscale_image()` (`src/core/dicom_image_render.py:189-231`) has two
+  paths: with W/L it calls `apply_window_level(...)` at `:204`; **without** W/L it
+  calls `normalize_to_uint8(pixel_array)` at `:209` instead, and
+  `create_slice_projection_pil_image()` has the same fallback
+  (`src/core/slice_display_pixels.py:113-123`). W/L can be unresolved because
+  `resolve_window_level_and_rescale()`
+  (`src/core/dicom_window_level.py:244`) returns `None` for window center/width
+  when the dataset carries no window metadata and none is supplied. Routing only
+  the `apply_window_level` path through the LUT engine would silently ignore the
+  active LUT exactly when the dataset has no window values. Both branches must
+  converge on the same post-normalize step: **normalize (or window) to uint8
+  first, then apply the LUT** to the normalized 0–255 array. Specify and test
+  this explicitly; do not let the LUT be reachable only via the windowing path.
+- [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
+  applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
+  **after** W/L and **after** normalization: at `dicom_image_render.py:219` for
+  the slice path and `slice_display_pixels.py:125` for projections. That helper
+  inverts only 2-D grayscale (`255 - array`, and it returns the array unchanged
+  when `array.ndim != 2` — a color array can never be MONOCHROME1). Therefore:
+  - **Polarity is applied before the LUT**, to the 2-D grayscale intermediate.
+    A grayscale LUT then consumes the correctly-polarized 0–255 array.
+  - A color LUT expands to `(H, W, 3)` **after** polarity, so
+    `apply_monochrome1_polarity` sees a 2-D array and inverts as today; the
+    existing `ndim != 2` guard means a color result is never double-inverted.
+  - State this order in the code and the docstrings: `W/L or normalize → uint8
+    → MONOCHROME1 polarity → LUT (grayscale or RGB expansion)`.
+- [ ] **Where RGB expansion happens.** Both functions already build the PIL image
+  from a 2-D array with `Image.fromarray(..., mode='L')`
+  (`dicom_image_render.py:222-224`) and from a 3-channel array with
+  `mode="RGB"` (`slice_display_pixels.py:129-131`); the MPR/QImage paths convert
+  with `QImage.Format_Grayscale8`. A color LUT returns `(H, W, 3)` uint8 and
+  must reach those existing RGB branches; the 2-D analysis arrays that
+  polarity/photometric-interpretation invariants depend on stay grayscale, so
+  expansion is only at the image-construction boundary. Single-slice analysis
   arrays (polarity/photometric-interpretation invariants) stay grayscale — the
   RGB expansion happens at the QImage conversion boundary only.
 
@@ -353,7 +406,15 @@ needs to see which part of the curve moved.
   (`tests/core/test_mpr_photometric_interpretation.py`,
   `tests/gui/test_mpr_controller_monochrome1.py`, and the projection/export
   image tests) — the polarity and `Format_Grayscale8` invariants are unchanged
-  by a default Linear LUT.
+  by a default Linear LUT. Add MONOCHROME1 coverage for **both**
+  `render_grayscale_image()` and `create_slice_projection_pil_image()` under a
+  color LUT, asserting polarity is applied before LUT expansion and the result is
+  never double-inverted (`(H, W, 3)` output, not `(H, W)`).
+- [ ] **Regression — no-windowing branch**: a dataset with no window metadata
+  (so `resolve_window_level_and_rescale()` returns `None` center/width) still
+  applies the active LUT after `normalize_to_uint8()` — for the slice path and
+  the projection path — and the pixel-invariance test asserts a non-linear LUT
+  changes the output there too, not only on the windowed path.
 - [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
   freehand draw → simplified control points; interpolation switch; undo/redo;
   gamma slider re-samples; a LUT loaded into the selector keeps its name/source

@@ -12,8 +12,10 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 ## Branches and commits
 
-- Never commit directly on `main` unless the maintainer explicitly says to do so. Start ordinary work on a named feature, plan, or hotfix branch, commit and push there, and open a pull request.
-- A general request to commit, push, update a PR, or finish work is not permission to commit on `main`. Do not merge without explicit instruction.
+- Never commit directly on `main` without **explicit maintainer authorization for that specific case**. Start ordinary work on a named feature, plan, or hotfix branch, commit and push there, and open a pull request.
+- **Who may authorize:** only the maintainer, and only by an explicit instruction that names committing to `main`. In an agent session the "user" is the maintainer, so a direct maintainer request counts; approval relayed from a third party, an issue, a PR comment, or a standing convention does not.
+- A general request to commit, push, update a PR, or finish work is **not** permission to commit on `main`, and neither is passing CI, an approving review, or a prior "merge once checks pass" pattern. Merging also requires explicit maintainer instruction for that specific merge.
+- `AGENTS.md` states the same standard for agents, in the same terms, so the two documents cannot drift.
 
 ## Refactor backups and Git hooks
 
