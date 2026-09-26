@@ -436,11 +436,20 @@ for the shared-LUT design.
   every channel independently (turning `hot` into a negative-looking map).
   Therefore: apply the user-invert flag to the **2-D grayscale array at the
   same stage as MONOCHROME1 polarity — before `apply_lut_to_uint8()`** — and
-  remove the post-render inversion from `image_viewer_view`. The two inversions
-  compose (`255 - (255 - u) == u`) when both are active, so a dataset that is
-  both MONOCHROME1 and user-inverted is simply un-inverted; keep that behavior
-  explicit and tested. `view_state_inversion.py` itself needs no change beyond
-  being named as the flag's source of truth.
+  remove the post-render inversion **from the grayscale/LUT render path only**.
+  This removal must be scoped: `_apply_inversion` (`image_viewer_view.py:403-416`)
+  is also the *only* place **color (RGB) DICOM** inversion happens.
+  `render_color_image` (`dicom_image_render.py:152`, W/L at `:167` via
+  `apply_color_window_level_luminance`) produces its PIL image directly — there
+  is no 2-D grayscale stage to move the invert to, and no LUT is specified for
+  that path. An unconditional removal would silently break the invert toggle
+  for every RGB series (and for the non-`'L'`/`'RGB'` convert-first branch).
+  Keep a post-render invert for non-LUT color renders, and remove it only where
+  the grayscale LUT path owns the pixels.
+  The two inversions compose (`255 - (255 - u) == u`) when both are active, so a
+  dataset that is both MONOCHROME1 and user-inverted is simply un-inverted; keep
+  that behavior explicit and tested. `view_state_inversion.py` itself needs no
+  change beyond being named as the flag's source of truth.
 - [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
   applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
   **after** W/L and **after** normalization: at `dicom_image_render.py:218` for
@@ -586,16 +595,20 @@ for the shared-LUT design.
   LUTs). Because `LookUpTable` is frozen, persisting means storing the LUT (or
   its `custom_luts.json` key) in the pane's state and handing out replacements —
   never mutating a LUT that another pane or the MPR cache may still hold.
-- [ ] The dropdown entry for "Custom…" is present but **disabled/grayed out** until
-  the Phase 3b curve editor lands (see sequencing note below) — Phase 3 is
-  completable on its own.
+- [ ] The dropdown entry for "Custom…" is present but **disabled/grayed out**
+  only during the development window in which the Phase 3a selector exists
+  without the Phase 3b curve editor. The release ships a complete Phase 3 (3a
+  selector **and** 3b editor together) — see the sequencing note below — so no
+  shipped state ever contains a permanently dead entry.
 - [ ] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a LUT immediately selects it and updates the histogram overlay. (Loading a **saved** LUT depends on Phase 4a persistence; until that ships there is nothing to load from disk, so this bullet covers in-session selection only.)
 - [ ] Gamma LUT: show a slider for the gamma parameter (default 1.0) bound to
   `LookUpTable.gamma`, so changing it re-samples and re-renders.
 
 > **Sequencing:** the interactive curve editor is **Phase 3b**, not Phase 4 —
-> the selector and the editor ship together so "Custom…" is never a dead entry.
-> Phase 4 is reduced to the genuinely deferred items below.
+> one release ships the 3a selector **and** the 3b editor together. The
+> disabled "Custom…" entry exists only for the development window between the
+> two landing — it is not a shippable state. Phase 4 is reduced to the
+> genuinely deferred items below.
 
 ### 3b. Interactive custom curve editor (grayscale curves first)
 
@@ -634,10 +647,17 @@ application. Every display surface should make that composition visible rather
 than showing the LUT alone, because a user who changes W/L under a steep LUT
 needs to see which part of the curve moved.
 
-- [ ] Draw all three curves together, painted once in `HistogramWidget`'s paint
-  path (`src/tools/histogram_widget.py`) so every host — including
-  `src/gui/dialogs/histogram_dialog.py` — inherits them, rather than
-  duplicating the overlay per dialog:
+- [ ] Draw all three curves together. Ownership is split in two, and the plan
+  previously assigned both halves to different places — read this carefully.
+  **`src/gui/widgets/lut_transfer_function_widget.py` (new) owns the curve
+  *data and geometry*: it samples the W/L ramp, the LUT, and the composed
+  result and computes their paths.** It is the shared implementation behind the
+  histogram overlay, the toolbar dropdown swatches, and the editor preview — no
+  other module may implement its own sampling. **`src/tools/histogram_widget.py`
+  owns the *painting*: it asks the widget for the three paths and draws them in
+  its paint event**, so every host — including
+  `src/gui/dialogs/histogram_dialog.py` — inherits the overlay rather than
+  duplicating per dialog:
   1. **W/L ramp alone** — the plain `WL(x)` diagonal clipped to the current
      window, i.e. the "simple window/level" reference. Neutral gray, dashed.
   2. **LUT alone** — the active LUT's own transfer function over a unit
@@ -645,12 +665,19 @@ needs to see which part of the curve moved.
      gradient bar along the x-axis instead of a line.
   3. **Composed result** — `LUT(P(WL(x)))` over the histogram's real x-range:
      the curve the viewport actually applies. Bold, topmost, and the one that
-     updates on W/L drags. **This must be polarity-aware**, or the overlay
-     misrepresents MONOCHROME1 images: for those the composed curve is
-     `LUT(255 - WL(x))`, which is a *different* curve from the MONOCHROME2
-     `LUT(WL(x))` for the same W/L and LUT. Read the dataset's
-     `photometric_interpretation` and apply `P` when sampling the composed
-     trace; do not draw the MONOCHROME2 formula for a MONOCHROME1 series.
+     updates on W/L drags. **This must be polarity-aware *and* invert-aware**,
+     or the overlay misrepresents inverted images. Read **two** pieces of state
+     when sampling the composed trace: the dataset's `photometric_interpretation`
+     (`P`) *and* the pane's user-invert flag (`image_inverted`, from
+     `ViewStateManager.series_defaults`), XORed — the flag inverts `u` to
+     `255 - u` at the same stage as `P`, so:
+     - MONOCHROME2, no user invert: `LUT(WL(x))`.
+     - MONOCHROME2, user-inverted: `LUT(255 - WL(x))`.
+     - MONOCHROME1, no user invert: `LUT(255 - WL(x))`.
+     - MONOCHROME1 **and** user-inverted: the two inversions cancel
+       (`255 - (255 - u) == u`), so the trace is `LUT(WL(x))` again — do **not**
+       draw the inverted form here either. A 3c that only accounts for `P`
+       draws the wrong curve in two of the four cases.
   - X-axis = pixel/stored value (or HU if rescaled), Y-axis = output intensity
     (0–255). Linear LUT **and MONOCHROME2** ⇒ the composed curve coincides with
     the W/L ramp, so draw a single line rather than two overlapping ones. For
@@ -786,9 +813,15 @@ needs to see which part of the curve moved.
   hardcoded or mismatched stride cannot hide.
 - [ ] **Regression — measurement space is never display-transformed**: assert that
   the array returned for MPR ROI statistics equals the rescaled stored values
-  exactly — no windowing, no polarity inversion, no LUT — and that selecting a
-  color LUT does not change a single reported ROI statistic. This guards the
-  shared-accessor split in 2b, whose failure mode is silent.
+  exactly — no windowing, no polarity inversion, no user invert, no LUT — and
+  that selecting a color LUT does not change a single reported ROI statistic.
+  This guards the shared-accessor split in 2b, whose failure mode is silent.
+- [ ] **Regression — user-invert composition**: with `image_inverted` set, the
+  composed transfer function the overlay draws equals
+  `LUT(P_inv(WL(x)))` where `P_inv` is the XOR of MONOCHROME1-inversion and the
+  user flag, covering all four combinations (MONOCHROME2/1 × invert on/off). In
+  particular assert the double-inverted case collapses back to `LUT(WL(x))`, and
+  that the editor preview and the viewport agree under each combination.
 - [ ] **Regression — LUT reaches every inventory path**: each of the five rows
   in the 1a inventory produces output changed by a non-linear LUT, on both its
   windowed and (where reachable) its normalize-fallback branch. Assert
@@ -897,7 +930,7 @@ needs to see which part of the curve moved.
 | `src/gui/main_window_toolbar_builder.py` | LUT dropdown |
 | `src/gui/main_window_menu_builder.py` | View → Look-Up Table submenu |
 | `src/gui/image_viewer_context_menu.py` | LUT submenu |
-| `src/tools/histogram_widget.py` | Three-curve transfer-function overlay: W/L ramp, LUT, composed result |
+| `src/tools/histogram_widget.py` | Paint the three paths supplied by `lut_transfer_function_widget` (owns no sampling) |
 | `src/gui/dialogs/histogram_dialog.py` | Host the overlay; no duplicate painting |
 | `src/gui/widgets/lut_transfer_function_widget.py` | **New** — reusable W/L + LUT + composed curve canvas (histogram overlay, dropdown swatches, editor preview) |
 | `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve editor (grayscale curves) |
