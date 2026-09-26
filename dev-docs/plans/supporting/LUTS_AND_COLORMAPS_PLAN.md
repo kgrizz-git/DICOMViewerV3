@@ -40,7 +40,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   LutType = Literal["grayscale_ramp", "colormap"]
   Interpolation = Literal["linear", "monotone_cubic", "catmull_rom"]
 
-  @dataclass(frozen=True)
+  @dataclass(frozen=True)   # see "Immutability" below before changing this
   class LookUpTable:
       name: str
       lut_type: LutType = "grayscale_ramp"
@@ -101,11 +101,30 @@ the post-polarity stage would window the bytes a second time, and calling it
 earlier would invert the polarity order. So:
 
 - `apply_lut_to_uint8()` is the **post-normalize, post-polarity** operation, and
-  it is the **only** thing those paths call, exactly once each. The four sites
-  are `render_grayscale_image`, `create_slice_projection_pil_image`, the
-  `export_rendering` rasterization path, and `mpr_view_math.array_to_pil` —
-  export is one of the four, not a fifth. Each calls it *after*
-  `apply_monochrome1_polarity()`, never before.
+  it is the **only** thing the display paths call, exactly once each. Each calls
+  it *after* `apply_monochrome1_polarity()`, never before. There are **five**
+  such paths — see the canonical inventory below, which every phase and the test
+  plan reference rather than restating counts.
+
+> ### Canonical display-path inventory
+>
+> This table is the single source of truth. Do not restate "four", "three", or
+> "fifth" anywhere else; cite the row. Five paths each re-implement
+> window/level → polarity → image construction, and each must gain exactly one
+> `apply_lut_to_uint8()` call after polarity.
+>
+> | # | Path | Entry point | No-windowing fallback? | Polarity at |
+> |---|------|-------------|------------------------|-------------|
+> | 1 | Single-slice pane | `render_grayscale_image`, `src/core/dicom_image_render.py:189` | **Yes** — `normalize_to_uint8()` at `:209` | `:218` |
+> | 2 | Projection (AIP/MIP/MinIP) | `create_slice_projection_pil_image`, `src/core/slice_display_pixels.py:38` | **Yes** — inline min/max normalize at `:113-123` | `:123` |
+> | 3 | PNG/JPG export | export rasterization, `src/gui/export_rendering.py` | **Yes** — inline min/max normalize at `:362-368` | `:370` |
+> | 4 | MPR pane | `array_to_pil`, `src/core/mpr_view_math.py:90` | **No** — takes a non-optional float window, so the branch is unreachable | inside `array_to_pil` |
+> | 5 | MPR navigator thumbnail | `MprThumbnailWidget` render, `src/gui/mpr_thumbnail_widget.py:148-161` | **Yes** — inline min/max normalize at `:148-157`, and only windows when `window_width > 0` | `:159-161` |
+>
+> Rows 1, 2, 3, and 5 have a reachable no-windowing branch; row 4 does not.
+> Rows 1, 2, 3, 4, and 5 all need the LUT call. Row 5 is the easiest to miss
+> because it is a thumbnail rather than a pane — if it is skipped, the navigator
+> keeps a linear appearance while its pane uses the active LUT.
 - `apply_lut()` is a **test/one-shot convenience wrapper** over a raw pixel
   array. It performs window/level (or normalize when no W/L) and then calls
   `apply_lut_to_uint8()`. It does **not** apply polarity — it has no
@@ -164,8 +183,27 @@ mutually exclusive on a non-monotone curve.
 
 **Parameter binding.** `transfer_fn` is never a bare closure built in a widget;
 parameterized built-ins (gamma, sigmoid, exponential) read their parameters from the
-`LookUpTable` fields (`gamma`, `sigmoid_k`, `exp_k`) at sample time, so the toolbar
-slider mutates a `LookUpTable` and the display path needs no extra plumbing.
+`LookUpTable` fields (`gamma`, `sigmoid_k`, `exp_k`) at sample time, so the
+display path needs no extra plumbing.
+
+**Immutability — `LookUpTable` is frozen, so nothing mutates one.** A slider
+does **not** assign to a live LUT: it builds a replacement with
+`dataclasses.replace(lut, gamma=new_value)`. Two consequences to honor:
+
+- Do **not** write "the slider mutates a `LookUpTable`" anywhere. On a frozen
+  dataclass that raises `FrozenInstanceError` at runtime.
+- `__post_init__` normalizes `control_points` (sorts by x, rejects duplicate x,
+  clamps y). A frozen dataclass forbids plain assignment, so that normalization
+  must go through `object.__setattr__` inside `__post_init__` — state that
+  explicitly in the method's docstring, or a reviewer will "fix" it into an
+  `AttributeError`.
+
+Frozen is the right choice here: LUTs are shared across panes and the MPR cache,
+so a LUT that could be mutated in place would let one pane's gamma change another
+pane's rendering without a state round-trip. Prefer
+`@dataclass(frozen=True)`; if v1 genuinely needs in-place parameter updates, drop
+`frozen` **and** say so here, because the immutability assumption is load-bearing
+for the shared-LUT design.
 
 ### 1b. Built-in grayscale transfer functions
 
@@ -347,9 +385,10 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
 - [ ] When LUT is "Linear" (default), behavior is identical to today.
 - [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
-  **Four** display/export paths have a no-windowing fallback, and all four must
-  converge on the same post-normalize step: **normalize (or window) to uint8
-  first, then polarity, then the LUT** on the resulting 0–255 array. W/L can be
+  **Four** of the five inventory rows have a reachable no-windowing fallback
+  (rows 1, 2, 3, and 5; row 4 does not), and all four must converge on the same
+  post-normalize step: **normalize (or window) to uint8 first, then polarity,
+  then the LUT** on the resulting 0–255 array. W/L can be
   unresolved because `resolve_window_level_and_rescale()`
   (`src/core/dicom_window_level.py:244`) returns `None` for window center/width
   when the dataset carries no window metadata and none is supplied; in every
@@ -508,18 +547,15 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   - Add a separate **display-space** accessor, or apply the transform at the
     image-construction sites, where W/L + polarity + LUT are applied in that
     order.
-- [ ] **A fourth display path exists and must not be missed.** The W/L →
-  polarity → PIL sequence is duplicated in **four** places, not three:
-  `src/core/dicom_image_render.py:189` (`render_grayscale_image`),
-  `src/core/slice_display_pixels.py:38`
-  (`create_slice_projection_pil_image`), the export rasterization path in
-  `src/gui/export_rendering.py`, and — easy to miss —
-  **`src/core/mpr_view_math.py:90`** (`array_to_pil`), which re-implements linear
-  W/L inline ("`out = clip((val - (wc - ww/2)) / ww * 255, 0, 255)`") and calls
-  `apply_monochrome1_polarity` itself so "MPR panes agree with the single-slice
-  viewer". Every one of the four must route through the same
-  normalize/window → polarity → LUT order, and all four should ideally be
-  collapsed onto shared helpers so a future fix cannot reach only some of them.
+- [ ] **All five inventory paths need the LUT, not just the panes.** The W/L →
+  polarity → image sequence is re-implemented once per row of the canonical
+  inventory in 1a. Row 4 (`array_to_pil`, `src/core/mpr_view_math.py:90`)
+  re-implements linear W/L inline ("`out = clip((val - (wc - ww/2)) / ww * 255,
+  0, 255)`") and calls `apply_monochrome1_polarity` itself so "MPR panes agree
+  with the single-slice viewer"; row 5 is the thumbnail and is the easiest to
+  miss. Every row must route through the same normalize/window → polarity → LUT
+  order, and the duplicated inline logic should ideally be collapsed onto shared
+  helpers so a future fix cannot reach only some of them.
 - [ ] The active LUT for an MPR pane is read from that pane's subwindow state
   (`app.subwindow_data` / `app.subwindow_managers`), falling back to the
   per-series `ViewStateManager` LUT when the pane has no explicit override.
@@ -546,7 +582,10 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   - Grouped: **Grayscale** (Linear, Sigmoid, Log, Exp, Gamma, Inverse) | **Color** (Hot, Cool, Jet, …).
   - Icon swatches showing a mini gradient preview for each LUT.
 - [ ] Also accessible from **View → Look-Up Table** submenu and from the image context menu.
-- [ ] Active LUT is persisted per-pane (so different panes can have different LUTs).
+- [ ] Active LUT is persisted per-pane (so different panes can have different
+  LUTs). Because `LookUpTable` is frozen, persisting means storing the LUT (or
+  its `custom_luts.json` key) in the pane's state and handing out replacements —
+  never mutating a LUT that another pane or the MPR cache may still hold.
 - [ ] The dropdown entry for "Custom…" is present but **disabled/grayed out** until
   the Phase 3b curve editor lands (see sequencing note below) — Phase 3 is
   completable on its own.
@@ -750,14 +789,20 @@ needs to see which part of the curve moved.
   exactly — no windowing, no polarity inversion, no LUT — and that selecting a
   color LUT does not change a single reported ROI statistic. This guards the
   shared-accessor split in 2b, whose failure mode is silent.
+- [ ] **Regression — LUT reaches every inventory path**: each of the five rows
+  in the 1a inventory produces output changed by a non-linear LUT, on both its
+  windowed and (where reachable) its normalize-fallback branch. Assert
+  row-by-row so a path cannot be silently skipped.
 - [ ] **Regression — no-windowing branch**: a dataset with no window metadata
   (so `resolve_window_level_and_rescale()` returns `None` center/width) still
-  applies the active LUT after the normalize fallback — for **all three** paths
-  (`render_grayscale_image`, `create_slice_projection_pil_image`, and the
-  `export_rendering.py` rasterization path) — and the pixel-invariance test
-  asserts a non-linear LUT changes the output there too, not only on the
-  windowed path. Include the export case, so "user sees what they exported"
-  holds for un-windowed datasets too.
+  applies the active LUT after the normalize fallback, for **all four rows that
+  have the branch** — row 1 `render_grayscale_image`, row 2
+  `create_slice_projection_pil_image`, row 3 the `export_rendering.py`
+  rasterization path, and **row 5 `MprThumbnailWidget`**. The pixel-invariance
+  test asserts a non-linear LUT changes the output there too, not only on the
+  windowed path. Row 5 is the one most likely to be forgotten — without it the
+  navigator stops previewing its pane. Row 3 matters because "user sees what
+  they exported" must hold for un-windowed datasets too.
 - [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
   freehand draw → simplified control points; interpolation switch; undo/redo;
   gamma slider re-samples; a LUT loaded into the selector keeps its name/source
