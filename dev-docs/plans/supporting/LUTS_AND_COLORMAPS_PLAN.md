@@ -336,19 +336,21 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   (`src/gui/slice_display_manager.py` → `src/core/dicom_processor.py`), and call
   `apply_lut_to_uint8(active_lut)` on its result **after** polarity, with the
   active LUT taken from per-pane state.
-- [ ] Update the remaining direct callers to pass the active LUT from their own
-  state source: `src/core/dicom_image_render.py:204` and
+- [ ] Update the remaining direct callers so each **threads the active LUT from
+  their own state source into the image builder** and calls
+  `apply_lut_to_uint8()` there, **after** polarity — not by passing a LUT to
+  `apply_window_level()`: `src/core/dicom_image_render.py:204` and
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
 - [ ] When LUT is "Linear" (default), behavior is identical to today.
 - [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
-  Three of the four display/export paths have a no-windowing fallback, and all
-  three must
+  **Four** display/export paths have a no-windowing fallback, and all four must
   converge on the same post-normalize step: **normalize (or window) to uint8
-  first, then apply the LUT** to the normalized 0–255 array. W/L can be
+  first, then polarity, then the LUT** on the resulting 0–255 array. W/L can be
   unresolved because `resolve_window_level_and_rescale()`
   (`src/core/dicom_window_level.py:244`) returns `None` for window center/width
   when the dataset carries no window metadata and none is supplied; in every
-  case the parameter is typed `float | None`, so the branch is reachable.
+  case the parameter is typed `float | None` (or the guard checks for it), so
+  the branch is reachable.
   - `render_grayscale_image()` — windowed at
     `src/core/dicom_image_render.py:204`, **falls back to
     `normalize_to_uint8()` at `:209`**.
@@ -360,14 +362,25 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
     `:287-288`) — windowed at `:357-361`, **falls back to a third inline
     min/max normalize at `:362-368`**. This path duplicates the normalization
     logic rather than calling the shared helper, so it will not pick up a fix
-    applied to the other two.
+    applied to the others.
+  - `MprThumbnailWidget`'s render (`src/gui/mpr_thumbnail_widget.py:148-157`) —
+    windowed only when `window_center`/`window_width` are set **and**
+    `window_width > 0`, **falls back to a fourth inline min/max normalize
+    otherwise**, then applies polarity at `:159-161`. Easy to miss because the
+    widget is a thumbnail rather than a pane. Consequence if skipped: the MPR
+    thumbnail keeps a linear appearance while its pane uses the active LUT, so
+    the navigator no longer previews what the pane shows.
+  - (`mpr_view_math.array_to_pil`, `src/core/mpr_view_math.py:90`, is a fifth
+    window/level path but takes a non-optional float window, so it has **no**
+    no-windowing branch — it is counted in the four-way display-path list, not
+    here.)
 
   Routing only the `apply_window_level` path through the LUT engine would
   silently ignore the active LUT for datasets with no window metadata, and
   would produce a LUT-less export for exactly the datasets where it is most
   visible. Specify and test this explicitly; do not let the LUT be reachable
-  only via the windowing path. Where practical, de-duplicate the three inline
-  normalize blocks into one helper so future fixes apply to all three.
+  only via the windowing path. Where practical, de-duplicate the four inline
+  normalize blocks into one helper so future fixes apply to all of them.
 - [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
   applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
   **after** W/L and **after** normalization: at `dicom_image_render.py:218` for
@@ -432,8 +445,12 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] Apply the active LUT to MPR panes and AIP/MIP/MinIP projections too.
 - [ ] Projections: thread `lut: LookUpTable | None` through
   `src/core/slice_display_pixels.py` → `create_slice_projection_pil_image` and
-  pass it at the `apply_window_level` call site (`slice_display_pixels.py:110`).
-  Source: `src/core/dicom_projections.py` / `src/core/projection_app_facade.py`
+  call `apply_lut_to_uint8()` on its result **after** the
+  `apply_monochrome1_polarity` call (`slice_display_pixels.py:123`). Do **not**
+  pass a LUT to `apply_window_level()` at `slice_display_pixels.py:110` — that
+  function no longer takes one, and applying it there would invert the curve
+  before polarity. Source: `src/core/dicom_projections.py` /
+  `src/core/projection_app_facade.py`
   / `src/gui/intensity_projection_controls_widget.py`.
 - [ ] MPR: `src/core/mpr_builder.py` stays **LUT-free**. `MprResult.slices` are raw
   stored-value float32 "consumed only at display time"
@@ -484,7 +501,11 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 ### 2c. Export with LUT
 
 - [ ] PNG/JPG export applies the active LUT (user sees what they exported):
-  pass the active LUT at `src/gui/export_rendering.py:357`.
+  thread the active LUT into the export rasterization builder and call
+  `apply_lut_to_uint8()` **after** its `apply_monochrome1_polarity` call
+  (`export_rendering.py:370`), on both the windowed branch (`:357-361`) and the
+  normalize fallback (`:362-368`). Do **not** pass a LUT to
+  `apply_window_level()` at `:357`.
 - [ ] DICOM export: store the raw pixel data (no LUT baked in); optionally write a VOI LUT Sequence for non-linear functions, or note in export dialog that LUT is display-only
   (`src/core/mpr_dicom_export.py` for MPR DICOM export).
 
@@ -513,6 +534,11 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 ### 3b. Interactive custom curve editor (grayscale curves first)
 
 - [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit **grayscale transfer curves**. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
+- [ ] Gamma / sigmoid / exponential parameter controls live in this dialog as well as
+  the toolbar, bound to `LookUpTable.gamma` / `sigmoid_k` / `exp_k`.
+- [ ] Live preview goes through the same `apply_lut_to_uint8()` call the viewport uses,
+  on the already-windowed **and polarity-corrected** array — not `apply_lut()` —
+  so the preview cannot diverge from the pane. No separate preview renderer.
 - [ ] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
   to Phase 4b.** The current `control_points` model is a list of `(x, y)` scalar
   pairs, which describes a grayscale intensity ramp only — it cannot represent
@@ -523,33 +549,18 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   built-in color LUTs remain read-only pre-sampled `(256, 3)` arrays (selectable
   and previewable, just not editable).
 
-### 4b. Editable color colormaps (deferred)
-
-- [ ] **Color stop model:** add an RGB(A) color-stop representation to
-  `LookUpTable` — e.g. `color_stops: tuple[tuple[float, tuple[int, int, int]], ...]`
-  keyed on input position, plus a `color_interpolation` mode (`linear` in RGB
-  space, or a perceptual space). Sample to the same `(256, 3)` uint8 array the
-  fast path already consumes, so `apply_lut_to_uint8()` needs no special case.
-- [ ] **Editor support:** a color-gradient editing surface (add/move/delete
-  stops, pick RGB, smooth vs stepped between stops) in the same dialog, kept
-  clearly separate from the grayscale curve surface rather than overloading
-  `(x, y)` breakpoints.
-- [ ] **Persistence:** extend the `custom_luts.json` schema with a
-  `"color_stops"` array and bump `schema_version`; `from_dict()` must accept the
-  v1 grayscale-only shape unchanged.
-- [ ] Gamma / sigmoid parameter controls live in this dialog as well as the toolbar.
-- [ ] Live preview uses the same `apply_lut` path as the viewport (no separate preview renderer).
-
 ### 3c. Transfer-function display: W/L ramp, LUT, and the composed result
 
 **The pipeline is a composition, not a convolution.** The LUT is a *separate
 processing step applied after* window/level, so the mapping a viewer sees is
 
 ```
-final(x) = LUT(WL(x))          # composition: LUT ∘ W/L
+final(x) = LUT(P(WL(x)))       # composition: LUT ∘ P ∘ W/L
 ```
 
-where `WL(x)` is today's linear clamp+normalize from the current window
+where `P` is **MONOCHROME1 polarity** — the identity for MONOCHROME2 and
+`255 - u` for MONOCHROME1. `WL(x)` is today's linear clamp+normalize from the
+current window
 center/width, and `LUT(·)` is the 256-entry table from the active `LookUpTable`.
 There is no spatial kernel and no convolution anywhere in this path — the two
 stages are independent 1-D functions of intensity, composed by function
@@ -566,20 +577,30 @@ needs to see which part of the curve moved.
   2. **LUT alone** — the active LUT's own transfer function over a unit
      (0–255 → 0–255) input range. Saturated, solid. Color LUTs draw a colored
      gradient bar along the x-axis instead of a line.
-  3. **Composed result** — `LUT(WL(x))` over the histogram's real x-range:
+  3. **Composed result** — `LUT(P(WL(x)))` over the histogram's real x-range:
      the curve the viewport actually applies. Bold, topmost, and the one that
-     updates on W/L drags.
+     updates on W/L drags. **This must be polarity-aware**, or the overlay
+     misrepresents MONOCHROME1 images: for those the composed curve is
+     `LUT(255 - WL(x))`, which is a *different* curve from the MONOCHROME2
+     `LUT(WL(x))` for the same W/L and LUT. Read the dataset's
+     `photometric_interpretation` and apply `P` when sampling the composed
+     trace; do not draw the MONOCHROME2 formula for a MONOCHROME1 series.
   - X-axis = pixel/stored value (or HU if rescaled), Y-axis = output intensity
-    (0–255). Linear LUT ⇒ the composed curve coincides with the W/L ramp;
-    show a single line rather than two overlapping ones.
+    (0–255). Linear LUT **and MONOCHROME2** ⇒ the composed curve coincides with
+    the W/L ramp, so draw a single line rather than two overlapping ones. For
+    MONOCHROME1 the ramp and composed curve legitimately differ even with a
+    Linear LUT (the composed one is the inverted ramp), so draw both and let the
+    polarity do the explaining.
   - A legend labels the three curves, and the active LUT name/source appears
     alongside it so the overlay is self-describing.
 - [ ] Update the overlay when W/L or LUT changes (W/L drag re-samples the
   composed curve; LUT or gamma change re-samples the LUT and composed curves).
 - [ ] The editor (3b) shows the same three-curve arrangement: the edited curve
-  is the **LUT (post-W/L)** curve, with the composed result drawn behind it as
-  a live preview against the current W/L, so editing stays in LUT space while
-  the preview remains in display space.
+  is the **LUT (post-polarity)** curve, with the polarity-aware composed result
+  drawn behind it as a live preview against the current W/L, so editing stays in
+  LUT space while the preview remains in display space. The preview must go
+  through the same `apply_lut_to_uint8()` call the viewport uses — **not**
+  `apply_lut()` — so it cannot diverge from what the pane shows.
 - [ ] Allow interactive W/L adjustment by dragging the composed curve's
   endpoints (stretch goal).
 - [ ] The same three-curve widget is reused for the toolbar dropdown swatches
@@ -634,6 +655,21 @@ needs to see which part of the curve moved.
   parameters; an unknown `interpolation` falls back to `linear`; an invalid LUT
   is skipped with a warning rather than aborting the load.
 
+### 4b. Editable color colormaps (deferred)
+
+- [ ] **Color stop model:** add an RGB(A) color-stop representation to
+  `LookUpTable` — e.g. `color_stops: tuple[tuple[float, tuple[int, int, int]], ...]`
+  keyed on input position, plus a `color_interpolation` mode (`linear` in RGB
+  space, or a perceptual space). Sample to the same `(256, 3)` uint8 array the
+  fast path already consumes, so `apply_lut_to_uint8()` needs no special case.
+- [ ] **Editor support:** a color-gradient editing surface (add/move/delete
+  stops, pick RGB, smooth vs stepped between stops) in the same dialog, kept
+  clearly separate from the grayscale curve surface rather than overloading
+  `(x, y)` breakpoints.
+- [ ] **Persistence:** extend the `custom_luts.json` schema with a
+  `"color_stops"` array and bump `schema_version`; `from_dict()` must accept the
+  v1 grayscale-only shape unchanged.
+
 ---
 
 ## Test plan (all phases)
@@ -644,13 +680,19 @@ needs to see which part of the curve moved.
   single-value images.
 - [ ] **Unit — curve model** (`tests/core/test_lut_curve.py`): piecewise-linear
   sampling exact between breakpoints; every interpolation mode passes through
-  each control point; monotone-cubic and Catmull–Rom stay in the endpoint range
-  after clamping; clamping / duplicate-point rejection / 256-entry sampling
-  deterministic; RDP simplification (`epsilon = 0.02`, endpoints pinned) is
-  deterministic and idempotent.
+  each control point as a **univariate** spline in `x`; Fritsch–Carlson
+  introduces **no new extrema** (stays within the control-point y-range) and
+  needs no clamp; Catmull–Rom **may** overshoot and is clamped to `[0, 1]` only
+  — do **not** assert "stays in the endpoint range", which is wrong for
+  non-monotone control points and contradicts the Phase 1 rule; clamping /
+  duplicate-point rejection / 256-entry sampling deterministic; RDP
+  simplification (`epsilon = 0.02`, endpoints pinned) is deterministic and
+  idempotent.
 - [ ] **Unit — composition** (new, `tests/core/test_lut_transfer.py`): the
-  composed curve satisfies `composed(x) == LUT(WL(x))` for both a linear and a
-  non-linear LUT; a linear LUT's composed curve equals the W/L ramp exactly;
+  composed curve satisfies `composed(x) == LUT(P(WL(x)))` — with `P` the
+  MONOCHROME1 inversion or the identity — for both a linear and a non-linear
+  LUT, and a linear LUT's composed curve equals the polarity-corrected ramp
+  exactly (the plain ramp for MONOCHROME2, the inverted ramp for MONOCHROME1);
   `composed` is monotonically **non-decreasing only for an increasing LUT** —
   the Inverse LUT is monotone *non-increasing*, so assert the direction from the
   LUT's own monotonicity rather than assuming "monotone" means "increasing";
