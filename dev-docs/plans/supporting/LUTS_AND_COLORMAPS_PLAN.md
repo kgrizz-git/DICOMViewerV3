@@ -51,12 +51,22 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
       interpolation: Interpolation = "linear"
       gamma: float | None = None                  # 0.1–5.0, used when transfer_fn is gamma
       sigmoid_k: float | None = None              # steepness, used when transfer_fn is sigmoid
-      exp_k: float | None = None                   # 0.1–5.0, used when transfer_fn is exponential
+      exp_k: float = 1.0                     # 0.1–5.0, used when transfer_fn is exponential
 
       def __post_init__(self) -> None:
           """Validate/normalize: sort control points by x, reject duplicate x,
           clamp y to [0, 1], require x strictly increasing in [0, 1], require
-          gamma in [0.1, 5.0], require colormap shape (256, 3) uint8 when set."""
+          gamma in [0.1, 5.0] when set, sigmoid_k > 0 when set, and
+          exp_k in [0.1, 5.0] (defaulting to 1.0) when transfer_fn is
+          exponential; require colormap shape (256, 3) uint8 when set."""
+
+**Parameter defaults.** `exp_k` is a plain `float` defaulting to `1.0` (not
+`None`), because exponential is always usable and `exp(1.0 * x)` is a
+well-defined curve — there is no "unset" state to represent. `gamma` and
+`sigmoid_k` stay `float | None`, because `None` is meaningful there: it means
+"this parameter does not apply to the selected transfer function".
+`__post_init__` validates `exp_k` against `[0.1, 5.0]`, so `lut_engine` can never
+sample exponential with an out-of-range or absent value.
 
   def apply_lut(
       pixel_array: np.ndarray,
@@ -258,16 +268,48 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
     existing `ndim != 2` guard means a color result is never double-inverted.
   - State this order in the code and the docstrings: `W/L or normalize → uint8
     → MONOCHROME1 polarity → LUT (grayscale or RGB expansion)`.
-- [ ] **Where RGB expansion happens.** Both functions already build the PIL image
-  from a 2-D array with `Image.fromarray(..., mode='L')`
+  - **Keep an explicit stage boundary before `lut_engine.apply_lut()`.** The
+    ordering above must be structural, not a convention that a later edit can
+    quietly reorder: the polarity call
+    (`apply_monochrome1_polarity(processed_array, photometric_interpretation)`)
+    must remain a distinct, completed step *before* the LUT is applied, in every
+    one of the three paths. Do not fold polarity into `apply_lut()`, do not apply
+    it to the LUT's RGB output, and do not reorder it to run last. If it helps,
+    name the two phases explicitly (e.g. a `_to_display_uint8` / `_apply_active_lut`
+    step pair) so the boundary is visible at each call site and greppable in
+    review. A non-linear grayscale LUT is the case that breaks first: applying
+    polarity after it would invert an already-shaped curve, and for a color LUT
+    it would silently no-op on the `ndim != 2` guard.
+- [ ] **Where RGB expansion happens.** Both projection functions already build the
+  PIL image from a 2-D array with `Image.fromarray(..., mode='L')`
   (`dicom_image_render.py:222-224`) and from a 3-channel array with
-  `mode="RGB"` (`slice_display_pixels.py:129-131`); the MPR/QImage paths convert
-  with `QImage.Format_Grayscale8`. A color LUT returns `(H, W, 3)` uint8 and
-  must reach those existing RGB branches; the 2-D analysis arrays that
-  polarity/photometric-interpretation invariants depend on stay grayscale, so
-  expansion is only at the image-construction boundary. Single-slice analysis
-  arrays (polarity/photometric-interpretation invariants) stay grayscale — the
-  RGB expansion happens at the QImage conversion boundary only.
+  `mode="RGB"` (`slice_display_pixels.py:129-131`). The QImage side is **not**
+  uniformly grayscale-only, so audit each consumer rather than assuming:
+  `src/gui/image_viewer_view.py:531-544` already branches on the PIL image mode
+  and emits `Format_Grayscale8` for `'L'` and `Format_RGB888` for `'RGB'`, while
+  `src/gui/mpr_thumbnail_widget.py:180-186` hardcodes
+  `QImage.Format.Format_RGB888` with a `3 * _THUMBNAIL_SIZE` stride.
+  A color LUT returns `(H, W, 3)` uint8 and must reach the existing RGB
+  branches; the 2-D analysis arrays that polarity/photometric-interpretation
+  invariants depend on stay grayscale, so expansion happens only at the
+  image-construction boundary.
+- [ ] **QImage row stride for `(H, W, 3)` must be 4-byte aligned.** Qt aligns
+  scanlines to a 32-bit boundary for most formats, so a raw `width * 3` stride
+  is only aligned when the width happens to be a multiple of 4 — it is not a
+  safe default. For every consumer that builds a `QImage` from a color LUT
+  buffer (`image_viewer_view.py:536`/`:541`, `mpr_thumbnail_widget.py:180`, and
+  any new MPR/thumbnail path), compute
+  `bytes_per_line = ((width * 3 + 3) // 4) * 4`, pad each row to that width, and
+  pass it as the explicit `bytesPerLine` argument. The current code is aligned
+  only by coincidence: `image_viewer_view.py` passes `image.width * 3` for
+  arbitrary viewport widths, and `mpr_thumbnail_widget.py` passes
+  `3 * 68 = 204`, which divides evenly by 4. Change the thumbnail size or view
+  a series whose width is not a multiple of 4 and the stride silently stops
+  matching, producing skewed or corrupted rows rather than a clean error.
+  Keep a reference to the backing `bytes` alive for the `QImage`'s lifetime —
+  the existing `self._img_bytes_ref` / `self._display_bytes_ref` pattern already
+  does this and must be preserved on every new path. Grayscale 8-bit paths keep
+  `width * 1` and `Format_Grayscale8` unchanged.
 
 ### 2b. MPR and projection displays
 
@@ -444,6 +486,13 @@ needs to see which part of the curve moved.
   `render_grayscale_image()` and `create_slice_projection_pil_image()` under a
   color LUT, asserting polarity is applied before LUT expansion and the result is
   never double-inverted (`(H, W, 3)` output, not `(H, W)`).
+- [ ] **Regression — QImage stride alignment**: render a color LUT at image widths
+  that are *not* multiples of 4 (e.g. 63, 65, 101) through every QImage consumer
+  and assert no row skew: `bytes_per_line == ((width * 3 + 3) // 4) * 4`, and
+  that the decoded image round-trips to the expected `(H, W, 3)` array. A test
+  that only uses the default thumbnail size would pass today, because `68 * 3`
+  happens to be divisible by 4 — use an odd width so the coincidence cannot
+  hide a regression.
 - [ ] **Regression — no-windowing branch**: a dataset with no window metadata
   (so `resolve_window_level_and_rescale()` returns `None` center/width) still
   applies the active LUT after the normalize fallback — for **all three** paths
@@ -527,7 +576,8 @@ needs to see which part of the curve moved.
 | `src/core/slice_display_pixels.py` | Pass active LUT into AIP/MIP/MinIP projection rendering |
 | `src/core/mpr_builder.py` | **Stays LUT-free** — cached `MprResult` slices remain raw stored values |
 | `src/core/mpr_navigator_thumbnail.py` | Apply active LUT at display, next to the existing rescale step |
-| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT in the thumbnail's internal render |
+| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT in the thumbnail's internal render; 4-byte-align the RGB QImage stride |
+| `src/gui/image_viewer_view.py` | 4-byte-align the RGB QImage stride for color-LUT output |
 | `src/gui/slice_display_manager.py` | Use active LUT in display path |
 | `src/gui/view_state_manager.py` | Store active LUT per series in `series_defaults` |
 | `src/core/view_state_handlers.py` | Event glue only — fan LUT changes out to status text/reset |
