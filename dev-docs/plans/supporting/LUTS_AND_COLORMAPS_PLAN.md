@@ -101,8 +101,11 @@ the post-polarity stage would window the bytes a second time, and calling it
 earlier would invert the polarity order. So:
 
 - `apply_lut_to_uint8()` is the **post-normalize, post-polarity** operation, and
-  it is the **only** thing the four display paths and the export path call. They
-  call it *after* `apply_monochrome1_polarity()`, never before.
+  it is the **only** thing those paths call, exactly once each. The four sites
+  are `render_grayscale_image`, `create_slice_projection_pil_image`, the
+  `export_rendering` rasterization path, and `mpr_view_math.array_to_pil` —
+  export is one of the four, not a fifth. Each calls it *after*
+  `apply_monochrome1_polarity()`, never before.
 - `apply_lut()` is a **test/one-shot convenience wrapper** over a raw pixel
   array. It performs window/level (or normalize when no W/L) and then calls
   `apply_lut_to_uint8()`. It does **not** apply polarity — it has no
@@ -202,9 +205,11 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] **Sigmoid does not map [0, 1] onto [0, 1] and must not claim to.** With
   `center = 0.5`, `y(0.5) = 0.5` for every `k`, but the endpoints are
   `0.378 / 0.622` at `k = 1` and `0.076 / 0.924` at `k = 5` — a sigmoid never
-  reaches pure black or pure white. Either write the endpoint renormalization
-  `(s(x) - s(0)) / (s(1) - s(0))`, which does pin both ends, or state explicitly
-  that sigmoid is intentionally non-full-range. Note `sigmoid_k` is only
+  reaches pure black or pure white. **Use the endpoint renormalization**
+  `(s(x) - s(0)) / (s(1) - s(0))`, which pins both ends to 0 and 1 and keeps
+  `y(0.5) = 0.5`; the raw logistic is *not* an acceptable alternative, because
+  the two are different LUTs and leaving the choice open would let an
+  implementation ship either one. Note `sigmoid_k` is only
   constrained `> 0`, **not** `[0.1, 5.0]` like `gamma`/`exp_k` — keep the three
   ranges stated consistently wherever they appear. No overflow cap is needed:
   `k = 2000` returns finite `[0.0, 0.5, 1.0]` in both float32 and float64.
@@ -242,8 +247,9 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   - Linear LUT matches current `apply_window_level` output.
   - `apply_lut(..., lut=None)` and `apply_lut_to_uint8(arr, None)` are
     byte-identical to today.
-  - Sigmoid with high steepness approximates a step function, and its endpoint
-    behavior matches whichever full-range decision 1b makes.
+  - Sigmoid with high steepness approximates a step function, **and with the
+    endpoint renormalization of 1b returns exactly 0 and 1 at the endpoints**
+    (`lut[0] == 0`, `lut[255] == 255`) at every `k`, with `y(0.5) == 0.5`.
   - Gamma=1.0 matches linear.
   - **Inverse is exactly `lut[i] == 255 - i` for all 256 codes.** This is the
     test that catches a truncating scale — a `gamma = 1.0` test cannot, because
@@ -330,8 +336,6 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
       rescale_intercept: float | None = None,
   ) -> np.ndarray:
   ```
-  (If a `lut` keyword is added for convenience, it must be keyword-only and
-  documented as test-only — never passed from a display path.)
 - [ ] Keep the `apply_window_level()` call as-is in the display path
   (`src/gui/slice_display_manager.py` → `src/core/dicom_processor.py`), and call
   `apply_lut_to_uint8(active_lut)` on its result **after** polarity, with the
@@ -381,6 +385,23 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   visible. Specify and test this explicitly; do not let the LUT be reachable
   only via the windowing path. Where practical, de-duplicate the four inline
   normalize blocks into one helper so future fixes apply to all of them.
+- [ ] **The user "invert" flag is a second `255 - array`, and it must move.**
+  `src/core/view_state_inversion.py` only *reports* the flag (it returns a bool
+  from the per-series `image_inverted` default); the pixels are actually
+  inverted in `src/gui/image_viewer_view.py:403-415`, which does `255 - array`
+  for mode `'L'` and for `'RGB'` (and converts to RGB first for any other mode)
+  on the **finished PIL image** produced by the render path at `:441`/`:485`.
+  Once the LUT is inside that render, this invert runs *after* it, which is
+  wrong: inverting a non-linear curve flips an already-shaped transfer function
+  rather than inverting the display mapping, and on a **color LUT** it negates
+  every channel independently (turning `hot` into a negative-looking map).
+  Therefore: apply the user-invert flag to the **2-D grayscale array at the
+  same stage as MONOCHROME1 polarity — before `apply_lut_to_uint8()`** — and
+  remove the post-render inversion from `image_viewer_view`. The two inversions
+  compose (`255 - (255 - u) == u`) when both are active, so a dataset that is
+  both MONOCHROME1 and user-inverted is simply un-inverted; keep that behavior
+  explicit and tested. `view_state_inversion.py` itself needs no change beyond
+  being named as the flag's source of truth.
 - [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
   applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
   **after** W/L and **after** normalization: at `dicom_image_render.py:218` for
@@ -436,8 +457,14 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   `self._display_bytes_ref` pattern already does this — preserve it on every new
   path). A mismatch is what produces skewed rows, and it can creep in if a
   consumer later `copy()`s, converts, or concatenates the image and assumes
-  QImage's own 4-byte-rounded stride. Pick one convention per call site, pass it
-  explicitly, and keep the two in sync. Grayscale 8-bit paths keep
+  QImage's own 4-byte-rounded stride. **`copy()` repacks to a 4-byte-rounded
+  stride**: `img.copy()` on a stride-15 image reports `bytesPerLine` 16, so
+  reads after a `copy()`/`convertToFormat`/concatenate must use the **new**
+  image's `bytesPerLine()`. On a width-5 image with row 1 `(11, 22, 33)`,
+  reading the copy at 16 returns `[11, 22, 33]` and at 15 returns
+  `[0, 11, 22]`. `QPixmap.fromImage()` also converts RGB888 to RGB32, so a
+  pixmap round-trip changes format and stride again. Pick one convention per
+  call site, pass it explicitly, and keep the two in sync. Grayscale 8-bit paths keep
   `width * 1` and `Format_Grayscale8` unchanged.
 
 ### 2b. MPR and projection displays
@@ -644,8 +671,11 @@ needs to see which part of the curve moved.
   (`linspace(0, 1, 256)`, which matches `i/255` to ~1e-16). A control point at
   `x = 0.25` is therefore **not** itself a table abscissa (`63/255 ≈ 0.24706`,
   `64/255 ≈ 0.25098`): the piecewise-linear *function* passes through it exactly,
-  but the nearest stored sample can differ by up to half a step. Tests must
-  evaluate the interpolant at `i/255`, not assert the control point's `y`
+  but the nearest stored sample can differ **arbitrarily** in `y` when the curve
+  is steep there — e.g. control points `(0,0), (0.25,1), (0.26,0), (1,0)` give a
+  nearest abscissa of `64/255` whose interpolated `y ≈ 0.902`, a difference of
+  ~0.098, far beyond the `0.5/255 ≈ 0.00196` half-step in *x*. Tests must
+  evaluate the interpolant at `i/255`, not assert that a control point's `y`
   appears verbatim in the table.
 - [ ] Unknown/missing `interpolation` falls back to `linear`; a missing or null
   `exp_k` maps to the `1.0` default; a LUT that fails validation is skipped with
@@ -736,7 +766,8 @@ needs to see which part of the curve moved.
   drawn as **one** line, while the LUT-alone trace stays on its own 0–255 axis
   (a Linear LUT is the identity there, which is *not* the W/L ramp — on stored
   values `[0, 400, 500, 600, 1000]` with center 500 / width 200 the ramp is
-  `[0, 0, 127.5, 255, 255]`). Save/load
+  `[0, 0, 127.5, 255, 255]` as floats before the cast — `apply_window_level`
+  ends in `astype(np.uint8)`, so the stored value is **127**). Save/load
   round-trip is covered in Phase 4a (`tests/core/test_lut_persistence.py`).
 - [ ] Follow [`dev-docs/info/TESTING_GUIDANCE.md`](../../info/TESTING_GUIDANCE.md)
   tiers; never construct a `QCoreApplication` in a test — use the session `qapp`
@@ -749,10 +780,14 @@ needs to see which part of the curve moved.
 - [ ] **Contract docstrings** on the new/changed public functions —
   `apply_lut()`, `LookUpTable.__post_init__`/`to_dict`/`from_dict`, the
   interpolation and RDP helpers, and `apply_lut_to_uint8()` —
-  stating the composition order (`LUT ∘ W/L`, applied after window/level, not a
-  convolution), the `lut=None` equivalence guarantee, output dtype/shape for
-  grayscale vs color, and the accepted parameter ranges (`gamma` 0.1–5.0,
-  `sigmoid_k`, `exp_k`).
+  stating the composition order (`LUT ∘ P ∘ W/L`, where `P` is MONOCHROME1
+  polarity, applied after window/level, not a convolution), the `lut=None`
+  equivalence guarantee, output dtype/shape for grayscale vs color, the
+  round-to-nearest `[0, 1] -> [0, 255]` scale, and the accepted parameter
+  ranges — **`gamma` in [0.1, 5.0] (`None` when not the gamma curve),
+  `sigmoid_k > 0` (`None` when not the sigmoid curve), `exp_k` in [0.1, 5.0]
+  defaulting to 1.0**. Keep these three ranges identical to the dataclass
+  comments, `__post_init__`, and the JSON schema.
 - [ ] Update the docstring on every signature this plan changes
   (`apply_window_level`, the projection-image builder, `export_rendering`'s
   rasterization entry point, the MPR reslice/thumbnail entry points) so callers
@@ -812,7 +847,8 @@ needs to see which part of the curve moved.
 | `src/gui/slice_display_manager.py` | Use active LUT in display path |
 | `src/gui/view_state_manager.py` | Store active LUT per series in `series_defaults` |
 | `src/core/view_state_handlers.py` | Event glue only — fan LUT changes out to status text/reset |
-| `src/core/view_state_inversion.py` | Respect LUT when inverting |
+| `src/core/view_state_inversion.py` | Unchanged — it only reports the invert *flag*; the pixels are inverted in `image_viewer_view` |
+| `src/gui/image_viewer_view.py` | Move user-invert to the 2-D grayscale stage, before `apply_lut_to_uint8`; add the color branch for a color LUT |
 | `src/gui/main_window_toolbar_builder.py` | LUT dropdown |
 | `src/gui/main_window_menu_builder.py` | View → Look-Up Table submenu |
 | `src/gui/image_viewer_context_menu.py` | LUT submenu |
