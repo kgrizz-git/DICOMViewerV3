@@ -68,6 +68,19 @@ well-defined curve — there is no "unset" state to represent. `gamma` and
 `__post_init__` validates `exp_k` against `[0.1, 5.0]`, so `lut_engine` can never
 sample exponential with an out-of-range or absent value.
 
+  def apply_lut_to_uint8(
+      display_array: np.ndarray,   # (H, W) uint8, already windowed/normalized
+                                   # and already MONOCHROME1-corrected
+      lut: LookUpTable | None = None,
+  ) -> np.ndarray:
+      """Apply the LUT to an already-displayed uint8 array.
+
+      Returns uint8 (H, W) for a grayscale ramp, or uint8 (H, W, 3) for a
+      colormap. ``lut=None`` returns *display_array* unchanged (same object).
+      This is the operation every display/export path calls, after
+      windowing/normalization and after polarity.
+      """
+
   def apply_lut(
       pixel_array: np.ndarray,
       window_center: float,
@@ -77,12 +90,25 @@ sample exponential with an out-of-range or absent value.
       *,
       lut: LookUpTable | None = None,
   ) -> np.ndarray:
-      """Apply W/L then LUT. Returns uint8 (grayscale) or (H,W,3) uint8 (color).
-
-      ``lut=None`` (or a linear LUT) is a passthrough that reproduces today's
-      linear clamp+normalize byte-for-byte.
-      """
+      """Convenience: W/L (or normalize), then LUT. Raw-pixel entry point."""
   ```
+
+**Two entry points, because the pipeline has two stages.** Phase 2 requires the
+LUT to be applied *after* normalization **and** after MONOCHROME1 polarity, and
+that on paths which may have no window/level at all. A single raw-pixel
+`apply_lut(pixel_array, wc, ww, ...)` cannot serve that position: calling it at
+the post-polarity stage would window the bytes a second time, and calling it
+earlier would invert the polarity order. So:
+
+- `apply_lut_to_uint8()` is the **post-normalize, post-polarity** operation and
+  is what all four display paths and the export path actually call.
+- `apply_lut()` is the **raw-pixel convenience wrapper** that performs
+  window/level (or normalize when no W/L) and then delegates to
+  `apply_lut_to_uint8()`. It is what `apply_window_level(..., lut=...)` and unit
+  tests use.
+
+Keep them as separate named operations rather than one function with a
+`already_normalized` flag, so the call sites make the stage explicit.
 
 `lut` is optional from Phase 1 so the engine is testable on its own, before
 Phase 2 threads it through the display path; `apply_window_level()` gains the
@@ -293,22 +319,25 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   branches; the 2-D analysis arrays that polarity/photometric-interpretation
   invariants depend on stay grayscale, so expansion happens only at the
   image-construction boundary.
-- [ ] **QImage row stride for `(H, W, 3)` must be 4-byte aligned.** Qt aligns
-  scanlines to a 32-bit boundary for most formats, so a raw `width * 3` stride
-  is only aligned when the width happens to be a multiple of 4 — it is not a
-  safe default. For every consumer that builds a `QImage` from a color LUT
-  buffer (`image_viewer_view.py:536`/`:541`, `mpr_thumbnail_widget.py:180`, and
-  any new MPR/thumbnail path), compute
-  `bytes_per_line = ((width * 3 + 3) // 4) * 4`, pad each row to that width, and
-  pass it as the explicit `bytesPerLine` argument. The current code is aligned
-  only by coincidence: `image_viewer_view.py` passes `image.width * 3` for
-  arbitrary viewport widths, and `mpr_thumbnail_widget.py` passes
-  `3 * 68 = 204`, which divides evenly by 4. Change the thumbnail size or view
-  a series whose width is not a multiple of 4 and the stride silently stops
-  matching, producing skewed or corrupted rows rather than a clean error.
-  Keep a reference to the backing `bytes` alive for the `QImage`'s lifetime —
-  the existing `self._img_bytes_ref` / `self._display_bytes_ref` pattern already
-  does this and must be preserved on every new path. Grayscale 8-bit paths keep
+- [ ] **Always pass an explicit `bytesPerLine`, and keep it equal to the actual
+  buffer layout.** Verified behavior for `QImage` in this repo's PySide6:
+  - When **QImage allocates** the buffer (`QImage(w, h, Format_RGB888`), it
+    rounds `bytesPerLine` **up** to a 4-byte multiple — a width of 63 yields
+    192, not 189.
+  - When the **caller supplies** the buffer and an explicit `bytesPerLine`, QImage
+    honors that value verbatim and reads rows correctly even when it is not
+    4-byte aligned (a width-5 RGB888 image with a 15-byte stride reads back
+    correctly).
+  So a `width * 3` stride is *not* inherently broken, and padding is a
+  defensive choice rather than a Qt correctness requirement. The real invariant
+  to protect is **consistency**: the `bytesPerLine` passed must match the stride
+  the source buffer was actually packed with, and the backing `bytes` must stay
+  alive for the `QImage`'s lifetime (the existing `self._img_bytes_ref` /
+  `self._display_bytes_ref` pattern already does this — preserve it on every new
+  path). A mismatch is what produces skewed rows, and it can creep in if a
+  consumer later `copy()`s, converts, or concatenates the image and assumes
+  QImage's own 4-byte-rounded stride. Pick one convention per call site, pass it
+  explicitly, and keep the two in sync. Grayscale 8-bit paths keep
   `width * 1` and `Format_Grayscale8` unchanged.
 
 ### 2b. MPR and projection displays
@@ -325,13 +354,41 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   (`mpr_cache.py:291`) persists exactly what the builder produced — applying the
   LUT at reslice time would bake it into cached arrays, force a cache
   invalidation on every LUT change, and push display work into the builder
-  worker thread. Apply the LUT only at the **display/consumption** points,
-  alongside the rescale step that already lives there:
-  - `get_subwindow_mpr_pixel_array` (`src/core/mpr_navigator_thumbnail.py:32`),
-    which already calls `result.apply_rescale(raw)` at `:62-63`;
-  - `MprThumbnailWidget`'s internal render (`src/gui/mpr_thumbnail_widget.py:189`,
-    `QPixmap.fromImage`);
-  - the MPR pane's QImage conversion path.
+  worker thread.
+- [ ] **Split measurement space from display space in the MPR accessor — this is
+  the highest-risk item in the plan.** `get_subwindow_mpr_pixel_array()`
+  (`src/core/mpr_navigator_thumbnail.py:32`) has *two* consumers with opposite
+  requirements:
+  - **Measurement:** `subwindow_manager_factory.py:164` passes it as
+    `get_mpr_pixel_array` into the ROI coordinator, and
+    `roi_coordinator._get_pixel_array_for_statistics()` (`src/gui/roi_coordinator.py:260`)
+    returns it for ROI statistics. It must stay in **raw/rescaled measurement
+    space** (rescale applied, no windowing, no polarity, no LUT).
+  - **Display:** the same function feeds the navigator thumbnail
+    (`mpr_navigator_thumbnail.py:111`), which is a display consumer.
+
+  Applying a display LUT inside this shared getter would silently replace
+  measurement values with 8-bit display values, so ROI statistics on MPR panes
+  would report windowed, polarity-inverted, LUT-shaped numbers — a
+  clinically-significant correctness bug with no error message. Therefore:
+  - Keep the measurement accessor in measurement space (renaming it or adding a
+    `get_subwindow_mpr_measurement_array()` is fine — **do not** add display
+    transforms to the accessor ROI statistics uses).
+  - Add a separate **display-space** accessor, or apply the transform at the
+    image-construction sites, where W/L + polarity + LUT are applied in that
+    order.
+- [ ] **A fourth display path exists and must not be missed.** The W/L →
+  polarity → PIL sequence is duplicated in **four** places, not three:
+  `src/core/dicom_image_render.py:189` (`render_grayscale_image`),
+  `src/core/slice_display_pixels.py:38`
+  (`create_slice_projection_pil_image`), the export rasterization path in
+  `src/gui/export_rendering.py`, and — easy to miss —
+  **`src/core/mpr_view_math.py:90`** (`array_to_pil`), which re-implements linear
+  W/L inline ("`out = clip((val - (wc - ww/2)) / ww * 255, 0, 255)`") and calls
+  `apply_monochrome1_polarity` itself so "MPR panes agree with the single-slice
+  viewer". Every one of the four must route through the same
+  normalize/window → polarity → LUT order, and all four should ideally be
+  collapsed onto shared helpers so a future fix cannot reach only some of them.
 - [ ] The active LUT for an MPR pane is read from that pane's subwindow state
   (`app.subwindow_data` / `app.subwindow_managers`), falling back to the
   per-series `ViewStateManager` LUT when the pane has no explicit override.
@@ -366,9 +423,33 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 > the selector and the editor ship together so "Custom…" is never a dead entry.
 > Phase 4 is reduced to the genuinely deferred items below.
 
-### 3b. Interactive custom curve / colormap editor
+### 3b. Interactive custom curve editor (grayscale curves first)
 
-- [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit grayscale transfer curves and color colormaps. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
+- [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit **grayscale transfer curves**. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
+- [ ] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
+  to Phase 4b.** The current `control_points` model is a list of `(x, y)` scalar
+  pairs, which describes a grayscale intensity ramp only — it cannot represent
+  an RGB color stop, and the persistence schema stores no color data either.
+  Promising "edit grayscale transfer curves and color colormaps" in 3b while
+  specifying only a scalar control-point model would ship a selector entry that
+  cannot do what it claims. So: v1's editor edits grayscale curves, and
+  built-in color LUTs remain read-only pre-sampled `(256, 3)` arrays (selectable
+  and previewable, just not editable).
+
+### 4b. Editable color colormaps (deferred)
+
+- [ ] **Color stop model:** add an RGB(A) color-stop representation to
+  `LookUpTable` — e.g. `color_stops: tuple[tuple[float, tuple[int, int, int]], ...]`
+  keyed on input position, plus a `color_interpolation` mode (`linear` in RGB
+  space, or a perceptual space). Sample to the same `(256, 3)` uint8 array the
+  fast path already consumes, so `apply_lut_to_uint8()` needs no special case.
+- [ ] **Editor support:** a color-gradient editing surface (add/move/delete
+  stops, pick RGB, smooth vs stepped between stops) in the same dialog, kept
+  clearly separate from the grayscale curve surface rather than overloading
+  `(x, y)` breakpoints.
+- [ ] **Persistence:** extend the `custom_luts.json` schema with a
+  `"color_stops"` array and bump `schema_version`; `from_dict()` must accept the
+  v1 grayscale-only shape unchanged.
 - [ ] Gamma / sigmoid parameter controls live in this dialog as well as the toolbar.
 - [ ] Live preview uses the same `apply_lut` path as the viewport (no separate preview renderer).
 
@@ -486,13 +567,19 @@ needs to see which part of the curve moved.
   `render_grayscale_image()` and `create_slice_projection_pil_image()` under a
   color LUT, asserting polarity is applied before LUT expansion and the result is
   never double-inverted (`(H, W, 3)` output, not `(H, W)`).
-- [ ] **Regression — QImage stride alignment**: render a color LUT at image widths
+- [ ] **Regression — QImage stride consistency**: render a color LUT at image widths
   that are *not* multiples of 4 (e.g. 63, 65, 101) through every QImage consumer
-  and assert no row skew: `bytes_per_line == ((width * 3 + 3) // 4) * 4`, and
-  that the decoded image round-trips to the expected `(H, W, 3)` array. A test
-  that only uses the default thumbnail size would pass today, because `68 * 3`
-  happens to be divisible by 4 — use an odd width so the coincidence cannot
-  hide a regression.
+  and assert (a) the pixels round-trip to the expected `(H, W, 3)` array with no
+  row skew, and (b) the `bytesPerLine` actually passed equals the stride the
+  source buffer was packed with. Do **not** assert that the stride is
+  4-byte-padded — QImage honors an explicit unaligned stride correctly, so
+  padding is an implementation choice, not an invariant. Use odd widths so a
+  hardcoded or mismatched stride cannot hide.
+- [ ] **Regression — measurement space is never display-transformed**: assert that
+  the array returned for MPR ROI statistics equals the rescaled stored values
+  exactly — no windowing, no polarity inversion, no LUT — and that selecting a
+  color LUT does not change a single reported ROI statistic. This guards the
+  shared-accessor split in 2b, whose failure mode is silent.
 - [ ] **Regression — no-windowing branch**: a dataset with no window metadata
   (so `resolve_window_level_and_rescale()` returns `None` center/width) still
   applies the active LUT after the normalize fallback — for **all three** paths
@@ -576,8 +663,8 @@ needs to see which part of the curve moved.
 | `src/core/slice_display_pixels.py` | Pass active LUT into AIP/MIP/MinIP projection rendering |
 | `src/core/mpr_builder.py` | **Stays LUT-free** — cached `MprResult` slices remain raw stored values |
 | `src/core/mpr_navigator_thumbnail.py` | Apply active LUT at display, next to the existing rescale step |
-| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT in the thumbnail's internal render; 4-byte-align the RGB QImage stride |
-| `src/gui/image_viewer_view.py` | 4-byte-align the RGB QImage stride for color-LUT output |
+| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT in the thumbnail's internal render; pass a bytesPerLine matching the buffer |
+| `src/gui/image_viewer_view.py` | Pass a bytesPerLine matching the buffer for color-LUT output |
 | `src/gui/slice_display_manager.py` | Use active LUT in display path |
 | `src/gui/view_state_manager.py` | Store active LUT per series in `series_defaults` |
 | `src/core/view_state_handlers.py` | Event glue only — fan LUT changes out to status text/reset |
@@ -588,7 +675,8 @@ needs to see which part of the curve moved.
 | `src/tools/histogram_widget.py` | Three-curve transfer-function overlay: W/L ramp, LUT, composed result |
 | `src/gui/dialogs/histogram_dialog.py` | Host the overlay; no duplicate painting |
 | `src/gui/widgets/lut_transfer_function_widget.py` | **New** — reusable W/L + LUT + composed curve canvas (histogram overlay, dropdown swatches, editor preview) |
-| `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve/colormap editor |
+| `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve editor (grayscale curves) |
+| `src/core/mpr_view_math.py` | Route `array_to_pil` through the shared W/L → polarity → LUT order |
 | `src/gui/overlay_text_builder.py` | Active LUT label |
 | `src/core/photometric_polarity.py` | Update the stale "polarity last" module docstring for the new order |
 | `src/gui/export_rendering.py` | Apply LUT on PNG/JPG export (both the windowed and normalize-fallback branches) |
@@ -598,6 +686,7 @@ needs to see which part of the curve moved.
 | `tests/core/test_lut_curve.py` | **New** — control-point interpolation and sampling |
 | `tests/core/test_lut_transfer.py` | **New** — `composed(x) == LUT(WL(x))` composition tests |
 | `tests/gui/test_lut_curve_editor.py` | **New** — breakpoint editing, freehand, and loaded-LUT display (Phase 3b) |
+| `tests/core/test_mpr_roi_measurement_space.py` | **New** — MPR ROI statistics stay in measurement space (no W/L, polarity, or LUT) |
 | `tests/gui/test_lut_transfer_overlay.py` | **New** — three-curve overlay rendering and Linear collapse |
 | `tests/core/test_lut_persistence.py` | **New** — `to_dict`/`from_dict` round-trip and fallback (Phase 4a) |
 | `user-docs/` (display + LUT pages) | User documentation for the selector, editor, and overlay |
