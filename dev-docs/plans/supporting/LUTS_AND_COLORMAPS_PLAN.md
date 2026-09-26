@@ -51,6 +51,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
       interpolation: Interpolation = "linear"
       gamma: float | None = None                  # 0.1–5.0, used when transfer_fn is gamma
       sigmoid_k: float | None = None              # steepness, used when transfer_fn is sigmoid
+      exp_k: float | None = None                   # 0.1–5.0, used when transfer_fn is exponential
 
       def __post_init__(self) -> None:
           """Validate/normalize: sort control points by x, reject duplicate x,
@@ -61,9 +62,10 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
       pixel_array: np.ndarray,
       window_center: float,
       window_width: float,
-      lut: LookUpTable | None = None,
       rescale_slope: float | None = None,
       rescale_intercept: float | None = None,
+      *,
+      lut: LookUpTable | None = None,
   ) -> np.ndarray:
       """Apply W/L then LUT. Returns uint8 (grayscale) or (H,W,3) uint8 (color).
 
@@ -90,8 +92,8 @@ Monotone cubic and Catmull–Rom results are clamped to the endpoint range
 (`catmull_rom` may overshoot and is clamped, not left unbounded).
 
 **Parameter binding.** `transfer_fn` is never a bare closure built in a widget;
-parameterized built-ins (gamma, sigmoid) read their parameters from the
-`LookUpTable` fields (`gamma`, `sigmoid_k`) at sample time, so the toolbar
+parameterized built-ins (gamma, sigmoid, exponential) read their parameters from the
+`LookUpTable` fields (`gamma`, `sigmoid_k`, `exp_k`) at sample time, so the toolbar
 slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 
 ### 1b. Built-in grayscale transfer functions
@@ -100,7 +102,10 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` on normalized `x` in [0, 1],
   `center = 0.5` — adjustable steepness `k` (bound to `LookUpTable.sigmoid_k`).
 - [ ] **Logarithmic:** `log(1 + x)` normalized.
-- [ ] **Exponential:** `exp(k * x)` normalized.
+- [ ] **Exponential:** `exp(k * x)` normalized, with `k` bound to a new
+  `LookUpTable.exp_k` field (default 1.0, range 0.1–5.0) — like `gamma` and
+  `sigmoid_k`, a transfer-function parameter needs a model field to be
+  adjustable from the UI.
 - [ ] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
   `LookUpTable.gamma`).
 - [ ] **Inverse:** `1 - x` on normalized input. (Written normalized, **not** `255 - x`:
@@ -147,8 +152,19 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
     and Catmull–Rom output stays within the endpoint range after clamping.
   - Clamping, duplicate-point rejection, and 256-entry sampling are deterministic.
   - Freehand simplification is deterministic: Ramer–Douglas–Peucker with
-    `epsilon = 2.0` in normalized [0, 1] input space, endpoints always pinned to
-    (0, 0) and (1, 1), and a fixed point set simplifying to the same points.
+    `epsilon = 0.02` in normalized [0, 1] **output-value** space, endpoints
+    always pinned to (0, 0) and (1, 1), and a fixed point set simplifying to the
+    same points.
+  - **Epsilon units guard:** a freehand stroke is a function of *output* value
+    (y), so RDP runs on points normalized to [0, 1] in both axes. `epsilon` must
+    be a small fraction of that unit range — the geometric bound for any
+    point-to-segment distance inside the unit square is `sqrt(2) ≈ 1.414`, so any
+    `epsilon >= 1.414` is **degenerate**: no point can ever exceed tolerance,
+    every stroke collapses to its two pinned endpoints, and freehand becomes a
+    no-op that still passes a naive determinism test. `0.02` (2% of the output
+    range) is the starting value; keep it well below 1.414 and add a test that
+    asserts a drawn S-curve survives simplification with more than two control
+    points, so a degenerate epsilon cannot pass silently again.
 
 ---
 
@@ -171,12 +187,16 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 - [ ] **Signature contract:** `apply_window_level()` gains an optional
   `lut: LookUpTable | None = None` parameter **after** the existing
   `rescale_slope` / `rescale_intercept` parameters, and it is **keyword-only**
-  (either keyword-only in the signature or declared after `*`). Today
-  `dicom_image_render.py:204-206` calls it positionally with five arguments
-  (`apply_window_level(pixel_array, window_center, window_width, rescale_slope,
-  rescale_intercept)`), so inserting `lut` in 4th position would silently bind
-  a `LookUpTable` to `rescale_slope` at every existing call site. Keyword-only
-  keeps all existing positional calls source- and behavior-compatible:
+  (declared after `*`). Today the two five-argument callers pass positionally —
+  `src/core/dicom_image_render.py:204-206` and the `DICOMProcessor` wrapper at
+  `src/core/dicom_processor.py:127-134`, both
+  `apply_window_level(pixel_array, window_center, window_width, rescale_slope,
+  rescale_intercept)` — so inserting `lut` in 4th position would silently bind
+  a `LookUpTable` to `rescale_slope` at those sites. (The other two call sites,
+  `slice_display_pixels.py:110-111` and `export_rendering.py:357-361`, pass
+  only three positional arguments and would keep working either way.)
+  Keyword-only keeps every existing positional call source- and
+  behavior-compatible:
   ```python
   def apply_window_level(
       pixel_array: np.ndarray,
@@ -199,23 +219,36 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
 - [ ] When LUT is "Linear" (default), behavior is identical to today.
 - [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
-  `render_grayscale_image()` (`src/core/dicom_image_render.py:189-231`) has two
-  paths: with W/L it calls `apply_window_level(...)` at `:204`; **without** W/L it
-  calls `normalize_to_uint8(pixel_array)` at `:209` instead, and
-  `create_slice_projection_pil_image()` has the same fallback
-  (`src/core/slice_display_pixels.py:113-123`). W/L can be unresolved because
-  `resolve_window_level_and_rescale()`
-  (`src/core/dicom_window_level.py:244`) returns `None` for window center/width
-  when the dataset carries no window metadata and none is supplied. Routing only
-  the `apply_window_level` path through the LUT engine would silently ignore the
-  active LUT exactly when the dataset has no window values. Both branches must
+  Three display/export paths have a no-windowing fallback, and all three must
   converge on the same post-normalize step: **normalize (or window) to uint8
-  first, then apply the LUT** to the normalized 0–255 array. Specify and test
-  this explicitly; do not let the LUT be reachable only via the windowing path.
+  first, then apply the LUT** to the normalized 0–255 array. W/L can be
+  unresolved because `resolve_window_level_and_rescale()`
+  (`src/core/dicom_window_level.py:244`) returns `None` for window center/width
+  when the dataset carries no window metadata and none is supplied; in every
+  case the parameter is typed `float | None`, so the branch is reachable.
+  - `render_grayscale_image()` — windowed at
+    `src/core/dicom_image_render.py:204`, **falls back to
+    `normalize_to_uint8()` at `:209`**.
+  - `create_slice_projection_pil_image()` — windowed at
+    `src/core/slice_display_pixels.py:110`, **falls back to an inline
+    min/max normalize at `:113-123`**.
+  - The export rasterization path (`src/gui/export_rendering.py`, whose
+    signature types `window_center`/`window_width` as `float | None` at
+    `:287-288`) — windowed at `:357-361`, **falls back to a third inline
+    min/max normalize at `:362-368`**. This path duplicates the normalization
+    logic rather than calling the shared helper, so it will not pick up a fix
+    applied to the other two.
+
+  Routing only the `apply_window_level` path through the LUT engine would
+  silently ignore the active LUT for datasets with no window metadata, and
+  would produce a LUT-less export for exactly the datasets where it is most
+  visible. Specify and test this explicitly; do not let the LUT be reachable
+  only via the windowing path. Where practical, de-duplicate the three inline
+  normalize blocks into one helper so future fixes apply to all three.
 - [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
   applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
-  **after** W/L and **after** normalization: at `dicom_image_render.py:219` for
-  the slice path and `slice_display_pixels.py:125` for projections. That helper
+  **after** W/L and **after** normalization: at `dicom_image_render.py:218` for
+  the slice path and `slice_display_pixels.py:123` for projections. That helper
   inverts only 2-D grayscale (`255 - array`, and it returns the array unchanged
   when `array.ndim != 2` — a color array can never be MONOCHROME1). Therefore:
   - **Polarity is applied before the LUT**, to the 2-D grayscale intermediate.
@@ -293,7 +326,7 @@ slider mutates a `LookUpTable` and the display path needs no extra plumbing.
 
 ### 3b. Interactive custom curve / colormap editor
 
-- [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit grayscale transfer curves and color colormaps. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 2.0` in normalized space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
+- [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit grayscale transfer curves and color colormaps. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
 - [ ] Gamma / sigmoid parameter controls live in this dialog as well as the toolbar.
 - [ ] Live preview uses the same `apply_lut` path as the viewport (no separate preview renderer).
 
@@ -370,6 +403,7 @@ needs to see which part of the curve moved.
         "interpolation": "catmull_rom",
         "gamma": null,
         "sigmoid_k": null,
+        "exp_k": null,
         "control_points": [[0.0, 0.0], [0.25, 0.18], [0.5, 0.55], [1.0, 1.0]]
       }
     ]
@@ -394,7 +428,7 @@ needs to see which part of the curve moved.
   sampling exact between breakpoints; every interpolation mode passes through
   each control point; monotone-cubic and Catmull–Rom stay in the endpoint range
   after clamping; clamping / duplicate-point rejection / 256-entry sampling
-  deterministic; RDP simplification (`epsilon = 2.0`, endpoints pinned) is
+  deterministic; RDP simplification (`epsilon = 0.02`, endpoints pinned) is
   deterministic and idempotent.
 - [ ] **Unit — composition** (new, `tests/core/test_lut_transfer.py`): the
   composed curve satisfies `composed(x) == LUT(WL(x))` for both a linear and a
@@ -412,9 +446,12 @@ needs to see which part of the curve moved.
   never double-inverted (`(H, W, 3)` output, not `(H, W)`).
 - [ ] **Regression — no-windowing branch**: a dataset with no window metadata
   (so `resolve_window_level_and_rescale()` returns `None` center/width) still
-  applies the active LUT after `normalize_to_uint8()` — for the slice path and
-  the projection path — and the pixel-invariance test asserts a non-linear LUT
-  changes the output there too, not only on the windowed path.
+  applies the active LUT after the normalize fallback — for **all three** paths
+  (`render_grayscale_image`, `create_slice_projection_pil_image`, and the
+  `export_rendering.py` rasterization path) — and the pixel-invariance test
+  asserts a non-linear LUT changes the output there too, not only on the
+  windowed path. Include the export case, so "user sees what they exported"
+  holds for un-windowed datasets too.
 - [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
   freehand draw → simplified control points; interpolation switch; undo/redo;
   gamma slider re-samples; a LUT loaded into the selector keeps its name/source
@@ -435,11 +472,22 @@ needs to see which part of the curve moved.
   stating the composition order (`LUT ∘ W/L`, applied after window/level, not a
   convolution), the `lut=None` equivalence guarantee, output dtype/shape for
   grayscale vs color, and the accepted parameter ranges (`gamma` 0.1–5.0,
-  `sigmoid_k`).
+  `sigmoid_k`, `exp_k`).
 - [ ] Update the docstring on every signature this plan changes
   (`apply_window_level`, the projection-image builder, `export_rendering`'s
   rasterization entry point, the MPR reslice/thumbnail entry points) so callers
   reading only docstrings know a LUT is applied and where it comes from.
+- [ ] **`src/core/photometric_polarity.py` module docstring goes stale and must be
+  updated.** `photometric_polarity.py:16-18` currently states the pipeline is
+  "modality rescale, then window/level on stored values, then polarity inversion
+  **last, on the finalized 8-bit array**" (per PS3.3 C.11.2 and C.7.6.3.1.2's
+  "after any VOI gray scale transformations"), and `export_rendering.py:370`
+  carries a matching "Polarity last, on the finalized uint8 array" comment.
+  With a LUT applied **after** polarity (2a), polarity is no longer last, so
+  both must be rewritten to state the new order and to note that the DICOM
+  standard's "after any VOI gray scale transformations" is satisfied because
+  the LUT is a viewer-side display transform, not a DICOM VOI transformation.
+  Do not silently leave a comment that now contradicts the code.
 - [ ] **User docs** (`user-docs/`): document the LUT selector, the three-curve
   transfer-function display, the editor, keyboard shortcut, and the explicit
   statement that PNG/JPG export bakes the LUT while DICOM export does not.
@@ -492,7 +540,8 @@ needs to see which part of the curve moved.
 | `src/gui/widgets/lut_transfer_function_widget.py` | **New** — reusable W/L + LUT + composed curve canvas (histogram overlay, dropdown swatches, editor preview) |
 | `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve/colormap editor |
 | `src/gui/overlay_text_builder.py` | Active LUT label |
-| `src/gui/export_rendering.py` | Apply LUT on PNG/JPG export |
+| `src/core/photometric_polarity.py` | Update the stale "polarity last" module docstring for the new order |
+| `src/gui/export_rendering.py` | Apply LUT on PNG/JPG export (both the windowed and normalize-fallback branches) |
 | `src/core/mpr_dicom_export.py` | Keep DICOM export display-only (no baked LUT) |
 | `src/utils/config_manager.py` | Persist `custom_luts.json` |
 | `tests/core/test_lut_engine.py` | **New** |
