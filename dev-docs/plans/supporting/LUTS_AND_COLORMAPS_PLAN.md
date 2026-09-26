@@ -17,15 +17,17 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 - All direct `apply_window_level()` call sites (must each be reconciled in Phase 2):
   - `src/core/dicom_processor.py:132`
   - `src/core/dicom_image_render.py:204`
-  - `src/core/slice_display_pixels.py:110` (AIP/MIP/MinIP projections — **not** via `SliceDisplayManager`)
+  - `src/core/slice_display_pixels.py:110` (AIP/MIP/MinIP projections — invoked via `SliceDisplayManager._create_projection_image` at `slice_display_manager.py:359`; window/level is applied in `create_slice_projection_pil_image`, not through `dataset_to_image`)
   - `src/gui/export_rendering.py:357` (`create_projection_for_export` — projection PNG/JPG only; single-slice PNG/JPG uses row 1 via `DICOMProcessor.dataset_to_image`)
 - `src/core/slice_display_lut.py` is **not** a LUT system — it is W/L rescale-alignment (`apply_window_level_rescale_conversion`). It is reused, not replaced, by this plan; the new engine must not shadow its name/purpose.
 - Fusion applies colormaps through `FusionProcessor.apply_colormap()`
   (`src/core/fusion_processor.py:100-124`), which is **matplotlib-only** and
   memoizes into a module-level `_COLORMAP_CACHE` (`fusion_processor.py:28`,
   `:113-121`); `fusion_handler.py:78` holds only the colormap *name* string.
-  There is **no** `cv2.applyColorMap` call anywhere in `src/` (and no `cv2`
-  import at all), so do not look for an OpenCV colormap path.
+  There is **no** `cv2.applyColorMap` call anywhere in `src/`. OpenCV is not a
+  colormap path: `cv2` appears only as a guarded lazy `import_module("cv2")` in
+  `src/tools/annotation_overlay_bitmap.py:205`, for annotation contour
+  extraction, with a `scipy.ndimage` fallback at `:208`.
 - No general-purpose LUT system for single-series grayscale display.
 - Histogram widget (`src/gui/dialogs/histogram_dialog.py`, drawing in `src/tools/histogram_widget.py`) does not show the transfer function.
 
@@ -120,8 +122,8 @@ earlier would invert the polarity order. So:
 > |---|------|-------------|------------------------|-------------|
 > | 1 | Single-slice pane | `render_grayscale_image`, `src/core/dicom_image_render.py:189` | **Yes** — `normalize_to_uint8()` at `:209` | `apply_monochrome1_polarity()` at `:218`, then the builder applies `image_inverted` to the uint8 value |
 > | 2 | Projection (AIP/MIP/MinIP) | `create_slice_projection_pil_image`, `src/core/slice_display_pixels.py:38` | **Yes** — inline min/max normalize at `:113-121` | `apply_monochrome1_polarity()` at `:123`, then the builder applies `image_inverted` to the uint8 value |
-> | 3 | Projection PNG/JPG export | `create_projection_for_export`, `src/gui/export_rendering.py:279` | **Yes** — inline min/max normalize at `:362-368` | `apply_monochrome1_polarity()` at `:370`, then the builder applies `image_inverted` to the uint8 value |
-> | 4 | MPR pane | `array_to_pil`, `src/core/mpr_view_math.py:90` | **No** — takes a non-optional float window, so the branch is unreachable | inside `array_to_pil`, then the builder applies `image_inverted` to the uint8 value |
+> | 3 | Projection PNG/JPG export | `create_projection_for_export`, `src/gui/export_rendering.py:279` | **Yes** — inline min/max normalize at `:362-368` | `apply_monochrome1_polarity()` at `:372` (the stale "Polarity last" comment is `:370`), then the builder applies `image_inverted` to the uint8 value |
+> | 4 | MPR pane | `array_to_pil`, `src/core/mpr_view_math.py:84` | **No** — takes a non-optional float window, so the branch is unreachable | inside `array_to_pil`, then the builder applies `image_inverted` to the uint8 value |
 > | 5 | MPR navigator thumbnail | `MprThumbnailWidget` render, `src/gui/mpr_thumbnail_widget.py:148-161` | **Yes** — inline min/max normalize at `:148-157`, and only windows when `window_width > 0` | `apply_monochrome1_polarity()` at `:159-161`, then the builder applies `image_inverted` to the uint8 value |
 >
 > Single-slice PNG/JPG export is row 1: `export_manager.py:564` and `:576` call `DICOMProcessor.dataset_to_image`, which calls `render_grayscale_image`. Row 3 is only `create_projection_for_export`.
@@ -436,7 +438,7 @@ for the shared-LUT design.
     widget is a thumbnail rather than a pane. Consequence if skipped: the MPR
     thumbnail keeps a linear appearance while its pane uses the active LUT, so
     the navigator no longer previews what the pane shows.
-  - Row 4, `mpr_view_math.array_to_pil` (`src/core/mpr_view_math.py:90`), takes
+  - Row 4, `mpr_view_math.array_to_pil` (`src/core/mpr_view_math.py:84`), takes
     a non-optional float window, so it has **no** no-windowing branch and is
     not part of this fallback list.
 
@@ -586,7 +588,7 @@ for the shared-LUT design.
   inversion → image sequence is re-implemented once per row of the canonical
   inventory in 1a, where "inversion" always means the net `P_inv` inversion
   (MONOCHROME1 XOR user invert, applied to the uint8 value before the LUT).
-  Row 4 (`array_to_pil`, `src/core/mpr_view_math.py:90`)
+  Row 4 (`array_to_pil`, `src/core/mpr_view_math.py:84`)
   re-implements linear W/L inline ("`out = clip((val - (wc - ww/2)) / ww * 255,
   0, 255)`") and calls `apply_monochrome1_polarity` itself so "MPR panes agree
   with the single-slice viewer"; row 5 is the thumbnail and is the easiest to
@@ -613,7 +615,7 @@ for the shared-LUT design.
 - [ ] Projection PNG/JPG export applies the active LUT (user sees what they exported):
   thread the active LUT into `create_projection_for_export` and call
   `apply_lut_to_uint8()` **after** both inversion inputs
-  (`apply_monochrome1_polarity` at `export_rendering.py:370`, then the pane's
+  (`apply_monochrome1_polarity` at `export_rendering.py:372`, then the pane's
   `image_inverted` flag), on both the windowed branch (`:357-361`) and the
   normalize fallback (`:362-368`). Do **not** pass a LUT to
   `apply_window_level()` at `:357`. Single-slice PNG/JPG export is not a
