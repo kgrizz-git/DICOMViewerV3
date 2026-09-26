@@ -2,14 +2,14 @@
 
 **Status:** Not started  
 **Priority:** P1  
-**Last updated:** 2026-09-25  
+**Last updated:** 2026-09-26  
 **TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
 
 ## Goal
 
-Extend the display pipeline beyond the current **linear** window/level ramp to support **non-linear look-up tables** (sigmoid, logarithmic, exponential, gamma) and **color look-up tables / colormaps** (hot, cool, rainbow, bone, etc.) for grayscale DICOM images. Also provide an interactive custom curve editor with draggable breakpoints, freehand drawing, and straight-line or smooth interpolation; display the active/loaded LUT with its curve or colormap preview; and show the **active window/level ramp, the LUT, and their composed result** together as a transfer-function display, since the LUT is a separate processing step applied *after* window/level (`final(x) = LUT(WL(x))`).
+Extend the display pipeline beyond the current **linear** window/level ramp to support **non-linear look-up tables** (sigmoid, logarithmic, exponential, gamma) and **color look-up tables / colormaps** (hot, cool, rainbow, bone, etc.) for grayscale DICOM images. Also provide an interactive custom curve editor with draggable breakpoints, freehand drawing, and straight-line or smooth interpolation; display the active/loaded LUT with its curve or colormap preview; and show the **active window/level ramp, the LUT, and their composed result** together as a transfer-function display, since the LUT is a separate processing step applied *after* window/level (`final(x) = LUT(P_inv(u))` with `u = uint8(WL(x))`, where `P_inv` is the net uint8 inversion: MONOCHROME1 XOR user invert).
 
 ### Current state
 
@@ -18,7 +18,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
   - `src/core/dicom_processor.py:132`
   - `src/core/dicom_image_render.py:204`
   - `src/core/slice_display_pixels.py:110` (AIP/MIP/MinIP projections — **not** via `SliceDisplayManager`)
-  - `src/gui/export_rendering.py:357` (export rasterization — **not** via `SliceDisplayManager`)
+  - `src/gui/export_rendering.py:357` (`create_projection_for_export` — projection PNG/JPG only; single-slice PNG/JPG uses row 1 via `DICOMProcessor.dataset_to_image`)
 - `src/core/slice_display_lut.py` is **not** a LUT system — it is W/L rescale-alignment (`apply_window_level_rescale_conversion`). It is reused, not replaced, by this plan; the new engine must not shadow its name/purpose.
 - Fusion applies colormaps through `FusionProcessor.apply_colormap()`
   (`src/core/fusion_processor.py:100-124`), which is **matplotlib-only** and
@@ -69,8 +69,9 @@ well-defined curve — there is no "unset" state to represent. `gamma` and
 sample exponential with an out-of-range or absent value.
 
   def apply_lut_to_uint8(
-      display_array: np.ndarray,   # (H, W) uint8, already windowed/normalized
-                                   # and already MONOCHROME1-corrected
+      display_array: np.ndarray,   # (H, W) uint8, already windowed/normalized,
+                                   # cast with truncating astype(uint8), and already corrected
+                                   # by the net inversion P_inv
       lut: LookUpTable | None = None,
   ) -> np.ndarray:
       """Apply the LUT to an already-displayed uint8 array.
@@ -78,13 +79,13 @@ sample exponential with an out-of-range or absent value.
       Returns uint8 (H, W) for a grayscale ramp, or uint8 (H, W, 3) for a
       colormap. ``lut=None`` returns *display_array* unchanged (same object).
       This is the operation every display/export path calls, after
-      windowing/normalization and after polarity.
+      windowing/normalization and after net inversion.
       """
 
   def apply_lut(
       pixel_array: np.ndarray,
-      window_center: float,
-      window_width: float,
+      window_center: float | None,
+      window_width: float | None,
       rescale_slope: float | None = None,
       rescale_intercept: float | None = None,
       *,
@@ -94,15 +95,17 @@ sample exponential with an out-of-range or absent value.
   ```
 
 **Two entry points, because the pipeline has two stages.** Phase 2 requires the
-LUT to be applied *after* normalization **and** after MONOCHROME1 polarity, and
+LUT to be applied *after* normalization **and** after the net inversion, and
 that on paths which may have no window/level at all. A single raw-pixel
 `apply_lut(pixel_array, wc, ww, ...)` cannot serve that position: calling it at
-the post-polarity stage would window the bytes a second time, and calling it
+the post-inversion stage would window the bytes a second time, and calling it
 earlier would invert the polarity order. So:
 
-- `apply_lut_to_uint8()` is the **post-normalize, post-polarity** operation, and
+- `apply_lut_to_uint8()` is the **post-normalize, post-net-inversion** operation, and
   it is the **only** thing the display paths call, exactly once each. Each calls
-  it *after* `apply_monochrome1_polarity()`, never before. There are **five**
+  it *after* both inversion inputs have been applied to the uint8 value:
+  first `apply_monochrome1_polarity()`, then `255 - u` when `image_inverted`
+  is true. There are **five**
   such paths — see the canonical inventory below, which every phase and the test
   plan reference rather than restating counts.
 
@@ -110,17 +113,18 @@ earlier would invert the polarity order. So:
 >
 > This table is the single source of truth. Do not restate "four", "three", or
 > "fifth" anywhere else; cite the row. Five paths each re-implement
-> window/level → polarity → image construction, and each must gain exactly one
-> `apply_lut_to_uint8()` call after polarity.
+> window/level → net inversion → image construction, and each must gain exactly one
+> `apply_lut_to_uint8()` call after both inversion inputs.
 >
-> | # | Path | Entry point | No-windowing fallback? | Polarity at |
+> | # | Path | Entry point | No-windowing fallback? | Net inversion at |
 > |---|------|-------------|------------------------|-------------|
-> | 1 | Single-slice pane | `render_grayscale_image`, `src/core/dicom_image_render.py:189` | **Yes** — `normalize_to_uint8()` at `:209` | `:218` |
-> | 2 | Projection (AIP/MIP/MinIP) | `create_slice_projection_pil_image`, `src/core/slice_display_pixels.py:38` | **Yes** — inline min/max normalize at `:113-123` | `:123` |
-> | 3 | PNG/JPG export | export rasterization, `src/gui/export_rendering.py` | **Yes** — inline min/max normalize at `:362-368` | `:370` |
-> | 4 | MPR pane | `array_to_pil`, `src/core/mpr_view_math.py:90` | **No** — takes a non-optional float window, so the branch is unreachable | inside `array_to_pil` |
-> | 5 | MPR navigator thumbnail | `MprThumbnailWidget` render, `src/gui/mpr_thumbnail_widget.py:148-161` | **Yes** — inline min/max normalize at `:148-157`, and only windows when `window_width > 0` | `:159-161` |
+> | 1 | Single-slice pane | `render_grayscale_image`, `src/core/dicom_image_render.py:189` | **Yes** — `normalize_to_uint8()` at `:209` | `apply_monochrome1_polarity()` at `:218`, then the builder applies `image_inverted` to the uint8 value |
+> | 2 | Projection (AIP/MIP/MinIP) | `create_slice_projection_pil_image`, `src/core/slice_display_pixels.py:38` | **Yes** — inline min/max normalize at `:113-121` | `apply_monochrome1_polarity()` at `:123`, then the builder applies `image_inverted` to the uint8 value |
+> | 3 | Projection PNG/JPG export | `create_projection_for_export`, `src/gui/export_rendering.py:279` | **Yes** — inline min/max normalize at `:362-368` | `apply_monochrome1_polarity()` at `:370`, then the builder applies `image_inverted` to the uint8 value |
+> | 4 | MPR pane | `array_to_pil`, `src/core/mpr_view_math.py:90` | **No** — takes a non-optional float window, so the branch is unreachable | inside `array_to_pil`, then the builder applies `image_inverted` to the uint8 value |
+> | 5 | MPR navigator thumbnail | `MprThumbnailWidget` render, `src/gui/mpr_thumbnail_widget.py:148-161` | **Yes** — inline min/max normalize at `:148-157`, and only windows when `window_width > 0` | `apply_monochrome1_polarity()` at `:159-161`, then the builder applies `image_inverted` to the uint8 value |
 >
+> Single-slice PNG/JPG export is row 1: `export_manager.py:564` and `:576` call `DICOMProcessor.dataset_to_image`, which calls `render_grayscale_image`. Row 3 is only `create_projection_for_export`.
 > Rows 1, 2, 3, and 5 have a reachable no-windowing branch; row 4 does not.
 > Rows 1, 2, 3, 4, and 5 all need the LUT call. Row 5 is the easiest to miss
 > because it is a thumbnail rather than a pane — if it is skipped, the navigator
@@ -134,10 +138,10 @@ earlier would invert the polarity order. So:
 **`apply_window_level()` stays window/level only — it must NOT take a `lut`.**
 It is called at `dicom_image_render.py:204`, *before* the polarity call at
 `:218`, so a `lut` parameter there would apply the LUT before polarity and
-silently invert the required order. Drop the `lut` parameter from
-`apply_window_level` entirely; the display paths call `apply_lut_to_uint8()`
-after polarity instead. (If a `lut` keyword is kept on it for compatibility, it
-must be documented as test-only and must never be passed from a display path.)
+silently invert the required order. There is deliberately **no**
+compatibility `lut` escape hatch: keeping one would be callable at that site
+and would recreate the polarity-ordering defect this design removes. The
+display paths call `apply_lut_to_uint8()` after net inversion instead.
 
 Keep the two operations as separate named functions rather than one function
 with an `already_normalized` flag, so the call sites make the stage explicit.
@@ -173,7 +177,7 @@ to the first/last `y` span:
   off the control points.
 - Catmull–Rom may overshoot. On the spike `(0,0), (0.25,0), (0.5,1), (0.75,0),
   (1,0)` it reaches about **−0.074**, and on the non-monotone set above about
-  `0.9005`. Clamping its samples to `[0, 1]` is correct: control-point `y` is
+  `0.9004`. Clamping its samples to `[0, 1]` is correct: control-point `y` is
   already constrained to [0, 1] by `__post_init__`, so no control point moves,
   and the uint8 output stays valid.
 
@@ -245,7 +249,9 @@ for the shared-LUT design.
   `0.378 / 0.622` at `k = 1` and `0.076 / 0.924` at `k = 5` — a sigmoid never
   reaches pure black or pure white. **Use the endpoint renormalization**
   `(s(x) - s(0)) / (s(1) - s(0))`, which pins both ends to 0 and 1 and keeps
-  `y(0.5) = 0.5`; the raw logistic is *not* an acceptable alternative, because
+  `y(0.5)` within `1e-12` of `0.5` (at `k=5` the value is
+  `0.49999999999999994`; at `k=0.1` it is `0.5000000000000011`, about ten
+  ulps, so a one-ulp bound fails); the raw logistic is *not* an acceptable alternative, because
   the two are different LUTs and leaving the choice open would let an
   implementation ship either one. Note `sigmoid_k` is only
   constrained `> 0`, **not** `[0.1, 5.0]` like `gamma`/`exp_k` — keep the three
@@ -287,7 +293,8 @@ for the shared-LUT design.
     byte-identical to today.
   - Sigmoid with high steepness approximates a step function, **and with the
     endpoint renormalization of 1b returns exactly 0 and 1 at the endpoints**
-    (`lut[0] == 0`, `lut[255] == 255`) at every `k`, with `y(0.5) == 0.5`.
+    (`lut[0] == 0`, `lut[255] == 255`) at every `k`, with renormalized
+    `y(0.5)` within `1e-12` of `0.5`.
   - Gamma=1.0 matches linear.
   - **Inverse is exactly `lut[i] == 255 - i` for all 256 codes.** This is the
     test that catches a truncating scale — a `gamma = 1.0` test cannot, because
@@ -376,54 +383,70 @@ for the shared-LUT design.
   ```
 - [ ] Keep the `apply_window_level()` call as-is in the display path
   (`src/gui/slice_display_manager.py` → `src/core/dicom_processor.py`), and call
-  `apply_lut_to_uint8(active_lut)` on its result **after** polarity, with the
-  active LUT taken from per-pane state.
+  `apply_lut_to_uint8(display_array, active_lut)` on the uint8 result **after**
+  net inversion. `display_array` is the first argument; passing `active_lut`
+  positionally would bind it to the image. Take the active LUT from per-pane state.
 - [ ] Update the remaining direct callers so each **threads the active LUT from
   their own state source into the image builder** and calls
-  `apply_lut_to_uint8()` there, **after** polarity — not by passing a LUT to
+  `apply_lut_to_uint8()` there, **after** net inversion — not by passing a LUT to
   `apply_window_level()`: `src/core/dicom_image_render.py:204` and
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
 - [ ] When LUT is "Linear" (default), behavior is identical to today.
 - [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
-  **Four** of the five inventory rows have a reachable no-windowing fallback
-  (rows 1, 2, 3, and 5; row 4 does not), and all four must converge on the same
-  post-normalize step: **normalize (or window) to uint8 first, then polarity,
-  then the LUT** on the resulting 0–255 array. W/L can be
-  unresolved because `resolve_window_level_and_rescale()`
-  (`src/core/dicom_window_level.py:244`) returns `None` for window center/width
-  when the dataset carries no window metadata and none is supplied; in every
-  case the parameter is typed `float | None` (or the guard checks for it), so
-  the branch is reachable.
-  - `render_grayscale_image()` — windowed at
+  Inventory rows 1, 2, 3, and 5 have a reachable no-windowing fallback; row 4
+  does not. Those fallback rows must converge on the same post-normalize step:
+  **normalize (or window) to uint8 first, then net inversion (`P_inv`), then
+  the LUT** on the resulting 0–255 array. Missing window tags do **not**
+  make `resolve_window_level_and_rescale()` (`dicom_window_level.py:244`)
+  return `None`. It fills a missing center or width through
+  `get_base_window_level()` (`:198-204`), and
+  `get_window_level_from_dataset()` (`:158-168`) derives both from the pixel
+  array when the tags are absent. `None` comes back only when pixel decoding
+  fails or that lookup raises (`:176-177`). The normalize fallback is reached
+  when a caller passes `None` without that resolver, or when resolution itself
+  fails. Force it that way in tests; a tag-less dataset that still has pixels
+  takes the windowed path and will not catch a missed fallback.
+  - Row 1, `render_grayscale_image()` — windowed at
     `src/core/dicom_image_render.py:204`, **falls back to
-    `normalize_to_uint8()` at `:209`**.
-  - `create_slice_projection_pil_image()` — windowed at
+    `normalize_to_uint8()` at `:209`** when either argument is `None`.
+    `dataset_to_image` (`dicom_processor.py:205-208`, then `:237`) always
+    resolves first, so the test calls `render_grayscale_image` with explicit
+    `None` center and width.
+  - Row 2, `create_slice_projection_pil_image()` — windowed at
     `src/core/slice_display_pixels.py:110`, **falls back to an inline
-    min/max normalize at `:113-123`**.
-  - The export rasterization path (`src/gui/export_rendering.py`, whose
+    min/max normalize at `:113-121`**. It does not resolve tags itself.
+    `slice_display_manager.py:359-368` passes the pane's center and width
+    through, so the test passes `None` for both.
+  - Row 3, `create_projection_for_export` (`src/gui/export_rendering.py:279`, whose
     signature types `window_center`/`window_width` as `float | None` at
-    `:287-288`) — windowed at `:357-361`, **falls back to a third inline
-    min/max normalize at `:362-368`**. This path duplicates the normalization
+    `:287-288`) — windowed at `:357-361`, **falls back to an inline
+    min/max normalize at `:362-368`**. `export_manager.py:546-560` passes
+    `None` unless the export option is "current" with a live window, so the
+    test calls `create_projection_for_export` with `None` center and width.
+    This path duplicates the normalization
     logic rather than calling the shared helper, so it will not pick up a fix
     applied to the others.
-  - `MprThumbnailWidget`'s render (`src/gui/mpr_thumbnail_widget.py:148-157`) —
+  - Row 5, `MprThumbnailWidget`'s render (`src/gui/mpr_thumbnail_widget.py:148-157`) —
     windowed only when `window_center`/`window_width` are set **and**
-    `window_width > 0`, **falls back to a fourth inline min/max normalize
-    otherwise**, then applies polarity at `:159-161`. Easy to miss because the
+    `window_width > 0`, **falls back to an inline min/max normalize
+    otherwise**. `mpr_navigator_thumbnail.py:124-134` leaves center and width
+    `None` unless the live controls report a positive width. Pass `None` width
+    into the thumbnail render. The widget applies MONOCHROME1 polarity at
+    `:159-161` and must also apply `image_inverted` before the LUT. Easy to miss because the
     widget is a thumbnail rather than a pane. Consequence if skipped: the MPR
     thumbnail keeps a linear appearance while its pane uses the active LUT, so
     the navigator no longer previews what the pane shows.
-  - (`mpr_view_math.array_to_pil`, `src/core/mpr_view_math.py:90`, is a fifth
-    window/level path but takes a non-optional float window, so it has **no**
-    no-windowing branch — it is counted in the four-way display-path list, not
-    here.)
+  - Row 4, `mpr_view_math.array_to_pil` (`src/core/mpr_view_math.py:90`), takes
+    a non-optional float window, so it has **no** no-windowing branch and is
+    not part of this fallback list.
 
   Routing only the `apply_window_level` path through the LUT engine would
   silently ignore the active LUT for datasets with no window metadata, and
   would produce a LUT-less export for exactly the datasets where it is most
   visible. Specify and test this explicitly; do not let the LUT be reachable
-  only via the windowing path. Where practical, de-duplicate the four inline
-  normalize blocks into one helper so future fixes apply to all of them.
+  only via the windowing path. Where practical, de-duplicate the inline
+  normalize blocks on rows 2, 3, and 5 onto `normalize_to_uint8`, which row 1
+  already uses, so future fixes apply to all of them.
 - [ ] **The user "invert" flag is a second `255 - array`, and it must move.**
   `src/core/view_state_inversion.py` only *reports* the flag (it returns a bool
   from the per-series `image_inverted` default); the pixels are actually
@@ -461,14 +484,15 @@ for the shared-LUT design.
   - A color LUT expands to `(H, W, 3)` **after** polarity, so
     `apply_monochrome1_polarity` sees a 2-D array and inverts as today; the
     existing `ndim != 2` guard means a color result is never double-inverted.
-  - State this order in the code and the docstrings: `W/L or normalize → uint8
-    → MONOCHROME1 polarity → LUT (grayscale or RGB expansion)`.
+  - State this order in the code and the docstrings: `W/L or normalize → float
+    → truncating `astype(np.uint8)` → net inversion (`P_inv`: MONOCHROME1 XOR user
+    invert, applied to the uint8 value) → LUT (grayscale or RGB expansion)`.
   - **Keep an explicit stage boundary before `apply_lut_to_uint8()`.** The
     ordering above must be structural, not a convention that a later edit can
     quietly reorder: the polarity call
     (`apply_monochrome1_polarity(processed_array, photometric_interpretation)`)
-    must remain a distinct, completed step *before* the LUT is applied, at all
-    four display/export sites. Do not fold polarity into the LUT engine, do not
+    must remain a distinct, completed step *before* the LUT is applied, in all
+    five inventory rows alongside the user-invert flag. Do not fold polarity into the LUT engine, do not
     apply it to the LUT's RGB output, and do not reorder it to run last. If it
     helps, name the two phases explicitly (e.g. a `_to_display_uint8` /
     `_apply_active_lut` step pair) so the boundary is visible at each call site
@@ -503,9 +527,10 @@ for the shared-LUT design.
   the source buffer was actually packed with, and the backing `bytes` must stay
   alive for the `QImage`'s lifetime (the existing `self._img_bytes_ref` /
   `self._display_bytes_ref` pattern already does this — preserve it on every new
-  path). A mismatch is what produces skewed rows, and it can creep in if a
-  consumer later `copy()`s, converts, or concatenates the image and assumes
-  QImage's own 4-byte-rounded stride. **`copy()` repacks to a 4-byte-rounded
+  path). A mismatch is what produces skewed rows. It can creep in either by
+  pairing a padded or rounded stride with a tightly packed buffer, or by
+  continuing to use the pre-operation stride after `copy()`, conversion, or
+  concatenation has repacked the pixels. **`copy()` repacks to a 4-byte-rounded
   stride**: `img.copy()` on a stride-15 image reports `bytesPerLine` 16, so
   reads after a `copy()`/`convertToFormat`/concatenate must use the **new**
   image's `bytesPerLine()`. On a width-5 image with row 1 `(11, 22, 33)`,
@@ -520,8 +545,9 @@ for the shared-LUT design.
 - [ ] Apply the active LUT to MPR panes and AIP/MIP/MinIP projections too.
 - [ ] Projections: thread `lut: LookUpTable | None` through
   `src/core/slice_display_pixels.py` → `create_slice_projection_pil_image` and
-  call `apply_lut_to_uint8()` on its result **after** the
-  `apply_monochrome1_polarity` call (`slice_display_pixels.py:123`). Do **not**
+  call `apply_lut_to_uint8()` on its result **after** both inversion inputs
+  (`apply_monochrome1_polarity` at `slice_display_pixels.py:123`, then the pane's
+  `image_inverted` flag). Do **not**
   pass a LUT to `apply_window_level()` at `slice_display_pixels.py:110` — that
   function no longer takes one, and applying it there would invert the curve
   before polarity. Source: `src/core/dicom_projections.py` /
@@ -540,7 +566,7 @@ for the shared-LUT design.
   requirements:
   - **Measurement:** `subwindow_manager_factory.py:164` passes it as
     `get_mpr_pixel_array` into the ROI coordinator, and
-    `roi_coordinator._get_pixel_array_for_statistics()` (`src/gui/roi_coordinator.py:260`)
+    `roi_coordinator._get_pixel_array_for_statistics()` (`src/gui/roi_coordinator.py:250`; the MPR return starts at `:260`)
     returns it for ROI statistics. It must stay in **raw/rescaled measurement
     space** (rescale applied, no windowing, no polarity, no LUT).
   - **Display:** the same function feeds the navigator thumbnail
@@ -554,17 +580,29 @@ for the shared-LUT design.
     `get_subwindow_mpr_measurement_array()` is fine — **do not** add display
     transforms to the accessor ROI statistics uses).
   - Add a separate **display-space** accessor, or apply the transform at the
-    image-construction sites, where W/L + polarity + LUT are applied in that
-    order.
+    image-construction sites, where W/L + polarity + user invert + LUT are
+    applied in that order.
 - [ ] **All five inventory paths need the LUT, not just the panes.** The W/L →
-  polarity → image sequence is re-implemented once per row of the canonical
-  inventory in 1a. Row 4 (`array_to_pil`, `src/core/mpr_view_math.py:90`)
+  inversion → image sequence is re-implemented once per row of the canonical
+  inventory in 1a, where "inversion" always means the net `P_inv` inversion
+  (MONOCHROME1 XOR user invert, applied to the uint8 value before the LUT).
+  Row 4 (`array_to_pil`, `src/core/mpr_view_math.py:90`)
   re-implements linear W/L inline ("`out = clip((val - (wc - ww/2)) / ww * 255,
   0, 255)`") and calls `apply_monochrome1_polarity` itself so "MPR panes agree
   with the single-slice viewer"; row 5 is the thumbnail and is the easiest to
-  miss. Every row must route through the same normalize/window → polarity → LUT
-  order, and the duplicated inline logic should ideally be collapsed onto shared
-  helpers so a future fix cannot reach only some of them.
+  miss. Every row must route through the same normalize/window → net inversion
+  → LUT order, and the duplicated inline logic should ideally be collapsed onto
+  shared helpers so a future fix cannot reach only some of them.
+- [ ] **Rows 4 and 5 must consume `image_inverted` before the LUT and then stay
+  finished.** In row 4, read the pane's invert flag and apply it to the 2-D
+  grayscale array alongside MONOCHROME1 before `apply_lut_to_uint8()`; when the
+  finished row-4 image reaches `mpr_controller.py:1080`, use the new
+  state-preserving display-final path so `set_image()` does not call
+  `_apply_inversion()` again. In row 5, apply the same net inversion before the
+  LUT and branch its PIL construction like row 2: grayscale LUT output uses
+  `Image.fromarray(..., mode="L")`, while color LUT output goes directly to
+  `Image.fromarray(..., mode="RGB")` (the current code always uses `"L"` and
+  would raise `Too many dimensions` on `(H, W, 3)`).
 - [ ] The active LUT for an MPR pane is read from that pane's subwindow state
   (`app.subwindow_data` / `app.subwindow_managers`), falling back to the
   per-series `ViewStateManager` LUT when the pane has no explicit override.
@@ -572,12 +610,15 @@ for the shared-LUT design.
 
 ### 2c. Export with LUT
 
-- [ ] PNG/JPG export applies the active LUT (user sees what they exported):
-  thread the active LUT into the export rasterization builder and call
-  `apply_lut_to_uint8()` **after** its `apply_monochrome1_polarity` call
-  (`export_rendering.py:370`), on both the windowed branch (`:357-361`) and the
+- [ ] Projection PNG/JPG export applies the active LUT (user sees what they exported):
+  thread the active LUT into `create_projection_for_export` and call
+  `apply_lut_to_uint8()` **after** both inversion inputs
+  (`apply_monochrome1_polarity` at `export_rendering.py:370`, then the pane's
+  `image_inverted` flag), on both the windowed branch (`:357-361`) and the
   normalize fallback (`:362-368`). Do **not** pass a LUT to
-  `apply_window_level()` at `:357`.
+  `apply_window_level()` at `:357`. Single-slice PNG/JPG export is not a
+  separate path: `export_manager.py:564` and `:576` call
+  `DICOMProcessor.dataset_to_image`, which is row 1.
 - [ ] DICOM export: store the raw pixel data (no LUT baked in); optionally write a VOI LUT Sequence for non-linear functions, or note in export dialog that LUT is display-only
   (`src/core/mpr_dicom_export.py` for MPR DICOM export).
 
@@ -616,7 +657,7 @@ for the shared-LUT design.
 - [ ] Gamma / sigmoid / exponential parameter controls live in this dialog as well as
   the toolbar, bound to `LookUpTable.gamma` / `sigmoid_k` / `exp_k`.
 - [ ] Live preview goes through the same `apply_lut_to_uint8()` call the viewport uses,
-  on the already-windowed **and polarity-corrected** array — not `apply_lut()` —
+  on the already-windowed **and net-inversion-corrected** array — not `apply_lut()` —
   so the preview cannot diverge from the pane. No separate preview renderer.
 - [ ] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
   to Phase 4b.** The current `control_points` model is a list of `(x, y)` scalar
@@ -634,13 +675,19 @@ for the shared-LUT design.
 processing step applied after* window/level, so the mapping a viewer sees is
 
 ```
-final(x) = LUT(P(WL(x)))       # composition: LUT ∘ P ∘ W/L
+u = uint8(WL(x))                  # astype(uint8) truncates; 127.5 becomes 127
+final(x) = LUT(P_inv(u))          # composition: LUT ∘ P_inv ∘ uint8 ∘ W/L
 ```
 
-where `P` is **MONOCHROME1 polarity** — the identity for MONOCHROME2 and
-`255 - u` for MONOCHROME1. `WL(x)` is today's linear clamp+normalize from the
-current window
-center/width, and `LUT(·)` is the 256-entry table from the active `LookUpTable`.
+`WL(x)` is today's linear clamp+normalize from the current window
+center/width, and `P_inv(u)` is the net
+uint8 inversion from two independent booleans:
+
+- `photometric is MONOCHROME1`;
+- pane `image_inverted`.
+
+`P_inv` is their XOR: apply `255 - u` exactly when one — but not both — is true.
+`LUT(·)` is the 256-entry table from the active `LookUpTable`.
 There is no spatial kernel and no convolution anywhere in this path — the two
 stages are independent 1-D functions of intensity, composed by function
 application. Every display surface should make that composition visible rather
@@ -663,35 +710,38 @@ needs to see which part of the curve moved.
   2. **LUT alone** — the active LUT's own transfer function over a unit
      (0–255 → 0–255) input range. Saturated, solid. Color LUTs draw a colored
      gradient bar along the x-axis instead of a line.
-  3. **Composed result** — `LUT(P(WL(x)))` over the histogram's real x-range:
+  3. **Composed result** — `LUT(P_inv(u))` over the histogram's real x-range:
      the curve the viewport actually applies. Bold, topmost, and the one that
      updates on W/L drags. **This must be polarity-aware *and* invert-aware**,
      or the overlay misrepresents inverted images. Read **two** pieces of state
      when sampling the composed trace: the dataset's `photometric_interpretation`
-     (`P`) *and* the pane's user-invert flag (`image_inverted`, from
-     `ViewStateManager.series_defaults`), XORed — the flag inverts `u` to
-     `255 - u` at the same stage as `P`, so:
-     - MONOCHROME2, no user invert: `LUT(WL(x))`.
-     - MONOCHROME2, user-inverted: `LUT(255 - WL(x))`.
-     - MONOCHROME1, no user invert: `LUT(255 - WL(x))`.
+     *and* the pane's user-invert flag (`image_inverted`, from
+     `ViewStateManager.series_defaults`), XORed. Let `u` be `WL(x)` after
+     `astype(np.uint8)` — at window center the float ramp is 127.5, so `u` is
+     127 and `255 - u` is 128, not 127.5. Apply `255 - u` exactly when one of
+     the two flags is true:
+     - MONOCHROME2, no user invert: `LUT(u)`.
+     - MONOCHROME2, user-inverted: `LUT(255 - u)`.
+     - MONOCHROME1, no user invert: `LUT(255 - u)`.
      - MONOCHROME1 **and** user-inverted: the two inversions cancel
-       (`255 - (255 - u) == u`), so the trace is `LUT(WL(x))` again — do **not**
-       draw the inverted form here either. A 3c that only accounts for `P`
-       draws the wrong curve in two of the four cases.
+       (`255 - (255 - u) == u`), so the trace is `LUT(u)` again — do **not**
+       draw the inverted form here either. A 3c that only accounts for
+       photometric polarity draws the wrong curve in two of these combinations.
   - X-axis = pixel/stored value (or HU if rescaled), Y-axis = output intensity
-    (0–255). Linear LUT **and MONOCHROME2** ⇒ the composed curve coincides with
-    the W/L ramp, so draw a single line rather than two overlapping ones. For
-    MONOCHROME1 the ramp and composed curve legitimately differ even with a
-    Linear LUT (the composed one is the inverted ramp), so draw both and let the
-    polarity do the explaining.
+    (0–255). Draw **one** line for the W/L ramp and composed result only when
+    the net inversion is the identity — MONOCHROME2 with `image_inverted` off,
+    or MONOCHROME1 with `image_inverted` on — **and** the LUT is linear.
+    Whenever the net inversion is active, draw the ramp and composed curve
+    separately, even with a Linear LUT; label the overlay with the inversion
+    state that produced it.
   - A legend labels the three curves, and the active LUT name/source appears
     alongside it so the overlay is self-describing.
 - [ ] Update the overlay when W/L or LUT changes (W/L drag re-samples the
   composed curve; LUT or gamma change re-samples the LUT and composed curves).
 - [ ] The editor (3b) shows the same three-curve arrangement: the edited curve
-  is the **LUT (post-polarity)** curve, with the polarity-aware composed result
-  drawn behind it as a live preview against the current W/L, so editing stays in
-  LUT space while the preview remains in display space. The preview must go
+  is the **LUT (post-polarity, post-user-invert)** curve, with the net-inversion
+  composed result drawn behind it as a live preview against the current W/L, so
+  editing stays in LUT space while the preview remains in display space. The preview must go
   through the same `apply_lut_to_uint8()` call the viewport uses — **not**
   `apply_lut()` — so it cannot diverge from what the pane shows.
 - [ ] Allow interactive W/L adjustment by dragging the composed curve's
@@ -785,15 +835,17 @@ needs to see which part of the curve moved.
   simplification (`epsilon = 0.02`, endpoints pinned) is deterministic and
   idempotent.
 - [ ] **Unit — composition** (new, `tests/core/test_lut_transfer.py`): the
-  composed curve satisfies `composed(x) == LUT(P(WL(x)))` — with `P` the
-  MONOCHROME1 inversion or the identity — for both a linear and a non-linear
-  LUT, and a linear LUT's composed curve equals the polarity-corrected ramp
-  exactly (the plain ramp for MONOCHROME2, the inverted ramp for MONOCHROME1);
+  composed curve satisfies `composed(x) == LUT(P_inv(u))` with `u = uint8(WL(x))` — with `P_inv`
+  the XOR of MONOCHROME1 inversion and `image_inverted` — for both a linear and
+  a non-linear LUT, across all four photometric/user-invert combinations; a
+  linear LUT's composed curve equals the net-inversion-corrected ramp exactly
+  (the plain ramp when the net inversion is the identity, the inverted ramp
+  when it is active);
   `composed` is monotonically **non-decreasing only for an increasing LUT** —
   the Inverse LUT is monotone *non-increasing*, so assert the direction from the
   LUT's own monotonicity rather than assuming "monotone" means "increasing";
-  composition is order-sensitive (asserting it is LUT-after-W/L, never
-  W/L-after-LUT).
+  composition is order-sensitive (assert LUT after `P_inv` after the uint8
+  cast of W/L, never W/L after the LUT).
 - [ ] **Regression — display path**: existing slice-display, MPR, projection, and
   export tests stay green with a Linear LUT selected
   (`tests/core/test_mpr_photometric_interpretation.py`,
@@ -818,30 +870,32 @@ needs to see which part of the curve moved.
   This guards the shared-accessor split in 2b, whose failure mode is silent.
 - [ ] **Regression — user-invert composition**: with `image_inverted` set, the
   composed transfer function the overlay draws equals
-  `LUT(P_inv(WL(x)))` where `P_inv` is the XOR of MONOCHROME1-inversion and the
+  `LUT(P_inv(u))` with `u = uint8(WL(x))`, where `P_inv` is the XOR of MONOCHROME1-inversion and the
   user flag, covering all four combinations (MONOCHROME2/1 × invert on/off). In
-  particular assert the double-inverted case collapses back to `LUT(WL(x))`, and
+  particular assert the double-inverted case collapses back to `LUT(u)`, and
   that the editor preview and the viewport agree under each combination.
 - [ ] **Regression — LUT reaches every inventory path**: each of the five rows
   in the 1a inventory produces output changed by a non-linear LUT, on both its
   windowed and (where reachable) its normalize-fallback branch. Assert
   row-by-row so a path cannot be silently skipped.
-- [ ] **Regression — no-windowing branch**: a dataset with no window metadata
-  (so `resolve_window_level_and_rescale()` returns `None` center/width) still
-  applies the active LUT after the normalize fallback, for **all four rows that
-  have the branch** — row 1 `render_grayscale_image`, row 2
-  `create_slice_projection_pil_image`, row 3 the `export_rendering.py`
-  rasterization path, and **row 5 `MprThumbnailWidget`**. The pixel-invariance
-  test asserts a non-linear LUT changes the output there too, not only on the
-  windowed path. Row 5 is the one most likely to be forgotten — without it the
-  navigator stops previewing its pane. Row 3 matters because "user sees what
-  they exported" must hold for un-windowed datasets too.
+- [ ] **Regression — no-windowing branch**: pass explicit `None` center and
+  width into each inventory row that has the fallback — row 1
+  `render_grayscale_image` called directly (not through `dataset_to_image`,
+  which resolves tags first and will derive a window from the pixels), row 2
+  `create_slice_projection_pil_image`, row 3 `create_projection_for_export`,
+  and row 5 `MprThumbnailWidget` with `None` width. Do not use a tag-less
+  dataset as the trigger: `get_window_level_from_dataset()` derives center and
+  width from the pixels, so that test never enters the fallback. Assert a
+  non-linear LUT still changes the output on each of those calls. Row 5 is
+  the one most likely to be forgotten — without it the navigator stops
+  previewing its pane. Row 3 matters because "user sees what they exported"
+  must hold when the export has no current window.
 - [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
   freehand draw → simplified control points; interpolation switch; undo/redo;
   gamma slider re-samples; a LUT loaded into the selector keeps its name/source
   and reopens in the editor; the three-curve overlay renders W/L, LUT, and
-  composed result; for a Linear LUT the W/L ramp and the composed result are
-  drawn as **one** line, while the LUT-alone trace stays on its own 0–255 axis
+  composed result under all four MONOCHROME1/user-invert combinations; for a Linear LUT the W/L ramp and the composed result are
+  drawn as **one** line only when the net inversion is the identity, while the LUT-alone trace stays on its own 0–255 axis
   (a Linear LUT is the identity there, which is *not* the W/L ramp — on stored
   values `[0, 400, 500, 600, 1000]` with center 500 / width 200 the ramp is
   `[0, 0, 127.5, 255, 255]` as floats before the cast — `apply_window_level`
@@ -858,8 +912,9 @@ needs to see which part of the curve moved.
 - [ ] **Contract docstrings** on the new/changed public functions —
   `apply_lut()`, `LookUpTable.__post_init__`/`to_dict`/`from_dict`, the
   interpolation and RDP helpers, and `apply_lut_to_uint8()` —
-  stating the composition order (`LUT ∘ P ∘ W/L`, where `P` is MONOCHROME1
-  polarity, applied after window/level, not a convolution), the `lut=None`
+  stating the composition order (`LUT ∘ P_inv ∘ W/L`, where `P_inv` is the XOR of
+  MONOCHROME1 polarity and the user-invert flag, applied to the uint8 from truncating `astype`
+  after window/level, not a convolution), the `lut=None`
   equivalence guarantee, output dtype/shape for grayscale vs color, the
   round-to-nearest `[0, 1] -> [0, 255]` scale, and the accepted parameter
   ranges — **`gamma` in [0.1, 5.0] (`None` when not the gamma curve),
@@ -876,8 +931,11 @@ needs to see which part of the curve moved.
   **last, on the finalized 8-bit array**" (per PS3.3 C.11.2 and C.7.6.3.1.2's
   "after any VOI gray scale transformations"), and `export_rendering.py:370`
   carries a matching "Polarity last, on the finalized uint8 array" comment.
+  The same claim is in `slice_display_pixels.py:59-60` ("MONOCHROME1 polarity
+  is applied last, to the finalized 8-bit array") and `mpr_view_math.py:96-98`
+  (MONOCHROME1 inverts "the finalized 8-bit array").
   With a LUT applied **after** polarity (2a), polarity is no longer last, so
-  both must be rewritten to state the new order and to note that the DICOM
+  those comments must be rewritten to state the new order and to note that the DICOM
   standard's "after any VOI gray scale transformations" is satisfied because
   the LUT is a viewer-side display transform, not a DICOM VOI transformation.
   Do not silently leave a comment that now contradicts the code.
@@ -914,19 +972,18 @@ needs to see which part of the curve moved.
 | `src/core/lut_engine.py` | **New** — LUT application logic + `LookUpTable` model/validation |
 | `src/core/lut_curve.py` | **New** — control-point storage, interpolation, RDP simplification, and 256-entry sampling |
 | `src/core/lut_catalog.py` | **New** — built-in LUT registry (shares `fusion_processor` colormap lookup) |
-| `src/core/dicom_window_level.py` | **Signature unchanged** (no `lut`); the LUT is applied after polarity via `apply_lut_to_uint8` |
-| `src/core/dicom_processor.py` | Pass LUT through processing |
-| `src/core/dicom_image_render.py` | Pass active LUT at the direct `apply_window_level` call |
-| `src/core/slice_display_pixels.py` | Pass active LUT into AIP/MIP/MinIP projection rendering |
+| `src/core/dicom_window_level.py` | **Signature unchanged** (no `lut`); the LUT is applied after net inversion via `apply_lut_to_uint8` |
+| `src/core/dicom_processor.py` | No display-path LUT change; preserve the existing `apply_window_level` delegation because the active LUT is supplied downstream and applied after net inversion |
+| `src/core/dicom_image_render.py` | Thread the active LUT into the image builder and call `apply_lut_to_uint8` after net inversion; do **not** pass it to `apply_window_level` |
+| `src/core/slice_display_pixels.py` | Thread the active LUT into the AIP/MIP/MinIP builder and call `apply_lut_to_uint8` after net inversion; do **not** pass it to `apply_window_level` |
 | `src/core/mpr_builder.py` | **Stays LUT-free** — cached `MprResult` slices remain raw stored values |
 | `src/core/mpr_navigator_thumbnail.py` | Getter stays in measurement space; apply the active LUT only in the thumbnail/display builder |
-| `src/gui/mpr_thumbnail_widget.py` | Apply active LUT in the thumbnail's internal render; pass a bytesPerLine matching the buffer |
-| `src/gui/image_viewer_view.py` | Pass a bytesPerLine matching the buffer for color-LUT output |
-| `src/gui/slice_display_manager.py` | Use active LUT in display path |
+| `src/gui/mpr_thumbnail_widget.py` | Apply net inversion (MONOCHROME1 XOR `image_inverted`) to the uint8, then the active LUT; branch grayscale (`mode="L"`) versus color (`mode="RGB"`) image output; pass a bytesPerLine matching the buffer |
+| `src/gui/image_viewer_view.py` | Pass a bytesPerLine matching the buffer for color-LUT output; move grayscale user-invert before `apply_lut_to_uint8`; keep non-LUT RGB inversion; add a narrow, state-preserving display-final marker so `set_image` never calls `_apply_inversion` twice |
+| `src/gui/slice_display_manager.py` | Thread the active LUT from pane state into row 1 and call `apply_lut_to_uint8` after net inversion; do **not** pass it to `apply_window_level` |
 | `src/gui/view_state_manager.py` | Store active LUT per series in `series_defaults` |
 | `src/core/view_state_handlers.py` | Event glue only — fan LUT changes out to status text/reset |
-| `src/core/view_state_inversion.py` | Unchanged — it only reports the invert *flag*; the pixels are inverted in `image_viewer_view` |
-| `src/gui/image_viewer_view.py` | Move user-invert to the 2-D grayscale stage, before `apply_lut_to_uint8`; add the color branch for a color LUT |
+| `src/core/view_state_inversion.py` | Unchanged — it only reports the invert flag. Pixel inversion moves to the grayscale stage of each inventory row, before the LUT |
 | `src/gui/main_window_toolbar_builder.py` | LUT dropdown |
 | `src/gui/main_window_menu_builder.py` | View → Look-Up Table submenu |
 | `src/gui/image_viewer_context_menu.py` | LUT submenu |
@@ -934,17 +991,18 @@ needs to see which part of the curve moved.
 | `src/gui/dialogs/histogram_dialog.py` | Host the overlay; no duplicate painting |
 | `src/gui/widgets/lut_transfer_function_widget.py` | **New** — reusable W/L + LUT + composed curve canvas (histogram overlay, dropdown swatches, editor preview) |
 | `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve editor (grayscale curves) |
-| `src/core/mpr_view_math.py` | Route `array_to_pil` through the shared W/L → polarity → LUT order |
+| `src/core/mpr_view_math.py` | Route `array_to_pil` through the shared W/L → polarity → user-invert → LUT order; call `apply_lut_to_uint8` after both inversions; branch grayscale/RGB PIL output and return the pane's final image |
+| `src/gui/mpr_controller.py` | For grayscale LUT/MPR images, hand row 4 output to `set_image` through the new display-final path so the pane does not apply `_apply_inversion` a second time |
 | `src/gui/overlay_text_builder.py` | Active LUT label |
 | `src/core/photometric_polarity.py` | Update the stale "polarity last" module docstring for the new order |
-| `src/gui/export_rendering.py` | Apply LUT on PNG/JPG export (both the windowed and normalize-fallback branches) |
+| `src/gui/export_rendering.py` | Thread the active LUT into `create_projection_for_export` (`:279`) and call `apply_lut_to_uint8` after net inversion on both branches; do **not** pass it to `apply_window_level`. Single-slice PNG/JPG export stays on row 1 |
 | `src/core/mpr_dicom_export.py` | Keep DICOM export display-only (no baked LUT) |
 | `src/utils/config_manager.py` | Persist `custom_luts.json` |
 | `tests/core/test_lut_engine.py` | **New** |
 | `tests/core/test_lut_curve.py` | **New** — control-point interpolation and sampling |
-| `tests/core/test_lut_transfer.py` | **New** — `composed(x) == LUT(WL(x))` composition tests |
+| `tests/core/test_lut_transfer.py` | **New** — `composed(x) == LUT(P_inv(u))` with `u = uint8(WL(x))`, for all photometric/user-invert combinations |
 | `tests/gui/test_lut_curve_editor.py` | **New** — breakpoint editing, freehand, and loaded-LUT display (Phase 3b) |
 | `tests/core/test_mpr_roi_measurement_space.py` | **New** — MPR ROI statistics stay in measurement space (no W/L, polarity, or LUT) |
-| `tests/gui/test_lut_transfer_overlay.py` | **New** — three-curve overlay rendering and Linear collapse |
+| `tests/gui/test_lut_transfer_overlay.py` | **New** — three-curve rendering under all net-inversion states and Linear-collapse behavior |
 | `tests/core/test_lut_persistence.py` | **New** — `to_dict`/`from_dict` round-trip and fallback (Phase 4a) |
 | `user-docs/` (display + LUT pages) | User documentation for the selector, editor, and overlay |
