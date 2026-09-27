@@ -27,7 +27,7 @@
     "src/gui/qa_app_facade.py": 1217,
     "src/gui/roi_coordinator.py": 1138,
     "src/gui/series_navigator.py": 1145,
-    "src/gui/slice_display_manager.py": 1626,
+    "src/gui/slice_display_manager.py": 1625,
     "src/gui/view_state_manager.py": 1204,
     "src/gui/volume_viewer_widget.py": 1650,
     "src/qa/pylinac_nuclear.py": 767,

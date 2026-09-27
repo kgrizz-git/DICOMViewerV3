@@ -40,6 +40,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
+from core.display_normalize import normalize_to_uint8
 from core.lut_display import apply_user_invert_and_lut, rgb_preview_image
 from core.lut_engine import LookUpTable
 from core.photometric_polarity import apply_monochrome1_polarity
@@ -154,12 +155,7 @@ class MprThumbnailWidget(QWidget):
             lo = window_center - window_width / 2.0
             arr = np.clip((arr - lo) / window_width * 255.0, 0.0, 255.0)
         else:
-            mn, mx = arr.min(), arr.max()
-            span = mx - mn
-            if span > 0:
-                arr = (arr - mn) / span * 255.0
-            else:
-                arr = np.zeros_like(arr)
+            arr = normalize_to_uint8(arr)
 
         uint8_arr = apply_monochrome1_polarity(
             arr.astype(np.uint8), photometric_interpretation

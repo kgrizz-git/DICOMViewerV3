@@ -686,14 +686,13 @@ class SliceDisplayManager:
             window_center, window_width, use_rescaled_values, rescale_slope, rescale_intercept,
             **self._display_lut,
         )
-        from_projection = image is not None
         no_pixel_placeholder = False
         if image is None:
             image, no_pixel_placeholder = self._dataset_to_image_or_placeholder(
                 dataset, window_center, window_width, use_rescaled_values, **self._display_lut
             )
         color, _photometric = is_color_image(dataset)
-        self._display_final = (from_projection or not color) and not no_pixel_placeholder
+        self._display_final = (not color) and not no_pixel_placeholder
         image = self._maybe_apply_fusion(
             image,
             no_pixel_placeholder,

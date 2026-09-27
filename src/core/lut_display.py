@@ -41,8 +41,12 @@ def apply_user_invert_and_lut(
     Call ``apply_monochrome1_polarity`` first and keep that call at the display
     site. Both inversions are ``255 - array`` on uint8, so they cancel when
     both flags are set. The LUT runs after that and may expand to RGB.
+    A color array (``ndim != 2``) is returned unchanged: it is not a grayscale
+    LUT input, and the viewer inverts that PIL image afterwards.
     """
-    if image_inverted and polarized_uint8.ndim == 2:
+    if polarized_uint8.ndim != 2:
+        return polarized_uint8
+    if image_inverted:
         polarized_uint8 = 255 - polarized_uint8.astype(np.uint8)
     return apply_lut_to_uint8(polarized_uint8, lut)
 

@@ -241,7 +241,7 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
 
     if not is_projection_image:
         image = _er.process_image_by_photometric_interpretation(image, dataset)
-        image = invert_color_export_image(image, dataset, request.image_inverted)
+    image = invert_color_export_image(image, dataset, request.image_inverted)
 
     effective_scale = _er.effective_scale_for_image(image.width, image.height, export_scale)
     if effective_scale > 1.0:

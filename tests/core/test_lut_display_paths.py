@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from PIL import Image
 from pydicom.dataset import Dataset
 from PySide6.QtGui import QImage
 
 from core.dicom_image_render import render_grayscale_image
 from core.lut_catalog import inverse_lut, linear_lut
+from core.lut_display import apply_user_invert_and_lut
 from core.lut_series_state import focused_pane_lut, get_series_lut
 from core.mpr_view_math import array_to_pil
 from core.slice_display_pixels import create_slice_projection_pil_image
+from gui.export_manager import ExportManager, ExportSliceRequest
 from gui.export_rendering import create_projection_for_export
 from gui.mpr_thumbnail_widget import MprThumbnailWidget
 
@@ -132,6 +135,68 @@ def test_missing_series_lut_is_linear():
     inverted, lut = focused_pane_lut(None)
     assert inverted is False
     assert lut.name == linear_lut().name
+
+
+def test_color_array_skips_user_invert_and_lut():
+    color = np.arange(12, dtype=np.uint8).reshape(2, 2, 3)
+    out = apply_user_invert_and_lut(color, image_inverted=True, lut=inverse_lut())
+    assert np.array_equal(out, color)
+
+
+def test_color_projection_is_not_display_final_and_export_inverts(tmp_path, monkeypatch):
+    """A color projection is RGB. The viewer inverts it later; export must too."""
+    rgb = np.arange(12, dtype=np.uint8).reshape(2, 2, 3)
+    studies, ds = _studies()
+    ds.SamplesPerPixel = 3
+    ds.PhotometricInterpretation = "RGB"
+
+    class _ColorProc(_FakeProc):
+        def average_intensity_projection(self, slices):
+            _ = slices
+            return rgb.astype(np.float32)
+
+    proc = _ColorProc()
+    monkeypatch.setattr(
+        "gui.export_rendering.DICOMProcessor.average_intensity_projection",
+        staticmethod(proc.average_intensity_projection),
+    )
+    plain = create_slice_projection_pil_image(
+        proc, "aip", 3, studies, "st", "sr", 0, None, None, False, None, None,
+        image_inverted=True, lut=inverse_lut(),
+    )
+    untouched = create_slice_projection_pil_image(
+        proc, "aip", 3, studies, "st", "sr", 0, None, None, False, None, None,
+    )
+    exported = create_projection_for_export(
+        ds, studies, "st", "sr", 0, "aip", 3, None, None, False,
+        image_inverted=True, lut=inverse_lut(),
+    )
+    assert plain is not None and untouched is not None and plain.mode == "RGB"
+    assert np.array_equal(np.array(plain), np.array(untouched))
+    assert exported is not None and np.array_equal(np.array(plain), np.array(exported))
+
+    source = Image.fromarray(rgb, mode="RGB")
+    monkeypatch.setattr(
+        "gui.export_manager._er.create_projection_for_export",
+        lambda *_args, **_kwargs: source.copy(),
+    )
+    out = tmp_path / "color-projection.png"
+    ok, _info = ExportManager().export_slice(
+        ExportSliceRequest(
+            ds, str(out), "PNG",
+            include_overlays=False,
+            projection_enabled=True,
+            projection_slice_count=2,
+            studies=studies,
+            study_uid="st",
+            series_uid="sr",
+            slice_index=0,
+            image_inverted=True,
+        )
+    )
+    assert ok is True
+    saved = np.array(Image.open(out))
+    assert np.array_equal(saved, 255 - rgb)
 
 
 @pytest.mark.parametrize("photometric", ["MONOCHROME1", "MONOCHROME2"])

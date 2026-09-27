@@ -602,7 +602,7 @@ class ExportManager:
                 # Note: Fallback single-slice images need photometric processing even if projection was enabled
                 if not is_projection_image:
                     image = _er.process_image_by_photometric_interpretation(image, dataset)
-                    image = invert_color_export_image(image, dataset, image_inverted)
+                image = invert_color_export_image(image, dataset, image_inverted)
 
                 # Apply export scale: use effective scale (may be lower than requested to stay under 8192 px)
                 effective_scale = _er.effective_scale_for_image(
