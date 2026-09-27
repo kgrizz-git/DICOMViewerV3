@@ -361,7 +361,13 @@ for the shared-LUT design.
 - [ ] Per-**pane** state (MPR subwindows) is separate: it lives in
   `app.subwindow_data` / `app.subwindow_managers` (see
   `src/core/mpr_navigator_thumbnail.py:57-61`), so "one LUT per pane" is stored
-  there, not on the per-series dict. See 2b.
+  there, not on a process-wide series dict. Each pane already has its own
+  `ViewStateManager` (`subwindow_manager_factory.py:82`). That manager's
+  `series_defaults['image_inverted']` is the persisted invert flag for the
+  pane, and the pane viewer's `image_inverted` is the live flag `set_image`
+  applies. There is no extra pane override beside that manager. The overlay
+  must read the active pane's viewer flag, and must not read
+  `app.view_state_manager` when a different subwindow is active. See 2b.
 - [ ] **`apply_window_level()` keeps its existing signature and gains NO `lut`
   parameter.** It is called at `dicom_image_render.py:204`, *before* the polarity
   call at `:218`, so a `lut` here would apply the LUT before polarity and invert
@@ -717,8 +723,11 @@ needs to see which part of the curve moved.
      updates on W/L drags. **This must be polarity-aware *and* invert-aware**,
      or the overlay misrepresents inverted images. Read **two** pieces of state
      when sampling the composed trace: the dataset's `photometric_interpretation`
-     *and* the pane's user-invert flag (`image_inverted`, from
-     `ViewStateManager.series_defaults`), XORed. Let `u` be `WL(x)` after
+     *and* the active pane's live `image_viewer.image_inverted` (the flag
+     `set_image` applies). Its persisted copy is that pane's own
+     `ViewStateManager.series_defaults['image_inverted']`
+     (`subwindow_managers[idx]`), not `app.view_state_manager` when another
+     subwindow is active. XOR those two inputs. Let `u` be `WL(x)` after
      `astype(np.uint8)` — at window center the float ramp is 127.5, so `u` is
      127 and `255 - u` is 128, not 127.5. Apply `255 - u` exactly when one of
      the two flags is true:
@@ -857,13 +866,18 @@ needs to see which part of the curve moved.
   `render_grayscale_image()` and `create_slice_projection_pil_image()` under a
   color LUT, asserting polarity is applied before LUT expansion and the result is
   never double-inverted (`(H, W, 3)` output, not `(H, W)`).
-- [ ] **Regression — QImage stride consistency**: render a color LUT at image widths
-  that are *not* multiples of 4 (e.g. 63, 65, 101) through every QImage consumer
-  and assert (a) the pixels round-trip to the expected `(H, W, 3)` array with no
-  row skew, and (b) the `bytesPerLine` actually passed equals the stride the
-  source buffer was packed with. Do **not** assert that the stride is
-  4-byte-padded — QImage honors an explicit unaligned stride correctly, so
-  padding is an implementation choice, not an invariant. Use odd widths so a
+- [ ] **Regression — QImage stride consistency**: render a color LUT through every
+  QImage consumer. For consumers that accept a variable image width, use widths
+  that are not multiples of 4 (63, 65, 101). `MprThumbnailWidget` cannot take
+  those widths: it always builds a `THUMBNAIL_SIZE` square (`mpr_thumbnail_widget.py:50`,
+  68). Cover that consumer with its real 68-pixel buffer and `3 * 68` stride.
+  Width 68 is 4-byte aligned (`3 * 68 = 204`), so the thumbnail test checks
+  buffer/stride agreement, not the unaligned-stride case. Assert (a) the pixels
+  round-trip to the expected `(H, W, 3)` array with no row skew, and (b) the
+  `bytesPerLine` actually passed equals the stride the source buffer was packed
+  with. Do **not** assert that the stride is 4-byte-padded — QImage honors an
+  explicit unaligned stride correctly, so padding is an implementation choice,
+  not an invariant. Use the odd widths on the variable-size consumers so a
   hardcoded or mismatched stride cannot hide.
 - [ ] **Regression — measurement space is never display-transformed**: assert that
   the array returned for MPR ROI statistics equals the rescaled stored values
