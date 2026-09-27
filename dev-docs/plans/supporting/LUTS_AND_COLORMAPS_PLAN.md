@@ -1,8 +1,8 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** Not started  
+**Status:** In progress (Phase 1 engine landed on `feat/lut-display`; display wiring and UI remain)  
 **Priority:** P1  
-**Last updated:** 2026-09-26  
+**Last updated:** 2026-09-27  
 **TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
@@ -37,7 +37,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 
 ### 1a. LUT module
 
-- [ ] Create `src/core/lut_engine.py`:
+- [x] Create `src/core/lut_engine.py`:
   ```python
   LutType = Literal["grayscale_ramp", "colormap"]
   Interpolation = Literal["linear", "monotone_cubic", "catmull_rom"]
@@ -213,26 +213,26 @@ for the shared-LUT design.
 
 ### 1b. Built-in grayscale transfer functions
 
-- [ ] **Linear** (current behavior, default).
-- [ ] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` on normalized `x` in [0, 1],
+- [x] **Linear** (current behavior, default).
+- [x] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` on normalized `x` in [0, 1],
   `center = 0.5` — adjustable steepness `k` (bound to `LookUpTable.sigmoid_k`).
-- [ ] **Logarithmic:** `log(1 + x) / log(2)` on [0, 1]. The explicit divisor is
+- [x] **Logarithmic:** `log(1 + x) / log(2)` on [0, 1]. The explicit divisor is
   required: raw `log(1 + x)` ends at `log(2) ≈ 0.693`, not 1. (Divide-by-max
   happens to be the same divisor here, because the minimum is already 0.)
-- [ ] **Exponential:** `(exp(k * x) - 1) / (exp(k) - 1)` on [0, 1], with `k`
+- [x] **Exponential:** `(exp(k * x) - 1) / (exp(k) - 1)` on [0, 1], with `k`
   bound to a new `LookUpTable.exp_k` field (default 1.0, range 0.1–5.0) — like
   `gamma` and `sigmoid_k`, a transfer-function parameter needs a model field to
   be adjustable from the UI. **The affine form is required, not
   `exp(k*x)/exp(k)`:** dividing by the maximum pins only `x = 1` and leaves
   `x = 0` at `exp(-k)` (0.905 at k=0.1, 0.368 at k=1, 0.0067 at k=5), so the
   curve would never reach black.
-- [ ] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
+- [x] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
   `LookUpTable.gamma`).
-- [ ] **Inverse:** `1 - x` on normalized input. (Written normalized, **not** `255 - x`:
+- [x] **Inverse:** `1 - x` on normalized input. (Written normalized, **not** `255 - x`:
   the engine samples at 256 points on [0, 1] and scales to [0, 255], so a
   `255 - x` formula here would double-scale and produce the wrong range.)
-- [ ] **Sigmoid is the one exception to full-range coverage** — see below.
-- [ ] **The `[0, 1] → [0, 255]` scale uses round-to-nearest, never truncation.**
+- [x] **Sigmoid is the one exception to full-range coverage** — see below.
+- [x] **The `[0, 1] → [0, 255]` scale uses round-to-nearest, never truncation.**
   `(1 - i/255) * 255` carries float error of about ±2.84e-14, so
   `.astype(np.uint8)` (which truncates) misses **50 of 256** codes by one level
   (byte 43 → 211 instead of 212, byte 59 → 195 instead of 196), while
@@ -243,10 +243,10 @@ for the shared-LUT design.
   asserting the inverse LUT is exactly `lut[i] == 255 - i` for all 256 codes.
   Note this is distinct from MONOCHROME1 polarity, which legitimately does
   `255 - array` on an already-uint8 array at a later stage.
-- [ ] Every formula above is written on **normalized [0, 1] input**; `transfer_fn`
+- [x] Every formula above is written on **normalized [0, 1] input**; `transfer_fn`
   is only ever called with normalized values, and `lut_engine` owns the single
   scale to [0, 255]. Do not mix byte-range and normalized forms in one function.
-- [ ] **Sigmoid does not map [0, 1] onto [0, 1] and must not claim to.** With
+- [x] **Sigmoid does not map [0, 1] onto [0, 1] and must not claim to.** With
   `center = 0.5`, `y(0.5) = 0.5` for every `k`, but the endpoints are
   `0.378 / 0.622` at `k = 1` and `0.076 / 0.924` at `k = 5` — a sigmoid never
   reaches pure black or pure white. **Use the endpoint renormalization**
@@ -262,7 +262,7 @@ for the shared-LUT design.
 
 ### 1c. Built-in colormaps
 
-- [ ] Leverage matplotlib colormaps (already a dependency):
+- [x] Leverage matplotlib colormaps (already a dependency):
   - `hot`, `cool`, `jet`, `rainbow`, `bone`, `gray`, `viridis`, `magma`,
     `inferno`, `plasma`, `turbo` — **lowercase registry keys only.** Every
     title-case form raises `ValueError` in the installed matplotlib 3.11.1
@@ -278,10 +278,10 @@ for the shared-LUT design.
     `cmap(..., bytes=True)` exactly (max abs difference 0) — so the
     `* 255).astype(np.uint8)` idiom is fine *for colormaps*, unlike the
     inverse transfer function in 1b.
-- [ ] Store as `LookUpTable` instances in a registry (`src/core/lut_catalog.py`).
-- [ ] Share the colormap cache/lookup already present in `src/core/fusion_processor.py`
+- [x] Store as `LookUpTable` instances in a registry (`src/core/lut_catalog.py`).
+- [x] Share the colormap cache/lookup already present in `src/core/fusion_processor.py`
   rather than adding a second matplotlib colormap cache and a second import path.
-- [ ] Built-in colormaps stay as pre-sampled `(256, 3)` arrays for performance;
+- [x] Built-in colormaps stay as pre-sampled `(256, 3)` arrays for performance;
   the control-point representation is the **editable** form for user-defined
   curves (Phase 3b) and the **persisted** form once Phase 4a lands — sampling
   converts between the two.
@@ -289,7 +289,7 @@ for the shared-LUT design.
 
 ### 1d. Tests
 
-- [ ] `tests/core/test_lut_engine.py`:
+- [x] `tests/core/test_lut_engine.py`:
   - Linear LUT matches current `apply_window_level` output.
   - `apply_lut(..., lut=None)` and `apply_lut_to_uint8(arr, None)` are
     byte-identical to today.
@@ -305,7 +305,7 @@ for the shared-LUT design.
     (`lut[0] == 0`, `lut[255] == 255`); a divide-by-max exponential fails this.
   - Color LUT output is (H,W,3).
   - Edge cases: all-zero image, single-value image.
-- [ ] `tests/core/test_lut_curve.py`:
+- [x] `tests/core/test_lut_curve.py`:
   - Piecewise-linear control points sample exactly between breakpoints.
   - Every interpolation mode passes through each control point, evaluated as a
     **univariate** spline in `x` (not parametric).
@@ -831,11 +831,11 @@ needs to see which part of the curve moved.
 
 ## Test plan (all phases)
 
-- [ ] **Unit — engine** (`tests/core/test_lut_engine.py`): linear LUT byte-identical
+- [x] **Unit — engine** (`tests/core/test_lut_engine.py`): linear LUT byte-identical
   to `apply_window_level`; `lut=None` unchanged behavior; sigmoid steepness → step;
   `gamma=1.0` == linear; inverse flips; color LUT `(H, W, 3)`; all-zero and
   single-value images.
-- [ ] **Unit — curve model** (`tests/core/test_lut_curve.py`): piecewise-linear
+- [x] **Unit — curve model** (`tests/core/test_lut_curve.py`): piecewise-linear
   sampling exact between breakpoints; every interpolation mode passes through
   each control point as a **univariate** spline in `x`; Fritsch–Carlson
   introduces **no new extrema** (stays within the control-point y-range) and

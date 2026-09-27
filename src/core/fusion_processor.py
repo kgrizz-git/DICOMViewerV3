@@ -28,6 +28,41 @@ from utils.debug_flags import DEBUG_OFFSET
 _COLORMAP_CACHE: dict[str, Any] = {}
 
 
+def cached_matplotlib_colormap(name: str) -> Any:
+    """Return a matplotlib colormap, creating it once and storing it in ``_COLORMAP_CACHE``.
+
+    This is the only ``matplotlib.colormaps.get_cmap`` call in the app. Unknown
+    names raise ``ValueError`` (matplotlib's own error). Fusion overlays catch
+    that and fall back to ``hot``; display LUT lookup does not.
+    """
+    cached = _COLORMAP_CACHE.get(name)
+    if cached is not None:
+        return cached
+    import matplotlib  # deferred import (P1.7)
+
+    cmap = matplotlib.colormaps.get_cmap(name)
+    _COLORMAP_CACHE[name] = cmap
+    return cmap
+
+
+def _colormap_or_hot(name: str) -> Any:
+    """Return ``name`` from the shared cache, or ``hot`` if matplotlib rejects it.
+
+    The fallback is cached under ``name`` so a bad fusion request warns once.
+    That alias is not used by display LUT lookup, which rejects unknown names
+    before consulting the cache.
+    """
+    try:
+        return cached_matplotlib_colormap(name)
+    except (ValueError, KeyError):
+        print(  # privacy-check: allow[unsafe-print-argument] review=kgrizz-git
+            f"Warning: Colormap '{name}' not found, using 'hot'"
+        )
+        hot = cached_matplotlib_colormap("hot")
+        _COLORMAP_CACHE[name] = hot
+        return hot
+
+
 class FusionProcessor:
     """
     Performs image blending and colormap operations for fusion display.
@@ -110,15 +145,7 @@ class FusionProcessor:
         Returns:
             RGB array (0-1 range, float32, shape [..., 3])
         """
-        cmap = _COLORMAP_CACHE.get(colormap_name)
-        if cmap is None:
-            import matplotlib  # deferred import (P1.7)
-            try:
-                cmap = matplotlib.colormaps.get_cmap(colormap_name)
-            except (ValueError, KeyError):
-                print(f"Warning: Colormap '{colormap_name}' not found, using 'hot'")
-                cmap = matplotlib.colormaps.get_cmap('hot')
-            _COLORMAP_CACHE[colormap_name] = cmap
+        cmap = _colormap_or_hot(colormap_name)
 
         # cmap() returns float64 RGBA; cast to float32 RGB immediately (P1.3)
         colored = cmap(array).astype(np.float32)[..., :3]
