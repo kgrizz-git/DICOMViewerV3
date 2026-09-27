@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-24
+**Last updated:** 2026-09-27
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-27
+
+- **GitHub Actions patch pins (release, CodeQL, Grype):** `build.yml` pins `softprops/action-gh-release` to v3.0.3. `ci.yml` pins `github/codeql-action` to v4.38.2 and `anchore/scan-action` to v7.4.2. SonarQube and TruffleHog pins stay put; Dependabot PR #131 grouped those scanner bumps with these and failed the secret scan on an unverified SonarCloud result.
 
 ## 2026-09-24
 
