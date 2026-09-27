@@ -7,6 +7,7 @@ This file records development and repository-maintenance history that is useful 
 ## 2026-09-27
 
 - **GitHub Actions patch pins (release, CodeQL, Grype):** `build.yml` pins `softprops/action-gh-release` to v3.0.3. `ci.yml` pins `github/codeql-action` to v4.38.2 and `anchore/scan-action` to v7.4.2. SonarQube and TruffleHog pins stay put; Dependabot PR #131 grouped those scanner bumps with these and failed the secret scan on an unverified SonarCloud result.
+- **Scanner pins:** `ci.yml` pins `sonarqube-scan-action` to v8.2.2 and the harness allowlist matches that commit. `privacy-gates.yml` pins TruffleHog to v3.97.9 in both the action SHA and the `version` input. The v8.2.1 pin from #131 is not used: its commit message put a compare URL next to the word sonar, which is what the secret scan flagged.
 
 ## 2026-09-24
 
