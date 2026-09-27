@@ -90,6 +90,7 @@ class HistogramDialog(QDialog):
         get_projection_pixel_array: HistogramProjectionPixelsFn | None = None,
         get_histogram_use_projection_pixels: HistogramBoolFn | None = None,
         set_histogram_use_projection_pixels: HistogramVoidBoolFn | None = None,
+        get_lut_overlay: Callable[[], tuple[Any, Any, bool]] | None = None,
     ):
         """
         Initialize the histogram dialog.
@@ -133,6 +134,7 @@ class HistogramDialog(QDialog):
         self.get_projection_pixel_array = get_projection_pixel_array
         self.get_histogram_use_projection_pixels = get_histogram_use_projection_pixels
         self.set_histogram_use_projection_pixels = set_histogram_use_projection_pixels
+        self.get_lut_overlay = get_lut_overlay
         self.use_log_scale = False
         self.series_global_frequency_max: float | None = None
         self.series_global_x_min: float | None = None
@@ -335,6 +337,7 @@ class HistogramDialog(QDialog):
         self.histogram_widget.set_global_pixel_range(self.series_global_x_min, self.series_global_x_max)
 
         # Update histogram widget with current slice data
+        self._push_lut_overlay()
         self.histogram_widget.set_pixel_array(pixel_array)
 
         # Get window/level values
@@ -360,7 +363,17 @@ class HistogramDialog(QDialog):
             return
         window_center = self.get_window_center()
         window_width = self.get_window_width()
+        self._push_lut_overlay()
         self.histogram_widget.set_window_level(window_center, window_width)
+
+    def _push_lut_overlay(self) -> None:
+        """Give the histogram the pane LUT, photometric interpretation, and user invert."""
+        getter = self.get_lut_overlay
+        if not callable(getter):
+            self.histogram_widget.set_lut_overlay(None, None, False, refresh=False)
+            return
+        lut, photometric, inverted = getter()
+        self.histogram_widget.set_lut_overlay(lut, photometric, bool(inverted), refresh=False)
 
     def _on_log_scale_toggled(self, _checked: bool = False) -> None:
         """Handle log scale toggle.

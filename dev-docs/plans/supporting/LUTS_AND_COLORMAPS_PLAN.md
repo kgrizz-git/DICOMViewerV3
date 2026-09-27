@@ -1,6 +1,6 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** In progress (Phase 2 display wiring landed on `feat/lut-display`; selector and curve editor remain)  
+**Status:** In progress (Phase 3 selector, curve editor, and histogram overlay landed on `feat/lut-display`; composed-curve W/L dragging and Phase 4 remain)  
 **Priority:** P1  
 **Last updated:** 2026-09-27  
 **TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
@@ -636,21 +636,21 @@ for the shared-LUT design.
 
 ### 3a. LUT selector
 
-- [ ] Add a **LUT** dropdown to the toolbar (or to the right-pane controls area):
+- [x] Add a **LUT** dropdown to the toolbar (or to the right-pane controls area):
   - Grouped: **Grayscale** (Linear, Sigmoid, Log, Exp, Gamma, Inverse) | **Color** (Hot, Cool, Jet, …).
   - Icon swatches showing a mini gradient preview for each LUT.
-- [ ] Also accessible from **View → Look-Up Table** submenu and from the image context menu.
-- [ ] Active LUT is persisted per-pane (so different panes can have different
+- [x] Also accessible from **View → Look-Up Table** submenu and from the image context menu.
+- [x] Active LUT is persisted per-pane (so different panes can have different
   LUTs). Because `LookUpTable` is frozen, persisting means storing the LUT (or
   its `custom_luts.json` key) in the pane's state and handing out replacements —
   never mutating a LUT that another pane or the MPR cache may still hold.
-- [ ] The dropdown entry for "Custom…" is present but **disabled/grayed out**
+- [x] The dropdown entry for "Custom…" is present but **disabled/grayed out**
   only during the development window in which the Phase 3a selector exists
   without the Phase 3b curve editor. The release ships a complete Phase 3 (3a
   selector **and** 3b editor together) — see the sequencing note below — so no
   shipped state ever contains a permanently dead entry.
-- [ ] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a LUT immediately selects it and updates the histogram overlay. (Loading a **saved** LUT depends on Phase 4a persistence; until that ships there is nothing to load from disk, so this bullet covers in-session selection only.)
-- [ ] Gamma LUT: show a slider for the gamma parameter (default 1.0) bound to
+- [x] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a LUT immediately selects it and updates the histogram overlay. (Loading a **saved** LUT depends on Phase 4a persistence; until that ships there is nothing to load from disk, so this bullet covers in-session selection only.)
+- [x] Gamma LUT: show a slider for the gamma parameter (default 1.0) bound to
   `LookUpTable.gamma`, so changing it re-samples and re-renders.
 
 > **Sequencing:** the interactive curve editor is **Phase 3b**, not Phase 4 —
@@ -661,13 +661,13 @@ for the shared-LUT design.
 
 ### 3b. Interactive custom curve editor (grayscale curves first)
 
-- [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit **grayscale transfer curves**. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
-- [ ] Gamma / sigmoid / exponential parameter controls live in this dialog as well as
+- [x] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit **grayscale transfer curves**. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
+- [x] Gamma / sigmoid / exponential parameter controls live in this dialog as well as
   the toolbar, bound to `LookUpTable.gamma` / `sigmoid_k` / `exp_k`.
-- [ ] Live preview goes through the same `apply_lut_to_uint8()` call the viewport uses,
+- [x] Live preview goes through the same `apply_lut_to_uint8()` call the viewport uses,
   on the already-windowed **and net-inversion-corrected** array — not `apply_lut()` —
   so the preview cannot diverge from the pane. No separate preview renderer.
-- [ ] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
+- [x] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
   to Phase 4b.** The current `control_points` model is a list of `(x, y)` scalar
   pairs, which describes a grayscale intensity ramp only — it cannot represent
   an RGB color stop, and the persistence schema stores no color data either.
@@ -702,7 +702,7 @@ application. Every display surface should make that composition visible rather
 than showing the LUT alone, because a user who changes W/L under a steep LUT
 needs to see which part of the curve moved.
 
-- [ ] Draw all three curves together. Ownership is split in two, and the plan
+- [x] Draw all three curves together. Ownership is split in two, and the plan
   previously assigned both halves to different places — read this carefully.
   **`src/gui/widgets/lut_transfer_function_widget.py` (new) owns the curve
   *data and geometry*: it samples the W/L ramp, the LUT, and the composed
@@ -747,7 +747,7 @@ needs to see which part of the curve moved.
     state that produced it.
   - A legend labels the three curves, and the active LUT name/source appears
     alongside it so the overlay is self-describing.
-- [ ] Update the overlay when W/L or LUT changes (W/L drag re-samples the
+- [x] Update the overlay when W/L or LUT changes (W/L drag re-samples the
   composed curve; LUT or gamma change re-samples the LUT and composed curves).
 - [ ] The editor (3b) shows the same three-curve arrangement: the edited curve
   is the **LUT (post-polarity, post-user-invert)** curve, with the net-inversion
@@ -757,13 +757,16 @@ needs to see which part of the curve moved.
   `apply_lut()` — so it cannot diverge from what the pane shows.
 - [ ] Allow interactive W/L adjustment by dragging the composed curve's
   endpoints (stretch goal).
-- [ ] The same three-curve widget is reused for the toolbar dropdown swatches
+- [x] The same three-curve widget is reused for the toolbar dropdown swatches
   and the LUT name/source readout (3a) so there is one implementation.
 
 ### 3d. Keyboard shortcut
 
-- [ ] `L` to cycle through LUTs? Or just rely on the toolbar dropdown.
-- [ ] Check for conflicts with existing shortcuts.
+- [x] `L` to cycle through LUTs? Or just rely on the toolbar dropdown.
+  Decision: no **L** binding. The 3D view uses **L** for the patient-left camera,
+  and **Ctrl+Shift+L** opens overlay tag configuration. The toolbar, View menu,
+  and image context menu are the access path.
+- [x] Check for conflicts with existing shortcuts.
 
 ---
 

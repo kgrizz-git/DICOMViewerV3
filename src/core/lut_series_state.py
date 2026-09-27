@@ -23,6 +23,21 @@ from typing import Any
 
 from core.lut_catalog import linear_lut
 from core.lut_engine import LookUpTable
+from core.photometric_polarity import dataset_photometric_interpretation
+
+
+def pane_lut_overlay(view_state: Any, dataset: Any) -> tuple[LookUpTable, str, bool]:
+    """Active LUT, photometric interpretation, and the live user-invert flag.
+
+    The invert flag is the viewer's, which is the value ``set_image`` applies
+    for this pane. It is not another pane's series default.
+    """
+    series_id = getattr(view_state, "current_series_identifier", None)
+    lut = get_series_lut(view_state, series_id)
+    viewer = getattr(view_state, "image_viewer", None)
+    inverted = bool(getattr(viewer, "image_inverted", False))
+    photometric = dataset_photometric_interpretation(dataset) if dataset is not None else ""
+    return lut, photometric, inverted
 
 
 def get_series_lut(view_state: Any, series_identifier: str | None) -> LookUpTable:

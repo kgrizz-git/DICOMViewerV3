@@ -457,6 +457,9 @@ def build_main_toolbar(main_window) -> None:
     )
     _apply_split_toolbutton_layout(wl_btn, text_under_icon=False)
     toolbar.addWidget(wl_btn)
+    from gui.lut_actions import attach_toolbar_lut_button
+
+    main_window.lut_toolbar_button = attach_toolbar_lut_button(toolbar, main_window)
     main_window._wl_toolbar_btn = wl_btn
 
     toolbar.addSeparator()

@@ -6,7 +6,7 @@
     "src/core/fusion_handler.py": 863,
     "src/core/image_resampler.py": 796,
     "src/core/rdsr_irradiation_events.py": 932,
-    "src/core/subwindow_lifecycle_controller.py": 862,
+    "src/core/subwindow_lifecycle_controller.py": 861,
     "src/core/subwindow_signal_wiring.py": 755,
     "src/core/volume_renderer.py": 1117,
     "src/gui/annotation_paste_handler.py": 878,

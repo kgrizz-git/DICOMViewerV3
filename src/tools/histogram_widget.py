@@ -19,7 +19,7 @@ Requirements:
 """
 
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -56,6 +56,10 @@ class HistogramWidget(QWidget):
         self.global_frequency_max: float | None = None
         self.global_x_min: float | None = None
         self.global_x_max: float | None = None
+        self._overlay_lut: Any = None
+        self._overlay_photometric: object = None
+        self._overlay_inverted = False
+        self._transfer_axis: Any = None
 
     # Font size tiers for responsive scaling (min width threshold -> (title_pt, label_pt, tick_pt))
     # label_pt is clamped to ≥ 11 at medium and larger sizes (C12).
@@ -216,6 +220,7 @@ class HistogramWidget(QWidget):
             return
 
         # Clear axes
+        self._clear_transfer_axis()
         self.axes.clear()
 
         # Calculate histogram, optionally using a fixed global x-range
@@ -295,10 +300,72 @@ class HistogramWidget(QWidget):
         else:
             self.axes.set_ylabel("Frequency (Linear Scale)")
 
+        self._paint_lut_overlay()
         self.axes.legend(loc='upper right')
         self.axes.grid(True, alpha=0.3)
 
         # Apply theme colors (dark / light) then font scaling — both call draw_idle internally
         self._apply_theme_colors()
         self.update_font_sizes_for_size(self.size().width(), self.size().height())
+
+    def set_lut_overlay(
+        self,
+        lut: Any,
+        photometric_interpretation: object,
+        image_inverted: bool,
+        refresh: bool = True,
+    ) -> None:
+        """Store the pane LUT inputs. Paths are sampled by the transfer widget at draw time."""
+        self._overlay_lut = lut
+        self._overlay_photometric = photometric_interpretation
+        self._overlay_inverted = image_inverted
+        if refresh:
+            self._update_histogram()
+
+    def _clear_transfer_axis(self) -> None:
+        """Drop the previous output-intensity axis before the histogram axes are cleared."""
+        axis = self._transfer_axis
+        self._transfer_axis = None
+        if axis is not None:
+            axis.remove()
+
+    def _paint_lut_overlay(self) -> None:
+        """Draw ramp, LUT, and composed result from the shared transfer widget."""
+        from gui.widgets.lut_transfer_function_widget import overlay_paths
+
+        x_min, x_max = self.axes.get_xlim()
+        paths = overlay_paths(
+            self._overlay_lut,
+            self.window_center,
+            self.window_width,
+            self._overlay_photometric,
+            self._overlay_inverted,
+            float(x_min),
+            float(x_max),
+        )
+        if paths is None:
+            return
+        twin = self.axes.twinx()
+        self._transfer_axis = twin
+        twin.set_ylim(0, 255)
+        twin.set_ylabel("Output")
+        label = f"{paths.name} ({paths.source})"
+        if paths.collapse:
+            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=label)
+        else:
+            twin.plot(paths.xs, paths.window, color="#888888", linestyle="--", linewidth=1.0, label="W/L ramp")
+            if paths.lut_trace is not None:
+                lut_x = np.linspace(float(paths.xs[0]), float(paths.xs[-1]), len(paths.lut_trace))
+                twin.plot(lut_x, paths.lut_trace, color="#4aa3ff", linewidth=1.5, label=f"LUT {paths.name}")
+            if paths.lut_colors is not None:
+                twin.imshow(
+                    paths.lut_colors.reshape(1, -1, 3),
+                    aspect="auto",
+                    extent=(float(paths.xs[0]), float(paths.xs[-1]), 0, 16),
+                    origin="lower",
+                    interpolation="nearest",
+                )
+            composed_label = f"{label}, inverted" if paths.net_inverted else label
+            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.5, label=composed_label)
+        twin.legend(loc="upper left")
 

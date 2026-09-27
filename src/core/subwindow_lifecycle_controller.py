@@ -30,6 +30,7 @@ from typing import Any
 from pydicom.dataset import Dataset
 from PySide6.QtCore import QPointF, QRectF, QTimer
 
+from core.lut_series_state import pane_lut_overlay
 from core.subwindow_signal_wiring import (
     connect_all_subwindow_context_menu_signals as _wiring_connect_context_menu,
 )
@@ -174,10 +175,7 @@ class SubwindowLifecycleController:
         return self.app.focused_subwindow_index
 
     def get_histogram_callbacks_for_subwindow(self, idx: int) -> dict[str, Any]:
-        """
-        Return a dict of callbacks for the histogram dialog tied to subwindow idx.
-        Used so each histogram always shows the image currently displayed in that subwindow.
-        """
+        """Callbacks for the histogram of subwindow ``idx``."""
         if idx not in self.app.subwindow_managers:
             return {}
         vsm = self.app.subwindow_managers[idx].get('view_state_manager')
@@ -206,6 +204,7 @@ class SubwindowLifecycleController:
             ),
             'get_histogram_use_projection_pixels': self.app.config_manager.get_histogram_use_projection_pixels,
             'set_histogram_use_projection_pixels': self.app.config_manager.set_histogram_use_projection_pixels,
+            'get_lut_overlay': lambda i=idx, view=vsm: pane_lut_overlay(view, self.get_subwindow_dataset(i)),
         }
 
     def _get_histogram_projection_enabled(self, idx: int) -> bool:
