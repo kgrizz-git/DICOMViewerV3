@@ -259,6 +259,7 @@ def build_managers_for_subwindow(
             )
 
     image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+    image_viewer.redisplay_after_inversion = lambda i=idx: app._redisplay_subwindow_slice(i, preserve_view=True)
 
     def on_orientation_changed(_flip_h: bool, _flip_v: bool, _rotation_deg: int, _i=idx) -> None:
         """Persist orientation state whenever the user flips or rotates the image."""

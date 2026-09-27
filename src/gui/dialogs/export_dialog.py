@@ -82,6 +82,8 @@ class ExportDialog(QDialog):
         projection_type: str = "aip",
         projection_slice_count: int = 4,
         subwindow_annotation_managers: list[dict[str, Any]] | None = None,
+        image_inverted: bool = False,
+        lut=None,
         parent=None
     ):
         """
@@ -126,6 +128,8 @@ class ExportDialog(QDialog):
         self.projection_type = projection_type
         self.projection_slice_count = projection_slice_count
         self.subwindow_annotation_managers = subwindow_annotation_managers or []
+        self.image_inverted = bool(image_inverted)
+        self.lut = lut
 
         self.export_format = "PNG"
         self.window_level_option = "current"  # "current" or "dataset"
@@ -692,6 +696,8 @@ class ExportDialog(QDialog):
                     deep_anonymize=deep_anonymize,
                     deep_anonymizer_options=self.anonymizer_options if deep_anonymize else None,
                     deep_anonymized_items=deep_anonymized_items,
+                    image_inverted=self.image_inverted,
+                    lut=self.lut,
                 )
             )
 

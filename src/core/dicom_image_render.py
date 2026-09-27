@@ -17,7 +17,10 @@ Requirements:
     - core.dicom_color (YBR/RGB conversion)
     - core.dicom_window_level (window/level application)
 """
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 from PIL import Image
@@ -28,22 +31,16 @@ from core.dicom_window_level import (
     apply_color_window_level_luminance,
     apply_window_level,
 )
+from core.display_normalize import normalize_to_uint8
+from core.lut_display import apply_user_invert_and_lut, pil_from_display_array
 from core.photometric_polarity import apply_monochrome1_polarity
 from utils.log_sanitizer import sanitized_format_exc
 from utils.privacy.console import print_redacted
 
+if TYPE_CHECKING:
+    from core.lut_engine import LookUpTable
+
 _logger = logging.getLogger(__name__)
-
-
-def normalize_to_uint8(array: np.ndarray) -> np.ndarray:
-    """Normalize an array to 0-255 uint8. Flat arrays (max == min) are zeroed,
-    matching ``normalize_channels_to_uint8``."""
-    processed = array.astype(np.float32)
-    if processed.max() > processed.min():
-        processed = ((processed - processed.min()) / (processed.max() - processed.min()) * 255.0)
-    else:
-        processed = np.zeros_like(processed)
-    return processed.astype(np.uint8)
 
 
 def normalize_channels_to_uint8(array: np.ndarray) -> np.ndarray:
@@ -194,11 +191,13 @@ def render_grayscale_image(
     rescale_intercept: float | None,
     *,
     photometric_interpretation: str | None = None,
+    image_inverted: bool = False,
+    lut: LookUpTable | None = None,
 ) -> Image.Image | None:
-    """Apply window/level (or normalize) to a grayscale pixel array and build a PIL Image.
+    """Window or normalize, then net inversion, then the LUT.
 
-    When *photometric_interpretation* is ``MONOCHROME1``, the final uint8 array is
-    inverted (``255 - arr``) so the core render layer owns the dataset baseline polarity.
+    MONOCHROME1 and ``image_inverted`` both run on the uint8 array before
+    ``lut``. ``lut=None`` leaves those bytes unchanged. A color LUT returns RGB.
     """
     if window_center is not None and window_width is not None:
         processed_array = apply_window_level(
@@ -216,13 +215,14 @@ def render_grayscale_image(
         processed_array = processed_array[0]
 
     processed_array = apply_monochrome1_polarity(processed_array, photometric_interpretation)
+    processed_array = apply_user_invert_and_lut(
+        processed_array,
+        image_inverted=image_inverted,
+        lut=lut,
+    )
 
     try:
-        if len(processed_array.shape) == 2:
-            # Grayscale
-            return Image.fromarray(processed_array, mode='L')
-        # RGB or other (shouldn't happen for grayscale, but handle gracefully)
-        return Image.fromarray(processed_array)
+        return pil_from_display_array(processed_array)
     except Exception:
         _logger.debug("%s", sanitized_format_exc())
         return None

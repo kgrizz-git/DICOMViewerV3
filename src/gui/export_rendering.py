@@ -21,6 +21,8 @@ from pydicom.dataset import Dataset
 
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
+from core.lut_display import apply_user_invert_and_lut, pil_from_display_array
+from core.lut_engine import LookUpTable
 from core.photometric_polarity import (
     apply_monochrome1_polarity,
     dataset_photometric_interpretation,
@@ -286,7 +288,10 @@ def create_projection_for_export(
     projection_slice_count: int,
     window_center: float | None,
     window_width: float | None,
-    use_rescaled_values: bool
+    use_rescaled_values: bool,
+    *,
+    image_inverted: bool = False,
+    lut: LookUpTable | None = None,
 ) -> Image.Image | None:
     """
     Create a projection image for export.
@@ -367,22 +372,14 @@ def create_projection_for_export(
                                  (processed_array.max() - processed_array.min()) * 255.0)
             processed_array = np.clip(processed_array, 0, 255).astype(np.uint8)
 
-        # Polarity last, on the finalized uint8 array, so export matches the on-screen pane.
-        # Series-first PI, matching the on-screen builder, so mixed-PI cannot diverge.
-        processed_array = apply_monochrome1_polarity(processed_array, dataset_photometric_interpretation(series_datasets[0]))
-
-        # Convert to PIL Image
-        if len(processed_array.shape) == 2:
-            # Grayscale
-            image = Image.fromarray(processed_array, mode='L')
-        elif len(processed_array.shape) == 3 and processed_array.shape[2] == 3:
-            # RGB
-            image = Image.fromarray(processed_array, mode='RGB')
-        else:
-            # Fallback
-            image = Image.fromarray(processed_array)
-
-        return image
+        # Series-first PI. MONOCHROME1, then user invert, then the LUT.
+        processed_array = apply_monochrome1_polarity(
+            processed_array, dataset_photometric_interpretation(series_datasets[0])
+        )
+        processed_array = apply_user_invert_and_lut(
+            processed_array, image_inverted=image_inverted, lut=lut
+        )
+        return pil_from_display_array(processed_array)
     except Exception as e:
         print_redacted(f"Error creating projection for export: {e}")
         _logger.debug("%s", sanitized_format_exc())

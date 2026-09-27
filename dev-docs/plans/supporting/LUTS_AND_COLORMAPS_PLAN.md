@@ -1,6 +1,6 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** In progress (Phase 1 engine landed on `feat/lut-display`; display wiring and UI remain)  
+**Status:** In progress (Phase 2 display wiring landed on `feat/lut-display`; selector and curve editor remain)  
 **Priority:** P1  
 **Last updated:** 2026-09-27  
 **TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
@@ -368,7 +368,7 @@ for the shared-LUT design.
   applies. There is no extra pane override beside that manager. The overlay
   must read the active pane's viewer flag, and must not read
   `app.view_state_manager` when a different subwindow is active. See 2b.
-- [ ] **`apply_window_level()` keeps its existing signature and gains NO `lut`
+- [x] **`apply_window_level()` keeps its existing signature and gains NO `lut`
   parameter.** It is called at `dicom_image_render.py:204`, *before* the polarity
   call at `:218`, so a `lut` here would apply the LUT before polarity and invert
   the required order. The LUT is applied afterwards by calling
@@ -389,17 +389,17 @@ for the shared-LUT design.
       rescale_intercept: float | None = None,
   ) -> np.ndarray:
   ```
-- [ ] Keep the `apply_window_level()` call as-is in the display path
+- [x] Keep the `apply_window_level()` call as-is in the display path
   (`src/gui/slice_display_manager.py` → `src/core/dicom_processor.py`), and call
   `apply_lut_to_uint8(display_array, active_lut)` on the uint8 result **after**
   net inversion. `display_array` is the first argument; passing `active_lut`
   positionally would bind it to the image. Take the active LUT from per-pane state.
-- [ ] Update the remaining direct callers so each **threads the active LUT from
+- [x] Update the remaining direct callers so each **threads the active LUT from
   their own state source into the image builder** and calls
   `apply_lut_to_uint8()` there, **after** net inversion — not by passing a LUT to
   `apply_window_level()`: `src/core/dicom_image_render.py:204` and
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
-- [ ] When LUT is "Linear" (default), behavior is identical to today.
+- [x] When LUT is "Linear" (default), behavior is identical to today.
 - [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
   Inventory rows 1, 2, 3, and 5 have a reachable no-windowing fallback; row 4
   does not. Those fallback rows must converge on the same post-normalize step:
@@ -455,7 +455,7 @@ for the shared-LUT design.
   only via the windowing path. Where practical, de-duplicate the inline
   normalize blocks on rows 2, 3, and 5 onto `normalize_to_uint8`, which row 1
   already uses, so future fixes apply to all of them.
-- [ ] **The user "invert" flag is a second `255 - array`, and it must move.**
+- [x] **The user "invert" flag is a second `255 - array`, and it must move.**
   `src/core/view_state_inversion.py` only *reports* the flag (it returns a bool
   from the per-series `image_inverted` default); the pixels are actually
   inverted in `src/gui/image_viewer_view.py:403-415`, which does `255 - array`
@@ -481,7 +481,7 @@ for the shared-LUT design.
   dataset that is both MONOCHROME1 and user-inverted is simply un-inverted; keep
   that behavior explicit and tested. `view_state_inversion.py` itself needs no
   change beyond being named as the flag's source of truth.
-- [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
+- [x] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
   applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
   **after** W/L and **after** normalization: at `dicom_image_render.py:218` for
   the slice path and `slice_display_pixels.py:123` for projections. That helper
@@ -507,7 +507,7 @@ for the shared-LUT design.
     and greppable in review. A non-linear grayscale LUT is the case that breaks first: applying
     polarity after it would invert an already-shaped curve, and for a color LUT
     it would silently no-op on the `ndim != 2` guard.
-- [ ] **Where RGB expansion happens.** Both projection functions already build the
+- [x] **Where RGB expansion happens.** Both projection functions already build the
   PIL image from a 2-D array with `Image.fromarray(..., mode='L')`
   (`dicom_image_render.py:222-224`) and from a 3-channel array with
   `mode="RGB"` (`slice_display_pixels.py:129-131`). The QImage side is **not**

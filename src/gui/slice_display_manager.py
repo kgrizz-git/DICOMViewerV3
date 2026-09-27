@@ -30,6 +30,7 @@ from PIL import Image
 from pydicom.dataset import Dataset
 from PySide6.QtWidgets import QMessageBox
 
+from core.dicom_color import is_color_image
 from core.dicom_organizer import DICOMOrganizer
 from core.dicom_parser import DICOMParser
 from core.dicom_processor import DICOMProcessor
@@ -42,6 +43,7 @@ from core.slice_window_level_resolver import (
     resolve_window_level_for_series_transition as _wl_resolve_transition,
 )
 from gui.image_viewer import ImageViewer
+from gui.lut_view_state import show_slice_image, slice_lut_kwargs
 from gui.metadata_panel import MetadataPanel
 from gui.overlay_manager import OverlayManager
 from gui.roi_list_panel import ROIListPanel
@@ -336,26 +338,12 @@ class SliceDisplayManager:
         window_width: float | None,
         use_rescaled_values: bool,
         rescale_slope: float | None,
-        rescale_intercept: float | None
+        rescale_intercept: float | None,
+        *,
+        image_inverted: bool = False,
+        lut=None,
     ) -> Image.Image | None:
-        """
-        Create a projection image from multiple slices.
-
-        Args:
-            dataset: Current dataset (for metadata)
-            current_studies: Dictionary of studies
-            current_study_uid: Current study UID
-            current_series_uid: Current series UID
-            current_slice_index: Current slice index
-            window_center: Window center value
-            window_width: Window width value
-            use_rescaled_values: Whether to use rescaled values
-            rescale_slope: Rescale slope
-            rescale_intercept: Rescale intercept
-
-        Returns:
-            PIL Image or None if projection failed
-        """
+        """Projection PIL, or None. User invert and the LUT run after polarity."""
         return create_slice_projection_pil_image(
             self.dicom_processor,
             self.projection_type,
@@ -369,6 +357,8 @@ class SliceDisplayManager:
             use_rescaled_values,
             rescale_slope,
             rescale_intercept,
+            image_inverted=image_inverted,
+            lut=lut,
         )
 
     def _resolve_canonical_dataset_for_slice(
@@ -496,6 +486,9 @@ class SliceDisplayManager:
         use_rescaled_values: bool,
         rescale_slope: float | None,
         rescale_intercept: float | None,
+        *,
+        image_inverted: bool = False,
+        lut=None,
     ):
         """Return a projection PIL image when enabled, else None on skip/failure."""
         if not self.projection_enabled:
@@ -512,6 +505,8 @@ class SliceDisplayManager:
                 use_rescaled_values,
                 rescale_slope,
                 rescale_intercept,
+                image_inverted=image_inverted,
+                lut=lut,
             )
         except Exception as e:
             error_type = type(e).__name__
@@ -524,6 +519,7 @@ class SliceDisplayManager:
         window_center: float | None,
         window_width: float | None,
         use_rescaled_values: bool,
+        **lut_kwargs: Any,
     ) -> tuple[Image.Image, bool]:
         """Convert dataset to PIL image, or a no-pixel placeholder when conversion yields None."""
         if DEBUG_WL:
@@ -538,11 +534,13 @@ class SliceDisplayManager:
                     window_center=window_center,
                     window_width=window_width,
                     apply_rescale=use_rescaled_values,
+                    **lut_kwargs,
                 )
             else:
                 image = self.dicom_processor.dataset_to_image(
                     dataset,
                     apply_rescale=use_rescaled_values,
+                    **lut_kwargs,
                 )
             if image is None:
                 return _make_no_pixel_placeholder_pil(), True
@@ -640,7 +638,8 @@ class SliceDisplayManager:
         series_identifier: str,
     ) -> None:
         """Push image to the viewer and optionally fit / store initial zoom."""
-        self.image_viewer.set_image(image, preserve_view=preserve_view, apply_inversion=apply_inversion)
+        lut_state = getattr(self, "_display_lut", {})
+        show_slice_image(self.image_viewer, image, preserve_view=preserve_view, apply_inversion=apply_inversion, display_final=bool(getattr(self, "_display_final", False)), image_inverted=bool(lut_state.get("image_inverted", False)))
 
         if is_new_study_series or force_fit_to_view:
             self.image_viewer.fit_to_view(center_image=True)
@@ -675,27 +674,26 @@ class SliceDisplayManager:
         is_new_study_series = ctx.is_new_study_series
         series_identifier = ctx.series_identifier
         preserve_view_override = ctx.preserve_view_override
-        image = self._try_build_projection_image(
-            dataset,
-            current_studies,
-            current_study_uid,
-            current_series_uid,
-            current_slice_index,
-            window_center,
-            window_width,
-            use_rescaled_values,
-            rescale_slope,
-            rescale_intercept,
-        )
-        no_pixel_placeholder = False
-        if image is None:
-            image, no_pixel_placeholder = self._dataset_to_image_or_placeholder(
-                dataset, window_center, window_width, use_rescaled_values
-            )
-
         preserve_view, force_fit_to_view, apply_inversion = self._resolve_view_preserve_and_inversion(
             is_same_series, is_new_study_series, series_identifier, preserve_view_override
         )
+        self._display_lut = slice_lut_kwargs(
+            self.view_state_manager, series_identifier, preserve_view,
+            getattr(dataset, "PhotometricInterpretation", None),
+        )
+        image = self._try_build_projection_image(
+            dataset, current_studies, current_study_uid, current_series_uid, current_slice_index,
+            window_center, window_width, use_rescaled_values, rescale_slope, rescale_intercept,
+            **self._display_lut,
+        )
+        from_projection = image is not None
+        no_pixel_placeholder = False
+        if image is None:
+            image, no_pixel_placeholder = self._dataset_to_image_or_placeholder(
+                dataset, window_center, window_width, use_rescaled_values, **self._display_lut
+            )
+        color, _photometric = is_color_image(dataset)
+        self._display_final = (from_projection or not color) and not no_pixel_placeholder
         image = self._maybe_apply_fusion(
             image,
             no_pixel_placeholder,

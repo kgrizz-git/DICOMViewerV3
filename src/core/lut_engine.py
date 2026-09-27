@@ -33,7 +33,7 @@ Requirements:
     - numpy
     - core.lut_curve (control-point interpolation)
     - core.dicom_window_level.apply_window_level
-    - core.dicom_image_render.normalize_to_uint8
+    - core.display_normalize.normalize_to_uint8
 """
 
 from __future__ import annotations
@@ -45,8 +45,8 @@ from typing import Literal
 
 import numpy as np
 
-from core.dicom_image_render import normalize_to_uint8
 from core.dicom_window_level import apply_window_level
+from core.display_normalize import normalize_to_uint8
 from core.lut_curve import CATMULL_ROM, clamp_unit_interval, evaluate_univariate
 
 LutType = Literal["grayscale_ramp", "colormap"]

@@ -165,25 +165,9 @@ class SeriesNavigator(QWidget):
         source_series_uid: str,
         window_center: float | None = None, window_width: float | None = None,
         n_slices: int | None = None, photometric_interpretation: str | None = None,
+        image_inverted: bool = False, lut=None,
     ) -> None:
-        """
-        Show or update an MPR thumbnail for *subwindow_index*.
-
-        Passing ``pixel_array=None`` is equivalent to calling
-        ``clear_mpr_thumbnail(subwindow_index)``.
-
-        Args:
-            subwindow_index: Subwindow slot (0–3), or -1 for detached MPR (same
-                placement as attached: after the source series in that study).
-            pixel_array:     2-D float MPR slice array, or None to remove.
-            study_uid:       Study the source series belongs to.
-            source_series_uid: Series key the MPR was built from.
-            window_center:   W/L centre for rendering (optional).
-            window_width:    W/L width for rendering (optional, must be > 0).
-            n_slices:        Number of planes in the MPR stack for the navigator
-                             slice-count badge (optional).
-            photometric_interpretation: Source PI, so the thumbnail matches the pane.
-        """
+        """Show or update an MPR thumbnail. ``pixel_array=None`` clears it."""
         if pixel_array is None:
             self.clear_mpr_thumbnail(subwindow_index)
             return
@@ -196,6 +180,8 @@ class SeriesNavigator(QWidget):
             "window_width": window_width,
             "n_slices": n_slices,
             "photometric_interpretation": photometric_interpretation,
+            "image_inverted": image_inverted,
+            "lut": lut,
         }
         self._rebuild_from_cached_studies()
 
@@ -661,7 +647,9 @@ class SeriesNavigator(QWidget):
             )
             mpr_widget.update_preview(
                 mpr_spec.get("pixel_array"), mpr_spec.get("window_center"),
-                mpr_spec.get("window_width"), mpr_spec.get("photometric_interpretation"))
+                mpr_spec.get("window_width"), mpr_spec.get("photometric_interpretation"),
+                image_inverted=bool(mpr_spec.get("image_inverted", False)),
+                lut=mpr_spec.get("lut"))
             mpr_widget.set_slice_count(mpr_spec.get("n_slices"))
             mpr_widget.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
             thumbnails_layout.addWidget(mpr_widget)

@@ -40,6 +40,8 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
+from core.lut_display import apply_user_invert_and_lut, rgb_preview_image
+from core.lut_engine import LookUpTable
 from core.photometric_polarity import apply_monochrome1_polarity
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
 from utils.privacy.console import print_redacted
@@ -124,6 +126,9 @@ class MprThumbnailWidget(QWidget):
         window_center: float | None = None,
         window_width: float | None = None,
         photometric_interpretation: str | None = None,
+        *,
+        image_inverted: bool = False,
+        lut: LookUpTable | None = None,
     ) -> None:
         """
         Render a new preview from a 2-D float pixel array.
@@ -159,10 +164,13 @@ class MprThumbnailWidget(QWidget):
         uint8_arr = apply_monochrome1_polarity(
             arr.astype(np.uint8), photometric_interpretation
         )
+        uint8_arr = apply_user_invert_and_lut(
+            uint8_arr, image_inverted=image_inverted, lut=lut
+        )
 
         try:
             # Convert via PIL for high-quality resize while preserving aspect ratio.
-            pil_img = Image.fromarray(uint8_arr, mode="L").convert("RGB")
+            pil_img = rgb_preview_image(uint8_arr)
             thumb = Image.new(
                 "RGB",
                 (self.THUMBNAIL_SIZE, self.THUMBNAIL_SIZE),

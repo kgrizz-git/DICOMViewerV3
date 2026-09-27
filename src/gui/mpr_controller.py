@@ -68,6 +68,7 @@ from core.mpr_volume import (
     has_slice_location_fallback_available,
 )
 from gui.dialogs.mpr_orientation_choice_dialog import MprOrientationChoiceDialog
+from gui.lut_view_state import mpr_display_kwargs
 from utils.debug_flags import DEBUG_MPR
 from utils.dicom_utils import get_composite_series_key
 from utils.privacy.console import print_redacted
@@ -989,7 +990,7 @@ class MprController(QObject):
             wl_controls,
             array,
         )
-        pil_image = self._array_to_pil(array, wc, ww, photometric_interpretation=result.photometric_interpretation)
+        pil_image = self._array_to_pil(array, wc, ww, photometric_interpretation=result.photometric_interpretation, **mpr_display_kwargs(managers, result.photometric_interpretation))
         if pil_image is None:
             return
 
@@ -1077,7 +1078,7 @@ class MprController(QObject):
                     f"[MprController] Failed to update MPR view state in window {idx}: {exc}"
                 )
 
-        image_viewer.set_image(pil_image, preserve_view=True)
+        image_viewer.set_display_final_image(pil_image, preserve_view=True, image_inverted=bool(getattr(image_viewer, "image_inverted", False)))
         return overlay_dataset
 
     def _display_mpr_render_annotations(
@@ -1904,10 +1905,7 @@ class MprController(QObject):
     def _array_to_pil(
         array: np.ndarray, window_center: float, window_width: float,
         *, photometric_interpretation: str | None = None,
+        image_inverted: bool = False, lut=None,
     ) -> Image.Image | None:
-        """
-        Thin wrapper over :func:`core.mpr_view_math.array_to_pil`, which owns the linear
-        window/level mapping and the MONOCHROME1 polarity. Kept as a static method because it
-        is part of this controller's established API and is patched by existing tests.
-        """
-        return array_to_pil(array, window_center, window_width, photometric_interpretation=photometric_interpretation)
+        """Wrapper over ``array_to_pil``. Patched by tests; polarity then LUT stay in core."""
+        return array_to_pil(array, window_center, window_width, photometric_interpretation=photometric_interpretation, image_inverted=image_inverted, lut=lut)

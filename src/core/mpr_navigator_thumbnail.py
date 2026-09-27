@@ -21,8 +21,9 @@ Requirements:
 from __future__ import annotations
 
 # pyright: reportImportCycles=false
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from core.lut_series_state import mpr_display_kwargs
 from core.mpr_stack_combine import apply_mpr_stack_combine
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -90,6 +91,15 @@ def _result_photometric_interpretation(result: object | None) -> str | None:
     return str(value) if value else None
 
 
+def _pane_managers(app: DICOMViewerApp, idx: int) -> dict[str, Any] | None:
+    """Return one pane's manager dict. Missing on stubs that predate the LUT wiring."""
+    managers = getattr(app, "subwindow_managers", None)
+    if not isinstance(managers, dict):
+        return None
+    found = managers.get(idx)
+    return found if isinstance(found, dict) else None
+
+
 def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
     """
     Show or refresh the MPR thumbnail in the series navigator for subwindow *idx*.
@@ -133,6 +143,8 @@ def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
         except (AttributeError, TypeError, ValueError):
             pass
 
+    photometric = _result_photometric_interpretation(result)
+    display = mpr_display_kwargs(_pane_managers(app, idx), photometric)
     app.series_navigator.set_mpr_thumbnail(
         idx,
         pixel_array,
@@ -141,7 +153,9 @@ def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
         wc,
         ww,
         n_slices,
-        _result_photometric_interpretation(result),
+        photometric,
+        image_inverted=display["image_inverted"],
+        lut=display["lut"],
     )
 
 
@@ -203,6 +217,10 @@ def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
                 wc, ww = wc_val, ww_val
         except (AttributeError, TypeError, ValueError):
             pass
+    photometric = _result_photometric_interpretation(
+        payload.get("mpr_result") if isinstance(payload, dict) else None
+    )
+    display = mpr_display_kwargs(_pane_managers(app, focused), photometric)
     app.series_navigator.set_mpr_thumbnail(
         -1,
         pixel_array,
@@ -211,7 +229,9 @@ def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
         wc,
         ww,
         n_slices,
-        _result_photometric_interpretation(payload.get("mpr_result") if isinstance(payload, dict) else None),
+        photometric,
+        image_inverted=display["image_inverted"],
+        lut=display["lut"],
     )
 
 

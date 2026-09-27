@@ -11,7 +11,7 @@ so they are unit-testable without Qt/VTK:
 - :func:`build_mpr_banner_text` — active-MPR banner text,
 - :func:`auto_window_level` — percentile (2–98) auto window/level,
 - :func:`array_to_pil` — linear window/level mapping of a 2-D array to 8-bit gray,
-  with MONOCHROME1 display polarity applied last.
+  then MONOCHROME1 polarity, user invert, and the LUT.
 
 The controller keeps thin static-method wrappers (preserving its public API and
 existing tests) that delegate here.
@@ -24,6 +24,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from core.lut_display import apply_user_invert_and_lut, pil_from_display_array
+from core.lut_engine import LookUpTable
 from core.photometric_polarity import apply_monochrome1_polarity
 from utils.privacy.console import print_redacted
 
@@ -87,15 +89,13 @@ def array_to_pil(
     window_width: float,
     *,
     photometric_interpretation: str | None = None,
+    image_inverted: bool = False,
+    lut: LookUpTable | None = None,
 ) -> Image.Image | None:
-    """Convert a 2-D array to an 8-bit grayscale PIL image via linear window/level.
+    """Window a 2-D array, then MONOCHROME1, user invert, and the LUT.
 
-    Mapping: ``out = clip((val - (wc - ww/2)) / ww * 255, 0, 255)``. Returns the
-    image, or ``None`` on failure.
-
-    When *photometric_interpretation* is ``MONOCHROME1`` the finalized 8-bit array is inverted,
-    matching ``render_grayscale_image`` so MPR panes agree with the single-slice viewer. The
-    caller's *array* is never modified — the inversion applies to the mapped copy only.
+    Mapping: ``out = clip((val - (wc - ww/2)) / ww * 255, 0, 255)``. The caller's
+    array is not modified. ``lut=None`` keeps the inverted bytes.
     """
     try:
         lo = window_center - window_width / 2.0
@@ -104,7 +104,12 @@ def array_to_pil(
         np.clip(mapped, 0.0, 255.0, out=mapped)
         uint8_arr = mapped.astype(np.uint8)
         uint8_arr = apply_monochrome1_polarity(uint8_arr, photometric_interpretation)
-        return Image.fromarray(uint8_arr, mode="L")
+        uint8_arr = apply_user_invert_and_lut(
+            uint8_arr,
+            image_inverted=image_inverted,
+            lut=lut,
+        )
+        return pil_from_display_array(uint8_arr)
     except Exception as exc:
         print_redacted(f"[mpr_view_math] array_to_pil failed: {exc}")
         return None
