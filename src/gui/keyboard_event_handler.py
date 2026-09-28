@@ -68,6 +68,7 @@ _KEY_HANDLERS: dict[int, str] = {
     Qt.Key.Key_Q: "_key_quick_window_level",
     Qt.Key.Key_N: "_key_series_navigator",
     Qt.Key.Key_I: "_key_invert",
+    Qt.Key.Key_L: "_key_lut",
     Qt.Key.Key_A: "_key_arrow_annotation",
     Qt.Key.Key_Space: "_key_space",
     Qt.Key.Key_1: "_key_layout",
@@ -120,6 +121,7 @@ class KeyboardEventHandler:
         open_quick_window_level_callback: Callable[[], None] | None = None,
         cancel_angle_draw_callback: Callable[[], None] | None = None,
         exit_roi_geometry_edit_callback: Callable[[], bool] | None = None,
+        open_lut_menu_callback: Callable[[], None] | None = None,
     ):
         """
         Initialize the keyboard event handler.
@@ -152,6 +154,7 @@ class KeyboardEventHandler:
             open_quick_window_level_callback: Optional callback to open Quick Window/Level dialog for the focused subwindow (shortcut Q)
             cancel_angle_draw_callback: Optional callback to cancel in-progress angle placement (Esc in measure_angle mode)
             exit_roi_geometry_edit_callback: Optional callback to leave ROI resize-handle mode (Esc); return True if handled
+            open_lut_menu_callback: Optional callback to open the Look-Up Table menu (shortcut L)
         """
         self.roi_manager = roi_manager
         self.measurement_tool = measurement_tool
@@ -182,6 +185,7 @@ class KeyboardEventHandler:
         self.open_quick_window_level_callback = open_quick_window_level_callback
         self.cancel_angle_draw_callback = cancel_angle_draw_callback
         self.exit_roi_geometry_edit_callback = exit_roi_geometry_edit_callback
+        self.open_lut_menu_callback = open_lut_menu_callback
 
     # --- non-uniform handlers (checked before the key table) ----------------
 
@@ -330,6 +334,22 @@ class KeyboardEventHandler:
         if self.invert_image_callback:
             self.invert_image_callback()
         return True
+
+    def _key_lut(self, event: QKeyEvent) -> bool:
+        """L: open the Look-Up Table menu when focus is in a viewer pane.
+
+        Modified chords, including Ctrl+Shift+L, stay with the menu actions.
+        """
+        if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+            return False
+        if (
+            self.open_lut_menu_callback
+            and self.is_focus_ok_for_reset_view
+            and self.is_focus_ok_for_reset_view()
+        ):
+            self.open_lut_menu_callback()
+            return True
+        return False
 
     def _key_arrow_annotation(self, event: QKeyEvent) -> bool:
         """A: arrow annotation mode; Shift+A: reset all views."""

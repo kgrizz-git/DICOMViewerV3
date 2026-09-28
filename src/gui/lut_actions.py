@@ -5,8 +5,9 @@ Each image viewer receives ``apply_series_lut`` and ``current_series_lut``
 from the subwindow factory. The View menu and toolbar use the focused viewer
 (``main_window.image_viewer``). Built-in curves are replaced, never mutated.
 
-Bare ``L`` is not a shortcut. The 3D view uses ``L`` for the patient-left
-camera, and ``Ctrl+Shift+L`` opens overlay tag configuration.
+Bare ``L`` opens this menu when focus is in the image, navigator, or a side
+panel. ``Ctrl+Shift+L`` stays on overlay tag configuration. The 3D view's
+patient-left camera is key ``3``, not ``L``.
 
 Inputs:
     - A host widget (the image viewer, or the main window that holds one)
@@ -122,11 +123,19 @@ def attach_context_lut_menu(context_menu: QMenu, viewer: Any) -> None:
     lut_menu.aboutToShow.connect(lambda menu=lut_menu, owner=viewer: populate_lut_menu(menu, owner))
 
 
+def show_lut_toolbar_menu(host: Any) -> None:
+    """Open the toolbar Look-Up Table menu. Bound to bare ``L``."""
+    button = getattr(host, "lut_toolbar_button", None)
+    show_menu = getattr(button, "showMenu", None)
+    if callable(show_menu):
+        show_menu()
+
+
 def attach_toolbar_lut_button(toolbar: Any, host: Any) -> QToolButton:
     """Toolbar button whose menu is the same Look-Up Table list."""
     button = QToolButton(toolbar)
     button.setText("LUT")
-    button.setToolTip("Look-Up Table for the focused pane")
+    button.setToolTip("Look-Up Table for the focused pane  (L)")
     button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     menu = QMenu(button)
     menu.aboutToShow.connect(lambda host_menu=menu, owner=host: _show_toolbar_menu(button, host_menu, owner))

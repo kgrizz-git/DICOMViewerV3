@@ -67,7 +67,9 @@ _LABEL_STYLE_MAP = {
 _SPLIT_TOOLBUTTON_OBJECT_NAME = "toolbar_menu_split_button"
 _SPLIT_TOOLBUTTON_WIDTH_TEXT_UNDER = 52
 # Standard cells stay compact while longer labels retain their natural width.
-_TEXT_UNDER_STANDARD_BUTTON_WIDTH = 38
+# 36 px keeps the labelled first-run toolbar, including LUT, on one row at
+# 1280 px after font metrics widen. At 38 px the Next button overflowed.
+_TEXT_UNDER_STANDARD_BUTTON_WIDTH = 36
 _TEXT_UNDER_ICON_SIZE = 20
 # Narrow strip + tight padding-right (no extra gap before the arrow).
 _SPLIT_MENU_BUTTON_STRIP_PX = 10
@@ -213,6 +215,7 @@ def build_main_toolbar(main_window) -> None:
             "_open_split_btn",
             "_recent_toolbar_btn",
             "_overlay_font_size_toolbar_btn",
+            "lut_toolbar_button",
         ):
             plain_btn = getattr(main_window, _plain_btn_attr, None)
             if plain_btn is not None:
@@ -459,7 +462,10 @@ def build_main_toolbar(main_window) -> None:
     toolbar.addWidget(wl_btn)
     from gui.lut_actions import attach_toolbar_lut_button
 
-    main_window.lut_toolbar_button = attach_toolbar_lut_button(toolbar, main_window)
+    lut_btn = attach_toolbar_lut_button(toolbar, main_window)
+    lut_btn.setIcon(_icon("lut", color))
+    main_window._toolbar_icon_registry.append((lut_btn, "lut"))
+    main_window.lut_toolbar_button = lut_btn
     main_window._wl_toolbar_btn = wl_btn
 
     toolbar.addSeparator()

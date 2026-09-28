@@ -249,6 +249,30 @@ def test_q_is_not_handled_when_focus_not_ok():
     assert calls == []
 
 
+# --- L (look-up table menu) -------------------------------------------------
+
+def test_l_opens_lut_menu_when_focus_ok():
+    calls: list[str] = []
+    handler = _make(calls, focus_ok=True, open_lut_menu_callback=lambda: calls.append("lut_menu"))
+    assert _press(handler, Qt.Key.Key_L) is True
+    assert calls == ["lut_menu"]
+
+
+def test_l_is_not_handled_when_focus_not_ok():
+    calls: list[str] = []
+    handler = _make(calls, focus_ok=False, open_lut_menu_callback=lambda: calls.append("lut_menu"))
+    assert _press(handler, Qt.Key.Key_L) is False
+    assert calls == []
+
+
+@pytest.mark.parametrize("mod", [CTRL, META, SHIFT, CTRL | SHIFT, META | SHIFT])
+def test_modified_l_passes_through_for_menu_shortcuts(mod):
+    calls: list[str] = []
+    handler = _make(calls, open_lut_menu_callback=lambda: calls.append("lut_menu"))
+    assert _press(handler, Qt.Key.Key_L, mod) is False
+    assert calls == []
+
+
 @pytest.mark.parametrize("mod", [CTRL, META])
 def test_ctrl_q_passes_through(mod):
     calls: list[str] = []

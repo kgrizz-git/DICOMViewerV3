@@ -763,9 +763,9 @@ needs to see which part of the curve moved.
 ### 3d. Keyboard shortcut
 
 - [x] `L` to cycle through LUTs? Or just rely on the toolbar dropdown.
-  Decision: no **L** binding. The 3D view uses **L** for the patient-left camera,
-  and **Ctrl+Shift+L** opens overlay tag configuration. The toolbar, View menu,
-  and image context menu are the access path.
+  Decision: bare **L** opens the toolbar menu (it does not cycle). The 3D
+  patient-left camera is key **3**. **Ctrl+Shift+L** stays on overlay tag
+  configuration. The View menu and image context menu remain available.
 - [x] Check for conflicts with existing shortcuts.
 
 ---

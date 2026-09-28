@@ -408,6 +408,7 @@ def build_menu_bar(main_window) -> None:
     view_menu.addSeparator()
 
     overlay_config_action = QAction("Overlay &Tags Configuration...", main_window)
+    overlay_config_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
     overlay_config_action.triggered.connect(main_window.overlay_config_requested.emit)
     view_menu.addAction(overlay_config_action)
 
