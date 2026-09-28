@@ -27,6 +27,32 @@ from matplotlib.figure import Figure
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 
+def _paint_lut_input_axis(output_axis: Any, paths: Any) -> Any:
+    """Draw the LUT alone on a 0–255 input axis above the stored-value plot.
+
+    Grayscale tables are a line. Color maps are a bar. The window/level ramp
+    and the composed curve stay on ``output_axis``.
+    """
+    if paths.lut_trace is None and paths.lut_colors is None:
+        return None
+    axis = output_axis.twiny()
+    if paths.lut_trace is not None:
+        xs = np.arange(paths.lut_trace.shape[0], dtype=np.float64)
+        axis.plot(xs, paths.lut_trace, color="#4aa3ff", linewidth=1.5, label=f"LUT {paths.name}")
+        axis.legend(loc="upper right")
+    if paths.lut_colors is not None:
+        axis.imshow(
+            paths.lut_colors.reshape(1, -1, 3),
+            aspect="auto",
+            extent=(0, 255, 0, 16),
+            origin="lower",
+            interpolation="nearest",
+        )
+    axis.set_xlim(0, 255)
+    axis.set_xlabel("LUT input")
+    return axis
+
+
 class HistogramWidget(QWidget):
     """
     Widget for displaying image histograms.
@@ -60,6 +86,7 @@ class HistogramWidget(QWidget):
         self._overlay_photometric: object = None
         self._overlay_inverted = False
         self._transfer_axis: Any = None
+        self._lut_input_axis: Any = None
 
     # Font size tiers for responsive scaling (min width threshold -> (title_pt, label_pt, tick_pt))
     # label_pt is clamped to ≥ 11 at medium and larger sizes (C12).
@@ -323,11 +350,12 @@ class HistogramWidget(QWidget):
             self._update_histogram()
 
     def _clear_transfer_axis(self) -> None:
-        """Drop the previous output-intensity axis before the histogram axes are cleared."""
-        axis = self._transfer_axis
-        self._transfer_axis = None
-        if axis is not None:
-            axis.remove()
+        """Drop the previous output and LUT-input axes before the histogram is cleared."""
+        for name in ("_lut_input_axis", "_transfer_axis"):
+            axis = getattr(self, name, None)
+            setattr(self, name, None)
+            if axis is not None:
+                axis.remove()
 
     def _paint_lut_overlay(self) -> None:
         """Draw ramp, LUT, and composed result from the shared transfer widget."""
@@ -351,20 +379,11 @@ class HistogramWidget(QWidget):
         twin.set_ylabel("Output")
         label = f"{paths.name} ({paths.source})"
         if paths.collapse:
-            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=f"W/L, LUT, {label}")
+            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=f"W/L, {label}")
         else:
             twin.plot(paths.xs, paths.window, color="#888888", linestyle="--", linewidth=1.0, label="W/L ramp")
-            if paths.lut_on_window is not None:
-                twin.plot(paths.xs, paths.lut_on_window, color="#4aa3ff", linewidth=1.5, label=f"LUT {paths.name}")
-            if paths.lut_colors is not None:
-                twin.imshow(
-                    paths.lut_colors.reshape(1, -1, 3),
-                    aspect="auto",
-                    extent=(float(paths.xs[0]), float(paths.xs[-1]), 0, 16),
-                    origin="lower",
-                    interpolation="nearest",
-                )
             composed_label = f"{label}, inverted" if paths.net_inverted else label
             twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.5, label=composed_label)
         twin.legend(loc="upper left")
+        self._lut_input_axis = _paint_lut_input_axis(twin, paths)
 

@@ -65,7 +65,9 @@ class _CurveCanvas(QWidget):
         self.freehand = False
         self.selected: int | None = None
         self.on_changed: Any = None
+        self.on_preview: Any = None
         self._drag: int | None = None
+        self._gesture_changed = False
         self._stroke: list[tuple[float, float]] = []
         self.setMinimumSize(320, 240)
         self.setMouseTracking(True)
@@ -74,6 +76,7 @@ class _CurveCanvas(QWidget):
         """Start a drag, add a point, or begin a freehand stroke."""
         if event.button() != Qt.MouseButton.LeftButton:
             return
+        self._gesture_changed = False
         unit = self._to_unit(event.position())
         if self.freehand:
             self._stroke = [unit]
@@ -85,7 +88,8 @@ class _CurveCanvas(QWidget):
             self.points.sort(key=lambda item: item[0])
             self.selected = self.points.index(unit)
             self._drag = self.selected
-            self._notify()
+            self._gesture_changed = True
+            self._preview()
         else:
             self.selected = index
             self._drag = index
@@ -110,6 +114,8 @@ class _CurveCanvas(QWidget):
             right = self.points[self._drag + 1][0] - 0.01
             x = min(max(x, left), right)
         self.points[self._drag] = (x, y)
+        self._gesture_changed = True
+        self._preview()
         self.update()
 
     def mouseReleaseEvent(self, event: Any) -> None:
@@ -119,9 +125,10 @@ class _CurveCanvas(QWidget):
             self.points = _monotonic_points([(float(x), float(y)) for x, y in simplified])
             self._stroke = []
             self._notify()
-        elif self._drag is not None:
+        elif self._gesture_changed:
             self._notify()
         self._drag = None
+        self._gesture_changed = False
         self.update()
         _ = event
 
@@ -150,7 +157,13 @@ class _CurveCanvas(QWidget):
             painter.drawEllipse(self._from_unit(x, y), 4, 4)
         painter.end()
 
+    def _preview(self) -> None:
+        """Refresh the dialog preview without recording an undo step."""
+        if callable(self.on_preview):
+            self.on_preview()
+
     def _notify(self) -> None:
+        """Record one undo step for the finished gesture."""
         if callable(self.on_changed):
             self.on_changed()
 
@@ -197,6 +210,7 @@ class LutCurveEditorDialog(QDialog):
         self._points_dirty = False
         self._load(lut)
         self._canvas.on_changed = self._on_points_changed
+        self._canvas.on_preview = self._preview_points
         self._remember()
         interpolation = QComboBox()
         interpolation.addItems(list(_INTERPOLATION))
@@ -273,11 +287,15 @@ class LutCurveEditorDialog(QDialog):
         self._canvas.update()
         self._refresh_preview()
 
-    def _on_points_changed(self) -> None:
+    def _preview_points(self) -> None:
+        """Show the in-progress curve. Undo is recorded when the gesture ends."""
         self._points_dirty = True
         self._parameter = None
-        self._remember()
         self._refresh_preview()
+
+    def _on_points_changed(self) -> None:
+        self._preview_points()
+        self._remember()
 
     def _set_interpolation(self, name: str) -> None:
         if name == self._canvas.interpolation:
