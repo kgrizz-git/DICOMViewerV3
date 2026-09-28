@@ -146,6 +146,27 @@ class LookUpTable:
             return NotImplemented
         return _fields_equal(self, other)
 
+    def __hash__(self) -> int:
+        """Hash of the fields ``__eq__`` compares, so equal LUTs hash equal.
+
+        The colormap is hashed from its bytes because a bare ``ndarray`` is
+        unhashable; the shape is included so a reshape cannot collide.
+        """
+        return hash(
+            (
+                self.name,
+                self.lut_type,
+                self.source,
+                self.transfer_fn,
+                self.control_points,
+                self.interpolation,
+                self.gamma,
+                self.sigmoid_k,
+                self.exp_k,
+                None if self.colormap is None else (self.colormap.shape, self.colormap.tobytes()),
+            )
+        )
+
 
 def apply_lut_to_uint8(
     display_array: np.ndarray,

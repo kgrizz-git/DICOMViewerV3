@@ -180,6 +180,7 @@ def _clear_lut_menu(menu: QMenu) -> None:
 
 
 def _show_toolbar_menu(button: QToolButton, menu: QMenu, host: Any) -> None:
+    """Refresh the button tooltip to the active LUT, then rebuild its menu."""
     current = _current(host)
     if current is not None:
         button.setToolTip(f"{current.name} ({current.source})")
@@ -187,12 +188,14 @@ def _show_toolbar_menu(button: QToolButton, menu: QMenu, host: Any) -> None:
 
 
 def _actor(host: Any) -> Any:
+    """Return the LUT callback owner: ``host`` itself or its ``image_viewer``."""
     if callable(getattr(host, "apply_series_lut", None)) or callable(getattr(host, "current_series_lut", None)):
         return host
     return getattr(host, "image_viewer", None)
 
 
 def _current(host: Any) -> LookUpTable | None:
+    """Active LUT of the pane's actor, or ``None`` when the pane is unwired."""
     actor = _actor(host)
     getter = getattr(actor, "current_series_lut", None)
     if not callable(getter):
@@ -202,6 +205,7 @@ def _current(host: Any) -> LookUpTable | None:
 
 
 def _parent(host: Any) -> QWidget | None:
+    """Widget parent for dialogs: ``host`` itself or its viewer."""
     if isinstance(host, QWidget):
         return host
     viewer = getattr(host, "image_viewer", None)
@@ -209,18 +213,21 @@ def _parent(host: Any) -> QWidget | None:
 
 
 def _same_builtin(current: LookUpTable | None, built: LookUpTable) -> bool:
+    """True when ``current`` is the same built-in curve kind as ``built`` (parameters may differ)."""
     if current is None or current.lut_type != "grayscale_ramp" or current.control_points is not None:
         return False
     return current.transfer_fn is built.transfer_fn
 
 
 def _parameter_lut(lut: LookUpTable | None) -> bool:
+    """True when ``lut`` exposes an adjustable parameter (gamma, sigmoid, or exponential)."""
     if lut is None or lut.transfer_fn is None:
         return False
     return lut.transfer_fn in (gamma_transfer, sigmoid_transfer, exponential_transfer)
 
 
 def _select_builtin(host: Any, lut: LookUpTable) -> None:
+    """Apply ``lut``; a parameter curve opens its slider dialog first."""
     chosen = lut
     if _parameter_lut(lut):
         from gui.dialogs.lut_parameter_dialog import edit_lut_parameters
@@ -235,6 +242,7 @@ def _select_builtin(host: Any, lut: LookUpTable) -> None:
 
 
 def _adjust_parameters(host: Any) -> None:
+    """Open the parameter slider for the active parameter LUT and apply the result."""
     current = _current(host)
     if current is None or not _parameter_lut(current):
         return
@@ -246,6 +254,7 @@ def _adjust_parameters(host: Any) -> None:
 
 
 def _edit_curve(host: Any) -> None:
+    """Open the curve editor for a grayscale LUT and apply the accepted result."""
     current = _current(host)
     if current is not None and current.lut_type != "grayscale_ramp":
         return

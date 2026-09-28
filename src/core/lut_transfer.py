@@ -52,8 +52,6 @@ def lut_samples(lut: LookUpTable | None) -> np.ndarray:
     """LUT over codes ``0..255``. Shape ``(256,)`` or ``(256, 3)``. ``None`` is identity."""
     codes = np.arange(256, dtype=np.uint8).reshape(1, 256)
     sampled = apply_lut_to_uint8(codes, lut)
-    if sampled.ndim == 3:
-        return np.ascontiguousarray(sampled[0])
     return np.ascontiguousarray(sampled[0])
 
 
