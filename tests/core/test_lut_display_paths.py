@@ -208,3 +208,68 @@ def test_user_invert_without_lut_matches_polarity_xor(photometric):
         _ARRAY, None, None, None, None, photometric_interpretation=photometric, image_inverted=True
     )
     assert np.array_equal(_gray(extra), 255 - _gray(alone))
+
+
+def test_monochrome1_color_lut_expands_after_polarity():
+    """Rows 1 and 2 under MONOCHROME1 plus a color LUT: RGB, polarity before LUT, never double-inverted."""
+    from core.dicom_window_level import apply_window_level
+    from core.lut_catalog import colormap_lut
+
+    hot = colormap_lut("hot")
+    row1 = render_grayscale_image(
+        _ARRAY.astype(np.float32), 127.5, 255.0, None, None,
+        photometric_interpretation="MONOCHROME1", lut=hot,
+    )
+    assert row1 is not None and row1.mode == "RGB"
+
+    studies, _ds = _studies()
+    row2 = create_slice_projection_pil_image(
+        _FakeProc(), "aip", 3, studies, "st", "sr", 0, 40.0, 400.0, False, None, None,
+        photometric_interpretation="MONOCHROME1", lut=hot,
+    )
+    assert row2 is not None and row2.mode == "RGB"
+
+    # Both windows map this array to the identity, so the expected output is the
+    # color table indexed by the polarity-inverted bytes.
+    windowed = apply_window_level(_ARRAY.astype(np.float64), 127.5, 255.0)
+    expected = hot.colormap[255 - windowed]
+    assert np.array_equal(np.array(row1), expected)
+    assert np.array_equal(np.array(row2), expected)
+    # Polarity ran before the LUT expansion; indexing the uninverted bytes is a different image.
+    assert not np.array_equal(np.array(row1), hot.colormap[_ARRAY])
+
+
+def test_thumbnail_no_window_fallback_applies_lut(qapp):
+    """Row 5 fallback: a None window normalizes, then the LUT still runs (plan: no-windowing branch)."""
+    from core.display_normalize import normalize_to_uint8
+
+    _ = qapp
+    widget = MprThumbnailWidget(0)
+    size = MprThumbnailWidget.THUMBNAIL_SIZE
+    vals = np.linspace(0.0, 400.0, size * size, dtype=np.float32).reshape(size, size)
+
+    widget.update_preview(vals, None, None, "MONOCHROME2")
+    plain = _thumbnail_rgb_bytes(widget)
+    widget.update_preview(vals, None, None, "MONOCHROME2", lut=inverse_lut())
+    flipped = _thumbnail_rgb_bytes(widget)
+    widget.update_preview(vals, size * 3.0, size / 2.0, "MONOCHROME2")
+    windowed = _thumbnail_rgb_bytes(widget)
+
+    normalized = normalize_to_uint8(vals)
+    assert np.array_equal(plain, np.repeat(normalized[..., np.newaxis], 3, axis=2))
+    assert np.array_equal(flipped, np.repeat((255 - normalized)[..., np.newaxis], 3, axis=2))
+    # The None-window call really took the fallback, not an implicit window.
+    assert not np.array_equal(plain, windowed)
+
+
+def _thumbnail_rgb_bytes(widget):
+    """Return the thumbnail's RGB bytes as an (H, W, 3) array.
+
+    ``np.array`` copies: the QImage buffer dies with the local ``image``, so a
+    ``frombuffer`` view would read freed memory once the helper returns.
+    """
+    image = widget._preview_pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+    flat = np.frombuffer(
+        image.bits(), dtype=np.uint8, count=image.height() * image.bytesPerLine()
+    ).reshape(image.height(), image.bytesPerLine())
+    return np.array(flat[:, : 3 * image.width()]).reshape(image.height(), image.width(), 3)

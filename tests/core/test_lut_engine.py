@@ -203,6 +203,25 @@ def test_replace_builds_a_new_lut_and_leaves_the_original() -> None:
         original.gamma = 2.2  # pyright: ignore[reportAttributeAccessIssue]
 
 
+def test_equal_luts_hash_equal_and_work_as_dict_keys() -> None:
+    """``__eq__`` and ``__hash__`` stay consistent: equal LUTs are interchangeable keys."""
+    from dataclasses import replace
+
+    lut = gamma_lut(2.2)
+    same = replace(lut)
+    assert same is not lut
+    assert same == lut
+    assert hash(same) == hash(lut)
+
+    lut_map = {lut: "pane-1"}
+    assert lut_map[same] == "pane-1"
+
+    hot = colormap_lut("hot")
+    hot_same = replace(hot)
+    assert hot_same == hot
+    assert hash(hot_same) == hash(hot)
+
+
 def test_control_points_are_sorted_and_y_is_clamped() -> None:
     """Normalization is part of construction, via object.__setattr__ on the frozen LUT."""
     lut = LookUpTable(

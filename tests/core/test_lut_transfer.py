@@ -50,6 +50,15 @@ def test_user_invert_without_monochrome1_flips_before_the_lut() -> None:
     assert curves_are_one_line(linear_lut(), "MONOCHROME1", True)
 
 
+def test_monochrome1_without_invert_equals_monochrome2_with_invert() -> None:
+    """Completes the four photometric x invert combinations: P_inv is one XOR."""
+    stored = np.array([0.0, 64.0, 127.5, 255.0])
+    _w1, composed_m1 = sample_window_and_composed(stored, 127.5, 255.0, inverse_lut(), "MONOCHROME1", False)
+    _w2, composed_m2 = sample_window_and_composed(stored, 127.5, 255.0, inverse_lut(), "MONOCHROME2", True)
+    assert np.array_equal(composed_m1, composed_m2)
+    assert not curves_are_one_line(linear_lut(), "MONOCHROME1", False)
+
+
 def test_colormap_samples_are_rgb_and_overlay_uses_a_bar() -> None:
     samples = lut_samples(colormap_lut("hot"))
     assert samples.shape == (256, 3)
