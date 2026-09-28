@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-28
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -27,6 +27,7 @@ The window/level, overlay, and resolution options below the format are only rele
 - **Window/Level (for PNG/JPG):**
   - **Use currently focused sub-window window/level** — renders with the window center/width you are viewing in the focused pane (the label shows the pane number and the current center/width, e.g. *sub-window 1 — 44/486*). This is the default when a viewer W/L is available.
   - **Use dataset default window/level** — renders with the window/level stored in the DICOM dataset.
+  - **Look-Up Table (for PNG/JPG):** the focused pane's active look-up table and image-invert state are baked into the render, so the exported image matches the viewport. DICOM export never bakes the LUT — it always writes raw pixel data.
 - **Include overlays and ROIs (PNG/JPG only):** when checked (default), corner metadata overlays, ROIs, measurements, text, and arrows are drawn into the exported image. Uncheck for a clean image.
 - **Resolution (PNG/JPG):** choose **Native resolution** (default), **1.5×**, **2×**, or **4×**. Larger exports are capped so the longest side stays at or under **8192 px** — any image that would exceed this is exported at a lower magnification automatically, and the completion message lists exactly which files were stepped down (e.g. *requested 4×, exported at 2×*). This matches the cap used by **Export Screenshots**.
 

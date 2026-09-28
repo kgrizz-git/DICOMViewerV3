@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-09-26
+**Last updated:** 2026-09-28
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -80,7 +80,7 @@ use `find` and the platform's available text-search tool rather than assuming
 - **Layout:** `src/` (app), `tests/`, `user-docs/`, `dev-docs/` (plans, assessments).
 - **Local study index:** `src/core/study_index/` — plan: [`LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md`](dev-docs/plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
 - **Pylinac:** exact pin in `requirements.txt`; bump via [`DEPENDENCY_BUMP_VERIFICATION_PLAN.md`](dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) and [`PYLINAC_INTEGRATION_OVERVIEW.md`](dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
-- **Known dependency advisories:** [`security/pip-audit-exceptions.md`](security/pip-audit-exceptions.md) records the two temporary `pip-audit` exceptions, their review triggers, and the required removal criteria. Do not add or broaden an exception without explicit review.
+- **Known dependency advisories:** [`security/pip-audit-exceptions.md`](security/pip-audit-exceptions.md) records the current `pip-audit` exception, its review trigger, and the required removal criteria. Do not add or broaden an exception without explicit review.
 - **Version / changelog / SemVer:** bump [`src/version.py`](src/version.py) and keep **Current version** in [`CHANGELOG.md`](CHANGELOG.md) in sync; follow [`dev-docs/RELEASING.md`](dev-docs/RELEASING.md) for release cuts and [`dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increments.
 - **Tracking split / plan archive:** [`dev-docs/TO_DO.md`](dev-docs/TO_DO.md) is the active backlog, not a completion log. Remove fully completed items once captured in [`CHANGELOG.md`](CHANGELOG.md), [`dev-docs/MAINTENANCE_LOG.md`](dev-docs/MAINTENANCE_LOG.md), or a durable plan/investigation record. Move finished implementation plans to [`dev-docs/plans/completed/`](dev-docs/plans/completed/); keep only ongoing dependency/reference plans in [`dev-docs/plans/supporting/`](dev-docs/plans/supporting/). When a plan is merged but manual smoke remains, archive the plan and track the smoke in **Manual Smoke Checks** in `TO_DO.md` (one umbrella pointer in **Next up**). Use `CHANGELOG.md` for user-visible release changes and `MAINTENANCE_LOG.md` for CI, harness, static-analysis, dependency-verification, and repo-maintenance history. Do the closeout in the same PR that finishes the work (TO_DO removal, changelog / maintenance-log entries, plan archiving) — not a follow-up.
 - **Doc dates:** when editing a document that already has a `**Last updated:**` line, update the date if the edit changes policy, workflow, user-facing behavior, or canonical guidance. Do not bump dates for typo-only edits.
