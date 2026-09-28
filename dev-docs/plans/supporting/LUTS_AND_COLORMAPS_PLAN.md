@@ -1,8 +1,8 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** Not started  
+**Status:** In progress (Phase 1–3 landed on `feat/lut-display`; remaining: composed-curve W/L dragging (3c stretch goal), the editor's three-curve preview arrangement, the odd-width QImage stride regression, the four-combination Qt/GUI overlay tests, and Phase 4)  
 **Priority:** P1  
-**Last updated:** 2026-09-26  
+**Last updated:** 2026-09-28  
 **TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
@@ -37,7 +37,7 @@ Extend the display pipeline beyond the current **linear** window/level ramp to s
 
 ### 1a. LUT module
 
-- [ ] Create `src/core/lut_engine.py`:
+- [x] Create `src/core/lut_engine.py`:
   ```python
   LutType = Literal["grayscale_ramp", "colormap"]
   Interpolation = Literal["linear", "monotone_cubic", "catmull_rom"]
@@ -213,26 +213,26 @@ for the shared-LUT design.
 
 ### 1b. Built-in grayscale transfer functions
 
-- [ ] **Linear** (current behavior, default).
-- [ ] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` on normalized `x` in [0, 1],
+- [x] **Linear** (current behavior, default).
+- [x] **Sigmoid:** `1 / (1 + exp(-k * (x - center)))` on normalized `x` in [0, 1],
   `center = 0.5` — adjustable steepness `k` (bound to `LookUpTable.sigmoid_k`).
-- [ ] **Logarithmic:** `log(1 + x) / log(2)` on [0, 1]. The explicit divisor is
+- [x] **Logarithmic:** `log(1 + x) / log(2)` on [0, 1]. The explicit divisor is
   required: raw `log(1 + x)` ends at `log(2) ≈ 0.693`, not 1. (Divide-by-max
   happens to be the same divisor here, because the minimum is already 0.)
-- [ ] **Exponential:** `(exp(k * x) - 1) / (exp(k) - 1)` on [0, 1], with `k`
+- [x] **Exponential:** `(exp(k * x) - 1) / (exp(k) - 1)` on [0, 1], with `k`
   bound to a new `LookUpTable.exp_k` field (default 1.0, range 0.1–5.0) — like
   `gamma` and `sigmoid_k`, a transfer-function parameter needs a model field to
   be adjustable from the UI. **The affine form is required, not
   `exp(k*x)/exp(k)`:** dividing by the maximum pins only `x = 1` and leaves
   `x = 0` at `exp(-k)` (0.905 at k=0.1, 0.368 at k=1, 0.0067 at k=5), so the
   curve would never reach black.
-- [ ] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
+- [x] **Gamma:** `x^gamma` — adjustable gamma (0.1–5.0, bound to
   `LookUpTable.gamma`).
-- [ ] **Inverse:** `1 - x` on normalized input. (Written normalized, **not** `255 - x`:
+- [x] **Inverse:** `1 - x` on normalized input. (Written normalized, **not** `255 - x`:
   the engine samples at 256 points on [0, 1] and scales to [0, 255], so a
   `255 - x` formula here would double-scale and produce the wrong range.)
-- [ ] **Sigmoid is the one exception to full-range coverage** — see below.
-- [ ] **The `[0, 1] → [0, 255]` scale uses round-to-nearest, never truncation.**
+- [x] **Sigmoid is the one exception to full-range coverage** — see below.
+- [x] **The `[0, 1] → [0, 255]` scale uses round-to-nearest, never truncation.**
   `(1 - i/255) * 255` carries float error of about ±2.84e-14, so
   `.astype(np.uint8)` (which truncates) misses **50 of 256** codes by one level
   (byte 43 → 211 instead of 212, byte 59 → 195 instead of 196), while
@@ -243,10 +243,10 @@ for the shared-LUT design.
   asserting the inverse LUT is exactly `lut[i] == 255 - i` for all 256 codes.
   Note this is distinct from MONOCHROME1 polarity, which legitimately does
   `255 - array` on an already-uint8 array at a later stage.
-- [ ] Every formula above is written on **normalized [0, 1] input**; `transfer_fn`
+- [x] Every formula above is written on **normalized [0, 1] input**; `transfer_fn`
   is only ever called with normalized values, and `lut_engine` owns the single
   scale to [0, 255]. Do not mix byte-range and normalized forms in one function.
-- [ ] **Sigmoid does not map [0, 1] onto [0, 1] and must not claim to.** With
+- [x] **Sigmoid does not map [0, 1] onto [0, 1] and must not claim to.** With
   `center = 0.5`, `y(0.5) = 0.5` for every `k`, but the endpoints are
   `0.378 / 0.622` at `k = 1` and `0.076 / 0.924` at `k = 5` — a sigmoid never
   reaches pure black or pure white. **Use the endpoint renormalization**
@@ -262,7 +262,7 @@ for the shared-LUT design.
 
 ### 1c. Built-in colormaps
 
-- [ ] Leverage matplotlib colormaps (already a dependency):
+- [x] Leverage matplotlib colormaps (already a dependency):
   - `hot`, `cool`, `jet`, `rainbow`, `bone`, `gray`, `viridis`, `magma`,
     `inferno`, `plasma`, `turbo` — **lowercase registry keys only.** Every
     title-case form raises `ValueError` in the installed matplotlib 3.11.1
@@ -278,10 +278,10 @@ for the shared-LUT design.
     `cmap(..., bytes=True)` exactly (max abs difference 0) — so the
     `* 255).astype(np.uint8)` idiom is fine *for colormaps*, unlike the
     inverse transfer function in 1b.
-- [ ] Store as `LookUpTable` instances in a registry (`src/core/lut_catalog.py`).
-- [ ] Share the colormap cache/lookup already present in `src/core/fusion_processor.py`
+- [x] Store as `LookUpTable` instances in a registry (`src/core/lut_catalog.py`).
+- [x] Share the colormap cache/lookup already present in `src/core/fusion_processor.py`
   rather than adding a second matplotlib colormap cache and a second import path.
-- [ ] Built-in colormaps stay as pre-sampled `(256, 3)` arrays for performance;
+- [x] Built-in colormaps stay as pre-sampled `(256, 3)` arrays for performance;
   the control-point representation is the **editable** form for user-defined
   curves (Phase 3b) and the **persisted** form once Phase 4a lands — sampling
   converts between the two.
@@ -289,7 +289,7 @@ for the shared-LUT design.
 
 ### 1d. Tests
 
-- [ ] `tests/core/test_lut_engine.py`:
+- [x] `tests/core/test_lut_engine.py`:
   - Linear LUT matches current `apply_window_level` output.
   - `apply_lut(..., lut=None)` and `apply_lut_to_uint8(arr, None)` are
     byte-identical to today.
@@ -305,7 +305,7 @@ for the shared-LUT design.
     (`lut[0] == 0`, `lut[255] == 255`); a divide-by-max exponential fails this.
   - Color LUT output is (H,W,3).
   - Edge cases: all-zero image, single-value image.
-- [ ] `tests/core/test_lut_curve.py`:
+- [x] `tests/core/test_lut_curve.py`:
   - Piecewise-linear control points sample exactly between breakpoints.
   - Every interpolation mode passes through each control point, evaluated as a
     **univariate** spline in `x` (not parametric).
@@ -350,7 +350,7 @@ for the shared-LUT design.
 
 ### 2a. Wire LUT into slice display
 
-- [ ] Add `current_lut: LookUpTable` alongside the existing W/L fields in the
+- [x] Add `current_lut: LookUpTable` alongside the existing W/L fields in the
   per-series state dict on `ViewStateManager`
   (`src/gui/view_state_manager.py:112` — `series_defaults`, keyed by series
   identifier: "window_center, window_width, zoom, … image_inverted"), and to
@@ -358,7 +358,7 @@ for the shared-LUT design.
   `src/core/view_state_handlers.py` is **event glue** (`on_rescale_toggle_changed`,
   `on_reset_all_views`, `update_zoom_wl_status_from_view_state`), not a state
   store — extend it only where a LUT change must fan out to status text/reset.
-- [ ] Per-**pane** state (MPR subwindows) is separate: it lives in
+- [x] Per-**pane** state (MPR subwindows) is separate: it lives in
   `app.subwindow_data` / `app.subwindow_managers` (see
   `src/core/mpr_navigator_thumbnail.py:57-61`), so "one LUT per pane" is stored
   there, not on a process-wide series dict. Each pane already has its own
@@ -368,7 +368,7 @@ for the shared-LUT design.
   applies. There is no extra pane override beside that manager. The overlay
   must read the active pane's viewer flag, and must not read
   `app.view_state_manager` when a different subwindow is active. See 2b.
-- [ ] **`apply_window_level()` keeps its existing signature and gains NO `lut`
+- [x] **`apply_window_level()` keeps its existing signature and gains NO `lut`
   parameter.** It is called at `dicom_image_render.py:204`, *before* the polarity
   call at `:218`, so a `lut` here would apply the LUT before polarity and invert
   the required order. The LUT is applied afterwards by calling
@@ -389,18 +389,18 @@ for the shared-LUT design.
       rescale_intercept: float | None = None,
   ) -> np.ndarray:
   ```
-- [ ] Keep the `apply_window_level()` call as-is in the display path
+- [x] Keep the `apply_window_level()` call as-is in the display path
   (`src/gui/slice_display_manager.py` → `src/core/dicom_processor.py`), and call
   `apply_lut_to_uint8(display_array, active_lut)` on the uint8 result **after**
   net inversion. `display_array` is the first argument; passing `active_lut`
   positionally would bind it to the image. Take the active LUT from per-pane state.
-- [ ] Update the remaining direct callers so each **threads the active LUT from
+- [x] Update the remaining direct callers so each **threads the active LUT from
   their own state source into the image builder** and calls
   `apply_lut_to_uint8()` there, **after** net inversion — not by passing a LUT to
   `apply_window_level()`: `src/core/dicom_image_render.py:204` and
   `src/core/slice_display_pixels.py:110` (projections) — see 2b.
-- [ ] When LUT is "Linear" (default), behavior is identical to today.
-- [ ] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
+- [x] When LUT is "Linear" (default), behavior is identical to today.
+- [x] **Unresolved W/L (no windowing) branch — the LUT must still apply.**
   Inventory rows 1, 2, 3, and 5 have a reachable no-windowing fallback; row 4
   does not. Those fallback rows must converge on the same post-normalize step:
   **normalize (or window) to uint8 first, then net inversion (`P_inv`), then
@@ -455,7 +455,7 @@ for the shared-LUT design.
   only via the windowing path. Where practical, de-duplicate the inline
   normalize blocks on rows 2, 3, and 5 onto `normalize_to_uint8`, which row 1
   already uses, so future fixes apply to all of them.
-- [ ] **The user "invert" flag is a second `255 - array`, and it must move.**
+- [x] **The user "invert" flag is a second `255 - array`, and it must move.**
   `src/core/view_state_inversion.py` only *reports* the flag (it returns a bool
   from the per-series `image_inverted` default); the pixels are actually
   inverted in `src/gui/image_viewer_view.py:403-415`, which does `255 - array`
@@ -481,7 +481,7 @@ for the shared-LUT design.
   dataset that is both MONOCHROME1 and user-inverted is simply un-inverted; keep
   that behavior explicit and tested. `view_state_inversion.py` itself needs no
   change beyond being named as the flag's source of truth.
-- [ ] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
+- [x] **MONOCHROME1 ordering with color LUTs.** Current display polarity is
   applied by `apply_monochrome1_polarity()` (`src/core/photometric_polarity.py:73`)
   **after** W/L and **after** normalization: at `dicom_image_render.py:218` for
   the slice path and `slice_display_pixels.py:123` for projections. That helper
@@ -507,7 +507,7 @@ for the shared-LUT design.
     and greppable in review. A non-linear grayscale LUT is the case that breaks first: applying
     polarity after it would invert an already-shaped curve, and for a color LUT
     it would silently no-op on the `ndim != 2` guard.
-- [ ] **Where RGB expansion happens.** Both projection functions already build the
+- [x] **Where RGB expansion happens.** Both projection functions already build the
   PIL image from a 2-D array with `Image.fromarray(..., mode='L')`
   (`dicom_image_render.py:222-224`) and from a 3-channel array with
   `mode="RGB"` (`slice_display_pixels.py:129-131`). The QImage side is **not**
@@ -520,7 +520,7 @@ for the shared-LUT design.
   branches; the 2-D analysis arrays that polarity/photometric-interpretation
   invariants depend on stay grayscale, so expansion happens only at the
   image-construction boundary.
-- [ ] **Always pass an explicit `bytesPerLine`, and keep it equal to the actual
+- [x] **Always pass an explicit `bytesPerLine`, and keep it equal to the actual
   buffer layout.** Verified behavior for `QImage` in this repo's PySide6:
   - When **QImage allocates** the buffer (`QImage(w, h, Format_RGB888`), it
     rounds `bytesPerLine` **up** to a 4-byte multiple — a width of 63 yields
@@ -550,8 +550,8 @@ for the shared-LUT design.
 
 ### 2b. MPR and projection displays
 
-- [ ] Apply the active LUT to MPR panes and AIP/MIP/MinIP projections too.
-- [ ] Projections: thread `lut: LookUpTable | None` through
+- [x] Apply the active LUT to MPR panes and AIP/MIP/MinIP projections too.
+- [x] Projections: thread `lut: LookUpTable | None` through
   `src/core/slice_display_pixels.py` → `create_slice_projection_pil_image` and
   call `apply_lut_to_uint8()` on its result **after** both inversion inputs
   (`apply_monochrome1_polarity` at `slice_display_pixels.py:123`, then the pane's
@@ -561,14 +561,14 @@ for the shared-LUT design.
   before polarity. Source: `src/core/dicom_projections.py` /
   `src/core/projection_app_facade.py`
   / `src/gui/intensity_projection_controls_widget.py`.
-- [ ] MPR: `src/core/mpr_builder.py` stays **LUT-free**. `MprResult.slices` are raw
+- [x] MPR: `src/core/mpr_builder.py` stays **LUT-free**. `MprResult.slices` are raw
   stored-value float32 "consumed only at display time"
   (`mpr_builder.py:101-104`), and `mpr_cache.save(result: MprResult)`
   (`mpr_cache.py:291`) persists exactly what the builder produced — applying the
   LUT at reslice time would bake it into cached arrays, force a cache
   invalidation on every LUT change, and push display work into the builder
   worker thread.
-- [ ] **Split measurement space from display space in the MPR accessor — this is
+- [x] **Split measurement space from display space in the MPR accessor — this is
   the highest-risk item in the plan.** `get_subwindow_mpr_pixel_array()`
   (`src/core/mpr_navigator_thumbnail.py:32`) has *two* consumers with opposite
   requirements:
@@ -590,7 +590,7 @@ for the shared-LUT design.
   - Add a separate **display-space** accessor, or apply the transform at the
     image-construction sites, where W/L + polarity + user invert + LUT are
     applied in that order.
-- [ ] **All five inventory paths need the LUT, not just the panes.** The W/L →
+- [x] **All five inventory paths need the LUT, not just the panes.** The W/L →
   inversion → image sequence is re-implemented once per row of the canonical
   inventory in 1a, where "inversion" always means the net `P_inv` inversion
   (MONOCHROME1 XOR user invert, applied to the uint8 value before the LUT).
@@ -601,7 +601,7 @@ for the shared-LUT design.
   miss. Every row must route through the same normalize/window → net inversion
   → LUT order, and the duplicated inline logic should ideally be collapsed onto
   shared helpers so a future fix cannot reach only some of them.
-- [ ] **Rows 4 and 5 must consume `image_inverted` before the LUT and then stay
+- [x] **Rows 4 and 5 must consume `image_inverted` before the LUT and then stay
   finished.** In row 4, read the pane's invert flag and apply it to the 2-D
   grayscale array alongside MONOCHROME1 before `apply_lut_to_uint8()`; when the
   finished row-4 image reaches `mpr_controller.py:1080`, use the new
@@ -611,14 +611,14 @@ for the shared-LUT design.
   `Image.fromarray(..., mode="L")`, while color LUT output goes directly to
   `Image.fromarray(..., mode="RGB")` (the current code always uses `"L"` and
   would raise `Too many dimensions` on `(H, W, 3)`).
-- [ ] The active LUT for an MPR pane is read from that pane's subwindow state
+- [x] The active LUT for an MPR pane is read from that pane's subwindow state
   (`app.subwindow_data` / `app.subwindow_managers`), falling back to the
   per-series `ViewStateManager` LUT when the pane has no explicit override.
-- [ ] 3D volume rendering has its own transfer function system — LUTs here are for 2D display only.
+- [x] 3D volume rendering has its own transfer function system — LUTs here are for 2D display only.
 
 ### 2c. Export with LUT
 
-- [ ] Projection PNG/JPG export applies the active LUT (user sees what they exported):
+- [x] Projection PNG/JPG export applies the active LUT (user sees what they exported):
   thread the active LUT into `create_projection_for_export` and call
   `apply_lut_to_uint8()` **after** both inversion inputs
   (`apply_monochrome1_polarity` at `export_rendering.py:372`, then the pane's
@@ -627,7 +627,8 @@ for the shared-LUT design.
   `apply_window_level()` at `:357`. Single-slice PNG/JPG export is not a
   separate path: `export_manager.py:564` and `:576` call
   `DICOMProcessor.dataset_to_image`, which is row 1.
-- [ ] DICOM export: store the raw pixel data (no LUT baked in); optionally write a VOI LUT Sequence for non-linear functions, or note in export dialog that LUT is display-only
+- [x] DICOM export: store the raw pixel data (no LUT baked in); the user guide's
+  export page notes that the LUT is display-only for DICOM
   (`src/core/mpr_dicom_export.py` for MPR DICOM export).
 
 ---
@@ -636,21 +637,21 @@ for the shared-LUT design.
 
 ### 3a. LUT selector
 
-- [ ] Add a **LUT** dropdown to the toolbar (or to the right-pane controls area):
+- [x] Add a **LUT** dropdown to the toolbar (or to the right-pane controls area):
   - Grouped: **Grayscale** (Linear, Sigmoid, Log, Exp, Gamma, Inverse) | **Color** (Hot, Cool, Jet, …).
   - Icon swatches showing a mini gradient preview for each LUT.
-- [ ] Also accessible from **View → Look-Up Table** submenu and from the image context menu.
-- [ ] Active LUT is persisted per-pane (so different panes can have different
+- [x] Also accessible from **View → Look-Up Table** submenu and from the image context menu.
+- [x] Active LUT is persisted per-pane (so different panes can have different
   LUTs). Because `LookUpTable` is frozen, persisting means storing the LUT (or
   its `custom_luts.json` key) in the pane's state and handing out replacements —
   never mutating a LUT that another pane or the MPR cache may still hold.
-- [ ] The dropdown entry for "Custom…" is present but **disabled/grayed out**
+- [x] The dropdown entry for "Custom…" is present but **disabled/grayed out**
   only during the development window in which the Phase 3a selector exists
   without the Phase 3b curve editor. The release ships a complete Phase 3 (3a
   selector **and** 3b editor together) — see the sequencing note below — so no
   shipped state ever contains a permanently dead entry.
-- [ ] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a LUT immediately selects it and updates the histogram overlay. (Loading a **saved** LUT depends on Phase 4a persistence; until that ships there is nothing to load from disk, so this bullet covers in-session selection only.)
-- [ ] Gamma LUT: show a slider for the gamma parameter (default 1.0) bound to
+- [x] Display the active/loaded LUT name, source (built-in, file, or custom), and curve/colormap preview; loading a LUT immediately selects it and updates the histogram overlay. (Loading a **saved** LUT depends on Phase 4a persistence; until that ships there is nothing to load from disk, so this bullet covers in-session selection only.)
+- [x] Gamma LUT: show a slider for the gamma parameter (default 1.0) bound to
   `LookUpTable.gamma`, so changing it re-samples and re-renders.
 
 > **Sequencing:** the interactive curve editor is **Phase 3b**, not Phase 4 —
@@ -661,13 +662,13 @@ for the shared-LUT design.
 
 ### 3b. Interactive custom curve editor (grayscale curves first)
 
-- [ ] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit **grayscale transfer curves**. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
-- [ ] Gamma / sigmoid / exponential parameter controls live in this dialog as well as
+- [x] **New** `src/gui/dialogs/lut_curve_editor_dialog.py`: edit **grayscale transfer curves**. Add, delete, and drag breakpoints on a graph; draw freehand; switch between straight-line piecewise interpolation and smooth curves (monotone cubic or Catmull–Rom); clamp or snap endpoints to the valid range; preview the result; undo/redo edits. Freehand input simplifies into editable control points (Ramer–Douglas–Peucker, `epsilon = 0.02` in normalized [0, 1] output space, endpoints pinned to (0,0)/(1,1)) rather than becoming a raster-only map. A loaded LUT remains visible in the selector with its name/source and is reopenable here.
+- [x] Gamma / sigmoid / exponential parameter controls live in this dialog as well as
   the toolbar, bound to `LookUpTable.gamma` / `sigmoid_k` / `exp_k`.
-- [ ] Live preview goes through the same `apply_lut_to_uint8()` call the viewport uses,
+- [x] Live preview goes through the same `apply_lut_to_uint8()` call the viewport uses,
   on the already-windowed **and net-inversion-corrected** array — not `apply_lut()` —
   so the preview cannot diverge from the pane. No separate preview renderer.
-- [ ] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
+- [x] **Editing *color* colormaps is explicitly out of scope for v1 and is deferred
   to Phase 4b.** The current `control_points` model is a list of `(x, y)` scalar
   pairs, which describes a grayscale intensity ramp only — it cannot represent
   an RGB color stop, and the persistence schema stores no color data either.
@@ -702,7 +703,7 @@ application. Every display surface should make that composition visible rather
 than showing the LUT alone, because a user who changes W/L under a steep LUT
 needs to see which part of the curve moved.
 
-- [ ] Draw all three curves together. Ownership is split in two, and the plan
+- [x] Draw all three curves together. Ownership is split in two, and the plan
   previously assigned both halves to different places — read this carefully.
   **`src/gui/widgets/lut_transfer_function_widget.py` (new) owns the curve
   *data and geometry*: it samples the W/L ramp, the LUT, and the composed
@@ -747,7 +748,7 @@ needs to see which part of the curve moved.
     state that produced it.
   - A legend labels the three curves, and the active LUT name/source appears
     alongside it so the overlay is self-describing.
-- [ ] Update the overlay when W/L or LUT changes (W/L drag re-samples the
+- [x] Update the overlay when W/L or LUT changes (W/L drag re-samples the
   composed curve; LUT or gamma change re-samples the LUT and composed curves).
 - [ ] The editor (3b) shows the same three-curve arrangement: the edited curve
   is the **LUT (post-polarity, post-user-invert)** curve, with the net-inversion
@@ -755,20 +756,38 @@ needs to see which part of the curve moved.
   editing stays in LUT space while the preview remains in display space. The preview must go
   through the same `apply_lut_to_uint8()` call the viewport uses — **not**
   `apply_lut()` — so it cannot diverge from what the pane shows.
+  **Gesture-boundary hardening (review follow-up, 2026-09-28):** the canvas
+  mutates points at press while the undo snapshot is written at release, so a
+  lost release would leave an unundoable change. No reachable interruption
+  exists inside the modal dialog today (Qt delivers the release through the
+  mouse grab); if the editor ever becomes non-modal or gains gesture-cancel
+  shortcuts, snapshot at the gesture boundary first.
 - [ ] Allow interactive W/L adjustment by dragging the composed curve's
   endpoints (stretch goal).
-- [ ] The same three-curve widget is reused for the toolbar dropdown swatches
+- [x] The same three-curve widget is reused for the toolbar dropdown swatches
   and the LUT name/source readout (3a) so there is one implementation.
 
 ### 3d. Keyboard shortcut
 
-- [ ] `L` to cycle through LUTs? Or just rely on the toolbar dropdown.
-- [ ] Check for conflicts with existing shortcuts.
+- [x] `L` to cycle through LUTs? Or just rely on the toolbar dropdown.
+  Decision: bare **L** opens the toolbar menu (it does not cycle). The 3D
+  patient-left camera is key **3**. **Ctrl+Shift+L** stays on overlay tag
+  configuration. The View menu and image context menu remain available.
+- [x] Check for conflicts with existing shortcuts.
 
 ---
 
 ## Phase 4 — Advanced (future)
 
+- [ ] **LUT display overlay on panes:** show the active LUT name — and an optional
+  curve/colormap mini-indicator — in a corner of each image pane when a non-Linear
+  LUT is active, **toggleable from the View menu** and persisted via
+  `ConfigManager` like the other overlay toggles (follow the existing
+  `overlay_text_builder.py` corner-label pattern). This supersedes the
+  files-touched `overlay_text_builder.py` "Active LUT label" row and open
+  question 4 below: today the LUT is named in the menu, the toolbar tooltip, and
+  the histogram legend, but not on the pane itself. Label text follows the same
+  privacy masking as the other corner overlays.
 - [ ] **DICOM Modality LUT Sequence:** Parse `ModalityLUTSequence` (0028,3000) and `VOILUTSequence` (0028,3010) from datasets that embed non-linear LUTs — use them as an additional "From DICOM" option.
 - [ ] **Per-series default LUT:** E.g., always use "Hot" for PET, "Bone" for CT.
 
@@ -831,11 +850,11 @@ needs to see which part of the curve moved.
 
 ## Test plan (all phases)
 
-- [ ] **Unit — engine** (`tests/core/test_lut_engine.py`): linear LUT byte-identical
+- [x] **Unit — engine** (`tests/core/test_lut_engine.py`): linear LUT byte-identical
   to `apply_window_level`; `lut=None` unchanged behavior; sigmoid steepness → step;
   `gamma=1.0` == linear; inverse flips; color LUT `(H, W, 3)`; all-zero and
   single-value images.
-- [ ] **Unit — curve model** (`tests/core/test_lut_curve.py`): piecewise-linear
+- [x] **Unit — curve model** (`tests/core/test_lut_curve.py`): piecewise-linear
   sampling exact between breakpoints; every interpolation mode passes through
   each control point as a **univariate** spline in `x`; Fritsch–Carlson
   introduces **no new extrema** (stays within the control-point y-range) and
@@ -845,7 +864,7 @@ needs to see which part of the curve moved.
   duplicate-point rejection / 256-entry sampling deterministic; RDP
   simplification (`epsilon = 0.02`, endpoints pinned) is deterministic and
   idempotent.
-- [ ] **Unit — composition** (new, `tests/core/test_lut_transfer.py`): the
+- [x] **Unit — composition** (new, `tests/core/test_lut_transfer.py`): the
   composed curve satisfies `composed(x) == LUT(P_inv(u))` with `u = uint8(WL(x))` — with `P_inv`
   the XOR of MONOCHROME1 inversion and `image_inverted` — for both a linear and
   a non-linear LUT, across all four photometric/user-invert combinations; a
@@ -857,7 +876,7 @@ needs to see which part of the curve moved.
   LUT's own monotonicity rather than assuming "monotone" means "increasing";
   composition is order-sensitive (assert LUT after `P_inv` after the uint8
   cast of W/L, never W/L after the LUT).
-- [ ] **Regression — display path**: existing slice-display, MPR, projection, and
+- [x] **Regression — display path**: existing slice-display, MPR, projection, and
   export tests stay green with a Linear LUT selected
   (`tests/core/test_mpr_photometric_interpretation.py`,
   `tests/gui/test_mpr_controller_monochrome1.py`, and the projection/export
@@ -879,22 +898,22 @@ needs to see which part of the curve moved.
   explicit unaligned stride correctly, so padding is an implementation choice,
   not an invariant. Use the odd widths on the variable-size consumers so a
   hardcoded or mismatched stride cannot hide.
-- [ ] **Regression — measurement space is never display-transformed**: assert that
+- [x] **Regression — measurement space is never display-transformed**: assert that
   the array returned for MPR ROI statistics equals the rescaled stored values
   exactly — no windowing, no polarity inversion, no user invert, no LUT — and
   that selecting a color LUT does not change a single reported ROI statistic.
   This guards the shared-accessor split in 2b, whose failure mode is silent.
-- [ ] **Regression — user-invert composition**: with `image_inverted` set, the
+- [x] **Regression — user-invert composition**: with `image_inverted` set, the
   composed transfer function the overlay draws equals
   `LUT(P_inv(u))` with `u = uint8(WL(x))`, where `P_inv` is the XOR of MONOCHROME1-inversion and the
   user flag, covering all four combinations (MONOCHROME2/1 × invert on/off). In
   particular assert the double-inverted case collapses back to `LUT(u)`, and
   that the editor preview and the viewport agree under each combination.
-- [ ] **Regression — LUT reaches every inventory path**: each of the five rows
+- [x] **Regression — LUT reaches every inventory path**: each of the five rows
   in the 1a inventory produces output changed by a non-linear LUT, on both its
   windowed and (where reachable) its normalize-fallback branch. Assert
   row-by-row so a path cannot be silently skipped.
-- [ ] **Regression — no-windowing branch**: pass explicit `None` center and
+- [x] **Regression — no-windowing branch**: pass explicit `None` center and
   width into each inventory row that has the fallback — row 1
   `render_grayscale_image` called directly (not through `dataset_to_image`,
   which resolves tags first and will derive a window from the pixels), row 2
@@ -925,7 +944,7 @@ needs to see which part of the curve moved.
 
 ## Documentation and docstrings
 
-- [ ] **Contract docstrings** on the new/changed public functions —
+- [x] **Contract docstrings** on the new/changed public functions —
   `apply_lut()`, `LookUpTable.__post_init__`/`to_dict`/`from_dict`, the
   interpolation and RDP helpers, and `apply_lut_to_uint8()` —
   stating the composition order (`LUT ∘ P_inv ∘ W/L`, where `P_inv` is the XOR of
@@ -936,12 +955,13 @@ needs to see which part of the curve moved.
   ranges — **`gamma` in [0.1, 5.0] (`None` when not the gamma curve),
   `sigmoid_k > 0` (`None` when not the sigmoid curve), `exp_k` in [0.1, 5.0]
   defaulting to 1.0**. Keep these three ranges identical to the dataclass
-  comments, `__post_init__`, and the JSON schema.
-- [ ] Update the docstring on every signature this plan changes
+  comments, `__post_init__`, and the JSON schema. (`to_dict`/`from_dict`
+  docstrings land with the Phase 4a persistence schema.)
+- [x] Update the docstring on every signature this plan changes
   (`apply_window_level`, the projection-image builder, `export_rendering`'s
   rasterization entry point, the MPR reslice/thumbnail entry points) so callers
   reading only docstrings know a LUT is applied and where it comes from.
-- [ ] **`src/core/photometric_polarity.py` module docstring goes stale and must be
+- [x] **`src/core/photometric_polarity.py` module docstring goes stale and must be
   updated.** `photometric_polarity.py:16-18` currently states the pipeline is
   "modality rescale, then window/level on stored values, then polarity inversion
   **last, on the finalized 8-bit array**" (per PS3.3 C.11.2 and C.7.6.3.1.2's
@@ -955,16 +975,16 @@ needs to see which part of the curve moved.
   standard's "after any VOI gray scale transformations" is satisfied because
   the LUT is a viewer-side display transform, not a DICOM VOI transformation.
   Do not silently leave a comment that now contradicts the code.
-- [ ] **User docs** (`user-docs/`): document the LUT selector, the three-curve
+- [x] **User docs** (`user-docs/`): document the LUT selector, the three-curve
   transfer-function display, the editor, keyboard shortcut, and the explicit
   statement that PNG/JPG export bakes the LUT while DICOM export does not.
   Follow [`dev-docs/plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](../../DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
   and run `python scripts/check_user_docs_links.py`.
-- [ ] **Dev docs**: refresh
+- [x] **Dev docs**: refresh
   [`dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`](../../info/PYLINAC_INTEGRATION_OVERVIEW.md)
   only if a DICOM LUT source lands; add a CHANGELOG entry for the user-visible
   feature; keep `dev-docs/TO_DO.md` and the plan status in sync in the same PR.
-- [ ] **Manual smoke** steps for the AGENTS.md smoke harness
+- [x] **Manual smoke** steps for the AGENTS.md smoke harness
   (`dev-docs/orchestration/AGENT_SMOKE.md`): select Linear (no visible change),
   select a color LUT (RGB output, correct orientation), open the editor, draw
   freehand, save/reload, and confirm export matches the viewport.
@@ -976,7 +996,7 @@ needs to see which part of the curve moved.
 1. **Interaction with fusion:** Fusion already uses colormaps for the overlay series. Should the base image LUT apply independently? Probably yes — the fusion overlay has its own color pipeline.
 2. **Performance:** Applying a 256-entry LUT to a large image is a vectorized `np.take` — should be fast. Color LUTs require 1→3 channel expansion; measure impact on large images.
 3. **DICOM VOI LUT Sequence:** Some DICOM datasets embed non-linear LUTs. Should we automatically use them if present? Recommend: offer as a choice ("From DICOM" in the dropdown).
-4. **Overlay text:** Should the overlay show which LUT is active? E.g., "LUT: Sigmoid" or "LUT: Hot". Recommend yes, small text in corner.
+4. **Overlay text:** Should the overlay show which LUT is active? E.g., "LUT: Sigmoid" or "LUT: Hot". Recommend yes, small text in corner. **Decision: deferred into the Phase 4 "LUT display overlay on panes" item** (View-menu toggle, ConfigManager-persisted).
 5. **Custom curve editing:** Should freehand drawing create a dense point set or simplify into a small set of editable control points? Recommend editable control points, optional freehand sampling, monotone-cubic smoothing, and undo/redo; keep endpoints clamped to the valid range.
 
 ---
@@ -1009,7 +1029,7 @@ needs to see which part of the curve moved.
 | `src/gui/dialogs/lut_curve_editor_dialog.py` | **New** — interactive custom curve editor (grayscale curves) |
 | `src/core/mpr_view_math.py` | Route `array_to_pil` through the shared W/L → polarity → user-invert → LUT order; call `apply_lut_to_uint8` after both inversions; branch grayscale/RGB PIL output and return the pane's final image |
 | `src/gui/mpr_controller.py` | For grayscale LUT/MPR images, hand row 4 output to `set_image` through the new display-final path so the pane does not apply `_apply_inversion` a second time |
-| `src/gui/overlay_text_builder.py` | Active LUT label |
+| `src/gui/overlay_text_builder.py` | Active LUT label — **deferred to the Phase 4 "LUT display overlay on panes" item** |
 | `src/core/photometric_polarity.py` | Update the stale "polarity last" module docstring for the new order |
 | `src/gui/export_rendering.py` | Thread the active LUT into `create_projection_for_export` (`:279`) and call `apply_lut_to_uint8` after net inversion on both branches; do **not** pass it to `apply_window_level`. Single-slice PNG/JPG export stays on row 1 |
 | `src/core/mpr_dicom_export.py` | Keep DICOM export display-only (no baked LUT) |

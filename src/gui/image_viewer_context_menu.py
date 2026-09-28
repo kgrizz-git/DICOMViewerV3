@@ -452,6 +452,10 @@ def _add_window_level_section(viewer: Any, context_menu: QMenu) -> None:
     quick_wl_action = context_menu.addAction("Quick Window/Level (Q)")
     quick_wl_action.triggered.connect(viewer.quick_window_level_requested.emit)
 
+    from gui.lut_actions import attach_context_lut_menu
+
+    attach_context_lut_menu(context_menu, viewer)
+
     invert_action = context_menu.addAction("Invert Image (I)")
     invert_action.setCheckable(True)
     invert_action.setChecked(viewer.image_inverted)

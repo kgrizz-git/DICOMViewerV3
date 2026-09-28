@@ -427,13 +427,16 @@ class ImageViewerViewMixin:
             # This should not happen in normal operation as set_image stores the original
             return
 
-        # Toggle inversion state FIRST
         self.image_inverted = not self.image_inverted
 
         # Notify callback of state change (for persistence per series)
         # This must happen BEFORE calling set_image to ensure state is stored
         if self.inversion_state_changed_callback:
             self.inversion_state_changed_callback(self.image_inverted)
+        redisplay = getattr(self, "redisplay_after_inversion", None)
+        if redisplay is not None:
+            redisplay()
+            return
 
         # Apply inversion to the original image and update display
         # Pass the new inversion state explicitly to ensure synchronization
@@ -447,6 +450,12 @@ class ImageViewerViewMixin:
         preserve_view = True
         self.set_image(display_image, preserve_view=preserve_view, apply_inversion=self.image_inverted)
 
+    def set_display_final_image(self, image: Image.Image, *, preserve_view: bool, image_inverted: bool) -> None:
+        """Show a grayscale image whose pixels already include user invert."""
+        self.image_inverted = False
+        self.set_image(image, preserve_view=preserve_view, apply_inversion=None if preserve_view else False)
+        self.image_inverted = image_inverted
+
     def set_image(self, image: Image.Image, preserve_view: bool = False, apply_inversion: bool | None = None) -> None:
         """
         Set the image to display.
@@ -459,25 +468,16 @@ class ImageViewerViewMixin:
             apply_inversion: Optional bool to override inversion state. If None, uses self.image_inverted
         """
 
-        # Store original image for inversion
-        # When preserve_view=False: new slice, always store new original_image
-        # When preserve_view=True and apply_inversion is not None: same slice, inversion toggle, preserve original_image
-        # When preserve_view=True and apply_inversion is None: new slice (scrolling), store new original_image
         if not preserve_view:
             # New slice - always store new original image (non-inverted)
             self.original_image = image.copy()
 
-            # Update inversion state FIRST before determining if we need to invert
-            # If apply_inversion is provided, use it (stored state for this series)
-            # If apply_inversion is None, reset to False (no stored state for this series)
             if apply_inversion is not None:
                 self.image_inverted = apply_inversion
             else:
                 # No stored inversion state for this series - reset to False
                 self.image_inverted = False
 
-            # Determine if we need to invert the image for display
-            # Use apply_inversion if provided, otherwise use current self.image_inverted state
             should_invert = apply_inversion if apply_inversion is not None else self.image_inverted
 
             # Apply inversion if needed

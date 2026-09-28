@@ -35,6 +35,17 @@ def test_update_with_pixel_array_callback(qapp) -> None:
 
 
 @pytest.mark.qt
+def test_curve_checkboxes_start_checked_and_hide_the_lut(qapp) -> None:
+    dlg = HistogramDialog(get_current_dataset=lambda: None)
+    assert dlg._window_curve_checkbox.isChecked()
+    assert dlg._lut_curve_checkbox.isChecked()
+    assert dlg._composed_curve_checkbox.isChecked()
+    dlg._lut_curve_checkbox.setChecked(False)
+    assert dlg.histogram_widget._show_lut_curve is False
+    _ = qapp
+
+
+@pytest.mark.qt
 def test_reject_closes_dialog(qapp) -> None:
     dlg = HistogramDialog(get_current_dataset=lambda: None)
     dlg.reject()

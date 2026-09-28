@@ -179,6 +179,7 @@ class ImageViewer(ImageViewerInputMixin, ImageViewerViewMixin, QGraphicsView):
 
         # Image inversion state
         self.image_inverted: bool = False
+        self.redisplay_after_inversion: Callable[[], None] | None = None
         self.original_image: Image.Image | None = None  # Store original image for inversion
 
         # Callback to notify when inversion state changes (for persistence per series)

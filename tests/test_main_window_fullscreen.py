@@ -113,6 +113,22 @@ def test_fullscreen_chrome_hide_and_restore_splitter(qapp):
 
 
 @pytest.mark.qt
+def test_overlay_tags_configuration_uses_ctrl_shift_l(qapp, tmp_path):
+    """The shortcuts dialog lists this chord; the View action has to carry it."""
+    w = MainWindow(ConfigManager(config_dir=tmp_path / "config"))
+    matches = [
+        action
+        for action in w.view_menu.actions()
+        if action.text().startswith("Overlay") and "Tags" in action.text()
+    ]
+    assert len(matches) == 1
+    assert matches[0].shortcut().toString(QKeySequence.SequenceFormat.PortableText) == "Ctrl+Shift+L"
+    button = w.lut_toolbar_button
+    assert button.icon().isNull() is False
+    assert any(target is button and name == "lut" for target, name in w._toolbar_icon_registry)
+
+
+@pytest.mark.qt
 def test_fullscreen_action_has_f11_and_portable_fullscreen_shortcuts(qapp):
     w = MainWindow(ConfigManager())
     assert w.fullscreen_action is not None

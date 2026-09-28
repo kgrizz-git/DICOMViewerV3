@@ -400,11 +400,15 @@ def build_menu_bar(main_window) -> None:
     main_window.smooth_when_zoomed_action.setChecked(main_window.config_manager.get_smooth_image_when_zoomed())
     main_window.smooth_when_zoomed_action.triggered.connect(main_window._on_smooth_when_zoomed_toggled)
     view_menu.addAction(main_window.smooth_when_zoomed_action)
+    from gui.lut_actions import attach_view_lut_menu
+
+    attach_view_lut_menu(view_menu, main_window)
 
     # ── Section 2: Overlays ─────────────────────────────────────────────────
     view_menu.addSeparator()
 
     overlay_config_action = QAction("Overlay &Tags Configuration...", main_window)
+    overlay_config_action.setShortcut(QKeySequence("Ctrl+Shift+L"))
     overlay_config_action.triggered.connect(main_window.overlay_config_requested.emit)
     view_menu.addAction(overlay_config_action)
 

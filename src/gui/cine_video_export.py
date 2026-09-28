@@ -46,6 +46,7 @@ from PIL import Image
 from pydicom.dataset import Dataset
 
 from core.dicom_processor import DICOMProcessor
+from core.lut_display import grayscale_export_kwargs, invert_color_export_image
 from gui import export_rendering as _er
 
 _MSG_EXPORT_CANCELLED = "Export cancelled."
@@ -157,6 +158,8 @@ class CineFrameRequest:
     export_scale: float = 1.0
     scale_annotations_with_image: bool = False
     subwindow_annotation_managers: list[dict[str, Any]] | None = None
+    image_inverted: bool = False
+    lut: Any = None
 
 
 def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None:
@@ -211,6 +214,8 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
             window_center,
             window_width,
             use_rescaled_values,
+            image_inverted=request.image_inverted,
+            lut=request.lut,
         )
         if image is None:
             image = DICOMProcessor.dataset_to_image(
@@ -218,6 +223,7 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
                 window_center=window_center,
                 window_width=window_width,
                 apply_rescale=use_rescaled_values,
+                **grayscale_export_kwargs(dataset, request.image_inverted, request.lut),
             )
         else:
             is_projection_image = True
@@ -227,6 +233,7 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
             window_center=window_center,
             window_width=window_width,
             apply_rescale=use_rescaled_values,
+            **grayscale_export_kwargs(dataset, request.image_inverted, request.lut),
         )
 
     if image is None:
@@ -234,6 +241,7 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
 
     if not is_projection_image:
         image = _er.process_image_by_photometric_interpretation(image, dataset)
+    image = invert_color_export_image(image, dataset, request.image_inverted)
 
     effective_scale = _er.effective_scale_for_image(image.width, image.height, export_scale)
     if effective_scale > 1.0:

@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-26
+**Last updated:** 2026-09-28
 
 ---
 
@@ -344,6 +344,8 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
 
 - [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
+
+- [ ] **[P2]** **Consider a 10- or 12-bit display path.** Stored pixels are already 10-, 12-, or 16-bit. Window/level uses that range, then the display path quantizes to 8-bit (`uint8`, then `QImage.Format_Grayscale8` / `Format_RGB888`) before the LUT indexes a 256-entry table. Spike whether Qt can keep a 10-bit (`Format_RGB30`) or 16-bit grayscale (`Format_Grayscale16`) image through to the monitor on macOS and Windows, and which outputs must stay 8-bit (JPEG, cine, thumbnails). Keep the LUT after window/level. Wider display depth helps when one window contains more than 256 distinct stored steps, and it reduces banding on a steep LUT. It does not show values outside the window. Added 2026-09-28.
 
 ### MPR & fusion views
 

@@ -76,6 +76,7 @@ _SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Fullscreen", "F11  or  Ctrl+F"),
             ("Privacy View", "Ctrl+P"),
             ("Invert Image", "I"),
+            ("Look-Up Table", "L"),
             ("Cycle Overlay Detail (all panes)", "Space"),
             ("Legacy Overlay Cycle (focused pane)", "Shift+Space"),
             ("Overlay Tags Config", "Ctrl+Shift+L"),

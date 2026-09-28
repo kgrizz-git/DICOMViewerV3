@@ -1,0 +1,117 @@
+"""Window/level ramp, LUT, and composed-trace sampling."""
+
+from __future__ import annotations
+
+import itertools
+
+import numpy as np
+
+from core.dicom_window_level import apply_window_level
+from core.lut_catalog import colormap_lut, gamma_lut, inverse_lut, linear_lut
+from core.lut_engine import apply_lut_to_uint8
+from core.lut_transfer import (
+    curves_are_one_line,
+    lut_samples,
+    sample_window_and_composed,
+)
+from gui.widgets.lut_transfer_function_widget import overlay_paths
+
+
+def test_linear_monochrome2_collapses_to_the_window() -> None:
+    stored = np.array([0.0, 50.0, 127.5, 200.0])
+    windowed, composed = sample_window_and_composed(stored, 100.0, 200.0, linear_lut(), "MONOCHROME2", False)
+    expected = apply_window_level(stored.copy(), 100.0, 200.0)
+    assert np.array_equal(windowed, expected)
+    assert np.array_equal(composed, expected)
+    assert curves_are_one_line(linear_lut(), "MONOCHROME2", False)
+
+
+def test_truncation_inverts_127_point_5_to_128() -> None:
+    stored = np.array([127.5])
+    _windowed, composed = sample_window_and_composed(stored, 127.5, 255.0, linear_lut(), "MONOCHROME1", False)
+    assert int(composed[0]) == 128
+
+
+def test_xor_cancels_before_the_lut() -> None:
+    stored = np.array([0.0, 64.0, 127.5, 255.0])
+    both, composed_both = sample_window_and_composed(stored, 127.5, 255.0, inverse_lut(), "MONOCHROME1", True)
+    neither, composed_neither = sample_window_and_composed(stored, 127.5, 255.0, inverse_lut(), "MONOCHROME2", False)
+    assert np.array_equal(composed_both, composed_neither)
+    inverted = apply_lut_to_uint8((255 - both).reshape(1, -1), inverse_lut()).reshape(-1)
+    assert not np.array_equal(composed_both, inverted)
+
+
+def test_user_invert_without_monochrome1_flips_before_the_lut() -> None:
+    stored = np.arange(8, dtype=np.float64)
+    windowed, composed = sample_window_and_composed(stored, 3.5, 8.0, inverse_lut(), "MONOCHROME2", True)
+    expected = apply_lut_to_uint8((255 - windowed).reshape(1, -1), inverse_lut()).reshape(-1)
+    assert np.array_equal(composed, expected)
+    assert not curves_are_one_line(linear_lut(), "MONOCHROME2", True)
+    assert curves_are_one_line(linear_lut(), "MONOCHROME1", True)
+
+
+def test_monochrome1_without_invert_equals_monochrome2_with_invert() -> None:
+    """Completes the four photometric x invert combinations: P_inv is one XOR."""
+    stored = np.array([0.0, 64.0, 127.5, 255.0])
+    _w1, composed_m1 = sample_window_and_composed(stored, 127.5, 255.0, inverse_lut(), "MONOCHROME1", False)
+    _w2, composed_m2 = sample_window_and_composed(stored, 127.5, 255.0, inverse_lut(), "MONOCHROME2", True)
+    assert np.array_equal(composed_m1, composed_m2)
+    assert not curves_are_one_line(linear_lut(), "MONOCHROME1", False)
+
+
+def test_colormap_samples_are_rgb_and_overlay_uses_a_bar() -> None:
+    samples = lut_samples(colormap_lut("hot"))
+    assert samples.shape == (256, 3)
+    paths = overlay_paths(colormap_lut("hot"), 40.0, 80.0, "MONOCHROME2", False, 0.0, 80.0)
+    assert paths is not None
+    assert paths.lut_colors is not None and paths.lut_colors.shape == (256, 3)
+    assert paths.lut_trace is None
+    assert paths.composed.shape == (256,)
+
+
+def test_lut_trace_follows_windowed_codes() -> None:
+    paths = overlay_paths(gamma_lut(2.2), 1000.0, 400.0, "MONOCHROME2", False, 800.0, 1200.0)
+    assert paths is not None
+    assert paths.lut_on_window is not None
+    expected = apply_lut_to_uint8(paths.window.reshape(1, -1), gamma_lut(2.2)).reshape(-1)
+    assert np.array_equal(paths.lut_on_window, expected)
+    linear = overlay_paths(linear_lut(), 1000.0, 400.0, "MONOCHROME2", False, 800.0, 1200.0)
+    assert linear is not None and linear.collapse
+
+
+def test_color_lut_base_fuses_as_rgb() -> None:
+    from core.fusion_processor import FusionProcessor
+
+    base = np.zeros((4, 4, 3), dtype=np.uint8)
+    base[..., 0] = 200
+    overlay = np.full((4, 4), 10, dtype=np.float32)
+    fused = FusionProcessor.create_fusion_image(base, overlay, alpha=0.0, colormap="gray", threshold=0.0)
+    assert fused.shape == (4, 4, 3)
+
+
+def test_dark_uint8_color_base_stays_dark_in_fusion() -> None:
+    from core.fusion_processor import FusionProcessor
+
+    base = np.zeros((4, 4, 3), dtype=np.uint8)
+    base[..., 0] = 1
+    overlay = np.zeros((4, 4), dtype=np.float32)
+    fused = FusionProcessor.create_fusion_image(base, overlay, alpha=0.0, colormap="gray", threshold=0.0)
+    assert int(fused[..., 0].max()) == 1
+
+
+def test_vertical_freehand_points_stay_a_valid_lut() -> None:
+    from core.lut_engine import LookUpTable
+    from gui.dialogs.lut_curve_editor_dialog import _curve_lut
+
+    lut = _curve_lut([(0.0, 0.0), (0.0, 0.9), (1.0, 1.0)], "linear")
+    assert isinstance(lut, LookUpTable)
+    xs = [point[0] for point in lut.control_points or ()]
+    assert xs[0] == 0.0 and xs[-1] == 1.0
+    assert all(right > left for left, right in itertools.pairwise(xs))
+
+
+def test_gamma_changes_the_composed_bytes() -> None:
+    stored = np.linspace(0.0, 100.0, 16)
+    _windowed, linear = sample_window_and_composed(stored, 50.0, 100.0, linear_lut(), "MONOCHROME2", False)
+    _windowed, curved = sample_window_and_composed(stored, 50.0, 100.0, gamma_lut(2.2), "MONOCHROME2", False)
+    assert not np.array_equal(linear, curved)

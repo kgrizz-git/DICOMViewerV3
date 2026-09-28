@@ -33,6 +33,7 @@ from gui.dialog_coordinator import DialogCoordinator
 from gui.file_operations_handler import FileOperationsHandler
 from gui.file_series_loading_coordinator import FileSeriesLoadingCoordinator
 from gui.keyboard_event_handler import KeyboardEventHandler
+from gui.lut_actions import show_lut_toolbar_menu
 from gui.main_app_key_event_filter import is_widget_allowed_for_layout_shortcuts
 from gui.mouse_mode_handler import MouseModeHandler
 
@@ -225,4 +226,5 @@ def initialize_handlers(app: DICOMViewerApp) -> None:
         open_quick_window_level_callback=app._open_quick_window_level,
         cancel_angle_draw_callback=app.measurement_coordinator.handle_angle_draw_cancel_requested,
         exit_roi_geometry_edit_callback=app.roi_coordinator.exit_roi_geometry_edit_mode,
+        open_lut_menu_callback=lambda: show_lut_toolbar_menu(app.main_window),
     )

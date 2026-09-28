@@ -30,6 +30,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QProgressDialog
 
 from core.dicom_processor import DICOMProcessor
+from core.lut_display import grayscale_export_kwargs, invert_color_export_image
 from gui import export_rendering as _er
 from utils.deep_anonymizer import DeepDICOMAnonymizer
 from utils.privacy.console import print_redacted
@@ -79,6 +80,8 @@ class ExportSelectedRequest:
     projection_slice_count: int = 4
     subwindow_annotation_managers: list[dict[str, Any]] | None = None
     deep_anonymized_items: dict[tuple[str, str, int], Dataset] | None = None
+    image_inverted: bool = False
+    lut: Any = None
 
 
 @dataclass
@@ -115,6 +118,8 @@ class ExportSliceRequest:
     projection_slice_count: int = 4
     studies: dict[str, dict[str, list[Dataset]]] | None = None
     subwindow_annotation_managers: list[dict[str, Any]] | None = None
+    image_inverted: bool = False
+    lut: Any = None
 
 
 class ExportManager:
@@ -310,6 +315,8 @@ class ExportManager:
         projection_slice_count = request.projection_slice_count
         subwindow_annotation_managers = request.subwindow_annotation_managers
         deep_anonymized_items = request.deep_anonymized_items
+        image_inverted = request.image_inverted
+        lut = request.lut
 
         _reject_legacy_anonymize(anonymize, deep_anonymize=deep_anonymize)
 
@@ -461,6 +468,8 @@ class ExportManager:
                             projection_slice_count=projection_slice_count,
                             studies=studies,
                             subwindow_annotation_managers=subwindow_annotation_managers,
+                            image_inverted=image_inverted,
+                            lut=lut,
                         )
                     )
                     if success:
@@ -522,6 +531,8 @@ class ExportManager:
         projection_slice_count = request.projection_slice_count
         studies = request.studies
         subwindow_annotation_managers = request.subwindow_annotation_managers
+        image_inverted = request.image_inverted
+        lut = request.lut
 
         _reject_legacy_anonymize(anonymize)
 
@@ -557,7 +568,8 @@ class ExportManager:
                     image = _er.create_projection_for_export(
                         dataset, studies, study_uid, series_uid, slice_index,
                         projection_type, projection_slice_count,
-                        window_center, window_width, use_rescaled_values
+                        window_center, window_width, use_rescaled_values,
+                        image_inverted=image_inverted, lut=lut,
                     )
                     if image is None:
                         # Fall back to single slice if projection fails
@@ -565,7 +577,8 @@ class ExportManager:
                             dataset,
                             window_center=window_center,
                             window_width=window_width,
-                            apply_rescale=use_rescaled_values
+                            apply_rescale=use_rescaled_values,
+                            **grayscale_export_kwargs(dataset, image_inverted, lut),
                         )
                         # is_projection_image remains False - this is a fallback single slice
                     else:
@@ -577,7 +590,8 @@ class ExportManager:
                         dataset,
                         window_center=window_center,
                         window_width=window_width,
-                        apply_rescale=use_rescaled_values
+                        apply_rescale=use_rescaled_values,
+                        **grayscale_export_kwargs(dataset, image_inverted, lut),
                     )
 
                 if image is None:
@@ -588,6 +602,7 @@ class ExportManager:
                 # Note: Fallback single-slice images need photometric processing even if projection was enabled
                 if not is_projection_image:
                     image = _er.process_image_by_photometric_interpretation(image, dataset)
+                image = invert_color_export_image(image, dataset, image_inverted)
 
                 # Apply export scale: use effective scale (may be lower than requested to stay under 8192 px)
                 effective_scale = _er.effective_scale_for_image(

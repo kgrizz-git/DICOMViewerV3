@@ -1,6 +1,6 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-09-28
 
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
 
@@ -51,6 +51,12 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
 - [ ] If a MONOCHROME1 secondary-capture series is available: load it, verify
   screen polarity matches export (still + cine). Manual Invert toggle should
   flip without double-inverting. Status bar shows `(MI)` marker.
+- [ ] **LUT**: toolbar **LUT** / **L** → select Linear (no visible change);
+  select a color map (RGB output, correct orientation; toggle **I** — no
+  double-invert); **Adjust Parameters…** moves the gamma slider; **Edit Curve…**
+  → drag/add a breakpoint, draw a freehand stroke, switch interpolation, Undo.
+  Histogram (**Ctrl+Shift+H**) shows the W/L ramp, LUT, and composed curves with
+  the three checkboxes. Export → PNG on that pane matches the viewport.
 
 ---
 

@@ -15,7 +15,11 @@ from this tag.
 
 Pipeline order this module assumes, per PS3.3 C.11.2 plus C.7.6.3.1.2's "after any VOI gray scale
 transformations": modality rescale, then window/level on stored values, then polarity inversion
-last, on the finalized 8-bit array.
+on the finalized 8-bit array. Polarity is no longer the last stage: the viewer's user-invert flag
+and the display look-up table run after it (``core.lut_display.apply_user_invert_and_lut``), so
+a non-linear LUT shapes the already-polarized bytes instead of having its curve flipped. The
+DICOM ordering statement still holds because the LUT is a viewer-side display transform, not a
+DICOM VOI transformation.
 
 Inputs:
     - Photometric-interpretation values as ``str``, ``list``/``tuple`` (first element), or ``None``

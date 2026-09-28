@@ -1,12 +1,12 @@
 # Keyboard shortcuts
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-28
 
 A consolidated reference for every keyboard shortcut. The app also shows a built-in list at **Help → Keyboard Shortcuts…** (or **F1**).
 
 > This page lists keys. For the **View** menu actions they map to (overlay settings, scale markers, slice sync, side panes), see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md) and [Configuration and settings](CONFIGURATION.md).
 >
-> **Single-key shortcuts** (tool modes, layout keys, `I`, `N`, `C`, `D`, `V`, `Q`) are ignored while you are **editing a text annotation**, so typing those letters inserts characters as expected. Tool keys are also passed through to Qt when **Ctrl/Cmd** is held (so `Ctrl+S`, `Ctrl+W`, etc. keep their standard meaning).
+> **Single-key shortcuts** (tool modes, layout keys, `I`, `N`, `C`, `D`, `V`, `Q`, `L`) are ignored while you are **editing a text annotation**, so typing those letters inserts characters as expected. Tool keys are also passed through to Qt when **Ctrl/Cmd** is held (so `Ctrl+S`, `Ctrl+W`, etc. keep their standard meaning).
 
 ## File
 
@@ -65,6 +65,7 @@ These switch the active mouse tool (see [Measurements & annotations](USER_GUIDE_
 | Fullscreen | **F11** / **Ctrl+F** |
 | Privacy view | **Ctrl+P** |
 | Invert image | **I** |
+| Look-Up Table | **L** (image, navigator, or side panel). Also **View → Look-Up Table**, toolbar **LUT**, or image right-click. In fullscreen, **L** opens the menu at the pointer. **Ctrl+Shift+L** is overlay tag configuration. In the 3D view, patient left is **3**. |
 | Cycle overlay detail (Simple → Detailed → Hidden, all panes) | **Space** |
 | Legacy overlay-visibility cycle (focused pane) | **Shift+Space** |
 | Overlay Tags Configuration | **Ctrl+Shift+L** |

@@ -24,6 +24,7 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox
 
+from core.lut_series_state import focused_pane_lut
 from gui.dialogs.about_this_file_dialog import AboutThisFileDialog
 from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
 from gui.dialogs.deep_anonymizer_export_dialog import DeepAnonymizerExportDialog
@@ -44,6 +45,28 @@ from utils.doc_urls import local_doc_url, user_guide_hub_url
 from utils.privacy.safe_storage import DeletionResult
 
 _MSG_NO_DATA_LOADED = "No Data Loaded"
+
+
+def _export_managers(owner: Any) -> dict[Any, Any]:
+    """Subwindow managers live on the app, which the coordinator holds as ``tag_export_union_host``."""
+    direct = getattr(owner, "subwindow_managers", None)
+    if isinstance(direct, dict) and direct:
+        return direct
+    host = getattr(owner, "tag_export_union_host", None)
+    hosted = getattr(host, "subwindow_managers", None)
+    return hosted if isinstance(hosted, dict) else {}
+
+
+def _focused_export_lut(owner: Any, focused_subwindow_index: int | None) -> tuple[bool, Any]:
+    """Pane LUT for PNG/JPG export. Linear and not inverted when the pane is unknown."""
+    managers = _export_managers(owner)
+    idx = focused_subwindow_index
+    if idx is None:
+        getter = getattr(owner, "get_focused_subwindow_index", None)
+        idx = getter() if callable(getter) else getattr(owner, "focused_subwindow_index", 0)
+    view_state = managers.get(idx, {}).get("view_state_manager") if isinstance(managers, dict) else None
+    return focused_pane_lut(view_state)
+
 
 class DialogCoordinator:
     """
@@ -263,6 +286,7 @@ class DialogCoordinator:
             )
             return
 
+        image_inverted, lut = _focused_export_lut(self, focused_subwindow_index)
         dialog = ExportDialog(
             current_studies,
             current_window_center=current_window_center,
@@ -279,6 +303,8 @@ class DialogCoordinator:
             projection_type=projection_type,
             projection_slice_count=projection_slice_count,
             subwindow_annotation_managers=subwindow_annotation_managers,
+            image_inverted=image_inverted,
+            lut=lut,
             parent=self.main_window
         )
         dialog.exec()

@@ -28,6 +28,60 @@ from utils.debug_flags import DEBUG_OFFSET
 _COLORMAP_CACHE: dict[str, Any] = {}
 
 
+def cached_matplotlib_colormap(name: str) -> Any:
+    """Return a matplotlib colormap, creating it once and storing it in ``_COLORMAP_CACHE``.
+
+    This is the only ``matplotlib.colormaps.get_cmap`` call in the app. Unknown
+    names raise ``ValueError`` (matplotlib's own error). Fusion overlays catch
+    that and fall back to ``hot``; display LUT lookup does not.
+    """
+    cached = _COLORMAP_CACHE.get(name)
+    if cached is not None:
+        return cached
+    import matplotlib  # deferred import (P1.7)
+
+    cmap = matplotlib.colormaps.get_cmap(name)
+    _COLORMAP_CACHE[name] = cmap
+    return cmap
+
+
+def _fusion_float_base(base_array: np.ndarray) -> np.ndarray:
+    """Float32 base for blending.
+
+    A uint8 RGB display image, including a color LUT, is scaled to 0–1 here.
+    ``create_fusion_image`` casts every base to float32 before the blend, so
+    the scale has to be chosen from the original dtype. A float base is left
+    for ``_base_display_rgb`` to scale when its peak is above 1.
+    """
+    if (
+        base_array.ndim == 3
+        and base_array.shape[-1] == 3
+        and np.issubdtype(base_array.dtype, np.integer)
+    ):
+        return base_array.astype(np.float32) / np.float32(255.0)
+    if base_array.dtype != np.float32:
+        return base_array.astype(np.float32)
+    return base_array
+
+
+def _colormap_or_hot(name: str) -> Any:
+    """Return ``name`` from the shared cache, or ``hot`` if matplotlib rejects it.
+
+    The fallback is cached under ``name`` so a bad fusion request warns once.
+    That alias is not used by display LUT lookup, which rejects unknown names
+    before consulting the cache.
+    """
+    try:
+        return cached_matplotlib_colormap(name)
+    except (ValueError, KeyError):
+        print(  # privacy-check: allow[unsafe-print-argument] review=kgrizz-git
+            f"Warning: Colormap '{name}' not found, using 'hot'"
+        )
+        hot = cached_matplotlib_colormap("hot")
+        _COLORMAP_CACHE[name] = hot
+        return hot
+
+
 class FusionProcessor:
     """
     Performs image blending and colormap operations for fusion display.
@@ -110,15 +164,7 @@ class FusionProcessor:
         Returns:
             RGB array (0-1 range, float32, shape [..., 3])
         """
-        cmap = _COLORMAP_CACHE.get(colormap_name)
-        if cmap is None:
-            import matplotlib  # deferred import (P1.7)
-            try:
-                cmap = matplotlib.colormaps.get_cmap(colormap_name)
-            except (ValueError, KeyError):
-                print(f"Warning: Colormap '{colormap_name}' not found, using 'hot'")
-                cmap = matplotlib.colormaps.get_cmap('hot')
-            _COLORMAP_CACHE[colormap_name] = cmap
+        cmap = _colormap_or_hot(colormap_name)
 
         # cmap() returns float64 RGBA; cast to float32 RGB immediately (P1.3)
         colored = cmap(array).astype(np.float32)[..., :3]
@@ -158,8 +204,7 @@ class FusionProcessor:
             Fused RGB array (0-255, uint8)
         """
         # Ensure float32 — skip copy if already correct dtype (P1.3)
-        if base_array.dtype != np.float32:
-            base_array = base_array.astype(np.float32)
+        base_array = _fusion_float_base(base_array)
         if overlay_array.dtype != np.float32:
             overlay_array = overlay_array.astype(np.float32)
 
@@ -227,7 +272,7 @@ class FusionProcessor:
         if translation_offset is not None:
             offset_x, offset_y = translation_offset
             overlay_array = FusionProcessor._apply_translation_offset(
-                overlay_array, offset_x, offset_y, base_array.shape
+                overlay_array, offset_x, offset_y, base_array.shape[:2]
             )
 
             if DEBUG_OFFSET:
@@ -236,25 +281,7 @@ class FusionProcessor:
                 print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
                 print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
 
-        # Normalize base image
-        if base_wl is not None:
-            window, level = base_wl
-            base_normalized = FusionProcessor.normalize_array(
-                base_array, window, level
-            )
-        else:
-            # Auto-normalize to full range
-            base_min = np.min(base_array)
-            base_max = np.max(base_array)
-            if base_max > base_min:
-                base_normalized = (base_array - base_min) / (base_max - base_min)
-            else:
-                base_normalized = np.zeros_like(base_array)
-
-        # Convert base to RGB (grayscale to RGB)
-        base_rgb = np.broadcast_to(
-            base_normalized[..., np.newaxis], (*base_normalized.shape, 3)
-        ).copy()  # copy needed: broadcast is read-only view (P1.3)
+        base_rgb = FusionProcessor._base_display_rgb(base_array, base_wl)
 
         # Normalize overlay image
         if overlay_wl is not None:
@@ -297,6 +324,39 @@ class FusionProcessor:
         fused = np.clip(fused * 255.0, 0, 255).astype(np.uint8)
 
         return fused
+
+    @staticmethod
+    def _base_display_rgb(
+        base_array: np.ndarray,
+        base_wl: tuple[float, float] | None,
+    ) -> np.ndarray:
+        """Float RGB in ``[0, 1]``. An RGB base, such as a color LUT, is not expanded again.
+
+        Integer display images are uint8 from PIL. Their scale is the dtype,
+        not the brightest pixel: a color LUT whose peak sample is 1 must stay
+        near black. Float arrays still in 0–255 are scaled only when the peak
+        exceeds 1.
+        """
+        if base_array.ndim == 3 and base_array.shape[-1] == 3:
+            rgb = base_array.astype(np.float64)
+            if np.issubdtype(base_array.dtype, np.integer):
+                rgb = rgb / 255.0
+            else:
+                peak = float(np.max(rgb)) if rgb.size else 0.0
+                if peak > 1.0:
+                    rgb = rgb / 255.0
+            return np.clip(rgb, 0.0, 1.0)
+        if base_wl is not None:
+            window, level = base_wl
+            normalized = FusionProcessor.normalize_array(base_array, window, level)
+        else:
+            base_min = float(np.min(base_array))
+            base_max = float(np.max(base_array))
+            if base_max > base_min:
+                normalized = (base_array - base_min) / (base_max - base_min)
+            else:
+                normalized = np.zeros_like(base_array)
+        return np.broadcast_to(normalized[..., np.newaxis], (*normalized.shape, 3)).copy()
 
     @staticmethod
     def _apply_translation_offset(

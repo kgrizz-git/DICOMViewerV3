@@ -90,6 +90,7 @@ class HistogramDialog(QDialog):
         get_projection_pixel_array: HistogramProjectionPixelsFn | None = None,
         get_histogram_use_projection_pixels: HistogramBoolFn | None = None,
         set_histogram_use_projection_pixels: HistogramVoidBoolFn | None = None,
+        get_lut_overlay: Callable[[], tuple[Any, Any, bool]] | None = None,
     ):
         """
         Initialize the histogram dialog.
@@ -133,6 +134,7 @@ class HistogramDialog(QDialog):
         self.get_projection_pixel_array = get_projection_pixel_array
         self.get_histogram_use_projection_pixels = get_histogram_use_projection_pixels
         self.set_histogram_use_projection_pixels = set_histogram_use_projection_pixels
+        self.get_lut_overlay = get_lut_overlay
         self.use_log_scale = False
         self.series_global_frequency_max: float | None = None
         self.series_global_x_min: float | None = None
@@ -199,6 +201,33 @@ class HistogramDialog(QDialog):
         self._projection_checkbox.toggled.connect(self._on_projection_pixels_toggled)
         layout.addWidget(self._projection_checkbox)
 
+        curve_row = QHBoxLayout()
+        self._window_curve_checkbox = QCheckBox("W/L ramp")
+        self._window_curve_checkbox.setChecked(True)
+        self._window_curve_checkbox.setToolTip(
+            "Dashed window/level ramp on the histogram's stored-value axis."
+        )
+        self._lut_curve_checkbox = QCheckBox("LUT")
+        self._lut_curve_checkbox.setChecked(True)
+        self._lut_curve_checkbox.setToolTip(
+            "Look-up table on the 0–255 axis along the top of the same plot."
+        )
+        self._composed_curve_checkbox = QCheckBox("Composed")
+        self._composed_curve_checkbox.setChecked(True)
+        self._composed_curve_checkbox.setToolTip(
+            "Window/level and LUT combined, on the stored-value axis. "
+            "This is the curve the image uses."
+        )
+        for box in (
+            self._window_curve_checkbox,
+            self._lut_curve_checkbox,
+            self._composed_curve_checkbox,
+        ):
+            box.toggled.connect(self._on_curve_toggles)
+            curve_row.addWidget(box)
+        curve_row.addStretch()
+        layout.addLayout(curve_row)
+
         # Histogram widget
         self.histogram_widget = HistogramWidget(self)
         layout.addWidget(self.histogram_widget)
@@ -220,6 +249,14 @@ class HistogramDialog(QDialog):
         controls_layout.addWidget(self.log_scale_button)
 
         layout.addLayout(controls_layout)
+
+    def _on_curve_toggles(self, _checked: bool) -> None:
+        """Show or hide each transfer curve on the histogram plot."""
+        self.histogram_widget.set_overlay_curves(
+            window=self._window_curve_checkbox.isChecked(),
+            lut=self._lut_curve_checkbox.isChecked(),
+            composed=self._composed_curve_checkbox.isChecked(),
+        )
 
     def _on_projection_pixels_toggled(self, checked: bool) -> None:
         if self.set_histogram_use_projection_pixels is not None:
@@ -335,6 +372,7 @@ class HistogramDialog(QDialog):
         self.histogram_widget.set_global_pixel_range(self.series_global_x_min, self.series_global_x_max)
 
         # Update histogram widget with current slice data
+        self._push_lut_overlay()
         self.histogram_widget.set_pixel_array(pixel_array)
 
         # Get window/level values
@@ -360,7 +398,17 @@ class HistogramDialog(QDialog):
             return
         window_center = self.get_window_center()
         window_width = self.get_window_width()
+        self._push_lut_overlay()
         self.histogram_widget.set_window_level(window_center, window_width)
+
+    def _push_lut_overlay(self) -> None:
+        """Give the histogram the pane LUT, photometric interpretation, and user invert."""
+        getter = self.get_lut_overlay
+        if not callable(getter):
+            self.histogram_widget.set_lut_overlay(None, None, False, refresh=False)
+            return
+        lut, photometric, inverted = getter()
+        self.histogram_widget.set_lut_overlay(lut, photometric, bool(inverted), refresh=False)
 
     def _on_log_scale_toggled(self, _checked: bool = False) -> None:
         """Handle log scale toggle.

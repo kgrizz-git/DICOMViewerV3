@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 from PySide6.QtCore import QEventLoop, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QProgressDialog
 
+from core.lut_series_state import focused_pane_lut
 from core.sr_sop_classes import is_structured_report_dataset
 from gui.cine_video_export import (
     CineFrameRequest,
@@ -412,6 +413,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
         wc = None
         ww = None
     use_rescaled = bool(getattr(vsm, "use_rescaled_values", False)) if vsm else False
+    image_inverted, lut = focused_pane_lut(vsm)
     proj_en = bool(getattr(sdm, "projection_enabled", False)) if sdm else False
     proj_ty = str(getattr(sdm, "projection_type", "aip") or "aip") if sdm else "aip"
     proj_cnt = int(getattr(sdm, "projection_slice_count", 4) or 4) if sdm else 4
@@ -473,6 +475,8 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
                     export_scale=opts.export_scale,
                     scale_annotations_with_image=False,
                     subwindow_annotation_managers=subwindow_annotation_managers,
+                    image_inverted=image_inverted,
+                    lut=lut,
                 )
             )
             if img is None:

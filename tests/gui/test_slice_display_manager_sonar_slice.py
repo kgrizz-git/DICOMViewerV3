@@ -111,8 +111,8 @@ def test_projection_success_skips_dataset_to_image(qapp) -> None:
     )
 
     mgr.dicom_processor.dataset_to_image.assert_not_called()
-    mgr.image_viewer.set_image.assert_called_once()
-    assert mgr.image_viewer.set_image.call_args.args[0] is proj
+    mgr.image_viewer.set_display_final_image.assert_called_once()
+    assert mgr.image_viewer.set_display_final_image.call_args.args[0] is proj
 
 
 @pytest.mark.qt
@@ -144,7 +144,7 @@ def test_projection_none_falls_back_to_dataset_to_image(qapp) -> None:
     )
 
     mgr.dicom_processor.dataset_to_image.assert_called_once()
-    assert mgr.image_viewer.set_image.call_args.args[0] is single
+    assert mgr.image_viewer.set_display_final_image.call_args.args[0] is single
 
 
 @pytest.mark.qt
@@ -209,7 +209,7 @@ def test_fusion_replaces_base_image_when_available(qapp) -> None:
     )
 
     fusion.get_fused_image.assert_called_once()
-    assert mgr.image_viewer.set_image.call_args.args[0] is fused
+    assert mgr.image_viewer.set_display_final_image.call_args.args[0] is fused
 
 
 @pytest.mark.qt

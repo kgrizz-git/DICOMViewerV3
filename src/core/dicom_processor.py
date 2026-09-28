@@ -43,6 +43,7 @@ from core import (
     dicom_rescale,
     dicom_window_level,
 )
+from core.lut_engine import LookUpTable
 
 _logger = logging.getLogger(__name__)
 
@@ -175,7 +176,9 @@ class DICOMProcessor:
 
     @staticmethod
     def dataset_to_image(dataset: Dataset, window_center: float | None = None,
-                        window_width: float | None = None, apply_rescale: bool = False) -> Image.Image | None:
+                        window_width: float | None = None, apply_rescale: bool = False,
+                        *, image_inverted: bool = False, lut: LookUpTable | None = None,
+                        ) -> Image.Image | None:
         """
         Convert DICOM dataset to PIL Image.
 
@@ -237,6 +240,8 @@ class DICOMProcessor:
         return dicom_image_render.render_grayscale_image(
             pixel_array, window_center, window_width, rescale_slope, rescale_intercept,
             photometric_interpretation=photometric_interpretation,
+            image_inverted=image_inverted,
+            lut=lut,
         )
 
     @staticmethod

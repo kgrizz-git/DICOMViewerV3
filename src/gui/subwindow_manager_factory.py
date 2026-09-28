@@ -24,6 +24,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.fusion_handler import FusionHandler
+from core.lut_series_state import get_series_lut, set_series_lut
+from core.photometric_polarity import dataset_photometric_interpretation
 from core.sr_sop_classes import is_structured_report_dataset
 from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
@@ -259,6 +261,8 @@ def build_managers_for_subwindow(
             )
 
     image_viewer.inversion_state_changed_callback = on_inversion_state_changed
+    image_viewer.redisplay_after_inversion = lambda i=idx: app._redisplay_subwindow_slice(i, preserve_view=True)
+    _wire_series_lut(app, idx, managers, image_viewer)
 
     def on_orientation_changed(_flip_h: bool, _flip_v: bool, _rotation_deg: int, _i=idx) -> None:
         """Persist orientation state whenever the user flips or rotates the image."""
@@ -266,3 +270,39 @@ def build_managers_for_subwindow(
 
     image_viewer.orientation_changed_callback = on_orientation_changed
     return managers
+
+
+def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer: Any) -> None:
+    """Store the pane LUT and redisplay. The viewer holds the callbacks the menus call."""
+
+    def apply_series_lut(lut: Any, _i: int = idx) -> None:
+        view_state = managers["view_state_manager"]
+        series_id = getattr(view_state, "current_series_identifier", None)
+        if not series_id:
+            status = getattr(getattr(app, "main_window", None), "update_status", None)
+            if callable(status):
+                status("Load a series before choosing a look-up table.")
+            return
+        set_series_lut(view_state, lut, series_id)
+        app._redisplay_subwindow_slice(_i, preserve_view=True)
+        refresh = getattr(app, "_update_mpr_navigator_thumbnail", None)
+        if refresh is not None:
+            refresh(_i)
+
+    def current_series_lut() -> Any:
+        view_state = managers["view_state_manager"]
+        return get_series_lut(view_state, getattr(view_state, "current_series_identifier", None))
+
+    def lut_display_context() -> dict[str, Any]:
+        view_state = managers["view_state_manager"]
+        dataset = getattr(managers["slice_display_manager"], "current_dataset", None)
+        return {
+            "window_center": getattr(view_state, "current_window_center", None),
+            "window_width": getattr(view_state, "current_window_width", None),
+            "photometric": dataset_photometric_interpretation(dataset) if dataset is not None else "",
+            "image_inverted": bool(getattr(image_viewer, "image_inverted", False)),
+        }
+
+    image_viewer.apply_series_lut = apply_series_lut
+    image_viewer.current_series_lut = current_series_lut
+    image_viewer.lut_display_context = lut_display_context

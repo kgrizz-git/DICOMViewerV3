@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-28
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -14,7 +14,7 @@ At the top, pick one **format** (PNG is the default):
 
 | Format | What it writes |
 |--------|----------------|
-| **PNG** | Rendered 8-bit image of each selected instance, **as displayed** — current window/level and (optionally) overlays/ROIs are baked in. Lossless. |
+| **PNG** | Rendered 8-bit image of each selected instance, using the selected window/level, the focused pane's look-up table, and (optionally) overlays/ROIs. Lossless. |
 | **JPG** | Same rendered image as PNG, but JPEG-compressed (smaller, lossy). |
 | **DICOM** | The DICOM dataset(s) themselves — pixel data and tags. Window/level and overlay options do **not** apply; the file is a real DICOM instance, optionally de-identified. |
 
@@ -27,6 +27,7 @@ The window/level, overlay, and resolution options below the format are only rele
 - **Window/Level (for PNG/JPG):**
   - **Use currently focused sub-window window/level** — renders with the window center/width you are viewing in the focused pane (the label shows the pane number and the current center/width, e.g. *sub-window 1 — 44/486*). This is the default when a viewer W/L is available.
   - **Use dataset default window/level** — renders with the window/level stored in the DICOM dataset.
+- **Look-Up Table (for PNG/JPG):** the focused pane's active look-up table and image-invert state are baked into the render. To match the viewport, export the same image with the same window/level settings; choosing dataset default window/level may produce a different render. DICOM export does not bake in the LUT; it writes the DICOM pixel data.
 - **Include overlays and ROIs (PNG/JPG only):** when checked (default), corner metadata overlays, ROIs, measurements, text, and arrows are drawn into the exported image. Uncheck for a clean image.
 - **Resolution (PNG/JPG):** choose **Native resolution** (default), **1.5×**, **2×**, or **4×**. Larger exports are capped so the longest side stays at or under **8192 px** — any image that would exceed this is exported at a lower magnification automatically, and the completion message lists exactly which files were stepped down (e.g. *requested 4×, exported at 2×*). This matches the cap used by **Export Screenshots**.
 
