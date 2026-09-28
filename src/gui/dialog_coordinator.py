@@ -47,12 +47,23 @@ from utils.privacy.safe_storage import DeletionResult
 _MSG_NO_DATA_LOADED = "No Data Loaded"
 
 
-def _focused_export_lut(main_window: Any, focused_subwindow_index: int | None) -> tuple[bool, Any]:
+def _export_managers(owner: Any) -> dict[Any, Any]:
+    """Subwindow managers live on the app, which the coordinator holds as ``tag_export_union_host``."""
+    direct = getattr(owner, "subwindow_managers", None)
+    if isinstance(direct, dict) and direct:
+        return direct
+    host = getattr(owner, "tag_export_union_host", None)
+    hosted = getattr(host, "subwindow_managers", None)
+    return hosted if isinstance(hosted, dict) else {}
+
+
+def _focused_export_lut(owner: Any, focused_subwindow_index: int | None) -> tuple[bool, Any]:
     """Pane LUT for PNG/JPG export. Linear and not inverted when the pane is unknown."""
-    managers = getattr(main_window, "subwindow_managers", {}) or {}
+    managers = _export_managers(owner)
     idx = focused_subwindow_index
     if idx is None:
-        idx = getattr(main_window, "focused_subwindow_index", 0)
+        getter = getattr(owner, "get_focused_subwindow_index", None)
+        idx = getter() if callable(getter) else getattr(owner, "focused_subwindow_index", 0)
     view_state = managers.get(idx, {}).get("view_state_manager") if isinstance(managers, dict) else None
     return focused_pane_lut(view_state)
 
@@ -275,7 +286,7 @@ class DialogCoordinator:
             )
             return
 
-        image_inverted, lut = _focused_export_lut(self.main_window, focused_subwindow_index)
+        image_inverted, lut = _focused_export_lut(self, focused_subwindow_index)
         dialog = ExportDialog(
             current_studies,
             current_window_center=current_window_center,

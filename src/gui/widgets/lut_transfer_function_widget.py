@@ -31,6 +31,7 @@ from core.lut_transfer import (
     lut_samples,
     net_user_polarity_invert,
     sample_window_and_composed,
+    windowed_lut_trace,
 )
 
 __all__ = [
@@ -48,6 +49,7 @@ class TransferPaths:
     xs: np.ndarray
     window: np.ndarray
     lut_trace: np.ndarray | None
+    lut_on_window: np.ndarray | None
     lut_colors: np.ndarray | None
     composed: np.ndarray
     collapse: bool
@@ -93,6 +95,7 @@ def overlay_paths(
         xs=xs,
         window=windowed,
         lut_trace=lut_trace,
+        lut_on_window=windowed_lut_trace(windowed, lut),
         lut_colors=lut_colors,
         composed=np.asarray(composed_trace, dtype=np.float64),
         collapse=curves_are_one_line(lut, photometric_interpretation, image_inverted),

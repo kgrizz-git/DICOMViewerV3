@@ -351,12 +351,11 @@ class HistogramWidget(QWidget):
         twin.set_ylabel("Output")
         label = f"{paths.name} ({paths.source})"
         if paths.collapse:
-            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=label)
+            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=f"W/L, LUT, {label}")
         else:
             twin.plot(paths.xs, paths.window, color="#888888", linestyle="--", linewidth=1.0, label="W/L ramp")
-            if paths.lut_trace is not None:
-                lut_x = np.linspace(float(paths.xs[0]), float(paths.xs[-1]), len(paths.lut_trace))
-                twin.plot(lut_x, paths.lut_trace, color="#4aa3ff", linewidth=1.5, label=f"LUT {paths.name}")
+            if paths.lut_on_window is not None:
+                twin.plot(paths.xs, paths.lut_on_window, color="#4aa3ff", linewidth=1.5, label=f"LUT {paths.name}")
             if paths.lut_colors is not None:
                 twin.imshow(
                     paths.lut_colors.reshape(1, -1, 3),

@@ -116,7 +116,7 @@ class _CurveCanvas(QWidget):
         """Finish a drag or commit a simplified freehand stroke."""
         if self.freehand and self._stroke:
             simplified = simplify_freehand(np.asarray(self._stroke, dtype=np.float64))
-            self.points = [(float(x), float(y)) for x, y in simplified]
+            self.points = _monotonic_points([(float(x), float(y)) for x, y in simplified])
             self._stroke = []
             self._notify()
         elif self._drag is not None:
@@ -189,8 +189,10 @@ class LutCurveEditorDialog(QDialog):
         self._display = display or {}
         self._canvas = _CurveCanvas(self)
         self._preview = LutTransferFunctionWidget(self)
-        self._undo: list[list[tuple[float, float]]] = []
-        self._redo: list[list[tuple[float, float]]] = []
+        self._undo: list[tuple[Any, ...]] = []
+        self._redo: list[tuple[Any, ...]] = []
+        self._interpolation_box: QComboBox | None = None
+        self._source = lut
         self._parameter: LookUpTable | None = lut if _is_parameter(lut) else None
         self._points_dirty = False
         self._load(lut)
@@ -200,6 +202,7 @@ class LutCurveEditorDialog(QDialog):
         interpolation.addItems(list(_INTERPOLATION))
         interpolation.setCurrentText(self._canvas.interpolation)
         interpolation.currentTextChanged.connect(self._set_interpolation)
+        self._interpolation_box = interpolation
         freehand = QPushButton("Freehand")
         freehand.setCheckable(True)
         freehand.toggled.connect(self._set_freehand)
@@ -225,9 +228,11 @@ class LutCurveEditorDialog(QDialog):
         self._refresh_preview()
 
     def result_lut(self) -> LookUpTable:
-        """Parameter LUT when the points were not edited, otherwise a custom curve."""
-        if self._parameter is not None and not self._points_dirty:
+        """The LUT that was opened, until the points or interpolation change."""
+        if not self._points_dirty and self._parameter is not None:
             return self._parameter
+        if not self._points_dirty and self._source is not None:
+            return self._source
         return _curve_lut(self._canvas.points, self._canvas.interpolation)
 
     def _load(self, lut: LookUpTable | None) -> None:
@@ -239,11 +244,34 @@ class LutCurveEditorDialog(QDialog):
             ys = evaluate_lut(lut, xs)
             self._canvas.points = [(float(x), float(y)) for x, y in zip(xs, ys, strict=True)]
 
+    def _snapshot(self) -> tuple[Any, ...]:
+        """Points, interpolation, parameter LUT, and whether the points replaced it."""
+        return (
+            list(self._canvas.points),
+            self._canvas.interpolation,
+            self._parameter,
+            self._points_dirty,
+        )
+
     def _remember(self) -> None:
-        self._undo.append(list(self._canvas.points))
+        self._undo.append(self._snapshot())
         if len(self._undo) > 50:
             del self._undo[0]
         self._redo.clear()
+
+    def _restore(self, snapshot: tuple[Any, ...]) -> None:
+        points, interpolation, parameter, dirty = snapshot
+        self._canvas.points = list(points)
+        self._canvas.interpolation = str(interpolation)
+        self._parameter = parameter if isinstance(parameter, LookUpTable) else None
+        self._points_dirty = bool(dirty)
+        box = self._interpolation_box
+        if box is not None:
+            box.blockSignals(True)
+            box.setCurrentText(self._canvas.interpolation)
+            box.blockSignals(False)
+        self._canvas.update()
+        self._refresh_preview()
 
     def _on_points_changed(self) -> None:
         self._points_dirty = True
@@ -252,9 +280,12 @@ class LutCurveEditorDialog(QDialog):
         self._refresh_preview()
 
     def _set_interpolation(self, name: str) -> None:
+        if name == self._canvas.interpolation:
+            return
         self._canvas.interpolation = name
         self._points_dirty = True
         self._parameter = None
+        self._remember()
         self._canvas.update()
         self._refresh_preview()
 
@@ -292,20 +323,14 @@ class LutCurveEditorDialog(QDialog):
         if len(self._undo) < 2:
             return
         self._redo.append(self._undo.pop())
-        self._canvas.points = list(self._undo[-1])
-        self._points_dirty = True
-        self._parameter = None
-        self._canvas.update()
-        self._refresh_preview()
+        self._restore(self._undo[-1])
 
     def _redo_points(self) -> None:
         if not self._redo:
             return
-        points = self._redo.pop()
-        self._undo.append(list(points))
-        self._canvas.points = list(points)
-        self._canvas.update()
-        self._refresh_preview()
+        snapshot = self._redo.pop()
+        self._undo.append(snapshot)
+        self._restore(snapshot)
 
     def _refresh_preview(self) -> None:
         lut = self.result_lut()
@@ -330,11 +355,28 @@ def edit_lut_curve(
     return dialog.result_lut()
 
 
+def _monotonic_points(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Endpoints at 0 and 1, with strictly increasing x so a vertical stroke cannot crash."""
+    if len(points) < 2:
+        return [(0.0, 0.0), (1.0, 1.0)]
+    ordered = [(float(x), float(y)) for x, y in points]
+    ordered[0] = (0.0, ordered[0][1])
+    ordered[-1] = (1.0, ordered[-1][1])
+    kept = [ordered[0]]
+    for x, y in ordered[1:-1]:
+        nudged = min(max(x, kept[-1][0] + 0.01), 0.99)
+        if nudged <= kept[-1][0]:
+            continue
+        kept.append((nudged, y))
+    if kept[-1][0] >= 1.0:
+        kept[-1] = (0.99, kept[-1][1])
+    kept.append(ordered[-1])
+    return kept
+
+
 def _curve_lut(points: list[tuple[float, float]], interpolation: str) -> LookUpTable:
     """Custom grayscale LUT. Endpoints are forced to x = 0 and x = 1."""
-    pinned = list(points) if points else [(0.0, 0.0), (1.0, 1.0)]
-    pinned[0] = (0.0, pinned[0][1])
-    pinned[-1] = (1.0, pinned[-1][1])
+    pinned = _monotonic_points(points)
     mode = interpolation if interpolation in _INTERPOLATION else "linear"
     return LookUpTable(
         name="Custom",

@@ -277,7 +277,13 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
 
     def apply_series_lut(lut: Any, _i: int = idx) -> None:
         view_state = managers["view_state_manager"]
-        set_series_lut(view_state, lut, getattr(view_state, "current_series_identifier", None))
+        series_id = getattr(view_state, "current_series_identifier", None)
+        if not series_id:
+            status = getattr(getattr(app, "main_window", None), "update_status", None)
+            if callable(status):
+                status("Load a series before choosing a look-up table.")
+            return
+        set_series_lut(view_state, lut, series_id)
         app._redisplay_subwindow_slice(_i, preserve_view=True)
         refresh = getattr(app, "_update_mpr_navigator_thumbnail", None)
         if refresh is not None:

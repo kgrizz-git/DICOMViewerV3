@@ -241,8 +241,8 @@ class SliceDisplayManager:
 
         # Intensity projection state
         self.projection_enabled: bool = False
-        self.projection_type: str = "aip"  # "aip", "mip", or "minip"
-        self.projection_slice_count: int = 4  # 2, 3, 4, 6, or 8
+        self.projection_type, self.projection_slice_count = "aip", 4
+        self._display_lut, self._display_final = {}, False
 
     def get_multiframe_overlay_context(
         self,

@@ -57,6 +57,18 @@ def lut_samples(lut: LookUpTable | None) -> np.ndarray:
     return np.ascontiguousarray(sampled[0])
 
 
+def windowed_lut_trace(windowed: np.ndarray, lut: LookUpTable | None) -> np.ndarray | None:
+    """LUT of already-windowed codes, with no polarity flip.
+
+    ``None`` for a color map, which is drawn as a gradient rather than a line.
+    The returned samples share the stored-value positions of ``windowed``.
+    """
+    applied = apply_lut_to_uint8(np.asarray(windowed, dtype=np.uint8).reshape(1, -1), lut)
+    if applied.ndim == 3:
+        return None
+    return np.ascontiguousarray(applied.reshape(-1))
+
+
 def sample_window_and_composed(
     stored_values: np.ndarray,
     window_center: float,

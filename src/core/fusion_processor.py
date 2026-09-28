@@ -254,7 +254,7 @@ class FusionProcessor:
         if translation_offset is not None:
             offset_x, offset_y = translation_offset
             overlay_array = FusionProcessor._apply_translation_offset(
-                overlay_array, offset_x, offset_y, base_array.shape
+                overlay_array, offset_x, offset_y, base_array.shape[:2]
             )
 
             if DEBUG_OFFSET:
@@ -263,25 +263,7 @@ class FusionProcessor:
                 print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
                 print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
 
-        # Normalize base image
-        if base_wl is not None:
-            window, level = base_wl
-            base_normalized = FusionProcessor.normalize_array(
-                base_array, window, level
-            )
-        else:
-            # Auto-normalize to full range
-            base_min = np.min(base_array)
-            base_max = np.max(base_array)
-            if base_max > base_min:
-                base_normalized = (base_array - base_min) / (base_max - base_min)
-            else:
-                base_normalized = np.zeros_like(base_array)
-
-        # Convert base to RGB (grayscale to RGB)
-        base_rgb = np.broadcast_to(
-            base_normalized[..., np.newaxis], (*base_normalized.shape, 3)
-        ).copy()  # copy needed: broadcast is read-only view (P1.3)
+        base_rgb = FusionProcessor._base_display_rgb(base_array, base_wl)
 
         # Normalize overlay image
         if overlay_wl is not None:
@@ -324,6 +306,30 @@ class FusionProcessor:
         fused = np.clip(fused * 255.0, 0, 255).astype(np.uint8)
 
         return fused
+
+    @staticmethod
+    def _base_display_rgb(
+        base_array: np.ndarray,
+        base_wl: tuple[float, float] | None,
+    ) -> np.ndarray:
+        """Float RGB in ``[0, 1]``. An RGB base, such as a color LUT, is not expanded again."""
+        if base_array.ndim == 3 and base_array.shape[-1] == 3:
+            rgb = base_array.astype(np.float64)
+            peak = float(np.max(rgb)) if rgb.size else 0.0
+            if peak > 1.0:
+                rgb = rgb / 255.0
+            return np.clip(rgb, 0.0, 1.0)
+        if base_wl is not None:
+            window, level = base_wl
+            normalized = FusionProcessor.normalize_array(base_array, window, level)
+        else:
+            base_min = float(np.min(base_array))
+            base_max = float(np.max(base_array))
+            if base_max > base_min:
+                normalized = (base_array - base_min) / (base_max - base_min)
+            else:
+                normalized = np.zeros_like(base_array)
+        return np.broadcast_to(normalized[..., np.newaxis], (*normalized.shape, 3)).copy()
 
     @staticmethod
     def _apply_translation_offset(

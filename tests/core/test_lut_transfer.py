@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 
 from core.dicom_window_level import apply_window_level
@@ -56,6 +58,37 @@ def test_colormap_samples_are_rgb_and_overlay_uses_a_bar() -> None:
     assert paths.lut_colors is not None and paths.lut_colors.shape == (256, 3)
     assert paths.lut_trace is None
     assert paths.composed.shape == (256,)
+
+
+def test_lut_trace_follows_windowed_codes() -> None:
+    paths = overlay_paths(gamma_lut(2.2), 1000.0, 400.0, "MONOCHROME2", False, 800.0, 1200.0)
+    assert paths is not None
+    assert paths.lut_on_window is not None
+    expected = apply_lut_to_uint8(paths.window.reshape(1, -1), gamma_lut(2.2)).reshape(-1)
+    assert np.array_equal(paths.lut_on_window, expected)
+    linear = overlay_paths(linear_lut(), 1000.0, 400.0, "MONOCHROME2", False, 800.0, 1200.0)
+    assert linear is not None and linear.collapse
+
+
+def test_color_lut_base_fuses_as_rgb() -> None:
+    from core.fusion_processor import FusionProcessor
+
+    base = np.zeros((4, 4, 3), dtype=np.uint8)
+    base[..., 0] = 200
+    overlay = np.full((4, 4), 10, dtype=np.float32)
+    fused = FusionProcessor.create_fusion_image(base, overlay, alpha=0.0, colormap="gray", threshold=0.0)
+    assert fused.shape == (4, 4, 3)
+
+
+def test_vertical_freehand_points_stay_a_valid_lut() -> None:
+    from core.lut_engine import LookUpTable
+    from gui.dialogs.lut_curve_editor_dialog import _curve_lut
+
+    lut = _curve_lut([(0.0, 0.0), (0.0, 0.9), (1.0, 1.0)], "linear")
+    assert isinstance(lut, LookUpTable)
+    xs = [point[0] for point in lut.control_points or ()]
+    assert xs[0] == 0.0 and xs[-1] == 1.0
+    assert all(right > left for left, right in itertools.pairwise(xs))
 
 
 def test_gamma_changes_the_composed_bytes() -> None:
