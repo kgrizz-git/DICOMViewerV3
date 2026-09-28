@@ -1,8 +1,10 @@
 """
 Edit a grayscale LUT by control points.
 
-Endpoints stay at x = 0 and x = 1. Freehand strokes go through
-``simplify_freehand`` (epsilon 0.02), which pins those endpoints. The painted
+Endpoints stay at x = 0 and x = 1. Freehand strokes are sorted into a
+function of x, then simplified with ``simplify_freehand`` (epsilon 0.02),
+which pins those endpoints. A click that does not move leaves the curve
+unchanged. The painted
 curve is sampled with ``lut_samples`` (``apply_lut_to_uint8``). The preview
 strip under the graph is ``LutTransferFunctionWidget``, so the composed
 result uses the same sampler as the histogram. Color colormaps are not
@@ -121,10 +123,12 @@ class _CurveCanvas(QWidget):
     def mouseReleaseEvent(self, event: Any) -> None:
         """Finish a drag or commit a simplified freehand stroke."""
         if self.freehand and self._stroke:
-            simplified = simplify_freehand(np.asarray(self._stroke, dtype=np.float64))
-            self.points = _monotonic_points([(float(x), float(y)) for x, y in simplified])
+            function = _stroke_as_function(self._stroke)
             self._stroke = []
-            self._notify()
+            if function is not None:
+                simplified = simplify_freehand(function)
+                self.points = _monotonic_points([(float(x), float(y)) for x, y in simplified])
+                self._notify()
         elif self._gesture_changed:
             self._notify()
         self._drag = None
@@ -371,6 +375,38 @@ def edit_lut_curve(
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     return dialog.result_lut()
+
+
+def _stroke_as_function(stroke: list[tuple[float, float]]) -> np.ndarray | None:
+    """Return the stroke as one y per x, or None when it is only a click.
+
+    Draw order does not matter: a right-to-left stroke is the same curve as
+    a left-to-right one. Samples that share an x are averaged. A stroke that
+    never leaves a small neighborhood is ignored so a click cannot replace
+    the current curve with the identity line.
+    """
+    if len(stroke) < 2:
+        return None
+    samples = np.asarray(stroke, dtype=np.float64)
+    span = samples.max(axis=0) - samples.min(axis=0)
+    if float(span[0]) < 0.02 and float(span[1]) < 0.02:
+        return None
+    ordered = samples[np.argsort(samples[:, 0], kind="mergesort")]
+    xs = [float(ordered[0, 0])]
+    totals = [float(ordered[0, 1])]
+    counts = [1]
+    for x_value, y_value in ordered[1:]:
+        if float(x_value) - xs[-1] < 1e-3:
+            totals[-1] += float(y_value)
+            counts[-1] += 1
+            continue
+        xs.append(float(x_value))
+        totals.append(float(y_value))
+        counts.append(1)
+    if len(xs) < 2:
+        return None
+    ys = [total / count for total, count in zip(totals, counts, strict=True)]
+    return np.column_stack((xs, ys))
 
 
 def _monotonic_points(points: list[tuple[float, float]]) -> list[tuple[float, float]]:

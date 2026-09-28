@@ -27,7 +27,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QMenu, QToolButton, QWidget, QWidgetAction
 
 from core.lut_catalog import (
@@ -57,7 +57,7 @@ def apply_lut_to_host(host: Any, lut: LookUpTable) -> None:
 
 def populate_lut_menu(menu: QMenu, host: Any) -> None:
     """Fill ``menu`` with grayscale curves, colormaps, parameter adjust, and the editor."""
-    menu.clear()
+    _clear_lut_menu(menu)
     current = _current(host)
     if current is not None:
         info = QAction(f"{current.name} — {current.source}", menu)
@@ -124,8 +124,19 @@ def attach_context_lut_menu(context_menu: QMenu, viewer: Any) -> None:
 
 
 def show_lut_toolbar_menu(host: Any) -> None:
-    """Open the toolbar Look-Up Table menu. Bound to bare ``L``."""
+    """Open the toolbar Look-Up Table menu. Bound to bare ``L``.
+
+    Fullscreen hides the toolbar. A hidden button would pin ``showMenu`` to
+    the window corner, so the menu opens at the pointer instead.
+    """
     button = getattr(host, "lut_toolbar_button", None)
+    if button is None:
+        return
+    menu_getter = getattr(button, "menu", None)
+    menu = menu_getter() if callable(menu_getter) else None
+    if menu is not None and not button.isVisible():
+        menu.popup(QCursor.pos())
+        return
     show_menu = getattr(button, "showMenu", None)
     if callable(show_menu):
         show_menu()
@@ -156,6 +167,19 @@ def swatch_icon(lut: LookUpTable) -> QIcon:
     height, width, _channels = strip.shape
     image = QImage(strip.tobytes(), width, height, 3 * width, QImage.Format.Format_RGB888)
     return QIcon(QPixmap.fromImage(image.copy()))
+
+
+def _clear_lut_menu(menu: QMenu) -> None:
+    """Remove the previous entries.
+
+    ``QMenu.clear`` deletes actions and leaves submenus and the exclusive
+    action group parented to the menu. Each open would otherwise keep another
+    Grayscale menu, Color menu, and group.
+    """
+    menu.clear()
+    for child in list(menu.children()):
+        if isinstance(child, (QMenu, QActionGroup)):
+            child.deleteLater()
 
 
 def _show_toolbar_menu(button: QToolButton, menu: QMenu, host: Any) -> None:

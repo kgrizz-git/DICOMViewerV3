@@ -138,4 +138,125 @@ def test_histogram_curve_toggles_hide_each_overlay(qapp) -> None:
     widget.set_overlay_curves(window=False, lut=False, composed=False)
     assert widget._transfer_axis is None
     assert widget._lut_input_axis is None
+    assert widget.figure.subplotpars.right > 0.95
+    assert widget.figure.subplotpars.top > 0.95
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_histogram_overlay_labels_stay_inside_and_follow_theme(qapp) -> None:
+    import matplotlib.colors as mcolors
+    from PySide6.QtGui import QColor, QPalette
+
+    widget = HistogramWidget()
+    palette = widget.palette()
+    palette.setColor(QPalette.ColorRole.Window, QColor(26, 26, 26))
+    widget.setPalette(palette)
+    widget.figure.set_dpi(100)
+    widget.figure.set_size_inches(5.2, 3.4)
+    widget.set_lut_overlay(inverse_lut(), "MONOCHROME2", False, refresh=False)
+    widget.set_pixel_array(np.arange(64, dtype=np.float32).reshape(8, 8))
+    widget.set_window_level(32.0, 64.0)
+    assert widget.figure.subplotpars.right <= 0.90
+    assert widget.figure.subplotpars.top <= 0.85
+    widget.canvas.draw()
+    renderer = widget.canvas.get_renderer()
+    figure_box = widget.figure.bbox
+    artists = [
+        widget._transfer_axis.yaxis.label,
+        widget._lut_input_axis.xaxis.label,
+        *widget._transfer_axis.get_yticklabels(),
+        *widget._lut_input_axis.get_xticklabels(),
+    ]
+    for artist in artists:
+        box = artist.get_window_extent(renderer)
+        assert box.x0 >= -1
+        assert box.y0 >= -1
+        assert box.x1 <= figure_box.width + 1
+        assert box.y1 <= figure_box.height + 1
+    output_color = mcolors.to_hex(widget._transfer_axis.yaxis.label.get_color())
+    assert output_color.lower() == "#cccccc"
+    hist_legend = widget.axes.get_legend().get_window_extent(renderer)
+    lut_legend = widget._lut_input_axis.get_legend().get_window_extent(renderer)
+    assert not hist_legend.overlaps(lut_legend)
+    widget.update_font_sizes_for_size(200, 200)
+    assert widget._transfer_axis.yaxis.get_label().get_fontsize() == 7
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_window_only_linear_overlay_is_the_dashed_ramp(qapp) -> None:
+    widget = HistogramWidget()
+    widget.set_lut_overlay(linear_lut(), "MONOCHROME2", False, refresh=False)
+    widget.set_pixel_array(np.arange(64, dtype=np.float32).reshape(8, 8))
+    widget.set_window_level(32.0, 64.0)
+    widget.set_overlay_curves(window=True, lut=False, composed=False)
+    line = widget._transfer_axis.get_lines()[0]
+    assert line.get_linestyle() == "--"
+    assert line.get_label() == "W/L ramp"
+    _ = qapp
+
+
+def _stroke(canvas, units: list[tuple[float, float]]) -> None:
+    first = canvas._from_unit(*units[0])
+    canvas.mousePressEvent(_mouse(QEvent.Type.MouseButtonPress, first, Qt.MouseButton.LeftButton))
+    for unit in units[1:]:
+        point = canvas._from_unit(*unit)
+        canvas.mouseMoveEvent(_mouse(QEvent.Type.MouseMove, point, Qt.MouseButton.LeftButton))
+    last = canvas._from_unit(*units[-1])
+    canvas.mouseReleaseEvent(_mouse(QEvent.Type.MouseButtonRelease, last, Qt.MouseButton.NoButton))
+
+
+@pytest.mark.qt
+def test_reverse_freehand_matches_forward_and_a_click_keeps_the_curve(qapp) -> None:
+    dialog = LutCurveEditorDialog(linear_lut())
+    canvas = dialog._canvas
+    canvas.resize(320, 240)
+    canvas.freehand = True
+    forward = [(index / 20, (index / 20) ** 2) for index in range(21)]
+    _stroke(canvas, forward)
+    forward_points = list(canvas.points)
+    assert len(dialog._undo) == 2
+    dialog._undo_points()
+    _stroke(canvas, list(reversed(forward)))
+    assert canvas.points == forward_points
+    undo_steps = len(dialog._undo)
+    kept = list(canvas.points)
+    _stroke(canvas, [(0.2, 0.2)])
+    assert canvas.points == kept
+    assert len(dialog._undo) == undo_steps
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_reopening_lut_menu_drops_old_submenus(qapp) -> None:
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QActionGroup
+    from PySide6.QtWidgets import QMenu, QWidget
+
+    from gui.lut_actions import populate_lut_menu
+
+    menu = QMenu()
+    populate_lut_menu(menu, QWidget())
+    populate_lut_menu(menu, QWidget())
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert len(menu.findChildren(QMenu)) == 2
+    assert len(menu.findChildren(QActionGroup)) == 1
+
+
+@pytest.mark.qt
+def test_hidden_lut_button_opens_the_menu(qapp) -> None:
+    from PySide6.QtWidgets import QToolBar, QWidget
+
+    from gui.lut_actions import attach_toolbar_lut_button, show_lut_toolbar_menu
+
+    host = QWidget()
+    toolbar = QToolBar(host)
+    button = attach_toolbar_lut_button(toolbar, host)
+    host.lut_toolbar_button = button
+    assert not button.isVisible()
+    show_lut_toolbar_menu(host)
+    menu = button.menu()
+    assert menu is not None and menu.isVisible()
+    menu.close()
     _ = qapp

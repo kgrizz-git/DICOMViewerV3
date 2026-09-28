@@ -39,7 +39,8 @@ def _paint_lut_input_axis(output_axis: Any, paths: Any) -> Any:
     if paths.lut_trace is not None:
         xs = np.arange(paths.lut_trace.shape[0], dtype=np.float64)
         axis.plot(xs, paths.lut_trace, color="#4aa3ff", linewidth=1.5, label=f"LUT {paths.name}")
-        axis.legend(loc="upper right")
+        # Lower right stays clear of the histogram legend, which is upper right.
+        axis.legend(loc="lower right")
     if paths.lut_colors is not None:
         axis.imshow(
             paths.lut_colors.reshape(1, -1, 3),
@@ -49,6 +50,7 @@ def _paint_lut_input_axis(output_axis: Any, paths: Any) -> Any:
             interpolation="nearest",
         )
     axis.set_xlim(0, 255)
+    axis.set_xticks(_SCALE_TICKS)
     axis.set_xlabel("LUT input")
     return axis
 
@@ -68,20 +70,64 @@ def _paint_stored_curves(
         return
     label = f"{paths.name} ({paths.source})"
     composed_label = f"{label}, inverted" if paths.net_inverted else label
-    if paths.collapse:
-        if show_window and show_composed:
-            text = f"W/L, {label}"
-        elif show_window:
-            text = "W/L ramp"
-        else:
-            text = composed_label
-        axis.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=text)
+    if paths.collapse and show_window and show_composed:
+        axis.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=f"W/L, {label}")
     else:
         if show_window:
-            axis.plot(paths.xs, paths.window, color="#888888", linestyle="--", linewidth=1.0, label="W/L ramp")
+            axis.plot(
+                paths.xs,
+                paths.window,
+                color="#888888",
+                linestyle="--",
+                linewidth=1.0,
+                label="W/L ramp",
+            )
         if show_composed:
             axis.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.5, label=composed_label)
     axis.legend(loc="upper left")
+
+
+# Stay inside 0–255. The default locator adds 300, which draws past the figure.
+_SCALE_TICKS = (0, 50, 100, 150, 200, 255)
+
+
+def _set_plot_margins(figure: Figure, *, output_axis: bool, lut_axis: bool) -> None:
+    """Leave room for the Output label and the top LUT axis when those exist.
+
+    The plain histogram uses a tight right and top edge. Twin axes draw their
+    titles outside that box, so those titles are clipped unless the margins grow.
+    """
+    figure.subplots_adjust(
+        left=0.12,
+        right=0.86 if output_axis else 0.98,
+        top=0.82 if lut_axis else 0.97,
+        bottom=0.18,
+    )
+
+
+def _style_axis(axis: Any, foreground: str, spine_color: str) -> None:
+    """Match one axes' ticks, labels, spines, and legend to the Qt theme."""
+    axis.tick_params(colors=foreground)
+    axis.xaxis.label.set_color(foreground)
+    axis.yaxis.label.set_color(foreground)
+    for spine in axis.spines.values():
+        spine.set_edgecolor(spine_color)
+    legend = axis.get_legend()
+    if legend is not None:
+        for text in legend.get_texts():
+            text.set_color(foreground)
+
+
+def _apply_axis_fonts(axis: Any, label_pt: int, tick_pt: int) -> None:
+    """Scale one axes' labels, ticks, and legend with the dialog."""
+    axis.tick_params(axis="both", labelsize=tick_pt)
+    axis.xaxis.get_label().set_fontsize(label_pt)
+    axis.yaxis.get_label().set_fontsize(label_pt)
+    legend = axis.get_legend()
+    if legend is not None:
+        legend.get_frame().set_linewidth(0.5)
+        for text in legend.get_texts():
+            text.set_fontsize(tick_pt)
 
 
 class HistogramWidget(QWidget):
@@ -147,8 +193,8 @@ class HistogramWidget(QWidget):
         layout.addWidget(self.canvas)
 
         self.axes = self.figure.add_subplot(111)
-        # Keep labels fully visible while minimizing unused top margin.
-        self.figure.subplots_adjust(left=0.11, right=0.98, top=0.97, bottom=0.17)
+        # Plain histogram. Overlay axes reserve the right and top in _paint_lut_overlay.
+        _set_plot_margins(self.figure, output_axis=False, lut_axis=False)
         self.axes.set_xlabel("Pixel Value")
         self.axes.set_ylabel("Frequency")
         self.axes.grid(True, alpha=0.3)
@@ -231,14 +277,9 @@ class HistogramWidget(QWidget):
                 title_pt, label_pt, tick_pt = t_pt, l_pt, k_pt
                 break
         self._title_label.setStyleSheet(f"font-weight: bold; font-size: {title_pt}pt;")
-        self.axes.tick_params(axis="both", labelsize=tick_pt)
-        for ax_label in [self.axes.xaxis.get_label(), self.axes.yaxis.get_label()]:
-            ax_label.set_fontsize(label_pt)
-        legend = self.axes.get_legend()
-        if legend is not None:
-            legend.get_frame().set_linewidth(0.5)
-            for t in legend.get_texts():
-                t.set_fontsize(tick_pt)
+        for axis in (self.axes, self._transfer_axis, self._lut_input_axis):
+            if axis is not None:
+                _apply_axis_fonts(axis, label_pt, tick_pt)
         self.canvas.draw_idle()
 
     def _is_dark_mode(self) -> bool:
@@ -259,11 +300,9 @@ class HistogramWidget(QWidget):
 
         self.figure.patch.set_facecolor(bg)
         self.axes.set_facecolor(bg)
-        self.axes.tick_params(colors=fg)
-        self.axes.xaxis.label.set_color(fg)
-        self.axes.yaxis.label.set_color(fg)
-        for sp in self.axes.spines.values():
-            sp.set_edgecolor(spine_color)
+        for axis in (self.axes, self._transfer_axis, self._lut_input_axis):
+            if axis is not None:
+                _style_axis(axis, fg, spine_color)
         self.axes.grid(True, alpha=0.3, color=grid_color)
 
     def _update_histogram(self) -> None:
@@ -412,16 +451,17 @@ class HistogramWidget(QWidget):
             float(x_min),
             float(x_max),
         )
-        if paths is None:
-            return
         show_window = self._show_window_curve
         show_lut = self._show_lut_curve
         show_composed = self._show_composed_curve
-        if not show_window and not show_lut and not show_composed:
+        overlay = paths is not None and (show_window or show_lut or show_composed)
+        _set_plot_margins(self.figure, output_axis=overlay, lut_axis=overlay and show_lut)
+        if not overlay or paths is None:
             return
         twin = self.axes.twinx()
         self._transfer_axis = twin
         twin.set_ylim(0, 255)
+        twin.set_yticks(_SCALE_TICKS)
         twin.set_ylabel("Output")
         _paint_stored_curves(twin, paths, show_window=show_window, show_composed=show_composed)
         if show_lut:

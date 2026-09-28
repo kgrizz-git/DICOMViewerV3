@@ -80,6 +80,16 @@ def test_color_lut_base_fuses_as_rgb() -> None:
     assert fused.shape == (4, 4, 3)
 
 
+def test_dark_uint8_color_base_stays_dark_in_fusion() -> None:
+    from core.fusion_processor import FusionProcessor
+
+    base = np.zeros((4, 4, 3), dtype=np.uint8)
+    base[..., 0] = 1
+    overlay = np.zeros((4, 4), dtype=np.float32)
+    fused = FusionProcessor.create_fusion_image(base, overlay, alpha=0.0, colormap="gray", threshold=0.0)
+    assert int(fused[..., 0].max()) == 1
+
+
 def test_vertical_freehand_points_stay_a_valid_lut() -> None:
     from core.lut_engine import LookUpTable
     from gui.dialogs.lut_curve_editor_dialog import _curve_lut

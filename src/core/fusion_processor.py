@@ -45,6 +45,25 @@ def cached_matplotlib_colormap(name: str) -> Any:
     return cmap
 
 
+def _fusion_float_base(base_array: np.ndarray) -> np.ndarray:
+    """Float32 base for blending.
+
+    A uint8 RGB display image, including a color LUT, is scaled to 0–1 here.
+    ``create_fusion_image`` casts every base to float32 before the blend, so
+    the scale has to be chosen from the original dtype. A float base is left
+    for ``_base_display_rgb`` to scale when its peak is above 1.
+    """
+    if (
+        base_array.ndim == 3
+        and base_array.shape[-1] == 3
+        and np.issubdtype(base_array.dtype, np.integer)
+    ):
+        return base_array.astype(np.float32) / np.float32(255.0)
+    if base_array.dtype != np.float32:
+        return base_array.astype(np.float32)
+    return base_array
+
+
 def _colormap_or_hot(name: str) -> Any:
     """Return ``name`` from the shared cache, or ``hot`` if matplotlib rejects it.
 
@@ -185,8 +204,7 @@ class FusionProcessor:
             Fused RGB array (0-255, uint8)
         """
         # Ensure float32 — skip copy if already correct dtype (P1.3)
-        if base_array.dtype != np.float32:
-            base_array = base_array.astype(np.float32)
+        base_array = _fusion_float_base(base_array)
         if overlay_array.dtype != np.float32:
             overlay_array = overlay_array.astype(np.float32)
 
@@ -312,12 +330,21 @@ class FusionProcessor:
         base_array: np.ndarray,
         base_wl: tuple[float, float] | None,
     ) -> np.ndarray:
-        """Float RGB in ``[0, 1]``. An RGB base, such as a color LUT, is not expanded again."""
+        """Float RGB in ``[0, 1]``. An RGB base, such as a color LUT, is not expanded again.
+
+        Integer display images are uint8 from PIL. Their scale is the dtype,
+        not the brightest pixel: a color LUT whose peak sample is 1 must stay
+        near black. Float arrays still in 0–255 are scaled only when the peak
+        exceeds 1.
+        """
         if base_array.ndim == 3 and base_array.shape[-1] == 3:
             rgb = base_array.astype(np.float64)
-            peak = float(np.max(rgb)) if rgb.size else 0.0
-            if peak > 1.0:
+            if np.issubdtype(base_array.dtype, np.integer):
                 rgb = rgb / 255.0
+            else:
+                peak = float(np.max(rgb)) if rgb.size else 0.0
+                if peak > 1.0:
+                    rgb = rgb / 255.0
             return np.clip(rgb, 0.0, 1.0)
         if base_wl is not None:
             window, level = base_wl

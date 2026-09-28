@@ -65,7 +65,7 @@ These switch the active mouse tool (see [Measurements & annotations](USER_GUIDE_
 | Fullscreen | **F11** / **Ctrl+F** |
 | Privacy view | **Ctrl+P** |
 | Invert image | **I** |
-| Look-Up Table | **L** (image, navigator, or side panel). Also **View → Look-Up Table**, toolbar **LUT**, or image right-click. **Ctrl+Shift+L** is overlay tag configuration. In the 3D view, patient left is **3**. |
+| Look-Up Table | **L** (image, navigator, or side panel). Also **View → Look-Up Table**, toolbar **LUT**, or image right-click. In fullscreen, **L** opens the menu at the pointer. **Ctrl+Shift+L** is overlay tag configuration. In the 3D view, patient left is **3**. |
 | Cycle overlay detail (Simple → Detailed → Hidden, all panes) | **Space** |
 | Legacy overlay-visibility cycle (focused pane) | **Shift+Space** |
 | Overlay Tags Configuration | **Ctrl+Shift+L** |

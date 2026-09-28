@@ -76,7 +76,6 @@
     "src/core/dicom_window_level.py::get_window_level_presets_from_dataset": 28,
     "src/core/file_path_actions.py::get_file_path_for_dataset": 17,
     "src/core/fusion_handler.py::interpolate_overlay_slice": 19,
-    "src/core/fusion_processor.py::create_fusion_image": 16,
     "src/core/image_resampler.py::dicom_series_to_sitk": 20,
     "src/core/image_resampler.py::needs_resampling": 19,
     "src/core/key_object_handler.py::parse_content_sequence": 22,
