@@ -121,3 +121,21 @@ def test_histogram_overlay_draws_a_transfer_axis(qapp) -> None:
     lut_line = linear._lut_input_axis.get_lines()[0]
     assert lut_line.get_xdata()[0] == 0
     assert lut_line.get_xdata()[-1] == 255
+
+
+@pytest.mark.qt
+def test_histogram_curve_toggles_hide_each_overlay(qapp) -> None:
+    widget = HistogramWidget()
+    widget.set_lut_overlay(inverse_lut(), "MONOCHROME2", False, refresh=False)
+    widget.set_pixel_array(np.arange(64, dtype=np.float32).reshape(8, 8))
+    widget.set_window_level(32.0, 64.0)
+    widget.set_overlay_curves(window=False, lut=False, composed=True)
+    assert widget._lut_input_axis is None
+    assert len(widget._transfer_axis.get_lines()) == 1
+    widget.set_overlay_curves(window=False, lut=True, composed=False)
+    assert widget._lut_input_axis is not None
+    assert widget._transfer_axis.get_lines() == []
+    widget.set_overlay_curves(window=False, lut=False, composed=False)
+    assert widget._transfer_axis is None
+    assert widget._lut_input_axis is None
+    _ = qapp

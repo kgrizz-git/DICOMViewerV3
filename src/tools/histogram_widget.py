@@ -53,6 +53,37 @@ def _paint_lut_input_axis(output_axis: Any, paths: Any) -> Any:
     return axis
 
 
+def _paint_stored_curves(
+    axis: Any,
+    paths: Any,
+    *,
+    show_window: bool,
+    show_composed: bool,
+) -> None:
+    """Draw the window/level ramp and composed curve on the stored-value axis.
+
+    When those two coincide, one line is drawn if either checkbox is on.
+    """
+    if not show_window and not show_composed:
+        return
+    label = f"{paths.name} ({paths.source})"
+    composed_label = f"{label}, inverted" if paths.net_inverted else label
+    if paths.collapse:
+        if show_window and show_composed:
+            text = f"W/L, {label}"
+        elif show_window:
+            text = "W/L ramp"
+        else:
+            text = composed_label
+        axis.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=text)
+    else:
+        if show_window:
+            axis.plot(paths.xs, paths.window, color="#888888", linestyle="--", linewidth=1.0, label="W/L ramp")
+        if show_composed:
+            axis.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.5, label=composed_label)
+    axis.legend(loc="upper left")
+
+
 class HistogramWidget(QWidget):
     """
     Widget for displaying image histograms.
@@ -85,6 +116,9 @@ class HistogramWidget(QWidget):
         self._overlay_lut: Any = None
         self._overlay_photometric: object = None
         self._overlay_inverted = False
+        self._show_window_curve = True
+        self._show_lut_curve = True
+        self._show_composed_curve = True
         self._transfer_axis: Any = None
         self._lut_input_axis: Any = None
 
@@ -349,6 +383,13 @@ class HistogramWidget(QWidget):
         if refresh:
             self._update_histogram()
 
+    def set_overlay_curves(self, *, window: bool, lut: bool, composed: bool) -> None:
+        """Show or hide the stored-axis ramp, the 0–255 LUT, and the composed curve."""
+        self._show_window_curve = window
+        self._show_lut_curve = lut
+        self._show_composed_curve = composed
+        self._update_histogram()
+
     def _clear_transfer_axis(self) -> None:
         """Drop the previous output and LUT-input axes before the histogram is cleared."""
         for name in ("_lut_input_axis", "_transfer_axis"):
@@ -373,17 +414,16 @@ class HistogramWidget(QWidget):
         )
         if paths is None:
             return
+        show_window = self._show_window_curve
+        show_lut = self._show_lut_curve
+        show_composed = self._show_composed_curve
+        if not show_window and not show_lut and not show_composed:
+            return
         twin = self.axes.twinx()
         self._transfer_axis = twin
         twin.set_ylim(0, 255)
         twin.set_ylabel("Output")
-        label = f"{paths.name} ({paths.source})"
-        if paths.collapse:
-            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.0, label=f"W/L, {label}")
-        else:
-            twin.plot(paths.xs, paths.window, color="#888888", linestyle="--", linewidth=1.0, label="W/L ramp")
-            composed_label = f"{label}, inverted" if paths.net_inverted else label
-            twin.plot(paths.xs, paths.composed, color="#ffb000", linewidth=2.5, label=composed_label)
-        twin.legend(loc="upper left")
-        self._lut_input_axis = _paint_lut_input_axis(twin, paths)
+        _paint_stored_curves(twin, paths, show_window=show_window, show_composed=show_composed)
+        if show_lut:
+            self._lut_input_axis = _paint_lut_input_axis(twin, paths)
 

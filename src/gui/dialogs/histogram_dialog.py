@@ -201,6 +201,33 @@ class HistogramDialog(QDialog):
         self._projection_checkbox.toggled.connect(self._on_projection_pixels_toggled)
         layout.addWidget(self._projection_checkbox)
 
+        curve_row = QHBoxLayout()
+        self._window_curve_checkbox = QCheckBox("W/L ramp")
+        self._window_curve_checkbox.setChecked(True)
+        self._window_curve_checkbox.setToolTip(
+            "Dashed window/level ramp on the histogram's stored-value axis."
+        )
+        self._lut_curve_checkbox = QCheckBox("LUT")
+        self._lut_curve_checkbox.setChecked(True)
+        self._lut_curve_checkbox.setToolTip(
+            "Look-up table on the 0–255 axis along the top of the same plot."
+        )
+        self._composed_curve_checkbox = QCheckBox("Composed")
+        self._composed_curve_checkbox.setChecked(True)
+        self._composed_curve_checkbox.setToolTip(
+            "Window/level and LUT combined, on the stored-value axis. "
+            "This is the curve the image uses."
+        )
+        for box in (
+            self._window_curve_checkbox,
+            self._lut_curve_checkbox,
+            self._composed_curve_checkbox,
+        ):
+            box.toggled.connect(self._on_curve_toggles)
+            curve_row.addWidget(box)
+        curve_row.addStretch()
+        layout.addLayout(curve_row)
+
         # Histogram widget
         self.histogram_widget = HistogramWidget(self)
         layout.addWidget(self.histogram_widget)
@@ -222,6 +249,14 @@ class HistogramDialog(QDialog):
         controls_layout.addWidget(self.log_scale_button)
 
         layout.addLayout(controls_layout)
+
+    def _on_curve_toggles(self, _checked: bool) -> None:
+        """Show or hide each transfer curve on the histogram plot."""
+        self.histogram_widget.set_overlay_curves(
+            window=self._window_curve_checkbox.isChecked(),
+            lut=self._lut_curve_checkbox.isChecked(),
+            composed=self._composed_curve_checkbox.isChecked(),
+        )
 
     def _on_projection_pixels_toggled(self, checked: bool) -> None:
         if self.set_histogram_use_projection_pixels is not None:
