@@ -130,16 +130,13 @@ def show_lut_toolbar_menu(host: Any) -> None:
     the window corner, so the menu opens at the pointer instead.
     """
     button = getattr(host, "lut_toolbar_button", None)
-    if button is None:
+    if not isinstance(button, QToolButton):
         return
-    menu_getter = getattr(button, "menu", None)
-    menu = menu_getter() if callable(menu_getter) else None
+    menu = button.menu()
     if menu is not None and not button.isVisible():
         menu.popup(QCursor.pos())
         return
-    show_menu = getattr(button, "showMenu", None)
-    if callable(show_menu):
-        show_menu()
+    button.showMenu()
 
 
 def attach_toolbar_lut_button(toolbar: Any, host: Any) -> QToolButton:
