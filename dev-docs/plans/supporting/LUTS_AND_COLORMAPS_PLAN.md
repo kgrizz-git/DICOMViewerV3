@@ -756,6 +756,12 @@ needs to see which part of the curve moved.
   editing stays in LUT space while the preview remains in display space. The preview must go
   through the same `apply_lut_to_uint8()` call the viewport uses — **not**
   `apply_lut()` — so it cannot diverge from what the pane shows.
+  **Gesture-boundary hardening (review follow-up, 2026-09-28):** the canvas
+  mutates points at press while the undo snapshot is written at release, so a
+  lost release would leave an unundoable change. No reachable interruption
+  exists inside the modal dialog today (Qt delivers the release through the
+  mouse grab); if the editor ever becomes non-modal or gains gesture-cancel
+  shortcuts, snapshot at the gesture boundary first.
 - [ ] Allow interactive W/L adjustment by dragging the composed curve's
   endpoints (stretch goal).
 - [x] The same three-curve widget is reused for the toolbar dropdown swatches

@@ -143,8 +143,9 @@ class LutTransferFunctionWidget(QWidget):
             return
         samples = lut_samples(self._lut)
         strip = _rgb_strip(samples)
+        img_bytes = strip.tobytes()
         image = QImage(
-            strip.tobytes(),
+            img_bytes,
             strip.shape[1],
             strip.shape[0],
             3 * strip.shape[1],

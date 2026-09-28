@@ -162,7 +162,8 @@ def swatch_icon(lut: LookUpTable) -> QIcon:
         rgb = np.asarray(samples, dtype=np.uint8)
     strip = np.ascontiguousarray(np.repeat(rgb.reshape(1, -1, 3), 10, axis=0))
     height, width, _channels = strip.shape
-    image = QImage(strip.tobytes(), width, height, 3 * width, QImage.Format.Format_RGB888)
+    img_bytes = strip.tobytes()
+    image = QImage(img_bytes, width, height, 3 * width, QImage.Format.Format_RGB888)
     return QIcon(QPixmap.fromImage(image.copy()))
 
 
