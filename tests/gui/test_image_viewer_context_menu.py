@@ -56,6 +56,7 @@ class _FakeMenu:
     def __init__(self, _parent=None) -> None:
         self.actions: list[_FakeAction] = []
         self.submenus: list[tuple[str, _FakeMenu]] = []
+        self.aboutToShow = _FakeSignal()
         self.enabled = True
         _FakeMenu.instances.append(self)
 

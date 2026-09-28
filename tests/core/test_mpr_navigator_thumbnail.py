@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import core.mpr_navigator_thumbnail as mpr_navigator_thumbnail
+from core.lut_catalog import linear_lut
 
 
 def _make_app(**overrides) -> SimpleNamespace:
@@ -138,6 +139,8 @@ class TestUpdateMprNavigatorThumbnail:
             400.0,
             9,
             None,
+            image_inverted=False,
+            lut=linear_lut(),
         )
 
     def test_skips_set_when_pixels_missing_and_tolerates_bad_window_level(self, monkeypatch) -> None:
@@ -164,6 +167,8 @@ class TestUpdateMprNavigatorThumbnail:
             None,
             None,
             None,
+            image_inverted=False,
+            lut=linear_lut(),
         )
 
 
@@ -202,6 +207,8 @@ class TestFloatingMprThumbnail:
             400.0,
             11,
             None,
+            image_inverted=False,
+            lut=linear_lut(),
         )
 
     def test_skips_when_floating_pixels_missing_or_payload_invalid(self) -> None:
@@ -227,6 +234,8 @@ class TestFloatingMprThumbnail:
             None,
             None,
             None,
+            image_inverted=False,
+            lut=linear_lut(),
         )
 
 
