@@ -5,8 +5,10 @@
 #   pip install -r requirements-dev.txt
 #
 # This pulls in application + test dependencies from requirements.txt, then adds
-# Python-based security scanners. End users who only run the viewer can use
-# requirements.txt alone.
+# Python-based security scanners. Semgrep runs in an isolated uvx environment
+# locally and in its own CI job; its pinned transitive dependencies must not
+# constrain the application dependency audit. End users who only run the viewer
+# can use requirements.txt alone.
 #
 # TruffleHog v3 is installed as an official binary (not from PyPI):
 #   powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1
@@ -14,7 +16,6 @@
 
 -r requirements.txt
 
-semgrep>=1.177.0
 detect-secrets>=1.5.0
 pip-audit>=2.10.1
 # Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
@@ -38,9 +39,6 @@ lizard==1.24.0
 # main.py split; run from repo root:
 #   python -m interrogate src/main_app_*.py src/main.py --ignore-init-method -f <baseline>
 interrogate>=1.7.0
-
-# Pin h11 to mitigate CVE-2024-27306 / Aikido scanner flags (transitive via semgrep/uvicorn)
-h11>=0.16.0
 
 # Local static user-docs layout pilot (MkDocs Material) — Phase A only.
 # Do NOT adopt Material long-term (EOL ~2026-11-05). Phase CZ Zensical pilot:

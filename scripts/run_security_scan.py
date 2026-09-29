@@ -92,17 +92,14 @@ def check_debug_flags():
 
 def check_semgrep(verbose=False):
     print_header("Running Semgrep (SAST)")
-    semgrep_path = get_tool_path(
-        "./.venv/Scripts/semgrep.exe",
-        "./.venv/bin/semgrep",
-        "./venv/Scripts/semgrep.exe",
-        "./venv/bin/semgrep",
-    )
-    if not semgrep_path:
-        print_fail("Semgrep executable not found in venv")
+    uvx_path = which("uvx")
+    if not uvx_path:
+        print_fail("uvx is required for isolated Semgrep scans")
         return {"status": "fail", "reason": "missing_semgrep"}
     cmd = [
-        semgrep_path,
+        uvx_path,
+        "--from=semgrep",
+        "semgrep",
         "--metrics=off",
         "--config=p/security-audit",
         "--config=p/owasp-top-ten",

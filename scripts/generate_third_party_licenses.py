@@ -13,9 +13,10 @@ It wraps the third-party ``pip-licenses`` tool (a dev dependency — see
 ``requirements-dev.txt``) with consistent flags and a stamped header.
 
 **Accuracy:** ``pip-licenses`` reports whatever is installed in the *current*
-environment. The dev venv contains build/test tooling (semgrep, pip-audit,
-basedpyright, ...) that is NOT shipped. For a release-accurate SBOM, run this in
-a clean venv installed from ``requirements.txt`` only. The generated header
+environment. The dev venv contains build/test tooling (pip-audit, basedpyright,
+...) that is NOT shipped; Semgrep runs in a separate uv tool environment. For a
+release-accurate SBOM, run this in a clean venv installed from
+``requirements.txt`` only. The generated header
 records which mode was used.
 
 Usage (from repository root)::

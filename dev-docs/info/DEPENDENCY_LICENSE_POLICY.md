@@ -98,7 +98,7 @@ python scripts/generate_third_party_licenses.py --release --with-texts   # + ful
 ```
 
 Run **without** `--release` from a dev venv and the generator auto-excludes
-known build/test tooling (semgrep, pip-audit, basedpyright, ...) and stamps a
+known build/test tooling (pip-audit, basedpyright, ...) and stamps a
 "DEVELOPMENT venv" caveat in the header. For the artifact you actually ship, use
 a clean `requirements.txt`-only venv with `--release`.
 
