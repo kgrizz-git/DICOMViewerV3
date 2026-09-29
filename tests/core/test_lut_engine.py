@@ -93,6 +93,15 @@ def test_gamma_one_matches_linear_bytes() -> None:
     np.testing.assert_array_equal(_ramp_bytes(gamma_lut(1.0)), _ramp_bytes(linear_lut()))
 
 
+def test_gamma_near_one_still_applies_exponent() -> None:
+    """A gamma close to one is still a distinct transfer function."""
+    query = np.array([0.25, 0.5], dtype=np.float64)
+    gamma = 1.0 + 1e-10
+    actual = evaluate_lut(gamma_lut(gamma), query)
+    np.testing.assert_array_equal(actual, np.power(query, gamma))
+    assert np.any(actual != query)
+
+
 def test_inverse_lut_is_exact_complement() -> None:
     """Truncating the scale misses 50 codes; round-to-nearest misses none."""
     table = _ramp_bytes(inverse_lut())

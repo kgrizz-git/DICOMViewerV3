@@ -233,7 +233,7 @@ def _perpendicular_distance(
     """Perpendicular distance from each point to the chord ``start``–``end``."""
     delta = end - start
     length = float(np.hypot(delta[0], delta[1]))
-    if length == 0.0:
+    if length <= 0.0:
         return np.hypot(points[:, 0] - start[0], points[:, 1] - start[1])
     cross = delta[1] * (points[:, 0] - start[0]) - delta[0] * (points[:, 1] - start[1])
     return np.abs(cross) / length
