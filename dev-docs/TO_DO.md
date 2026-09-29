@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 ---
 
@@ -50,11 +50,12 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **window/level ramp, the LUT, and their composed result** as an overlaid
    transfer-function display (the LUT is a separate step applied after
    window/level, `final(x) = LUT(P_inv(u))` with `u = uint8(WL(x))`, where `P_inv` is MONOCHROME1 XOR user invert). **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
-5. **[P1] Propagate 2D ROIs across slices** — copy or link a selected 2D ROI
-   across a user-selected slice/frame range in the same series, preserving
-   slice/frame identity and allowing per-slice edits. First slice of the ROI
-   roadmap (slice-profile stats plotting, 3D ROIs, and structure export
-   follow). **Plan:** [ROI propagation, slice-profile statistics, and 3D ROI](plans/supporting/ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
+5. **[P1] Restructure ACR QA XLSX/CSV exports around headline results** — put
+   the principal CT/MRI phantom measurements and their calculation inputs first
+   for direct use in physicist QC reports, with supporting detail retained in
+   the XLSX `Detail` sheet and trailing CSV sections. Include the nuclear CSV
+   follow-on tracked in the backlog item below. **Plan:** [ACR QA headline
+   results export](plans/supporting/ACR_QA_HEADLINE_RESULTS_EXPORT_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
