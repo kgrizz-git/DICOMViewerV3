@@ -8,6 +8,10 @@ This file records development and repository-maintenance history that is useful 
 
 - **Isolated Semgrep from the app dependency audit:** PR #167's `pip-audit (app dependencies)` check resolved Semgrep's `PyJWT ~=2.13.0` constraint to vulnerable PyJWT 2.13.0 (`CVE-2026-102274`; fixed in 2.14.0). Removed Semgrep and its scanner-only `h11` floor from `requirements-dev.txt`; local Semgrep scans use an isolated uv tool environment, while the existing CI Semgrep job installs it separately. The application audit still covers the app, development, and build requirement files without adding a vulnerability exception.
 
+## 2026-09-28
+
+- **PR #161 SonarCloud reliability follow-up:** Addressed two new Python `S1244` issues in the LUT chord-distance and gamma-transfer paths while preserving their exact boundary behavior. Added a near-one gamma regression test. Investigation: [`SONARCLOUD_PR161_LUT_RELIABILITY_FAILURE.md`](investigations/SONARCLOUD_PR161_LUT_RELIABILITY_FAILURE.md).
+
 ## 2026-09-27
 
 - **GitHub Actions patch pins (release, CodeQL, Grype):** `build.yml` pins `softprops/action-gh-release` to v3.0.3. `ci.yml` pins `github/codeql-action` to v4.38.2 and `anchore/scan-action` to v7.4.2. SonarQube and TruffleHog pins stay put; Dependabot PR #131 grouped those scanner bumps with these and failed the secret scan on an unverified SonarCloud result.

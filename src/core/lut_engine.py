@@ -468,8 +468,6 @@ def _gamma_curve(query: np.ndarray, gamma: float | None) -> np.ndarray:
     """``x ** gamma``. Gamma 1 is the identity so it stays byte-identical to linear."""
     if gamma is None:
         raise ValueError("gamma LUT is missing gamma")
-    if gamma == 1.0:
-        return query
     return np.power(query, gamma)
 
 

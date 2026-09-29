@@ -16,6 +16,7 @@ import pytest
 from core.lut_curve import (
     DIAGONAL_EPSILON_LIMIT,
     FREEHAND_EPSILON,
+    _perpendicular_distance,
     evaluate_univariate,
     simplify_freehand,
 )
@@ -120,6 +121,14 @@ def test_vertical_bump_threshold_and_small_sine_are_dropped() -> None:
     x = np.linspace(0.0, 1.0, 81)
     sine = np.column_stack((x, x + 0.015 * np.sin(2.0 * np.pi * x)))
     assert len(simplify_freehand(sine)) == 2
+
+
+def test_zero_length_chord_uses_distance_to_endpoint() -> None:
+    """A collapsed chord has no line direction but still has point distances."""
+    endpoint = np.array([0.25, 0.5])
+    points = np.array([[0.25, 0.5], [0.25, 0.8], [0.65, 0.8]])
+    distances = _perpendicular_distance(points, endpoint, endpoint.copy())
+    np.testing.assert_allclose(distances, [0.0, 0.3, 0.5])
 
 
 def test_s_curve_survives_and_large_epsilon_collapses() -> None:
