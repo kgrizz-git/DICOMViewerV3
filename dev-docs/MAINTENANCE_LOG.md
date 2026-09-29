@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-28
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-28
+
+- **PR #161 SonarCloud reliability follow-up:** Addressed two new Python `S1244` issues in the LUT chord-distance and gamma-transfer paths while preserving their exact boundary behavior. Added a near-one gamma regression test. Investigation: [`SONARCLOUD_PR161_LUT_RELIABILITY_FAILURE.md`](investigations/SONARCLOUD_PR161_LUT_RELIABILITY_FAILURE.md).
 
 ## 2026-09-27
 
