@@ -70,7 +70,7 @@ The MRI phantom-guidance tests and the broader routine QC distinction are docume
 | CT | Low-contrast detectability/CNR | `low_contrast_module.cnr`; curated `low_contrast_cnr.cnr` | **Headline** as `CNR`, but after its inputs. State the method in the label. |
 | CT | CNR calculation inputs | Curated `low_contrast_cnr.object_rois[*].mean`, `.background.mean`, `.background.std` | **Headline**, currently before CNR. Keep the aggregate inputs immediately after CNR; individual ROI records stay Detail. |
 | CT | High-contrast spatial resolution | `spatial_resolution_module.lpmm_to_rmtf`; live `spatial_resolution_module.mtf.relative_resolution(50)` | rMTF grid **Detail**; scalar MTF@50% **missing** from structured export and requires live harvest. Neither is a visual line-pair read. |
-| CT | Measured slice thickness | No `ACRCT` thickness module | **Missing; not computable from vanilla `ACRCT`.** A DICOM `SliceThickness` tag is nominal metadata, not the ramp measurement. |
+| CT | Measured slice thickness | No `ACRCT` thickness module; future viewer-side Module 1 wire-ramp measurement is feasible | **Missing from vanilla pylinac and this viewer today.** DICOM `SliceThickness` is the scanner-reported reference value to compare with an independent measurement, never the measurement itself. See [wire-ramp investigation](#future-work-ct-module-1-wire-ramp-thickness-measurement). |
 | CT | Geometric/positioning accuracy | No `ACRCT` geometric-distance result | **Missing.** Do not relabel another phantom module's geometry result as ACR CT geometry. |
 | MRI | Geometric lengths | Axial and sagittal profile `width (mm)` values | **Detail.** PDF-prominent results absent from Summary. |
 | MRI | High-contrast spatial resolution | `slice1.row_mtf_50`, `slice1.col_mtf_50` | **Headline** automated proxies; visual smallest resolved hole pair **missing**. |
@@ -99,7 +99,7 @@ Use one deterministic schema for a mixed-modality batch, leaving inapplicable ce
 7. **CNR object mean, background mean, background standard deviation** — curated `low_contrast_cnr` aggregates.
 8. Audit fields: pylinac version, image count, study/series UID, and a concise analysis-profile identifier. The full profile remains in JSON/Detail.
 
-There should be no CT measured-thickness or CT SNR headline cell that could imply a completed measurement.
+There should be no CT measured-thickness or CT SNR headline cell that could imply a completed measurement. If the separately tracked DICOM tag harvest ships first, label it **Reported SliceThickness (DICOM, mm)** and place it with acquisition/reference data, never under **Measured slice thickness**. A later wire-ramp result should have distinct **Measured top ramp (mm)** and **Measured bottom ramp (mm)** fields, with the reported thickness alongside for comparison.
 
 ### MRI block
 
@@ -124,13 +124,29 @@ Keep module offsets, ROI size/area/radius, ROI placement settings, individual lo
 
 ## Not computable as a headline measurement today
 
-- **CT measured slice thickness:** no `ACRCT` ramp/FWHM thickness module (`acr.py:256-284`). Nominal DICOM `SliceThickness` is a different quantity; its harvest is separately tracked in `dev-docs/TO_DO.md:274`.
+- **CT measured slice thickness in the current implementation:** no `ACRCT` ramp/FWHM thickness module (`acr.py:256-284`) and no viewer measurement yet. DICOM `SliceThickness` is the scanner-reported image thickness and **does not measure it**. Its harvest is separately tracked in `dev-docs/TO_DO.md:274`. A viewer-side wire-ramp method is a plausible future addition, described below.
 - **CT geometric distance:** none in `ACRCTResult`. A CatPhan geometry measurement is not an ACR CT measurement by substitution.
 - **CT SNR:** no native `ACRCT` field; center ROI noise alone does not create an SNR measurement.
 - **Observer CT line-pair and MRI hole-pair resolution:** pylinac supplies rMTF/MTF proxies, not a manual visibility score (`acr.py:190-215,918-931`).
 - **ACR-procedure MRI PIU:** pylinac's percentile calculation is not the small high/low-region procedure (`acr.py:984-989`).
 - **Vanilla MRI SNR:** absent from `ACRMRILarge`; the viewer's value is uncorrected and method-specific (`src/qa/pylinac_mri_snr.py:154-186`).
 - **MRI SNR uniformity or two-image difference SNR:** neither follows from one run's `mri_snr`; both require separate acquisition and method design ([reference assessment](../info/ACR_PHANTOM_QA_METRICS_AND_PYLINAC_GAPS.md#snr-and-snr-uniformity--not-accreditation-tests)).
+
+## Future work: CT Module 1 wire-ramp thickness measurement
+
+**Keep reported and measured values separate.** DICOM `(0018,0050) SliceThickness` is [nominal reconstructed slice thickness](https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_c.34.12.html). Reading that tag cannot establish actual thickness; the independent phantom result is what could be compared with it and with the site's recorded protocol. DICOM `SpacingBetweenSlices` or distance between image positions describes [slice-center spacing](https://dicom.nema.org/medical/dicom/2023a/output/chtml/part03/sect_C.7.6.2.html), not slice thickness. The [ACR phantom overview](https://accreditationsupport.acr.org/support/solutions/articles/11000053945-overview-of-the-ct-phantom) locates two wire ramps in Module 1, alongside the material inserts, and says adjacent wires represent 0.5 mm in the z direction. The [current ACR CT phantom scanning instructions](https://accreditationsupport.acr.org/support/solutions/articles/11000056197-acr-ct-phantom-scanning-instructions) use the Module 1 landmark/BB image and describe centered, symmetric wires for alignment. These support using the analyzed Module 1 origin image as the starting image, subject to confirming that the ramps are well centered and visible on the selected reconstruction.
+
+The **historical** ACR CT accreditation phantom instructions describe viewing the Module 1 image at WW 400/WL 0, counting wires at least half as bright as the central wires **separately on the top and bottom ramps**, and dividing each count by two to obtain millimeters (0.5 mm per visible wire). A [peer-reviewed AAPM-hosted description of the ACR program](https://www.aapm.org/meetings/05AM/pdf/18-4146-57655-316.pdf) independently describes the discrete 0.5 mm ramp spacing, counts well-visualized wires, and notes about 0.5 mm observer variability. The exact 50% visual rule was verified in an [archived copy of the ACR instruction](https://manualzz.com/doc/27570347/acr-ct-accreditation-phantom-instruction-manual); it is a historical procedure, **not** a claim that the current CT QC manual mandates it. [ACR's current manual summary](https://accreditationsupport.acr.org/support/solutions/articles/11000069437-the-2017-ct-qc-manual) says image-thickness testing was removed as a required test for modern multidetector CT, while noting possible value on remaining single-slice systems. The [current ACR phantom scoring page](https://accreditationsupport.acr.org/support/solutions/articles/11000054129-acr-ct-phantom-scoring) still discusses submitted image thickness relative to the phantom data form. The implementation plan must establish which procedure and reporting context the site actually wants.
+
+**Candidate algorithm for a future, physicist-reviewed spike:**
+
+1. Reuse the CT runner's Module 1 origin selection (the material-insert slice), but verify BB alignment, ramp centering, and adequate coverage; let a physicist correct the slice and ramp regions when detection is uncertain. Do not assume every origin candidate has a usable thickness image.
+2. Register the phantom center and orientation, locate top and bottom wire-ramp regions independently, and sample the original rescaled CT values rather than thresholding a saved screenshot. Use the historical WW 400/WL 0 view for manual comparison, while specifying precisely how pixel values are converted to a reproducible brightness or contrast score.
+3. Estimate a local water-equivalent background for each ramp, detect distinct wire peaks at the expected spacing, and measure each peak above its local background. Set the candidate visibility threshold at 50% of a robust central-wire reference **per ramp**; validate how this numerical rule matches the historical *visual* half-brightness judgment. Avoid using raw HU divided by central-wire HU without background subtraction.
+4. Count qualifying wires on each ramp separately and calculate `top_count × 0.5 mm` and `bottom_count × 0.5 mm`. Retain both counts, both measurements, the reference brightness/contrast, threshold, rejected peaks, selected image identity, and an annotated ramp image. Do not silently average discrepant top/bottom results.
+5. Compare each measured width with the **reported** DICOM thickness and the site-recorded protocol value only after the measurement succeeds. Flag absent or inconsistent DICOM tags separately. Validate the method across thin/thick reconstructions, noise, iterative reconstruction, off-center ramps, partial-volume ends, artifacts from inserts/BBs, and ramps whose count extends beyond the available wires. Compare blinded manual counts from physicists before clinical use.
+
+This is an engineering proposal, not a validated implementation or a current `ACRCT` capability. The 50% rule, background handling, tolerance, and whether a particular series is suitable need agreement from the physicist and the applicable site procedure before any automated pass/fail claim.
 
 ## Open questions and risks
 
@@ -140,6 +156,7 @@ Keep module offsets, ROI size/area/radius, ROI placement settings, individual lo
 4. How should downstream CSV consumers handle reordered columns and the new single-run section? Preserve existing keys and the complete trailing flatten, and document the ordering change.
 5. Failed or partial `results_data()` extraction can leave `raw_pylinac` empty. Blank headline cells need retained warnings/errors so they cannot be mistaken for measured zeros.
 6. The backlog also requests nuclear/flat CSV ordering. Their own metric inventory is needed before applying this presentation pattern to those exports.
+7. Should the future CT wire-ramp measurement be offered for routine QC, accreditation preparation, or both? Confirm the site's procedure, reference value, and review workflow in light of the current manual's removal of image thickness as a generally required QC test.
 
 ## Next steps
 
