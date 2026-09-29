@@ -98,7 +98,7 @@ def check_semgrep(verbose=False):
         return {"status": "fail", "reason": "missing_semgrep"}
     cmd = [
         uvx_path,
-        "--from=semgrep",
+        "--from=semgrep==1.178.0",
         "semgrep",
         "--metrics=off",
         "--config=p/security-audit",

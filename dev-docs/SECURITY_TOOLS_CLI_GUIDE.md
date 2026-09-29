@@ -29,10 +29,10 @@ pip install -r requirements-dev.txt
 This installs `requirements.txt` plus **detect-secrets** and the other development tools. Install Semgrep separately so its pinned transitive dependencies do not enter the application dependency audit:
 
 ```bash
-uv tool install semgrep
+uv tool install 'semgrep==1.178.0'
 ```
 
-For a one-off scan without a persistent tool installation, use `uvx --from semgrep semgrep` in place of `semgrep` in the examples below. This explicit form also avoids an older `semgrep` executable left in an activated venv. The repository scan wrapper uses `uvx` and requires it on `PATH`.
+For a one-off scan without a persistent tool installation, use `uvx --from 'semgrep==1.178.0' semgrep` in place of `semgrep` in the examples below. This explicit form also avoids an older `semgrep` executable left in an activated venv. The repository scan wrapper uses the same pinned version through `uvx` and requires it on `PATH`.
 
 PhiScan and Microsoft Presidio run in a separate environment because Presidio's
 NumPy constraint conflicts with the application's NumPy requirement; see
@@ -61,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -Ve
 ### Step 3: Verify versions
 
 ```bash
-uvx --from semgrep semgrep --version
+uvx --from 'semgrep==1.178.0' semgrep --version
 trufflehog --version
 detect-secrets --version
 ```
@@ -485,8 +485,8 @@ detect-secrets audit .secrets.baseline
 
 ```bash
 # The scanner runs outside the project venv.
-uvx --from semgrep semgrep --version
-uvx --from semgrep semgrep --metrics=off --config=p/security-audit src/
+uvx --from 'semgrep==1.178.0' semgrep --version
+uvx --from 'semgrep==1.178.0' semgrep --metrics=off --config=p/security-audit src/
 ```
 
 ### TruffleHog takes too long
