@@ -85,7 +85,7 @@ def _extract_background_roi_details(lcm: Any) -> dict[str, Any]:
         "mean": sum(means) / len(means),
         "std": sum(stds) / len(stds),
     }
-    if medians:
+    if len(medians) == len(means):
         background["pixel_value"] = sum(medians) / len(medians)
     return background
 

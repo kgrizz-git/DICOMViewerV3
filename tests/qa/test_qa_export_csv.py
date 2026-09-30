@@ -36,7 +36,7 @@ def _acr_result() -> QAResult:
         metrics={
             "low_contrast_cnr": {
                 "cnr": 4.25,
-                "object_rois": [{"mean": 105.0, "pixel_value": 101.0}, {"mean": 95.0}],
+                "object_rois": [{"mean": 18.0, "pixel_value": 17.375}],
                 "background": {"mean": 12.0, "std": 1.5, "pixel_value": 11.0},
             },
             "low_contrast_score": 1,
@@ -113,9 +113,9 @@ def test_single_csv_keeps_full_detail_after_separator_without_duplicate_mtf_key(
     assert ["", ""] in rows
     separator = rows.index(["", ""])
     assert rows.index(["acr_ct_mtf50_lpmm", "0.53"]) < separator
-    assert rows.index(["acr_ct_cnr_object_median_hu", "101.0"]) < separator
+    assert rows.index(["acr_ct_cnr_object_median_hu", "17.375"]) < separator
     assert rows.index(["acr_ct_cnr_background_median_hu", "11.0"]) < separator
-    assert ["acr_ct_cnr_mean_based", str((100.0 - 12.0) / 1.5)] in rows
+    assert ["acr_ct_cnr_mean_based", "4.0"] in rows
     assert rows.index(["ct_module.rois.Air", "-987.1"]) > separator
     assert [row[0] for row in rows].count("acr_ct_mtf50_lpmm") == 1
 
@@ -240,6 +240,31 @@ def test_mri_single_run_csv_projects_headlines_before_detail() -> None:
     assert rows.index([
         "geometric_distortion_module.profiles.negative diagonal.width (mm)", "189.5"
     ]) > separator
+
+
+def test_acr_csv_tolerates_missing_metrics_dict() -> None:
+    result = QAResult(success=True, analysis_type="acr_ct")
+    result.metrics = None  # type: ignore[assignment]
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert ["acr_ct_cnr_mean_based", ""] in rows
+    assert ["acr_ct_cnr_object_median_hu", ""] in rows
+
+
+def test_ct_ambiguous_multiple_object_medians_stay_blank() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        metrics={"low_contrast_cnr": {
+            "object_rois": [
+                {"mean": 18.0, "pixel_value": 17.0},
+                {"mean": 20.0, "pixel_value": 19.0},
+            ],
+            "background": {"mean": 12.0, "std": 2.0},
+        }},
+    )
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert ["acr_ct_cnr_object_median_hu", ""] in rows
+    assert ["acr_ct_cnr_mean_based", "3.5"] in rows
 
 
 def test_analysis_profile_summary_is_exported_as_audit_text() -> None:

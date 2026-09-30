@@ -21,7 +21,7 @@ def _ct_result() -> QAResult:
             "acr_ct_mtf50_lpmm": 0.53,
             "low_contrast_cnr": {
                 "cnr": 4.25,
-                "object_rois": [{"mean": 105.0, "pixel_value": 101.0}, {"mean": 95.0}],
+                "object_rois": [{"mean": 18.0, "pixel_value": 17.375}],
                 "background": {"mean": 12.0, "std": 1.5, "pixel_value": 11.0},
             },
         },
@@ -104,12 +104,15 @@ def test_ct_summary_headlines_precede_inputs_and_detail() -> None:
     row = _row(wb, 2)
     assert row["Series/Run ID"] == "CT-1"
     assert row["CT low-contrast CNR (pylinac)"] == 4.25
-    assert row["CT low-contrast CNR (mean-based, viewer)"] == (100.0 - 12.0) / 1.5
+    assert row["CT low-contrast CNR (mean-based, viewer)"] == 4.0
     assert row["CT MTF@50% (lp/mm, pylinac)"] == 0.53
     assert row["CT number: Air (HU)"] == -998.0
-    assert row["CNR object ROI mean (HU)"] == 100.0
-    assert row["CNR object ROI median (HU)"] == 101.0
+    assert row["CNR object ROI mean (HU)"] == 18.0
+    assert row["CNR object ROI median (HU)"] == 17.375
     assert row["CNR background median (HU)"] == 11.0
+    assert abs(17.375 - 11.0) / row["CNR background SD (HU)"] == row[
+        "CT low-contrast CNR (pylinac)"
+    ]
     assert row["CNR background SD (HU)"] == 1.5
     assert "spatial_resolution_module.lpmm_to_rmtf.0.5" in [
         cell.value for cell in wb["Detail"]["A"]

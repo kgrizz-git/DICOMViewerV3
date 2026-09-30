@@ -245,15 +245,10 @@ def _audit_value(
     return provenance.get(column.key)
 
 
-def _ct_cnr_values(metrics: dict[str, Any], flat: dict[str, Any]) -> dict[str, Any]:
-    """Read curated CNR inputs and derive a mean-based value for older runs."""
-    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(metrics)
-    cnr_details = metrics.get("low_contrast_cnr")
-    cnr_details = cnr_details if isinstance(cnr_details, dict) else {}
-    object_rois = cnr_details.get("object_rois")
-    object_roi = object_rois[0] if isinstance(object_rois, list) and object_rois else {}
-    background = cnr_details.get("background")
-    background = background if isinstance(background, dict) else {}
+def _mean_based_cnr_value(
+    cnr_details: dict[str, Any], obj_mean: Any, bg_mean: Any, bg_std: Any
+) -> Any:
+    """Use a harvested viewer CNR, or derive it from older run inputs."""
     mean_based_cnr = cnr_details.get("mean_based_cnr")
     if (
         mean_based_cnr is None
@@ -266,9 +261,28 @@ def _ct_cnr_values(metrics: dict[str, Any], flat: dict[str, Any]) -> dict[str, A
         and bg_std > 0
     ):
         mean_based_cnr = abs(obj_mean - bg_mean) / bg_std
+    return mean_based_cnr
+
+
+def _ct_cnr_values(metrics: dict[str, Any], flat: dict[str, Any]) -> dict[str, Any]:
+    """Read curated CNR inputs and derive a mean-based value for older runs."""
+    metrics = metrics or {}
+    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(metrics)
+    cnr_details = metrics.get("low_contrast_cnr")
+    cnr_details = cnr_details if isinstance(cnr_details, dict) else {}
+    object_rois = cnr_details.get("object_rois")
+    object_roi = (
+        object_rois[0]
+        if isinstance(object_rois, list) and len(object_rois) == 1
+        else {}
+    )
+    background = cnr_details.get("background")
+    background = background if isinstance(background, dict) else {}
     return {
         "acr_ct_cnr": cnr if cnr is not None else flat.get("low_contrast_module.cnr"),
-        "acr_ct_cnr_mean_based": mean_based_cnr,
+        "acr_ct_cnr_mean_based": _mean_based_cnr_value(
+            cnr_details, obj_mean, bg_mean, bg_std
+        ),
         "acr_ct_cnr_object_median_hu": (
             object_roi.get("pixel_value") if isinstance(object_roi, dict) else None
         ),

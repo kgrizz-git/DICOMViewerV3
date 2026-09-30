@@ -133,6 +133,16 @@ def test_background_mean_remains_when_median_is_unavailable() -> None:
     assert out["mean_based_cnr"] == 5.0
 
 
+def test_partial_background_medians_are_not_exported_as_complete() -> None:
+    analyzer = _analyzer(background_rois={
+        "A": _FakeROI(mean=10.0, std=2.0, pixel_value=11.0),
+        "B": types.SimpleNamespace(mean=30.0, std=4.0),
+    })
+    out = _extract_low_contrast_cnr_details(analyzer)
+    assert out["background"]["mean"] == 20.0
+    assert "pixel_value" not in out["background"]
+
+
 def test_jsonable_numpy_scalars() -> None:
     np = __import__("numpy")
     converted = _jsonable(
