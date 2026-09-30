@@ -73,11 +73,11 @@
       "id": "semgrep",
       "category": "static-analysis",
       "purpose": "Python security static analysis using community rules.",
-      "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
-      "tested_version": "1.169.0",
+      "install_scope": "isolated uv tool or uvx environment for local scans; separate CI job",
+      "install_reference": "dev-docs/SECURITY_TOOLS_CLI_GUIDE.md",
+      "tested_version": "1.178.0",
       "enforcement": [
-        "pre-push blocking",
+        "local optional scan",
         "CI blocking"
       ],
       "network_policy": "rules-download-only-no-source-upload",

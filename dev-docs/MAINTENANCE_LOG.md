@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-09-29
+
+- **Isolated Semgrep from the app dependency audit:** PR #167's `pip-audit (app dependencies)` check resolved Semgrep's `PyJWT ~=2.13.0` constraint to vulnerable PyJWT 2.13.0 (`CVE-2026-102274`; fixed in 2.14.0). Removed Semgrep and its scanner-only `h11` floor from `requirements-dev.txt`; local Semgrep scans use an isolated uv tool environment, while the existing CI Semgrep job installs it separately. The application audit still covers the app, development, and build requirement files without adding a vulnerability exception.
 
 ## 2026-09-28
 

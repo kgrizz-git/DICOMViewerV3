@@ -2,7 +2,7 @@
 
 **Local Security Scanning in Development**
 
-This guide shows how to use the security scanning tools installed in your venv. These are the same tools used in GitHub Actions workflows, but you can run them locally before committing.
+This guide shows how to run security scanners locally. Most Python tools use the project venv; Semgrep uses an isolated uv tool environment. GitHub Actions installs Semgrep in its own job.
 
 The canonical machine-readable inventory is
 [`security/security-tool-inventory.json`](../security/security-tool-inventory.json).
@@ -26,11 +26,16 @@ These tools are **not** in the main `requirements.txt` (that file is for running
 pip install -r requirements-dev.txt
 ```
 
-This installs `requirements.txt` plus **semgrep** and **detect-secrets**.
+This installs `requirements.txt` plus **detect-secrets** and the other development tools. Install Semgrep separately so its pinned transitive dependencies do not enter the application dependency audit:
 
-PhiScan and Microsoft Presidio run in a separate environment because PhiScan's
-Click constraint conflicts with Semgrep and Presidio conflicts with the
-application's NumPy requirement; see
+```bash
+uv tool install 'semgrep==1.178.0'
+```
+
+For a one-off scan without a persistent tool installation, use `uvx --from 'semgrep==1.178.0' semgrep` in place of `semgrep` in the examples below. This explicit form also avoids an older `semgrep` executable left in an activated venv. The repository scan wrapper uses the same pinned version through `uvx` and requires it on `PATH`.
+
+PhiScan and Microsoft Presidio run in a separate environment because Presidio's
+NumPy constraint conflicts with the application's NumPy requirement; see
 [`requirements-phi-tools.txt`](../requirements-phi-tools.txt).
 
 Install dependency CVE scanner (`pip-audit`) in the same venv:
@@ -56,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -Ve
 ### Step 3: Verify versions
 
 ```bash
-semgrep --version
+uvx --from 'semgrep==1.178.0' semgrep --version
 trufflehog --version
 detect-secrets --version
 ```
@@ -64,7 +69,7 @@ detect-secrets --version
 Example versions (your venv may differ slightly):
 
 ```
-semgrep         1.156.x  (Python SAST scanner)
+semgrep         1.178.x  (Python SAST scanner; isolated uv environment)
 trufflehog      3.94.x   (Secrets scanner; official TruffleHog binary line)
 detect-secrets  1.5.x    (Secrets detector)
 ```
@@ -478,12 +483,10 @@ detect-secrets audit .secrets.baseline
 
 ### Semgrep not found
 
-```powershell
-# Verify installation
-.\.venv\Scripts\python.exe -m semgrep --version
-
-# Or use python module directly
-python -m semgrep --config=p/security-audit src/
+```bash
+# The scanner runs outside the project venv.
+uvx --from 'semgrep==1.178.0' semgrep --version
+uvx --from 'semgrep==1.178.0' semgrep --metrics=off --config=p/security-audit src/
 ```
 
 ### TruffleHog takes too long
