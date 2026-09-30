@@ -296,7 +296,7 @@ class QAAppFacade:
         Offer a single save dialog for a finished QA run as JSON, CSV, or XLSX.
 
         One prompt with all three filters (defaults to JSON). The format is
-        chosen by the saved file's extension: ``.csv`` writes a flat
+        chosen by the saved file's extension: ``.csv`` writes a
         headline-first ``metric,value`` CSV; ``.xlsx``
         writes a workbook (Summary/Detail/Images sheets -- see
         ``qa.qa_xlsx_export.build_qa_workbook``) with the analyzed CT image

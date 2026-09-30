@@ -242,7 +242,9 @@ def build_qa_workbook(
             and MRI headline measurements and calculation inputs, then audit
             fields. ``columns_for`` chooses the shared batch header and
             ``project_headlines`` supplies each row; unavailable, failed, or
-            other-modality measurements stay blank. MRI SNR is the viewer's
+            other-modality measurements stay blank. Detail retains any partial
+            values from failed runs for audit even when Summary blanks them.
+            MRI SNR is the viewer's
             uncorrected ratio, not NEMA MS 1. Values pass through
             ``_xlsx_cell`` before writing.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).

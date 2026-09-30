@@ -177,7 +177,11 @@ AUDIT_COLUMNS = (
 
 
 def columns_for(results: list[QAResult]) -> tuple[HeadlineColumn, ...]:
-    """Return stable identity, applicable modality, and audit columns."""
+    """Return identity, applicable modality, and audit columns.
+
+    With no runs, emit the specified 12-column identity/audit header. The
+    profile summary is run-specific, and no modality can be inferred.
+    """
     if not results:
         return (*IDENTITY_COLUMNS, *AUDIT_COLUMNS[:-1])
     types = {result.analysis_type for result in results}

@@ -11,6 +11,7 @@ from __future__ import annotations
 import builtins
 import sys
 import types
+import warnings
 
 from qa.analysis_types import QARequest
 from qa.pylinac_acr_ct import (
@@ -88,11 +89,38 @@ class _FakeAnalyzerWithMtfAndCnr(_FakeAnalyzerWithMtf):
     def __init__(self, input_value, *, check_uid=True) -> None:
         super().__init__(input_value, check_uid=check_uid)
         self.low_contrast_module = types.SimpleNamespace(
-            cnr=lambda: 3.0, rois={}, background_rois={}
+            cnr=lambda: 3.0,
+            rois={"ROI": types.SimpleNamespace(
+                mean=13.0, pixel_value=13.0, contrast_to_noise=3.0
+            )},
+            background_rois={"ROI": types.SimpleNamespace(
+                mean=10.0, pixel_value=10.0, std=1.0
+            )},
         )
 
     def results_data(self, as_dict=False):
         return {"low_contrast_module": {"cnr": 4.0}}
+
+
+class _FakeAnalyzerWithExtrapolatedMtf(_FakeAnalyzerWithMtf):
+    def __init__(self, input_value, *, check_uid=True) -> None:
+        super().__init__(input_value, check_uid=check_uid)
+
+        def resolution(_percent):
+            warnings.warn(
+                "MTF resolution wasn't calculated for 50% that was asked for. "
+                "The value returned is an extrapolation.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return 0.52
+
+        self.spatial_resolution_module.mtf.relative_resolution = resolution
+
+
+class _FakeAnalyzerWithMatchingCnr(_FakeAnalyzerWithMtfAndCnr):
+    def results_data(self, as_dict=False):
+        return {"low_contrast_module": {"cnr": 3.0}}
 
 
 class _FakeAnalyzerAnalyzeRaises(_FakeAnalyzer):
@@ -281,7 +309,17 @@ def test_ct_missing_mtf_warns_without_failing(monkeypatch) -> None:
     assert any("MTF@50%" in warning for warning in result.warnings)
 
 
-def test_ct_runner_warns_when_live_and_structured_cnr_disagree(monkeypatch) -> None:
+def test_ct_mtf_extrapolation_is_recorded_in_run_warnings(monkeypatch) -> None:
+    _install_fake_pylinac(monkeypatch, analyzer_cls=_FakeAnalyzerWithExtrapolatedMtf)
+
+    result = run_acr_ct_analysis(_request())
+
+    assert result.success is True
+    assert result.metrics["acr_ct_mtf50_lpmm"] == 0.52
+    assert "CT MTF@50% was extrapolated by pylinac." in result.warnings
+
+
+def test_ct_runner_warns_when_roi_based_and_structured_cnr_disagree(monkeypatch) -> None:
     _install_fake_pylinac(monkeypatch, analyzer_cls=_FakeAnalyzerWithMtfAndCnr)
 
     result = run_acr_ct_analysis(_request())
@@ -289,6 +327,15 @@ def test_ct_runner_warns_when_live_and_structured_cnr_disagree(monkeypatch) -> N
     assert result.success is True
     assert result.metrics["low_contrast_cnr"]["cnr"] == 3.0
     assert any("CNR differs" in warning for warning in result.warnings)
+
+
+def test_ct_runner_accepts_matching_roi_based_cnr(monkeypatch) -> None:
+    _install_fake_pylinac(monkeypatch, analyzer_cls=_FakeAnalyzerWithMatchingCnr)
+
+    result = run_acr_ct_analysis(_request())
+
+    assert result.success is True
+    assert not any("CNR differs" in warning for warning in result.warnings)
 
 
 def test_analysis_failure_appends_extent_diagnostics(monkeypatch) -> None:

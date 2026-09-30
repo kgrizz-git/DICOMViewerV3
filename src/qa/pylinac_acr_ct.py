@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
+import warnings as py_warnings
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -201,13 +202,19 @@ def _acr_ct_stack_diagnostic_lines(analyzer: Any) -> list[str]:
 def _harvest_ct_headlines(
     analyzer: Any,
     raw: dict[str, Any],
-    low_contrast_cnr: dict[str, Any],
 ) -> tuple[dict[str, float], list[str]]:
-    """Read live MTF and compare the two pylinac CNR representations."""
+    """Read live MTF and check serialized CNR against its ROI inputs."""
     metrics: dict[str, float] = {}
     warnings: list[str] = []
     try:
-        mtf50 = float(analyzer.spatial_resolution_module.mtf.relative_resolution(50))
+        with py_warnings.catch_warnings(record=True) as caught:
+            py_warnings.simplefilter("always", UserWarning)
+            mtf50 = float(analyzer.spatial_resolution_module.mtf.relative_resolution(50))
+        for emitted in caught:
+            if "MTF resolution wasn't calculated" in str(emitted.message):
+                warnings.append("CT MTF@50% was extrapolated by pylinac.")
+            else:
+                py_warnings.warn(emitted.message, emitted.category, stacklevel=2)
         if math.isfinite(mtf50):
             metrics["acr_ct_mtf50_lpmm"] = mtf50
         else:
@@ -221,16 +228,22 @@ def _harvest_ct_headlines(
         if isinstance(low_contrast_data, dict)
         else None
     )
-    curated_cnr = low_contrast_cnr.get("cnr")
+    try:
+        lcm = analyzer.low_contrast_module
+        obj = lcm.rois["ROI"].pixel_value
+        bg = lcm.background_rois["ROI"]
+        recomputed_cnr = abs(obj - bg.pixel_value) / bg.std
+    except (AttributeError, KeyError, TypeError, ZeroDivisionError):
+        recomputed_cnr = None
     if (
         isinstance(structured_cnr, (int, float))
-        and isinstance(curated_cnr, (int, float))
+        and isinstance(recomputed_cnr, (int, float))
         and math.isfinite(structured_cnr)
-        and math.isfinite(curated_cnr)
-        and not math.isclose(structured_cnr, curated_cnr, rel_tol=1e-6, abs_tol=1e-6)
+        and math.isfinite(recomputed_cnr)
+        and not math.isclose(structured_cnr, recomputed_cnr, rel_tol=1e-6, abs_tol=1e-6)
     ):
         warnings.append(
-            "CT low-contrast CNR differs between live and structured pylinac results."
+            "CT low-contrast CNR differs from the ROI-based calculation."
         )
     return metrics, warnings
 
@@ -358,9 +371,7 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         if low_contrast_cnr:
             metrics["low_contrast_cnr"] = low_contrast_cnr
 
-        headline_metrics, ct_warnings = _harvest_ct_headlines(
-            analyzer, raw, low_contrast_cnr
-        )
+        headline_metrics, ct_warnings = _harvest_ct_headlines(analyzer, raw)
         metrics.update(headline_metrics)
         if warn_ignore_tol:
             ct_warnings.append(

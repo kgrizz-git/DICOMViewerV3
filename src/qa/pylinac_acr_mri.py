@@ -432,20 +432,19 @@ def _extract_lc_score(raw: dict[str, Any]) -> int | None:
     return None
 
 
-def _warn_lc_score_mismatch(
-    raw: dict[str, Any], analyzer: Any, warnings: list[str]
-) -> None:
-    """Compare the live pylinac score with its serialized result, if available."""
-    live_module = getattr(analyzer, "low_contrast_multi_slice", None)
-    live_score = getattr(live_module, "score", None)
+def _warn_lc_score_mismatch(raw: dict[str, Any], analyzer: Any, warnings: list[str]) -> None:
+    """Check the serialized score against the sum of per-slice scores."""
+    try:
+        slices = analyzer.low_contrast_multi_slice.slices.values()
+        recomputed_score = sum(item.score for item in slices)
+    except (AttributeError, TypeError, ValueError):
+        return
     module = raw.get("low_contrast_multi_slice_module")
     structured = module.get("score") if isinstance(module, dict) else None
-    if (
-        isinstance(live_score, (int, float))
-        and math.isfinite(live_score)
-        and isinstance(structured, (int, float))
-        and math.isfinite(structured)
-        and not math.isclose(live_score, structured, rel_tol=1e-6, abs_tol=1e-6)
+    if not isinstance(structured, (int, float)) or not math.isfinite(structured):
+        return
+    if math.isfinite(recomputed_score) and not math.isclose(
+        recomputed_score, structured, rel_tol=1e-6, abs_tol=1e-6
     ):
         warnings.append("MRI low-contrast score differs from structured pylinac results.")
 

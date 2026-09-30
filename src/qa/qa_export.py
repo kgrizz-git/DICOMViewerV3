@@ -180,6 +180,7 @@ def build_metrics_csv(result: QAResult) -> str:
     ACR CT/MRI exports put identity, headline measurements, inputs, and audit
     rows first. A blank two-cell row separates them from the original sorted
     flatten; a key already emitted in the headline block appears only once.
+    Failed runs blank headline measurements but retain partial detail values.
     Other analysis types retain their previous full-flatten order. The
     two-column shape (``metric,value``) is preserved for single-run parity.
     List/tuple metric values are joined with ``"; "`` first so
