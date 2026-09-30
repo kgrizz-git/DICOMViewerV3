@@ -10,6 +10,9 @@ On success it archives a timestamped JSON dump under ignored
 ``tmp/sonarqube-findings/`` (plus ``latest.json``) so findings can be compared
 over time. Pass ``--no-dump`` to skip the archive. Optional ``--output`` still
 writes Markdown under ``tmp/`` for a one-off human-readable report.
+If analysis history alone returns HTTP 403, the report is archived as
+provisional using the matching local submission record. The server revision
+remains unknown; other API failures still stop the report.
 
 Usage (with SONAR_TOKEN in the ignored .env file or exported, and the local
 service running):
@@ -50,6 +53,7 @@ try:
         get_server_status,
         load_dotenv,
         normalize_host_url,
+        read_last_submission,
     )
 except ModuleNotFoundError:
     from privacy_console import print_redacted
@@ -59,6 +63,7 @@ except ModuleNotFoundError:
         get_server_status,
         load_dotenv,
         normalize_host_url,
+        read_last_submission,
     )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -70,12 +75,16 @@ REPORTED_QUERIES = (
 )
 DEFAULT_DUMP_DIRECTORY = Path("tmp/sonarqube-findings")
 LATEST_JSON_NAME = "latest.json"
-FINDINGS_SCHEMA_VERSION = 1
+FINDINGS_SCHEMA_VERSION = 2
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 class SonarReportError(RuntimeError):
     """Raised when SonarQube cannot produce a complete, scoped report."""
+
+
+class SonarPermissionError(SonarReportError):
+    """Raised for an API permission denial without reflecting response content."""
 
 
 @dataclass(frozen=True)
@@ -84,6 +93,9 @@ class AnalysisMetadata:
 
     date: str | None
     revision: str | None
+    verification_source: str = "server"
+    local_submission_revision: str | None = None
+    local_submission_at_utc: str | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +141,10 @@ def _read_json(url: str, token: str) -> dict[str, Any]:
         )
         response.raise_for_status()
         payload = response.json()
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 403:
+            raise SonarPermissionError("SonarQube denied access to this API") from exc
+        raise SonarReportError("SonarQube request could not be completed") from exc
     except (requests.RequestException, ValueError) as exc:
         raise SonarReportError("SonarQube request could not be completed") from exc
     if not isinstance(payload, dict):
@@ -250,7 +266,27 @@ def collect_reported_findings(host_url: str, token: str, project_key: str) -> So
     issues: list[SonarIssue] = []
     for _label, query in REPORTED_QUERIES:
         issues.extend(fetch_issues(host_url, token, project_key, query))
-    analysis = fetch_latest_analysis(host_url, token, project_key)
+    try:
+        analysis = fetch_latest_analysis(host_url, token, project_key)
+    except SonarPermissionError:
+        record = read_last_submission(REPO_ROOT)
+        if (
+            not isinstance(record, dict)
+            or record.get("project_key") != project_key
+            or record.get("host_url") != host_url
+            or not isinstance(record.get("revision"), str)
+            or not record["revision"]
+        ):
+            raise SonarReportError(
+                "Analysis history is forbidden and no matching local submission record exists"
+            ) from None
+        analysis = AnalysisMetadata(
+            date=None,
+            revision=None,
+            verification_source="local_submission_only",
+            local_submission_revision=record["revision"],
+            local_submission_at_utc=record.get("submitted_at_utc"),
+        )
     return SonarReport(project_key=project_key, analysis=analysis, issues=tuple(issues))
 
 
@@ -291,6 +327,9 @@ def build_findings_document(
         "analysis": {
             "date": report.analysis.date,
             "revision": report.analysis.revision,
+            "verification_source": report.analysis.verification_source,
+            "local_submission_revision": report.analysis.local_submission_revision,
+            "local_submission_at_utc": report.analysis.local_submission_at_utc,
         },
         "git_head": git_head,
         "summary": {
@@ -335,9 +374,12 @@ def render_markdown_report(report: SonarReport) -> str:
         f"- Project: `{report.project_key}`",
         f"- Latest analysis: `{report.analysis.date or 'not available'}`",
         f"- Revision: `{report.analysis.revision or 'not available'}`",
+        f"- Revision verification: `{report.analysis.verification_source}`",
         f"- Reported findings: {len(report.issues)}",
         "",
     ]
+    if report.analysis.local_submission_revision:
+        lines.insert(-1, f"- Local submitted revision (server unverified): `{report.analysis.local_submission_revision}`")
     if report.issues:
         lines.extend(["## Findings", ""])
         for issue in report.issues:
@@ -390,11 +432,14 @@ def dump_filename_stem(
     dumped_at_utc: datetime,
     project_key: str,
     revision: str | None,
+    unverified: bool = False,
 ) -> str:
     """Build a stable timestamped stem for one findings dump."""
     stamp = dumped_at_utc.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
     project = _sanitize_filename_part(project_key)
     short_rev = _sanitize_filename_part((revision or "unknown")[:12])
+    if unverified:
+        short_rev = f"unverified-{short_rev}"
     return f"{stamp}_{project}_{short_rev}"
 
 
@@ -465,11 +510,12 @@ def archive_findings_json(
     refreshes ``latest.json``.
     """
     stamped = dumped_at_utc or datetime.now(UTC)
-    revision = report.analysis.revision or git_head
+    revision = report.analysis.revision or report.analysis.local_submission_revision or git_head
     stem = dump_filename_stem(
         dumped_at_utc=stamped,
         project_key=report.project_key,
         revision=revision,
+        unverified=report.analysis.verification_source == "local_submission_only",
     )
     timestamped_path = dump_directory / f"{stem}.json"
     latest_path = dump_directory / LATEST_JSON_NAME
@@ -505,7 +551,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--expected-revision",
-        help="Fail if SonarQube's latest analysis revision differs from this Git revision.",
+        help="Compare the server revision when available; on analysis-history 403 compare the local submission and mark the report unverified.",
     )
     parser.add_argument(
         "--fail-on-findings",
@@ -606,9 +652,14 @@ def main() -> int:
             print_redacted(f"SonarQube is not ready: {host_url} did not report UP.", file=sys.stderr)
             return 2
         report = collect_reported_findings(host_url, token, project_key)
-        if args.expected_revision and report.analysis.revision != args.expected_revision:
+        compared_revision = (
+            report.analysis.local_submission_revision
+            if report.analysis.verification_source == "local_submission_only"
+            else report.analysis.revision
+        )
+        if args.expected_revision and compared_revision != args.expected_revision:
             print(
-                "SonarQube latest analysis revision does not match --expected-revision.",
+                "Available analysis revision does not match --expected-revision.",
                 file=sys.stderr,
             )
             return 2
@@ -625,6 +676,11 @@ def main() -> int:
     print_completion_summary(
         report, args, dump_paths=dump_paths, output_path=output_path
     )
+    if report.analysis.verification_source == "local_submission_only":
+        print(
+            "PROVISIONAL: findings were fetched from SonarQube, but its analysis revision "
+            "could not be verified; the recorded local submission is only provenance."
+        )
     return 1 if args.fail_on_findings and report.issues else 0
 
 

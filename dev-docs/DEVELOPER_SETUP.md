@@ -282,6 +282,17 @@ Optional `--output tmp/<report>.md` still writes a one-off Markdown copy under
 `--expected-revision` value, or omit that optional assertion when only reading
 the report.
 
+An analysis-only token can read issues while the analysis-history API returns
+HTTP 403. In that case the reporter uses the matching ignored local submission
+record and writes a **provisional** archive. Its `analysis.revision` stays null;
+`analysis.local_submission_revision` names the submitted commit, and
+`analysis.verification_source` is `local_submission_only`. The filename begins
+`unverified-` before the abbreviated local revision. `--expected-revision`
+compares the local submission in this case, but does not establish that the
+server has processed that submission. The console also says `PROVISIONAL`.
+Other API failures, missing or unrelated local records, and revision mismatches
+still prevent a dump.
+
 For a release or remediation branch, pair the reporter with a fresh analysis of
 the same revision (JSON archive is written automatically):
 

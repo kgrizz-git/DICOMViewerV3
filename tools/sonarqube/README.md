@@ -1,6 +1,6 @@
 # Local SonarQube Community Build
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-30
 
 This directory holds the **local** SonarQube analysis settings for DICOM Viewer V3
 ([`sonar-project.properties`](sonar-project.properties)). Analysis is submitted
@@ -171,6 +171,12 @@ python scripts/report_local_sonarqube_issues.py \
   --expected-revision "$(git rev-parse HEAD)"
 # Optional Markdown copy: add --output tmp/sonar-findings.md
 ```
+
+If this token is denied access to analysis history (HTTP 403), the reporter
+can still archive the accessible issues as a **provisional** snapshot. The
+archive separates the unverified local submission revision from the unknown
+server revision; it does not claim the server processed that commit. Other
+reporting failures still stop the archive.
 
 ## Backup
 

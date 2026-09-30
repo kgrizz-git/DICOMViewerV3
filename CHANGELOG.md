@@ -7,6 +7,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
 ## [Unreleased]
 
 ### Changed
+- **Local SonarQube findings reporter:** When the scan token cannot read analysis history, accessible issue metadata can still be archived provisionally using the local submission record. The archive clearly separates the submitted commit from an unverified server revision. **Semantic versioning note: patch** (developer tooling only).
 - **Single-run ACR QA export:** The save dialog now suggests XLSX first, with an `.xlsx` filename. JSON and CSV remain available from the same dialog. **Semantic versioning note: no further bump** (still unreleased `0.5.0`).
 - **ACR QA report exports:** CT and MRI single-run CSV, batch CSV, and XLSX Summary now lead with analysis status, the principal modality-specific measurements, and their calculation inputs. CT includes a live pylinac MTF@50% result, pylinac's median-based CNR, and a separate viewer mean-based CNR with the relevant ROI inputs. MRI includes numeric axial/sagittal lengths and the viewer's uncorrected SNR. CT and MRI run warnings flag extrapolated MTF@50% values. The full pylinac/curated flatten remains in XLSX Detail and the trailing CSV section. Nuclear CSVs put measured result fields before geometry and input fields. The additive CT metrics retain JSON schema 1.3. **Semantic versioning note: no further bump** (still unreleased `0.5.0`).
 - **User-docs self-contained (Phase C0):** Relative links from `user-docs/` to
