@@ -43,18 +43,21 @@ For the single-run CSV, `series_run_id` is `series_uid` when no user label exist
 | Order | Stable CSV key | XLSX label | Exact source and handling |
 |---|---|---|---|
 | 1 | `acr_ct_cnr` | CT low-contrast CNR (pylinac) | `low_contrast_cnr.cnr`; a missing curated value may fall back to `low_contrast_module.cnr` only when finite. The **runner**, not an export builder, cross-checks both sources and records a mismatch warning in `QAResult.warnings`. |
-| 2 | `acr_ct_mtf50_lpmm` | CT MTF@50% (lp/mm, pylinac) | New curated live result `metrics["acr_ct_mtf50_lpmm"]` from `analyzer.spatial_resolution_module.mtf.relative_resolution(50)`. No estimate from rounded `lpmm_to_rmtf`. |
-| 3–7 | `acr_ct_hu_water`, `_air`, `_poly`, `_acrylic`, `_bone` | CT number: Water, Air, Poly, Acrylic, Bone (HU) | `ct_module.rois.Water/Air/Poly/Acrylic/Bone`; leave absent ROIs blank. |
-| 8–12 | `acr_ct_uniformity_hu_center`, `_top`, `_right`, `_bottom`, `_left` | Uniformity: Center, Top, Right, Bottom, Left (HU) | `uniformity_module.rois.Center/Top/Right/Bottom/Left`; distinct from a future derived max deviation. |
-| 13 | `acr_ct_uniformity_center_std_hu` | Uniformity center ROI SD (HU) | `uniformity_module.center_roi_stdev`; image-noise context, not an ACR pass/fail verdict. |
+| 2 | `acr_ct_cnr_mean_based` | CT low-contrast CNR (mean-based, viewer) | `low_contrast_cnr.mean_based_cnr` or the same finite calculation from exported means/SD: absolute object/background ROI mean difference divided by background ROI SD. Distinct from pylinac's median-based CNR. |
+| 3 | `acr_ct_mtf50_lpmm` | CT MTF@50% (lp/mm, pylinac) | New curated live result `metrics["acr_ct_mtf50_lpmm"]` from `analyzer.spatial_resolution_module.mtf.relative_resolution(50)`. No estimate from rounded `lpmm_to_rmtf`. |
+| 4–8 | `acr_ct_hu_water`, `_air`, `_poly`, `_acrylic`, `_bone` | CT number: Water, Air, Poly, Acrylic, Bone (HU) | `ct_module.rois.Water/Air/Poly/Acrylic/Bone`; leave absent ROIs blank. |
+| 9–13 | `acr_ct_uniformity_hu_center`, `_top`, `_right`, `_bottom`, `_left` | Uniformity: Center, Top, Right, Bottom, Left (HU) | `uniformity_module.rois.Center/Top/Right/Bottom/Left`; distinct from a future derived max deviation. |
+| 14 | `acr_ct_uniformity_center_std_hu` | Uniformity center ROI SD (HU) | `uniformity_module.center_roi_stdev`; image-noise context, not an ACR pass/fail verdict. |
 
 CT calculation-input rows/columns immediately after the CT measurement block:
 
 | Order | Stable CSV key | XLSX label | Exact source and handling |
 |---|---|---|---|
-| 14 | `acr_ct_cnr_object_mean_hu` | CNR object ROI mean (HU) | Existing `extract_low_contrast_cnr_values` aggregate over `low_contrast_cnr.object_rois[*].mean`. |
-| 15 | `acr_ct_cnr_background_mean_hu` | CNR background mean (HU) | `low_contrast_cnr.background.mean`. |
-| 16 | `acr_ct_cnr_background_std_hu` | CNR background SD (HU) | `low_contrast_cnr.background.std`. |
+| 15 | `acr_ct_cnr_object_median_hu` | CNR object ROI median (HU) | `low_contrast_cnr.object_rois[0].pixel_value`; pylinac's CNR numerator uses this ROI median. |
+| 16 | `acr_ct_cnr_background_median_hu` | CNR background median (HU) | `low_contrast_cnr.background.pixel_value`; pylinac's CNR numerator uses this ROI median. |
+| 17 | `acr_ct_cnr_object_mean_hu` | CNR object ROI mean (HU) | Existing `extract_low_contrast_cnr_values` aggregate over `low_contrast_cnr.object_rois[*].mean`; input to the viewer mean-based CNR. |
+| 18 | `acr_ct_cnr_background_mean_hu` | CNR background mean (HU) | `low_contrast_cnr.background.mean`; input to the viewer mean-based CNR. |
+| 19 | `acr_ct_cnr_background_std_hu` | CNR background SD (HU) | `low_contrast_cnr.background.std`; denominator for both CNR methods. |
 
 Do not produce a CT SNR or measured-thickness headline in this phase. Do not label `acr_ct_mtf50_lpmm` as ACR's visual highest resolved line-pair score. The DICOM reported thickness fields belong to the separate CT metadata backlog item; if available by implementation time, place **Reported SliceThickness (DICOM, mm)** and **Reported SpacingBetweenSlices (DICOM, mm)** in the audit/reference block with distinct keys, never in the CT measurement block.
 

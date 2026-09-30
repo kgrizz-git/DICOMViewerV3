@@ -36,8 +36,8 @@ def _acr_result() -> QAResult:
         metrics={
             "low_contrast_cnr": {
                 "cnr": 4.25,
-                "object_rois": [{"mean": 105.0}, {"mean": 95.0}],
-                "background": {"mean": 12.0, "std": 1.5},
+                "object_rois": [{"mean": 105.0, "pixel_value": 101.0}, {"mean": 95.0}],
+                "background": {"mean": 12.0, "std": 1.5, "pixel_value": 11.0},
             },
             "low_contrast_score": 1,
             "num_images": 40,
@@ -113,6 +113,9 @@ def test_single_csv_keeps_full_detail_after_separator_without_duplicate_mtf_key(
     assert ["", ""] in rows
     separator = rows.index(["", ""])
     assert rows.index(["acr_ct_mtf50_lpmm", "0.53"]) < separator
+    assert rows.index(["acr_ct_cnr_object_median_hu", "101.0"]) < separator
+    assert rows.index(["acr_ct_cnr_background_median_hu", "11.0"]) < separator
+    assert ["acr_ct_cnr_mean_based", str((100.0 - 12.0) / 1.5)] in rows
     assert rows.index(["ct_module.rois.Air", "-987.1"]) > separator
     assert [row[0] for row in rows].count("acr_ct_mtf50_lpmm") == 1
 
@@ -160,9 +163,9 @@ def test_batch_csv_header_and_row_count() -> None:
     rows = list(csv.reader(io.StringIO(text)))
     assert len(rows) == 3  # header + 2 data rows
     # Identity and measurements lead; provenance follows them.
-    assert rows[0][:7] == [
+    assert rows[0][:8] == [
         "series_run_id", "analysis_type", "analysis_status", "warnings", "errors",
-        "acr_ct_cnr", "acr_ct_mtf50_lpmm",
+        "acr_ct_cnr", "acr_ct_cnr_mean_based", "acr_ct_mtf50_lpmm",
     ]
     assert "success" in rows[0]
     # Metric overflow keys present after provenance block.

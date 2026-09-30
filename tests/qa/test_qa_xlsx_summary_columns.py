@@ -21,8 +21,8 @@ def _ct_result() -> QAResult:
             "acr_ct_mtf50_lpmm": 0.53,
             "low_contrast_cnr": {
                 "cnr": 4.25,
-                "object_rois": [{"mean": 105.0}, {"mean": 95.0}],
-                "background": {"mean": 12.0, "std": 1.5},
+                "object_rois": [{"mean": 105.0, "pixel_value": 101.0}, {"mean": 95.0}],
+                "background": {"mean": 12.0, "std": 1.5, "pixel_value": 11.0},
             },
         },
         raw_pylinac={
@@ -87,13 +87,14 @@ def _row(wb: openpyxl.Workbook, number: int) -> dict[str, object]:
 def test_ct_summary_headlines_precede_inputs_and_detail() -> None:
     wb = build_qa_workbook([_ct_result()], labels=["CT-1"])
     headers = [cell.value for cell in wb["Summary"][1]]
-    assert headers[:7] == [
+    assert headers[:8] == [
         "Series/Run ID",
         "Analysis type",
         "Analysis status",
         "Warnings",
         "Errors",
         "CT low-contrast CNR (pylinac)",
+        "CT low-contrast CNR (mean-based, viewer)",
         "CT MTF@50% (lp/mm, pylinac)",
     ]
     assert headers.index("CNR object ROI mean (HU)") > headers.index(
@@ -103,9 +104,12 @@ def test_ct_summary_headlines_precede_inputs_and_detail() -> None:
     row = _row(wb, 2)
     assert row["Series/Run ID"] == "CT-1"
     assert row["CT low-contrast CNR (pylinac)"] == 4.25
+    assert row["CT low-contrast CNR (mean-based, viewer)"] == (100.0 - 12.0) / 1.5
     assert row["CT MTF@50% (lp/mm, pylinac)"] == 0.53
     assert row["CT number: Air (HU)"] == -998.0
     assert row["CNR object ROI mean (HU)"] == 100.0
+    assert row["CNR object ROI median (HU)"] == 101.0
+    assert row["CNR background median (HU)"] == 11.0
     assert row["CNR background SD (HU)"] == 1.5
     assert "spatial_resolution_module.lpmm_to_rmtf.0.5" in [
         cell.value for cell in wb["Detail"]["A"]
@@ -168,6 +172,7 @@ def test_exact_ct_and_mri_headline_key_order() -> None:
         "warnings",
         "errors",
         "acr_ct_cnr",
+        "acr_ct_cnr_mean_based",
         "acr_ct_mtf50_lpmm",
         "acr_ct_hu_water",
         "acr_ct_hu_air",
@@ -180,6 +185,8 @@ def test_exact_ct_and_mri_headline_key_order() -> None:
         "acr_ct_uniformity_hu_bottom",
         "acr_ct_uniformity_hu_left",
         "acr_ct_uniformity_center_std_hu",
+        "acr_ct_cnr_object_median_hu",
+        "acr_ct_cnr_background_median_hu",
         "acr_ct_cnr_object_mean_hu",
         "acr_ct_cnr_background_mean_hu",
         "acr_ct_cnr_background_std_hu",

@@ -57,8 +57,8 @@ def _result(
 
 _CNR_DETAILS = {
     "cnr": 4.5,
-    "object_rois": [{"mean": 100.0, "pixel_value": 100.0, "contrast_to_noise": 3.0}],
-    "background": {"means": [10.0], "stds": [2.0], "mean": 10.0, "std": 2.0},
+    "object_rois": [{"mean": 20.5, "pixel_value": 21.0, "contrast_to_noise": 3.0}],
+    "background": {"means": [11.0], "stds": [2.0], "mean": 11.0, "std": 2.0, "pixel_value": 12.0},
 }
 
 
@@ -81,10 +81,16 @@ def test_single_row_workbook_round_trip() -> None:
     row2 = [c.value for c in summary[2]]
     values = dict(zip(header, row2, strict=True))
     assert values["Series/Run ID"] == "Series A"
-    assert values["CNR object ROI mean (HU)"] == 100.0
-    assert values["CNR background mean (HU)"] == 10.0
+    assert values["CNR object ROI mean (HU)"] == 20.5
+    assert values["CNR object ROI median (HU)"] == 21.0
+    assert values["CNR background median (HU)"] == 12.0
+    assert (21.0 - 12.0) / values["CNR background SD (HU)"] == values[
+        "CT low-contrast CNR (pylinac)"
+    ]
+    assert values["CNR background mean (HU)"] == 11.0
     assert values["CNR background SD (HU)"] == 2.0
     assert values["CT low-contrast CNR (pylinac)"] == 4.5
+    assert values["CT low-contrast CNR (mean-based, viewer)"] == 4.75
     assert values["Analysis status"] == "success"
     assert values["Warnings"] == "w1"
 

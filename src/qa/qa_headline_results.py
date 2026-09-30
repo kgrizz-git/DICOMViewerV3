@@ -37,6 +37,10 @@ IDENTITY_COLUMNS = (
 CT_COLUMNS = (
     HeadlineColumn("acr_ct_cnr", "CT low-contrast CNR (pylinac)", modality="acr_ct"),
     HeadlineColumn(
+        "acr_ct_cnr_mean_based", "CT low-contrast CNR (mean-based, viewer)",
+        modality="acr_ct",
+    ),
+    HeadlineColumn(
         "acr_ct_mtf50_lpmm",
         "CT MTF@50% (lp/mm, pylinac)",
         "acr_ct_mtf50_lpmm",
@@ -65,6 +69,12 @@ CT_COLUMNS = (
         "Uniformity center ROI SD (HU)",
         "uniformity_module.center_roi_stdev",
         "acr_ct",
+    ),
+    HeadlineColumn(
+        "acr_ct_cnr_object_median_hu", "CNR object ROI median (HU)", modality="acr_ct"
+    ),
+    HeadlineColumn(
+        "acr_ct_cnr_background_median_hu", "CNR background median (HU)", modality="acr_ct"
     ),
     HeadlineColumn(
         "acr_ct_cnr_object_mean_hu", "CNR object ROI mean (HU)", modality="acr_ct"
@@ -235,6 +245,40 @@ def _audit_value(
     return provenance.get(column.key)
 
 
+def _ct_cnr_values(metrics: dict[str, Any], flat: dict[str, Any]) -> dict[str, Any]:
+    """Read curated CNR inputs and derive a mean-based value for older runs."""
+    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(metrics)
+    cnr_details = metrics.get("low_contrast_cnr")
+    cnr_details = cnr_details if isinstance(cnr_details, dict) else {}
+    object_rois = cnr_details.get("object_rois")
+    object_roi = object_rois[0] if isinstance(object_rois, list) and object_rois else {}
+    background = cnr_details.get("background")
+    background = background if isinstance(background, dict) else {}
+    mean_based_cnr = cnr_details.get("mean_based_cnr")
+    if (
+        mean_based_cnr is None
+        and isinstance(obj_mean, (int, float))
+        and isinstance(bg_mean, (int, float))
+        and isinstance(bg_std, (int, float))
+        and math.isfinite(obj_mean)
+        and math.isfinite(bg_mean)
+        and math.isfinite(bg_std)
+        and bg_std > 0
+    ):
+        mean_based_cnr = abs(obj_mean - bg_mean) / bg_std
+    return {
+        "acr_ct_cnr": cnr if cnr is not None else flat.get("low_contrast_module.cnr"),
+        "acr_ct_cnr_mean_based": mean_based_cnr,
+        "acr_ct_cnr_object_median_hu": (
+            object_roi.get("pixel_value") if isinstance(object_roi, dict) else None
+        ),
+        "acr_ct_cnr_background_median_hu": background.get("pixel_value"),
+        "acr_ct_cnr_object_mean_hu": obj_mean,
+        "acr_ct_cnr_background_mean_hu": bg_mean,
+        "acr_ct_cnr_background_std_hu": bg_std,
+    }
+
+
 def project_headlines(
     result: QAResult,
     columns: tuple[HeadlineColumn, ...],
@@ -244,12 +288,8 @@ def project_headlines(
     """Project one run; leave other-modality and unavailable measurements blank."""
     flat = dict(build_metric_rows(result))
     provenance = build_run_provenance(result, label=label)
-    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
     special = {
-        "acr_ct_cnr": cnr if cnr is not None else flat.get("low_contrast_module.cnr"),
-        "acr_ct_cnr_object_mean_hu": obj_mean,
-        "acr_ct_cnr_background_mean_hu": bg_mean,
-        "acr_ct_cnr_background_std_hu": bg_std,
+        **_ct_cnr_values(result.metrics, flat),
         "acr_mri_low_contrast_spokes": (
             flat.get("low_contrast_score")
             if flat.get("low_contrast_score") is not None

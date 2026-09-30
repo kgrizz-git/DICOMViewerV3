@@ -13,6 +13,8 @@ import sys
 import types
 import warnings
 
+import pytest
+
 from qa.analysis_types import QARequest
 from qa.pylinac_acr_ct import (
     _acr_ct_stack_diagnostic_lines,
@@ -116,6 +118,7 @@ class _FakeAnalyzerWithExtrapolatedMtf(_FakeAnalyzerWithMtf):
             return 0.52
 
         self.spatial_resolution_module.mtf.relative_resolution = resolution
+        self.spatial_resolution_module.mtf.spacings = [0.1, 0.4]
 
 
 class _FakeAnalyzerWithMatchingCnr(_FakeAnalyzerWithMtfAndCnr):
@@ -312,7 +315,8 @@ def test_ct_missing_mtf_warns_without_failing(monkeypatch) -> None:
 def test_ct_mtf_extrapolation_is_recorded_in_run_warnings(monkeypatch) -> None:
     _install_fake_pylinac(monkeypatch, analyzer_cls=_FakeAnalyzerWithExtrapolatedMtf)
 
-    result = run_acr_ct_analysis(_request())
+    with pytest.warns(UserWarning, match="MTF resolution wasn't calculated"):
+        result = run_acr_ct_analysis(_request())
 
     assert result.success is True
     assert result.metrics["acr_ct_mtf50_lpmm"] == 0.52
@@ -326,6 +330,7 @@ def test_ct_runner_warns_when_roi_based_and_structured_cnr_disagree(monkeypatch)
 
     assert result.success is True
     assert result.metrics["low_contrast_cnr"]["cnr"] == 3.0
+    assert result.metrics["low_contrast_cnr"]["mean_based_cnr"] == 3.0
     assert any("CNR differs" in warning for warning in result.warnings)
 
 
