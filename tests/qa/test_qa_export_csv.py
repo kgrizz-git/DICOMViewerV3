@@ -197,6 +197,69 @@ def test_batch_csv_num_images_top_level_not_metric_namespaced() -> None:
     assert rows[1][col] == "40"
 
 
+def test_metric_num_images_wins_over_provenance_in_acr_exports() -> None:
+    """The headline projection preserves the canonical flatten collision rule."""
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        num_images=0,
+        metrics={"num_images": 40},
+    )
+    single = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert [row for row in single if row and row[0] == "num_images"] == [
+        ["num_images", "40"]
+    ]
+
+    batch = list(csv.reader(io.StringIO(build_batch_metrics_csv([result]))))
+    assert batch[0].count("num_images") == 1
+    assert batch[1][batch[0].index("num_images")] == "40"
+
+
+def test_mri_single_run_csv_projects_headlines_before_detail() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        metrics={"low_contrast_score": 11, "mri_snr": 40.0},
+        raw_pylinac={
+            "uniformity_module": {"piu": 91.2, "psg": 1.3},
+            "geometric_distortion_module": {
+                "profiles": {"negative diagonal": {"width (mm)": 189.5}}
+            },
+        },
+    )
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    separator = rows.index(["", ""])
+    assert rows[1][0] == "series_run_id"
+    assert rows.index(["acr_mri_pylinac_percentile_piu_pct", "91.2"]) < separator
+    assert rows.index(["acr_mri_axial_negative_diagonal_mm", "189.5"]) < separator
+    assert rows.index(["acr_mri_low_contrast_spokes", "11"]) < separator
+    assert rows.index(["acr_mri_viewer_snr_uncorrected", "40.0"]) < separator
+    assert rows.index([
+        "geometric_distortion_module.profiles.negative diagonal.width (mm)", "189.5"
+    ]) > separator
+
+
+def test_analysis_profile_summary_is_exported_as_audit_text() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        pylinac_analysis_profile={
+            "engine": "ACRMRILarge",
+            "vanilla_pylinac": True,
+            "echo_number": 2,
+            "low_contrast_method": "Ratio",
+        },
+    )
+    expected = (
+        "engine=ACRMRILarge; vanilla_pylinac=True; "
+        "echo_number=2; low_contrast_method=Ratio"
+    )
+    single = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert ["analysis_profile_summary", expected] in single
+    batch = list(csv.reader(io.StringIO(build_batch_metrics_csv([result]))))
+    assert batch[1][batch[0].index("analysis_profile_summary")] == expected
+
+
 def test_batch_csv_labels_parallel_and_overflow_sorted() -> None:
     """Labels align with results; overflow metric keys sorted by str (stable)."""
     r1 = QAResult(success=True, analysis_type="acr_ct", metrics={"aaa": 1},

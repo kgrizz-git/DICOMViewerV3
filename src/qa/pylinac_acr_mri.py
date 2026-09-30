@@ -364,7 +364,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         lc_score = _extract_lc_score(raw)
         if lc_score is not None:
             metrics["low_contrast_score"] = lc_score
-        _warn_lc_score_mismatch(raw, lc_score, extra_warnings)
+        _warn_lc_score_mismatch(raw, analyzer, extra_warnings)
         _apply_mri_post_analyze_metrics(
             metrics, analyzer, request, analyzed_echo, extra_warnings
         )
@@ -433,16 +433,19 @@ def _extract_lc_score(raw: dict[str, Any]) -> int | None:
 
 
 def _warn_lc_score_mismatch(
-    raw: dict[str, Any], score: int | None, warnings: list[str]
+    raw: dict[str, Any], analyzer: Any, warnings: list[str]
 ) -> None:
-    """Record a disagreement between curated and structured MRI LC scores."""
+    """Compare the live pylinac score with its serialized result, if available."""
+    live_module = getattr(analyzer, "low_contrast_multi_slice", None)
+    live_score = getattr(live_module, "score", None)
     module = raw.get("low_contrast_multi_slice_module")
     structured = module.get("score") if isinstance(module, dict) else None
     if (
-        score is not None
+        isinstance(live_score, (int, float))
+        and math.isfinite(live_score)
         and isinstance(structured, (int, float))
         and math.isfinite(structured)
-        and not math.isclose(score, structured, rel_tol=1e-6, abs_tol=1e-6)
+        and not math.isclose(live_score, structured, rel_tol=1e-6, abs_tol=1e-6)
     ):
         warnings.append("MRI low-contrast score differs from structured pylinac results.")
 
@@ -611,7 +614,7 @@ def run_acr_mri_large_batch(
             lc_score = _extract_lc_score(raw)
             if lc_score is not None:
                 metrics["low_contrast_score"] = lc_score
-            _warn_lc_score_mismatch(raw, lc_score, extra_warnings)
+            _warn_lc_score_mismatch(raw, analyzer, extra_warnings)
             _apply_mri_post_analyze_metrics(
                 metrics, analyzer, per_run_request, analyzed_echo, extra_warnings
             )

@@ -238,16 +238,13 @@ def build_qa_workbook(
             accepted for signature parity with the JSON/CSV builders).
 
     Sheets:
-        Summary -- one row per run: Series/Run ID, object ROI mean,
-            background mean/std, CNR, status, warnings, then modality-aware
-            key columns pulled from the canonical flatten (PIU, PSG, LC score,
-            MTF@50% row/col, slice thickness/shift, uncorrected MRI SNR). Each
-            extra column is best-effort: it stays blank when its flatten key
-            is absent for the run, so CT and MRI rows share one header with
-            blanks where a metric does not apply (CT slice thickness and CT SNR
-            are excluded by design). ``MRI SNR`` is the viewer-harvested
-            uncorrected ACR-style ratio (``mri_snr``), not NEMA MS 1. Extra
-            mapped values pass through ``_xlsx_cell``.
+        Summary -- one row per run, ordered as identity/status, applicable CT
+            and MRI headline measurements and calculation inputs, then audit
+            fields. ``columns_for`` chooses the shared batch header and
+            ``project_headlines`` supplies each row; unavailable, failed, or
+            other-modality measurements stay blank. MRI SNR is the viewer's
+            uncorrected ratio, not NEMA MS 1. Values pass through
+            ``_xlsx_cell`` before writing.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- per-module embedded PNGs from ``analyzed_module_images``
             (stable key sort), each preceded by its module label, stacked

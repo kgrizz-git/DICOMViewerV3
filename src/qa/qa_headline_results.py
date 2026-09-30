@@ -213,6 +213,7 @@ def _audit_value(
     result: QAResult,
     column: HeadlineColumn,
     provenance: dict[str, Any],
+    flat: dict[str, Any],
     label: str | None,
 ) -> Any:
     """Render identity and audit fields without measurement coercion."""
@@ -224,6 +225,9 @@ def _audit_value(
         return "; ".join(str(item) for item in provenance[column.key])
     if column.key == "analysis_profile_summary":
         return _profile_summary(result.pylinac_analysis_profile)
+    if column.key == "num_images" and "num_images" in flat:
+        # Match build_tabular_run's established metric-wins collision rule.
+        return flat["num_images"]
     return provenance.get(column.key)
 
 
@@ -261,5 +265,5 @@ def project_headlines(
                 else flat.get(column.source)
             )
         else:
-            row[column.key] = _audit_value(result, column, provenance, label)
+            row[column.key] = _audit_value(result, column, provenance, flat, label)
     return row

@@ -224,6 +224,14 @@ def test_failed_run_keeps_audit_but_blanks_existing_measurements() -> None:
     assert row["CT number: Water (HU)"] in (None, "")
 
 
+def test_summary_num_images_preserves_metric_collision_precedence() -> None:
+    result = _ct_result()
+    result.num_images = 0
+    result.metrics["num_images"] = 40
+    row = _row(build_qa_workbook([result]), 2)
+    assert row["Image count"] == 40
+
+
 def test_mri_low_contrast_uses_structured_fallback_when_curated_absent() -> None:
     result = _mri_result()
     del result.metrics["low_contrast_score"]

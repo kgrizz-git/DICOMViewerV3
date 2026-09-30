@@ -288,6 +288,16 @@ def test_extract_lc_score_supports_current_legacy_and_missing_shapes(
     assert _extract_lc_score(raw) == expected
 
 
+def test_mri_lc_score_warning_compares_live_and_structured_values() -> None:
+    warnings: list[str] = []
+    analyzer = SimpleNamespace(low_contrast_multi_slice=SimpleNamespace(score=12))
+    raw = {"low_contrast_multi_slice_module": {"score": 11}}
+
+    acr_mri._warn_lc_score_mismatch(raw, analyzer, warnings)
+
+    assert warnings == ["MRI low-contrast score differs from structured pylinac results."]
+
+
 def test_run_analysis_normalizes_successful_fake_analyzer_result(monkeypatch) -> None:
     _install_fake_pylinac(monkeypatch, _FakeMriAnalyzer)
 

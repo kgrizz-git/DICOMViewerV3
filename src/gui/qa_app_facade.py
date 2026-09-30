@@ -297,7 +297,7 @@ class QAAppFacade:
 
         One prompt with all three filters (defaults to JSON). The format is
         chosen by the saved file's extension: ``.csv`` writes a flat
-        ``metric,value`` CSV (full nested payload stays in JSON); ``.xlsx``
+        headline-first ``metric,value`` CSV; ``.xlsx``
         writes a workbook (Summary/Detail/Images sheets -- see
         ``qa.qa_xlsx_export.build_qa_workbook``) with the analyzed CT image
         embedded when one was captured for this run; anything else writes the
@@ -793,7 +793,7 @@ class QAAppFacade:
         save_ct_batch_json(self._app, batch)
 
     def export_ct_batch_csv(self, batch: CTBatchResult) -> None:
-        """Offer CSV export for a finished ACR CT batch (full flatten)."""
+        """Offer headline-first CSV export for a finished ACR CT batch."""
         save_ct_batch_csv(self._app, batch)
 
     def open_acr_mri_phantom_analysis(self) -> None:
