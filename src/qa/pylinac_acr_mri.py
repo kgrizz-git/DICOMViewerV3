@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import math
 import shutil
 import tempfile
 from pathlib import Path
@@ -43,6 +42,10 @@ from qa.pylinac_mri_pdf import (
     _write_per_run_temp_pdf,
     assemble_mri_compare_pdf,
     build_mri_compare_summary_pdf,
+)
+from qa.pylinac_mri_result_warnings import (
+    _warn_lc_score_mismatch,
+    _warn_mtf_extrapolation,
 )
 from qa.pylinac_mri_snr import overlay_mri_snr_metrics
 from utils.config.qa_pylinac_config import (
@@ -365,6 +368,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         if lc_score is not None:
             metrics["low_contrast_score"] = lc_score
         _warn_lc_score_mismatch(raw, analyzer, extra_warnings)
+        _warn_mtf_extrapolation(raw, analyzer, extra_warnings)
         _apply_mri_post_analyze_metrics(
             metrics, analyzer, request, analyzed_echo, extra_warnings
         )
@@ -430,23 +434,6 @@ def _extract_lc_score(raw: dict[str, Any]) -> int | None:
         except (TypeError, ValueError):
             pass
     return None
-
-
-def _warn_lc_score_mismatch(raw: dict[str, Any], analyzer: Any, warnings: list[str]) -> None:
-    """Check the serialized score against the sum of per-slice scores."""
-    try:
-        slices = analyzer.low_contrast_multi_slice.slices.values()
-        recomputed_score = sum(item.score for item in slices)
-    except (AttributeError, TypeError, ValueError):
-        return
-    module = raw.get("low_contrast_multi_slice_module")
-    structured = module.get("score") if isinstance(module, dict) else None
-    if not isinstance(structured, (int, float)) or not math.isfinite(structured):
-        return
-    if math.isfinite(recomputed_score) and not math.isclose(
-        recomputed_score, structured, rel_tol=1e-6, abs_tol=1e-6
-    ):
-        warnings.append("MRI low-contrast score differs from structured pylinac results.")
 
 
 # ---------------------------------------------------------------------------
@@ -614,6 +601,7 @@ def run_acr_mri_large_batch(
             if lc_score is not None:
                 metrics["low_contrast_score"] = lc_score
             _warn_lc_score_mismatch(raw, analyzer, extra_warnings)
+            _warn_mtf_extrapolation(raw, analyzer, extra_warnings)
             _apply_mri_post_analyze_metrics(
                 metrics, analyzer, per_run_request, analyzed_echo, extra_warnings
             )

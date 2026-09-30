@@ -125,6 +125,20 @@ class _PdfRaisesMriAnalyzer(_FakeMriAnalyzer):
         raise OSError("synthetic PDF write failure")
 
 
+class _ExtrapolatedMriAnalyzer(_FakeMriAnalyzer):
+    def __init__(self, source: object, *, check_uid: bool) -> None:
+        super().__init__(source, check_uid=check_uid)
+        self.slice1 = SimpleNamespace(
+            row_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
+            col_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
+        )
+
+    def results_data(self, *, as_dict: bool) -> dict[str, object]:
+        raw = super().results_data(as_dict=as_dict)
+        raw["slice1"] = {"row_mtf_50": 1.2, "col_mtf_50": 0.8}
+        return raw
+
+
 def _request(**overrides: object) -> QARequest:
     values: dict[str, object] = {
         "analysis_type": "acr_mri_large",
@@ -303,6 +317,36 @@ def test_mri_lc_score_warning_compares_live_and_structured_values() -> None:
         {"low_contrast_multi_slice_module": {"score": 12}}, analyzer, warnings
     )
     assert warnings == []
+
+
+def test_mri_mtf_extrapolation_warning_uses_each_axis_range() -> None:
+    warnings: list[str] = []
+    analyzer = SimpleNamespace(slice1=SimpleNamespace(
+        row_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
+        col_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
+    ))
+    acr_mri._warn_mtf_extrapolation(
+        {"slice1": {"row_mtf_50": 1.2, "col_mtf_50": 0.8}}, analyzer, warnings
+    )
+    assert warnings == ["MRI row MTF@50% was extrapolated by pylinac."]
+    warnings.clear()
+    acr_mri._warn_mtf_extrapolation(
+        {"slice1": {"row_mtf_50": 0.8, "col_mtf_50": 1.2}}, analyzer, warnings
+    )
+    assert warnings == ["MRI col MTF@50% was extrapolated by pylinac."]
+
+
+def test_mri_mtf_extrapolation_reaches_single_and_batch_run_warnings(monkeypatch) -> None:
+    _install_fake_pylinac(monkeypatch, _ExtrapolatedMriAnalyzer)
+    expected = "MRI row MTF@50% was extrapolated by pylinac."
+    single = run_acr_mri_large_analysis(_request())
+    batch = run_acr_mri_large_batch(_request(), _run_configs())
+    assert single.success and expected in single.warnings
+    assert all(run.success and expected in run.warnings for run in batch.run_results)
+    assert all(
+        "MRI col MTF@50% was extrapolated by pylinac." not in run.warnings
+        for run in (single, *batch.run_results)
+    )
 
 
 def test_run_analysis_normalizes_successful_fake_analyzer_result(monkeypatch) -> None:
