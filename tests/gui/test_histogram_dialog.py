@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtWidgets import QWidget
 
 from gui.dialogs.histogram_dialog import HistogramDialog
 
@@ -50,3 +52,26 @@ def test_reject_closes_dialog(qapp) -> None:
     dlg = HistogramDialog(get_current_dataset=lambda: None)
     dlg.reject()
     assert dlg.result() == int(dlg.DialogCode.Rejected)
+
+
+@pytest.mark.qt
+def test_parent_activation_raises_visible_histogram_without_restoring_minimized(
+    qapp, monkeypatch
+) -> None:
+    parent = QWidget()
+    dlg = HistogramDialog(parent, get_current_dataset=lambda: None)
+    raised: list[bool] = []
+    monkeypatch.setattr(dlg, "raise_", lambda: raised.append(True))
+    dlg.show()
+
+    assert dlg.windowType() == Qt.WindowType.Dialog
+    assert dlg.windowFlags() & Qt.WindowType.WindowMinimizeButtonHint
+    assert not (dlg.windowFlags() & Qt.WindowType.WindowStaysOnTopHint)
+    QCoreApplication.sendEvent(parent, QEvent(QEvent.Type.WindowActivate))
+    assert raised == [True]
+
+    monkeypatch.setattr(dlg, "isMinimized", lambda: True)
+    QCoreApplication.sendEvent(parent, QEvent(QEvent.Type.WindowActivate))
+    assert raised == [True]
+    dlg.close()
+    parent.close()

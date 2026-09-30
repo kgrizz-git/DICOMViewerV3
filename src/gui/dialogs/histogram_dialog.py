@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 from pydicom.dataset import Dataset
-from PySide6.QtCore import QRect
+from PySide6.QtCore import QEvent, QObject, QRect, Qt
 from PySide6.QtGui import QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -108,6 +108,19 @@ class HistogramDialog(QDialog):
             save_geometry_callback: Optional callback (x, y, width, height) to persist geometry
         """
         super().__init__(parent)
+        # Keep the native minimize control of a normal dialog. Re-raise only
+        # when our own main window becomes active, rather than making this a
+        # system-wide always-on-top window (or a platform-specific Tool panel).
+        self.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.CustomizeWindowHint
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowSystemMenuHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        if parent is not None:
+            parent.installEventFilter(self)
         self.get_restore_geometry = get_restore_geometry
         self.save_geometry_callback = save_geometry_callback
         self._geometry_restored = False
@@ -143,6 +156,17 @@ class HistogramDialog(QDialog):
 
         self._create_ui()
         self.update_histogram()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """Keep an open histogram above its main window without restoring it."""
+        if (
+            watched is self.parentWidget()
+            and event.type() == QEvent.Type.WindowActivate
+            and self.isVisible()
+            and not self.isMinimized()
+        ):
+            self.raise_()
+        return super().eventFilter(watched, event)
 
     def _compute_series_global_frequency_max(self, use_rescaled: bool) -> None:
         """
@@ -463,4 +487,3 @@ class HistogramDialog(QDialog):
                 pass
             self._projection_checkbox.blockSignals(False)
         self.update_histogram()
-

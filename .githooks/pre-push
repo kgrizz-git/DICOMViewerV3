@@ -28,6 +28,12 @@ printf '%s\n' "$PUSH_UPDATES" | "$PY_BIN" "$REPO_ROOT/scripts/git_hook_pre_push_
   --remote-name "${1:-}" \
   --remote-url "${2:-}" || exit 1
 
+# Fail fast on an unscanned ref tip before the longer repository-wide gates.
+# This reads only Git objects and the ignored local scan record.
+echo "[sonarqube][analysis] Checking pushed ref tips against the local scan..."
+printf '%s\n' "$PUSH_UPDATES" | \
+  "$PY_BIN" "$REPO_ROOT/scripts/check_local_sonarqube_hook.py" --pre-push || exit 1
+
 echo "[phi] Scanning the complete tracked tree..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_no_phi_artifacts.py" --root "$REPO_ROOT" || exit 1
 
@@ -42,9 +48,8 @@ echo "[secrets] Scanning full reachable history with Gitleaks..."
 echo "[pyright] Running basedpyright error gate..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_basedpyright_errors.py" || exit 1
 
-# Full pytest + coverage live in CI (see .github/workflows/ci.yml), not here.
-# The suite is large (~thousands of tests); running it on every push made local
-# pushes too slow. Pre-commit already runs agent smoke + ruff + line/CCN gates.
+# This hook does not run pytest; the manually invoked local SonarQube scan
+# can run it with --with-coverage, and CI has its own full-suite gate.
 # Run locally (venv on): PYTHONPATH=src python -m pytest tests --cov=src --cov-fail-under=80
 echo "[tests] Skipping full pytest on pre-push (CI owns suite + 80% coverage)."
 
@@ -71,16 +76,13 @@ if [[ "$PUSH_UPDATES" == *" refs/heads/main "* ]]; then
   "$PY_BIN" "$REPO_ROOT/scripts/privacy_tool_review.py" hounddog || true
 fi
 
-# Every local push, including the branches that back pull requests, receives
-# advisory checks. These are two independent checks with separate state files
-# and timers; the [analysis] leg tracks code drift since the last scan, while
-# the [image-update] leg throttles upstream version polling to once every seven
-# days. Neither checks nor the other's "due" status; neither pulls, installs, or
-# blocks. The ignored local SonarQube record may be missing, older than 14 days,
-# or more than five commits behind.
-echo "[sonarqube][analysis] Checking local Community Build analysis freshness..."
+# Keep the existing age/cadence message advisory. It can flag an
+# old analyzer even when the scanned commit still matches the pushed ref.
+echo "[sonarqube][age] Checking local analysis cadence..."
 "$PY_BIN" "$REPO_ROOT/scripts/run_local_sonarqube.py" \
   --check-freshness-days 14 || true
+
+# Image version polling remains independent and advisory.
 echo "[sonarqube][image-update] Checking for local server/scanner updates (weekly)..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_local_sonarqube_updates.py" || true
 

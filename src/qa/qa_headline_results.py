@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from numbers import Real
+from numbers import Integral, Real
 from typing import Any
 
 from qa.analysis_types import QAResult
@@ -205,11 +205,15 @@ def columns_for(results: list[QAResult]) -> tuple[HeadlineColumn, ...]:
 
 def _finite_number(value: Any) -> int | float | str:
     """Keep only finite numeric measurement scalars; blank everything else."""
-    if isinstance(value, bool) or not isinstance(value, Real):
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, Integral):
+        return int(value)
+    if not isinstance(value, Real):
         return ""
     if not math.isfinite(value):
         return ""
-    return value if isinstance(value, int) else float(value)
+    return float(value)
 
 
 def _profile_summary(profile: dict[str, Any] | None) -> str:

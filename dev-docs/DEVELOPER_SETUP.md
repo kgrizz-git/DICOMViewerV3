@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-30
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -168,10 +168,11 @@ records are ignored and blocked from staging even with `git add -f`. Run
 `direnv deny` to revoke approval for this checkout. Contributors without direnv
 can continue exporting variables and activating the venv manually.
 
-## Optional local SonarQube Community Build analysis
+## Local SonarQube Community Build analysis
 
-This repository supports opt-in analysis against a local SonarQube Community
-Build instance. Other external analysis uploads are disabled by policy. The
+Before pushing, contributors run analysis against a local SonarQube Community
+Build instance; the pre-push hook checks the recorded commit. Other external
+analysis uploads are disabled by policy. The
 approved SonarQube Cloud scan is the `sonarqube` job in
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); it uses the
 repository `SONAR_TOKEN` secret and root
@@ -281,6 +282,17 @@ Optional `--output tmp/<report>.md` still writes a one-off Markdown copy under
 `--expected-revision` value, or omit that optional assertion when only reading
 the report.
 
+An analysis-only token can read issues while the analysis-history API returns
+HTTP 403. In that case the reporter uses the matching ignored local submission
+record and writes a **provisional** archive. Its `analysis.revision` stays null;
+`analysis.local_submission_revision` names the submitted commit, and
+`analysis.verification_source` is `local_submission_only`. The filename begins
+`unverified-` before the abbreviated local revision. `--expected-revision`
+compares the local submission in this case, but does not establish that the
+server has processed that submission. The console also says `PROVISIONAL`.
+Other API failures, missing or unrelated local records, and revision mismatches
+still prevent a dump.
+
 For a release or remediation branch, pair the reporter with a fresh analysis of
 the same revision (JSON archive is written automatically):
 
@@ -290,15 +302,18 @@ python scripts/report_local_sonarqube_issues.py \
   --expected-revision "$(git rev-parse HEAD)"
 ```
 
-Recommended cadence: run `python scripts/run_local_sonarqube.py
---with-coverage` at least every 14 days, before a release, and after a large
-dependency or security-sensitive change. A push that updates `main` checks the
-ignored scan record only after the blocking privacy, PHI, secret, type, test, and
-full local scanner gates pass. The record is stale when it is older than 14 days
-or more than five commits behind `HEAD`; scans recorded before revision tracking
-was added are stale until rerun. Missing or stale analysis prints a reminder but
-does not block contributors who do not have the local service or token. Check
-freshness without contacting SonarQube:
+The pre-commit hook gives a nonblocking reminder when `HEAD` is more than five
+commits past the last local scan (or the scan record is missing). The pre-push
+hook blocks every proposed ref update whose tip commit does not exactly match
+the last scanned revision; deleting a remote ref requires no scan. A push of
+multiple refs at different commits requires separate scans and pushes. This
+strict gate requires a working local SonarQube service and `SONAR_TOKEN` in the
+ignored `.env` for contributors who push. Commit your
+changes, run `python scripts/run_local_sonarqube.py --with-coverage`, review
+new issues with the reporter above, then push. If another commit is made after
+the scan, rerun it. These hook checks read the ignored local scan record and
+Git history without contacting SonarQube. The older 14-day age/five-commit
+status check remains advisory in pre-push, and is available manually:
 
 ```bash
 python scripts/run_local_sonarqube.py --check-freshness-days 14

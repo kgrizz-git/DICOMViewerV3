@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run an opt-in local SonarQube Community Build analysis for this repository.
+"""Run a local SonarQube Community Build analysis for this repository.
 
-This is deliberately not a Git hook. It submits source analysis only by
-default; pass --with-coverage when the additional full pytest run is wanted.
+The pre-push hook checks the recorded revision, not the server. Run this
+command on the final commit before pushing. It submits source analysis only by
+default; pass --with-coverage to run the full pytest suite first.
 The script records the most recent successful scanner submission in
 .sonar-local/last-analysis.json, which is intentionally ignored by Git.
 

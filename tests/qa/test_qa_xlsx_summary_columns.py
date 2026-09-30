@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from io import BytesIO
 
+import numpy as np
 import openpyxl
 
 from qa.analysis_types import QAResult
-from qa.qa_headline_results import columns_for
+from qa.qa_headline_results import _finite_number, columns_for
 from qa.qa_xlsx_export import _SUMMARY_HEADERS, build_qa_workbook
 
 
@@ -164,6 +165,15 @@ def test_missing_nonfinite_and_formula_cells() -> None:
     assert row["CT number: Water (HU)"] in (None, "")
     assert row["Series/Run ID"] == "'=Run1"
     assert row["Warnings"] == "'=unexpected"
+
+
+def test_measurement_projection_preserves_integer_counts_and_finite_floats() -> None:
+    assert _finite_number(11) == 11
+    assert type(_finite_number(11)) is int
+    assert _finite_number(np.int64(11)) == 11
+    assert _finite_number(1.25) == 1.25
+    assert _finite_number(True) == ""
+    assert _finite_number(float("inf")) == ""
 
 
 def test_exact_ct_and_mri_headline_key_order() -> None:

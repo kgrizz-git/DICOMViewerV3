@@ -115,6 +115,19 @@ def test_export_qa_results_writes_csv_and_updates_status(tmp_path) -> None:
     app.main_window.update_status.assert_called_once_with(f"Saved QA CSV: {output}")
 
 
+def test_single_run_save_dialog_defaults_to_xlsx(tmp_path) -> None:
+    output = tmp_path / "qa-result.xlsx"
+    app = _app(str(output))
+    result = QAResult(success=True, analysis_type="acr_ct")
+
+    QAAppFacade(app).export_qa_results(result, "qa-result")
+
+    prompt_args = app._prompt_save_path.call_args.args
+    assert prompt_args[1].endswith(".xlsx")
+    assert prompt_args[2].startswith("Excel Files (*.xlsx);;")
+    assert output.is_file()
+
+
 # ---------------------------------------------------------------------------
 # P3-C2 — single-run save-dialog CSV/XLSX pick up the full flatten (no UI
 # change). Synthetic QAResult fixtures carry a curated-metrics overlay that

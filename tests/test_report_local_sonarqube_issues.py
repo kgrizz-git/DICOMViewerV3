@@ -88,6 +88,25 @@ def test_fetch_issues_uses_component_filter_and_keeps_token_out_of_url(monkeypat
     assert calls[0][1]["Authorization"]
 
 
+def test_read_json_distinguishes_forbidden_from_other_http_errors(monkeypatch) -> None:
+    module = _load_module()
+
+    class ErrorResponse:
+        def __init__(self, status_code: int) -> None:
+            self.status_code = status_code
+
+        def raise_for_status(self) -> None:
+            raise module.requests.HTTPError(response=self)
+
+    monkeypatch.setattr(module.requests, "get", lambda *_args, **_kwargs: ErrorResponse(403))
+    with pytest.raises(module.SonarPermissionError):
+        module._read_json("http://localhost:9000/api/project_analyses/search", "token")
+
+    monkeypatch.setattr(module.requests, "get", lambda *_args, **_kwargs: ErrorResponse(500))
+    with pytest.raises(module.SonarReportError, match="request could not be completed"):
+        module._read_json("http://localhost:9000/api/project_analyses/search", "token")
+
+
 def test_fetch_issues_collects_all_pages(monkeypatch):
     module = _load_module()
 
@@ -195,7 +214,8 @@ def test_json_archive_writes_timestamped_and_latest_under_tmp(tmp_path):
     assert latest_path.name == "latest.json"
     payload = json.loads(timestamped_path.read_text(encoding="utf-8"))
     assert payload == json.loads(latest_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
+    assert payload["analysis"]["verification_source"] == "server"
     assert payload["summary"]["total"] == 1
     assert payload["summary"]["by_severity"] == {"BLOCKER": 1}
     assert payload["issues"][0]["path"] == "src/example.py"
@@ -211,6 +231,97 @@ def test_json_archive_writes_timestamped_and_latest_under_tmp(tmp_path):
         module.resolve_dump_directory(tmp_path, Path("tmp/../escape"))
     custom = module.resolve_dump_directory(tmp_path, (tmp_path / "tmp" / "custom").resolve())
     assert custom == (tmp_path / "tmp" / "custom").resolve()
+
+
+def test_history_403_uses_matching_local_submission_without_claiming_server_revision(
+    monkeypatch, tmp_path
+) -> None:
+    module = _load_module()
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    state = tmp_path / ".sonar-local" / "last-analysis.json"
+    state.parent.mkdir()
+    state.write_text(
+        json.dumps({
+            "host_url": "http://localhost:9000",
+            "project_key": "dicom-viewer-v3",
+            "revision": "abc123",
+            "submitted_at_utc": "2026-09-30T19:43:14Z",
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "fetch_issues", lambda *_args: ())
+
+    def forbidden(*_args):
+        raise module.SonarPermissionError("forbidden")
+
+    monkeypatch.setattr(module, "fetch_latest_analysis", forbidden)
+    report = module.collect_reported_findings(
+        "http://localhost:9000", "token", "dicom-viewer-v3"
+    )
+    assert report.analysis.revision is None
+    assert report.analysis.local_submission_revision == "abc123"
+    assert report.analysis.verification_source == "local_submission_only"
+    payload = module.build_findings_document(
+        report, dumped_at_utc=datetime(2026, 9, 30, tzinfo=UTC), git_head="abc123"
+    )
+    assert payload["analysis"]["revision"] is None
+    assert payload["analysis"]["local_submission_revision"] == "abc123"
+    assert payload["analysis"]["verification_source"] == "local_submission_only"
+    assert "server unverified" in module.render_markdown_report(report)
+
+
+def test_history_403_does_not_fall_back_to_unrelated_local_record(monkeypatch, tmp_path) -> None:
+    module = _load_module()
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    state = tmp_path / ".sonar-local" / "last-analysis.json"
+    state.parent.mkdir()
+    state.write_text(json.dumps({
+        "host_url": "http://localhost:9000", "project_key": "other", "revision": "abc123"
+    }), encoding="utf-8")
+    monkeypatch.setattr(module, "fetch_issues", lambda *_args: ())
+
+    def forbidden(*_args):
+        raise module.SonarPermissionError("forbidden")
+
+    monkeypatch.setattr(module, "fetch_latest_analysis", forbidden)
+    with pytest.raises(module.SonarReportError, match="no matching local submission"):
+        module.collect_reported_findings("http://localhost:9000", "token", "dicom-viewer-v3")
+
+
+def test_history_403_provisional_archive_and_expected_revision(monkeypatch, tmp_path, capsys) -> None:
+    module = _load_module()
+    (tmp_path / ".env").write_text("SONAR_TOKEN=file-token\n", encoding="utf-8")
+    state = tmp_path / ".sonar-local" / "last-analysis.json"
+    state.parent.mkdir()
+    state.write_text(json.dumps({
+        "host_url": "http://localhost:9000",
+        "project_key": "dicom-viewer-v3",
+        "revision": "abc123",
+    }), encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    monkeypatch.delenv("SONAR_TOKEN", raising=False)
+    monkeypatch.setattr(module, "get_server_status", lambda _host: "UP")
+    monkeypatch.setattr(module, "fetch_issues", lambda *_args: ())
+
+    def forbidden(*_args):
+        raise module.SonarPermissionError("forbidden")
+
+    monkeypatch.setattr(module, "fetch_latest_analysis", forbidden)
+    monkeypatch.setattr(module, "current_git_head", lambda _root: "abc123")
+    monkeypatch.setattr(sys, "argv", [
+        "report_local_sonarqube_issues.py", "--expected-revision", "abc123"
+    ])
+    assert module.main() == 0
+    latest = tmp_path / "tmp" / "sonarqube-findings" / "latest.json"
+    assert latest.is_file()
+    assert "PROVISIONAL" in capsys.readouterr().out
+    assert "unverified-abc123" in next(latest.parent.glob("*_unverified-abc123.json")).name
+
+    monkeypatch.setattr(sys, "argv", [
+        "report_local_sonarqube_issues.py", "--expected-revision", "different"
+    ])
+    assert module.main() == 2
+    assert "does not match" in capsys.readouterr().err
 
 
 def test_current_git_head_returns_none_when_git_missing(monkeypatch, tmp_path):

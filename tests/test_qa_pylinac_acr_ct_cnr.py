@@ -5,7 +5,7 @@ Exercises ``_extract_low_contrast_cnr_details`` against lightweight fake
 analyzers that mimic pylinac 3.43.2 shapes:
 
   - ``low_contrast_module.rois`` / ``.background_rois`` are
-    ``dict[str, LowContrastDiskROI]`` (single ``"ROI"`` key for ACR CT), not
+    ``dict[str, HUDiskROI]`` (single ``"ROI"`` key for ACR CT), not
     lists — extraction must iterate ``.values()``.
   - ``low_contrast_module.cnr`` is a **method**, not a property.
 
@@ -58,6 +58,23 @@ def test_full_extraction() -> None:
     assert out["mean_based_cnr"] == 45.0
     assert out["background"]["means"] == [10.0]
     assert out["background"]["stds"] == [2.0]
+
+
+def test_hu_disk_roi_shape_without_contrast_keeps_mean_and_median() -> None:
+    class _HUDiskROIShape:
+        mean = 98.0
+        std = 4.0
+        pixel_value = 99.0
+
+    analyzer = _analyzer(
+        rois={"ROI": _HUDiskROIShape()},
+        background_rois={"ROI": _FakeROI(mean=92.0, std=3.0, pixel_value=91.0)},
+        cnr=8 / 3,
+    )
+    out = _extract_low_contrast_cnr_details(analyzer)
+    assert out["object_rois"] == [{"mean": 98.0, "pixel_value": 99.0}]
+    assert out["mean_based_cnr"] == 2.0
+    assert out["cnr"] == 8 / 3
 
 
 def test_missing_module_returns_empty() -> None:

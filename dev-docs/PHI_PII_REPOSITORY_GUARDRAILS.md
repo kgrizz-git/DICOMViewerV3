@@ -1,6 +1,6 @@
 # PHI / PII Repository Guardrails
 
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-30
 
 **Audience:** contributors and coding agents who add, generate, inspect, or export files in this repository.
 
@@ -146,7 +146,9 @@ remain advisory; the artifact/hash/human-review gate remains blocking.
 A proposed `main` push runs Hounddog only after all blocking pre-push gates pass.
 This is preferable to a generic last-run timestamp: staged asset reviews are
 bound directly to current index bytes, while the fast source-wide data-flow scan
-is rerun at the promotion boundary. SonarQube alone uses a 14-day or
-five-commit-behind freshness record because it is materially heavier.
+is rerun at the promotion boundary. The local SonarQube pre-commit reminder
+appears after five commits without a scan; pre-push requires the scanned
+revision to match each pushed ref tip exactly. The 14-day scan-age reminder
+remains advisory at pre-push.
 
 When a scanner flags possible PHI/PII, do not paste the suspected value into a chat, commit message, issue, or documentation. Report only the affected path and rule category until the material has been safely reviewed.
