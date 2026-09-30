@@ -143,6 +143,25 @@ def test_partial_background_medians_are_not_exported_as_complete() -> None:
     assert "pixel_value" not in out["background"]
 
 
+def test_background_roi_without_std_does_not_fail_extraction() -> None:
+    analyzer = _analyzer(background_rois={
+        "ROI": types.SimpleNamespace(mean=10.0),
+    })
+    assert "background" not in _extract_low_contrast_cnr_details(analyzer)
+
+
+def test_background_mean_and_std_use_the_same_rois() -> None:
+    analyzer = _analyzer(background_rois={
+        "BAD": types.SimpleNamespace(mean=10.0),
+        "ROI": _FakeROI(mean=30.0, std=4.0, pixel_value=29.0),
+    })
+    background = _extract_low_contrast_cnr_details(analyzer)["background"]
+    assert background["means"] == [30.0]
+    assert background["stds"] == [4.0]
+    assert background["mean"] == 30.0
+    assert background["pixel_value"] == 29.0
+
+
 def test_jsonable_numpy_scalars() -> None:
     np = __import__("numpy")
     converted = _jsonable(

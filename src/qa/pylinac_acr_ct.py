@@ -64,21 +64,22 @@ def _jsonable(value: Any) -> Any:
 
 def _extract_background_roi_details(lcm: Any) -> dict[str, Any]:
     """Harvest background means, standard deviations, and available medians."""
-    means: list[float] = []
-    stds: list[float] = []
+    mean_std_pairs: list[tuple[float, float]] = []
     medians: list[float] = []
     for roi in (getattr(lcm, "background_rois", {}) or {}).values():
         try:
-            means.append(float(roi.mean))
-            stds.append(float(roi.std))
+            pair = (float(roi.mean), float(roi.std))
         except Exception:
             continue
+        mean_std_pairs.append(pair)
         try:
             medians.append(float(roi.pixel_value))
         except Exception:
             pass
-    if not means:
+    if not mean_std_pairs:
         return {}
+    means = [mean for mean, _ in mean_std_pairs]
+    stds = [std for _, std in mean_std_pairs]
     background: dict[str, Any] = {
         "means": means,
         "stds": stds,
