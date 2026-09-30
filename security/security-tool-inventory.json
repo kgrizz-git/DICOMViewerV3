@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-08-07",
+  "last_verified": "2026-09-30",
   "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
   "policy": {
     "default_data_handling": "local-only",
@@ -281,17 +281,22 @@
     {
       "id": "sonarqube-community-build",
       "category": "local-static-analysis",
-      "purpose": "Opt-in local code-quality and security analysis with no cloud project.",
+      "purpose": "Local code-quality and security analysis with a revision record required before pushing.",
       "install_scope": "local service",
       "install_reference": "dev-docs/DEVELOPER_SETUP.md",
       "tested_version": "locally managed Community Build",
       "enforcement": [
-        "manual advisory",
-        "14-day or five-commit-behind main pre-push freshness reminder"
+        "manual scan submission",
+        "pre-commit advisory after five commits",
+        "pre-push blocking ref-tip revision check",
+        "14-day pre-push age advisory"
       ],
       "network_policy": "local-loopback analysis; Docker Hub image-manifest and SonarSource GitHub release metadata only for weekly advisory update checks",
       "entrypoints": [
         "scripts/run_local_sonarqube.py",
+        "scripts/check_local_sonarqube_hook.py",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
         "scripts/report_local_sonarqube_issues.py",
         "scripts/check_local_sonarqube_updates.py"
       ],

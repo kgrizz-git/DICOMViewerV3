@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-30
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -128,9 +128,9 @@ mostly blocking. Know what they run before wondering why a commit was rejected.
 
 | Hook | Runs, in order |
 |------|----------------|
-| `pre-commit` | `git-hook-prune-backups.py`, `git_hook_line_complexity.py --staged`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --staged`, `check_gitleaks_staged.py`, `run_conditional_privacy_reviews.py`, `check_repo_harness.py`, `check_architecture_boundaries.py`, `agent_smoke_harness.py`, `ruff`, `check_dependency_licenses.py`, `git-hook-security-gate.py` |
+| `pre-commit` | `git-hook-prune-backups.py`, `git_hook_line_complexity.py --staged`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --staged`, `check_gitleaks_staged.py`, `run_conditional_privacy_reviews.py`, `check_repo_harness.py`, `check_architecture_boundaries.py`, `agent_smoke_harness.py`, `ruff`, `check_dependency_licenses.py`, `check_local_sonarqube_hook.py --pre-commit` (advisory after five commits), `git-hook-security-gate.py` |
 | `commit-msg` | `git_hook_commit_message_privacy.py` |
-| `pre-push` | `git_hook_pre_push_privacy.py`, `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --all --critical`, `check_gitleaks_history.py`, `check_basedpyright_errors.py`, `ruff`, `lizard` (advisory), `git-hook-security-gate.py`, `privacy_tool_review.py`, `run_local_sonarqube.py --check-freshness-days` (advisory), `check_local_sonarqube_updates.py` (advisory) |
+| `pre-push` | `git_hook_pre_push_privacy.py`, `check_local_sonarqube_hook.py --pre-push` (blocking exact ref-tip revision), `check_no_phi_artifacts.py`, `git_hook_privacy_checks.py --all --critical`, `check_gitleaks_history.py`, `check_basedpyright_errors.py`, `ruff`, `lizard` (advisory), `git-hook-security-gate.py`, `privacy_tool_review.py`, `run_local_sonarqube.py --check-freshness-days` (advisory age/cadence), `check_local_sonarqube_updates.py` (advisory) |
 
 `git-hook-security-gate.py` runs `run_security_scan.py` and is **branch-gated to
 `main`**, so it is silent on feature branches. The full pytest suite is **not** run

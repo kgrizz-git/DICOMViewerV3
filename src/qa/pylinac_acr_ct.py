@@ -110,12 +110,11 @@ def _extract_low_contrast_cnr_details(analyzer: Any) -> dict[str, Any]:
     or empty dict rather than raising (pylinac minor-version drift).
 
     pylinac 3.43.2 shapes (verified against installed source):
-      - lcm.rois / lcm.background_rois are dict[str, LowContrastDiskROI]
+      - lcm.rois / lcm.background_rois are dict[str, HUDiskROI]
         (ACR CT: single "ROI" key each) -> iterate .values(), NOT as a list.
       - lcm.cnr is a METHOD (|A-B|/SD), not a property -> call lcm.cnr().
-      - LowContrastDiskROI: .mean, .std, .pixel_value, .contrast_to_noise.
-        The optional per-ROI contrast calculation can raise when pylinac has
-        no contrast reference; it must not discard the mean or median.
+      - HUDiskROI has .mean, .std, and median-based .pixel_value but no
+        .contrast_to_noise. Its absence must not discard the mean or median.
     """
     out: dict[str, Any] = {}
     lcm = getattr(analyzer, "low_contrast_module", None)

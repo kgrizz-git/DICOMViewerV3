@@ -84,4 +84,7 @@ fi
 echo "[license] Checking dependency licenses..."
 "$PY_BIN" "$REPO_ROOT/scripts/check_dependency_licenses.py" --root "$REPO_ROOT" || exit 1
 
+echo "[sonarqube advisory] Checking commits since the last local scan..."
+"$PY_BIN" "$REPO_ROOT/scripts/check_local_sonarqube_hook.py" --pre-commit || true
+
 exec "$PY_BIN" "$REPO_ROOT/scripts/git-hook-security-gate.py" --hook-type pre-commit

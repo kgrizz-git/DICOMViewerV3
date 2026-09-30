@@ -1,6 +1,6 @@
 # Release checklist (semantic versioning)
 
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-30
 
 Use this checklist when cutting a new release so version, changelog, and Git tags stay in sync. The app version is defined in **`src/version.py`** (`__version__`); **`CHANGELOG.md`** repeats it in the **Current version** line at the top for readability—keep those two in sync whenever you bump the version.
 
@@ -35,6 +35,14 @@ See [dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md](info/SEMANTIC_VERSIONING_GUIDE.
      ```
 
 6. **Push branch and tags**
+   - Scan the release commit and review its findings before pushing. The
+     pre-push hook requires the last local SonarQube scan revision to match
+     the branch and tag target commit exactly:
+     ```bash
+     python scripts/run_local_sonarqube.py --with-coverage
+     python scripts/report_local_sonarqube_issues.py --fail-on-findings \
+       --expected-revision "$(git rev-parse HEAD)"
+     ```
    - Push your branch, then push the tag:
      ```bash
      git push origin <branch>

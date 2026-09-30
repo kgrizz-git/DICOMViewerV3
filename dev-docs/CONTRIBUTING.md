@@ -87,13 +87,17 @@ Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g.
   see `scripts/new_code_coverage.py` in
   [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md).
   DeepSource, Sentry, and similar repository integrations should remain
-  uninstalled or disabled. Use the opt-in local SonarQube runner and local
-  security tools when deeper analysis is needed.
-- **Local SonarQube Community Build** is an opt-in developer tool, not a hook or CI gate. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py) supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties) file explicitly, can use Docker for the scanner, and writes the last successful submission timestamp to ignored `.sonar-local/last-analysis.json`. See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for token, server, coverage, and Docker-network guidance, and [`tools/sonarqube/README.md`](../tools/sonarqube/README.md) for shared-server persistence / restore-first recovery. After analysis, [`scripts/report_local_sonarqube_issues.py`](../scripts/report_local_sonarqube_issues.py) reports BLOCKER, CRITICAL, and MAJOR findings scoped to the `dicom-viewer-v3` component key and archives timestamped JSON (plus `latest.json`) under ignored `tmp/sonarqube-findings/` for trend monitoring.
-  Run it with coverage at least every 14 days, before releases, and after large
-  dependency or security-sensitive changes. Main-push hooks provide a
-  non-blocking stale/missing reminder and weekly Docker Hub/SonarSource update
-  metadata checks on every local push; neither action pulls or installs.
+  uninstalled or disabled. Use the local SonarQube runner and local security
+  tools for analysis.
+- **Local SonarQube Community Build** is run manually before pushing; the
+  pre-push hook blocks a ref tip that differs from the last recorded scan
+  revision. The pre-commit hook advises when the scan is more than five commits
+  behind `HEAD`. [`scripts/run_local_sonarqube.py`](../scripts/run_local_sonarqube.py)
+  supplies the isolated [`tools/sonarqube/sonar-project.properties`](../tools/sonarqube/sonar-project.properties)
+  file and writes the successful submission to ignored `.sonar-local/last-analysis.json`.
+  See [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md) for the server, token, coverage,
+  reporter, and Docker guidance. The 14-day age and weekly image-update checks
+  remain advisory; neither update check pulls or installs software.
 
 ## User documentation links
 

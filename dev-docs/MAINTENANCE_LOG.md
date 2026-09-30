@@ -6,6 +6,8 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-09-30
 
+- **Local SonarQube hook freshness:** Pre-commit now advises a new scan and issue review after more than five commits without one. Pre-push blocks ref updates unless the last local scan matches each pushed ref-tip commit exactly; remote ref deletion is exempt. This requires a local SonarQube service and token for pushes. The 14-day analysis-age and weekly server/scanner update checks remain advisory.
+
 - **SonarCloud reliability follow-up after PR #168:** The `main` quality gate reported `pythonbugs:S2583` on the finite-measurement projection's integer type check. Handle integral values before real-valued finite checks, retaining integer count cells and blanking non-finite floating-point cells. A focused regression test covers both paths.
 
 ## 2026-09-29

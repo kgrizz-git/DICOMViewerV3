@@ -389,13 +389,16 @@ Behavior:
 - `commit-msg` (**all branches**): runs **`scripts/git_hook_commit_message_privacy.py`** and blocks machine-specific paths, local account/hostname terms, RFC1918/ULA addresses, internal PACS/DICOM endpoints, and patient/study identifiers. Its output reports only rule categories and line numbers, never the matched text.
 - `pre-commit` (branch **`main`**): after the privacy script, runs a **light** security check — debug flags plus **detect-secrets** on **staged** files only (`scripts/run_security_scan.py --pre-commit`). Skips Semgrep, TruffleHog, and pip-audit for speed. To run the **full** suite on every commit instead, set environment variable **`DICOMVIEWER_PRECOMMIT_FULL_SECURITY_SCAN=1`** (e.g. in your shell profile) before committing. **`run_security_scan.py`** exits with a **non-zero** status when any configured check fails (so the hook can block).
 - `pre-commit`: prunes `backups/` on **`main`** / **`WIP`** — **`scripts/git-hook-prune-backups.py --days 3 --max-commits 10`**: **tracked** files are removed if **more than 10 commits** since the last commit that touched the path **or** (when **more than 10** commits landed in the last **3** days) the touch is **strictly older than 3 days**; **untracked** files use embedded **`YYYYMMDD`** and **mtime** (the **older** of the two), removed when **strictly older than 3 days**. Then **`git add -u -- backups`** stages tracked removals (other branches: no prune). Shallow clones may skew Git counts; prune / staging errors are **non-fatal**.
-- `pre-push`: runs the universal metadata/privacy, PHI artifact, Gitleaks,
-  basedpyright, coverage/test, and complexity gates first. If the proposed
+- `pre-commit`: advises when the local SonarQube scan is more than five commits
+  behind `HEAD` (or the record is missing or cannot be compared).
+- `pre-push`: validates proposed refs and then blocks ref tips that do not match
+  the last local SonarQube scan revision, before the longer PHI, privacy,
+  Gitleaks, basedpyright, and complexity gates. If the proposed
   update targets `refs/heads/main`, it then runs the full offline/local scanner
   suite (`run_security_scan.py --all`). Only after those gates pass, it checks
-  the ignored local SonarQube timestamp and prints a non-blocking reminder when
-  the last successful Community Build analysis is missing, over 14 days old,
-  or more than five commits behind `HEAD`.
+  the ignored local SonarQube timestamp and prints an additional non-blocking
+  age/cadence reminder. Scan the final commit before pushing; see
+  [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md).
   The same successful `main` path also runs local/no-account Hounddog after the
   blocking suite and before the SonarQube freshness reminder. Hounddog findings
   remain advisory and no report is retained.

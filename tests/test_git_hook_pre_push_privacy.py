@@ -196,12 +196,13 @@ def test_cli_reads_stdin_and_does_not_mutate_refs(tmp_path: Path) -> None:
     assert _git(repo, "show-ref") == before
 
 
-def test_tracked_hook_replays_ref_updates_to_both_stdin_consumers() -> None:
+def test_tracked_hook_replays_ref_updates_to_all_stdin_consumers() -> None:
     hook = (ROOT / ".githooks" / "pre-push").read_text(encoding="utf-8")
 
     capture = 'PUSH_UPDATES="$(cat)"'
     metadata = '"$REPO_ROOT/scripts/git_hook_pre_push_privacy.py"'
     security = '"$REPO_ROOT/scripts/git-hook-security-gate.py"'
+    sonar = '"$REPO_ROOT/scripts/check_local_sonarqube_hook.py" --pre-push'
     assert capture in hook
-    assert hook.index(capture) < hook.index(metadata) < hook.index(security)
-    assert hook.count("printf '%s\\n' \"$PUSH_UPDATES\"") == 2
+    assert hook.index(capture) < hook.index(metadata) < hook.index(sonar) < hook.index(security)
+    assert hook.count("printf '%s\\n' \"$PUSH_UPDATES\"") == 3
