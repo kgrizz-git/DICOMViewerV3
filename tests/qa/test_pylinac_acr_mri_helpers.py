@@ -128,10 +128,7 @@ class _PdfRaisesMriAnalyzer(_FakeMriAnalyzer):
 class _ExtrapolatedMriAnalyzer(_FakeMriAnalyzer):
     def __init__(self, source: object, *, check_uid: bool) -> None:
         super().__init__(source, check_uid=check_uid)
-        self.slice1 = SimpleNamespace(
-            row_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
-            col_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
-        )
+        self.slice1 = SimpleNamespace(spacings=[0.5, 1.0])
 
     def results_data(self, *, as_dict: bool) -> dict[str, object]:
         raw = super().results_data(as_dict=as_dict)
@@ -321,10 +318,7 @@ def test_mri_lc_score_warning_compares_live_and_structured_values() -> None:
 
 def test_mri_mtf_extrapolation_warning_uses_each_axis_range() -> None:
     warnings: list[str] = []
-    analyzer = SimpleNamespace(slice1=SimpleNamespace(
-        row_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
-        col_mtf=SimpleNamespace(spacings=[0.5, 1.0]),
-    ))
+    analyzer = SimpleNamespace(slice1=SimpleNamespace(spacings=[0.5, 1.0]))
     acr_mri._warn_mtf_extrapolation(
         {"slice1": {"row_mtf_50": 1.2, "col_mtf_50": 0.8}}, analyzer, warnings
     )

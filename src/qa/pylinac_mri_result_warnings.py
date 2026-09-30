@@ -34,7 +34,8 @@ def _warn_mtf_extrapolation(raw: dict[str, Any], analyzer: Any, warnings: list[s
         if not isinstance(value, (int, float)) or not math.isfinite(value):
             continue
         try:
-            spacings = getattr(live_slice, f"{axis}_mtf").spacings
+            # Both pylinac MTF properties construct from this same spacing grid.
+            spacings = live_slice.spacings
             if value > max(spacings):
                 warnings.append(f"MRI {axis} MTF@50% was extrapolated by pylinac.")
         except (AttributeError, TypeError, ValueError):
