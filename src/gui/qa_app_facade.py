@@ -1,7 +1,7 @@
 """
 ACR CT/MRI pylinac QA flows for DICOMViewerApp.
 
-Hosts preflight, single-run worker, MRI compare batch, result dialogs, and JSON
+Hosts preflight, single-run worker, MRI compare batch, result dialogs, and QA
 export logic previously on ``DICOMViewerApp`` in ``main.py``. Signal slots stay
 on the app as thin delegates (see ``app_signal_wiring`` for ACR menu actions).
 
@@ -295,7 +295,7 @@ class QAAppFacade:
         """
         Offer a single save dialog for a finished QA run as JSON, CSV, or XLSX.
 
-        One prompt with all three filters (defaults to JSON). The format is
+        One prompt with all three filters (defaults to XLSX). The format is
         chosen by the saved file's extension: ``.csv`` writes a
         headline-first ``metric,value`` CSV; ``.xlsx``
         writes a workbook (Summary/Detail/Images sheets -- see
@@ -306,9 +306,9 @@ class QAAppFacade:
         app = self._app
         timestamp = datetime.now(UTC).strftime(_UTC_TIMESTAMP_FMT)
         path = app._prompt_save_path(
-            "Save QA Results (JSON, CSV, or XLSX)",
-            f"{default_stem}-{timestamp}.json",
-            "JSON Files (*.json);;CSV Files (*.csv);;Excel Files (*.xlsx)",
+            "Save QA Results (XLSX, JSON, or CSV)",
+            f"{default_stem}-{timestamp}.xlsx",
+            "Excel Files (*.xlsx);;JSON Files (*.json);;CSV Files (*.csv)",
             remember_pylinac_output_dir=True,
         )
         if not path:
@@ -445,7 +445,7 @@ class QAAppFacade:
         module_images_cleanup: Callable[[], None] | None = None,
     ) -> None:
         """
-        Show progress, run QA in a background thread, then summary + JSON export.
+        Show progress, run QA in a background thread, then results + save prompt.
 
         ``analyzed_image_temp_dir`` is a caller-owned temp dir holding the
         analyzed-image PNG; kept open until export completes, then cleaned here.
@@ -487,7 +487,7 @@ class QAAppFacade:
                     result.analysis_type
                 ).startswith("nuclear_"):
                     # Nuclear results carry their own Export JSON/CSV buttons, so we
-                    # skip the ACR-style auto JSON prompt and PDF offer.
+                    # skip the ACR-style save prompt and PDF offer.
                     from gui.dialogs.nuclear_result_dialog import (
                         show_nuclear_result_dialog,
                     )
@@ -943,7 +943,7 @@ class QAAppFacade:
 
         Nuclear classes take a single DICOM file, so this resolves one input
         path (focused image or file picker), collects PlanarUniformity options,
-        and reuses the shared worker/result/JSON-export path.
+        and reuses the shared worker/result path with nuclear export buttons.
         """
         app = self._app
         study_uid, series_uid, modality, ordered_paths, _datasets = (

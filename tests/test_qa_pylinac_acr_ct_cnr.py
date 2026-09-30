@@ -60,6 +60,27 @@ def test_full_extraction() -> None:
     assert out["background"]["stds"] == [2.0]
 
 
+def test_optional_contrast_failure_keeps_object_mean_and_median() -> None:
+    class _NoContrastReference(_FakeROI):
+        @property
+        def contrast_to_noise(self) -> float:
+            raise AttributeError("contrast reference unavailable")
+
+        @contrast_to_noise.setter
+        def contrast_to_noise(self, value: object) -> None:
+            pass
+
+    analyzer = _analyzer(
+        rois={"ROI": _NoContrastReference(mean=98.0, std=4.0, pixel_value=99.0)},
+        background_rois={"ROI": _FakeROI(mean=92.0, std=3.0, pixel_value=91.0)},
+        cnr=8 / 3,
+    )
+    out = _extract_low_contrast_cnr_details(analyzer)
+    assert out["object_rois"] == [{"mean": 98.0, "pixel_value": 99.0}]
+    assert out["mean_based_cnr"] == 2.0
+    assert out["cnr"] == 8 / 3
+
+
 def test_missing_module_returns_empty() -> None:
     assert _extract_low_contrast_cnr_details(_analyzer(has_module=False)) == {}
     assert _extract_low_contrast_cnr_details(types.SimpleNamespace()) == {}

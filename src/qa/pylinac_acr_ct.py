@@ -114,6 +114,8 @@ def _extract_low_contrast_cnr_details(analyzer: Any) -> dict[str, Any]:
         (ACR CT: single "ROI" key each) -> iterate .values(), NOT as a list.
       - lcm.cnr is a METHOD (|A-B|/SD), not a property -> call lcm.cnr().
       - LowContrastDiskROI: .mean, .std, .pixel_value, .contrast_to_noise.
+        The optional per-ROI contrast calculation can raise when pylinac has
+        no contrast reference; it must not discard the mean or median.
     """
     out: dict[str, Any] = {}
     lcm = getattr(analyzer, "low_contrast_module", None)
@@ -126,15 +128,19 @@ def _extract_low_contrast_cnr_details(analyzer: Any) -> dict[str, Any]:
     obj: list[dict[str, float]] = []
     for roi in (getattr(lcm, "rois", {}) or {}).values():  # dict, not list
         try:
-            obj.append(
-                {
-                    "mean": float(roi.mean),
-                    "pixel_value": float(roi.pixel_value),
-                    "contrast_to_noise": float(roi.contrast_to_noise),
-                }
-            )
+            object_mean = float(roi.mean)
         except Exception:
             continue
+        details = {"mean": object_mean}
+        try:
+            details["pixel_value"] = float(roi.pixel_value)
+        except Exception:
+            pass
+        try:
+            details["contrast_to_noise"] = float(roi.contrast_to_noise)
+        except Exception:
+            pass
+        obj.append(details)
     if obj:
         out["object_rois"] = obj
     background = _extract_background_roi_details(lcm)

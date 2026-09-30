@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-30
 
 ---
 
@@ -83,6 +83,7 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** **Large multi-frame load — first paint** — **Steps:** open one large single-file enhanced CT or XA sample; accept the large-file warning; confirm the first image, metadata panel, and series navigator render correctly without an apparent post-Continue stall (automated GUI benchmark and focused regressions already pass). **Archived plan:** [Slow post-load first paint](plans/completed/POST_LOAD_FIRST_PAINT_PERFORMANCE_PLAN.md)
 - [ ] **[P2]** **W/L presets (US, CR, DX)** — **Steps:** load representative **US**, **CR**, and **DX** studies at available stored bit depths, including **MONOCHROME1** and **MONOCHROME2**; verify Default and Wide presets are sensible, manual Invert remains a user offset, and still/cine exports match the single-slice display. Record fixture coverage and modality-specific findings. **Related:** [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
 - [ ] **[P2]** **Pylinac ACR export and MRI batch (optional real-phantom smoke)** — **Env:** local de-identified CT and MRI ACR phantoms. **Steps:** verify single-run CT/MRI CSV and XLSX export, CT batch CSV, and MRI batch CSV/JSON/XLSX; confirm headline values and method labels lead, match the analyzed results, and leave full metrics in Detail/trailing CSV; with module images enabled, compare the XLSX Images module set with the PDF figures. **Pass:** exports are complete, readable, and consistent with the visible analysis; disabled images omit the sheet cleanly. **Archived plans:** [Pylinac ACR full metrics export and MRI batch](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) §G3; [ACR QA headline results export](plans/completed/ACR_QA_HEADLINE_RESULTS_EXPORT_PLAN.md).
+- [ ] **[P2]** **Histogram stacking and minimization** — **Env:** native macOS and Windows window managers. **Steps:** open a histogram, click the main viewer and navigate slices, then minimize and restore the histogram; repeat with two pane histograms and after switching to another application. **Pass:** visible histograms remain above their own viewer while navigating, minimized histograms stay minimized, restoration refreshes values, and unrelated applications can cover the viewer and histogram. Automated flag/event-filter tests pass; native window-manager behavior still needs this check.
 
 ## Validation / QA
 
@@ -181,7 +182,6 @@ Release blockers (license compliance, versioned executables) live in
 
 ### Dialogs, themes & design system
 
-- [ ] **[P2]** **Histogram window should stay above the main window, not fall behind it.** Clicking back onto the main window drops the histogram behind it, so the user has to re-raise it to keep watching values while navigating. `HistogramDialog` is a non-modal `QDialog` parented to `main_window` with **no window flags set** (`histogram_dialog.py:116` only calls `setModal(False)`), which is exactly the configuration that lets a child dialog sink behind its parent on macOS. Candidate fix: `Qt.WindowType.Tool` (stays above its parent, does not float above unrelated apps) rather than `WindowStaysOnTopHint`, which would sit above everything system-wide. Verify on macOS *and* Windows — the two platforms differ here — and check the other non-modal dialogs for the same problem. Added 2026-08-23.
 
 - [ ] **[P0/P1/P2]** Address UX assessment findings (icons, toolbar overflow, shortcut conflicts, splitter handles, menu reorganization, design system) — **Plan:** [UX Assessment Remediation & Design System Plan](plans/supporting/UX_ASSESSMENT_REMEDIATION_AND_DESIGN_SYSTEM_PLAN.md); **Design spec:** [DESIGN.md](../DESIGN.md); **Assessment summary:** [ux-summary.md](ux-assessments/ux-summary.md). Start with Part A (design system / DESIGN.md) before implementing any visual fixes.
 
