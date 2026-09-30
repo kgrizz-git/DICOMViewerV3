@@ -11,6 +11,7 @@ Public functions:
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -197,6 +198,43 @@ def _acr_ct_stack_diagnostic_lines(analyzer: Any) -> list[str]:
     return lines
 
 
+def _harvest_ct_headlines(
+    analyzer: Any,
+    raw: dict[str, Any],
+    low_contrast_cnr: dict[str, Any],
+) -> tuple[dict[str, float], list[str]]:
+    """Read live MTF and compare the two pylinac CNR representations."""
+    metrics: dict[str, float] = {}
+    warnings: list[str] = []
+    try:
+        mtf50 = float(analyzer.spatial_resolution_module.mtf.relative_resolution(50))
+        if math.isfinite(mtf50):
+            metrics["acr_ct_mtf50_lpmm"] = mtf50
+        else:
+            warnings.append("CT MTF@50% was unavailable from pylinac.")
+    except Exception:
+        warnings.append("CT MTF@50% was unavailable from pylinac.")
+
+    low_contrast_data = raw.get("low_contrast_module")
+    structured_cnr = (
+        low_contrast_data.get("cnr")
+        if isinstance(low_contrast_data, dict)
+        else None
+    )
+    curated_cnr = low_contrast_cnr.get("cnr")
+    if (
+        isinstance(structured_cnr, (int, float))
+        and isinstance(curated_cnr, (int, float))
+        and math.isfinite(structured_cnr)
+        and math.isfinite(curated_cnr)
+        and not math.isclose(structured_cnr, curated_cnr, rel_tol=1e-6, abs_tol=1e-6)
+    ):
+        warnings.append(
+            "CT low-contrast CNR differs between live and structured pylinac results."
+        )
+    return metrics, warnings
+
+
 def run_acr_ct_analysis(request: QARequest) -> QAResult:
     """
     Run ACR CT analysis through pylinac with normalized output.
@@ -320,7 +358,10 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         if low_contrast_cnr:
             metrics["low_contrast_cnr"] = low_contrast_cnr
 
-        ct_warnings: list[str] = []
+        headline_metrics, ct_warnings = _harvest_ct_headlines(
+            analyzer, raw, low_contrast_cnr
+        )
+        metrics.update(headline_metrics)
         if warn_ignore_tol:
             ct_warnings.append(
                 "Scan extent tolerance is ignored in stock pylinac mode (ACRCT)."

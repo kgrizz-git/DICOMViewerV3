@@ -259,8 +259,8 @@ def test_contrast_export_csv_is_per_sphere(qapp, tmp_path) -> None:
     )
     dlg._export_csv()
     lines = Path(out).read_text(encoding="utf-8").splitlines()
-    assert lines[0] == "sphere,x,y,z,radius,mean,mean_contrast,max_contrast"
-    assert lines[1].startswith("1,78.5")
+    assert lines[0] == "sphere,mean_contrast,max_contrast,mean,radius,x,y,z"
+    assert lines[1].startswith("1,35.8")
     dlg.deleteLater()
 
 

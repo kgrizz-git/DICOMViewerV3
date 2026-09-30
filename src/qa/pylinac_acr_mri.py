@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import math
 import shutil
 import tempfile
 from pathlib import Path
@@ -363,6 +364,7 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         lc_score = _extract_lc_score(raw)
         if lc_score is not None:
             metrics["low_contrast_score"] = lc_score
+        _warn_lc_score_mismatch(raw, lc_score, extra_warnings)
         _apply_mri_post_analyze_metrics(
             metrics, analyzer, request, analyzed_echo, extra_warnings
         )
@@ -428,6 +430,21 @@ def _extract_lc_score(raw: dict[str, Any]) -> int | None:
         except (TypeError, ValueError):
             pass
     return None
+
+
+def _warn_lc_score_mismatch(
+    raw: dict[str, Any], score: int | None, warnings: list[str]
+) -> None:
+    """Record a disagreement between curated and structured MRI LC scores."""
+    module = raw.get("low_contrast_multi_slice_module")
+    structured = module.get("score") if isinstance(module, dict) else None
+    if (
+        score is not None
+        and isinstance(structured, (int, float))
+        and math.isfinite(structured)
+        and not math.isclose(score, structured, rel_tol=1e-6, abs_tol=1e-6)
+    ):
+        warnings.append("MRI low-contrast score differs from structured pylinac results.")
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +611,7 @@ def run_acr_mri_large_batch(
             lc_score = _extract_lc_score(raw)
             if lc_score is not None:
                 metrics["low_contrast_score"] = lc_score
+            _warn_lc_score_mismatch(raw, lc_score, extra_warnings)
             _apply_mri_post_analyze_metrics(
                 metrics, analyzer, per_run_request, analyzed_echo, extra_warnings
             )

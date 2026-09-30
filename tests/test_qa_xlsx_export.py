@@ -79,13 +79,14 @@ def test_single_row_workbook_round_trip() -> None:
     header = [c.value for c in summary[1]]
     assert header[0] == "Series/Run ID"
     row2 = [c.value for c in summary[2]]
-    assert row2[0] == "Series A"
-    assert row2[1] == 100.0  # object ROI mean
-    assert row2[2] == 10.0  # background mean
-    assert row2[3] == 2.0  # background std
-    assert row2[4] == 4.5  # cnr
-    assert row2[5] == "success"
-    assert row2[6] == "w1"
+    values = dict(zip(header, row2, strict=True))
+    assert values["Series/Run ID"] == "Series A"
+    assert values["CNR object ROI mean (HU)"] == 100.0
+    assert values["CNR background mean (HU)"] == 10.0
+    assert values["CNR background SD (HU)"] == 2.0
+    assert values["CT low-contrast CNR (pylinac)"] == 4.5
+    assert values["Analysis status"] == "success"
+    assert values["Warnings"] == "w1"
 
     detail = reloaded["Detail"]
     detail_values = [c.value for row in detail.iter_rows() for c in row]
@@ -104,7 +105,8 @@ def test_multi_row_workbook_round_trip() -> None:
     summary = reloaded["Summary"]
     ids = [row[0].value for row in summary.iter_rows(min_row=2, max_row=3)]
     assert ids == ["1.1", "1.2"]
-    statuses = [row[5].value for row in summary.iter_rows(min_row=2, max_row=3)]
+    status_col = [cell.value for cell in summary[1]].index("Analysis status")
+    statuses = [row[status_col].value for row in summary.iter_rows(min_row=2, max_row=3)]
     assert statuses == ["success", "failed"]
 
 
@@ -326,8 +328,8 @@ def test_summary_formula_like_warning_neutralized() -> None:
     result = _raw_pylinac_result()
     wb = build_qa_workbook([result], labels=["Run1"])
     summary = wb["Summary"]
-    # Column 7 = Warnings.
-    assert summary.cell(row=2, column=7).value == "'=cmd"
+    warning_col = [cell.value for cell in summary[1]].index("Warnings") + 1
+    assert summary.cell(row=2, column=warning_col).value == "'=cmd"
 
 
 def test_detail_analyzed_image_path_not_present() -> None:

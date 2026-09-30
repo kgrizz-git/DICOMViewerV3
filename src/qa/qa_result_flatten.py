@@ -124,6 +124,43 @@ def build_metric_rows(result: QAResult) -> list[tuple[str, Any]]:
     return sorted(flat.items(), key=lambda kv: str(kv[0]))
 
 
+def extract_low_contrast_cnr_values(
+    metrics: dict[str, Any] | None,
+) -> tuple[float | None, float | None, float | None, float | None]:
+    """Return object mean, background mean/SD, and CNR from curated CT metrics."""
+    details = (metrics or {}).get("low_contrast_cnr")
+    if not isinstance(details, dict):
+        return (None, None, None, None)
+
+    obj_mean = None
+    obj_rois = details.get("object_rois")
+    if isinstance(obj_rois, list):
+        means = [
+            float(roi["mean"])
+            for roi in obj_rois
+            if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
+        ]
+        if means:
+            obj_mean = sum(means) / len(means)
+
+    background = details.get("background")
+    bg_mean = None
+    bg_std = None
+    if isinstance(background, dict):
+        if isinstance(background.get("mean"), (int, float)):
+            bg_mean = float(background["mean"])
+        if isinstance(background.get("std"), (int, float)):
+            bg_std = float(background["std"])
+
+    cnr = details.get("cnr")
+    return (
+        obj_mean,
+        bg_mean,
+        bg_std,
+        float(cnr) if isinstance(cnr, (int, float)) else None,
+    )
+
+
 def _merged_audit_messages(result: QAResult, key: str) -> list[Any]:
     """Return deduplicated normalized and raw-pylinac audit messages.
 

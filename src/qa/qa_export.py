@@ -6,7 +6,7 @@ buttons so the JSON schema stays in one place.
 
 Public:
     build_single_run_document   -- versioned dict for a QAResult
-    build_metrics_csv           -- flat metric,value CSV (full flatten; any analysis type)
+    build_metrics_csv           -- ACR headline-first or other full metric,value CSV
     build_batch_metrics_csv     -- wide CSV, one row per run (batch export)
     build_nuclear_frames_csv    -- per-frame uniformity CSV text for a nuclear run
     build_nuclear_flat_csv      -- metric,value CSV over a flat nuclear result
@@ -24,10 +24,13 @@ from typing import Any
 
 from core.spreadsheet_safety import SafeCsvWriter
 from qa.analysis_types import QAResult
+from qa.qa_headline_results import columns_for, project_headlines
 from qa.qa_result_flatten import (
     build_metric_rows,
-    build_run_provenance,
     build_tabular_run,
+)
+from qa.qa_result_flatten import (
+    extract_low_contrast_cnr_values as extract_low_contrast_cnr_values,
 )
 
 # Per-frame metric columns for nuclear PlanarUniformity CSV export.
@@ -43,14 +46,31 @@ _NUCLEAR_QUADRANT_FIELDS = ("mtf", "fwhm", "lpmm", "spacing")
 
 # Per-sphere metric columns for nuclear TomographicContrast CSV export.
 _NUCLEAR_SPHERE_FIELDS = (
+    "mean_contrast",
+    "max_contrast",
+    "mean",
+    "radius",
     "x",
     "y",
     "z",
-    "radius",
-    "mean",
-    "mean_contrast",
-    "max_contrast",
 )
+
+# Flat nuclear pylinac result models have different measured quantities.
+# Keep every original key, with the class's report values before inputs.
+_NUCLEAR_FLAT_HEADLINES: dict[str, tuple[str, ...]] = {
+    "FourBarResolution": ("x_fwhm", "y_fwhm", "x_fwtm", "y_fwtm"),
+    "CenterOfRotation": ("x_deviation_mm", "y_deviation_mm"),
+    "TomographicResolution": (
+        "x_fwhm", "y_fwhm", "z_fwhm", "x_fwtm", "y_fwtm", "z_fwtm"
+    ),
+    "MaxCountRate": ("max_countrate",),
+    "TomographicUniformity": (
+        "ufov_integral_uniformity", "ufov_differential_uniformity",
+        "cfov_integral_uniformity", "cfov_differential_uniformity",
+        "center_border_ratio",
+    ),
+    "SimpleSensitivity": ("sensitivity_mbq", "sensitivity_uci"),
+}
 
 
 def _frame_sort_key(frame_label: str) -> int:
@@ -148,67 +168,39 @@ def flatten_metrics(data: dict[str, Any], prefix: str = "") -> list[tuple[str, A
 _flatten = flatten_metrics
 
 
-def extract_low_contrast_cnr_values(
-    metrics: dict[str, Any] | None
-) -> tuple[float | None, float | None, float | None, float | None]:
-    """
-    Extract low-contrast CNR intermediate values:
-    (object_mean, background_mean, background_std, cnr)
-    from the given metrics dictionary.
-    """
-    if not metrics:
-        return (None, None, None, None)
-    details = metrics.get("low_contrast_cnr")
-    if not isinstance(details, dict):
-        return (None, None, None, None)
-
-    obj_mean = None
-    obj_rois = details.get("object_rois")
-    if isinstance(obj_rois, list) and obj_rois:
-        means = [
-            float(roi["mean"])
-            for roi in obj_rois
-            if isinstance(roi, dict) and isinstance(roi.get("mean"), (int, float))
-        ]
-        if means:
-            obj_mean = sum(means) / len(means)
-
-    background = details.get("background")
-    bg_mean = None
-    bg_std = None
-    if isinstance(background, dict):
-        if isinstance(background.get("mean"), (int, float)):
-            bg_mean = float(background["mean"])
-        if isinstance(background.get("std"), (int, float)):
-            bg_std = float(background["std"])
-
-    cnr = None
-    if isinstance(details.get("cnr"), (int, float)):
-        cnr = float(details["cnr"])
-
-    return (obj_mean, bg_mean, bg_std, cnr)
-
-
 def build_metrics_csv(result: QAResult) -> str:
     """
-    Build a ``metric,value`` CSV from the **full flatten** of a QA run.
+    Build a ``metric,value`` CSV with ACR headlines followed by full detail.
 
     Uses :func:`qa.qa_result_flatten.build_metric_rows` which walks
     ``result.raw_pylinac`` into dotted keys then overlays curated
     ``result.metrics`` (metrics wins on collision, curated keys stay
     top-level). Nested dicts flatten with dotted keys; lists join with ``; ``.
 
-    Two-column shape (``metric,value``) is preserved for single-run parity.
+    ACR CT/MRI exports put identity, headline measurements, inputs, and audit
+    rows first. A blank two-cell row separates them from the original sorted
+    flatten; a key already emitted in the headline block appears only once.
+    Other analysis types retain their previous full-flatten order. The
+    two-column shape (``metric,value``) is preserved for single-run parity.
     List/tuple metric values are joined with ``"; "`` first so
     :class:`core.spreadsheet_safety.SafeCsvWriter` can neutralize leading
     ``= + - @`` strings (R0-8). Provenance ``errors`` / ``warnings`` are
-    included on the **batch** builder, not this two-column export.
+    included in the ACR headline block and the batch builder.
     """
     buffer = io.StringIO()
     writer = SafeCsvWriter(csv.writer(buffer))
     writer.writerow(_csv_row(["metric", "value"]))
+    emitted: set[str] = set()
+    if result.analysis_type in {"acr_ct", "acr_mri_large"}:
+        columns = columns_for([result])
+        headline = project_headlines(result, columns)
+        for column in columns:
+            writer.writerow(_csv_row([column.key, headline[column.key]]))
+            emitted.add(column.key)
+        writer.writerow(["", ""])
     for key, value in build_metric_rows(result):
-        writer.writerow(_csv_row([key, value]))
+        if key not in emitted:
+            writer.writerow(_csv_row([key, value]))
     return buffer.getvalue()
 
 
@@ -219,13 +211,9 @@ def build_batch_metrics_csv(
     """
     Build a wide CSV with one header row and one data row per run.
 
-    Each row is produced by :func:`qa.qa_result_flatten.build_tabular_run`
-    (provenance keys first, then flattened metric rows overlaid in place —
-    metrics wins on collision, keys stay top-level).
-
-    Column order (OQ-3): the union of keys across all rows, ordered as the
-    provenance key order from :func:`build_run_provenance` first, then the
-    remaining metric keys sorted by ``str`` (stable). Missing cells are empty.
+    ACR headline/audit columns appear first in shared projection order. The
+    remaining full-flatten keys follow in stable sorted order. Mixed CT/MRI
+    runs share one header and leave inapplicable measurement cells blank.
 
     ``labels`` must be parallel to ``results``; if it is shorter or ``None``,
     unmatched results get ``label=None``. ``analyzed_image_path`` is never
@@ -233,8 +221,7 @@ def build_batch_metrics_csv(
     before :class:`core.spreadsheet_safety.SafeCsvWriter` so formula-like
     strings inside ``errors`` / ``warnings`` are actually neutralized.
 
-    When ``results`` is empty, returns a header-only CSV built from the
-    provenance keys of an empty run (no ``metric`` overflow columns).
+    Empty batches emit the identity and audit header only.
     """
     # Build all rows up front to compute the stable column union.
     if labels is None:
@@ -243,15 +230,18 @@ def build_batch_metrics_csv(
         labels_seq = labels
 
     rows: list[dict[str, Any]] = []
+    columns_spec = columns_for(list(results))
+    headline_keys = [column.key for column in columns_spec]
     for idx, result in enumerate(results):
         label = labels_seq[idx] if idx < len(labels_seq) else None
-        rows.append(build_tabular_run(result, label=label))
+        rows.append({
+            **project_headlines(result, columns_spec, label=label),
+            **{key: value for key, value in build_tabular_run(result, label=label).items()
+               if key not in headline_keys},
+        })
 
-    # Fixed column order: provenance keys first, then remaining metric keys
-    # sorted by str (stable). Union across all rows; missing cells empty.
-    dummy = QAResult(success=False, analysis_type="")
-    prov_keys = list(build_run_provenance(dummy).keys())
-    seen_prov = set(prov_keys)
+    # Fixed projection first, then remaining metric keys sorted by str.
+    seen_prov = set(headline_keys)
     overflow_keys: list[str] = []
     seen_overflow: set[str] = set()
     for row in rows:
@@ -260,7 +250,7 @@ def build_batch_metrics_csv(
                 seen_overflow.add(key)
                 overflow_keys.append(key)
     overflow_keys.sort(key=str)
-    columns = prov_keys + overflow_keys
+    columns = headline_keys + overflow_keys
 
     buffer = io.StringIO()
     writer = SafeCsvWriter(csv.writer(buffer))
@@ -295,13 +285,19 @@ def build_nuclear_flat_csv(result: QAResult) -> str:
     Build a ``metric,value`` CSV from a flat nuclear result.
 
     Reads ``result.metrics["results"]`` (e.g. FourBarResolution's 8 floats),
-    preserving pylinac's field order. Header-only when no results are present.
+    putting class-specific measured values first and retaining every input.
+    Header-only when no results are present.
     """
     results = (result.metrics or {}).get("results") or {}
     buffer = io.StringIO()
     writer = SafeCsvWriter(csv.writer(buffer))
     writer.writerow(_csv_row(["metric", "value"]))
-    for key, value in results.items():
+    analysis_class = str((result.metrics or {}).get("analysis_class") or "")
+    first = _NUCLEAR_FLAT_HEADLINES.get(analysis_class, ())
+    ordered_keys = [key for key in first if key in results]
+    ordered_keys.extend(key for key in results if key not in ordered_keys)
+    for key in ordered_keys:
+        value = results[key]
         writer.writerow(_csv_row([key, value]))
     return buffer.getvalue()
 

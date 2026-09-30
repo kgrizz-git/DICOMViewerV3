@@ -1,7 +1,7 @@
 # ACR QA headline results export assessment
 
 **Last updated:** 2026-09-29
-**Status:** Investigation; [implementation plan](../plans/supporting/ACR_QA_HEADLINE_RESULTS_EXPORT_PLAN.md) drafted
+**Status:** Investigation; [implementation plan](../plans/completed/ACR_QA_HEADLINE_RESULTS_EXPORT_PLAN.md) archived
 
 ## Purpose and user story
 
