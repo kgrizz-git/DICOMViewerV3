@@ -29,6 +29,8 @@ def _warn_mtf_extrapolation(raw: dict[str, Any], analyzer: Any, warnings: list[s
     if not isinstance(slice1, dict):
         return
     live_slice = getattr(analyzer, "slice1", None)
+    if live_slice is None:
+        return
     for axis in ("row", "col"):
         value = slice1.get(f"{axis}_mtf_50")
         if not isinstance(value, (int, float)) or not math.isfinite(value):
