@@ -120,6 +120,17 @@ def test_single_csv_keeps_full_detail_after_separator_without_duplicate_mtf_key(
     assert [row[0] for row in rows].count("acr_ct_mtf50_lpmm") == 1
 
 
+def test_failed_single_csv_keeps_partial_measurement_after_blank_headline() -> None:
+    result = QAResult(
+        success=False, analysis_type="acr_ct",
+        metrics={"acr_ct_mtf50_lpmm": 0.53},
+    )
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    separator = rows.index(["", ""])
+    assert ["acr_ct_mtf50_lpmm", ""] in rows[:separator]
+    assert ["acr_ct_mtf50_lpmm", "0.53"] in rows[separator + 1:]
+
+
 def test_metrics_csv_formula_cells_neutralized() -> None:
     """Leading = + - @ string cells must be prefixed with an apostrophe."""
     result = _formula_result()
@@ -170,6 +181,35 @@ def test_batch_csv_header_and_row_count() -> None:
     assert "success" in rows[0]
     # Metric overflow keys present after provenance block.
     assert "ct_module.rois.Air" in rows[0]
+
+
+def test_failed_batch_csv_preserves_differing_partial_measurement() -> None:
+    failed = QAResult(
+        success=False, analysis_type="acr_ct",
+        metrics={"acr_ct_mtf50_lpmm": 0.53},
+    )
+    successful = _acr_result()
+    successful.metrics["acr_ct_mtf50_lpmm"] = 0.61
+    rows = list(csv.reader(io.StringIO(build_batch_metrics_csv([failed, successful]))))
+    header = rows[0]
+    assert rows[1][header.index("acr_ct_mtf50_lpmm")] == ""
+    assert rows[1][header.index("detail.acr_ct_mtf50_lpmm")] == "0.53"
+    assert rows[2][header.index("acr_ct_mtf50_lpmm")] == "0.61"
+    assert rows[2][header.index("detail.acr_ct_mtf50_lpmm")] == ""
+
+
+def test_batch_detail_alias_avoids_existing_flatten_key() -> None:
+    failed = QAResult(
+        success=False, analysis_type="acr_ct",
+        metrics={
+            "acr_ct_mtf50_lpmm": 0.53,
+            "detail.acr_ct_mtf50_lpmm": "original detail",
+        },
+    )
+    rows = list(csv.reader(io.StringIO(build_batch_metrics_csv([failed]))))
+    header = rows[0]
+    assert rows[1][header.index("detail.acr_ct_mtf50_lpmm")] == "original detail"
+    assert rows[1][header.index("detail.acr_ct_mtf50_lpmm.2")] == "0.53"
 
 
 def test_batch_csv_mixed_modality_and_unique_header() -> None:

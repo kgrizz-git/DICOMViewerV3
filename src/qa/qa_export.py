@@ -95,6 +95,13 @@ def _csv_row(cells: Sequence[Any]) -> list[Any]:
     return [_csv_cell(cell) for cell in cells]
 
 
+def _same_csv_value(left: Any, right: Any) -> bool:
+    """Compare values as the CSV writer renders them (including list joins)."""
+    return str(_csv_cell(left) if left is not None else "") == str(
+        _csv_cell(right) if right is not None else ""
+    )
+
+
 def build_single_run_document(
     result: QAResult,
     *,
@@ -179,8 +186,8 @@ def build_metrics_csv(result: QAResult) -> str:
 
     ACR CT/MRI exports put identity, headline measurements, inputs, and audit
     rows first. A blank two-cell row separates them from the original sorted
-    flatten; a key already emitted in the headline block appears only once.
-    Failed runs blank headline measurements but retain partial detail values.
+    flatten. Identical headline/detail cells appear once; differing detail
+    values remain after the separator, including partial failed-run values.
     Other analysis types retain their previous full-flatten order. The
     two-column shape (``metric,value``) is preserved for single-run parity.
     List/tuple metric values are joined with ``"; "`` first so
@@ -191,18 +198,54 @@ def build_metrics_csv(result: QAResult) -> str:
     buffer = io.StringIO()
     writer = SafeCsvWriter(csv.writer(buffer))
     writer.writerow(_csv_row(["metric", "value"]))
-    emitted: set[str] = set()
+    emitted: dict[str, Any] = {}
     if result.analysis_type in {"acr_ct", "acr_mri_large"}:
         columns = columns_for([result])
         headline = project_headlines(result, columns)
         for column in columns:
             writer.writerow(_csv_row([column.key, headline[column.key]]))
-            emitted.add(column.key)
+            emitted[column.key] = headline[column.key]
         writer.writerow(["", ""])
     for key, value in build_metric_rows(result):
-        if key not in emitted:
+        if key not in emitted or not _same_csv_value(value, emitted[key]):
             writer.writerow(_csv_row([key, value]))
     return buffer.getvalue()
+
+
+def _merge_batch_headlines_and_detail(
+    projected: list[dict[str, Any]],
+    flattened: list[dict[str, Any]],
+    headline_keys: list[str],
+) -> list[dict[str, Any]]:
+    """Keep differing tabular values under stable, collision-free detail keys."""
+    occupied = set(headline_keys) | {key for detail in flattened for key in detail}
+    aliases: dict[str, str] = {}
+    for key in headline_keys:
+        if not any(
+            key in detail and not _same_csv_value(detail[key], headline[key])
+            for headline, detail in zip(projected, flattened, strict=True)
+        ):
+            continue
+        base = f"detail.{key}"
+        alias = base
+        suffix = 2
+        while alias in occupied:
+            alias = f"{base}.{suffix}"
+            suffix += 1
+        aliases[key] = alias
+        occupied.add(alias)
+
+    rows: list[dict[str, Any]] = []
+    for headline, detail in zip(projected, flattened, strict=True):
+        row = dict(headline)
+        for key, value in detail.items():
+            if key in headline:
+                if not _same_csv_value(value, headline[key]):
+                    row[aliases[key]] = value
+            else:
+                row[key] = value
+        rows.append(row)
+    return rows
 
 
 def build_batch_metrics_csv(
@@ -215,6 +258,8 @@ def build_batch_metrics_csv(
     ACR headline/audit columns appear first in shared projection order. The
     remaining full-flatten keys follow in stable sorted order. Mixed CT/MRI
     runs share one header and leave inapplicable measurement cells blank.
+    Differing flattened values that share a headline key use a distinct
+    ``detail.*`` column, so failed-run partial measurements remain available.
 
     ``labels`` must be parallel to ``results``; if it is shorter or ``None``,
     unmatched results get ``label=None``. ``analyzed_image_path`` is never
@@ -230,16 +275,16 @@ def build_batch_metrics_csv(
     else:
         labels_seq = labels
 
-    rows: list[dict[str, Any]] = []
     columns_spec = columns_for(list(results))
     headline_keys = [column.key for column in columns_spec]
+    projected: list[dict[str, Any]] = []
+    flattened: list[dict[str, Any]] = []
     for idx, result in enumerate(results):
         label = labels_seq[idx] if idx < len(labels_seq) else None
-        rows.append({
-            **project_headlines(result, columns_spec, label=label),
-            **{key: value for key, value in build_tabular_run(result, label=label).items()
-               if key not in headline_keys},
-        })
+        projected.append(project_headlines(result, columns_spec, label=label))
+        flattened.append(build_tabular_run(result, label=label))
+
+    rows = _merge_batch_headlines_and_detail(projected, flattened, headline_keys)
 
     # Fixed projection first, then remaining metric keys sorted by str.
     seen_prov = set(headline_keys)
