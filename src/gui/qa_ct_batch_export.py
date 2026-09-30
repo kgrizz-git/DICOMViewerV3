@@ -95,7 +95,7 @@ def save_ct_batch_json(app: Any, batch: CTBatchResult) -> None:
 
 def save_ct_batch_csv(app: Any, batch: CTBatchResult) -> None:
     """
-    Offer CSV export for a finished ACR CT batch (full flatten, one row per series).
+    Offer headline-first CSV export for a finished ACR CT batch (one row per series).
 
     Args:
         app: Host with ``_prompt_save_path`` and ``main_window.update_status``.

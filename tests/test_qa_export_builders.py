@@ -13,6 +13,7 @@ import io
 from qa.analysis_types import QAResult
 from qa.qa_export import (
     build_metrics_csv,
+    build_nuclear_flat_csv,
     build_nuclear_frames_csv,
     build_nuclear_quadrants_csv,
     build_nuclear_spheres_csv,
@@ -120,7 +121,7 @@ def test_nuclear_spheres_csv_one_row_per_sphere() -> None:
         },
     )
     rows = list(csv.reader(io.StringIO(build_nuclear_spheres_csv(result))))
-    assert rows[0] == ["sphere", "x", "y", "z", "radius", "mean", "mean_contrast", "max_contrast"]
+    assert rows[0] == ["sphere", "mean_contrast", "max_contrast", "mean", "radius", "x", "y", "z"]
     assert rows[1][0] == "1"  # sorted
     assert rows[2][0] == "2"
 
@@ -135,6 +136,7 @@ def test_metrics_csv_flattens_acr_metrics() -> None:
             "num_images": 40,
             "origin_slice": None,
         },
+        num_images=40,
     )
     rows = list(csv.reader(io.StringIO(build_metrics_csv(acr))))
     assert rows[0] == ["metric", "value"]
@@ -162,6 +164,58 @@ def test_nuclear_quadrants_csv_one_row_per_quadrant() -> None:
     assert rows[1][0] == "1"
     assert rows[2][0] == "2"
     assert rows[1][1] == "0.65"
+
+
+def test_nuclear_flat_csv_orders_class_results_before_inputs() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="nuclear_simple_sensitivity",
+        metrics={
+            "analysis_class": "SimpleSensitivity",
+            "results": {
+                "phantom_cps": 120.0,
+                "duration_s": 60.0,
+                "sensitivity_mbq": 8.4,
+                "sensitivity_uci": 0.31,
+                "extra": "retained",
+            },
+        },
+    )
+    rows = list(csv.reader(io.StringIO(build_nuclear_flat_csv(result))))
+    assert rows == [
+        ["metric", "value"],
+        ["sensitivity_mbq", "8.4"],
+        ["sensitivity_uci", "0.31"],
+        ["phantom_cps", "120.0"],
+        ["duration_s", "60.0"],
+        ["extra", "retained"],
+    ]
+
+
+def test_nuclear_flat_csv_orders_each_class_report_values_first() -> None:
+    expected_by_class = {
+        "FourBarResolution": ("x_fwhm", "y_fwhm", "x_fwtm", "y_fwtm"),
+        "CenterOfRotation": ("x_deviation_mm", "y_deviation_mm"),
+        "TomographicResolution": (
+            "x_fwhm", "y_fwhm", "z_fwhm", "x_fwtm", "y_fwtm", "z_fwtm"
+        ),
+        "MaxCountRate": ("max_countrate",),
+        "TomographicUniformity": (
+            "ufov_integral_uniformity", "ufov_differential_uniformity",
+            "cfov_integral_uniformity", "cfov_differential_uniformity",
+            "center_border_ratio",
+        ),
+        "SimpleSensitivity": ("sensitivity_mbq", "sensitivity_uci"),
+    }
+    for analysis_class, headline_keys in expected_by_class.items():
+        results = {"input_setting": 7, **dict.fromkeys(reversed(headline_keys), 1)}
+        result = QAResult(
+            success=True,
+            analysis_type="nuclear_test",
+            metrics={"analysis_class": analysis_class, "results": results},
+        )
+        rows = list(csv.reader(io.StringIO(build_nuclear_flat_csv(result))))
+        assert [row[0] for row in rows[1:]] == [*headline_keys, "input_setting"]
 
 
 def test_metrics_csv_dotted_keys_for_nested() -> None:

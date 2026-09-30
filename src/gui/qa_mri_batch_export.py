@@ -97,7 +97,7 @@ def save_mri_batch_json(app: Any, batch: ACRMBatchResult) -> None:
 
 def save_mri_batch_csv(app: Any, batch: ACRMBatchResult) -> None:
     """
-    Offer CSV export for a finished ACR MRI Large batch (full flatten, one row per series).
+    Offer headline-first CSV export for an ACR MRI Large batch (one row per series).
 
     Args:
         app: Host with ``_prompt_save_path`` and ``main_window.update_status``.

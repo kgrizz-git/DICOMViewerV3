@@ -43,6 +43,10 @@ from qa.pylinac_mri_pdf import (
     assemble_mri_compare_pdf,
     build_mri_compare_summary_pdf,
 )
+from qa.pylinac_mri_result_warnings import (
+    _warn_lc_score_mismatch,
+    _warn_mtf_extrapolation,
+)
 from qa.pylinac_mri_snr import overlay_mri_snr_metrics
 from utils.config.qa_pylinac_config import (
     DEFAULT_ACR_MRI_LOW_CONTRAST_METHOD,
@@ -363,6 +367,8 @@ def run_acr_mri_large_analysis(request: QARequest) -> QAResult:
         lc_score = _extract_lc_score(raw)
         if lc_score is not None:
             metrics["low_contrast_score"] = lc_score
+        _warn_lc_score_mismatch(raw, analyzer, extra_warnings)
+        _warn_mtf_extrapolation(raw, analyzer, extra_warnings)
         _apply_mri_post_analyze_metrics(
             metrics, analyzer, request, analyzed_echo, extra_warnings
         )
@@ -594,6 +600,8 @@ def run_acr_mri_large_batch(
             lc_score = _extract_lc_score(raw)
             if lc_score is not None:
                 metrics["low_contrast_score"] = lc_score
+            _warn_lc_score_mismatch(raw, analyzer, extra_warnings)
+            _warn_mtf_extrapolation(raw, analyzer, extra_warnings)
             _apply_mri_post_analyze_metrics(
                 metrics, analyzer, per_run_request, analyzed_echo, extra_warnings
             )

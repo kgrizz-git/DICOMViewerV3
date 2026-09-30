@@ -11,6 +11,7 @@ Public functions:
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,47 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
+def _extract_background_roi_details(lcm: Any) -> dict[str, Any]:
+    """Harvest background means, standard deviations, and available medians."""
+    mean_std_pairs: list[tuple[float, float]] = []
+    medians: list[float] = []
+    for roi in (getattr(lcm, "background_rois", {}) or {}).values():
+        try:
+            pair = (float(roi.mean), float(roi.std))
+        except Exception:
+            continue
+        mean_std_pairs.append(pair)
+        try:
+            medians.append(float(roi.pixel_value))
+        except Exception:
+            pass
+    if not mean_std_pairs:
+        return {}
+    means = [mean for mean, _ in mean_std_pairs]
+    stds = [std for _, std in mean_std_pairs]
+    background: dict[str, Any] = {
+        "means": means,
+        "stds": stds,
+        "mean": sum(means) / len(means),
+        "std": sum(stds) / len(stds),
+    }
+    if len(medians) == len(means):
+        background["pixel_value"] = sum(medians) / len(medians)
+    return background
+
+
+def _mean_based_cnr(object_rois: list[dict[str, float]], background: dict[str, Any]) -> float | None:
+    """Calculate the viewer CNR from mean ROI values and background SD."""
+    if not object_rois or not background:
+        return None
+    object_mean = sum(roi["mean"] for roi in object_rois) / len(object_rois)
+    bg_mean = background["mean"]
+    bg_std = background["std"]
+    if not all(math.isfinite(value) for value in (object_mean, bg_mean, bg_std)):
+        return None
+    return abs(object_mean - bg_mean) / bg_std if bg_std > 0 else None
+
+
 def _extract_low_contrast_cnr_details(analyzer: Any) -> dict[str, Any]:
     """Harvest CNR intermediates from the live ACRCT low-contrast module.
 
@@ -95,21 +137,12 @@ def _extract_low_contrast_cnr_details(analyzer: Any) -> dict[str, Any]:
             continue
     if obj:
         out["object_rois"] = obj
-    bg_means: list[float] = []
-    bg_stds: list[float] = []
-    for roi in (getattr(lcm, "background_rois", {}) or {}).values():  # dict, not list
-        try:
-            bg_means.append(float(roi.mean))
-            bg_stds.append(float(roi.std))
-        except Exception:
-            continue
-    if bg_means:
-        out["background"] = {
-            "means": bg_means,
-            "stds": bg_stds,
-            "mean": sum(bg_means) / len(bg_means),  # aggregate noise floor
-            "std": sum(bg_stds) / len(bg_stds),
-        }
+    background = _extract_background_roi_details(lcm)
+    if background:
+        out["background"] = background
+    mean_based_cnr = _mean_based_cnr(obj, background)
+    if mean_based_cnr is not None:
+        out["mean_based_cnr"] = mean_based_cnr
     return out
 
 
@@ -195,6 +228,52 @@ def _acr_ct_stack_diagnostic_lines(analyzer: Any) -> list[str]:
         "options dialog if needed."
     )
     return lines
+
+
+def _harvest_ct_headlines(
+    analyzer: Any,
+    raw: dict[str, Any],
+) -> tuple[dict[str, float], list[str]]:
+    """Read live MTF and check serialized CNR against its ROI inputs."""
+    metrics: dict[str, float] = {}
+    warnings: list[str] = []
+    try:
+        mtf = analyzer.spatial_resolution_module.mtf
+        mtf50 = float(mtf.relative_resolution(50))
+        if math.isfinite(mtf50):
+            metrics["acr_ct_mtf50_lpmm"] = mtf50
+            spacings = getattr(mtf, "spacings", None)
+            if spacings is not None and mtf50 > max(spacings):
+                warnings.append("CT MTF@50% was extrapolated by pylinac.")
+        else:
+            warnings.append("CT MTF@50% was unavailable from pylinac.")
+    except Exception:
+        warnings.append("CT MTF@50% was unavailable from pylinac.")
+
+    low_contrast_data = raw.get("low_contrast_module")
+    structured_cnr = (
+        low_contrast_data.get("cnr")
+        if isinstance(low_contrast_data, dict)
+        else None
+    )
+    try:
+        lcm = analyzer.low_contrast_module
+        obj = lcm.rois["ROI"].pixel_value
+        bg = lcm.background_rois["ROI"]
+        recomputed_cnr = abs(obj - bg.pixel_value) / bg.std
+    except (AttributeError, KeyError, TypeError, ZeroDivisionError):
+        recomputed_cnr = None
+    if (
+        isinstance(structured_cnr, (int, float))
+        and isinstance(recomputed_cnr, (int, float))
+        and math.isfinite(structured_cnr)
+        and math.isfinite(recomputed_cnr)
+        and not math.isclose(structured_cnr, recomputed_cnr, rel_tol=1e-6, abs_tol=1e-6)
+    ):
+        warnings.append(
+            "CT low-contrast CNR differs from the ROI-based calculation."
+        )
+    return metrics, warnings
 
 
 def run_acr_ct_analysis(request: QARequest) -> QAResult:
@@ -320,7 +399,8 @@ def run_acr_ct_analysis(request: QARequest) -> QAResult:
         if low_contrast_cnr:
             metrics["low_contrast_cnr"] = low_contrast_cnr
 
-        ct_warnings: list[str] = []
+        headline_metrics, ct_warnings = _harvest_ct_headlines(analyzer, raw)
+        metrics.update(headline_metrics)
         if warn_ignore_tol:
             ct_warnings.append(
                 "Scan extent tolerance is ignored in stock pylinac mode (ACRCT)."

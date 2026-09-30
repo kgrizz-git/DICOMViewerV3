@@ -54,6 +54,8 @@ def test_full_extraction() -> None:
     ]
     assert out["background"]["mean"] == 10.0
     assert out["background"]["std"] == 2.0
+    assert out["background"]["pixel_value"] == 10.0
+    assert out["mean_based_cnr"] == 45.0
     assert out["background"]["means"] == [10.0]
     assert out["background"]["stds"] == [2.0]
 
@@ -109,6 +111,55 @@ def test_multiple_background_rois_average() -> None:
     out = _extract_low_contrast_cnr_details(analyzer)
     assert out["background"]["mean"] == 15.0
     assert out["background"]["std"] == 3.0
+
+
+def test_mean_based_cnr_is_absent_when_background_noise_is_zero() -> None:
+    analyzer = _analyzer(
+        rois={"ROI": _FakeROI(mean=20.0, std=1.0)},
+        background_rois={"ROI": _FakeROI(mean=10.0, std=0.0)},
+    )
+    out = _extract_low_contrast_cnr_details(analyzer)
+    assert "mean_based_cnr" not in out
+
+
+def test_background_mean_remains_when_median_is_unavailable() -> None:
+    analyzer = _analyzer(
+        rois={"ROI": _FakeROI(mean=20.0, std=1.0)},
+        background_rois={"ROI": types.SimpleNamespace(mean=10.0, std=2.0)},
+    )
+    out = _extract_low_contrast_cnr_details(analyzer)
+    assert out["background"]["mean"] == 10.0
+    assert "pixel_value" not in out["background"]
+    assert out["mean_based_cnr"] == 5.0
+
+
+def test_partial_background_medians_are_not_exported_as_complete() -> None:
+    analyzer = _analyzer(background_rois={
+        "A": _FakeROI(mean=10.0, std=2.0, pixel_value=11.0),
+        "B": types.SimpleNamespace(mean=30.0, std=4.0),
+    })
+    out = _extract_low_contrast_cnr_details(analyzer)
+    assert out["background"]["mean"] == 20.0
+    assert "pixel_value" not in out["background"]
+
+
+def test_background_roi_without_std_does_not_fail_extraction() -> None:
+    analyzer = _analyzer(background_rois={
+        "ROI": types.SimpleNamespace(mean=10.0),
+    })
+    assert "background" not in _extract_low_contrast_cnr_details(analyzer)
+
+
+def test_background_mean_and_std_use_the_same_rois() -> None:
+    analyzer = _analyzer(background_rois={
+        "BAD": types.SimpleNamespace(mean=10.0),
+        "ROI": _FakeROI(mean=30.0, std=4.0, pixel_value=29.0),
+    })
+    background = _extract_low_contrast_cnr_details(analyzer)["background"]
+    assert background["means"] == [30.0]
+    assert background["stds"] == [4.0]
+    assert background["mean"] == 30.0
+    assert background["pixel_value"] == 29.0
 
 
 def test_jsonable_numpy_scalars() -> None:

@@ -1,13 +1,11 @@
 """
-Tests for the full-flatten CSV builders in src/qa/qa_export.py (P1-F2/F3).
+Tests for the headline-first ACR CSV builders in src/qa/qa_export.py.
 
 Covers:
-    - P1-F2: build_metrics_csv emits the full flatten (raw_pylinac + metrics),
-      row count greater than the legacy metrics-only flatten, formula cells
-      neutralized, JSON document unchanged (no metrics_flat).
-    - P1-F3: build_batch_metrics_csv produces a wide CSV with one row per run,
-      provenance-first column order, num_images top-level (not metric.num_images),
-      stable overflow sort, empty-results header-only, parallel labels.
+    - build_metrics_csv emits identity and headline rows before the full
+      flatten, with formula cells neutralized and JSON unchanged.
+    - build_batch_metrics_csv produces a wide CSV with one row per run,
+      mixed-modality blanks, stable overflow sort, and parallel labels.
 
 No live analyze(), no DICOM fixtures, no PHI.
 """
@@ -23,6 +21,7 @@ from qa.qa_export import (
     build_metrics_csv,
     build_single_run_document,
 )
+from qa.qa_headline_results import columns_for
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -37,8 +36,8 @@ def _acr_result() -> QAResult:
         metrics={
             "low_contrast_cnr": {
                 "cnr": 4.25,
-                "object_rois": [{"mean": 105.0}, {"mean": 95.0}],
-                "background": {"mean": 12.0, "std": 1.5},
+                "object_rois": [{"mean": 18.0, "pixel_value": 17.375}],
+                "background": {"mean": 12.0, "std": 1.5, "pixel_value": 11.0},
             },
             "low_contrast_score": 1,
             "num_images": 40,
@@ -106,6 +105,32 @@ def test_metrics_csv_row_count_exceeds_metrics_only() -> None:
     assert "uniformity_module.center_roi_stdev" in full_keys
 
 
+def test_single_csv_keeps_full_detail_after_separator_without_duplicate_mtf_key() -> None:
+    result = _acr_result()
+    result.metrics["acr_ct_mtf50_lpmm"] = 0.53
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert rows[1] == ["series_run_id", "1.2.3.4.5"]
+    assert ["", ""] in rows
+    separator = rows.index(["", ""])
+    assert rows.index(["acr_ct_mtf50_lpmm", "0.53"]) < separator
+    assert rows.index(["acr_ct_cnr_object_median_hu", "17.375"]) < separator
+    assert rows.index(["acr_ct_cnr_background_median_hu", "11.0"]) < separator
+    assert ["acr_ct_cnr_mean_based", "4.0"] in rows
+    assert rows.index(["ct_module.rois.Air", "-987.1"]) > separator
+    assert [row[0] for row in rows].count("acr_ct_mtf50_lpmm") == 1
+
+
+def test_failed_single_csv_keeps_partial_measurement_after_blank_headline() -> None:
+    result = QAResult(
+        success=False, analysis_type="acr_ct",
+        metrics={"acr_ct_mtf50_lpmm": 0.53},
+    )
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    separator = rows.index(["", ""])
+    assert ["acr_ct_mtf50_lpmm", ""] in rows[:separator]
+    assert ["acr_ct_mtf50_lpmm", "0.53"] in rows[separator + 1:]
+
+
 def test_metrics_csv_formula_cells_neutralized() -> None:
     """Leading = + - @ string cells must be prefixed with an apostrophe."""
     result = _formula_result()
@@ -148,11 +173,61 @@ def test_batch_csv_header_and_row_count() -> None:
     text = build_batch_metrics_csv(results, labels=["A", "B"])
     rows = list(csv.reader(io.StringIO(text)))
     assert len(rows) == 3  # header + 2 data rows
-    # Provenance keys lead the header.
-    assert rows[0][0] == "analysis_type"
+    # Identity and measurements lead; provenance follows them.
+    assert rows[0][:8] == [
+        "series_run_id", "analysis_type", "analysis_status", "warnings", "errors",
+        "acr_ct_cnr", "acr_ct_cnr_mean_based", "acr_ct_mtf50_lpmm",
+    ]
     assert "success" in rows[0]
     # Metric overflow keys present after provenance block.
     assert "ct_module.rois.Air" in rows[0]
+
+
+def test_failed_batch_csv_preserves_differing_partial_measurement() -> None:
+    failed = QAResult(
+        success=False, analysis_type="acr_ct",
+        metrics={"acr_ct_mtf50_lpmm": 0.53},
+    )
+    successful = _acr_result()
+    successful.metrics["acr_ct_mtf50_lpmm"] = 0.61
+    rows = list(csv.reader(io.StringIO(build_batch_metrics_csv([failed, successful]))))
+    header = rows[0]
+    assert rows[1][header.index("acr_ct_mtf50_lpmm")] == ""
+    assert rows[1][header.index("detail.acr_ct_mtf50_lpmm")] == "0.53"
+    assert rows[2][header.index("acr_ct_mtf50_lpmm")] == "0.61"
+    assert rows[2][header.index("detail.acr_ct_mtf50_lpmm")] == ""
+
+
+def test_batch_detail_alias_avoids_existing_flatten_key() -> None:
+    failed = QAResult(
+        success=False, analysis_type="acr_ct",
+        metrics={
+            "acr_ct_mtf50_lpmm": 0.53,
+            "detail.acr_ct_mtf50_lpmm": "original detail",
+        },
+    )
+    rows = list(csv.reader(io.StringIO(build_batch_metrics_csv([failed]))))
+    header = rows[0]
+    assert rows[1][header.index("detail.acr_ct_mtf50_lpmm")] == "original detail"
+    assert rows[1][header.index("detail.acr_ct_mtf50_lpmm.2")] == "0.53"
+
+
+def test_batch_csv_mixed_modality_and_unique_header() -> None:
+    ct = _acr_result()
+    mri = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        metrics={"mri_snr": 73.0},
+        raw_pylinac={"uniformity_module": {"piu": 91.2}},
+    )
+    rows = list(csv.reader(io.StringIO(build_batch_metrics_csv([ct, mri]))))
+    header = rows[0]
+    assert len(header) == len(set(header))
+    assert header.index("acr_ct_cnr") < header.index("acr_mri_pylinac_percentile_piu_pct")
+    assert rows[1][header.index("acr_mri_pylinac_percentile_piu_pct")] == ""
+    assert rows[2][header.index("acr_ct_cnr")] == ""
+    assert rows[2][header.index("acr_mri_pylinac_percentile_piu_pct")] == "91.2"
+    assert rows[2][header.index("acr_mri_viewer_snr_uncorrected")] == "73.0"
 
 
 def test_batch_csv_num_images_top_level_not_metric_namespaced() -> None:
@@ -163,6 +238,94 @@ def test_batch_csv_num_images_top_level_not_metric_namespaced() -> None:
     assert "metric.num_images" not in rows[0]
     col = rows[0].index("num_images")
     assert rows[1][col] == "40"
+
+
+def test_metric_num_images_wins_over_provenance_in_acr_exports() -> None:
+    """The headline projection preserves the canonical flatten collision rule."""
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        num_images=0,
+        metrics={"num_images": 40},
+    )
+    single = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert [row for row in single if row and row[0] == "num_images"] == [
+        ["num_images", "40"]
+    ]
+
+    batch = list(csv.reader(io.StringIO(build_batch_metrics_csv([result]))))
+    assert batch[0].count("num_images") == 1
+    assert batch[1][batch[0].index("num_images")] == "40"
+
+
+def test_mri_single_run_csv_projects_headlines_before_detail() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        metrics={"low_contrast_score": 11, "mri_snr": 40.0},
+        raw_pylinac={
+            "uniformity_module": {"piu": 91.2, "psg": 1.3},
+            "geometric_distortion_module": {
+                "profiles": {"negative diagonal": {"width (mm)": 189.5}}
+            },
+        },
+    )
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    separator = rows.index(["", ""])
+    assert rows[1][0] == "series_run_id"
+    assert rows.index(["acr_mri_pylinac_percentile_piu_pct", "91.2"]) < separator
+    assert rows.index(["acr_mri_axial_negative_diagonal_mm", "189.5"]) < separator
+    assert rows.index(["acr_mri_low_contrast_spokes", "11"]) < separator
+    assert rows.index(["acr_mri_viewer_snr_uncorrected", "40.0"]) < separator
+    assert rows.index([
+        "geometric_distortion_module.profiles.negative diagonal.width (mm)", "189.5"
+    ]) > separator
+
+
+def test_acr_csv_tolerates_missing_metrics_dict() -> None:
+    result = QAResult(success=True, analysis_type="acr_ct")
+    result.metrics = None  # type: ignore[assignment]
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert ["acr_ct_cnr_mean_based", ""] in rows
+    assert ["acr_ct_cnr_object_median_hu", ""] in rows
+
+
+def test_ct_ambiguous_multiple_object_medians_stay_blank() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="acr_ct",
+        metrics={"low_contrast_cnr": {
+            "object_rois": [
+                {"mean": 18.0, "pixel_value": 17.0},
+                {"mean": 20.0, "pixel_value": 19.0},
+            ],
+            "background": {"mean": 12.0, "std": 2.0},
+        }},
+    )
+    rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert ["acr_ct_cnr_object_median_hu", ""] in rows
+    assert ["acr_ct_cnr_mean_based", "3.5"] in rows
+
+
+def test_analysis_profile_summary_is_exported_as_audit_text() -> None:
+    result = QAResult(
+        success=True,
+        analysis_type="acr_mri_large",
+        pylinac_analysis_profile={
+            "engine": "ACRMRILarge",
+            "vanilla_pylinac": True,
+            "echo_number": 2,
+            "low_contrast_method": "Ratio",
+        },
+    )
+    expected = (
+        "engine=ACRMRILarge; vanilla_pylinac=True; "
+        "echo_number=2; low_contrast_method=Ratio"
+    )
+    single = list(csv.reader(io.StringIO(build_metrics_csv(result))))
+    assert ["analysis_profile_summary", expected] in single
+    batch = list(csv.reader(io.StringIO(build_batch_metrics_csv([result]))))
+    assert batch[1][batch[0].index("analysis_profile_summary")] == expected
 
 
 def test_batch_csv_labels_parallel_and_overflow_sorted() -> None:
@@ -178,7 +341,7 @@ def test_batch_csv_labels_parallel_and_overflow_sorted() -> None:
     assert rows[1][label_idx] == "L1"
     assert rows[2][label_idx] == "L2"
     # Overflow keys sorted by str: "aa" < "aaa" < "bbb" < "zz"
-    overflow = [k for k in header if k not in _PROV_KEYS]
+    overflow = header[len(columns_for([r1, r2])):]
     assert overflow == sorted(overflow, key=str)
     assert overflow == ["aa", "aaa", "bbb", "zz"]
 
@@ -273,10 +436,11 @@ def test_batch_csv_preserves_all_preflight_and_pylinac_warnings() -> None:
     warnings_cell = rows[1][header.index("warnings")]
     assert "Slice spacing irregular" in warnings_cell
     assert "pylinac: low contrast" in warnings_cell
-    # Single-run metric CSV must not emit a hollow warnings metric row.
+    # Single-run CSV now exposes merged warnings in its headline audit block.
     single_rows = list(csv.reader(io.StringIO(build_metrics_csv(result))))
-    single_keys = [row[0] for row in single_rows[1:] if row]
-    assert "warnings" not in single_keys
+    single = dict(row for row in single_rows[1:] if row and row[0])
+    assert "Slice spacing irregular" in single["warnings"]
+    assert "pylinac: low contrast" in single["warnings"]
 
 
 def test_failed_run_empty_raw_pylinac_csv_no_crash() -> None:
@@ -290,9 +454,10 @@ def test_failed_run_empty_raw_pylinac_csv_no_crash() -> None:
     )
     single = list(csv.reader(io.StringIO(build_metrics_csv(result))))
     assert single[0] == ["metric", "value"]
-    assert len(single) == 1  # header only; no metric rows
+    assert ["analysis_status", "failed"] in single
+    assert ["errors", "analyze failed"] in single
     batch = list(csv.reader(io.StringIO(build_batch_metrics_csv([result]))))
-    assert batch[0][0] == "analysis_type"
+    assert batch[0][0] == "series_run_id"
     assert batch[1][batch[0].index("success")] == "False"
     assert "analyze failed" in batch[1][batch[0].index("errors")]
 
@@ -312,16 +477,18 @@ def test_metrics_csv_nested_path_denylist() -> None:
 
 
 _PROV_KEYS = [
+    "series_run_id",
     "analysis_type",
+    "analysis_status",
+    "warnings",
+    "errors",
     "success",
+    "label",
     "pylinac_version",
+    "num_images",
     "study_uid",
     "series_uid",
     "modality",
-    "num_images",
-    "label",
-    "errors",
-    "warnings",
 ]
 
 

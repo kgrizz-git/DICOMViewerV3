@@ -1,7 +1,7 @@
 # ACR QA headline results export implementation plan
 
 **Last updated:** 2026-09-29
-**Status:** Proposed; implementation pending
+**Status:** Implemented; archived with the export implementation
 **Scope:** ACR CT/MRI single-run CSV, batch CSV, and XLSX `Summary`; retained `Detail`/Images; subsequent nuclear CSV ordering
 **Basis:** [ACR QA headline results export assessment](../../investigations/ACR_QA_HEADLINE_RESULTS_EXPORT_ASSESSMENT.md)
 
@@ -15,7 +15,7 @@ The [ACR CT phantom instructions](https://accreditationsupport.acr.org/support/s
 
 ## Existing contracts to preserve
 
-- `QAResult` and JSON retain raw `results_data(as_dict=True)`, curated `metrics`, warnings/errors, identity, and analysis profile (`src/qa/analysis_types.py`; `src/qa/qa_export.py`). CT's new curated MTF field is additive to JSON; no raw pylinac keys are rewritten. Decide the CT JSON `schema_version` bump in the implementation PR and document it if consumers treat this additive metric as a schema change.
+- `QAResult` and JSON retain raw `results_data(as_dict=True)`, curated `metrics`, warnings/errors, identity, and analysis profile (`src/qa/analysis_types.py`; `src/qa/qa_export.py`). CT's new curated MTF field is additive to JSON; no raw pylinac keys are rewritten. The additive CT `acr_ct_mtf50_lpmm` metric keeps JSON `schema_version` 1.3: existing fields and meanings are unchanged, and consumers already permit extra metric keys.
 - `build_metric_rows` remains the canonical full, sorted flatten, with curated values winning collisions and path/audit denylisted keys excluded (`src/qa/qa_result_flatten.py`). XLSX `Detail` continues to emit every allowed flattened key once per run; `Images` retains its current embedding/fallback behavior.
 - Single-run CSV retains the two-column `metric,value` shape. Batch CSV retains one header and one data row per run. Excel and CSV formula neutralization (`neutralize_spreadsheet_value`/`SafeCsvWriter`) applies to **every** new label, warning, and string cell. Existing GUI callers should consume the shared builders without format-specific reordering (`src/gui/qa_app_facade.py`, `src/gui/qa_ct_batch_export.py`, `src/gui/qa_mri_batch_export.py`).
 - Missing, inapplicable, failed, and nonfinite measurements produce blank measurement cells, never zero or `nan`/`inf`. Identity and audit fields retain their declared types and values, including status and merged preflight/pylinac warnings and errors from `build_run_provenance`. `success` means analysis completed; it is not an ACR acceptance result.
@@ -43,18 +43,21 @@ For the single-run CSV, `series_run_id` is `series_uid` when no user label exist
 | Order | Stable CSV key | XLSX label | Exact source and handling |
 |---|---|---|---|
 | 1 | `acr_ct_cnr` | CT low-contrast CNR (pylinac) | `low_contrast_cnr.cnr`; a missing curated value may fall back to `low_contrast_module.cnr` only when finite. The **runner**, not an export builder, cross-checks both sources and records a mismatch warning in `QAResult.warnings`. |
-| 2 | `acr_ct_mtf50_lpmm` | CT MTF@50% (lp/mm, pylinac) | New curated live result `metrics["acr_ct_mtf50_lpmm"]` from `analyzer.spatial_resolution_module.mtf.relative_resolution(50)`. No estimate from rounded `lpmm_to_rmtf`. |
-| 3–7 | `acr_ct_hu_water`, `_air`, `_poly`, `_acrylic`, `_bone` | CT number: Water, Air, Poly, Acrylic, Bone (HU) | `ct_module.rois.Water/Air/Poly/Acrylic/Bone`; leave absent ROIs blank. |
-| 8–12 | `acr_ct_uniformity_hu_center`, `_top`, `_right`, `_bottom`, `_left` | Uniformity: Center, Top, Right, Bottom, Left (HU) | `uniformity_module.rois.Center/Top/Right/Bottom/Left`; distinct from a future derived max deviation. |
-| 13 | `acr_ct_uniformity_center_std_hu` | Uniformity center ROI SD (HU) | `uniformity_module.center_roi_stdev`; image-noise context, not an ACR pass/fail verdict. |
+| 2 | `acr_ct_cnr_mean_based` | CT low-contrast CNR (mean-based, viewer) | `low_contrast_cnr.mean_based_cnr` or the same finite calculation from exported means/SD: absolute object/background ROI mean difference divided by background ROI SD. Distinct from pylinac's median-based CNR. |
+| 3 | `acr_ct_mtf50_lpmm` | CT MTF@50% (lp/mm, pylinac) | New curated live result `metrics["acr_ct_mtf50_lpmm"]` from `analyzer.spatial_resolution_module.mtf.relative_resolution(50)`. No estimate from rounded `lpmm_to_rmtf`. |
+| 4–8 | `acr_ct_hu_water`, `_air`, `_poly`, `_acrylic`, `_bone` | CT number: Water, Air, Poly, Acrylic, Bone (HU) | `ct_module.rois.Water/Air/Poly/Acrylic/Bone`; leave absent ROIs blank. |
+| 9–13 | `acr_ct_uniformity_hu_center`, `_top`, `_right`, `_bottom`, `_left` | Uniformity: Center, Top, Right, Bottom, Left (HU) | `uniformity_module.rois.Center/Top/Right/Bottom/Left`; distinct from a future derived max deviation. |
+| 14 | `acr_ct_uniformity_center_std_hu` | Uniformity center ROI SD (HU) | `uniformity_module.center_roi_stdev`; image-noise context, not an ACR pass/fail verdict. |
 
 CT calculation-input rows/columns immediately after the CT measurement block:
 
 | Order | Stable CSV key | XLSX label | Exact source and handling |
 |---|---|---|---|
-| 14 | `acr_ct_cnr_object_mean_hu` | CNR object ROI mean (HU) | Existing `extract_low_contrast_cnr_values` aggregate over `low_contrast_cnr.object_rois[*].mean`. |
-| 15 | `acr_ct_cnr_background_mean_hu` | CNR background mean (HU) | `low_contrast_cnr.background.mean`. |
-| 16 | `acr_ct_cnr_background_std_hu` | CNR background SD (HU) | `low_contrast_cnr.background.std`. |
+| 15 | `acr_ct_cnr_object_median_hu` | CNR object ROI median (HU) | `low_contrast_cnr.object_rois[0].pixel_value`; pylinac's CNR numerator uses this ROI median. |
+| 16 | `acr_ct_cnr_background_median_hu` | CNR background median (HU) | `low_contrast_cnr.background.pixel_value`; pylinac's CNR numerator uses this ROI median. |
+| 17 | `acr_ct_cnr_object_mean_hu` | CNR object ROI mean (HU) | Existing `extract_low_contrast_cnr_values` aggregate over `low_contrast_cnr.object_rois[*].mean`; input to the viewer mean-based CNR. |
+| 18 | `acr_ct_cnr_background_mean_hu` | CNR background mean (HU) | `low_contrast_cnr.background.mean`; input to the viewer mean-based CNR. |
+| 19 | `acr_ct_cnr_background_std_hu` | CNR background SD (HU) | `low_contrast_cnr.background.std`; denominator for both CNR methods. |
 
 Do not produce a CT SNR or measured-thickness headline in this phase. Do not label `acr_ct_mtf50_lpmm` as ACR's visual highest resolved line-pair score. The DICOM reported thickness fields belong to the separate CT metadata backlog item; if available by implementation time, place **Reported SliceThickness (DICOM, mm)** and **Reported SpacingBetweenSlices (DICOM, mm)** in the audit/reference block with distinct keys, never in the CT measurement block.
 
@@ -84,7 +87,7 @@ For the wide batch CSV, append every remaining key from the existing `build_tabu
 
 ## Implementation sequence
 
-1. **Lock fixtures and compatibility:** capture existing headers and representative synthetic `QAResult`s for CT, MRI, mixed, failed/partial, and absent sagittal geometry. Confirm the actual `analysis_type` values, profile keys, and MRI numeric geometry keys against runner output or de-identified result fixtures; the tracked MRI fixture has empty sagittal profiles, so add a synthetic four-ROI sagittal fixture. Confirm the post-analysis `echo_number` profile key and SNR input value units. Decide whether an additive CT JSON field requires `schema_version` 1.4; record the decision in the implementation PR. Do not use PHI-bearing examples.
+1. **Lock fixtures and compatibility:** capture existing headers and representative synthetic `QAResult`s for CT, MRI, mixed, failed/partial, and absent sagittal geometry. Confirm the actual `analysis_type` values, profile keys, and MRI numeric geometry keys against runner output or de-identified result fixtures; the tracked MRI fixture has empty sagittal profiles, so add a synthetic four-ROI sagittal fixture. Confirm the post-analysis `echo_number` profile key and SNR input value units. Retain CT JSON `schema_version` 1.3 for the additive MTF metric; no existing field is changed. Do not use PHI-bearing examples.
 2. **Move the CNR helper and harvest CT MTF@50%:** move `extract_low_contrast_cnr_values` from `qa_export.py` to `qa_result_flatten.py`, retaining a compatibility re-export from `qa_export.py`; update XLSX and new projection imports to use the shared location, avoiding an import cycle. Inside `run_acr_ct_analysis` after `analyzer.analyze`, read the live MTF scalar, coerce finite numeric output, and store `metrics["acr_ct_mtf50_lpmm"]`. If unavailable, retain successful analysis and add a useful warning rather than fabricating a value. Compare curated/structured CT CNR values here and add any mismatch to `ct_warnings`; make the analogous MRI low-contrast check in its runner. Keep raw `lpmm_to_rmtf` intact. Compare harvested CT MTF with pylinac `results()` on a representative non-PHI or approved de-identified run.
 3. **Implement the shared projection:** add the ordered spec and pure extractors in `src/qa/qa_headline_results.py`. Export builders only read already recorded runner warnings; they never mutate `QAResult`. Validate missing/nonfinite handling, modality routing, type coercion, duplicate key prevention, and numeric geometry extraction.
 4. **Wire the three ACR surfaces:** update `build_metrics_csv`, `build_batch_metrics_csv`, and `qa_xlsx_export._build_summary_sheet` to consume the same projection/order. Preserve existing single-run `metric,value`, batch wide-row, `Detail`, `Images`, and formula-neutralization behavior. Update public docstrings and GUI copy that describes export content; do not create format-specific metric lists. Change the locked `_SUMMARY_HEADERS` tuple and its exact-tuple test intentionally.

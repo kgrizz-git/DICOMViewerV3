@@ -79,7 +79,7 @@ def create_mri_batch_result_dialog(
             calls ``qa.qa_xlsx_export.build_qa_workbook`` directly (OQ-9).
         on_save_json_clicked: Invoked when **Export JSON** is pressed.
         on_save_csv_clicked: Invoked when **Export CSV** is pressed; caller
-            writes ``build_batch_metrics_csv`` (full flatten, one row per series).
+            writes ``build_batch_metrics_csv`` (headlines then detail, one row per series).
         on_destroyed: Optional slot for ``dialog.destroyed`` (e.g. clear app
             ref).
 

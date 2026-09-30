@@ -19,7 +19,14 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from core.spreadsheet_safety import neutralize_spreadsheet_value
 from qa.analysis_types import QAResult
-from qa.qa_export import extract_low_contrast_cnr_values
+from qa.qa_headline_results import (
+    AUDIT_COLUMNS,
+    CT_COLUMNS,
+    IDENTITY_COLUMNS,
+    MRI_COLUMNS,
+    columns_for,
+    project_headlines,
+)
 from qa.qa_result_flatten import build_metric_rows
 
 
@@ -39,39 +46,9 @@ def _detect_pillow() -> bool:
 
 _PILLOW_AVAILABLE = _detect_pillow()
 
-_SUMMARY_HEADERS = (
-    "Series/Run ID",
-    "Object ROI Mean",
-    "Background Mean",
-    "Background Std",
-    "CNR",
-    "Status",
-    "Warnings",
-    "PIU (%)",
-    "PSG",
-    "LC Score",
-    "MTF@50% Row",
-    "MTF@50% Col",
-    "Slice Thickness (mm)",
-    "Slice Shift (mm)",
-    "MRI SNR",
-)
-
-# Modality-aware Summary columns pulled from the canonical flatten rows
-# (``build_metric_rows``). Each entry is a human header paired with the exact
-# flatten key; a column stays blank when its key is absent for a run (CT rows
-# leave the MRI-only fields blank and vice versa — shared header, best-effort
-# fill). Locked gaps (CT slice thickness, CT SNR) are intentionally excluded.
-# ``MRI SNR`` maps ``mri_snr`` (viewer-harvested uncorrected ACR-style ratio).
-_SUMMARY_KEY_COLUMNS: tuple[tuple[str, str], ...] = (
-    ("PIU (%)", "uniformity_module.piu"),
-    ("PSG", "uniformity_module.psg"),
-    ("LC Score", "low_contrast_score"),
-    ("MTF@50% Row", "slice1.row_mtf_50"),
-    ("MTF@50% Col", "slice1.col_mtf_50"),
-    ("Slice Thickness (mm)", "slice1.measured_slice_thickness_mm"),
-    ("Slice Shift (mm)", "slice1.slice_shift_mm"),
-    ("MRI SNR", "mri_snr"),
+_SUMMARY_HEADERS = tuple(
+    column.label
+    for column in (*IDENTITY_COLUMNS, *CT_COLUMNS, *MRI_COLUMNS, *AUDIT_COLUMNS)
 )
 
 
@@ -80,24 +57,6 @@ def _row_label(result: QAResult, label: str | None) -> str:
     if label:
         return label
     return result.series_uid or ""
-
-
-def _cnr_summary_values(result: QAResult) -> tuple[Any, Any, Any, Any]:
-    """
-    Pull the F1 CNR intermediates for the Summary sheet.
-
-    Reads the canonical ``metrics["low_contrast_cnr"]`` shape (see F1 in
-    PYLINAC_CT_CNR_BATCH_XLSX_PLAN.md): object ROI mean is the average of
-    ``object_rois[*].mean``; background mean/std and module ``cnr`` are read
-    with ``.get()``. Any missing key degrades to a blank cell.
-    """
-    obj_mean, bg_mean, bg_std, cnr = extract_low_contrast_cnr_values(result.metrics)
-    return (
-        "" if obj_mean is None else obj_mean,
-        "" if bg_mean is None else bg_mean,
-        "" if bg_std is None else bg_std,
-        "" if cnr is None else cnr,
-    )
 
 
 def _xlsx_cell(value: Any) -> Any:
@@ -113,42 +72,14 @@ def _xlsx_cell(value: Any) -> Any:
     return neutralize_spreadsheet_value(value)
 
 
-def _summary_extra_values(result: QAResult) -> list[Any]:
-    """
-    Pull the modality-aware Summary columns from the canonical flatten rows.
-
-    Reads ``build_metric_rows(result)`` once and looks up each key in
-    ``_SUMMARY_KEY_COLUMNS``; missing keys degrade to a blank cell. Numeric
-    scalars (PIU, PSG, MTF, thickness, shift, LC score) stay numbers so the
-    Summary sheet stays sortable/filterable. The caller applies ``_xlsx_cell``
-    to every extra value so formula-like mapped strings are stored as
-    neutralized text; numeric scalars pass through unchanged.
-    """
-    flat = dict(build_metric_rows(result))
-    return [flat.get(key) for _, key in _SUMMARY_KEY_COLUMNS]
-
-
 def _build_summary_sheet(
     ws: Worksheet, results: list[QAResult], row_labels: list[str | None]
 ) -> None:
-    ws.append(list(_SUMMARY_HEADERS))
+    columns = columns_for(results)
+    ws.append([column.label for column in columns])
     for result, label in zip(results, row_labels, strict=True):
-        obj_mean, bg_mean, bg_std, cnr = _cnr_summary_values(result)
-        status = "success" if result.success else "failed"
-        warnings_text = "; ".join(result.warnings or [])
-        extra = [_xlsx_cell(value) for value in _summary_extra_values(result)]
-        ws.append(
-            [
-                _xlsx_cell(_row_label(result, label)),
-                obj_mean,
-                bg_mean,
-                bg_std,
-                cnr,
-                _xlsx_cell(status),
-                _xlsx_cell(warnings_text),
-                *extra,
-            ]
-        )
+        projected = project_headlines(result, columns, label=label)
+        ws.append([_xlsx_cell(projected[column.key]) for column in columns])
 
 
 def _build_detail_sheet(
@@ -307,16 +238,15 @@ def build_qa_workbook(
             accepted for signature parity with the JSON/CSV builders).
 
     Sheets:
-        Summary -- one row per run: Series/Run ID, object ROI mean,
-            background mean/std, CNR, status, warnings, then modality-aware
-            key columns pulled from the canonical flatten (PIU, PSG, LC score,
-            MTF@50% row/col, slice thickness/shift, uncorrected MRI SNR). Each
-            extra column is best-effort: it stays blank when its flatten key
-            is absent for the run, so CT and MRI rows share one header with
-            blanks where a metric does not apply (CT slice thickness and CT SNR
-            are excluded by design). ``MRI SNR`` is the viewer-harvested
-            uncorrected ACR-style ratio (``mri_snr``), not NEMA MS 1. Extra
-            mapped values pass through ``_xlsx_cell``.
+        Summary -- one row per run, ordered as identity/status, applicable CT
+            and MRI headline measurements and calculation inputs, then audit
+            fields. ``columns_for`` chooses the shared batch header and
+            ``project_headlines`` supplies each row; unavailable, failed, or
+            other-modality measurements stay blank. Detail retains any partial
+            values from failed runs for audit even when Summary blanks them.
+            MRI SNR is the viewer's
+            uncorrected ratio, not NEMA MS 1. Values pass through
+            ``_xlsx_cell`` before writing.
         Detail -- full flatten per run (``build_metric_rows``; path denylist).
         Images -- per-module embedded PNGs from ``analyzed_module_images``
             (stable key sort), each preceded by its module label, stacked
