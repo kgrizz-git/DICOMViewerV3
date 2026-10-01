@@ -122,11 +122,32 @@ skip the one place the finding gets explained.
 Note the scan and the upload are still separate concerns. The step also fails on
 a *broken* scan (no SARIF written, or exit `2` for a fatal error) regardless of
 `--error`. Grype stays non-blocking by design (`fail-build: false`,
-`severity-cutoff: high`), and the `KGRuleset1` ruleset's `code_scanning` rule
-covers **CodeQL only** — Semgrep is not in its `code_scanning_tools` list, so it
-gates the merge by exit code rather than by Security-tab alert severity. Adding
-it there is a repo-settings change, tracked in
-[`TO_DO.md`](TO_DO.md#maintenance).
+`severity-cutoff: high`).
+
+**Both CodeQL and Semgrep are in the `KGRuleset1` `code_scanning` rule**, so
+their alerts gate the merge independently of any exit code:
+
+```json
+"code_scanning_tools": [
+  {"tool": "CodeQL",      "alerts_threshold": "errors", "security_alerts_threshold": "high_or_higher"},
+  {"tool": "Semgrep OSS", "alerts_threshold": "errors", "security_alerts_threshold": "high_or_higher"}
+]
+```
+
+**`alerts_threshold` is the operative knob for Semgrep, not
+`security_alerts_threshold`.** GitHub classifies an alert as *security* only when
+its rule carries a `security-severity` value or a CWE tag. Measured 2026-10-01
+against Semgrep's own SARIF for these four rulesets: **0 of 729 rules carry
+`security-severity` and 0 carry a CWE tag**, so every Semgrep alert is a default
+(quality) alert. A Semgrep entry carrying only `security_alerts_threshold` would
+match **nothing** — reading as configured while enforcing nothing, which is the
+exact silent-no-op failure this document keeps warning about.
+`alerts_threshold: "errors"` is what covers Semgrep's 233 error-level rules
+(double-free, XXE, SQLi, weak RNG, dockerfile-user, and so on).
+`security_alerts_threshold: "high_or_higher"` is kept to mirror CodeQL so it
+starts working if Semgrep ever emits `security-severity`; **do not drop
+`alerts_threshold` as redundant** — without it, Semgrep enforcement silently
+disappears.
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
