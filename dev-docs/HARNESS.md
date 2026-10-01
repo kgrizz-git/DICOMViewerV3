@@ -145,16 +145,24 @@ retained to mirror CodeQL and to start working if Semgrep ever emits
 `security-severity`.
 
 **`alerts_threshold` is the only entry that can plausibly match a Semgrep alert
-today.** `security_alerts_threshold` compares against a `security-severity`
-value, which Semgrep OSS does not emit, so that entry has nothing to match on. It
-is **forward cover** for a future Semgrep that does emit one — not a spare that
-makes `alerts_threshold` redundant — and it is set to `high_or_higher` rather
-than `errors`, so the two are not interchangeable even if it did match. Dropping
-`alerts_threshold` on the theory that the other entry covers the same ground
-would therefore remove all Semgrep enforcement: the same silent-no-op shape this
-section exists to prevent. (How GitHub buckets a CWE-tagged,
-`security-severity`-less alert was not independently verified; the conservative
-reading above is what the configuration assumes.)
+today.** Per [GitHub's SARIF support documentation](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support-for-code-scanning), a result is treated
+as a *security* result only when its rule **includes** a `properties.security-severity`
+value — "if you include a value for this field, results for the rule are treated
+as security results." Semgrep OSS emits **none**, so its alerts are not security
+alerts, and `security_alerts_threshold` has nothing to compare against. The
+`security` and `CWE-NNN: …` tags Semgrep *does* emit do not change this: the
+documented trigger is the `security-severity` value, not a tag.
+
+So the second entry is **forward cover** for a future Semgrep that emits
+`security-severity` — not a spare that makes `alerts_threshold` redundant — and
+it is set to `high_or_higher` rather than `errors`, so the two are not
+interchangeable even if it did match. Dropping `alerts_threshold` on the theory
+that the other entry covers the same ground would therefore remove all Semgrep
+enforcement: the same silent-no-op shape this section exists to prevent.
+
+`KGRuleset1` targets the default branch, so this gating applies to PRs into
+`main`. The scans themselves also run on `develop`, but alerts uploaded from a
+`develop` PR are not gated by this ruleset.
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
