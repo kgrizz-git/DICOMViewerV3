@@ -96,6 +96,56 @@ Generated `site/` is gitignored. See
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
+### Code scanning (SARIF uploads)
+
+The `semgrep`, `codeql`, and `grype` jobs in `ci.yml` each upload SARIF to the
+GitHub Security tab, and **all three uploads are blocking**. The semgrep and
+grype uploads previously carried `continue-on-error: true`, which existed only
+while the repository was private and Code Scanning could not accept SARIF;
+restored 2026-09-30 after the repository became public.
+
+A failing upload means the Security tab has stopped receiving results for that
+scanner — a silent loss of coverage that reads exactly like "no findings." Fix
+the upload; do not re-add `continue-on-error` to make a red build go away. CodeQL
+never had the flag.
+
+Note that the scans themselves are separate from the uploads, and **a green scan
+does not mean "no findings."** `semgrep scan` exits `0` when it finds problems —
+only `--error` makes it exit `1` — and the CI invocation does not pass
+`--error`. The step fails on a *broken* scan (no SARIF written, or exit `2` for a
+fatal error), not on a *dirty* one. Grype is the same shape by design
+(`fail-build: false` + `severity-cutoff: high`). So findings surface in exactly
+two places: the Security tab, and the PR comment. Read the Security tab for "the
+scan found nothing", not the check status. Making findings *block* would mean
+adding `--error` **and** `always()` to the comment step (so the comment still
+posts when the scan step fails) — a deliberate policy change, not a default.
+
+**Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
+PR comments on `github.event.pull_request.head.repo.full_name ==
+github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
+`GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
+and with the uploads now blocking, an unguarded fork PR would turn the required
+**Semgrep Security Audit** check red on an outside contribution. The scan itself
+still runs on fork PRs; only the upload and the comment are skipped. Combined
+with the point above, that means a fork PR's findings produce **no in-PR signal
+at all** while the check stays green.
+
+**The fork guard must be scoped to `pull_request` events.** A bare
+`github.event.pull_request.head.repo.full_name == github.repository` looks like
+it only excludes forks, but `github.event.pull_request` is **null** on `push` and
+`schedule`, so the comparison evaluates false and the upload is skipped on every
+push to `main` — silently starving the Security tab, which is the exact failure
+the blocking change exists to prevent. The two upload steps therefore read:
+
+```yaml
+if: always() && <artifact check> && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+```
+
+The two PR-comment steps are already gated on `github.event_name ==
+'pull_request'` first, so the bare comparison short-circuits and needs no
+disjunction there. If you add a step that touches a PR-scoped permission, copy
+the disjunction form.
+
 ### Dependency vulnerability audits
 
 Two separate jobs, because they have different reliability:
@@ -220,5 +270,19 @@ When you add a major domain or change bootstrap/signal rules:
 3. Bump **Last updated** on edited harness docs when the edit changes policy, workflow, user-facing behavior, or canonical guidance; skip date churn for typo-only edits.
 4. Run `python scripts/check_repo_harness.py` and `python scripts/check_architecture_boundaries.py`; fix new failures before merge.
 5. When a baseline violation is intentionally refactored away, run `python scripts/check_architecture_boundaries.py --refresh-baseline` and review the removed line.
+6. **When you archive a plan** (`git mv` into `plans/completed/`), add one `../`
+   to every relative link in it. Moving the file down a level breaks all of them
+   at once, and `check_user_docs_links.py` deliberately excludes
+   `dev-docs/plans/` as historical record, so nothing else will flag it. The
+   coverage-boost archive in PR #170 broke ten links this way. Quick check:
+   ```bash
+   python - <<'EOF'
+   import re, pathlib
+   f = pathlib.Path("dev-docs/plans/completed/<PLAN>.md")
+   for m in re.finditer(r"\]\((\.\.?/[^)#\s]+)", f.read_text()):
+       if not (f.parent / m.group(1)).resolve().exists():
+           print("broken:", m.group(1))
+   EOF
+   ```
 
 Future improvements (not required today): autonomous doc-gardening bot, per-worktree launch script with observability hooks.
