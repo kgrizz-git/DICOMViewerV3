@@ -1,9 +1,14 @@
 # Plan: Raise Test Coverage (local SonarQube baseline)
 
-**Last updated:** 2026-08-03  
-**Status:** Active — Phases 1–4 complete; Phase 5 partial + deferred-dialog/high-miss slices; local Sonar remeasured (+7–8 pp line vs baseline). Hardened
-with explicit agent rules + recipes so a less-capable model can execute safely.  
-**Branch:** `test/coverage-boost` (at `origin/main`)  
+**Last updated:** 2026-09-30  
+**Status:** **Complete** — Phases 1–5 landed. The tests-only `test/coverage-boost` branch merged as
+**PR #43 (2026-08-04)**; subsequent feature work (LUT/transfer functions, tag tree, etc.) carried
+the number higher still. Final local pytest-cov measurement: **82.12%** with the repo's
+`.coveragerc` omits, **81.61%** with **no** omits at all (`main.py` + the five `main_app_*.py`
+mixins included) — so the CI `--cov-fail-under=80` floor is met even on the un-omitted set.
+Archived; the surviving follow-ups live in
+[`TO_DO.md`](../TO_DO.md#static-analysis) (`.coveragerc` omit lift, per-module safety nets).
+**Original branch:** `test/coverage-boost` — merged, branch deleted  
 **Source analysis:** `2026-08-01T03:04:41+0000`, revision
 `85366265af53ed23f1a79c6f2fc251c31c87be60`  
 **Dashboard:** `http://localhost:9000/dashboard?id=dicom-viewer-v3`
@@ -196,24 +201,19 @@ python scripts/report_local_sonarqube_issues.py \
 
 ## Phase 0 — Guardrails and measurement hygiene
 
-- [ ] Keep tests PHI-safe: no real DICOM/PII; use existing fixtures / synthetic
+- [x] Keep tests PHI-safe: no real DICOM/PII; use existing fixtures / synthetic
       datasets only ([`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md)).
-- [ ] Prefer thin Qt dialogs constructed with the `qapp` fixture + mocks over
+- [x] Prefer thin Qt dialogs constructed with the `qapp` fixture + mocks over
       full `MainWindow` boots (there is **no** `qtbot` in this repo — see Rules).
-- [ ] **`src/main.py` policy — default: option B (tests-only), but expect
-      little.** The entrypoint reads 0% because pytest never imports it.
-      **Do not `import main` under pytest** — that pulls in `MainWindow` and the
-      full heavy stack. The only cheap tests-only seam is the **module-level
-      early-exit** for the decoder-fixture flags (`--decoder-fixture-smoke` /
-      `--decoder-fixture-child`, near the top of `main.py`), best exercised with
-      a **subprocess** call, not a direct import. This will **not** clear
-      Sonar's ~996 uncovered `main.py` lines — so when scoring milestones,
-      mentally set `main.py` aside entirely. **Do NOT do option A here**
-      (excluding `**/main.py` edits `tools/sonarqube/sonar-project.properties`,
-      forbidden on this tests-only branch — Rule 1); option A is a **separate
-      chore PR** if the owner wants it.
-- [ ] After each merged slice on this branch, refresh local Sonar with
-      `--with-coverage` and record line/branch % in this plan’s progress notes.
+- [x] **`src/main.py` policy — option B (tests-only), as predicted.** No `src/`
+      extraction happened on the coverage branch. `main.py` reads **69%** today
+      (139 statements / 36 missed) because later work added tests that import it
+      directly; the original "pytest never imports the entrypoint" reading no
+      longer holds. The `.coveragerc` `src/main.py` omit is still in place and is
+      tracked separately in [`TO_DO.md`](../TO_DO.md#static-analysis).
+- [x] Coverage was refreshed with local Sonar after the merged slices (see the
+      progress table's 2026-08-02 row).
+
 
 ---
 
@@ -316,8 +316,8 @@ have at least one cancel path and one successful-accept path with mocked I/O.
 - [x] Coordinators with low cov: `text_annotation_coordinator`,
       `crosshair_coordinator`, `arrow_annotation_coordinator`,
       `slice_location_line_coordinator`
-- [ ] `layout_window_slot_controller` — **skipped** (needs `DICOMViewerApp` /
-      `MainWindow`; Rule 6/11). See Progress notes.
+- [x] `layout_window_slot_controller` — **skipped here** (needed `DICOMViewerApp` /
+      `MainWindow`; Rule 6/11), but later work covered it: it reads **100%** today.
 
 **Done when:** each touched tool module gains ≥15 absolute percentage points
 or clears its top public methods’ happy + one error path.
@@ -338,7 +338,10 @@ Core is ~81% overall; remaining holes are still worth targeted tests:
 - [x] Opportunistic deferred dialogs/widgets: `structured_report_browser_dialog`, `export_dialog`,
       `tag_export` presets, `fusion_controls_widget`, `overlay_manager`, `window_slot_map_widget`,
       `export_rendering` / `export_manager` helpers, `series_navigator` behavior slice
-- [ ] Opportunistic: `sr_document_tree`, `mpr_cache` / `mpr_volume` branches (existing coverage strong)
+- [x] Opportunistic: `sr_document_tree`, `mpr_cache` / `mpr_volume` branches
+      (existing coverage strong). `sr_document_tree` reads **93%**;
+      `mpr_cache` (61%) and `mpr_volume` (59%) remain the thinnest of this
+      group but are inside `src/core`, and the 80% project floor is met.
 
 **Done when:** fusion_handler and dicom_loader ≥55% line coverage; lifecycle
 controller has create/destroy/error characterization.
@@ -356,15 +359,23 @@ heavier fixtures.
 > only. If a module is genuinely untestable without a refactor, **skip it** and
 > note it in Progress notes for a future owner-approved refactor branch.
 
-| File | ~cov | ~miss | Approach (tests-only) |
-|------|-----:|------:|----------|
-| `image_viewer_input.py` | 16% | 551 | Drive existing public event handlers with synthesized `QMouseEvent`s; do **not** extract helpers |
-| `qa_app_facade.py` | 16% | 454 | Facade method tests with fake QA workers |
-| `main_window.py` | 56% | 425 | Only menu/action handlers with mocks; no full boot marathon |
-| `series_navigator.py` | 26% | 393 | **Partial:** `test_series_navigator_behavior_slice.py` (privacy/list/MPR/keys) |
-| `image_viewer_view.py` | 40% | 384 | View-state seams only |
-| `annotation_paste_handler.py` | 24% | 333 | Clipboard fake + paste/undo |
-| `mpr_controller.py` | 61% | 359 | Add tests only for its public methods; **ignore any `src/` extraction items** in older sonar-slice plans (Rule 1) |
+| File | ~cov at start | ~miss | Approach (tests-only) | cov today |
+|------|-----:|------:|----------|-----:|
+| `image_viewer_input.py` | 16% | 551 | Drive existing public event handlers with synthesized `QMouseEvent`s; do **not** extract helpers | **84%** |
+| `qa_app_facade.py` | 16% | 454 | Facade method tests with fake QA workers | **85%** |
+| `main_window.py` | 56% | 425 | Only menu/action handlers with mocks; no full boot marathon | **72%** |
+| `series_navigator.py` | 26% | 393 | **Partial:** `test_series_navigator_behavior_slice.py` (privacy/list/MPR/keys) | **84%** |
+| `image_viewer_view.py` | 40% | 384 | View-state seams only | **92%** |
+| `annotation_paste_handler.py` | 24% | 333 | Clipboard fake + paste/undo | **75%** |
+| `mpr_controller.py` | 61% | 359 | Add tests only for its public methods; **ignore any `src/` extraction items** in older sonar-slice plans (Rule 1) | **56%** |
+
+**Closeout note (2026-09-30):** every module in this table cleared its starting
+point by a wide margin, so the phase's premise — that these needed heavier
+fixtures than a tests-only branch could supply — turned out to be wrong.
+`image_viewer_input` and `qa_app_facade` went from the two worst-covered files in
+the repo to 84% / 85% without any `src/` extraction. `mpr_controller` is the only
+one that slipped (61% → 56%); the sink there is VTK- and dialog-driven reslice
+plumbing, and the follow-up belongs with the MPR work rather than here.
 
 **Explicitly out of scope for unit coverage:** full interactive drag/WL/cine
 loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
@@ -413,3 +424,20 @@ loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
 | 2026-08-01 | post-final-review | (pending re-measure) | Addressed Important findings: lifecycle focused-index assert; split layout_window_slot_controller checklist; arrow scene/visibility; histogram Slice label; export browse-cancel no-I/O paths. Full suite 3415 passed at `b9576df`. Sonar re-measure still pending. |
 | 2026-08-01 | `1f29082` | pytest-cov 63% (34,018 / 53,860) | Full re-measure: 3,418 passed, 19 skipped. Reaching 70% needs at least 3,684 additional covered statements before branch coverage; continue with high-yield behavior slices rather than superficial assertions. |
 | 2026-08-02 | `2e4e689` | **64.0% / 68.5% / 50.3%** | Local Sonar `--with-coverage` after Phase5+deferred slices (window_slot_map, overlay_manager, SR browser, series_navigator, fusion_controls, export_dialog, export_rendering helpers, tag_export presets, export_manager). Baseline was 56.6/60.5/44.7 (+7.4 / +8.0 / +5.6 pp). Suite 3459+ passed. |
+| 2026-08-04 | `693213b` | — | **PR #43 merged** — `test/coverage-boost` landed on `main`; branch deleted. Plan left "Active" pending a local-Sonar re-measure that never ran. |
+| 2026-09-30 | `3b91e21` (main) | **pytest-cov 82.12% / 81.61%** | **Closeout re-measurement** on `main` (`3b91e21`): 7001 passed, 15 skipped, 34.5 s. 82.12% with the repo `.coveragerc` omits; **81.61% with the omits removed entirely** (`main.py` + all five `main_app_*.py` mixins measured: 1079 statements, 455 missed). Phase 5's modules measured 56–92% (table above) — all far above their starting points. Plan archived; `.coveragerc` omit lift tracked in TO_DO. Local Sonar was **not** re-run for this row (it needs `SONAR_TOKEN` + the Community Build service), so the 56.6/60.5/44.7 Sonar baseline in this document is the last Sonar-side number — the pytest-cov figures above are the current truth. |
+
+---
+
+## Follow-ups that outlived this plan
+
+Recorded in [`TO_DO.md`](../TO_DO.md#static-analysis) rather than kept here:
+
+1. **Lift the `.coveragerc` omit** for `src/main_app_*.py` (and decide on
+   `src/main.py`). The floor now holds without the omit, but headroom is only
+   ~1.6 pp on the un-omitted set, so add safety-net/facade tests for the four
+   thin mixins (`main_app_subwindow_management` 35%, `main_app_tag_roi` 35%,
+   `main_app_ui_and_files` 47%, `main_app_display_settings` 58%) first.
+2. **Sub-50% stragglers** at closeout: `volume/legacy_surface.py` 22%,
+   `core/loader_worker.py` 43%, `tools/angle_measurement_items.py` 47%,
+   `utils/config/layout_config.py` 48%, `gui/window_slot_map_widget.py` 49%.
