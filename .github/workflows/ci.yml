@@ -511,10 +511,9 @@ jobs:
         # schedule `github.event.pull_request` is null, and comparing a null
         # property to `github.repository` yields false, which would skip the
         # upload on every push to main and silently starve the Security tab.
-        # The scan step still runs on fork PRs. Note it does NOT go red on
-        # findings: `semgrep scan` exits 0 unless it cannot run (the step maps
-        # exit 2 to a hard failure), so findings surface only via the Security
-        # tab and the PR comment. See HARNESS.md §Code scanning.
+        # The scan step goes red on findings (`--error`). On a fork PR both the
+        # upload and the PR comment are skipped, so a fork finding surfaces only
+        # in the job log. See HARNESS.md §Code scanning.
         if: always() && hashFiles('semgrep.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           sarif_file: semgrep.sarif

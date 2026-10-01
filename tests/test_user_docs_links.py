@@ -562,6 +562,36 @@ class TestPlanTreePolicy(unittest.TestCase):
             self.assertIn("Advisory only", proc.stderr)
             self.assertIn("broken link", proc.stderr)
 
+    def test_advisory_mode_actually_covers_the_changelog(self) -> None:
+        """The flag documents CHANGELOG.md coverage, so it must scan it.
+
+        ``_is_excluded`` only *demotes* a file; it never introduces one. Without
+        an explicit add, the flag claimed coverage of the historical set while
+        never passing CHANGELOG.md to the scanner - the same reads-as-configured
+        -while-doing-nothing shape the flag is meant to avoid.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            self._tree(tmp)
+            (tmp / "CHANGELOG.md").write_text(
+                "## 1.0.0\n\nSee [gone](dev-docs/NO_SUCH_FILE.md).\n"
+            )
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("Advisory only", proc.stderr)
+            self.assertIn("CHANGELOG.md", proc.stderr)
+
+    def test_changelog_is_not_scanned_in_blocking_mode(self) -> None:
+        """CHANGELOG rot must never block a merge."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            self._tree(tmp)
+            (tmp / "CHANGELOG.md").write_text(
+                "## 1.0.0\n\nSee [gone](dev-docs/NO_SUCH_FILE.md).\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_advisory_mode_still_blocks_broken_links_in_active_plans(self) -> None:
         """Asking for advisory output must not downgrade the live tree to a warning."""
         with tempfile.TemporaryDirectory() as d:

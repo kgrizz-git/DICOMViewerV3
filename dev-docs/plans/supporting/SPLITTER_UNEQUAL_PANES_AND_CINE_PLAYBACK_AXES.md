@@ -47,7 +47,7 @@ So the checklist item targets **intra–image-grid** proportions (e.g. one large
 
 ### Out of scope / follow-ups
 
-- **Subdividing a single subwindow into tiles** is a separate, heavier item (see [`plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md`](../../plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md) if present).
+- **Subdividing a single subwindow into tiles** is a separate, heavier item (see [`dev-docs/plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md`](../../plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md) if present).
 - **Preset asymmetric layouts** (e.g. one large + two small) overlaps with other TO_DO items about fixed templates; draggable splitters give users **continuous** control without defining every template.
 
 ---
@@ -120,7 +120,7 @@ Optional later:
 1. **Refactor advance logic** out of a single `_advance_frame` into a strategy or small functions keyed by mode (keeps `CinePlayer` testable).
 2. **Align slider and labels** with the active mode: e.g. “Frame 3/14 (slice 7/120)” or dual readouts—requires knowing **group index** + **index within group** from [`slice_grouping.py`](../../../src/core/slice_grouping.py).
 3. **Loop bounds:** decide whether A–B loop applies to **linear index** only or also to **frame-only** sub-ranges (document choice).
-4. **Cine export / video** ([`src/core/cine_video_export.py`](../../../src/gui/cine_video_export.py)): ensure exported frame sequence matches the selected mode (or warn “export uses full linear order”).
+4. **Cine export / video** ([`src/gui/cine_video_export.py`](../../../src/gui/cine_video_export.py)): ensure exported frame sequence matches the selected mode (or warn “export uses full linear order”).
 5. **Tests:** synthetic multi-frame series in `tests/` verifying each mode’s index sequence.
 
 ### Feasibility and difficulty

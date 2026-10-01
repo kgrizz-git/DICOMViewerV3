@@ -132,6 +132,15 @@ def iter_markdown_files(
         candidate = repo_root / rel
         if candidate.is_file():
             paths.append(candidate)
+    if include_completed_plans:
+        # The advisory mode is documented as covering the historical set, and
+        # CHANGELOG.md is part of it (same rationale: released entries describe
+        # the tree as it was). It has to be *added* here — `_is_excluded` only
+        # demotes a file, it never introduces one, so without this the flag
+        # claimed coverage it did not have.
+        changelog = repo_root / "CHANGELOG.md"
+        if changelog.is_file():
+            paths.append(changelog)
     return sorted(set(paths))
 
 

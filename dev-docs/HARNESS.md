@@ -134,20 +134,24 @@ their alerts gate the merge independently of any exit code:
 ]
 ```
 
-**`alerts_threshold` is the operative knob for Semgrep, not
-`security_alerts_threshold`.** GitHub classifies an alert as *security* only when
-its rule carries a `security-severity` value or a CWE tag. Measured 2026-10-01
-against Semgrep's own SARIF for these four rulesets: **0 of 729 rules carry
-`security-severity` and 0 carry a CWE tag**, so every Semgrep alert is a default
-(quality) alert. A Semgrep entry carrying only `security_alerts_threshold` would
-match **nothing** — reading as configured while enforcing nothing, which is the
-exact silent-no-op failure this document keeps warning about.
-`alerts_threshold: "errors"` is what covers Semgrep's 233 error-level rules
-(double-free, XXE, SQLi, weak RNG, dockerfile-user, and so on).
-`security_alerts_threshold: "high_or_higher"` is kept to mirror CodeQL so it
-starts working if Semgrep ever emits `security-severity`; **do not drop
-`alerts_threshold` as redundant** — without it, Semgrep enforcement silently
-disappears.
+**`alerts_threshold` is set deliberately and must not be dropped.** Measured
+2026-10-01 against Semgrep's own SARIF for these four rulesets: **0 of 729 rules
+carry `security-severity`**, while all 729 carry a `CWE-NNN: …` tag and a bare
+`security` tag. GitHub derives code-scanning *alert severity* from
+`security-severity`, which Semgrep OSS does not emit, so `alerts_threshold` is
+the knob that covers its 233 error-level rules (double-free, XXE, SQLi, weak RNG,
+dockerfile-user, and so on). `security_alerts_threshold: "high_or_higher"` is
+retained to mirror CodeQL and to start working if Semgrep ever emits
+`security-severity`.
+
+**How GitHub splits alerts into "security" versus "quality" for a tool that
+carries CWE tags but no `security-severity` was not independently verified** — do
+not assume either way. The configuration above is deliberately set on **both**
+thresholds precisely so enforcement does not depend on that answer: whichever
+bucket a Semgrep alert lands in, one of the two entries covers it at `errors`.
+Removing `alerts_threshold` on the theory that `security_alerts_threshold` makes
+it redundant would remove enforcement in the case where alerts are bucketed as
+quality — the same silent-no-op shape this section exists to prevent.
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==

@@ -179,7 +179,7 @@ Example sections: `Mouse Mode Tools`, `Privacy`, `View Controls`, `Series Naviga
 **Priority:** P1  
 **Key files:**
 - [src/gui/image_viewer.py](../../../src/gui/image_viewer.py) — `mousePressEvent`, `mouseMoveEvent`, `mouseReleaseEvent`
-- [src/core/view_state_manager.py](../../../src/gui/view_state_manager.py) — `handle_window_level_drag`, `handle_right_mouse_press_for_drag`
+- [src/gui/view_state_manager.py](../../../src/gui/view_state_manager.py) — `handle_window_level_drag`, `handle_right_mouse_press_for_drag`
 - [src/utils/config/display_config.py](../../../src/utils/config/display_config.py) — if a config option is needed
 
 ### Current state
@@ -218,8 +218,8 @@ If item 3 remains a documentation-only change, this conflict largely disappears.
 **Key files:**
 - [src/core/dicom_pixel_stats.py](../../../src/core/dicom_pixel_stats.py) — pixel range utilities
 - [src/core/dicom_window_level.py](../../../src/core/dicom_window_level.py) — `get_window_level_from_dataset`
-- [src/core/view_state_manager.py](../../../src/gui/view_state_manager.py) — `set_series_pixel_range`, `get_series_pixel_range`
-- [src/core/slice_display_manager.py](../../../src/gui/slice_display_manager.py) — where `set_series_pixel_range` is called
+- [src/gui/view_state_manager.py](../../../src/gui/view_state_manager.py) — `set_series_pixel_range`, `get_series_pixel_range`
+- [src/gui/slice_display_manager.py](../../../src/gui/slice_display_manager.py) — where `set_series_pixel_range` is called
 - [src/gui/window_level_controls.py](../../../src/gui/window_level_controls.py) — (likely) W/L spinboxes / slider
 - Possibly [src/gui/image_viewer.py](../../../src/gui/image_viewer.py) — context menu entry for "Full Range"
 
