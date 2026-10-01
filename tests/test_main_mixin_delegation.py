@@ -381,66 +381,67 @@ def test_on_undo_requested_without_available_undo_is_a_no_op() -> None:
     stub._update_roi_list.assert_not_called()
 
 
+def _compound_allow_list() -> dict[str, set[str]]:
+    """Return the mixin methods characterized individually, per mixin class.
+
+    Only methods whose body does more than forward belong here: a single-statement
+    forward must live in a case table so its delegate is pinned.
+    ``test_compound_allow_list_only_contains_genuinely_compound_methods`` enforces that.
+    """
+    return {
+    "UIHandlersMixin": {
+        "_on_undo_requested",
+        "_on_redo_requested",
+        "_on_study_index_after_load",
+        "_on_assign_series_requested",
+        "_on_keyboard_shortcuts_requested",
+        "_on_scroll_wheel_mode_changed",
+    },
+    "TagEditingMixin": {
+        "_on_tag_edited",
+        "_undo_tag_edit",
+        "_redo_tag_edit",
+        "_update_undo_redo_state",
+        "_refresh_tag_ui",
+    },
+    "ROIWorkflowMixin": {"_keyboard_delete_roi", "_delete_all_rois_current_slice"},
+    "DisplayProjectionMixin": {
+        "_schedule_histogram_wl_only",
+        "_do_update_histogram_wl_only",
+    },
+    "SubwindowManagementMixin": {
+        "_create_managers_for_subwindow",
+        "_refresh_slice_sync_group_indicators",
+        "_sync_navigation_slider_for_subwindow",
+        "_update_focused_subwindow_references",
+        "has_shown_fusion_notification",
+        "mark_fusion_notification_shown",
+        "_redisplay_subwindow_slice",
+        "_reset_fusion_handler_for_subwindow",
+        "_reset_fusion_for_all_subwindows",
+        "_get_rescale_params",
+        "_get_subwindow_rescale_params",
+        "_on_focused_subwindow_changed",
+        "_update_histogram_for_focused_subwindow",
+        "_do_update_histogram_for_focused_subwindow",
+        "_get_thumbnail_for_view",
+    },
+    "MPRNavigationMixin": {
+        "_on_mpr_thumbnail_clicked",
+        "_on_mpr_assign_requested",
+        "_on_mpr_clear_from_navigator_thumbnail",
+        "_get_subwindow_mpr_output_pixel_spacing",
+    },
+}
+
+
 def test_every_mixin_method_has_a_coverage_route() -> None:
     """Guard the guard: a new delegating mixin method must be added to a table here.
 
     Only one-line forwards are required. Methods with a real body (conditionals, loops,
     local computation) are covered by their own tests and are allow-listed below.
     """
-    compound = {
-        "UIHandlersMixin": {
-            "_on_undo_requested",
-            "_on_redo_requested",
-            "_on_study_index_after_load",
-            "_on_assign_series_requested",
-            "_on_keyboard_shortcuts_requested",
-            "_on_context_menu_mouse_mode_changed",
-            "_on_context_menu_scroll_wheel_mode_changed",
-            "_on_scroll_wheel_mode_changed",
-        },
-        "TagEditingMixin": {
-            "_on_tag_edited",
-            "_undo_tag_edit",
-            "_redo_tag_edit",
-            "_update_undo_redo_state",
-            "_refresh_tag_ui",
-        },
-        "ROIWorkflowMixin": {"_keyboard_delete_roi", "_delete_all_rois_current_slice"},
-        "DisplayProjectionMixin": {
-            "_schedule_histogram_wl_only",
-            "_do_update_histogram_wl_only",
-        },
-        "SubwindowManagementMixin": {
-            "_build_managers_for_subwindow",
-            "_create_managers_for_subwindow",
-            "_refresh_slice_sync_group_indicators",
-            "_sync_navigation_slider_for_subwindow",
-            "_update_focused_subwindow_references",
-            "has_shown_fusion_notification",
-            "mark_fusion_notification_shown",
-            "_redisplay_subwindow_slice",
-            "_reset_fusion_handler_for_subwindow",
-            "_clear_subwindow",
-            "_reset_focused_subwindow_state_after_close",
-            "_on_clear_subwindow_content_requested",
-            "_close_series",
-            "_close_study",
-            "_reset_fusion_for_all_subwindows",
-            "_handle_load_first_slice",
-            "_get_rescale_params",
-            "_get_subwindow_rescale_params",
-            "_on_focused_subwindow_changed",
-            "_update_histogram_for_focused_subwindow",
-            "_do_update_histogram_for_focused_subwindow",
-            "_get_thumbnail_for_view",
-        },
-        "MPRNavigationMixin": {
-            "_on_mpr_thumbnail_clicked",
-            "_on_mpr_assign_requested",
-            "_on_mpr_clear_from_navigator_thumbnail",
-            "_get_subwindow_mpr_output_pixel_spacing",
-        },
-    }
+    compound = _compound_allow_list()
     covered = {f"{c.mixin_class}.{c.method}" for c in HANDLER_CASES}
     covered |= {f"{c.mixin_class}.{c.method}" for c in LAYOUT_HANDLER_CASES}
     covered |= {f"{c.mixin_class}.{c.method}" for c in COLLABORATOR_CASES}
@@ -449,8 +450,7 @@ def test_every_mixin_method_has_a_coverage_route() -> None:
         for name, methods in {
             "UIHandlersMixin": {
                 "_on_scroll_wheel_mode_changed",
-                "_on_context_menu_scroll_wheel_mode_changed",
-                "_on_undo_requested",
+                    "_on_undo_requested",
                 "_on_redo_requested",
             },
             "SubwindowManagementMixin": {
@@ -486,3 +486,50 @@ def test_every_mixin_method_has_a_coverage_route() -> None:
         if gaps:
             uncovered[mixin_name] = gaps
     assert uncovered == {}, f"mixin methods with no coverage route: {uncovered}"
+
+
+def test_compound_allow_list_only_contains_genuinely_compound_methods() -> None:
+    """The ``compound`` allow-list must not become a hiding place for pure forwards.
+
+    The route guard above treats an allow-listed name as covered, so a one-line
+    forward parked there would never be pinned to its delegate — the exact gap
+    this net exists to close. Verify each allow-listed method really does do
+    something beyond the forward, by inspecting its AST rather than trusting the
+    list.
+
+    "Pure forward" means a single statement that is a bare call (optionally
+    returned) with no branching anywhere inside it. A single ``if``/``try`` is
+    still compound behaviour, and a plain accessor (``return a in b``) is not a
+    delegation at all, so neither is flagged.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    _BRANCHING = (ast.If, ast.Try, ast.For, ast.While, ast.BoolOp, ast.IfExp, ast.comprehension)
+
+    allow_listed = {
+        (mixin_name, method)
+        for mixin_name, methods in _compound_allow_list().items()
+        for method in methods
+    }
+    assert allow_listed, "allow-list unexpectedly empty"
+
+    pure_forwards: list[str] = []
+    for mixin_name, method in sorted(allow_listed):
+        source = textwrap.dedent(inspect.getsource(getattr(_mixin_class(mixin_name), method)))
+        body = [
+            stmt
+            for stmt in ast.parse(source).body[0].body
+            if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant))
+        ]
+        if len(body) > 1 or any(isinstance(n, _BRANCHING) for n in ast.walk(ast.Module(body=body, type_ignores=[]))):
+            continue  # genuinely compound
+        call = body[0].value if isinstance(body[0], ast.Expr) else getattr(body[0], "value", None)
+        if isinstance(call, ast.Call):
+            pure_forwards.append(f"{mixin_name}.{method}")
+
+    assert pure_forwards == [], (
+        "these allow-listed methods are single-call forwards and belong in a case "
+        f"table instead: {pure_forwards}"
+    )

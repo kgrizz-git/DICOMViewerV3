@@ -211,16 +211,19 @@ def test_on_tag_edited_refreshes_panel_and_open_viewer() -> None:
     dialog.parser._tag_cache.clear.assert_called_once_with()
     dialog._populate_tags.assert_called_once_with("Modality")
     stub._update_undo_redo_state.assert_called_once_with()
-    assert panel is stub.metadata_panel
+    # The metadata panel is refreshed through its controller, not by clearing its
+    # own cache here - that asymmetry is deliberate (see ``_refresh_tag_ui``).
+    panel.parser._tag_cache.clear.assert_not_called()
 
 
 def test_on_tag_edited_skips_the_viewer_when_it_is_closed() -> None:
-    """With no tag-viewer dialog open there is nothing to invalidate there."""
-    stub, _controller, _panel, coordinator = _tag_edit_stub(dialog=None)
+    """With no tag-viewer dialog open the panel still refreshes and nothing raises."""
+    stub, controller, _panel, _coordinator = _tag_edit_stub(dialog=None)
 
     stub._on_tag_edited("(0010,0010)", "NEW")
 
-    assert coordinator.tag_viewer_dialog is None
+    # The edit must not be swallowed just because the optional viewer is closed.
+    controller.refresh_panel_tags.assert_called_once_with("Patient")
     stub._update_undo_redo_state.assert_called_once_with()
 
 

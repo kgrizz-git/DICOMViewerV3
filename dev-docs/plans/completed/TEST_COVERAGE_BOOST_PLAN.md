@@ -369,13 +369,14 @@ heavier fixtures.
 | `annotation_paste_handler.py` | 24% | 333 | Clipboard fake + paste/undo | **75%** |
 | `mpr_controller.py` | 61% | 359 | Add tests only for its public methods; **ignore any `src/` extraction items** in older sonar-slice plans (Rule 1) | **56%** |
 
-**Closeout note (2026-09-30):** every module in this table cleared its starting
-point by a wide margin, so the phase's premise — that these needed heavier
-fixtures than a tests-only branch could supply — turned out to be wrong.
+**Closeout note (2026-09-30):** six of the seven modules in this table cleared
+their starting point by a wide margin, so the phase's premise — that these needed
+heavier fixtures than a tests-only branch could supply — turned out to be wrong.
 `image_viewer_input` and `qa_app_facade` went from the two worst-covered files in
-the repo to 84% / 85% without any `src/` extraction. `mpr_controller` is the only
-one that slipped (61% → 56%); the sink there is VTK- and dialog-driven reslice
-plumbing, and the follow-up belongs with the MPR work rather than here.
+the repo to 84% / 85% without any `src/` extraction. `mpr_controller` is the
+exception and it **regressed**, 61% → 56%: the sink there is VTK- and
+dialog-driven reslice plumbing, and the follow-up belongs with the MPR work
+rather than here.
 
 **Explicitly out of scope for unit coverage:** full interactive drag/WL/cine
 loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.

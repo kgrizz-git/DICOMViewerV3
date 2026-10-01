@@ -75,6 +75,27 @@ COLLABORATOR_CASES: tuple[CollaboratorCase, ...] = (
     CollaboratorCase("UIHandlersMixin", "_on_mouse_mode_changed", "mouse_mode_handler", "handle_mouse_mode_changed", ("pan",)),
     CollaboratorCase("UIHandlersMixin", "_set_mouse_mode", "mouse_mode_handler", "set_mouse_mode", ("roi",)),
     CollaboratorCase("UIHandlersMixin", "_on_arrow_key_pressed", "slice_display_manager", "handle_arrow_key_pressed", (-1,)),
+    CollaboratorCase(
+        "UIHandlersMixin",
+        "_on_context_menu_mouse_mode_changed",
+        "mouse_mode_handler",
+        "handle_context_menu_mouse_mode_changed",
+        ("pan",),
+    ),
+    CollaboratorCase(
+        "UIHandlersMixin",
+        "_on_context_menu_scroll_wheel_mode_changed",
+        "mouse_mode_handler",
+        "handle_context_menu_scroll_wheel_mode_changed",
+        ("slice",),
+    ),
+    CollaboratorCase(
+        "SubwindowManagementMixin",
+        "_handle_load_first_slice",
+        "_file_series_coordinator",
+        "handle_load_first_slice",
+        ({"1.2": {"1.2.3": {}}},),
+    ),
     CollaboratorCase("FileOperationsMixin", "_open_export", "_export_app_facade", "open_export", ()),
     CollaboratorCase(
         "FileOperationsMixin",
@@ -403,6 +424,28 @@ COLLABORATOR_CASES: tuple[CollaboratorCase, ...] = (
 
 #: SubwindowManagementMixin / MPRNavigationMixin forwards into layout + MPR helpers.
 LAYOUT_HANDLER_CASES: tuple[HandlerCase, ...] = (
+    # --- SubwindowManagementMixin -> manager factory / session reset / study nav ---
+    HandlerCase(
+        "SubwindowManagementMixin",
+        "_build_managers_for_subwindow",
+        "build_managers_for_subwindow",
+        (1, object()),
+    ),
+    HandlerCase("SubwindowManagementMixin", "_clear_subwindow", "clear_subwindow", (2,)),
+    HandlerCase(
+        "SubwindowManagementMixin",
+        "_reset_focused_subwindow_state_after_close",
+        "reset_focused_subwindow_state_after_close",
+        (),
+    ),
+    HandlerCase(
+        "SubwindowManagementMixin",
+        "_on_clear_subwindow_content_requested",
+        "clear_subwindow_content",
+        (2,),
+    ),
+    HandlerCase("SubwindowManagementMixin", "_close_series", "close_series", ("1.2", "1.2.3")),
+    HandlerCase("SubwindowManagementMixin", "_close_study", "close_study", ("1.2",)),
     HandlerCase(
         "SubwindowManagementMixin",
         "_ensure_all_subwindows_have_managers",
