@@ -5,22 +5,35 @@ code paths pointing into src/.
 
 Blocking coverage is user-docs/, the root README.md and ARCHITECTURE.md,
 AGENTS.md, the top level of dev-docs/, dev-docs/info/, and the **active** plan
-tree (dev-docs/plans/*.md and dev-docs/plans/supporting/*.md). Active plans are
+tree (dev-docs/plans/*.md and dev-docs/plans/supporting/**/*.md). Active plans are
 live work documents that someone is implementing from right now, so a broken
 link in one is a real defect.
 
-``dev-docs/plans/completed/`` is deliberately excluded. A completed plan
-describes the tree as it was when it was written, so a link to a file that was
-later renamed is an *accurate* record rather than a defect; repairing those would
-rewrite history to match a present the plan never described. CHANGELOG.md is
-excluded for the same reason - released entries name modules that have since
-moved.
+Historical material is deliberately excluded, in three groups: completed plans,
+the dated files in ``HISTORICAL_RECORD_FILES``, and the generated-assessment
+directories in ``SNAPSHOT_SUBDIRS``. All three describe the tree as it was when
+they were written, so a link to a file later renamed is an *accurate* record
+rather than a defect; repairing those would rewrite history to match a present
+the document never described.
 
-Because the exclusion hides a whole subtree, ``--include-completed-plans`` makes
-it visible: that mode reports rot in completed plans as **advisory** output and
-still exits 0, so the debt can be measured without becoming a gate. It is a
-report, not a policy change; a 40-link backlog in historical records is expected
-and is not a failure.
+``MAINTENANCE_LOG.md`` is in that set on specific evidence rather than a general
+claim about logs: its references to ``grype.yml``/``semgrep.yml`` appear inside
+the entry that documents the workflow consolidation, in the sentence explaining
+that the old backlog item named files "which no longer exist". Those are
+deliberate back-references. The forward-looking cost is accepted knowingly --
+that file is appended to on most PRs, so a newly written entry naming a
+nonexistent workflow is advisory rather than blocking, exactly as for
+``CHANGELOG.md``.
+
+Because the exclusion hides whole subtrees, ``--include-completed-plans`` makes
+them visible: that mode reports historical rot as **advisory** output and still
+exits 0, so the debt can be measured without becoming a gate. It is a report,
+not a policy change; a large backlog in historical records is expected and is
+not a failure.
+
+Note that the snapshot directories are scanned *and* advisory. Outside the
+scanned set entirely, a reviewer cannot distinguish "checked and clean" from
+"never looked at", which is a worse failure than measurable debt.
 
 Two checks run over the covered files:
 
@@ -68,8 +81,13 @@ LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 # Note the deliberate limit: a name written as inline code is read as a claim that
 # the file exists *now*. Prose proposing a file to create ("add `src/my_thing.py`")
 # will be flagged. Write such names as a directory, a glob, or plain prose.
-SRC_PATH_PATTERN = re.compile(
-    r"`(src/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)(?::\d+(?:[-,]\d+)*)?`"
+#: Inline paths to code a plan may legitimately *propose* and therefore not yet
+#: have. ``scripts/`` and ``tests/`` belong here for the same reason ``src/`` does:
+#: ``AGENTS.md`` and the plans routinely name a gate script or a test file as work
+#: still to be written, so plan-exempting them is what keeps the gate green.
+CODE_PATH_PATTERN = re.compile(
+    r"`((?:src|scripts|tests)/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)"
+    r"(?::\d+(?:[-,]\d+)*)?`"
 )
 # Well-known repository files named as inline code. A doc that says
 # ``.github/workflows/grype.yml`` is asserting that file exists now, exactly as
@@ -83,7 +101,7 @@ KNOWN_REPO_PATH_PATTERN = re.compile(
     r"`((?:\.github/workflows/[\w.-]+\.ya?ml"
     r"|requirements[-\w]*\.txt"
     r"|pytest\.ini|ruff\.toml|\.coveragerc"
-    r"|[\w-]+\.githooks/[\w.-]+)"
+    r"|\.githooks/[\w.-]+)"
     r")(?::\d+)?`"
 )
 # Absolute GitHub blob links under user-docs/ must share GITHUB_BLOB_BASE.
@@ -103,6 +121,19 @@ def _completed_plans_root(repo_root: Path) -> Path:
 #: to a since-renamed file is an accurate record rather than rot, and "fixing" it
 #: would rewrite the past. ``MAINTENANCE_LOG.md`` is a dated log by the repo's own
 #: convention; ``SECURITY_IMPLEMENTATION_SUMMARY.md`` is a dated, completed summary.
+#: Dated generated-assessment directories under ``dev-docs/``. Scanned, but
+#: advisory only. ``templates-generalized/`` is included here because it is a
+#: template rather than a snapshot, but it is not a *living* doc: the refs it
+#: carries are illustrative examples in fenced code blocks that agents copy when
+#: generating a scan, so its current text is a worked example, not a live claim.
+SNAPSHOT_SUBDIRS = (
+    "safety-scans",
+    "security-assessments",
+    "doc-assessments",
+    "refactor-assessments",
+    "templates-generalized",
+)
+
 HISTORICAL_RECORD_FILES = (
     "CHANGELOG.md",
     "dev-docs/MAINTENANCE_LOG.md",
@@ -115,7 +146,71 @@ def _is_excluded(candidate: Path, repo_root: Path) -> bool:
     resolved = candidate.resolve()
     if resolved.is_relative_to(_completed_plans_root(repo_root)):
         return True
+    for subdir in SNAPSHOT_SUBDIRS:
+        if resolved.is_relative_to(repo_root / "dev-docs" / subdir):
+            return True
     return resolved in {(repo_root / rel).resolve() for rel in HISTORICAL_RECORD_FILES}
+
+
+def _markdown_under(directory: Path, recursive: bool = True) -> list[Path]:
+    """Markdown files in *directory*, empty when it does not exist."""
+    if not directory.is_dir():
+        return []
+    return sorted(directory.rglob("*.md") if recursive else directory.glob("*.md"))
+
+
+def _active_plan_files(repo_root: Path) -> list[Path]:
+    """Live plan documents: the top level plus supporting/ recursively.
+
+    Recursive because ``supporting/research/`` holds live analysis, and a
+    non-recursive glob silently hid a stale workflow reference there.
+    """
+    plans_root = repo_root / "dev-docs" / "plans"
+    return [
+        *_markdown_under(plans_root, recursive=False),
+        *_markdown_under(plans_root / "supporting"),
+    ]
+
+
+def _living_dev_doc_files(repo_root: Path) -> list[Path]:
+    """Top-level dev docs plus ``info/``, minus historical records.
+
+    Resolved before excluding so a symlink under ``dev-docs/`` cannot pull
+    excluded content back in.
+    """
+    found: list[Path] = []
+    for subdir in ("dev-docs", "dev-docs/info"):
+        for candidate in _markdown_under(repo_root / subdir, recursive=False):
+            if not _is_excluded(candidate, repo_root):
+                found.append(candidate)
+    return found
+
+
+def _root_doc_files(repo_root: Path) -> list[Path]:
+    return [
+        candidate
+        for rel in ("README.md", "ARCHITECTURE.md", "AGENTS.md")
+        if (candidate := repo_root / rel).is_file()
+    ]
+
+
+def _historical_files(repo_root: Path) -> list[Path]:
+    """Everything the advisory pass adds: completed plans, dated records, snapshots.
+
+    ``_is_excluded`` only *drops* a file from the candidate list; it never
+    introduces one. So the flag has to add the historical set back explicitly --
+    otherwise it claims coverage it does not have, which is the same
+    reads-as-configured-while-doing-nothing shape it exists to avoid.
+    """
+    found: list[Path] = _markdown_under(repo_root / "dev-docs" / "plans" / "completed", recursive=False)
+    found.extend(
+        candidate
+        for rel in HISTORICAL_RECORD_FILES
+        if (candidate := repo_root / rel).is_file()
+    )
+    for subdir in SNAPSHOT_SUBDIRS:
+        found.extend(_markdown_under(repo_root / "dev-docs" / subdir))
+    return found
 
 
 def iter_markdown_files(
@@ -124,58 +219,52 @@ def iter_markdown_files(
     """Markdown files to validate.
 
     Blocking set: user docs, the living dev docs, and the **active** plan tree
-    (``dev-docs/plans/*.md`` plus ``dev-docs/plans/supporting/*.md``).
-    ``dev-docs/plans/completed/`` and ``CHANGELOG.md`` are excluded because they
-    describe the tree as it was; pass ``include_completed_plans=True`` to include
-    them in an advisory pass.
+    (``dev-docs/plans/*.md`` plus ``dev-docs/plans/supporting/**/*.md``).
+    Historical material -- ``dev-docs/plans/completed/``, the dated files in
+    ``HISTORICAL_RECORD_FILES``, and the generated-assessment directories in
+    ``SNAPSHOT_SUBDIRS`` -- is excluded because it describes the tree as it was;
+    pass ``include_completed_plans=True`` to include it in an advisory pass.
+
+    NB: ``SNAPSHOT_SUBDIRS`` are deliberately not added to the blocking set. They
+    are advisory -- a dated generated assessment, not a living claim -- so they
+    belong to the advisory pass alone. Adding them unconditionally made the
+    default run report them while the flag's help claimed it was what brought
+    them in; code and documented contract have to agree.
     """
-    paths: list[Path] = []
-    user_docs = repo_root / "user-docs"
-    if user_docs.is_dir():
-        paths.extend(sorted(user_docs.rglob("*.md")))
-    plans_root = repo_root / "dev-docs" / "plans"
-    if plans_root.is_dir():
-        # Active plans: the top level and supporting/. These are live documents.
-        paths.extend(sorted(plans_root.glob("*.md")))
-        supporting = plans_root / "supporting"
-        if supporting.is_dir():
-            paths.extend(sorted(supporting.glob("*.md")))
-        if include_completed_plans:
-            completed = plans_root / "completed"
-            if completed.is_dir():
-                paths.extend(sorted(completed.glob("*.md")))
-    # Living dev docs. Resolve before excluding so a symlink in dev-docs/ cannot
-    # pull excluded content back in.
-    for subdir in ("dev-docs", "dev-docs/info"):
-        directory = repo_root / subdir
-        if not directory.is_dir():
-            continue
-        for candidate in sorted(directory.glob("*.md")):
-            if _is_excluded(candidate, repo_root):
-                continue
-            paths.append(candidate)
-    for rel in ("README.md", "ARCHITECTURE.md", "AGENTS.md"):
-        candidate = repo_root / rel
-        if candidate.is_file():
-            paths.append(candidate)
+    paths = [
+        *_markdown_under(repo_root / "user-docs"),
+        *_active_plan_files(repo_root),
+        *_living_dev_doc_files(repo_root),
+        *_root_doc_files(repo_root),
+    ]
     if include_completed_plans:
-        # The advisory mode is documented as covering the historical set, and that
-        # set is completed plans plus the dated records in
-        # ``HISTORICAL_RECORD_FILES``. They have to be *added* here:
-        # ``_is_excluded`` only drops a file from the candidate list, it never
-        # introduces one, so without this the flag would claim coverage it does
-        # not have — the same reads-as-configured-while-doing-nothing shape it
-        # exists to avoid.
-        for rel in HISTORICAL_RECORD_FILES:
-            candidate = repo_root / rel
-            if candidate.is_file():
-                paths.append(candidate)
+        paths.extend(_historical_files(repo_root))
     return sorted(set(paths))
 
 
 def is_historical_record(md_path: Path, repo_root: Path) -> bool:
-    """True when a file is in the advisory-only set (completed plans, CHANGELOG)."""
+    """True when a file is in the advisory-only historical set."""
     return _is_excluded(md_path, repo_root)
+
+
+def is_proposal_bearing_document(md_path: Path, repo_root: Path) -> bool:
+    """True for documents that legitimately name code that does not exist yet.
+
+    A plan proposes a module; the active backlog and the future-work notes do the
+    same in prose. A ``TO_DO.md`` item reading "Add a
+    `scripts/check_file_line_counts.py` + CI step", or a ``FUTURE_WORK`` note saying
+    a registration "must be generated dynamically" by a named script, is a
+    *proposal*, not a broken reference. Treating those as rot would make the gate
+    permanently red for a reason no edit can fix -- the identical failure the plan
+    exemption exists to avoid.
+    """
+    if is_plan_document(md_path, repo_root):
+        return True
+    # Forward-looking documents by name as well as by content.
+    for rel in ("dev-docs/TO_DO.md", "dev-docs/FUTURE_WORK_DETAIL_NOTES.md"):
+        if md_path.resolve() == (repo_root / rel).resolve():
+            return True
+    return False
 
 
 def is_plan_document(md_path: Path, repo_root: Path) -> bool:
@@ -183,7 +272,7 @@ def is_plan_document(md_path: Path, repo_root: Path) -> bool:
 
     Plans get relative-link checking but not the inline ``src/...py`` existence
     check, because a plan may name a module it intends to create. See
-    :func:`check_src_paths` for that contract.
+    :func:`check_code_paths` for that contract.
     """
     plans_root = (repo_root / "dev-docs" / "plans").resolve()
     try:
@@ -213,15 +302,19 @@ def exists_with_exact_case(repo_root: Path, relative: str) -> bool:
     return current.is_file()
 
 
-def check_src_paths(md_path: Path, repo_root: Path) -> list[str]:
-    """Return errors for inline `src/....py` paths that do not exist."""
-    return _check_inline_paths(md_path, repo_root, SRC_PATH_PATTERN, "source file")
+def check_code_paths(md_path: Path, repo_root: Path) -> list[str]:
+    """Return errors for inline ``src|scripts|tests/...py`` paths that do not exist.
+
+    Plan-exempt: a plan may name a module, gate script or test file it intends to
+    create.
+    """
+    return _check_inline_paths(md_path, repo_root, CODE_PATH_PATTERN, "code file")
 
 
 def check_known_repo_paths(md_path: Path, repo_root: Path) -> list[str]:
     """Return errors for inline well-known repo paths (workflows, requirements).
 
-    Kept separate from :func:`check_src_paths` because it is **not** exempt for
+    Kept separate from :func:`check_code_paths` because it is **not** exempt for
     plans: naming a workflow or a requirements file is always a claim that it
     exists now, so a plan proposing a new ``src/core/thing.py`` does not create
     false positives here the way it would for the ``src/`` pattern.
@@ -334,9 +427,11 @@ def main() -> int:
         "--include-completed-plans",
         action="store_true",
         help=(
-            "Also report link rot in dev-docs/plans/completed/ and CHANGELOG.md. "
-            "Advisory only: reports and still exits 0, so historical-record debt "
-            "is measurable without becoming a merge gate."
+            "Also report link rot in the historical set: dev-docs/plans/completed/, "
+            "the files in HISTORICAL_RECORD_FILES, and the dated snapshot "
+            "directories in SNAPSHOT_SUBDIRS. Advisory only: reports and still "
+            "exits 0, so historical-record debt is measurable without becoming a "
+            "merge gate."
         ),
     )
     args = parser.parse_args()
@@ -357,17 +452,18 @@ def main() -> int:
     for md in files:
         is_user_doc = md.is_relative_to(user_docs_root)
         errors = check_file(md, repo_root, is_user_doc=is_user_doc)
-        # The inline `src/...py` check asserts that a backticked path names a
-        # file that exists *now*, which is true of descriptive docs but false
-        # of plans: a plan legitimately names modules it intends to create
+        # The inline code-path check asserts that a backticked path names a file
+        # that exists *now*, which is true of descriptive docs but false of
+        # proposals: a plan or backlog item legitimately names modules, gate
+        # scripts or test files it intends to create
         # ("add `src/core/image_pairing.py`"), and the checker's own contract
         # says such prose should be written as a glob or plain text instead.
         # Applying it to the plan tree would report 17 distinct proposed
         # modules as broken alongside the 16 genuinely-stale ones, so a gate
         # would be permanently red for a reason no edit can fix. Plans are
         # therefore link-checked only; the stale refs are swept separately.
-        if not is_plan_document(md, repo_root):
-            errors.extend(check_src_paths(md, repo_root))
+        if not is_proposal_bearing_document(md, repo_root):
+            errors.extend(check_code_paths(md, repo_root))
         # Not plan-exempt, unlike the src/ check above: a workflow or a
         # requirements file is never something a plan proposes to create, so
         # this class is safe to enforce in the plan tree too. It is the class
@@ -393,15 +489,19 @@ def main() -> int:
 
     n_files = len(files)
     scope = (
-        "user-docs/, the living dev-docs/, the active plan tree, README.md, "
-        "ARCHITECTURE.md, and AGENTS.md"
+        "user-docs/, the living dev-docs/, the active plan tree (including "
+        "supporting/research/), README.md, ARCHITECTURE.md, and AGENTS.md"
     )
     if advisory:
         print(
             f"OK: checked {n_files} Markdown file(s) ({scope}). "
             f"Advisory only - {len(advisory)} broken reference(s) in historical "
-            "records (dev-docs/plans/completed/, CHANGELOG.md), which are "
-            "excluded by policy because they describe the tree as it was:",
+            "records (dev-docs/plans/completed/, the dated files in "
+            "HISTORICAL_RECORD_FILES, and the generated-assessment directories "
+            "in SNAPSHOT_SUBDIRS), which are excluded by policy because they "
+            "describe the tree as it was. Note templates-generalized/ carries "
+            "its example paths in fenced code comments rather than backticks, so "
+            "the inline check does not see them:",
             file=sys.stderr,
         )
         for line in advisory:
