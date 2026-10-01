@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-01
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -144,14 +144,17 @@ dockerfile-user, and so on). `security_alerts_threshold: "high_or_higher"` is
 retained to mirror CodeQL and to start working if Semgrep ever emits
 `security-severity`.
 
-**How GitHub splits alerts into "security" versus "quality" for a tool that
-carries CWE tags but no `security-severity` was not independently verified** — do
-not assume either way. The configuration above is deliberately set on **both**
-thresholds precisely so enforcement does not depend on that answer: whichever
-bucket a Semgrep alert lands in, one of the two entries covers it at `errors`.
-Removing `alerts_threshold` on the theory that `security_alerts_threshold` makes
-it redundant would remove enforcement in the case where alerts are bucketed as
-quality — the same silent-no-op shape this section exists to prevent.
+**`alerts_threshold` is the only entry that can plausibly match a Semgrep alert
+today.** `security_alerts_threshold` compares against a `security-severity`
+value, which Semgrep OSS does not emit, so that entry has nothing to match on. It
+is **forward cover** for a future Semgrep that does emit one — not a spare that
+makes `alerts_threshold` redundant — and it is set to `high_or_higher` rather
+than `errors`, so the two are not interchangeable even if it did match. Dropping
+`alerts_threshold` on the theory that the other entry covers the same ground
+would therefore remove all Semgrep enforcement: the same silent-no-op shape this
+section exists to prevent. (How GitHub buckets a CWE-tagged,
+`security-severity`-less alert was not independently verified; the conservative
+reading above is what the configuration assumes.)
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
