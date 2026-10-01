@@ -7,7 +7,7 @@ the number higher still. Final local pytest-cov measurement: **82.12%** with the
 `.coveragerc` omits, **81.61%** with **no** omits at all (`main.py` + the five `main_app_*.py`
 mixins included) — so the CI `--cov-fail-under=80` floor is met even on the un-omitted set.
 Archived; the surviving follow-ups live in
-[`TO_DO.md`](../TO_DO.md#static-analysis) (`.coveragerc` omit lift, per-module safety nets).
+[`TO_DO.md`](../../TO_DO.md#static-analysis) (`.coveragerc` omit lift, per-module safety nets).
 **Original branch:** `test/coverage-boost` — merged, branch deleted  
 **Source analysis:** `2026-08-01T03:04:41+0000`, revision
 `85366265af53ed23f1a79c6f2fc251c31c87be60`  
@@ -44,7 +44,7 @@ improvise around it. If you cannot follow a rule, **stop and leave a note in
 4. **NEVER put real patient data in a test.** No real DICOM, no PHI/PII, no real
    file paths from a scanner. Use only existing fixtures under `tests/` or
    synthetic data you build in-test. See
-   [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md).
+   [`PHI_PII_REPOSITORY_GUARDRAILS.md`](../../PHI_PII_REPOSITORY_GUARDRAILS.md).
 5. **NEVER commit with a personal email, and NEVER change git config.** Commits
    must use the GitHub noreply author already configured on this machine:
    `216068303+kgrizz-git@users.noreply.github.com`. Checkpoint commits on
@@ -56,8 +56,8 @@ improvise around it. If you cannot follow a rule, **stop and leave a note in
 ### Always do these
 
 7. **Mirror an existing test file.** Copy the structure of a real neighbor —
-   e.g. [`tests/gui/test_annotation_options_dialog.py`](../../tests/gui/test_annotation_options_dialog.py)
-   or [`tests/gui/test_overlay_config_dialog.py`](../../tests/gui/test_overlay_config_dialog.py).
+   e.g. [`tests/gui/test_annotation_options_dialog.py`](../../../tests/gui/test_annotation_options_dialog.py)
+   or [`tests/gui/test_overlay_config_dialog.py`](../../../tests/gui/test_overlay_config_dialog.py).
    Use the same imports, the `qapp` fixture, and the `@pytest.mark.qt` marker.
 8. **One new test file per source module.** Name it
    `tests/gui/test_<module>.py` (or `tests/<pkg>/test_<module>.py` matching the
@@ -109,8 +109,8 @@ python scripts/run_local_sonarqube.py --with-coverage
 construct-and-assert dialogs. For widgets that need synthesized input events
 (`QMouseEvent` / `QKeyEvent`) — e.g. `transfer_function_editor_widget.py`,
 `histogram_widget.py` — mirror an existing example that already does this:
-[`tests/gui/test_series_navigator_view.py`](../../tests/gui/test_series_navigator_view.py)
-or [`tests/gui/test_image_viewer_context_menu.py`](../../tests/gui/test_image_viewer_context_menu.py).
+[`tests/gui/test_series_navigator_view.py`](../../../tests/gui/test_series_navigator_view.py)
+or [`tests/gui/test_image_viewer_context_menu.py`](../../../tests/gui/test_image_viewer_context_menu.py).
 Do not invent an event-injection pattern; copy one of those.
 
 ### Copy-paste test skeleton (adapt names; keep the shape)
@@ -202,7 +202,7 @@ python scripts/report_local_sonarqube_issues.py \
 ## Phase 0 — Guardrails and measurement hygiene
 
 - [x] Keep tests PHI-safe: no real DICOM/PII; use existing fixtures / synthetic
-      datasets only ([`PHI_PII_REPOSITORY_GUARDRAILS.md`](../PHI_PII_REPOSITORY_GUARDRAILS.md)).
+      datasets only ([`PHI_PII_REPOSITORY_GUARDRAILS.md`](../../PHI_PII_REPOSITORY_GUARDRAILS.md)).
 - [x] Prefer thin Qt dialogs constructed with the `qapp` fixture + mocks over
       full `MainWindow` boots (there is **no** `qtbot` in this repo — see Rules).
 - [x] **`src/main.py` policy — option B (tests-only), as predicted.** No `src/`
@@ -210,7 +210,7 @@ python scripts/report_local_sonarqube_issues.py \
       (139 statements / 36 missed) because later work added tests that import it
       directly; the original "pytest never imports the entrypoint" reading no
       longer holds. The `.coveragerc` `src/main.py` omit is still in place and is
-      tracked separately in [`TO_DO.md`](../TO_DO.md#static-analysis).
+      tracked separately in [`TO_DO.md`](../../TO_DO.md#static-analysis).
 - [x] Coverage was refreshed with local Sonar after the merged slices (see the
       progress table's 2026-08-02 row).
 
@@ -379,7 +379,7 @@ dialog-driven reslice plumbing, and the follow-up belongs with the MPR work
 rather than here.
 
 **Explicitly out of scope for unit coverage:** full interactive drag/WL/cine
-loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
+loops; rely on [`AGENT_SMOKE`](../../orchestration/AGENT_SMOKE.md) for those.
 
 ---
 
@@ -432,7 +432,7 @@ loops; rely on [`AGENT_SMOKE`](../orchestration/AGENT_SMOKE.md) for those.
 
 ## Follow-ups that outlived this plan
 
-Recorded in [`TO_DO.md`](../TO_DO.md#static-analysis) rather than kept here:
+Recorded in [`TO_DO.md`](../../TO_DO.md#static-analysis) rather than kept here:
 
 1. **Lift the `.coveragerc` omit** for `src/main_app_*.py` (and decide on
    `src/main.py`). The floor now holds without the omit, but headroom is only
