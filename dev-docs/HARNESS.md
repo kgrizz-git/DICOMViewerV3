@@ -109,10 +109,16 @@ scanner — a silent loss of coverage that reads exactly like "no findings." Fix
 the upload; do not re-add `continue-on-error` to make a red build go away. CodeQL
 never had the flag.
 
-Note that the scans themselves are separate from the uploads: `semgrep` exits
-non-zero on findings and `grype` runs with `fail-build: false` +
-`severity-cutoff: high`, so a green scan with a green upload is the expected
-state, not evidence that the scanner is misconfigured.
+Note that the scans themselves are separate from the uploads, and **a green scan
+does not mean "no findings."** `semgrep scan` exits `0` when it finds problems —
+only `--error` makes it exit `1` — and the CI invocation does not pass
+`--error`. The step fails on a *broken* scan (no SARIF written, or exit `2` for a
+fatal error), not on a *dirty* one. Grype is the same shape by design
+(`fail-build: false` + `severity-cutoff: high`). So findings surface in exactly
+two places: the Security tab, and the PR comment. Read the Security tab for "the
+scan found nothing", not the check status. Making findings *block* would mean
+adding `--error` **and** `always()` to the comment step (so the comment still
+posts when the scan step fails) — a deliberate policy change, not a default.
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
@@ -120,8 +126,9 @@ github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
 `GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
 and with the uploads now blocking, an unguarded fork PR would turn the required
 **Semgrep Security Audit** check red on an outside contribution. The scan itself
-still runs on fork PRs and still fails on findings; only the upload and the
-comment are skipped.
+still runs on fork PRs; only the upload and the comment are skipped. Combined
+with the point above, that means a fork PR's findings produce **no in-PR signal
+at all** while the check stays green.
 
 **The fork guard must be scoped to `pull_request` events.** A bare
 `github.event.pull_request.head.repo.full_name == github.repository` looks like

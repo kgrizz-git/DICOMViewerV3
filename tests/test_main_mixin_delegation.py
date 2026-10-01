@@ -410,9 +410,10 @@ def _compound_allow_list() -> dict[str, set[str]]:
     ``*_wiring`` modules. The exception is ``InitializationMixin``: only
     ``_setup_ui`` is characterized (``test_main_mixin_ui_and_init_wiring.py``),
     while its remaining entries construct the application and are exercised only
-    incidentally, by the ``DICOMViewerApp()`` smoke anchor in
-    ``test_main_mixin_composition.py``. Do not read presence here as a coverage
-    claim.
+    incidentally, by the app-construction smoke tests (e.g.
+    ``test_main_mixin_composition.py``; several other ``viewer_app`` tests build
+    the same object). No test calls them by name. Do not read presence here as a
+    coverage claim.
     """
     return {
     "InitializationMixin": {

@@ -296,5 +296,3 @@ HANDLER_CASES: tuple[HandlerCase, ...] = (
     HandlerCase("SubwindowManagementMixin", "_get_subwindow_assignments", "get_subwindow_assignments", ()),
 )
 
-
-# --- collaborator forwards (facades and coordinators held on ``self``) ---------------

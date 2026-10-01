@@ -439,6 +439,10 @@ Recorded in [`TO_DO.md`](../TO_DO.md#static-analysis) rather than kept here:
    ~1.6 pp on the un-omitted set, so add safety-net/facade tests for the four
    thin mixins (`main_app_subwindow_management` 35%, `main_app_tag_roi` 35%,
    `main_app_ui_and_files` 47%, `main_app_display_settings` 58%) first.
+   **Superseded the same day (2026-09-30, PR #170):** the mixin delegation safety
+   net landed those tests — the four now read 98.8% / 95% / 98% / 100% with ~2.3 pp
+   headroom. [`TO_DO.md`](../../TO_DO.md#static-analysis) is the live tracker;
+   this entry is kept only to show what the closeout measurement implied.
 2. **Sub-50% stragglers** at closeout: `volume/legacy_surface.py` 22%,
    `core/loader_worker.py` 43%, `tools/angle_measurement_items.py` 47%,
    `utils/config/layout_config.py` 48%, `gui/window_slot_map_widget.py` 49%.

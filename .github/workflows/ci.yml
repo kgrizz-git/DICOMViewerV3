@@ -38,7 +38,10 @@ name: CI
 # `github.event_name != 'pull_request' ||`. The CodeRabbit job shows the
 # equivalent short-circuit form.
 #
-# Verified 2026-09-30: both steps succeed on `main` (run 36791738332, push event).
+# Verified 2026-09-30 *before this change* (pre-PR main @ 3b91e21, run
+# 36791738332, push event): both upload steps concluded success, confirming Code
+# Scanning accepts SARIF. That run predates the fork guard, so it does not
+# exercise the new `if:` expressions - no push to main can until this merges.
 
 on:
   push:
@@ -502,7 +505,10 @@ jobs:
         # schedule `github.event.pull_request` is null, and comparing a null
         # property to `github.repository` yields false, which would skip the
         # upload on every push to main and silently starve the Security tab.
-        # The scan itself still runs on fork PRs and still fails on findings.
+        # The scan step still runs on fork PRs. Note it does NOT go red on
+        # findings: `semgrep scan` exits 0 unless it cannot run (the step maps
+        # exit 2 to a hard failure), so findings surface only via the Security
+        # tab and the PR comment. See HARNESS.md §Code scanning.
         if: always() && hashFiles('semgrep.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           sarif_file: semgrep.sarif
