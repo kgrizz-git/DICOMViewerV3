@@ -476,8 +476,14 @@ jobs:
           SEMGREP_SEND_METRICS: "off"
         run: |
           set +e
+          # --error is what makes this job a gate rather than a report. Without
+          # it `semgrep scan` exits 0 even with findings, so the required
+          # "Semgrep Security Audit" check only proved the scan ran. Measured
+          # 2026-09-30: 0 findings across these four rulesets, so this passes on
+          # main today and turns red only on a real regression.
           semgrep scan \
             --metrics=off \
+            --error \
             --config p/security-audit \
             --config p/owasp-top-ten \
             --config p/secrets \
@@ -515,7 +521,10 @@ jobs:
           category: semgrep
 
       - name: Comment on PR with results
-        if: github.event_name == 'pull_request' && hashFiles('semgrep.sarif') != '' && github.event.pull_request.head.repo.full_name == github.repository
+        # always() so the comment still posts when the scan step above went red
+        # on a finding — that is exactly when the author needs to read it. Without
+        # it, a failing scan would skip the one place the finding is explained.
+        if: always() && github.event_name == 'pull_request' && hashFiles('semgrep.sarif') != '' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |

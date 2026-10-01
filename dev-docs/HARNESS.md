@@ -109,16 +109,24 @@ scanner — a silent loss of coverage that reads exactly like "no findings." Fix
 the upload; do not re-add `continue-on-error` to make a red build go away. CodeQL
 never had the flag.
 
-Note that the scans themselves are separate from the uploads, and **a green scan
-does not mean "no findings."** `semgrep scan` exits `0` when it finds problems —
-only `--error` makes it exit `1` — and the CI invocation does not pass
-`--error`. The step fails on a *broken* scan (no SARIF written, or exit `2` for a
-fatal error), not on a *dirty* one. Grype is the same shape by design
-(`fail-build: false` + `severity-cutoff: high`). So findings surface in exactly
-two places: the Security tab, and the PR comment. Read the Security tab for "the
-scan found nothing", not the check status. Making findings *block* would mean
-adding `--error` **and** `always()` to the comment step (so the comment still
-posts when the scan step fails) — a deliberate policy change, not a default.
+**Semgrep findings now fail the job.** The scan runs with `--error`, so a finding
+exits `1` and the required **Semgrep Security Audit** check goes red. That check
+previously proved only that the scan *ran*: `semgrep scan` exits `0` with
+findings unless `--error` is passed, and it was not — so a green check meant
+nothing about the code. Measured 2026-09-30 against `main` with CI's exact four
+rulesets: **0 findings**, so this is a no-op today and turns red only on a real
+regression. The "Comment on PR with results" step now carries `always()` so the
+comment still posts when the scan step fails — otherwise a failing scan would
+skip the one place the finding gets explained.
+
+Note the scan and the upload are still separate concerns. The step also fails on
+a *broken* scan (no SARIF written, or exit `2` for a fatal error) regardless of
+`--error`. Grype stays non-blocking by design (`fail-build: false`,
+`severity-cutoff: high`), and the `KGRuleset1` ruleset's `code_scanning` rule
+covers **CodeQL only** — Semgrep is not in its `code_scanning_tools` list, so it
+gates the merge by exit code rather than by Security-tab alert severity. Adding
+it there is a repo-settings change, tracked in
+[`TO_DO.md`](TO_DO.md#maintenance).
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
