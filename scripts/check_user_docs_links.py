@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Verify documentation references resolve: relative Markdown links, and inline
-code paths pointing into src/.
+code paths pointing into `src/`, `scripts/`, and `tests/`.
 
 Blocking coverage is user-docs/, the root README.md and ARCHITECTURE.md,
 AGENTS.md, the top level of dev-docs/, dev-docs/info/, and the **active** plan
@@ -45,7 +45,7 @@ Two checks run over the covered files:
     repository. Absolute ``https://github.com/.../blob/...`` links under
     ``user-docs/`` must share the ``GITHUB_BLOB_BASE`` prefix from
     ``src/utils/doc_urls.py`` (so forks/tags stay aligned with in-app Help).
-2. **Inline `src/...py` code paths.** A path written in backticks, such as
+2. **Inline `src|scripts|tests/...py` code paths.** A path written in backticks, such as
     `src/core/mpr_controller.py`, must exist. This catches the failure mode where a
     module moves between packages and prose that names it silently goes stale; a
     core/ to gui/ move left 17 such references wrong across the living docs before
@@ -247,33 +247,23 @@ def is_historical_record(md_path: Path, repo_root: Path) -> bool:
     return _is_excluded(md_path, repo_root)
 
 
-def is_proposal_bearing_document(md_path: Path, repo_root: Path) -> bool:
-    """True for documents that legitimately name code that does not exist yet.
-
-    A plan proposes a module; the active backlog and the future-work notes do the
-    same in prose. A ``TO_DO.md`` item reading "Add a
-    `scripts/check_file_line_counts.py` + CI step", or a ``FUTURE_WORK`` note saying
-    a registration "must be generated dynamically" by a named script, is a
-    *proposal*, not a broken reference. Treating those as rot would make the gate
-    permanently red for a reason no edit can fix -- the identical failure the plan
-    exemption exists to avoid.
-    """
-    if is_plan_document(md_path, repo_root):
-        return True
-    # Forward-looking documents by name as well as by content.
-    for rel in ("dev-docs/TO_DO.md", "dev-docs/FUTURE_WORK_DETAIL_NOTES.md"):
-        if md_path.resolve() == (repo_root / rel).resolve():
-            return True
-    return False
-
-
 def is_plan_document(md_path: Path, repo_root: Path) -> bool:
     """True when a file is a plan (active or completed) under ``dev-docs/plans/``.
 
-    Plans get relative-link checking but not the inline ``src/...py`` existence
+    Plans get relative-link checking but not the inline code-path existence
     check, because a plan may name a module it intends to create. See
     :func:`check_code_paths` for that contract.
+
+    The exemption is plans only, deliberately. ``TO_DO.md`` and
+    ``FUTURE_WORK_DETAIL_NOTES.md`` were briefly exempted here too, reasoning that
+    a backlog proposes files just as a plan does. That was the wrong instrument:
+    those two files hold 17 code-path references of which 13 exist today and are
+    descriptive, so the exemption let 13 real claims rot silently to save four
+    prose edits. The checker's own contract already prescribes the narrower fix --
+    "prose proposing a file to create will be flagged; write such names as a
+    directory, a glob, or plain prose" -- and those four proposals now follow it.
     """
+
     plans_root = (repo_root / "dev-docs" / "plans").resolve()
     try:
         return md_path.resolve().is_relative_to(plans_root)
@@ -462,7 +452,7 @@ def main() -> int:
         # modules as broken alongside the 16 genuinely-stale ones, so a gate
         # would be permanently red for a reason no edit can fix. Plans are
         # therefore link-checked only; the stale refs are swept separately.
-        if not is_proposal_bearing_document(md, repo_root):
+        if not is_plan_document(md, repo_root):
             errors.extend(check_code_paths(md, repo_root))
         # Not plan-exempt, unlike the src/ check above: a workflow or a
         # requirements file is never something a plan proposes to create, so
@@ -507,7 +497,7 @@ def main() -> int:
         for line in advisory:
             print(f"  {line}", file=sys.stderr)
     else:
-        print(f"OK: checked links and src/ code paths in {n_files} Markdown file(s) ({scope}).")
+        print(f"OK: checked links and src/scripts/tests code paths in {n_files} Markdown file(s) ({scope}).")
     return 0
 
 

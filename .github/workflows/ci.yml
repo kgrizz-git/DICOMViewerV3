@@ -392,6 +392,20 @@ jobs:
       - name: Run link checker
         run: python scripts/check_user_docs_links.py --root "${{ github.workspace }}"
 
+      # Advisory pass over the historical set (completed plans, the dated files in
+      # HISTORICAL_RECORD_FILES, and SNAPSHOT_SUBDIRS). Deliberately non-blocking:
+      # that debt is expected and is not a merge gate. It runs anyway because a
+      # figure nothing prints is a figure nobody watches, and "outside the scanned
+      # set" is worse than measurable debt. continue-on-error keeps the gate
+      # honest in both directions - the number is always reported, and it never
+      # turns red.
+      - name: Report historical link rot (advisory)
+        continue-on-error: true
+        run: >-
+          python scripts/check_user_docs_links.py
+          --root "${{ github.workspace }}"
+          --include-completed-plans
+
       # Publisher build gate (C2 adopted Zensical): the release-time offline
       # bundle builds from this same config, so keep it warning-free. Pin is
       # sourced from requirements-dev.txt (single source of truth).

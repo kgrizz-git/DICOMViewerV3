@@ -191,53 +191,70 @@ class TestPlanTreePolicy(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_every_known_repo_path_arm_is_reachable(self) -> None:
-        """Every arm of KNOWN_REPO_PATH_PATTERN is exercised, present and absent.
+        """Every arm of KNOWN_REPO_PATH_PATTERN is exercised in BOTH directions.
 
         The `.githooks/` arm shipped dead -- it required a word character before a
         dot-directory, so it could never match -- and it shipped because every
-        other arm did match and the tests only ever used a workflow path. One
-        assertion per arm, for the existing and the missing case, closes that.
+        other arm did match while the tests only ever used a workflow path.
+
+        Both directions are required, and the absent direction is the one that
+        matters: a name in the *present* list asserts exit 0, which passes
+        identically whether the arm matches an existing file or never matches at
+        all. A first attempt at this test listed `pytest.ini`, `ruff.toml` and
+        `.coveragerc` as present-only, leaving those three arms untested while the
+        docstring claimed otherwise -- the same vacuity, one level down. So the
+        absent fixture now names real repo filenames that are deliberately *not*
+        created, which distinguishes "arm matched and the file is missing" from
+        "arm never matched".
         """
-        cases = [
-            (".github/workflows/ci.yml", True),
-            (".github/workflows/ci.yaml", True),
-            ("requirements.txt", True),
-            ("requirements-dev.txt", True),
-            ("pytest.ini", True),
-            ("ruff.toml", True),
-            # NB: the set is *closed*, so `pyproject.toml` / `ruff-x.toml` are
-            # deliberately NOT arms -- two plans propose a `pyproject.toml`, and
-            # flagging it would be the proposal false positive again.
-            (".coveragerc", True),
-            (".githooks/pre-commit", True),
-            (".github/workflows/gone.yml", False),
-            ("requirements-imaginary.txt", False),
-            (".githooks/imaginary", False),
+        # Names that are arms of the pattern, paired with whether the fixture
+        # creates the file.
+        arms = [
+            ".github/workflows/ci.yml",
+            ".github/workflows/ci.yaml",
+            "requirements.txt",
+            "requirements-dev.txt",
+            "pytest.ini",
+            "ruff.toml",
+            ".coveragerc",
+            ".githooks/pre-commit",
         ]
+        # NB: the set is *closed*, so `pyproject.toml` / `ruff-x.toml` are
+        # deliberately NOT arms -- two plans propose a `pyproject.toml`, and
+        # flagging it would be the proposal false positive again.
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             self._tree(tmp)
             (tmp / ".github" / "workflows").mkdir(parents=True)
-            (tmp / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
-            (tmp / ".github" / "workflows" / "ci.yaml").write_text("name: CI\n")
             (tmp / ".githooks").mkdir(parents=True)
-            (tmp / ".githooks" / "pre-commit").write_text("#!/bin/sh\n")
-            for name in ("requirements.txt", "requirements-dev.txt",
-                         "pytest.ini", "ruff.toml", ".coveragerc"):
-                (tmp / name).write_text("x = 1\n")
-            present = [c for c, ok in cases if ok]
-            absent = [c for c, ok in cases if not ok]
-            (tmp / "dev-docs" / "GUIDE.md").write_text(
-                "".join(f"See `{c}`.\n" for c in present)
-            )
+            for rel in arms:
+                target = tmp / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("name: x\n" if rel.endswith((".yml", ".yaml")) else "x = 1\n")
+
+            def write_guide(names: list[str]) -> None:
+                (tmp / "dev-docs" / "GUIDE.md").write_text(
+                    "".join(f"See `{n}`.\n" for n in names)
+                )
+
+            # Direction 1: every arm names an existing file -> clean.
+            write_guide(arms)
+            clean = self._run(tmp)
+            self.assertEqual(clean.returncode, 0, clean.stderr)
+
+            # Direction 2: every arm names a file that does NOT exist -> each must
+            # be reported. Drop any single arm's file from the fixture while the
+            # guide still cites it, and that arm must now be flagged.
+            for rel in arms:
+                (tmp / rel).unlink()
+                proc = self._run(tmp)
+                self.assertEqual(proc.returncode, 1, f"{rel} deleted, expected failure")
+                self.assertIn(rel, proc.stderr)
+                target = tmp / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("name: x\n" if rel.endswith((".yml", ".yaml")) else "x = 1\n")
+            # Restored: clean again, proving the loop restored state correctly.
             self.assertEqual(self._run(tmp).returncode, 0)
-            (tmp / "dev-docs" / "GUIDE.md").write_text(
-                "".join(f"See `{c}`.\n" for c in absent)
-            )
-            proc = self._run(tmp)
-            self.assertEqual(proc.returncode, 1, proc.stderr)
-            for c in absent:
-                self.assertIn(c, proc.stderr)
 
     def test_descriptive_doc_flags_stale_scripts_and_tests_paths(self) -> None:
         """The positive case for the ``scripts``/``tests`` arms.
@@ -273,24 +290,54 @@ class TestPlanTreePolicy(unittest.TestCase):
             )
             self.assertEqual(self._run(tmp).returncode, 0)
 
-    def test_backlog_and_future_work_may_propose_code(self) -> None:
-        """TO_DO and FUTURE_WORK name files they intend to create.
+    def test_backlog_proposal_must_be_written_as_prose_not_inline_code(self) -> None:
+        """TO_DO/FUTURE_WORK are *not* exempt -- the checker's contract is the fix.
 
-        Same rationale as the plan exemption, extended to the two
-        forward-looking documents: "Add a `scripts/check_file_line_counts.py`" is a
-        proposal, and flagging it would make the gate permanently red.
+        They were briefly exempted, which let 13 descriptive claims in those two
+        files rot silently to avoid flagging four correct proposal sentences. The
+        contract already prescribed the narrower repair: name a proposed file as
+        plain prose, a directory or a glob, not as inline code. Both directions are
+        pinned here.
         """
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             dev_docs = self._tree(tmp)
+            # Unbackticked proposal: correct prose, not a claim that it exists.
             (dev_docs / "TO_DO.md").write_text(
-                "Add a `scripts/check_file_line_counts.py` + CI step.\n"
+                "Add a scripts/check_file_line_counts.py + CI step.\n"
             )
             (dev_docs / "FUTURE_WORK_DETAIL_NOTES.md").write_text(
-                "Generate it with `scripts/register_windows.py`.\n"
+                "Generate it with scripts/register_windows.py.\n"
             )
             proc = self._run(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
+
+            # Same names as inline code are now a claim, and a false one.
+            (dev_docs / "TO_DO.md").write_text(
+                "Add a `scripts/check_file_line_counts.py` + CI step.\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("check_file_line_counts.py", proc.stderr)
+
+    def test_descriptive_claims_in_backlog_are_not_silently_unchecked(self) -> None:
+        """The 13-descriptive-claims case: real paths in a backlog must still check.
+
+        Guards against re-widening the exemption to fix a future false positive.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (tmp / "scripts").mkdir()
+            (tmp / "scripts" / "real_gate.py").write_text("x = 1\n")
+            (dev_docs / "TO_DO.md").write_text(
+                "Gate runs `scripts/real_gate.py`; see also "
+                "`scripts/never_written.py`.\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("never_written.py", proc.stderr)
+            self.assertNotIn("real_gate.py", proc.stderr)
 
     def test_githooks_reference_is_matched(self) -> None:
         """Regression: `.githooks/` was unreachable in the pattern.
