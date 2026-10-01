@@ -270,5 +270,19 @@ When you add a major domain or change bootstrap/signal rules:
 3. Bump **Last updated** on edited harness docs when the edit changes policy, workflow, user-facing behavior, or canonical guidance; skip date churn for typo-only edits.
 4. Run `python scripts/check_repo_harness.py` and `python scripts/check_architecture_boundaries.py`; fix new failures before merge.
 5. When a baseline violation is intentionally refactored away, run `python scripts/check_architecture_boundaries.py --refresh-baseline` and review the removed line.
+6. **When you archive a plan** (`git mv` into `plans/completed/`), add one `../`
+   to every relative link in it. Moving the file down a level breaks all of them
+   at once, and `check_user_docs_links.py` deliberately excludes
+   `dev-docs/plans/` as historical record, so nothing else will flag it. The
+   coverage-boost archive in PR #170 broke ten links this way. Quick check:
+   ```bash
+   python - <<'EOF'
+   import re, pathlib
+   f = pathlib.Path("dev-docs/plans/completed/<PLAN>.md")
+   for m in re.finditer(r"\]\((\.\.?/[^)#\s]+)", f.read_text()):
+       if not (f.parent / m.group(1)).resolve().exists():
+           print("broken:", m.group(1))
+   EOF
+   ```
 
 Future improvements (not required today): autonomous doc-gardening bot, per-worktree launch script with observability hooks.
