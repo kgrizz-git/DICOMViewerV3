@@ -37,7 +37,7 @@ When PET/CT (or other) fusion pairs have **different slice thicknesses** and **d
 | Slice sync, source inside target FOV | Target pane updates to nearest slice (current). |
 | Slice sync, source outside target FOV | Target pane **unchanged**; status hint names skipped pane(s). |
 | Slice sync scroll | User can scroll **source and all targets** through full series extent. |
-| Regression | Fusion audit scripts still pass on overlapping PET/CT slices used in [FUSION_QUANTITATIVE_VERIFICATION_RESULTS.md](../bug-investigations/FUSION_QUANTITATIVE_VERIFICATION_RESULTS.md). |
+| Regression | Fusion audit scripts still pass on overlapping PET/CT slices used in [FUSION_QUANTITATIVE_VERIFICATION_RESULTS.md](../../bug-investigations/FUSION_QUANTITATIVE_VERIFICATION_RESULTS.md). |
 
 ---
 

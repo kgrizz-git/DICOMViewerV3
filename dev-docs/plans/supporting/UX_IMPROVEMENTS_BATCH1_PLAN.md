@@ -30,9 +30,9 @@
 
 **Priority:** P2  
 **Key files:**
-- [src/gui/window_slot_map_widget.py](../src/gui/window_slot_map_widget.py) — `WindowSlotMapWidget`, `_DraggableWindowSlotMapContainer`, `WindowSlotMapPopupDialog`
-- [src/main.py](../src/main.py) — `_on_focused_subwindow_changed`, `_on_layout_changed`, `set_window_slot_map_callbacks`
-- [src/gui/main_window.py](../src/gui/main_window.py) — `set_window_slot_map_callbacks`
+- [src/gui/window_slot_map_widget.py](../../../src/gui/window_slot_map_widget.py) — `WindowSlotMapWidget`, `_DraggableWindowSlotMapContainer`, `WindowSlotMapPopupDialog`
+- [src/main.py](../../../src/main.py) — `_on_focused_subwindow_changed`, `_on_layout_changed`, `set_window_slot_map_callbacks`
+- [src/gui/main_window.py](../../../src/gui/main_window.py) — `set_window_slot_map_callbacks`
 
 ### What already exists
 
@@ -127,10 +127,10 @@ Also set the same callback on the popup widget (`_window_slot_map_widget_popup`)
 
 **Priority:** P2  
 **Key files:**
-- [src/gui/main_window.py](../src/gui/main_window.py) — `_create_toolbar()`, all `self.mouse_mode_*_action` attributes
-- [src/utils/config/](../src/utils/config/) — new mixin needed for toolbar layout
-- [src/gui/dialogs/](../src/gui/dialogs/) — new `toolbar_config_dialog.py`
-- [src/gui/main_window_menu_builder.py](../src/gui/main_window_menu_builder.py) — if a menu entry is needed
+- [src/gui/main_window.py](../../../src/gui/main_window.py) — `_create_toolbar()`, all `self.mouse_mode_*_action` attributes
+- [src/utils/config/](../../../src/utils/config/) — new mixin needed for toolbar layout
+- [src/gui/dialogs/](../../../src/gui/dialogs/) — new `toolbar_config_dialog.py`
+- [src/gui/main_window_menu_builder.py](../../../src/gui/main_window_menu_builder.py) — if a menu entry is needed
 
 ### Complexity and risk: HIGH
 
@@ -178,9 +178,9 @@ Example sections: `Mouse Mode Tools`, `Privacy`, `View Controls`, `Series Naviga
 
 **Priority:** P1  
 **Key files:**
-- [src/gui/image_viewer.py](../src/gui/image_viewer.py) — `mousePressEvent`, `mouseMoveEvent`, `mouseReleaseEvent`
-- [src/core/view_state_manager.py](../src/core/view_state_manager.py) — `handle_window_level_drag`, `handle_right_mouse_press_for_drag`
-- [src/utils/config/display_config.py](../src/utils/config/display_config.py) — if a config option is needed
+- [src/gui/image_viewer.py](../../../src/gui/image_viewer.py) — `mousePressEvent`, `mouseMoveEvent`, `mouseReleaseEvent`
+- [src/core/view_state_manager.py](../../../src/gui/view_state_manager.py) — `handle_window_level_drag`, `handle_right_mouse_press_for_drag`
+- [src/utils/config/display_config.py](../../../src/utils/config/display_config.py) — if a config option is needed
 
 ### Current state
 
@@ -216,12 +216,12 @@ If item 3 remains a documentation-only change, this conflict largely disappears.
 
 **Priority:** P1  
 **Key files:**
-- [src/core/dicom_pixel_stats.py](../src/core/dicom_pixel_stats.py) — pixel range utilities
-- [src/core/dicom_window_level.py](../src/core/dicom_window_level.py) — `get_window_level_from_dataset`
-- [src/core/view_state_manager.py](../src/core/view_state_manager.py) — `set_series_pixel_range`, `get_series_pixel_range`
-- [src/core/slice_display_manager.py](../src/core/slice_display_manager.py) — where `set_series_pixel_range` is called
-- [src/gui/window_level_controls.py](../src/gui/window_level_controls.py) — (likely) W/L spinboxes / slider
-- Possibly [src/gui/image_viewer.py](../src/gui/image_viewer.py) — context menu entry for "Full Range"
+- [src/core/dicom_pixel_stats.py](../../../src/core/dicom_pixel_stats.py) — pixel range utilities
+- [src/core/dicom_window_level.py](../../../src/core/dicom_window_level.py) — `get_window_level_from_dataset`
+- [src/core/view_state_manager.py](../../../src/gui/view_state_manager.py) — `set_series_pixel_range`, `get_series_pixel_range`
+- [src/core/slice_display_manager.py](../../../src/gui/slice_display_manager.py) — where `set_series_pixel_range` is called
+- [src/gui/window_level_controls.py](../../../src/gui/window_level_controls.py) — (likely) W/L spinboxes / slider
+- Possibly [src/gui/image_viewer.py](../../../src/gui/image_viewer.py) — context menu entry for "Full Range"
 
 ### Goal
 
@@ -302,11 +302,11 @@ Both options can coexist. Option A is lower effort; Option B is more discoverabl
 
 **Priority:** P1  
 **Key files:**
-- [src/gui/image_viewer.py](../src/gui/image_viewer.py) — context menu build block (~line 1930+)
-- [src/gui/dialogs/overlay_config_dialog.py](../src/gui/dialogs/overlay_config_dialog.py) — `OverlayConfigDialog`
-- [src/gui/dialogs/overlay_settings_dialog.py](../src/gui/dialogs/overlay_settings_dialog.py) — `OverlaySettingsDialog`
-- [src/core/subwindow_lifecycle_controller.py](../src/core/subwindow_lifecycle_controller.py) — where focused-subwindow `ImageViewer` signals are wired
-- [src/gui/main_window_menu_builder.py](../src/gui/main_window_menu_builder.py) — existing menu entries for overlay dialogs
+- [src/gui/image_viewer.py](../../../src/gui/image_viewer.py) — context menu build block (~line 1930+)
+- [src/gui/dialogs/overlay_config_dialog.py](../../../src/gui/dialogs/overlay_config_dialog.py) — `OverlayConfigDialog`
+- [src/gui/dialogs/overlay_settings_dialog.py](../../../src/gui/dialogs/overlay_settings_dialog.py) — `OverlaySettingsDialog`
+- [src/core/subwindow_lifecycle_controller.py](../../../src/core/subwindow_lifecycle_controller.py) — where focused-subwindow `ImageViewer` signals are wired
+- [src/gui/main_window_menu_builder.py](../../../src/gui/main_window_menu_builder.py) — existing menu entries for overlay dialogs
 
 ### Current state
 
@@ -358,11 +358,11 @@ overlay_config_requested = Signal()     # → open OverlayConfigDialog (tag conf
 **Priority:** P2  
 **Status:** Implemented (defaults + shipped `default_config` merge values); see verification below.  
 **Key files:**
-- [src/utils/config/roi_config.py](../src/utils/config/roi_config.py) — `get_roi_line_thickness` / `get_roi_font_size` **fallback** defaults when keys are absent from merged config
-- [src/utils/config/measurement_config.py](../src/utils/config/measurement_config.py) — measurement line / font **fallback** defaults
-- [src/utils/config_manager.py](../src/utils/config_manager.py) — `default_config` dict used when creating a **new** config file and when merging loaded JSON over defaults (keys present in `default_config` seed first-time values)
-- [src/utils/config/annotation_config.py](../src/utils/config/annotation_config.py) — `get_text_annotation_font_size` (default 12, already at target; no change)
-- Tests: [tests/config/test_roi_config.py](../tests/config/test_roi_config.py), [tests/config/test_measurement_config.py](../tests/config/test_measurement_config.py)
+- [src/utils/config/roi_config.py](../../../src/utils/config/roi_config.py) — `get_roi_line_thickness` / `get_roi_font_size` **fallback** defaults when keys are absent from merged config
+- [src/utils/config/measurement_config.py](../../../src/utils/config/measurement_config.py) — measurement line / font **fallback** defaults
+- [src/utils/config_manager.py](../../../src/utils/config_manager.py) — `default_config` dict used when creating a **new** config file and when merging loaded JSON over defaults (keys present in `default_config` seed first-time values)
+- [src/utils/config/annotation_config.py](../../../src/utils/config/annotation_config.py) — `get_text_annotation_font_size` (default 12, already at target; no change)
+- Tests: [tests/config/test_roi_config.py](../../../tests/config/test_roi_config.py), [tests/config/test_measurement_config.py](../../../tests/config/test_measurement_config.py)
 
 ### Proposed default changes
 

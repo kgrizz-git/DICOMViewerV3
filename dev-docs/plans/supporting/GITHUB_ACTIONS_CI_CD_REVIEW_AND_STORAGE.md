@@ -10,12 +10,21 @@
 
 ## 1. Current workflow inventory (snapshot)
 
+> **Stale snapshot (verified 2026-09-30):** `security-checks.yml`, `semgrep.yml`,
+> and `grype.yml` **no longer exist** — all three were consolidated into
+> `ci.yml`. The rows below are kept for their trigger/cost analysis, but the
+> file each links to is the consolidated `ci.yml` and the "3 jobs" / "multi
+> workflow" cost reasoning should be re-read against the current job DAG in
+> `ci.yml`'s header comment. The live tree is exactly four workflows:
+> `build.yml`, `ci.yml`, `privacy-gates.yml`, `actions-cache-prune.yml`.
+> Refresh this section when the cost model is next reviewed.
+
 | Workflow | Triggers (summary) | Primary cost drivers |
 |----------|-------------------|----------------------|
 | [`build.yml`](../../../.github/workflows/build.yml) | Version tags `v*`, `workflow_dispatch` | **Heavy:** 3 OS matrix, PyInstaller, Linux AppImage tooling, **artifact uploads** (30-day retention noted in workflow). Releases via `softprops/action-gh-release`. |
-| [`security-checks.yml`](../../../.github/workflows/security-checks.yml) | PR + push to `main` / `develop` | 3 jobs (`ubuntu-latest` each): debug flags, TruffleHog (+ range logic), PII grep heuristics. Modest; `fetch-depth: 0` on one job increases checkout size/time slightly. |
-| [`semgrep.yml`](../../../.github/workflows/semgrep.yml) | PR + push to `main` / `develop` / `feature/**`, weekly cron | `pip install semgrep`, multiple rulesets, SARIF upload, optional PR comment. |
-| [`grype.yml`](../../../.github/workflows/grype.yml) | PR + push to `main` / `develop`, weekly cron | `anchore/scan-action`, SARIF upload, optional PR comment. |
+| [`security-checks.yml`](../../../.github/workflows/ci.yml) | PR + push to `main` / `develop` | 3 jobs (`ubuntu-latest` each): debug flags, TruffleHog (+ range logic), PII grep heuristics. Modest; `fetch-depth: 0` on one job increases checkout size/time slightly. |
+| [`semgrep.yml`](../../../.github/workflows/ci.yml) | PR + push to `main` / `develop` / `feature/**`, weekly cron | `pip install semgrep`, multiple rulesets, SARIF upload, optional PR comment. |
+| [`grype.yml`](../../../.github/workflows/ci.yml) | PR + push to `main` / `develop`, weekly cron | `anchore/scan-action`, SARIF upload, optional PR comment. |
 | `user-docs-links` (job in [`ci.yml`](../../../.github/workflows/ci.yml)) | PR + push to `main` / `develop` | Lightweight Python link check. |
 | [`actions-cache-prune.yml`](../../../.github/workflows/actions-cache-prune.yml) | Weekly cron + `workflow_dispatch` | Low cost; **reduces** cache storage churn via scripted prune. |
 | **Dependabot** ([`dependabot.yml`](../../../.github/dependabot.yml)) | Scheduled weekly | Creates PRs; each PR triggers the same CI gates as human PRs. |

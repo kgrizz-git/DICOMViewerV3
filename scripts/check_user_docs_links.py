@@ -3,13 +3,26 @@
 Verify documentation references resolve: relative Markdown links, and inline
 code paths pointing into src/.
 
-Covered files are user-docs/, the root README.md and ARCHITECTURE.md, AGENTS.md,
-the top level of dev-docs/, and dev-docs/info/. dev-docs/plans/ is deliberately
-excluded: completed and supporting plans are historical records that describe the
-tree as it was when they were written, so link rot there is expected rather than a
-defect.
+Blocking coverage is user-docs/, the root README.md and ARCHITECTURE.md,
+AGENTS.md, the top level of dev-docs/, dev-docs/info/, and the **active** plan
+tree (dev-docs/plans/*.md and dev-docs/plans/supporting/*.md). Active plans are
+live work documents that someone is implementing from right now, so a broken
+link in one is a real defect.
 
-Two checks run over those files:
+``dev-docs/plans/completed/`` is deliberately excluded. A completed plan
+describes the tree as it was when it was written, so a link to a file that was
+later renamed is an *accurate* record rather than a defect; repairing those would
+rewrite history to match a present the plan never described. CHANGELOG.md is
+excluded for the same reason - released entries name modules that have since
+moved.
+
+Because the exclusion hides a whole subtree, ``--include-completed-plans`` makes
+it visible: that mode reports rot in completed plans as **advisory** output and
+still exits 0, so the debt can be measured without becoming a gate. It is a
+report, not a policy change; a 40-link backlog in historical records is expected
+and is not a failure.
+
+Two checks run over the covered files:
 
 1. **Relative Markdown links.** Scans inline links of the form [text](url). Skips
     http(s), mailto, and bare fragment-only targets. Resolves each relative URL
@@ -27,8 +40,9 @@ Two checks run over those files:
 
 Usage (from repository root):
     python scripts/check_user_docs_links.py
+    python scripts/check_user_docs_links.py --include-completed-plans  # advisory
 
-Exit code: 0 if all links resolve, 1 if any are broken (prints details).
+Exit code: 0 if all blocking links resolve, 1 if any are broken (prints details).
 
 Inputs: Markdown files on disk under the repo; ``GITHUB_BLOB_BASE`` from
 ``src/utils/doc_urls.py``.
@@ -61,25 +75,57 @@ SRC_PATH_PATTERN = re.compile(
 GITHUB_BLOB_LINK_HINT = re.compile(r"https://github\.com/[^)\s]+/blob/")
 
 
-def iter_markdown_files(repo_root: Path) -> list[Path]:
-    """Markdown files to validate (user docs plus the living developer docs)."""
+def _completed_plans_root(repo_root: Path) -> Path:
+    """Return the excluded ``dev-docs/plans/completed`` subtree.
+
+    Resolved before use so a symlink in dev-docs/ cannot pull historical content
+    back into the blocking set.
+    """
+    return (repo_root / "dev-docs" / "plans" / "completed").resolve()
+
+
+def _is_excluded(candidate: Path, repo_root: Path) -> bool:
+    """True for files outside the blocking set: completed plans and CHANGELOG.md."""
+    resolved = candidate.resolve()
+    if resolved.is_relative_to(_completed_plans_root(repo_root)):
+        return True
+    return resolved == (repo_root / "CHANGELOG.md").resolve()
+
+
+def iter_markdown_files(
+    repo_root: Path, include_completed_plans: bool = False
+) -> list[Path]:
+    """Markdown files to validate.
+
+    Blocking set: user docs, the living dev docs, and the **active** plan tree
+    (``dev-docs/plans/*.md`` plus ``dev-docs/plans/supporting/*.md``).
+    ``dev-docs/plans/completed/`` and ``CHANGELOG.md`` are excluded because they
+    describe the tree as it was; pass ``include_completed_plans=True`` to include
+    them in an advisory pass.
+    """
     paths: list[Path] = []
     user_docs = repo_root / "user-docs"
     if user_docs.is_dir():
         paths.extend(sorted(user_docs.rglob("*.md")))
-    # Living dev docs only. dev-docs/plans/ is history and is not checked; nor is
-    # CHANGELOG.md, whose released entries describe the tree as it was at each
-    # release and legitimately name modules that have since moved. Resolve before
-    # excluding so a symlink in dev-docs/ cannot pull historical content back in.
-    plans_root = (repo_root / "dev-docs" / "plans").resolve()
-    changelog = (repo_root / "CHANGELOG.md").resolve()
+    plans_root = repo_root / "dev-docs" / "plans"
+    if plans_root.is_dir():
+        # Active plans: the top level and supporting/. These are live documents.
+        paths.extend(sorted(plans_root.glob("*.md")))
+        supporting = plans_root / "supporting"
+        if supporting.is_dir():
+            paths.extend(sorted(supporting.glob("*.md")))
+        if include_completed_plans:
+            completed = plans_root / "completed"
+            if completed.is_dir():
+                paths.extend(sorted(completed.glob("*.md")))
+    # Living dev docs. Resolve before excluding so a symlink in dev-docs/ cannot
+    # pull excluded content back in.
     for subdir in ("dev-docs", "dev-docs/info"):
         directory = repo_root / subdir
         if not directory.is_dir():
             continue
         for candidate in sorted(directory.glob("*.md")):
-            resolved = candidate.resolve()
-            if resolved.is_relative_to(plans_root) or resolved == changelog:
+            if _is_excluded(candidate, repo_root):
                 continue
             paths.append(candidate)
     for rel in ("README.md", "ARCHITECTURE.md", "AGENTS.md"):
@@ -87,6 +133,25 @@ def iter_markdown_files(repo_root: Path) -> list[Path]:
         if candidate.is_file():
             paths.append(candidate)
     return sorted(set(paths))
+
+
+def is_historical_record(md_path: Path, repo_root: Path) -> bool:
+    """True when a file is in the advisory-only set (completed plans, CHANGELOG)."""
+    return _is_excluded(md_path, repo_root)
+
+
+def is_plan_document(md_path: Path, repo_root: Path) -> bool:
+    """True when a file is a plan (active or completed) under ``dev-docs/plans/``.
+
+    Plans get relative-link checking but not the inline ``src/...py`` existence
+    check, because a plan may name a module it intends to create. See
+    :func:`check_src_paths` for that contract.
+    """
+    plans_root = (repo_root / "dev-docs" / "plans").resolve()
+    try:
+        return md_path.resolve().is_relative_to(plans_root)
+    except OSError:  # pragma: no cover - defensive
+        return False
 
 
 def exists_with_exact_case(repo_root: Path, relative: str) -> bool:
@@ -209,6 +274,15 @@ def main() -> int:
         default=Path(__file__).resolve().parent.parent,
         help="Repository root (default: parent of scripts/).",
     )
+    parser.add_argument(
+        "--include-completed-plans",
+        action="store_true",
+        help=(
+            "Also report link rot in dev-docs/plans/completed/ and CHANGELOG.md. "
+            "Advisory only: reports and still exits 0, so historical-record debt "
+            "is measurable without becoming a merge gate."
+        ),
+    )
     args = parser.parse_args()
     repo_root: Path = args.root.resolve()
 
@@ -221,28 +295,57 @@ def main() -> int:
     blob_base = (
         load_github_blob_base(repo_root) if doc_urls_path.is_file() else None
     )
-    all_errors: list[str] = []
-    for md in iter_markdown_files(repo_root):
+    blocking: list[str] = []
+    advisory: list[str] = []
+    files = iter_markdown_files(repo_root, args.include_completed_plans)
+    for md in files:
         is_user_doc = md.is_relative_to(user_docs_root)
-        all_errors.extend(check_file(md, repo_root, is_user_doc=is_user_doc))
-        all_errors.extend(check_src_paths(md, repo_root))
+        errors = check_file(md, repo_root, is_user_doc=is_user_doc)
+        # The inline `src/...py` check asserts that a backticked path names a
+        # file that exists *now*, which is true of descriptive docs but false
+        # of plans: a plan legitimately names modules it intends to create
+        # ("add `src/core/image_pairing.py`"), and the checker's own contract
+        # says such prose should be written as a glob or plain text instead.
+        # Applying it to the plan tree would report 17 distinct proposed
+        # modules as broken alongside the 16 genuinely-stale ones, so a gate
+        # would be permanently red for a reason no edit can fix. Plans are
+        # therefore link-checked only; the stale refs are swept separately.
+        if not is_plan_document(md, repo_root):
+            errors.extend(check_src_paths(md, repo_root))
         if is_user_doc and blob_base is not None:
-            all_errors.extend(
+            errors.extend(
                 check_github_blob_base_alignment(md, repo_root, blob_base)
             )
+        # Only rot in historical records is demoted; a broken link in a live
+        # document blocks even during an advisory pass.
+        if is_historical_record(md, repo_root):
+            advisory.extend(errors)
+        else:
+            blocking.extend(errors)
 
-    if all_errors:
+    if blocking:
         print("Broken documentation references:", file=sys.stderr)
-        for line in all_errors:
+        for line in blocking:
             print(f"  {line}", file=sys.stderr)
         return 1
 
-    n_files = len(iter_markdown_files(repo_root))
-    print(
-        f"OK: checked links and src/ code paths in {n_files} Markdown file(s) "
-        "under user-docs/, the living dev-docs/, README.md, ARCHITECTURE.md, "
-        "and AGENTS.md."
+    n_files = len(files)
+    scope = (
+        "user-docs/, the living dev-docs/, the active plan tree, README.md, "
+        "ARCHITECTURE.md, and AGENTS.md"
     )
+    if advisory:
+        print(
+            f"OK: checked {n_files} Markdown file(s) ({scope}). "
+            f"Advisory only - {len(advisory)} broken reference(s) in historical "
+            "records (dev-docs/plans/completed/, CHANGELOG.md), which are "
+            "excluded by policy because they describe the tree as it was:",
+            file=sys.stderr,
+        )
+        for line in advisory:
+            print(f"  {line}", file=sys.stderr)
+    else:
+        print(f"OK: checked links and src/ code paths in {n_files} Markdown file(s) ({scope}).")
     return 0
 
 

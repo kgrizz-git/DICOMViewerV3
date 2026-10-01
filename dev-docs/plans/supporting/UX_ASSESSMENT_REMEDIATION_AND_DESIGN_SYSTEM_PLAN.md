@@ -2,8 +2,8 @@
 
 **Created:** 2026-05-03  
 **Updated:** 2026-08-24
-**Source:** [ux-summary.md](../../dev-docs/ux-assessments/ux-summary.md) · [ux-assessment-overall-2026-04-30.md](../../dev-docs/ux-assessments/ux-assessment-overall-2026-04-30.md)  
-**Design reference:** [DESIGN.md](../../DESIGN.md)  
+**Source:** [ux-summary.md](../../../dev-docs/ux-assessments/ux-summary.md) · [ux-assessment-overall-2026-04-30.md](../../../dev-docs/ux-assessments/ux-assessment-overall-2026-04-30.md)  
+**Design reference:** [DESIGN.md](../../../DESIGN.md)  
 **TO_DO section:** UX / Workflow
 
 This plan addresses all P0, P1, and selected P2 findings from the 2026-04-30 UX assessment, and defines the steps to produce `DESIGN.md` as the canonical design specification for the project.

@@ -440,16 +440,16 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
-    def test_symlink_cannot_pull_plans_content_into_scope(self) -> None:
-        """A symlink in dev-docs/ must not defeat the plans/ exclusion."""
+    def test_symlink_cannot_pull_completed_plans_content_into_scope(self) -> None:
+        """A symlink must not defeat the plans/completed/ exclusion."""
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             dev_docs = self._make_repo(tmp)
-            (dev_docs / "plans").mkdir()
-            (dev_docs / "plans" / "OLD.md").write_text(
+            (dev_docs / "plans" / "completed").mkdir(parents=True)
+            (dev_docs / "plans" / "completed" / "OLD.md").write_text(
                 "Back then it was `src/core/mpr_controller.py`.\n"
             )
-            (dev_docs / "NOTE.md").symlink_to(Path("plans") / "OLD.md")
+            (dev_docs / "NOTE.md").symlink_to(Path("plans/completed") / "OLD.md")
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
@@ -469,17 +469,113 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
-    def test_plans_directory_is_not_checked(self) -> None:
-        """dev-docs/plans/ is historical record; stale paths there are expected."""
+
+class TestPlanTreePolicy(unittest.TestCase):
+    """dev-docs/plans/ is split: active plans are checked, completed ones are not.
+
+    A completed plan describes the tree as it was, so a link to a since-renamed
+    file is an accurate record. An *active* plan is a live work document, so a
+    broken link in it misleads whoever is implementing it.
+    """
+
+    def _run(self, tmp: Path, *extra: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(tmp), *extra],
+            cwd=str(tmp),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _tree(self, tmp: Path) -> Path:
+        (tmp / "user-docs").mkdir()
+        (tmp / "src" / "core").mkdir(parents=True)
+        (tmp / "src" / "core" / "real_module.py").write_text("x = 1\n")
+        (tmp / "dev-docs").mkdir()
+        (tmp / "dev-docs" / "TO_DO.md").write_text("# to-do\n")
+        (tmp / "dev-docs" / "info").mkdir()
+        (tmp / "dev-docs" / "plans").mkdir(parents=True)
+        (tmp / "dev-docs" / "plans" / "supporting").mkdir()
+        (tmp / "dev-docs" / "plans" / "completed").mkdir()
+        return tmp / "dev-docs"
+
+    def test_broken_link_in_an_active_plan_is_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
-            dev_docs = self._make_repo(tmp)
-            (dev_docs / "plans").mkdir()
-            (dev_docs / "plans" / "OLD_PLAN.md").write_text(
-                "Back then it was `src/core/mpr_controller.py`.\n"
+            dev_docs = self._tree(tmp)
+            (dev_docs / "plans" / "ACTIVE_PLAN.md").write_text(
+                "See [todo](../TO_DO_MISSING.md).\n"
             )
-            proc = self._run_on_tree(tmp)
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("broken link", proc.stderr)
+
+    def test_broken_link_in_a_supporting_plan_is_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "plans" / "supporting" / "S.md").write_text(
+                "See [nope](../../nowhere.md).\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("broken link", proc.stderr)
+
+    def test_active_plan_cannot_name_a_proposed_module(self) -> None:
+        """Plans may name modules they intend to create; that is not link rot.
+
+        The inline ``src/...py`` check asserts a path exists *now*, which is true
+        of descriptive docs but false of a plan's "add ``src/core/thing.py``".
+        Applying it there reported 17 proposed modules as broken, which no edit
+        could ever fix, so a gate would be permanently red.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "plans" / "ACTIVE.md").write_text(
+                "Add `src/core/not_created_yet.py` first.\n"
+            )
+            proc = self._run(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_descriptive_doc_still_rejects_a_stale_module_path(self) -> None:
+        """The src/ check is scoped to plans only, not disabled repo-wide."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "ARCHITECTURE.md").write_text(
+                "See `src/core/moved_away.py`.\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("names a source file", proc.stderr)
+
+    def test_completed_plan_rot_is_advisory_not_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "plans" / "completed" / "DONE.md").write_text(
+                "See [gone](../NO_LONGER_THERE.md).\n"
+            )
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("Advisory only", proc.stderr)
+            self.assertIn("broken link", proc.stderr)
+
+    def test_advisory_mode_still_blocks_broken_links_in_active_plans(self) -> None:
+        """Asking for advisory output must not downgrade the live tree to a warning."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "plans" / "completed" / "DONE.md").write_text(
+                "See [gone](../NO_LONGER_THERE.md).\n"
+            )
+            (dev_docs / "plans" / "ACTIVE.md").write_text(
+                "See [also gone](../ALSO_GONE.md).\n"
+            )
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("Broken documentation references", proc.stderr)
 
 
 if __name__ == "__main__":

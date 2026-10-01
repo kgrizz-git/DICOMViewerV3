@@ -978,7 +978,7 @@ needs to see which part of the curve moved.
 - [x] **User docs** (`user-docs/`): document the LUT selector, the three-curve
   transfer-function display, the editor, keyboard shortcut, and the explicit
   statement that PNG/JPG export bakes the LUT while DICOM export does not.
-  Follow [`dev-docs/plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](../../DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
+  Follow [`dev-docs/plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](../DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md)
   and run `python scripts/check_user_docs_links.py`.
 - [x] **Dev docs**: refresh
   [`dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md`](../../info/PYLINAC_INTEGRATION_OVERVIEW.md)
