@@ -407,10 +407,12 @@ def _compound_allow_list() -> dict[str, set[str]]:
     the exemption is justified by inspecting each method's AST.
 
     Most entries do also have a dedicated characterization test in one of the
-    ``*_wiring`` modules. Not all: the ``InitializationMixin._init_*`` methods
-    construct the application and are only exercised incidentally by the
-    ``DICOMViewerApp()`` smoke anchor in ``test_main_mixin_composition.py``.
-    Do not read presence here as a coverage claim.
+    ``*_wiring`` modules. The exception is ``InitializationMixin``: only
+    ``_setup_ui`` is characterized (``test_main_mixin_ui_and_init_wiring.py``),
+    while its remaining entries construct the application and are exercised only
+    incidentally, by the ``DICOMViewerApp()`` smoke anchor in
+    ``test_main_mixin_composition.py``. Do not read presence here as a coverage
+    claim.
     """
     return {
     "InitializationMixin": {
@@ -474,9 +476,10 @@ def test_every_mixin_method_has_a_coverage_route() -> None:
 
     Every method of every registered mixin must either appear in a case table —
     which pins its wiring — or be allow-listed, which exempts it because its body
-    is compound. Allow-list membership asserts only *that exemption is justified*
-    (enforced by the AST check below); it does **not** assert a characterization
-    test exists. Several allow-listed methods genuinely have none: they run
+    is compound. Allow-list membership asserts only *that the exemption is
+    justified* (enforced by the AST check below); it does **not** assert a
+    characterization test exists. One group genuinely has none: the
+    ``InitializationMixin`` entries other than ``_setup_ui`` run only
     incidentally inside the ``DICOMViewerApp()`` construction smoke test, and
     covering them by name would mean booting the whole app.
     """
