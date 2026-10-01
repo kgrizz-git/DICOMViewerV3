@@ -42,14 +42,31 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
-4. **[P1] More and custom look-up tables (LUTs & colormaps)** — add
-   non-linear grayscale transfer functions, built-in colormaps, and an
-   interactive custom LUT editor that supports drawing freehand curves or
-   moving breakpoints, with straight-line and smooth interpolation; display
-   the active/loaded LUT and its curve or colormap preview, and show the
-   **window/level ramp, the LUT, and their composed result** as an overlaid
-   transfer-function display (the LUT is a separate step applied after
-   window/level, `final(x) = LUT(P_inv(u))` with `u = uint8(WL(x))`, where `P_inv` is MONOCHROME1 XOR user invert). **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
+4. **[P1] More and custom look-up tables (LUTs & colormaps) — finish Phases 3c/4.**
+   **Phases 1–3a/3b/3d are shipped and merged** (PR #161 + #166, 2026-09-28): the
+   engine, built-in transfer functions and colormaps, all five display paths, the
+   toolbar/View/context-menu selector, and the grayscale curve editor. What remains,
+   in recommended order:
+   - **Missing test coverage for shipped UI** (no `src/` change needed): the
+     `tests/gui/test_lut_curve_editor.py` suite (breakpoint add/delete/drag,
+     freehand → simplified control points, interpolation switch, undo/redo, gamma
+     slider re-sample, three-curve overlay across all four MONOCHROME1 ×
+     user-invert combinations) and the **QImage stride-consistency** regression
+     (odd widths 63/65/101 on the variable-size consumers, 68 px buffer for
+     `MprThumbnailWidget`) — the plan's own test-plan boxes are still open.
+   - **3c editor three-curve preview** — the edited LUT curve in LUT space with the
+     net-inversion composed result behind it, live against the current W/L.
+   - **3c stretch goal** — drag the composed curve's endpoints to adjust W/L.
+   - **Phase 4a persistence** — `custom_luts.json` via `ConfigManager`,
+     `to_dict()`/`from_dict()`. This is the real user-facing gap: a curve the user
+     draws today is lost on restart.
+   - **Phase 4** — active-LUT label on each pane (View-menu toggle, `ConfigManager`
+     persisted), DICOM `ModalityLUTSequence`/`VOILUTSequence` as a "From DICOM"
+     option, per-series default LUT, and **4b** editable color colormaps.
+   **Manual smoke is written but not yet run or filed** — the steps are at
+   [`AGENT_SMOKE.md` §LUT](orchestration/AGENT_SMOKE.md) and are **not** yet a line
+   in [Manual Smoke Checks](#manual-smoke-checks), so slot 1 does not yet apply to
+   this item. **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -132,9 +149,8 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P1]** **Address open issues flagged on Aikido dashboard.** Review the Aikido scanner dashboard and triage/address remaining findings (e.g., configuring further explicit pins, fixing flagged code, or marking false positives).
 - [ ] **[P2]** **If DeepSource is enabled, require the same privacy controls as external CI scanners.** Do not enable the repository integration until it is configured to run only after the blocking privacy gate and excludes protected data/runtime roots plus DICOM, imaging, spreadsheet, document, and media patterns. Update `security/security-tool-inventory.json`, document the exact trigger/exclusion configuration, and verify that no source is sent before the gate passes.
-- [ ] **[P2]** **Restore blocking Grype and Semgrep SARIF uploads when GitHub Code Scanning is available.** The current private repository has Code Scanning disabled, so `.github/workflows/grype.yml` and `.github/workflows/semgrep.yml` keep their actual vulnerability/SAST scans mandatory but make only their optional Security-tab uploads nonblocking. When the repository becomes public **or** Code Scanning is explicitly enabled for the private repository, remove `continue-on-error: true` from both workflows, manually run them, and confirm that both SARIF result sets appear in the GitHub Security tab. **Added 2026-07-14.**
 - [ ] **[P2]** **Work through local Semgrep, basedpyright, and dependency-scan findings.** Triage actionable bugs/technical debt versus false positives using the repository's local-first tools; do not enable hosted source-analysis integrations to perform this work.
-- [ ] **[P2]** **Add a `pre-push` git hook running `basedpyright` locally.** Currently `basedpyright` only runs in CI (`.github/workflows/pyright.yml`), gated on `errorCount > 0` (warnings don't block). A local pre-push hook would catch errors before they reach GitHub instead of only surfacing after a push/PR. Note: investigated 2026-07-09 after a DeepSource PR comment flagged a reused-loop-variable type mismatch in `export_manager.py` (PR #81) — confirmed `basedpyright` itself does **not** flag that particular pattern (it flow-narrows the reassigned variable per-statement), so a pre-push hook running `basedpyright` would not have caught that specific case; DeepSource's own analyzer is stricter there. Still worth adding for the errors basedpyright *does* catch, to shorten the feedback loop vs. waiting on CI.
+- [ ] **[P2]** **Add a `pre-push` git hook running `basedpyright` locally.** Currently `basedpyright` only runs in CI (`.github/workflows/ci.yml`, `pyright` job), gated on `errorCount > 0` (warnings don't block). A local pre-push hook would catch errors before they reach GitHub instead of only surfacing after a push/PR. Note: investigated 2026-07-09 after a DeepSource PR comment flagged a reused-loop-variable type mismatch in `export_manager.py` (PR #81) — confirmed `basedpyright` itself does **not** flag that particular pattern (it flow-narrows the reassigned variable per-statement), so a pre-push hook running `basedpyright` would not have caught that specific case; DeepSource's own analyzer is stricter there. Still worth adding for the errors basedpyright *does* catch, to shorten the feedback loop vs. waiting on CI.
 - [ ] **[P1]** **Remediate local SonarQube MAJOR findings (ongoing).** Security (S2245 insecure randomness), logic bugs (S3923 identical branches), and float-equality (S1244) suppressions with per-site rationale; 114 CODE_SMELL findings deferred to a later cleanup pass. Staged on `fix/sonarqube-major-findings-20260718`. **Plan:** [SonarQube major findings remediation](plans/SONARQUBE_MAJOR_FINDINGS_REMEDIATION_PLAN_20260718.md). Surfaced 2026-08-11.
 - [ ] **[P2]** **Add a `scripts/check_file_line_counts.py` + CI step to flag oversized source files.** The repo currently has no hook for file size by **line count** (only byte-size thresholds in the loader/large-file dialog). Add a check that reports/fails files exceeding a line-count threshold (e.g. 500–1000 lines, matching the refactor guidance elsewhere in this file), with a sensible exclusion list (generated files, test data, migrations) and a `--fail-under`/`--max-lines` override. Wire into CI alongside the cognitive-complexity gate above, and optionally into a local pre-commit/pre-push hook.
 - [ ] **[P1]** **Fusion / core refactor deep dive:** audit and simplify fusion pipeline (`fusion_handler*`, `fusion_processor`, `image_resampler`, `fusion_coordinator`); align SimpleITK direction-matrix construction with MPR (`mpr_volume.py` / `mpr_builder.py`); break up large files (>500–1000 lines), reduce duplication, add unit tests for spatial math and rescale timing; no behavior change until audit findings are reviewed

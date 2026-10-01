@@ -96,6 +96,24 @@ Generated `site/` is gitignored. See
 
 **CI:** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 
+### Code scanning (SARIF uploads)
+
+The `semgrep`, `codeql`, and `grype` jobs in `ci.yml` each upload SARIF to the
+GitHub Security tab, and **all three uploads are blocking**. The semgrep and
+grype uploads previously carried `continue-on-error: true`, which existed only
+while the repository was private and Code Scanning could not accept SARIF;
+restored 2026-09-30 after the repository became public.
+
+A failing upload means the Security tab has stopped receiving results for that
+scanner — a silent loss of coverage that reads exactly like "no findings." Fix
+the upload; do not re-add `continue-on-error` to make a red build go away. CodeQL
+never had the flag.
+
+Note that the scans themselves are separate from the uploads: `semgrep` exits
+non-zero on findings and `grype` runs with `fail-build: false` +
+`severity-cutoff: high`, so a green scan with a green upload is the expected
+state, not evidence that the scanner is misconfigured.
+
 ### Dependency vulnerability audits
 
 Two separate jobs, because they have different reliability:

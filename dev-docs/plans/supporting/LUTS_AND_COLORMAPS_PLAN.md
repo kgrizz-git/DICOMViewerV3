@@ -1,9 +1,9 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** In progress (Phase 1–3 landed on `feat/lut-display`; remaining: composed-curve W/L dragging (3c stretch goal), the editor's three-curve preview arrangement, the odd-width QImage stride regression, the four-combination Qt/GUI overlay tests, and Phase 4)  
+**Status:** In progress — Phases 1–3a/3b/3d merged (PR #161, then #166, 2026-09-28). Remaining, in order: the **missing tests for shipped UI** (the `tests/gui/test_lut_curve_editor.py` suite and the QImage stride-consistency regression — both are open boxes in the Test plan below and need no `src/` change), **3c**'s editor three-curve preview and the composed-curve endpoint W/L drag, **Phase 4** (4a persistence, pane LUT label, DICOM LUT sequences, per-series default, 4b color stops). The manual smoke steps are written at [`AGENT_SMOKE.md`](../../orchestration/AGENT_SMOKE.md) but have **not** been run or filed in [`TO_DO.md`](../../TO_DO.md#manual-smoke-checks).  
 **Priority:** P1  
-**Last updated:** 2026-09-28  
-**TO_DO ref:** [`TO_DO.md` Next up](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps)**" (paraphrased; see the **Next up** entry for the authoritative wording)
+**Last updated:** 2026-09-30  
+**TO_DO ref:** [`TO_DO.md` Next up slot 4](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps) — finish Phases 3c/4**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
 
