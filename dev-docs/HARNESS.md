@@ -114,6 +114,15 @@ non-zero on findings and `grype` runs with `fail-build: false` +
 `severity-cutoff: high`, so a green scan with a green upload is the expected
 state, not evidence that the scanner is misconfigured.
 
+**Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
+PR comments on `github.event.pull_request.head.repo.full_name ==
+github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
+`GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
+and with the uploads now blocking, an unguarded fork PR would turn the required
+**Semgrep Security Audit** check red on an outside contribution. The scan itself
+still runs on fork PRs and still fails on findings; only the upload and the
+comment are skipped.
+
 ### Dependency vulnerability audits
 
 Two separate jobs, because they have different reliability:

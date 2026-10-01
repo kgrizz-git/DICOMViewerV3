@@ -76,6 +76,13 @@ COLLABORATOR_CASES: tuple[CollaboratorCase, ...] = (
     CollaboratorCase("UIHandlersMixin", "_set_mouse_mode", "mouse_mode_handler", "set_mouse_mode", ("roi",)),
     CollaboratorCase("UIHandlersMixin", "_on_arrow_key_pressed", "slice_display_manager", "handle_arrow_key_pressed", (-1,)),
     CollaboratorCase(
+        "InitializationMixin",
+        "_connect_focused_subwindow_signals",
+        "_subwindow_lifecycle_controller",
+        "connect_focused_subwindow_signals",
+        (),
+    ),
+    CollaboratorCase(
         "UIHandlersMixin",
         "_on_context_menu_mouse_mode_changed",
         "mouse_mode_handler",

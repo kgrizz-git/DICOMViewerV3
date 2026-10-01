@@ -37,6 +37,7 @@ class CollaboratorCase(NamedTuple):
 
 #: mixin_class -> importable module that defines it
 MIXIN_MODULES: dict[str, str] = {
+    "InitializationMixin": "main_app_initialization",
     "DisplayProjectionMixin": "main_app_display_settings",
     "SettingsLayoutMixin": "main_app_display_settings",
     "UIHandlersMixin": "main_app_ui_and_files",

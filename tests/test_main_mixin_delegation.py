@@ -1,7 +1,8 @@
 """
 Mixin delegation safety net for the ``main.py`` facade split.
 
-Every method of the mixins in ``src/main_app_*.py`` is covered by exactly one of:
+Every method of the nine mixin classes in ``src/main_app_*.py`` is covered by
+exactly one of:
 
 * a case in :mod:`main_mixin_delegation_cases_handlers` /
   :mod:`main_mixin_delegation_cases_collaborators`, exercised by the two
@@ -9,8 +10,13 @@ Every method of the mixins in ``src/main_app_*.py`` is covered by exactly one of
   dropped argument fails here instead of at runtime;
 * a characterization test in one of the ``*_wiring`` modules, for the methods
   whose body does more than forward;
-* the ``compound`` allow-list in :func:`test_every_mixin_method_has_a_coverage_route`,
-  which is the guard that keeps the first two from silently rotting.
+* the ``compound`` allow-list in :func:`_compound_allow_list`, whose entries are
+  themselves checked by :func:`test_compound_allow_list_only_contains_genuinely_compound_methods`.
+
+The allow-list is the weak link, so it is verified rather than trusted: the route
+test below fails if a method has no route into a case table, and the AST check
+fails if a single-call forward is allow-listed instead of tabulated. Both guards
+were confirmed by mutation, not by inspection.
 """
 
 from __future__ import annotations
@@ -46,6 +52,8 @@ def test_mixin_forwards_to_module_handler(monkeypatch: pytest.MonkeyPatch, case:
 
     stub = _stub_for(case.mixin_class)
     getattr(stub, case.method)(*case.args, **(case.kwargs or {}))
+
+    recorder.assert_called_once_with(stub, *case.args, **(case.kwargs or {}))
 
     recorder.assert_called_once_with(stub, *case.args, **(case.kwargs or {}))
 
@@ -389,6 +397,16 @@ def _compound_allow_list() -> dict[str, set[str]]:
     ``test_compound_allow_list_only_contains_genuinely_compound_methods`` enforces that.
     """
     return {
+    "InitializationMixin": {
+        "_init_core_managers",
+        "_setup_ui",
+        "_init_main_window_and_layout",
+        "_init_view_widgets",
+        "_post_init_subwindows_and_handlers",
+        "_init_controllers_and_tools",
+        "_initialize_subwindow_managers",
+        "_connect_signals",
+    },
     "UIHandlersMixin": {
         "_on_undo_requested",
         "_on_redo_requested",
@@ -498,9 +516,12 @@ def test_compound_allow_list_only_contains_genuinely_compound_methods() -> None:
     list.
 
     "Pure forward" means a single statement that is a bare call (optionally
-    returned) with no branching anywhere inside it. A single ``if``/``try`` is
-    still compound behaviour, and a plain accessor (``return a in b``) is not a
-    delegation at all, so neither is flagged.
+    returned) with no branching inside it **and** whose arguments are only plain
+    references it received. A call that constructs its own arguments — e.g.
+    ``_setup_ui`` building a ``MainWindowPanels`` bundle — is assembling, not
+    forwarding, and is better characterized directly than tabulated. A single
+    ``if``/``try`` is compound behaviour, and a plain accessor (``return x in
+    y``) is not a delegation at all, so neither is flagged.
     """
     import ast
     import inspect
@@ -526,8 +547,11 @@ def test_compound_allow_list_only_contains_genuinely_compound_methods() -> None:
         if len(body) > 1 or any(isinstance(n, _BRANCHING) for n in ast.walk(ast.Module(body=body, type_ignores=[]))):
             continue  # genuinely compound
         call = body[0].value if isinstance(body[0], ast.Expr) else getattr(body[0], "value", None)
-        if isinstance(call, ast.Call):
-            pure_forwards.append(f"{mixin_name}.{method}")
+        if not isinstance(call, ast.Call):
+            continue  # not a delegation (e.g. a plain accessor)
+        if any(isinstance(node, ast.Call) for arg in call.args for node in ast.walk(arg)):
+            continue  # constructs its own arguments: assembling, not forwarding
+        pure_forwards.append(f"{mixin_name}.{method}")
 
     assert pure_forwards == [], (
         "these allow-listed methods are single-call forwards and belong in a case "

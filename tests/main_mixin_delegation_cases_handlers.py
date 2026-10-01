@@ -16,6 +16,20 @@ from main_mixin_delegation_support import HandlerCase
 # --- module-level handler forwards (app is always the handler's first argument) ------
 
 HANDLER_CASES: tuple[HandlerCase, ...] = (
+    # InitializationMixin -> handler bootstrap / main-window assembly / layout signals
+    HandlerCase("InitializationMixin", "_initialize_handlers", "bootstrap_initialize_handlers", ()),
+    HandlerCase(
+        "InitializationMixin",
+        "_connect_all_subwindow_transform_signals",
+        "layout_connect_all_subwindow_transform_signals",
+        (),
+    ),
+    HandlerCase(
+        "InitializationMixin",
+        "_connect_all_subwindow_context_menu_signals",
+        "layout_connect_all_subwindow_context_menu_signals",
+        (),
+    ),
     # DisplayProjectionMixin -> core.slice_display_handlers / overlay handlers
     HandlerCase(
         "DisplayProjectionMixin",
