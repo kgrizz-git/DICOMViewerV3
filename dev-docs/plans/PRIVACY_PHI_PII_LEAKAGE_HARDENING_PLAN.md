@@ -69,7 +69,7 @@ Success requires all of the following:
 - Commit-message guard: `scripts/git_hook_commit_message_privacy.py`
 - Current sanitizer: `src/utils/log_sanitizer.py`
 - Current optional diagnostic sink: `src/utils/debug_log.py`
-- Current blocking CI artifact job: `.github/workflows/security-checks.yml`
+- Current blocking CI artifact job: `.github/workflows/privacy-gates.yml`
 - Reviewed media manifest: `security/approved-media-sha256.json`
 - Text exception manifest: `security/approved-phi-text-exceptions.json`
 - Isolated scanner dependencies: `requirements-phi-tools.txt`

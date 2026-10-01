@@ -71,6 +71,21 @@ LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 SRC_PATH_PATTERN = re.compile(
     r"`(src/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.py)(?::\d+(?:[-,]\d+)*)?`"
 )
+# Well-known repository files named as inline code. A doc that says
+# ``.github/workflows/grype.yml`` is asserting that file exists now, exactly as
+# ``src/core/foo.py`` is — and unlike a module, a workflow or a requirements file
+# is never something a plan *proposes to create*. That makes this class safe to
+# check in the plan tree too, which is the point: three workflows were
+# consolidated into ``ci.yml`` and the references went stale unnoticed because
+# nothing looked at non-``src`` paths. Deliberately a closed set of prefixes
+# rather than "any path-looking token", which would false-positive on prose.
+KNOWN_REPO_PATH_PATTERN = re.compile(
+    r"`((?:\.github/workflows/[\w.-]+\.ya?ml"
+    r"|requirements[-\w]*\.txt"
+    r"|pytest\.ini|ruff\.toml|\.coveragerc"
+    r"|[\w-]+\.githooks/[\w.-]+)"
+    r")(?::\d+)?`"
+)
 # Absolute GitHub blob links under user-docs/ must share GITHUB_BLOB_BASE.
 GITHUB_BLOB_LINK_HINT = re.compile(r"https://github\.com/[^)\s]+/blob/")
 
@@ -84,12 +99,23 @@ def _completed_plans_root(repo_root: Path) -> Path:
     return (repo_root / "dev-docs" / "plans" / "completed").resolve()
 
 
+#: Dated point-in-time records. They describe the tree as it was, so a reference
+#: to a since-renamed file is an accurate record rather than rot, and "fixing" it
+#: would rewrite the past. ``MAINTENANCE_LOG.md`` is a dated log by the repo's own
+#: convention; ``SECURITY_IMPLEMENTATION_SUMMARY.md`` is a dated, completed summary.
+HISTORICAL_RECORD_FILES = (
+    "CHANGELOG.md",
+    "dev-docs/MAINTENANCE_LOG.md",
+    "dev-docs/SECURITY_IMPLEMENTATION_SUMMARY.md",
+)
+
+
 def _is_excluded(candidate: Path, repo_root: Path) -> bool:
-    """True for files outside the blocking set: completed plans and CHANGELOG.md."""
+    """True for files outside the blocking set: historical records (see above)."""
     resolved = candidate.resolve()
     if resolved.is_relative_to(_completed_plans_root(repo_root)):
         return True
-    return resolved == (repo_root / "CHANGELOG.md").resolve()
+    return resolved in {(repo_root / rel).resolve() for rel in HISTORICAL_RECORD_FILES}
 
 
 def iter_markdown_files(
@@ -133,14 +159,17 @@ def iter_markdown_files(
         if candidate.is_file():
             paths.append(candidate)
     if include_completed_plans:
-        # The advisory mode is documented as covering the historical set, and
-        # CHANGELOG.md is part of it (same rationale: released entries describe
-        # the tree as it was). It has to be *added* here — `_is_excluded` only
-        # demotes a file, it never introduces one, so without this the flag
-        # claimed coverage it did not have.
-        changelog = repo_root / "CHANGELOG.md"
-        if changelog.is_file():
-            paths.append(changelog)
+        # The advisory mode is documented as covering the historical set, and that
+        # set is completed plans plus the dated records in
+        # ``HISTORICAL_RECORD_FILES``. They have to be *added* here:
+        # ``_is_excluded`` only drops a file from the candidate list, it never
+        # introduces one, so without this the flag would claim coverage it does
+        # not have — the same reads-as-configured-while-doing-nothing shape it
+        # exists to avoid.
+        for rel in HISTORICAL_RECORD_FILES:
+            candidate = repo_root / rel
+            if candidate.is_file():
+                paths.append(candidate)
     return sorted(set(paths))
 
 
@@ -186,13 +215,31 @@ def exists_with_exact_case(repo_root: Path, relative: str) -> bool:
 
 def check_src_paths(md_path: Path, repo_root: Path) -> list[str]:
     """Return errors for inline `src/....py` paths that do not exist."""
+    return _check_inline_paths(md_path, repo_root, SRC_PATH_PATTERN, "source file")
+
+
+def check_known_repo_paths(md_path: Path, repo_root: Path) -> list[str]:
+    """Return errors for inline well-known repo paths (workflows, requirements).
+
+    Kept separate from :func:`check_src_paths` because it is **not** exempt for
+    plans: naming a workflow or a requirements file is always a claim that it
+    exists now, so a plan proposing a new ``src/core/thing.py`` does not create
+    false positives here the way it would for the ``src/`` pattern.
+    """
+    return _check_inline_paths(md_path, repo_root, KNOWN_REPO_PATH_PATTERN, "repository file")
+
+
+def _check_inline_paths(
+    md_path: Path, repo_root: Path, pattern: re.Pattern[str], kind: str
+) -> list[str]:
+    """Return errors for inline code paths matching *pattern* that do not exist."""
     errors: list[str] = []
     text = md_path.read_text(encoding="utf-8")
-    for src_path in SRC_PATH_PATTERN.findall(text):
-        if not exists_with_exact_case(repo_root, src_path):
+    for path in pattern.findall(text):
+        if not exists_with_exact_case(repo_root, path):
             errors.append(
-                f"{md_path.relative_to(repo_root)}: names a source file that does "
-                f"not exist: {src_path!r}"
+                f"{md_path.relative_to(repo_root)}: names a {kind} that does "
+                f"not exist: {path!r}"
             )
     return errors
 
@@ -321,6 +368,12 @@ def main() -> int:
         # therefore link-checked only; the stale refs are swept separately.
         if not is_plan_document(md, repo_root):
             errors.extend(check_src_paths(md, repo_root))
+        # Not plan-exempt, unlike the src/ check above: a workflow or a
+        # requirements file is never something a plan proposes to create, so
+        # this class is safe to enforce in the plan tree too. It is the class
+        # that went stale unnoticed when three workflows were consolidated into
+        # ci.yml and nothing looked at non-src paths.
+        errors.extend(check_known_repo_paths(md, repo_root))
         if is_user_doc and blob_base is not None:
             errors.extend(
                 check_github_blob_base_alignment(md, repo_root, blob_base)

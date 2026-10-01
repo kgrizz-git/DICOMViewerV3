@@ -516,8 +516,8 @@ detect-secrets scan --all-files --force-use-all-plugins > .secrets.baseline 2>/d
 
 The same tools run automatically in CI:
 
-- **Semgrep:** `.github/workflows/semgrep.yml`
-- **Secrets detection:** `.github/workflows/security-checks.yml` (uses TruffleHog + detect-secrets)
+- **Semgrep:** `.github/workflows/ci.yml` (the `semgrep` job)
+- **Secrets detection:** `.github/workflows/privacy-gates.yml` (uses TruffleHog + detect-secrets)
 
 **Local vs CI:**
 - Local: Run before committing (fast feedback)

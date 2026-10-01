@@ -592,6 +592,71 @@ class TestPlanTreePolicy(unittest.TestCase):
             proc = self._run(tmp)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_stale_workflow_reference_in_a_living_doc_is_blocking(self) -> None:
+        """A doc naming a workflow inline is asserting the file exists now."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            self._tree(tmp)
+            (tmp / ".github" / "workflows").mkdir(parents=True)
+            (tmp / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
+            (tmp / "dev-docs" / "GUIDE.md").write_text(
+                "Runs in `.github/workflows/ci.yml` and "
+                "`.github/workflows/grype.yml`.\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("grype.yml", proc.stderr)
+            self.assertNotIn("ci.yml", proc.stderr)
+
+    def test_stale_workflow_reference_in_an_active_plan_is_blocking(self) -> None:
+        """The src/ check is plan-exempt; the workflow check deliberately is not.
+
+        A plan may *propose* a new module, so naming a not-yet-created
+        ``src/core/thing.py`` is not rot. A workflow or requirements file is
+        never proposed, so this class is safe to enforce in the plan tree — which
+        is how three consolidated workflows went stale unnoticed.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (tmp / ".github" / "workflows").mkdir(parents=True)
+            (dev_docs / "plans" / "ACTIVE.md").write_text(
+                "Job lives in `.github/workflows/security-checks.yml`.\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("security-checks.yml", proc.stderr)
+
+    def test_active_plan_may_still_propose_a_module(self) -> None:
+        """Guards the boundary the previous test relies on: proposals stay allowed."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (tmp / ".github" / "workflows").mkdir(parents=True)
+            (tmp / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
+            (dev_docs / "plans" / "ACTIVE.md").write_text(
+                "Add `src/core/not_created.py`; edit `.github/workflows/ci.yml`.\n"
+            )
+            proc = self._run(tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_dated_records_are_advisory_not_blocking(self) -> None:
+        """MAINTENANCE_LOG / SECURITY_IMPLEMENTATION_SUMMARY describe the past."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            self._tree(tmp)
+            (tmp / "dev-docs" / "MAINTENANCE_LOG.md").write_text(
+                "## 2026-01-01\n\nRan `.github/workflows/grype.yml`.\n"
+            )
+            (tmp / "dev-docs" / "SECURITY_IMPLEMENTATION_SUMMARY.md").write_text(
+                "**Date:** 2026-03-22\n\nUsed `.github/workflows/semgrep.yml`.\n"
+            )
+            self.assertEqual(self._run(tmp).returncode, 0)
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("MAINTENANCE_LOG.md", proc.stderr)
+            self.assertIn("SECURITY_IMPLEMENTATION_SUMMARY.md", proc.stderr)
+
     def test_advisory_mode_still_blocks_broken_links_in_active_plans(self) -> None:
         """Asking for advisory output must not downgrade the live tree to a warning."""
         with tempfile.TemporaryDirectory() as d:
