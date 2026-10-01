@@ -123,6 +123,22 @@ and with the uploads now blocking, an unguarded fork PR would turn the required
 still runs on fork PRs and still fails on findings; only the upload and the
 comment are skipped.
 
+**The fork guard must be scoped to `pull_request` events.** A bare
+`github.event.pull_request.head.repo.full_name == github.repository` looks like
+it only excludes forks, but `github.event.pull_request` is **null** on `push` and
+`schedule`, so the comparison evaluates false and the upload is skipped on every
+push to `main` — silently starving the Security tab, which is the exact failure
+the blocking change exists to prevent. The two upload steps therefore read:
+
+```yaml
+if: always() && <artifact check> && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+```
+
+The two PR-comment steps are already gated on `github.event_name ==
+'pull_request'` first, so the bare comparison short-circuits and needs no
+disjunction there. If you add a step that touches a PR-scoped permission, copy
+the disjunction form.
+
 ### Dependency vulnerability audits
 
 Two separate jobs, because they have different reliability:

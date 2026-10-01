@@ -1,22 +1,26 @@
 """
 Mixin delegation safety net for the ``main.py`` facade split.
 
-Every method of the nine mixin classes in ``src/main_app_*.py`` is covered by
-exactly one of:
+Every method of the nine mixin classes in ``src/main_app_*.py`` is *routed* —
+but routed does not mean equally covered:
 
-* a case in :mod:`main_mixin_delegation_cases_handlers` /
-  :mod:`main_mixin_delegation_cases_collaborators`, exercised by the two
-  parametrized tests below — these pin the wiring, so a rewired slot or a
-  dropped argument fails here instead of at runtime;
-* a characterization test in one of the ``*_wiring`` modules, for the methods
-  whose body does more than forward;
-* the ``compound`` allow-list in :func:`_compound_allow_list`, whose entries are
-  themselves checked by :func:`test_compound_allow_list_only_contains_genuinely_compound_methods`.
+1. **Pinned.** A case in :mod:`main_mixin_delegation_cases_handlers` /
+   :mod:`main_mixin_delegation_cases_collaborators`, exercised by the two
+   parametrized tests below. A rewired slot or a dropped argument fails here
+   instead of at runtime. This is the guarantee the net exists to provide.
+2. **Characterized.** A dedicated test in one of the ``*_wiring`` modules, for
+   methods whose body does more than forward.
+3. **Exempt.** The ``compound`` allow-list in :func:`_compound_allow_list` —
+   methods whose body is too compound for a table row to describe. Membership
+   asserts the exemption is *justified* (see
+   :func:`test_compound_allow_list_only_contains_genuinely_compound_methods`), not
+   that a test exercises them. Some exempt methods have no characterization test
+   of their own; those notes are in the allow-list docstring.
 
 The allow-list is the weak link, so it is verified rather than trusted: the route
-test below fails if a method has no route into a case table, and the AST check
-fails if a single-call forward is allow-listed instead of tabulated. Both guards
-were confirmed by mutation, not by inspection.
+test below fails if a method has no route at all, and the AST check fails if a
+single-call forward is exempted instead of tabled. Both guards were confirmed by
+mutation, not by inspection.
 """
 
 from __future__ import annotations
@@ -39,10 +43,17 @@ from main_mixin_delegation_support import (
 )
 
 
+def _id_suffix(case: HandlerCase) -> str:
+    """Disambiguate ids when one method is tabled for more than one argument shape."""
+    if case.kwargs:
+        return "[" + ",".join(f"{k}={v!r}" for k, v in case.kwargs.items()) + "]"
+    return ""
+
+
 @pytest.mark.parametrize(
     "case",
     HANDLER_CASES + LAYOUT_HANDLER_CASES,
-    ids=lambda c: f"{c.mixin_class}.{c.method}",
+    ids=lambda c: f"{c.mixin_class}.{c.method}{_id_suffix(c)}",
 )
 def test_mixin_forwards_to_module_handler(monkeypatch: pytest.MonkeyPatch, case: HandlerCase) -> None:
     """A mixin slot must call its module-level handler with ``(self, *args, **kwargs)``."""
@@ -52,8 +63,6 @@ def test_mixin_forwards_to_module_handler(monkeypatch: pytest.MonkeyPatch, case:
 
     stub = _stub_for(case.mixin_class)
     getattr(stub, case.method)(*case.args, **(case.kwargs or {}))
-
-    recorder.assert_called_once_with(stub, *case.args, **(case.kwargs or {}))
 
     recorder.assert_called_once_with(stub, *case.args, **(case.kwargs or {}))
 
@@ -390,11 +399,18 @@ def test_on_undo_requested_without_available_undo_is_a_no_op() -> None:
 
 
 def _compound_allow_list() -> dict[str, set[str]]:
-    """Return the mixin methods characterized individually, per mixin class.
+    """Return the mixin methods exempted from the wiring tables, per mixin class.
 
-    Only methods whose body does more than forward belong here: a single-statement
-    forward must live in a case table so its delegate is pinned.
-    ``test_compound_allow_list_only_contains_genuinely_compound_methods`` enforces that.
+    Membership means **exempt, not characterized**: these methods have a body
+    beyond a single forward, so a case-table row would assert the wrong thing.
+    ``test_compound_allow_list_only_contains_genuinely_compound_methods`` proves
+    the exemption is justified by inspecting each method's AST.
+
+    Most entries do also have a dedicated characterization test in one of the
+    ``*_wiring`` modules. Not all: the ``InitializationMixin._init_*`` methods
+    construct the application and are only exercised incidentally by the
+    ``DICOMViewerApp()`` smoke anchor in ``test_main_mixin_composition.py``.
+    Do not read presence here as a coverage claim.
     """
     return {
     "InitializationMixin": {
@@ -454,39 +470,20 @@ def _compound_allow_list() -> dict[str, set[str]]:
 
 
 def test_every_mixin_method_has_a_coverage_route() -> None:
-    """Guard the guard: a new delegating mixin method must be added to a table here.
+    """Guard the guard: a new mixin method must be routed, not silently skipped.
 
-    Only one-line forwards are required. Methods with a real body (conditionals, loops,
-    local computation) are covered by their own tests and are allow-listed below.
+    Every method of every registered mixin must either appear in a case table —
+    which pins its wiring — or be allow-listed, which exempts it because its body
+    is compound. Allow-list membership asserts only *that exemption is justified*
+    (enforced by the AST check below); it does **not** assert a characterization
+    test exists. Several allow-listed methods genuinely have none: they run
+    incidentally inside the ``DICOMViewerApp()`` construction smoke test, and
+    covering them by name would mean booting the whole app.
     """
     compound = _compound_allow_list()
     covered = {f"{c.mixin_class}.{c.method}" for c in HANDLER_CASES}
     covered |= {f"{c.mixin_class}.{c.method}" for c in LAYOUT_HANDLER_CASES}
     covered |= {f"{c.mixin_class}.{c.method}" for c in COLLABORATOR_CASES}
-    individually_tested = {
-        f"{name}.{method}"
-        for name, methods in {
-            "UIHandlersMixin": {
-                "_on_scroll_wheel_mode_changed",
-                    "_on_undo_requested",
-                "_on_redo_requested",
-            },
-            "SubwindowManagementMixin": {
-                "_redisplay_subwindow_slice",
-                "_update_focused_subwindow_references",
-                "has_shown_fusion_notification",
-                "mark_fusion_notification_shown",
-            },
-            "ROIWorkflowMixin": {"_keyboard_delete_roi", "_delete_all_rois_current_slice"},
-            "DisplayProjectionMixin": {
-                "_schedule_histogram_wl_only",
-                "_do_update_histogram_wl_only",
-            },
-            "TagEditingMixin": {"_update_undo_redo_state"},
-        }.items()
-        for method in methods
-    }
-    covered |= individually_tested
 
     uncovered: dict[str, set[str]] = {}
     for mixin_name in MIXIN_MODULES:
