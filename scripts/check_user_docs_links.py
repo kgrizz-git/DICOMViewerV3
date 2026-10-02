@@ -234,12 +234,18 @@ def _living_dev_doc_files(repo_root: Path) -> list[Path]:
     Resolved before excluding so a symlink under ``dev-docs/`` cannot pull
     excluded content back in.
     """
-    found: list[Path] = []
-    for subdir in ("dev-docs", "dev-docs/info"):
-        for candidate in _markdown_under(repo_root / subdir, recursive=False):
-            if not _is_excluded(candidate, repo_root):
-                found.append(candidate)
-    return found
+    # Recursive, with the living/historical split delegated entirely to
+    # ``_is_excluded``. This used to enumerate ``dev-docs`` and ``dev-docs/info``
+    # explicitly while ``_is_excluded`` treated *everything* unlisted as live --
+    # two rules describing the same universe, which is precisely how seven
+    # subdirectories could be absent from the scan yet not excluded from blocking.
+    # One predicate now decides and the scan follows it, so a new directory is
+    # classified rather than silently skipped.
+    return [
+        candidate
+        for candidate in _markdown_under(repo_root / "dev-docs", recursive=True)
+        if not _is_excluded(candidate, repo_root)
+    ]
 
 
 def _root_doc_files(repo_root: Path) -> list[Path]:

@@ -169,15 +169,18 @@ PR comments on `github.event.pull_request.head.repo.full_name ==
 github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
 `GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
 and with the uploads now blocking, an unguarded fork PR would turn the required
-**Semgrep Security Audit** check red on an outside contribution. The scan itself
-still runs on fork PRs and still **gates**: the scan step carries `--error` and no
+**Semgrep Security Audit** check red on an outside contribution.
+
+**The two scans do not behave alike on a fork PR, and the difference matters.**
+The Semgrep scan runs and still **gates**: its step carries `--error` with no
 `continue-on-error`, so findings exit non-zero and turn the required **Semgrep
-Security Audit** check red exactly as they do on a branch PR. What a fork PR loses
-is narrower and worth stating precisely: the SARIF upload (no Security-tab entry)
-and the PR comment (no inline annotation). The finding is still visible in the job
-log and in the check status. An earlier version of this paragraph claimed the check
-"stays green" on fork PRs, which was simply wrong — the fork guard covers only the
-upload and comment steps, never the scan.
+Security Audit** check red exactly as on a branch PR. Grype's scan, by contrast, is
+non-blocking *by design* (`fail-build: false`, `severity-cutoff: high`), so with its
+upload skipped a Grype finding genuinely does leave that check green. An earlier
+version of this paragraph generalised the Semgrep behaviour to both jobs, which was
+wrong; a second version then over-corrected and claimed no scanner's check stays
+green on a fork. Neither is right. What a fork PR loses, for both, is the SARIF
+upload (no Security-tab entry) and the PR comment (no inline annotation).
 
 The same fork-guard pattern covers the **Grype** job's SARIF upload and PR
 comment. **CodeQL** has no explicit guard because the CodeQL action checks the
