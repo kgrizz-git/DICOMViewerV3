@@ -53,7 +53,7 @@ slice_display = f"Slice {instance_num}/{total_slices}"  # total_slices = len(loa
 
 The **numerator** is the DICOM acquisition instance index; the **denominator** is the **count of loaded slices in the viewer**. Those are different concepts. Partial folder load, skipped instances, or a series where `InstanceNumber` is not `1..N` produces **`current > total`**.
 
-Callers pass `total_slices=len(series)` from [`slice_display_manager.py`](../../../src/core/slice_display_manager.py) and [`overlay_coordinator.py`](../../../src/gui/overlay_coordinator.py) but do **not** pass `current_slice_index` (stack position).
+Callers pass `total_slices=len(series)` from [`slice_display_manager.py`](../../../src/gui/slice_display_manager.py) and [`overlay_coordinator.py`](../../../src/gui/overlay_coordinator.py) but do **not** pass `current_slice_index` (stack position).
 
 ---
 

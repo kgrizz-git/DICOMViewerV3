@@ -9,7 +9,7 @@
 
 ### Debug print flags (`src/utils/debug_flags.py`)
 
-All `DEBUG_*` flags are boolean, default `False`, and gate `print()` tracing. CI (`.github/workflows/security-checks.yml`, debug-flags-check) fails if any is left `True`.
+All `DEBUG_*` flags are boolean, default `False`, and gate `print()` tracing. CI (`.github/workflows/privacy-gates.yml`, debug-flags-check) fails if any is left `True`.
 
 | Flag | Default | Affects (per file comment) | Relevance to first paint |
 |------|---------|-----------------------------|---------------------------|

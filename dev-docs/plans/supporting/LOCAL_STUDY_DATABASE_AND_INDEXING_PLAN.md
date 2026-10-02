@@ -1,15 +1,15 @@
 # Local Study Database and Indexing — implementation plan (draft)
 
 **Status:** Draft for `/planner` refinement and `/researcher` spikes.  
-**Spec:** [FUTURE_WORK_DETAIL_NOTES.md § Local Study Database and Indexing](../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing)  
-**TO_DO:** [TO_DO.md § Data / Platform (Future)](../TO_DO.md) — **[P1]** line ~122.
+**Spec:** [FUTURE_WORK_DETAIL_NOTES.md § Local Study Database and Indexing](../../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing)  
+**TO_DO:** [TO_DO.md § Data / Platform (Future)](../../TO_DO.md) — **[P1]** line ~122.
 
 ## Codebase snapshot (orchestrator reconnaissance, 2026-04-13)
 
 - **Open / load path:** `FileOperationsHandler` (`src/core/file_operations_handler.py`) coordinates open file/folder/recent, uses `DICOMLoader`, `DICOMOrganizer`, `LoadingProgressManager`, and `run_load_pipeline` (`src/core/loading_pipeline.py`). `DICOMViewerApp` constructs the handler in `main.py`; file signals are wired in `src/core/app_signal_wiring.py` (`_wire_file_signals`: `open_file_requested`, `open_folder_requested`, `open_recent_file_requested`, `open_files_from_paths_requested`).
 - **Paths / recents:** `PathsConfigMixin` (`src/utils/config/paths_config.py`) — `last_path`, `last_export_path`, `recent_files`; no study index today.
 - **Persistence:** No `sqlite3` / `QSql` usage under `src/`; `.gitignore` already lists `db.sqlite3` (reserved pattern for future DB files — confirm path under user config dir before shipping).
-- **Adjacent P2:** [PACS-like Query and Archive](../FUTURE_WORK_DETAIL_NOTES.md#pacs-like-query-and-archive-integration) — keep a **narrow port** (query + resolve-to-paths) so a future PACS backend can replace or complement the local index without rewriting UI.
+- **Adjacent P2:** [PACS-like Query and Archive](../../FUTURE_WORK_DETAIL_NOTES.md#pacs-like-query-and-archive-integration) — keep a **narrow port** (query + resolve-to-paths) so a future PACS backend can replace or complement the local index without rewriting UI.
 
 ## Design principles
 
@@ -114,7 +114,7 @@ All menu/drag-drop/recent opens flow through **`FileSeriesLoadingCoordinator.ope
 
 ## Deferred follow-ups
 
-- **FTS5** (full-text on description and related text fields): **Shipped** in app **v0.3.0** (was deferred past the original MVP ship order). **Spec / checklist:** [FTS5 — local study index search (detailed plan)](#fts5-local-study-index-search-detailed-plan); tracking closed in [TO_DO.md](../TO_DO.md).
+- **FTS5** (full-text on description and related text fields): **Shipped** in app **v0.3.0** (was deferred past the original MVP ship order). **Spec / checklist:** [FTS5 — local study index search (detailed plan)](#fts5-local-study-index-search-detailed-plan); tracking closed in [TO_DO.md](../../TO_DO.md).
 
 ## Grouped study query and index browser (requirements sketch) — 2026-04-13
 
@@ -283,13 +283,13 @@ Verification gate (definition of done):
 
 **Purpose:** Add SQLite [FTS5](https://www.sqlite.org/fts5.html) so the study index browser can (1) use **one** primary text box to find studies whose indexed metadata matches **any** of several text fields, while (2) keeping today’s **per-field filters** (patient name, patient ID, modality, accession, study description, study date range) for precise narrowing — combined with **AND** semantics between the global box and each active field filter.
 
-**Linked from:** [TO_DO.md § Features (Near-Term) — P0 FTS](../TO_DO.md).
+**Linked from:** [TO_DO.md § Features (Near-Term) — P0 FTS](../../TO_DO.md).
 
 <a id="fts5-progress-and-todo-closeout"></a>
 
 ### Progress tracking and closing the TO_DO item
 
-This section is **part of the definition of done** for the P0 FTS work tracked in [TO_DO.md](../TO_DO.md).
+This section is **part of the definition of done** for the P0 FTS work tracked in [TO_DO.md](../../TO_DO.md).
 
 1. **Check off plan boxes as work completes**  
    In the [Task checklist](#task-checklist-implementation-order) below, turn **`- [ ]`** into **`- [x]`** for **F1–F6** only when that item is **fully** implemented, reviewed, and verified (not for partial or “good enough” progress). Prefer updating the checkboxes in the **same commit** as the completing change, or in the merge commit that lands the slice—avoid leaving the plan out of sync with `main`/`develop`.

@@ -42,7 +42,7 @@
 3. **Geometry** — `slice_geometry.py` builds `SliceStack` / `SlicePlane` from DICOM IPP/IOP; `find_nearest_slice` enforces a half-thickness tolerance so non-overlapping stacks do not jump.
 4. **UI** — **View → Manage Sync Groups…** (`slice_sync_dialog.py`); **View → Show Slice Location Lines** toggles the coordinator via config.
 
-Tests: `tests/core/test_slice_sync_coordinator_unit.py`, `tests/core/test_slice_geometry.py`, `tests/core/test_slice_location_line_helper_logic.py`, `tests/utils/test_slice_sync_config.py`.
+Tests: `tests/core/test_slice_sync_coordinator_unit.py`, `tests/test_slice_geometry.py`, `tests/core/test_slice_location_line_helper_logic.py`, `tests/utils/test_slice_sync_config.py`.
 
 ---
 

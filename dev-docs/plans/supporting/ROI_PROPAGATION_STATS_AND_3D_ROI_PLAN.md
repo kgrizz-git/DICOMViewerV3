@@ -36,7 +36,7 @@ Success means:
   - ROI edit handles in [`VIEWER_UX_FEATURES_PLAN.md`](VIEWER_UX_FEATURES_PLAN.md#1-roi-editing-resize-handles).
   - ROI graphics primitive split kept `ROIItem` / `ROIManager` orchestration in `roi_manager.py`; preserve that boundary unless a dedicated refactor phase changes it.
   - Multi-frame instance navigation follow-up warns that `current_slice_index` identity paths need audit before more per-instance behavior is added.
-  - DICOM write/interchange notes in [`DICOM_GSPS_KO_SECONDARY_CAPTURE.md`](../info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md): GSPS is for display annotations, not voxel masks or structure interchange.
+  - DICOM write/interchange notes in [`DICOM_GSPS_KO_SECONDARY_CAPTURE.md`](../../info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md): GSPS is for display annotations, not voxel masks or structure interchange.
 
 ## Task graph and gates
 

@@ -1,6 +1,6 @@
 # Unequal multi-pane splitters and cine playback axes
 
-**Scope:** Two related UX items from [`TO_DO.md`](TO_DO.md):
+**Scope:** Two related UX items from [`TO_DO.md`](../../TO_DO.md):
 
 1. Draggable **window dividers** for **unequal** multi-view pane sizes (multi-window image grid).
 2. **Cine** controls that clearly separate **frames**, **instances**, and **slices**, with optional playback modes.
@@ -9,11 +9,11 @@
 
 | Area | Primary modules |
 |------|-----------------|
-| Multi-view grid | [`src/gui/multi_window_layout.py`](../src/gui/multi_window_layout.py) — `QGridLayout`, `set_layout`, `SubWindowContainer` |
-| Main chrome splitters | [`src/gui/main_window.py`](../src/gui/main_window.py) — three-way `QSplitter`, `splitter_sizes` in config |
-| Cine orchestration | [`src/core/cine_app_facade.py`](../src/core/cine_app_facade.py), [`src/gui/cine_player.py`](../src/gui/cine_player.py) |
-| Slice vs frame grouping | [`src/core/slice_grouping.py`](../src/core/slice_grouping.py) |
-| Multi-frame background | [`dev-docs/info/MULTI_FRAME_DICOM_RESEARCH.md`](info/MULTI_FRAME_DICOM_RESEARCH.md), completed plan [`dev-docs/plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md`](plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md) |
+| Multi-view grid | [`src/gui/multi_window_layout.py`](../../../src/gui/multi_window_layout.py) — `QGridLayout`, `set_layout`, `SubWindowContainer` |
+| Main chrome splitters | [`src/gui/main_window.py`](../../../src/gui/main_window.py) — three-way `QSplitter`, `splitter_sizes` in config |
+| Cine orchestration | [`src/core/cine_app_facade.py`](../../../src/core/cine_app_facade.py), [`src/gui/cine_player.py`](../../../src/gui/cine_player.py) |
+| Slice vs frame grouping | [`src/core/slice_grouping.py`](../../../src/core/slice_grouping.py) |
+| Multi-frame background | [`dev-docs/info/MULTI_FRAME_DICOM_RESEARCH.md`](../../info/MULTI_FRAME_DICOM_RESEARCH.md), completed plan [`dev-docs/plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md`](../../plans/completed/MULTI_FRAME_INSTANCE_NAVIGATION_PLAN.md) |
 
 ---
 
@@ -47,7 +47,7 @@ So the checklist item targets **intra–image-grid** proportions (e.g. one large
 
 ### Out of scope / follow-ups
 
-- **Subdividing a single subwindow into tiles** is a separate, heavier item (see [`plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md`](plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md) if present).
+- **Subdividing a single subwindow into tiles** is a separate, heavier item (see [`dev-docs/plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md`](../../plans/supporting/WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md) if present).
 - **Preset asymmetric layouts** (e.g. one large + two small) overlaps with other TO_DO items about fixed templates; draggable splitters give users **continuous** control without defining every template.
 
 ---
@@ -67,7 +67,7 @@ So the checklist item targets **intra–image-grid** proportions (e.g. one large
 
 - There is **no single standard tag** that always equals “slice index in the stack.”
 - Common **hints** (modality-dependent): **`ImagePositionPatient`** (0020,0032) with **`ImageOrientationPatient`** (0020,0037) for ordering along the normal; optional **`SliceLocation`** (0020,1041); **`InstanceNumber`** (0020,0013) is **acquisition instance order** and can disagree with true spatial order—still useful for labeling.
-- Enhanced MR/CT may use **functional groups** (`SharedFunctionalGroupsSequence` / `PerFrameFunctionalGroupsSequence`) for per-frame geometry; a future tier of work is noted in [`TO_DO.md`](TO_DO.md) under *Data / Platform*.
+- Enhanced MR/CT may use **functional groups** (`SharedFunctionalGroupsSequence` / `PerFrameFunctionalGroupsSequence`) for per-frame geometry; a future tier of work is noted in [`TO_DO.md`](../../TO_DO.md) under *Data / Platform*.
 
 ### What the app does today
 
@@ -118,9 +118,9 @@ Optional later:
 ### Engineering tasks
 
 1. **Refactor advance logic** out of a single `_advance_frame` into a strategy or small functions keyed by mode (keeps `CinePlayer` testable).
-2. **Align slider and labels** with the active mode: e.g. “Frame 3/14 (slice 7/120)” or dual readouts—requires knowing **group index** + **index within group** from [`slice_grouping.py`](../src/core/slice_grouping.py).
+2. **Align slider and labels** with the active mode: e.g. “Frame 3/14 (slice 7/120)” or dual readouts—requires knowing **group index** + **index within group** from [`slice_grouping.py`](../../../src/core/slice_grouping.py).
 3. **Loop bounds:** decide whether A–B loop applies to **linear index** only or also to **frame-only** sub-ranges (document choice).
-4. **Cine export / video** ([`src/core/cine_video_export.py`](../src/core/cine_video_export.py)): ensure exported frame sequence matches the selected mode (or warn “export uses full linear order”).
+4. **Cine export / video** ([`src/gui/cine_video_export.py`](../../../src/gui/cine_video_export.py)): ensure exported frame sequence matches the selected mode (or warn “export uses full linear order”).
 5. **Tests:** synthetic multi-frame series in `tests/` verifying each mode’s index sequence.
 
 ### Feasibility and difficulty
