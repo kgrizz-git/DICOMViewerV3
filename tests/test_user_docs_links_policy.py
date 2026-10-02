@@ -16,6 +16,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+from check_user_docs_links import iter_markdown_files
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "check_user_docs_links.py"
 
@@ -507,6 +511,89 @@ class TestPlanTreePolicy(unittest.TestCase):
             self.assertIn("security-assessments", proc.stderr)
             self.assertIn("doc-assessments", proc.stderr)
             self.assertIn("refactor-assessments", proc.stderr)
+
+    def test_every_dev_docs_subdirectory_is_either_scanned_or_listed(self) -> None:
+        """No `dev-docs/**` subdirectory may fall outside the scan set silently.
+
+        Seven directories had never been added at all — not excluded on purpose,
+        simply absent — hiding 12 stale `src/` references. Outside the scanned set
+        a reviewer cannot distinguish "checked and clean" from "never looked at",
+        so every subdirectory holding Markdown must be accounted for: scanned, or
+        named in SNAPSHOT_SUBDIRS / HISTORICAL_RECORD_FILES.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            # A directory nobody claimed.
+            (dev_docs / "bug-investigations").mkdir()
+            (dev_docs / "bug-investigations" / "INV.md").write_text(
+                "See `.github/workflows/grype.yml`.\n"
+            )
+            # Advisory by default (the real repo has no rot in these, but the
+            # classification is what is under test).
+            self.assertEqual(self._run(tmp).returncode, 0)
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("bug-investigations", proc.stderr)
+
+    def test_nested_agents_instructions_are_scanned_and_blocking(self) -> None:
+        """Nested `AGENTS.md` files under src/ are live, so they block.
+
+        The root AGENTS.md tells agents to run named scripts and paths. A nested
+        instruction file naming a module that has moved sends the next agent to a
+        file that is not there. Adding these to the scan set immediately surfaced
+        `src/qa/AGENTS.md` naming `src/core/qa_app_facade.py` when the facade
+        lives in `src/gui/`.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            self._tree(tmp)
+            (tmp / "src" / "qa").mkdir(parents=True, exist_ok=True)
+            (tmp / "src" / "qa" / "AGENTS.md").write_text(
+                "Start at `src/core/qa_app_facade.py`.\n"
+            )
+            blocked = self._run(tmp)
+            self.assertEqual(blocked.returncode, 1, blocked.stderr)
+            self.assertIn("qa_app_facade.py", blocked.stderr)
+
+    def test_real_repo_nested_agents_files_are_all_scanned(self) -> None:
+        """Real-repo guard: no `src/**/AGENTS.md` may escape the scan set."""
+        repo_root = Path(__file__).resolve().parents[1]
+        src_dir = repo_root / "src"
+        if not src_dir.is_dir():  # pragma: no cover - only if run outside the repo
+            self.skipTest("not running inside the repository")
+        scanned = set(iter_markdown_files(repo_root, True))
+        missed = {
+            str(f.relative_to(repo_root))
+            for f in src_dir.rglob("AGENTS.md")
+            if f.resolve() not in scanned
+        }
+        self.assertEqual(missed, set(), f"unscanned nested AGENTS.md: {missed}")
+
+    def test_real_repo_has_no_unclassified_dev_docs_subdirectory(self) -> None:
+        """Runs against the real repository, not a fixture.
+
+        A fixture cannot catch a directory that exists only in the repo, which is
+        exactly how the seven were missed. Any `dev-docs/` subdirectory holding
+        Markdown must be scanned by iter_markdown_files.
+        """
+        repo_root = Path(__file__).resolve().parents[1]
+        dev_docs = repo_root / "dev-docs"
+        if not dev_docs.is_dir():  # pragma: no cover - only if run outside the repo
+            self.skipTest("not running inside the repository")
+        scanned = set()
+        for f in iter_markdown_files(repo_root, True):
+            parts = f.relative_to(repo_root).parts
+            if len(parts) > 2 and parts[0] == "dev-docs":
+                scanned.add(parts[1])
+        unclassified = {
+            d.name
+            for d in dev_docs.iterdir()
+            if d.is_dir() and list(d.rglob("*.md")) and d.name not in scanned
+        }
+        self.assertEqual(
+            unclassified, set(), f"unscanned dev-docs subdirectories: {unclassified}"
+        )
 
     def test_dated_records_are_advisory_not_blocking(self) -> None:
         """MAINTENANCE_LOG / SECURITY_IMPLEMENTATION_SUMMARY describe the past."""

@@ -132,6 +132,24 @@ SNAPSHOT_SUBDIRS = (
     "doc-assessments",
     "refactor-assessments",
     "templates-generalized",
+    # Dated investigation and assessment records. Found by comparing every
+    # ``dev-docs/**`` subdirectory against the scanned set rather than trusting
+    # the set itself: these seven were not excluded on purpose, they had simply
+    # never been added, which hid 12 stale ``src/`` references across four files.
+    # Advisory for the same reason as the rest: a 2026 bug investigation naming
+    # the modules as they were is an accurate record, and correcting it to match
+    # today's layout would be rewriting history.
+    "bug-investigations",
+    "investigations",
+    "ux-assessments",
+    "assessments",
+    "code-assessments",
+    "testing-assessments",
+    # ``orchestration/`` holds live agent instructions rather than a dated record,
+    # but it is a generated checklist of the same shape as the rest and carries no
+    # inline path claims of its own, so advisory keeps it measured without letting
+    # a stale checklist block. Revisit if it ever grows real claims.
+    "orchestration",
 )
 
 HISTORICAL_RECORD_FILES = (
@@ -194,6 +212,24 @@ def _root_doc_files(repo_root: Path) -> list[Path]:
     ]
 
 
+def _nested_agents_files(repo_root: Path) -> list[Path]:
+    """Nested ``AGENTS.md`` instruction files under ``src/``.
+
+    These are *live* agent instructions, not history, so they belong in the
+    blocking set: the root ``AGENTS.md`` tells agents to run named scripts, and a
+    nested instruction file that names one which no longer exists sends the next
+    agent to a command that cannot run. Found by comparing every tracked
+    ``AGENTS.md`` against the scanned set rather than trusting the set -- the
+    seventh instance of a file being absent from scanning rather than excluded
+    from it on purpose.
+    """
+    return sorted(
+        candidate
+        for candidate in (repo_root / "src").rglob("AGENTS.md")
+        if candidate.is_file()
+    )
+
+
 def _historical_files(repo_root: Path) -> list[Path]:
     """Everything the advisory pass adds: completed plans, dated records, snapshots.
 
@@ -242,6 +278,7 @@ def iter_markdown_files(
         *_active_plan_files(repo_root),
         *_living_dev_doc_files(repo_root),
         *_root_doc_files(repo_root),
+        *_nested_agents_files(repo_root),
     ]
     if include_completed_plans:
         paths.extend(_historical_files(repo_root))
