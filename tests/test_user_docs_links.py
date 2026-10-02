@@ -369,7 +369,7 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 1)
             self.assertIn("src/core/mpr_controller.py", proc.stderr)
-            self.assertIn("names a source file that does not exist", proc.stderr)
+            self.assertIn("names a code file that does not exist", proc.stderr)
 
     def test_correct_module_path_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as d:
@@ -440,16 +440,16 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
-    def test_symlink_cannot_pull_plans_content_into_scope(self) -> None:
-        """A symlink in dev-docs/ must not defeat the plans/ exclusion."""
+    def test_symlink_cannot_pull_completed_plans_content_into_scope(self) -> None:
+        """A symlink must not defeat the plans/completed/ exclusion."""
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             dev_docs = self._make_repo(tmp)
-            (dev_docs / "plans").mkdir()
-            (dev_docs / "plans" / "OLD.md").write_text(
+            (dev_docs / "plans" / "completed").mkdir(parents=True)
+            (dev_docs / "plans" / "completed" / "OLD.md").write_text(
                 "Back then it was `src/core/mpr_controller.py`.\n"
             )
-            (dev_docs / "NOTE.md").symlink_to(Path("plans") / "OLD.md")
+            (dev_docs / "NOTE.md").symlink_to(Path("plans/completed") / "OLD.md")
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
@@ -468,19 +468,3 @@ class TestInlineSrcCodePaths(unittest.TestCase):
             (dev_docs / "NOTE.md").symlink_to(Path("..") / "CHANGELOG.md")
             proc = self._run_on_tree(tmp)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-
-    def test_plans_directory_is_not_checked(self) -> None:
-        """dev-docs/plans/ is historical record; stale paths there are expected."""
-        with tempfile.TemporaryDirectory() as d:
-            tmp = Path(d)
-            dev_docs = self._make_repo(tmp)
-            (dev_docs / "plans").mkdir()
-            (dev_docs / "plans" / "OLD_PLAN.md").write_text(
-                "Back then it was `src/core/mpr_controller.py`.\n"
-            )
-            proc = self._run_on_tree(tmp)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
-
-
-if __name__ == "__main__":
-    unittest.main()

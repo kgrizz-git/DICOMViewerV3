@@ -19,7 +19,7 @@ Success means:
   - Non-DICOM formats: [`NONDICOM_FORMAT_IMPORT_AND_CONVERSION_PLAN.md`](NONDICOM_FORMAT_IMPORT_AND_CONVERSION_PLAN.md).
   - 3D rendering: [`3D_VOLUME_RENDERING_PLAN.md`](../3D_VOLUME_RENDERING_PLAN.md).
   - Structure/ROI exports: [`ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md`](ROI_PROPAGATION_STATS_AND_3D_ROI_PLAN.md).
-  - Release and installer notes: [`RELEASING.md`](../../RELEASING.md), [`BUILDING_EXECUTABLES.md`](../../BUILDING_EXECUTABLES.md).
+  - Release and installer notes: [`RELEASING.md`](../../RELEASING.md), [`BUILDING_EXECUTABLES.md`](../../info/BUILDING_EXECUTABLES.md).
 
 ## Task graph and gates
 

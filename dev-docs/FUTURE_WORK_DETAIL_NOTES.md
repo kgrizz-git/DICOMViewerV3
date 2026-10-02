@@ -382,7 +382,7 @@ Works the same way but the command value points to `pythonw.exe` in the venv ins
 "C:\...\venv\Scripts\pythonw.exe" "C:\...\run.py" "%1"
 ```
 
-Use `pythonw.exe` (not `python.exe`) to suppress the console window. The path is machine-specific, so the registration must be generated dynamically — `scripts/register_windows.py` using Python's `winreg` module can detect `sys.executable` and write the correct path at runtime. A corresponding `scripts/unregister_windows.py` removes them.
+Use `pythonw.exe` (not `python.exe`) to suppress the console window. The path is machine-specific, so the registration must be generated dynamically — scripts/register_windows.py using Python's `winreg` module can detect `sys.executable` and write the correct path at runtime. A corresponding scripts/unregister_windows.py removes them.
 
 The `.bat` launcher could add a menu option ("Register .dcm file association") that calls this script.
 

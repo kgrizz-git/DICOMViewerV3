@@ -23,8 +23,8 @@ and re-verify **ACR CT + ACR MRI Large** before merging.
 ## Blocked upstream (tracked elsewhere)
 
 - **`pydicom` 2.x → 3.x** — capped by `pylinac==3.43.2` (`pydicom<3`). See the
-  `PYSEC-2026-2266` row in [`../../security/pip-audit-exceptions.md`](../../security/pip-audit-exceptions.md).
+  `PYSEC-2026-2266` row in [`security/pip-audit-exceptions.md`](../../../security/pip-audit-exceptions.md).
 - **`mcp` CVE exceptions** — `mcp` is pinned transitively by `semgrep`
   (`mcp==1.23.3`). Remove the three `mcp` `--ignore-vuln` entries once a
   `semgrep` release depends on `mcp>=1.28.1`. See the `mcp` rows in
-  [`../../security/pip-audit-exceptions.md`](../../security/pip-audit-exceptions.md).
+  [`security/pip-audit-exceptions.md`](../../../security/pip-audit-exceptions.md).

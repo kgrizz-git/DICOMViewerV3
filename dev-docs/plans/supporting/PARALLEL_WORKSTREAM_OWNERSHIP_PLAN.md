@@ -47,10 +47,10 @@ Use these as temporary placeholders until owners and branches are assigned.
 
 ### TO_DO items
 
-- [Reduce default ROI/measurement line thickness and font sizes](../TO_DO.md#L51)
-- [Duplicate-skip toast center/opacity](../TO_DO.md#L62)
-- [Large-file warning threshold update](../TO_DO.md#L63)
-- [PNG/JPG anonymization + embedded WL default](../TO_DO.md#L68)
+- [Reduce default ROI/measurement line thickness and font sizes](../../TO_DO.md#L51)
+- [Duplicate-skip toast center/opacity](../../TO_DO.md#L62)
+- [Large-file warning threshold update](../../TO_DO.md#L63)
+- [PNG/JPG anonymization + embedded WL default](../../TO_DO.md#L68)
 
 ### File ownership
 
@@ -75,9 +75,9 @@ Use these as temporary placeholders until owners and branches are assigned.
 
 ### TO_DO items
 
-- [Navigator tooltips (privacy-aware)](../TO_DO.md#L61)
-- [Multi-frame instance navigation follow-up audit (`current_slice_index` usage)](../TO_DO.md#L52)
-- [Left/right keys for instance switching when show-instances-separately is enabled](../TO_DO.md#L67)
+- [Navigator tooltips (privacy-aware)](../../TO_DO.md#L61)
+- [Multi-frame instance navigation follow-up audit (`current_slice_index` usage)](../../TO_DO.md#L52)
+- [Left/right keys for instance switching when show-instances-separately is enabled](../../TO_DO.md#L67)
 
 ### File ownership
 
@@ -102,9 +102,9 @@ Use these as temporary placeholders until owners and branches are assigned.
 
 ### TO_DO items
 
-- [Scale markers (ruler ticks)](../TO_DO.md#L57)
-- [Direction labels (A/P/L/R/S/I)](../TO_DO.md#L58)
-- [Overlay configuration in right-click context menu](../TO_DO.md#L50)
+- [Scale markers (ruler ticks)](../../TO_DO.md#L57)
+- [Direction labels (A/P/L/R/S/I)](../../TO_DO.md#L58)
+- [Overlay configuration in right-click context menu](../../TO_DO.md#L50)
 
 ### File ownership
 
@@ -128,12 +128,12 @@ Use these as temporary placeholders until owners and branches are assigned.
 
 ### TO_DO items
 
-- [Window/level discoverability/interaction updates](../TO_DO.md#L48)
-- [Min/max W/L from bit depth](../TO_DO.md#L49)
-- [W/L remembered per series](../TO_DO.md#L56)
-- [Flip/rotate image](../TO_DO.md#L59)
-- [Slice/frame edge slider bars](../TO_DO.md#L60)
-- [Image drift hardening/follow-up](../TO_DO.md#L31)
+- [Window/level discoverability/interaction updates](../../TO_DO.md#L48)
+- [Min/max W/L from bit depth](../../TO_DO.md#L49)
+- [W/L remembered per series](../../TO_DO.md#L56)
+- [Flip/rotate image](../../TO_DO.md#L59)
+- [Slice/frame edge slider bars](../../TO_DO.md#L60)
+- [Image drift hardening/follow-up](../../TO_DO.md#L31)
 
 ### File ownership
 
@@ -159,10 +159,10 @@ Use these as temporary placeholders until owners and branches are assigned.
 
 ### TO_DO items
 
-- [Window map thumbnail interactive](../TO_DO.md#L46)
-- [Toolbar customization](../TO_DO.md#L47)
-- [View fullscreen command and shortcut](../TO_DO.md#L65)
-- [Slice-position line display option](../TO_DO.md#L66)
+- [Window map thumbnail interactive](../../TO_DO.md#L46)
+- [Toolbar customization](../../TO_DO.md#L47)
+- [View fullscreen command and shortcut](../../TO_DO.md#L65)
+- [Slice-position line display option](../../TO_DO.md#L66)
 
 ### File ownership
 

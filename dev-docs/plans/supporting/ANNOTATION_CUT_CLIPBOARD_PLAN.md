@@ -149,7 +149,7 @@ Paste already mirrors selection gathering in `get_selected_*` methods on `Annota
 .\.venv\Scripts\python.exe -m pytest tests/test_annotation_cut.py -v
 ```
 
-Manual: [`dev-docs/orchestration/AGENT_SMOKE.md`](../orchestration/AGENT_SMOKE.md) annotation bullets if present.
+Manual: [`dev-docs/orchestration/AGENT_SMOKE.md`](../../orchestration/AGENT_SMOKE.md) annotation bullets if present.
 
 ---
 

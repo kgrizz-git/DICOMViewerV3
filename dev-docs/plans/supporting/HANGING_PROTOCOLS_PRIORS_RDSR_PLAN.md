@@ -10,7 +10,7 @@ This document implements three related items from `dev-docs/TO_DO.md` (**Feature
 
 - Multi-window layout and swap: `src/main.py` (`MultiWindowLayout`), [VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md](../completed/VIEW_SLOT_LAYOUT_AND_SWAP_PLAN.md), [WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md](WINDOW_LAYOUT_AND_NAVIGATION_POLISH_PLAN.md).
 - File loading and study/series model: file operations handlers, `dicom_organizer`, navigator thumbnails.
-- Future indexing / database notes: [FUTURE_WORK_DETAIL_NOTES.md](../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing), TO_DO **Data / Platform** → local study database item.
+- Future indexing / database notes: [FUTURE_WORK_DETAIL_NOTES.md](../../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing), TO_DO **Data / Platform** → local study database item.
 - DICOM I/O: `pydicom` usage elsewhere in `src/`; SR templates use `RawDataElement` / sequences as needed.
 
 ---
@@ -58,7 +58,7 @@ After **indexed metadata** can answer “other studies for this Patient ID” (o
 
 ### Prerequisites
 
-- [ ] **Local study database** milestone from [FUTURE_WORK_DETAIL_NOTES.md](../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing): patient/study/series index, incremental scan, stable paths or managed copies.
+- [ ] **Local study database** milestone from [FUTURE_WORK_DETAIL_NOTES.md](../../FUTURE_WORK_DETAIL_NOTES.md#local-study-database-and-indexing): patient/study/series index, incremental scan, stable paths or managed copies.
 - [ ] **Patient identity policy**: match on `(0010,0020) Patient ID`, with optional institution-specific rules; document false-merge risk when IDs are reused.
 - [ ] **Privacy**: prior search must respect **privacy mode** (mask patient in lists; audit what is logged).
 

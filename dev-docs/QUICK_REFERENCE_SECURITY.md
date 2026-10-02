@@ -116,10 +116,10 @@ except Exception as e:
 
 # Enabled workflows / scanning:
 # 1. CodeQL             - Python SAST via GitHub default code scanning (not codeql.yml; custom workflow conflicts with default)
-# 2. semgrep.yml        - Semgrep SAST (rule-based security)
-# 3. grype.yml          - Grype (CVE scanning)
-# 4. security-checks.yml - Debug flags + secrets validation
-# 5. dependabot.yml     - Dependency updates: pip + GitHub Actions (add Docker only with a Dockerfile)
+# 2. ci.yml (semgrep)   - Semgrep SAST (rule-based security)
+# 3. ci.yml (grype)     - Grype (CVE scanning)
+# 4. privacy-gates.yml   - Debug flags + secrets validation
+# 5. ../dependabot.yml   - Dependency updates: pip + GitHub Actions (add Docker only with a Dockerfile)
 
 # Results visible at: GitHub → Security → Code scanning
 

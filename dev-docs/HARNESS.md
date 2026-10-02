@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-01
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -77,7 +77,7 @@ raw-output path for every output filter.
 
 | Script | What it validates |
 |--------|-------------------|
-| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline `src/` code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), `README.md`, `ARCHITECTURE.md`, and `AGENTS.md`. Under `user-docs/`, relative links that resolve outside that tree fail (Phase C0 escape guard), and absolute GitHub blob links must share `GITHUB_BLOB_BASE` from `src/utils/doc_urls.py`. `dev-docs/plans/` is excluded as historical record |
+| [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), the **active** plan tree (`plans/*.md` plus `plans/supporting/`, recursively, so `supporting/research/` is covered), `README.md`, `ARCHITECTURE.md` and `AGENTS.md` — plus every nested `src/**/AGENTS.md`, which are live agent instructions and therefore **blocking** rather than advisory, because the root `AGENTS.md` tells agents to run named scripts and paths. Under `user-docs/`, relative links that resolve outside that tree fail (Phase C0 escape guard), and absolute GitHub blob links must share `GITHUB_BLOB_BASE` from `src/utils/doc_urls.py`. Inline paths are checked in two classes with different exemptions: **plan-exempt** — `src/...py`, `scripts/...py`, `tests/...py`, and plans *only*. A plan legitimately proposes a module, gate script or test file it has not written; `TO_DO.md` and `FUTURE_WORK_DETAIL_NOTES.md` were briefly exempted too and then narrowed back, because those two files hold 17 such references of which 13 are descriptive claims that would have rotted unmonitored. Proposals there are written as plain prose rather than inline code, per this checker's own contract. Note `pyproject.toml` is deliberately outside the closed set, since two plans propose creating it; and **not** plan-exempt — a closed set of well-known files (`.github/workflows/*.yml`, `requirements*.txt`, `pytest.ini`, `ruff.toml`, `.coveragerc`, `.githooks/*`) that no plan ever proposes, which is why a stale workflow name in an active plan blocks. Historical material is excluded as accurate history and surfaced by `--include-completed-plans` as advisory: `plans/completed/`, the dated files in `HISTORICAL_RECORD_FILES` (`CHANGELOG.md`, `MAINTENANCE_LOG.md`, `SECURITY_IMPLEMENTATION_SUMMARY.md`) and the generated-assessment directories in `SNAPSHOT_SUBDIRS` (`safety-scans/`, `security-assessments/`, `doc-assessments/`, `refactor-assessments/`, `templates-generalized/`, `bug-investigations/`, `investigations/`, `ux-assessments/`, `assessments/`, `code-assessments/`, `testing-assessments/`, `orchestration/`). Two real-repo guard tests enforce the boundary: one asserts no `dev-docs/` subdirectory holding Markdown is unaccounted for, the other that no `src/**/AGENTS.md` escapes the scan set — a fixture cannot catch a directory that exists only in the repo, which is how seven unscanned directories and three unscanned instruction files survived review. Those snapshot directories are scanned *and* advisory on purpose — outside the scanned set a reviewer cannot tell "checked and clean" from "never looked at" — and the advisory pass is wired into CI as a `continue-on-error` step, so that figure is reported on every run rather than only when someone remembers the flag. Two known blind spots, both from the same cause — the check reads inline code (backticks), so a path written as a bare filename in a comment or fenced block is invisible to it. `templates-generalized/` carries its example paths as `# .github/workflows/...` header comments, and those are deliberately left alone because they are filenames an example would be *saved as* in a hypothetical new project. `QUICK_REFERENCE_SECURITY.md` listed this repo's own workflows the same way and was rot; corrected to name `ci.yml` / `privacy-gates.yml` and the jobs within them |
 | [`scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files present, `AGENTS.md` not bloated, `TO_DO.md` freshness, plan paths in `TO_DO.md`, links in harness docs, required **user-docs** topic guides linked from `USER_GUIDE.md` hub |
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
@@ -109,26 +109,84 @@ scanner — a silent loss of coverage that reads exactly like "no findings." Fix
 the upload; do not re-add `continue-on-error` to make a red build go away. CodeQL
 never had the flag.
 
-Note that the scans themselves are separate from the uploads, and **a green scan
-does not mean "no findings."** `semgrep scan` exits `0` when it finds problems —
-only `--error` makes it exit `1` — and the CI invocation does not pass
-`--error`. The step fails on a *broken* scan (no SARIF written, or exit `2` for a
-fatal error), not on a *dirty* one. Grype is the same shape by design
-(`fail-build: false` + `severity-cutoff: high`). So findings surface in exactly
-two places: the Security tab, and the PR comment. Read the Security tab for "the
-scan found nothing", not the check status. Making findings *block* would mean
-adding `--error` **and** `always()` to the comment step (so the comment still
-posts when the scan step fails) — a deliberate policy change, not a default.
+**Semgrep findings now fail the job.** The scan runs with `--error`, so a finding
+exits `1` and the required **Semgrep Security Audit** check goes red. That check
+previously proved only that the scan *ran*: `semgrep scan` exits `0` with
+findings unless `--error` is passed, and it was not — so a green check meant
+nothing about the code. Measured 2026-09-30 against `main` with CI's exact four
+rulesets: **0 findings**, so this is a no-op today and turns red only on a real
+regression. The "Comment on PR with results" step now carries `always()` so the
+comment still posts when the scan step fails — otherwise a failing scan would
+skip the one place the finding gets explained.
+
+Note the scan and the upload are still separate concerns. The step also fails on
+a *broken* scan (no SARIF written, or exit `2` for a fatal error) regardless of
+`--error`. Grype stays non-blocking by design (`fail-build: false`,
+`severity-cutoff: high`).
+
+**Both CodeQL and Semgrep are in the `KGRuleset1` `code_scanning` rule**, so
+their alerts gate the merge independently of any exit code:
+
+```json
+"code_scanning_tools": [
+  {"tool": "CodeQL",      "alerts_threshold": "errors", "security_alerts_threshold": "high_or_higher"},
+  {"tool": "Semgrep OSS", "alerts_threshold": "errors", "security_alerts_threshold": "high_or_higher"}
+]
+```
+
+**`alerts_threshold` is set deliberately and must not be dropped.** Measured
+2026-10-01 against Semgrep's own SARIF for these four rulesets: **0 of 729 rules
+carry `security-severity`**, while all 729 carry a `CWE-NNN: …` tag and a bare
+`security` tag. GitHub derives code-scanning *alert severity* from
+`security-severity`, which Semgrep OSS does not emit, so `alerts_threshold` is
+the knob that covers its 233 error-level rules (double-free, XXE, SQLi, weak RNG,
+dockerfile-user, and so on). `security_alerts_threshold: "high_or_higher"` is
+retained to mirror CodeQL and to start working if Semgrep ever emits
+`security-severity`.
+
+**`alerts_threshold` is the only entry that can plausibly match a Semgrep alert
+today.** Per [GitHub's SARIF support documentation](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support-for-code-scanning), a result is treated
+as a *security* result only when its rule **includes** a `properties.security-severity`
+value — "if you include a value for this field, results for the rule are treated
+as security results." Semgrep OSS emits **none**, so its alerts are not security
+alerts, and `security_alerts_threshold` has nothing to compare against. The
+`security` and `CWE-NNN: …` tags Semgrep *does* emit do not change this: the
+documented trigger is the `security-severity` value, not a tag.
+
+So the second entry is **forward cover** for a future Semgrep that emits
+`security-severity` — not a spare that makes `alerts_threshold` redundant — and
+it is set to `high_or_higher` rather than `errors`, so the two are not
+interchangeable even if it did match. Dropping `alerts_threshold` on the theory
+that the other entry covers the same ground would therefore remove all Semgrep
+enforcement: the same silent-no-op shape this section exists to prevent.
+
+`KGRuleset1` targets the default branch, so this gating applies to PRs into
+`main`. The scans themselves also run on `develop`, but alerts uploaded from a
+`develop` PR are not gated by this ruleset.
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
 github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
 `GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
 and with the uploads now blocking, an unguarded fork PR would turn the required
-**Semgrep Security Audit** check red on an outside contribution. The scan itself
-still runs on fork PRs; only the upload and the comment are skipped. Combined
-with the point above, that means a fork PR's findings produce **no in-PR signal
-at all** while the check stays green.
+**Semgrep Security Audit** check red on an outside contribution.
+
+**The two scans do not behave alike on a fork PR, and the difference matters.**
+The Semgrep scan runs and still **gates**: its step carries `--error` with no
+`continue-on-error`, so findings exit non-zero and turn the required **Semgrep
+Security Audit** check red exactly as on a branch PR. Grype's scan, by contrast, is
+non-blocking *by design* (`fail-build: false`, `severity-cutoff: high`), so with its
+upload skipped a Grype finding genuinely does leave that check green. An earlier
+version of this paragraph generalised the Semgrep behaviour to both jobs, which was
+wrong; a second version then over-corrected and claimed no scanner's check stays
+green on a fork. Neither is right. What a fork PR loses, for both, is the SARIF
+upload (no Security-tab entry) and the PR comment (no inline annotation).
+
+The same fork-guard pattern covers the **Grype** job's SARIF upload and PR
+comment. **CodeQL** has no explicit guard because the CodeQL action checks the
+token's own permissions and skips its own upload when it cannot write, so a fork
+PR does not fail there. None of the three is uniquely gated: in all three cases
+the *analysis* runs on a fork PR and only the reporting step is skipped.
 
 **The fork guard must be scoped to `pull_request` events.** A bare
 `github.event.pull_request.head.repo.full_name == github.repository` looks like
