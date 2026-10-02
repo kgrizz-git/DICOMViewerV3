@@ -177,6 +177,44 @@ def _markdown_under(directory: Path, recursive: bool = True) -> list[Path]:
     return sorted(directory.rglob("*.md") if recursive else directory.glob("*.md"))
 
 
+#: Directories whose Markdown is project documentation and therefore scanned.
+#: ``.agents/``, ``.claude/`` and ``.cursor/`` are deliberately absent: they are
+#: agent tooling configuration owned by other tools, not documentation of this
+#: project, and scanning them would couple the gate to their file formats.
+DOC_SUBDIRS = (
+    ".github",
+    "security",
+    "tools",
+    "tests",
+)
+#: Under a protected data root. The PHI artifact gate owns that tree; the link
+#: checker does not duplicate it.
+DOC_SUBDIRS_EXCLUDED = ("sample-phantom-data-committed",)
+
+
+def _repo_wide_doc_files(repo_root: Path) -> list[Path]:
+    """Root-level and project Markdown outside dev-docs/, user-docs/ and tests-of-plans.
+
+    Found by comparing every tracked ``*.md`` against the scanned set: 16 files
+    were invisible, including ``SECURITY.md``, ``DESIGN.md``,
+    ``CODE_OF_CONDUCT.md``, ``.github/CONTRIBUTING.md``,
+    ``.github/PULL_REQUEST_TEMPLATE.md``, ``tests/README.md``, the five
+    ``tests/fixtures/*/README.md`` and ``security/pip-audit-exceptions.md``.
+    Most are living documents, which is the same "absent rather than excluded on
+    purpose" gap as the unscanned dev-docs directories and nested AGENTS.md files.
+    """
+    found = _markdown_under(repo_root, recursive=False)
+    for subdir in DOC_SUBDIRS:
+        found.extend(_markdown_under(repo_root / subdir))
+    for subdir in DOC_SUBDIRS_EXCLUDED:
+        found.extend(
+            f
+            for f in _markdown_under(repo_root / subdir)
+            if f not in found
+        )
+    return found
+
+
 def _active_plan_files(repo_root: Path) -> list[Path]:
     """Live plan documents: the top level plus supporting/ recursively.
 
@@ -279,6 +317,7 @@ def iter_markdown_files(
         *_living_dev_doc_files(repo_root),
         *_root_doc_files(repo_root),
         *_nested_agents_files(repo_root),
+        *_repo_wide_doc_files(repo_root),
     ]
     if include_completed_plans:
         paths.extend(_historical_files(repo_root))

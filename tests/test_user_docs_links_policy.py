@@ -10,6 +10,7 @@ way, so CI and local pytest stay aligned.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -555,6 +556,50 @@ class TestPlanTreePolicy(unittest.TestCase):
             blocked = self._run(tmp)
             self.assertEqual(blocked.returncode, 1, blocked.stderr)
             self.assertIn("qa_app_facade.py", blocked.stderr)
+
+    def test_real_repo_no_tracked_markdown_is_invisible(self) -> None:
+        """Exhaustive guard: only the documented exclusions may escape scanning.
+
+        Sixteen tracked Markdown files were invisible -- SECURITY.md, DESIGN.md,
+        CODE_OF_CONDUCT.md, .github/CONTRIBUTING.md, .github/PULL_REQUEST_TEMPLATE.md,
+        tests/README.md, five tests/fixtures/*/README.md, security/*.md and
+        tools/sonarqube/README.md. All sixteen turned out to be clean, so this closes
+        a risk rather than fixing rot, which is worth keeping precisely because the
+        gap was invisible in both directions: nothing reported those files and
+        nothing checked them.
+
+        Walks the tree rather than shelling out to git, so the test does not depend
+        on a git binary being present in CI.
+        """
+        repo_root = Path(__file__).resolve().parents[1]
+        skip_dirs = {
+            ".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache",
+            ".mypy_cache", ".ruff_cache", "tmp", "build", "dist", "data",
+            "test-DICOM-data", "sample-DICOM-gitignored", "decoder-spike-artifacts",
+            "resources", "logs", ".sonar-local", ".phi-tools", "backups",
+        }
+        # Deliberately out of scope: agent tooling configuration owned by other
+        # tools, not documentation of this project.
+        allowed_unscanned = (".agents/", ".claude/", ".cursor/")
+
+        scanned = {f.resolve() for f in iter_markdown_files(repo_root, True)}
+        invisible: list[str] = []
+        for dirpath, dirnames, filenames in os.walk(repo_root):
+            rel_dir = Path(dirpath).relative_to(repo_root).as_posix()
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d not in skip_dirs and not (d.startswith(".") and d != ".github")
+            ]
+            for name in filenames:
+                if not name.endswith(".md"):
+                    continue
+                rel = f"{rel_dir}/{name}" if rel_dir != "." else name
+                if rel.startswith(allowed_unscanned):
+                    continue
+                if (Path(dirpath) / name).resolve() not in scanned:
+                    invisible.append(rel)
+        self.assertEqual(invisible, [], f"invisible Markdown: {sorted(invisible)}")
 
     def test_real_repo_nested_agents_files_are_all_scanned(self) -> None:
         """Real-repo guard: no `src/**/AGENTS.md` may escape the scan set."""
