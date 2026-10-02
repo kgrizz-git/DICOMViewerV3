@@ -202,7 +202,13 @@ def _historical_files(repo_root: Path) -> list[Path]:
     otherwise it claims coverage it does not have, which is the same
     reads-as-configured-while-doing-nothing shape it exists to avoid.
     """
-    found: list[Path] = _markdown_under(repo_root / "dev-docs" / "plans" / "completed", recursive=False)
+    # Recursive, deliberately matching the exclusion rule: ``_is_excluded`` covers
+    # the whole ``completed/`` subtree via ``is_relative_to``, so a non-recursive
+    # glob here would leave nested plans excluded from blocking *and* unscanned in
+    # the advisory pass -- invisible rather than merely advisory. Correct today only
+    # because no subdirectory exists yet, which is exactly how the dead
+    # ``.githooks/`` arm and the non-recursive ``supporting/`` glob both survived.
+    found: list[Path] = _markdown_under(repo_root / "dev-docs" / "plans" / "completed")
     found.extend(
         candidate
         for rel in HISTORICAL_RECORD_FILES

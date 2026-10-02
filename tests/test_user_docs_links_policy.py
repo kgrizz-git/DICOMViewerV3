@@ -385,6 +385,36 @@ class TestPlanTreePolicy(unittest.TestCase):
             self.assertEqual(proc.returncode, 1, proc.stderr)
             self.assertIn("security-checks.yml", proc.stderr)
 
+    def test_nested_completed_plan_is_scanned_advisory_not_invisible(self) -> None:
+        """The advisory scan of ``completed/`` must recurse, matching the exclusion.
+
+        ``_is_excluded`` treats the whole ``completed/`` subtree as historical via
+        ``is_relative_to``, but the advisory glob was non-recursive. A nested plan
+        would therefore be excluded from the blocking pass *and* never scanned --
+        invisible, which is the worse failure the whole snapshot-directory change
+        was made to avoid. Correct today only because no subdirectory exists yet,
+        which is how the dead ``.githooks/`` arm and the non-recursive
+        ``supporting/`` glob both survived review.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            self._tree(tmp)
+            nested = tmp / "dev-docs" / "plans" / "completed" / "2026"
+            nested.mkdir(parents=True)
+            (nested / "NESTED.md").write_text("Ran `.github/workflows/grype.yml`.\n")
+            top = tmp / "dev-docs" / "plans" / "completed" / "OLD.md"
+            top.write_text("Ran `.github/workflows/grype.yml`.\n")
+
+            # Not blocking: a completed plan describes the tree as it was.
+            blocked = self._run(tmp)
+            self.assertEqual(blocked.returncode, 0, blocked.stderr)
+
+            # Both the top-level and the nested plan must be measured.
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("completed/OLD.md", proc.stderr)
+            self.assertIn("completed/2026/NESTED.md", proc.stderr)
+
     def test_snapshot_directories_are_scanned_but_advisory(self) -> None:
         """Dated assessments must be *measured*, not merely ignored.
 
