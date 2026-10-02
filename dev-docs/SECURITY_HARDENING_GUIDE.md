@@ -313,7 +313,7 @@ Located in `.github/dependabot.yml`:
 - Grype posts a PR comment when high-severity dependency issues are present (same-repo PRs only).
 - **Privacy / debug gates** (`privacy-gates.yml`, pre-commit hooks) block merge when debug flags are enabled or critical privacy checks fail.
 - **SARIF uploads** (Semgrep, Grype, CodeQL) are **blocking** when they run: a failed upload fails CI even when the scan itself completed. Treat a red upload as lost Security-tab coverage, not as "no findings."
-- **Findings vs. job status:** Semgrep and Grype are configured so a successful scan can still report issues without failing the job (`semgrep scan` without `--error`; Grype `fail-build: false`). Read **Security → Code scanning** (and the PR comment) for findings; a green check does not mean a clean scan. Canonical CI behavior: [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
+- **Findings vs. job status:** Semgrep runs with `--error`, so a finding fails the required **Semgrep Security Audit** check. The PR comment still posts when the scan step fails. Grype is non-blocking by design (`fail-build: false`, `severity-cutoff: high`), so a green Grype check does not mean no vulnerable dependencies. Read **Security → Code scanning** (and the PR comment) for Grype findings. Canonical CI behavior: [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
 
 #### **Example PR Comment (Semgrep):**
 
