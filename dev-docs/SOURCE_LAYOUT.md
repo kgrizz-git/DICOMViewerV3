@@ -50,19 +50,19 @@ Tests: `tests/core/test_slice_sync_coordinator_unit.py`, `tests/test_slice_geome
 
 | Mixin | Module | Owns (summary) |
 |---|---|---|
-| `InitializationMixin` | `src/main_app_initialization.py` | `_init_*` / `_setup_*` orchestration, handler bootstrap, `wire_all_signals` |
-| `SubwindowManagementMixin` | `src/main_app_subwindow_management.py` | Pane layout, subwindow lifecycle hooks, display refresh |
-| `MPRNavigationMixin` | `src/main_app_subwindow_management.py` | MPR navigator, detached thumbnail sessions |
-| `UIHandlersMixin` | `src/main_app_ui_and_files.py` | Menu/dialog slots, customization, keyboard routing helpers |
-| `FileOperationsMixin` | `src/main_app_ui_and_files.py` | Open/close, series load coordination, study index hooks |
-| `DisplayProjectionMixin` | `src/main_app_display_settings.py` | Intensity projection, fusion/display projection facades |
-| `SettingsLayoutMixin` | `src/main_app_display_settings.py` | Layout presets, window slots, smoothing/scroll-wheel prefs |
+| `InitializationMixin` | `src/main_app_initialization.py` | `_init_*` / `_setup_*` orchestration; forwards to the handler bootstrap and `wire_all_signals` helpers below |
+| `SubwindowManagementMixin` | `src/main_app_subwindow_management.py` | Per-subwindow managers and lookups, focus changes, close/clear (files, series, study, subwindow), fusion reset, view-state capture around layout changes |
+| `MPRNavigationMixin` | `src/main_app_subwindow_management.py` | MPR navigator thumbnails, detach/assign/clear, save MPR as DICOM |
+| `UIHandlersMixin` | `src/main_app_ui_and_files.py` | Menu/context-menu slots (orientation, slice-location lines, mouse and scroll-wheel modes), customization import/export, QA and MRI-compare workers, arrow-key navigation |
+| `FileOperationsMixin` | `src/main_app_ui_and_files.py` | Open files/folders/recent, dialog and export launchers, QA analysis entry points |
+| `DisplayProjectionMixin` | `src/main_app_display_settings.py` | Slice display/redisplay, intensity projection, smoothing toggle, overlay config/font, zoom and W/L preset status, histogram W/L throttle |
+| `SettingsLayoutMixin` | `src/main_app_display_settings.py` | Layout change/expand/swap slots, window-slot map, series navigator state, privacy view, slice-sync toggles, settings applied |
 | `TagEditingMixin` | `src/main_app_tag_roi.py` | Tag edit/export/undo fan-out |
 | `ROIWorkflowMixin` | `src/main_app_tag_roi.py` | ROI/measurement workflows, statistics export entry |
 
-Related shell helpers (not mixins): `src/gui/app_handler_bootstrap.py` (handler construction), `src/gui/app_signal_wiring.py` (all `connect()` calls), `src/gui/main_app_key_event_filter.py` (`eventFilter` / layout-shortcut focus gating).
+Related shell helpers (not mixins): `src/gui/app_handler_bootstrap.py` (handler construction), `src/gui/app_signal_wiring.py` (`wire_all_signals`, the app-level signal wiring), `src/gui/main_app_key_event_filter.py` (`eventFilter` / layout-shortcut focus gating).
 
-**Regression tests:** `tests/test_main_mixin_composition.py` (MRO), `tests/test_main_mixin_delegation.py` (one-line forwards and compound bodies), `tests/test_main_app_key_event_filter.py` (key dispatch). `InitializationMixin` heavy paths still run only through full `DICOMViewerApp()` construction smoke; see [`TO_DO.md`](TO_DO.md) for `.coveragerc` omit lift status.
+**Regression tests:** `tests/test_main_mixin_composition.py` (MRO), `tests/test_main_mixin_delegation.py` (one-line forwards and compound bodies), `tests/test_main_app_key_event_filter.py` (key dispatch). `tests/test_main_mixin_ui_and_init_wiring.py` characterizes `_setup_ui`; the remaining `InitializationMixin` paths run only through full `DICOMViewerApp()` construction smoke; see [`TO_DO.md`](TO_DO.md) for `.coveragerc` omit lift status.
 
 ---
 

@@ -15,7 +15,7 @@
 | `src/main_app_tag_roi.py` | Tag edit/export and ROI workflows |
 | `src/gui/main_app_key_event_filter.py` | App `eventFilter`: layout-shortcut focus gating and `KeyboardEventHandler` dispatch |
 | `src/gui/app_handler_bootstrap.py` | Construct coordinators/handlers after widgets exist |
-| `src/gui/app_signal_wiring.py` | Sole home for `DICOMViewerApp` Qt `connect()` wiring |
+| `src/gui/app_signal_wiring.py` | `wire_all_signals`: app-level `DICOMViewerApp` signal wiring |
 
 Mixin forwarding seams: `tests/test_main_mixin_delegation.py` (see [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md#dicomviewerapp-mixin-modules)).
 

@@ -309,9 +309,9 @@ Located in `.github/dependabot.yml`:
 
 #### **In Pull Requests:**
 
-- Semgrep posts a PR comment summarizing SARIF results (same-repo PRs only; fork PRs skip upload/comment — see below).
-- Grype posts a PR comment when high-severity dependency issues are present (same-repo PRs only).
-- **Privacy / debug gates** (`privacy-gates.yml`, pre-commit hooks) block merge when debug flags are enabled or critical privacy checks fail.
+- Semgrep posts a PR comment summarizing SARIF results (same-repo PRs only). Fork PRs skip the upload and comment, and Dependabot PRs skip the Semgrep job entirely. See [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
+- Grype posts a PR comment when high-severity dependency issues are present (same-repo, non-Dependabot PRs only).
+- **Privacy gates** (`privacy-gates.yml`): Detect Secrets, No PHI artifacts tracked, and Blocking Privacy Output Scan are required checks and block merge. **Check Debug Flags** fails CI when a `DEBUG_*` flag is `True`, but it is not a required check, so it does not block merge by itself. The local pre-commit debug-flag scan runs only on `main`.
 - **SARIF uploads** (Semgrep, Grype, CodeQL) are **blocking** when they run: a failed upload fails CI even when the scan itself completed. Treat a red upload as lost Security-tab coverage, not as "no findings."
 - **Findings vs. job status:** Semgrep runs with `--error`, so a finding fails the required **Semgrep Security Audit** check. The PR comment still posts when the scan step fails. Grype is non-blocking by design (`fail-build: false`, `severity-cutoff: high`), so a green Grype check does not mean no vulnerable dependencies. Read **Security → Code scanning** (and the PR comment) for Grype findings. Canonical CI behavior: [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
 
