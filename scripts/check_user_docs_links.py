@@ -425,9 +425,12 @@ def main() -> int:
         help=(
             "Also report link rot in the historical set: dev-docs/plans/completed/, "
             "the files in HISTORICAL_RECORD_FILES, and the dated snapshot "
-            "directories in SNAPSHOT_SUBDIRS. Advisory only: reports and still "
-            "exits 0, so historical-record debt is measurable without becoming a "
-            "merge gate."
+            "directories in SNAPSHOT_SUBDIRS. Historical rot is reported but never "
+            "affects the exit status, so it is measurable without becoming a merge "
+            "gate. This flag does NOT guarantee exit 0: broken references in live "
+            "documents (user-docs/, the living dev-docs/, the active plan tree) "
+            "still exit 1 in this mode. Both lists are reported when both are "
+            "non-empty."
         ),
     )
     args = parser.parse_args()
@@ -477,17 +480,22 @@ def main() -> int:
         else:
             blocking.extend(errors)
 
-    if blocking:
-        print("Broken documentation references:", file=sys.stderr)
-        for line in blocking:
-            print(f"  {line}", file=sys.stderr)
-        return 1
-
     n_files = len(files)
     scope = (
         "user-docs/, the living dev-docs/, the active plan tree (including "
         "supporting/research/), README.md, ARCHITECTURE.md, and AGENTS.md"
     )
+    # Report blocking findings but do NOT return yet. Returning here used to
+    # discard the advisory list entirely, so an advisory run that also found live
+    # rot printed no historical figure at all -- which is precisely when the debt
+    # number is worth having, and it made the advisory CI step go silent on
+    # exactly the runs where a reader was most likely to be looking. Status is
+    # decided last, from both lists.
+    if blocking:
+        print("Broken documentation references:", file=sys.stderr)
+        for line in blocking:
+            print(f"  {line}", file=sys.stderr)
+
     if advisory:
         print(
             f"OK: checked {n_files} Markdown file(s) ({scope}). "
@@ -502,9 +510,13 @@ def main() -> int:
         )
         for line in advisory:
             print(f"  {line}", file=sys.stderr)
-    else:
-        print(f"OK: checked links and src/scripts/tests code paths in {n_files} Markdown file(s) ({scope}).")
-    return 0
+    elif not blocking:
+        print(
+            f"OK: checked links and src/scripts/tests code paths in {n_files} "
+            f"Markdown file(s) ({scope})."
+        )
+    # Live-document rot blocks; historical rot never affects the exit status.
+    return 1 if blocking else 0
 
 
 if __name__ == "__main__":

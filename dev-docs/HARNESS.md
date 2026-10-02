@@ -170,9 +170,14 @@ github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
 `GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
 and with the uploads now blocking, an unguarded fork PR would turn the required
 **Semgrep Security Audit** check red on an outside contribution. The scan itself
-still runs on fork PRs; only the upload and the comment are skipped. Combined
-with the point above, that means a fork PR's findings produce **no in-PR signal
-at all** while the check stays green.
+still runs on fork PRs and still **gates**: the scan step carries `--error` and no
+`continue-on-error`, so findings exit non-zero and turn the required **Semgrep
+Security Audit** check red exactly as they do on a branch PR. What a fork PR loses
+is narrower and worth stating precisely: the SARIF upload (no Security-tab entry)
+and the PR comment (no inline annotation). The finding is still visible in the job
+log and in the check status. An earlier version of this paragraph claimed the check
+"stays green" on fork PRs, which was simply wrong — the fork guard covers only the
+upload and comment steps, never the scan.
 
 **The fork guard must be scoped to `pull_request` events.** A bare
 `github.event.pull_request.head.repo.full_name == github.repository` looks like

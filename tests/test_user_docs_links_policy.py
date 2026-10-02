@@ -415,6 +415,42 @@ class TestPlanTreePolicy(unittest.TestCase):
             self.assertIn("completed/OLD.md", proc.stderr)
             self.assertIn("completed/2026/NESTED.md", proc.stderr)
 
+    def test_advisory_report_survives_live_errors(self) -> None:
+        """Advisory output must not be discarded when live-document rot exists.
+
+        The blocking branch used to ``return 1`` immediately, dropping the
+        advisory list. An advisory run with live rot therefore printed no
+        historical figure at all -- silent on exactly the runs where the debt
+        number is most worth reading, and it made the advisory CI step go quiet
+        whenever a real regression was in progress.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "info" / "A.md").write_text(
+                "See `.github/workflows/gone.yml`.\n"
+            )
+            (dev_docs / "plans" / "completed" / "OLD.md").write_text(
+                "See `.github/workflows/grype.yml`.\n"
+            )
+            proc = self._run(tmp, "--include-completed-plans")
+            # Historical rot never affects status; live-document rot still does.
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertIn("gone.yml", proc.stderr)
+            self.assertIn("grype.yml", proc.stderr)
+            self.assertIn("completed/OLD.md", proc.stderr)
+
+    def test_live_errors_still_exit_1_in_advisory_mode(self) -> None:
+        """`--include-completed-plans` must not imply a guaranteed exit 0."""
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "info" / "A.md").write_text(
+                "See `.github/workflows/gone.yml`.\n"
+            )
+            self.assertEqual(self._run(tmp, "--include-completed-plans").returncode, 1)
+            self.assertEqual(self._run(tmp).returncode, 1)
+
     def test_snapshot_directories_are_scanned_but_advisory(self) -> None:
         """Dated assessments must be *measured*, not merely ignored.
 
