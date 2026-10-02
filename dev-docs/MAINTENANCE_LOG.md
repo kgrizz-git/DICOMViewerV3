@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-01
+**Last updated:** 2026-10-02
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-02
+- **Two CodeRabbit findings on the Markdown coverage work, both correct.** First, `_repo_wide_doc_files` iterated `DOC_SUBDIRS_EXCLUDED` and *added* `sample-phantom-data-committed/` to the scan, the opposite of the policy its own comment and the entry below describe. The loop is gone. Second, the real-repo guard pruned every hidden directory except `.github/`, so a new tracked dot-directory would have been invisible. The guard no longer walks the disk at all: it enumerates tracked Markdown with `git ls-files`, because a disk walk either prunes hidden directories wholesale or fails on each contributor's untracked tool caches. Exclusions are `.agents/`, `.claude/`, `.cursor/` and `DOC_SUBDIRS_EXCLUDED`, imported from the checker. The test skips only when git or a work tree is absent and fails on any other git error. Mutation-verified: a newly tracked `.githooks/NOTE.md` fails it. This supersedes the "walks the tree" wording in the 2026-10-01 entry below.
 
 ## 2026-10-01
 - **The final review verdict closed the round, and its one live finding was an error of mine — the same error class twice.** Having wrongly claimed no scanner's check stays green on a fork PR, I then over-corrected and generalised the opposite: I wrote that "the scan itself still runs on fork PRs and still gates" in a paragraph opening "the semgrep and grype jobs", implying Grype gates too. It does not. Grype runs `fail-build: false` with `severity-cutoff: high`, so its scan is non-blocking by design and, with the upload skipped, a Grype finding genuinely does leave that check green. That also contradicted another line of the same document. Corrected to separate the two: Semgrep gates via `--error`, Grype does not, and both lose the SARIF upload and the PR comment.

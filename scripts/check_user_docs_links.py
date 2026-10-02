@@ -206,12 +206,6 @@ def _repo_wide_doc_files(repo_root: Path) -> list[Path]:
     found = _markdown_under(repo_root, recursive=False)
     for subdir in DOC_SUBDIRS:
         found.extend(_markdown_under(repo_root / subdir))
-    for subdir in DOC_SUBDIRS_EXCLUDED:
-        found.extend(
-            f
-            for f in _markdown_under(repo_root / subdir)
-            if f not in found
-        )
     return found
 
 

@@ -11,6 +11,7 @@ way, so CI and local pytest stay aligned.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from check_user_docs_links import iter_markdown_files
+from check_user_docs_links import DOC_SUBDIRS_EXCLUDED, iter_markdown_files
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "check_user_docs_links.py"
@@ -568,37 +569,57 @@ class TestPlanTreePolicy(unittest.TestCase):
         gap was invisible in both directions: nothing reported those files and
         nothing checked them.
 
-        Walks the tree rather than shelling out to git, so the test does not depend
-        on a git binary being present in CI.
+        Lists tracked files with ``git ls-files`` rather than walking the disk.
+        A walk sees every contributor's untracked tool caches, so it either
+        prunes hidden directories wholesale (hiding a new tracked dot-directory)
+        or fails on whatever a given machine happens to hold. Git answers the
+        question the test is actually asking. CI checks out with git; the test
+        skips only when no git binary or work tree is available.
         """
         repo_root = Path(__file__).resolve().parents[1]
-        skip_dirs = {
-            ".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache",
-            ".mypy_cache", ".ruff_cache", "tmp", "build", "dist", "data",
-            "test-DICOM-data", "sample-DICOM-gitignored", "decoder-spike-artifacts",
-            "resources", "logs", ".sonar-local", ".phi-tools", "backups",
+        # Skip only for the two cases that genuinely cannot answer. Any other git
+        # failure (e.g. "dubious ownership" under a different UID) must fail, or
+        # the guard silently stops running while the job stays green.
+        if shutil.which("git") is None:  # pragma: no cover - CI always has git
+            self.skipTest("git is not available")
+        if not (repo_root / ".git").exists():  # pragma: no cover - source export
+            self.skipTest("not running inside a git work tree")
+        # An inherited GIT_DIR / GIT_INDEX_FILE (pytest launched from a hook)
+        # would list a different index than this checkout's. Only the
+        # redirection variables go: GIT_CONFIG_* may carry a safe.directory
+        # grant that a different-UID container needs.
+        redirects = {
+            "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+            "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
         }
+        env = {k: v for k, v in os.environ.items() if k not in redirects}
+        listed = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--", "*.md"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="surrogateescape",
+            env=env,
+            check=False,
+        )
+        if listed.returncode != 0:
+            self.fail(f"git ls-files failed: {listed.stderr.strip()}")
         # Deliberately out of scope: agent tooling configuration owned by other
-        # tools, not documentation of this project.
-        allowed_unscanned = (".agents/", ".claude/", ".cursor/")
+        # tools, not documentation of this project, plus the checker's own
+        # policy exclusion, imported so the two cannot drift apart.
+        allowed_unscanned = tuple(
+            f"{d}/" for d in (".agents", ".claude", ".cursor", *DOC_SUBDIRS_EXCLUDED)
+        )
 
         scanned = {f.resolve() for f in iter_markdown_files(repo_root, True)}
-        invisible: list[str] = []
-        for dirpath, dirnames, filenames in os.walk(repo_root):
-            rel_dir = Path(dirpath).relative_to(repo_root).as_posix()
-            dirnames[:] = [
-                d
-                for d in dirnames
-                if d not in skip_dirs and not (d.startswith(".") and d != ".github")
-            ]
-            for name in filenames:
-                if not name.endswith(".md"):
-                    continue
-                rel = f"{rel_dir}/{name}" if rel_dir != "." else name
-                if rel.startswith(allowed_unscanned):
-                    continue
-                if (Path(dirpath) / name).resolve() not in scanned:
-                    invisible.append(rel)
+        invisible = [
+            rel
+            for rel in listed.stdout.split("\0")
+            if rel
+            and not rel.startswith(allowed_unscanned)
+            # A tracked file deleted in the working tree is not scannable yet.
+            and (repo_root / rel).is_file()
+            and (repo_root / rel).resolve() not in scanned
+        ]
         self.assertEqual(invisible, [], f"invisible Markdown: {sorted(invisible)}")
 
     def test_real_repo_nested_agents_files_are_all_scanned(self) -> None:
