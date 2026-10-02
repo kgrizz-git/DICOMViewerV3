@@ -440,6 +440,37 @@ class TestPlanTreePolicy(unittest.TestCase):
             self.assertIn("grype.yml", proc.stderr)
             self.assertIn("completed/OLD.md", proc.stderr)
 
+    def test_advisory_banner_does_not_claim_ok_when_blocking(self) -> None:
+        """The advisory header must not read as success on a failing run.
+
+        Reporting advisory output ahead of the status decision means the header
+        can follow a "Broken documentation references" block. When it still led
+        with "OK:", a reader scanning stderr could take the whole run as clean.
+        Exit status was never wrong; the wording was.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            dev_docs = self._tree(tmp)
+            (dev_docs / "info" / "A.md").write_text(
+                "See `.github/workflows/gone.yml`.\n"
+            )
+            (dev_docs / "plans" / "completed" / "OLD.md").write_text(
+                "See `.github/workflows/grype.yml`.\n"
+            )
+            proc = self._run(tmp, "--include-completed-plans")
+            self.assertEqual(proc.returncode, 1, proc.stderr)
+            self.assertNotIn("OK:", proc.stderr)
+            self.assertIn("live-document rot above is blocking", proc.stderr)
+
+            # A clean run keeps its OK banner -- the wording is only a problem when
+            # blocking findings are present. NB the all-clear banner goes to stdout
+            # while the advisory header goes to stderr; they are not symmetric.
+            clean_tree = Path(tempfile.mkdtemp())
+            self._tree(clean_tree)
+            ok = self._run(clean_tree)
+            self.assertEqual(ok.returncode, 0)
+            self.assertIn("OK:", ok.stdout)
+
     def test_live_errors_still_exit_1_in_advisory_mode(self) -> None:
         """`--include-completed-plans` must not imply a guaranteed exit 0."""
         with tempfile.TemporaryDirectory() as d:

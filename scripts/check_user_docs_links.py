@@ -497,17 +497,24 @@ def main() -> int:
             print(f"  {line}", file=sys.stderr)
 
     if advisory:
-        print(
-            f"OK: checked {n_files} Markdown file(s) ({scope}). "
+        # No "OK:" prefix here. Moving the advisory report ahead of the status
+        # decision (so historical debt is still reported when live rot exists)
+        # meant this banner could follow a "Broken documentation references"
+        # block, reading as success on a run that exits 1. Both sections go to
+        # stderr, so a log scraper keys off the exit status -- but a human
+        # skimming should not have to.
+        banner = (
+            f"Checked {n_files} Markdown file(s) ({scope}). "
             f"Advisory only - {len(advisory)} broken reference(s) in historical "
             "records (dev-docs/plans/completed/, the dated files in "
             "HISTORICAL_RECORD_FILES, and the generated-assessment directories "
             "in SNAPSHOT_SUBDIRS), which are excluded by policy because they "
             "describe the tree as it was. Note templates-generalized/ carries "
             "its example paths in fenced code comments rather than backticks, so "
-            "the inline check does not see them:",
-            file=sys.stderr,
+            "the inline check does not see them:"
         )
+        print(f"{banner}{' (live-document rot above is blocking)' if blocking else ''}:",
+              file=sys.stderr)
         for line in advisory:
             print(f"  {line}", file=sys.stderr)
     elif not blocking:
