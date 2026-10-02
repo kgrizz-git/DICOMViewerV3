@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-10-02
 **Purpose:** Compact controller, bootstrap, and signal-wiring index. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules, then open the on-demand [detailed module tree](info/SOURCE_LAYOUT_MODULE_TREE.md) only when file-level navigation is needed.
 
 ---
@@ -20,7 +20,7 @@
 
 | Controller | File | Owns / coordinates |
 |---|---|---|
-| `DICOMViewerApp` | `src/main.py` + `src/main_app_*.py` mixins | Top-level orchestrator (plain mixin composition); delegates to all controllers below |
+| `DICOMViewerApp` | `src/main.py` + `src/main_app_*.py` mixins | Top-level orchestrator (plain mixin composition); see [mixin modules](#dicomviewerapp-mixin-modules) |
 | `MetadataController` | `src/metadata/metadata_controller.py` | `MetadataPanel`, `TagEditHistoryManager`, undo/redo callbacks, privacy mode for metadata |
 | `ROIMeasurementController` | `src/roi/roi_measurement_controller.py` | `ROIManager`, `MeasurementTool`, `AnnotationManager`, `ROIStatisticsPanel`, `ROIListPanel`; tracks active (focused-subwindow) managers via `update_focused_managers()` |
 | `SubwindowLifecycleController` | `src/core/subwindow_lifecycle_controller.py` | Per-subwindow manager creation, focus changes, display updates |
@@ -43,6 +43,26 @@
 4. **UI** — **View → Manage Sync Groups…** (`slice_sync_dialog.py`); **View → Show Slice Location Lines** toggles the coordinator via config.
 
 Tests: `tests/core/test_slice_sync_coordinator_unit.py`, `tests/core/test_slice_geometry.py`, `tests/core/test_slice_location_line_helper_logic.py`, `tests/utils/test_slice_sync_config.py`.
+
+### `DICOMViewerApp` mixin modules
+
+`DICOMViewerApp` (`src/main.py`) inherits **plain mixins** (no `QObject` base) in MRO order after `QObject`. Qt `Signal` declarations stay on the app class in `main.py`. Method ownership per mixin is listed in the archived [`plans/completed/MAIN_PY_REFACTOR_PLAN.md`](plans/completed/MAIN_PY_REFACTOR_PLAN.md) Appendix A.
+
+| Mixin | Module | Owns (summary) |
+|---|---|---|
+| `InitializationMixin` | `src/main_app_initialization.py` | `_init_*` / `_setup_*` orchestration, handler bootstrap, `wire_all_signals` |
+| `SubwindowManagementMixin` | `src/main_app_subwindow_management.py` | Pane layout, subwindow lifecycle hooks, display refresh |
+| `MPRNavigationMixin` | `src/main_app_subwindow_management.py` | MPR navigator, detached thumbnail sessions |
+| `UIHandlersMixin` | `src/main_app_ui_and_files.py` | Menu/dialog slots, customization, keyboard routing helpers |
+| `FileOperationsMixin` | `src/main_app_ui_and_files.py` | Open/close, series load coordination, study index hooks |
+| `DisplayProjectionMixin` | `src/main_app_display_settings.py` | Intensity projection, fusion/display projection facades |
+| `SettingsLayoutMixin` | `src/main_app_display_settings.py` | Layout presets, window slots, smoothing/scroll-wheel prefs |
+| `TagEditingMixin` | `src/main_app_tag_roi.py` | Tag edit/export/undo fan-out |
+| `ROIWorkflowMixin` | `src/main_app_tag_roi.py` | ROI/measurement workflows, statistics export entry |
+
+Related shell helpers (not mixins): `src/gui/app_handler_bootstrap.py` (handler construction), `src/gui/app_signal_wiring.py` (all `connect()` calls), `src/gui/main_app_key_event_filter.py` (`eventFilter` / layout-shortcut focus gating).
+
+**Regression tests:** `tests/test_main_mixin_composition.py` (MRO), `tests/test_main_mixin_delegation.py` (one-line forwards and compound bodies), `tests/test_main_app_key_event_filter.py` (key dispatch). `InitializationMixin` heavy paths still run only through full `DICOMViewerApp()` construction smoke; see [`TO_DO.md`](TO_DO.md) for `.coveragerc` omit lift status.
 
 ---
 

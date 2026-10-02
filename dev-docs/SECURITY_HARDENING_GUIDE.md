@@ -1,5 +1,7 @@
 # Security Hardening Guide: Debug Flags, PII Protection, and Automation
 
+**Last updated:** 2026-10-02
+
 This guide covers the new security features implemented to address safety scan findings:
 1. **Debug flag hooks** - Prevent builds with debug enabled
 2. **Log sanitization** - Redact patient PII from logs
@@ -307,10 +309,11 @@ Located in `.github/dependabot.yml`:
 
 #### **In Pull Requests:**
 
-- Semgrep posts comment with HIGH/CRITICAL findings
-- Grype posts comment with vulnerable dependencies
-- Security checks block merge if debug flags detected
-- All SARIF reports uploaded to Security tab
+- Semgrep posts a PR comment summarizing SARIF results (same-repo PRs only; fork PRs skip upload/comment — see below).
+- Grype posts a PR comment when high-severity dependency issues are present (same-repo PRs only).
+- **Privacy / debug gates** (`privacy-gates.yml`, pre-commit hooks) block merge when debug flags are enabled or critical privacy checks fail.
+- **SARIF uploads** (Semgrep, Grype, CodeQL) are **blocking** when they run: a failed upload fails CI even when the scan itself completed. Treat a red upload as lost Security-tab coverage, not as "no findings."
+- **Findings vs. job status:** Semgrep and Grype are configured so a successful scan can still report issues without failing the job (`semgrep scan` without `--error`; Grype `fail-build: false`). Read **Security → Code scanning** (and the PR comment) for findings; a green check does not mean a clean scan. Canonical CI behavior: [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
 
 #### **Example PR Comment (Semgrep):**
 

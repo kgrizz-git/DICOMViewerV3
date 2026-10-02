@@ -1,6 +1,6 @@
 # Detailed source module tree
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-10-02
 **Purpose:** On-demand file-level navigation. Paths in this document are repository-relative. Read [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md) first for bootstrap and signal-wiring rules, then read only the relevant domain below.
 
 ## Application shell
@@ -13,6 +13,11 @@
 | `src/main_app_ui_and_files.py` | Menus, dialogs, file/series loading |
 | `src/main_app_display_settings.py` | Overlays, projection, display settings |
 | `src/main_app_tag_roi.py` | Tag edit/export and ROI workflows |
+| `src/gui/main_app_key_event_filter.py` | App `eventFilter`: layout-shortcut focus gating and `KeyboardEventHandler` dispatch |
+| `src/gui/app_handler_bootstrap.py` | Construct coordinators/handlers after widgets exist |
+| `src/gui/app_signal_wiring.py` | Sole home for `DICOMViewerApp` Qt `connect()` wiring |
+
+Mixin forwarding seams: `tests/test_main_mixin_delegation.py` (see [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md#dicomviewerapp-mixin-modules)).
 
 ## Core processing and coordination
 
