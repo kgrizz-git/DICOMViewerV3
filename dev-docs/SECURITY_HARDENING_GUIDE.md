@@ -65,7 +65,7 @@ Two hooks prevent debug flags from entering the repository:
 **What it does:**
 - Checks `src/utils/debug_flags.py` for any `DEBUG_* = True`
 - Blocks commit if debugging is left on
-- Runs automatically on every commit
+- Runs automatically on commits to `main` only; feature-branch commits skip it
 
 **Example:**
 ```bash
@@ -83,7 +83,7 @@ $ git commit -m "Fix layout bug"
 #### **pre-push hook** (runs on `git push`)
 
 **What it does:**
-- Strict validation when pushing to `main`, `develop`, or version tags
+- Strict validation when pushing to `main` (other branches and tags are not scanned)
 - Blocks pushes with any `DEBUG_* = True`
 - Prevents release builds with debugging enabled
 
