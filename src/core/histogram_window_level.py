@@ -27,7 +27,9 @@ def apply_pane_window_level(
     """Focus pane ``idx`` when needed, then set its window through the controls."""
     if focused_idx != idx:
         layout = getattr(app, "multi_window_layout", None)
-        subwindows = layout.get_all_subwindows() if layout is not None else []
+        if layout is None:
+            return
+        subwindows = layout.get_all_subwindows()
         if idx >= len(subwindows) or subwindows[idx] is None:
             return
         layout.set_focused_subwindow(subwindows[idx])
