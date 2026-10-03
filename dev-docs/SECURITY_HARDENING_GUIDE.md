@@ -1,5 +1,7 @@
 # Security Hardening Guide: Debug Flags, PII Protection, and Automation
 
+**Last updated:** 2026-10-02
+
 This guide covers the new security features implemented to address safety scan findings:
 1. **Debug flag hooks** - Prevent builds with debug enabled
 2. **Log sanitization** - Redact patient PII from logs
@@ -63,7 +65,7 @@ Two hooks prevent debug flags from entering the repository:
 **What it does:**
 - Checks `src/utils/debug_flags.py` for any `DEBUG_* = True`
 - Blocks commit if debugging is left on
-- Runs automatically on every commit
+- Runs automatically on commits to `main` only; feature-branch commits skip it
 
 **Example:**
 ```bash
@@ -81,7 +83,7 @@ $ git commit -m "Fix layout bug"
 #### **pre-push hook** (runs on `git push`)
 
 **What it does:**
-- Strict validation when pushing to `main`, `develop`, or version tags
+- Strict validation when pushing to `main` (other branches and tags are not scanned)
 - Blocks pushes with any `DEBUG_* = True`
 - Prevents release builds with debugging enabled
 
@@ -307,10 +309,11 @@ Located in `.github/dependabot.yml`:
 
 #### **In Pull Requests:**
 
-- Semgrep posts comment with HIGH/CRITICAL findings
-- Grype posts comment with vulnerable dependencies
-- Security checks block merge if debug flags detected
-- All SARIF reports uploaded to Security tab
+- Semgrep posts a PR comment summarizing SARIF results (same-repo PRs only). Fork PRs skip the upload and comment, and Dependabot PRs skip the Semgrep job entirely. See [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
+- Grype posts a PR comment when high-severity dependency issues are present (same-repo, non-Dependabot PRs only).
+- **Privacy gates** (`privacy-gates.yml`): Detect Secrets, No PHI artifacts tracked, and Blocking Privacy Output Scan are required checks and block merge. **Check Debug Flags** fails CI when a `DEBUG_*` flag is `True`, but it is not a required check, so it does not block merge by itself. The local pre-commit debug-flag scan runs only on `main`.
+- **SARIF uploads** (Semgrep, Grype, CodeQL) are **blocking** when they run: a failed upload fails CI even when the scan itself completed. Treat a red upload as lost Security-tab coverage, not as "no findings."
+- **Findings vs. job status:** Semgrep runs with `--error`, so a finding fails the required **Semgrep Security Audit** check. The PR comment still posts when the scan step fails. Grype is non-blocking by design (`fail-build: false`, `severity-cutoff: high`), so a green Grype check does not mean no vulnerable dependencies. Read **Security → Code scanning** (and the PR comment) for Grype findings. Canonical CI behavior: [`HARNESS.md`](HARNESS.md#code-scanning-sarif-uploads).
 
 #### **Example PR Comment (Semgrep):**
 

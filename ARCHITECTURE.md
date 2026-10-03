@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-09-04  
+**Last updated:** 2026-10-02  
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -76,7 +76,7 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 
 ### `DICOMViewerApp` mixin composition
 
-`DICOMViewerApp` in **`src/main.py`** composes **plain mixin classes** from **`src/main_app_*.py`** (no `QObject` base, no mixin `__init__`). `QObject` remains the sole Qt base; PySide6 `Signal` declarations (e.g. `tag_export_union_ready`) stay on `DICOMViewerApp` in `main.py`. Mixins access shared app state via `self` after `DICOMViewerApp.__init__` runs the explicit `_init_*` / `_setup_*` orchestration. Method ownership per mixin is recorded in the archived **`dev-docs/plans/completed/MAIN_PY_REFACTOR_PLAN.md`** Appendix A.
+`DICOMViewerApp` in **`src/main.py`** composes **plain mixin classes** from five **`src/main_app_*.py`** modules (no `QObject` base, no mixin `__init__`). `QObject` remains the sole Qt base; PySide6 `Signal` declarations (e.g. `tag_export_union_ready`) stay on `DICOMViewerApp` in `main.py`. Mixins access shared app state via `self` after `DICOMViewerApp.__init__` runs the explicit `_init_*` / `_setup_*` orchestration in **`InitializationMixin`** (`main_app_initialization.py`); the other mixins hold menu slots and delegation seams. Method ownership per mixin is recorded in the archived **`dev-docs/plans/completed/MAIN_PY_REFACTOR_PLAN.md`** Appendix A. A compact mixin map and test pointers live in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md#dicomviewerapp-mixin-modules)**.
 
 **Typing note:** basedpyright rejects annotating mixin methods as `self: DICOMViewerApp` (`self` must be a *supertype* of the mixin class). The repo therefore uses the same file-level pragma pattern as `ImageViewer` mixins (`reportAttributeAccessIssue` / `reportArgumentType` / `reportUninitializedInstanceVariable`), with **no** `TYPE_CHECKING` import of `main` from `main_app_*.py`. Combined with `reportUnknown*=none` in `pyrightconfig.json`, mixin `self.<app-attr>` access is **not** type-checked for typos (accepted tradeoff vs 364 basedpyright errors). Rely on the Phase 0 behavioral suite and careful moves. Shared study-map typing lives in **`gui.tag_export_union_host.StudiesNestedDict`**.
 
@@ -132,5 +132,6 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | Repo harness | `python scripts/check_repo_harness.py` |
 | Architecture boundaries | `python scripts/check_architecture_boundaries.py` |
 | Agent smoke (imports + fixture) | `python scripts/agent_smoke_harness.py` |
+| `main.py` mixin delegation | `python -m pytest tests/test_main_mixin_delegation.py tests/test_main_mixin_composition.py -v` |
 | Type check | `.venv/bin/python scripts/check_basedpyright_errors.py` (CI / pre-push; basedpyright) |
-| Security (local/CI) | Semgrep, Grype workflows; see `CONTRIBUTING.md` |
+| Security (local/CI) | Semgrep, Grype, CodeQL SARIF uploads; see [`dev-docs/HARNESS.md`](dev-docs/HARNESS.md#code-scanning-sarif-uploads) and `CONTRIBUTING.md` |
