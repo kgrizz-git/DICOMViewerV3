@@ -97,7 +97,7 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
         lut = colormap_lut(name)
         action = QAction(name, color)
         action.setCheckable(True)
-        action.setChecked(current is not None and current.lut_type == "colormap" and current.name == name)
+        action.setChecked(current is not None and current == lut)
         action.setIcon(swatch_icon(lut))
         action.triggered.connect(lambda _checked=False, built=lut, owner=host: apply_lut_to_host(owner, built))
         group.addAction(action)

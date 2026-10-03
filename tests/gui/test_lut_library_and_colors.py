@@ -235,3 +235,36 @@ def test_color_dialog_keeps_untouched_positions_exact(qapp) -> None:
     assert moved.color_stops is not None
     assert moved.color_stops[1][0] == 0.5
     _ = qapp
+
+
+@pytest.mark.qt
+def test_a_saved_colormap_named_like_a_builtin_checks_only_its_saved_entry(qapp) -> None:
+    store = _Store()
+    stops = LookUpTable(
+        name="x",
+        lut_type="colormap",
+        source="custom",
+        color_stops=((0.0, (0, 0, 0)), (1.0, (0, 255, 0))),
+    )
+    saved = save_lut(store, stops, "hot")
+    assert saved is not None
+    pane = _Pane(saved, store)
+    menu = QMenu()
+    lut_actions.populate_lut_menu(menu, pane)
+    checked = [
+        (sub.title(), action.text())
+        for sub in (a.menu() for a in menu.actions() if a.menu())
+        for action in sub.actions()
+        if action.isCheckable() and action.isChecked()
+    ]
+    assert checked == [("Saved", "hot")]
+    pane.lut = colormap_lut("hot")
+    lut_actions.populate_lut_menu(menu, pane)
+    checked = [
+        (sub.title(), action.text())
+        for sub in (a.menu() for a in menu.actions() if a.menu())
+        for action in sub.actions()
+        if action.isCheckable() and action.isChecked()
+    ]
+    assert checked == [("Color", "hot")]
+    _ = qapp
