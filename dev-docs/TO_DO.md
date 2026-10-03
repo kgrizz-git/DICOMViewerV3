@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-01
+**Last updated:** 2026-10-03
 
 ---
 
@@ -42,27 +42,19 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
-4. **[P1] More and custom look-up tables (LUTs & colormaps) — finish Phases 3c/4.**
-   **Phases 1–3a/3b/3d are shipped and merged** (PR #161 + #166, 2026-09-28): the
-   engine, built-in transfer functions and colormaps, all five display paths, the
-   toolbar/View/context-menu selector, and the grayscale curve editor. What remains,
-   in recommended order:
-   - **Missing test coverage for shipped UI** (no `src/` change needed): the
-     tests/gui/test_lut_curve_editor.py suite (breakpoint add/delete/drag,
-     freehand → simplified control points, interpolation switch, undo/redo, gamma
-     slider re-sample, three-curve overlay across all four MONOCHROME1 ×
-     user-invert combinations) and the **QImage stride-consistency** regression
-     (odd widths 63/65/101 on the variable-size consumers, 68 px buffer for
-     `MprThumbnailWidget`) — the plan's own test-plan boxes are still open.
-   - **3c editor three-curve preview** — the edited LUT curve in LUT space with the
-     net-inversion composed result behind it, live against the current W/L.
-   - **3c stretch goal** — drag the composed curve's endpoints to adjust W/L.
-   - **Phase 4a persistence** — `custom_luts.json` via `ConfigManager`,
-     `to_dict()`/`from_dict()`. This is the real user-facing gap: a curve the user
-     draws today is lost on restart.
-   - **Phase 4** — active-LUT label on each pane (View-menu toggle, `ConfigManager`
-     persisted), DICOM `ModalityLUTSequence`/`VOILUTSequence` as a "From DICOM"
-     option, per-series default LUT, and **4b** editable color colormaps.
+4. **[P1] More and custom look-up tables (LUTs & colormaps) — finish Phase 4 (PR 2 of 2).**
+   Phases 1–3 shipped in PR #161 + #166. PR 1 of the completion
+   (`feature/lut-plan-completion`) adds the missing editor and stride tests, the
+   editor's display-result trace, the histogram composed-curve W/L drag,
+   `custom_luts.json` persistence, and editable color stops (4a/4b). What
+   remains, for PR 2:
+   - **Pane LUT label** — active LUT name on each pane, View-menu toggle,
+     `ConfigManager`-persisted, privacy-masked like the other corner overlays.
+   - **Per-series default LUT** — for example Hot for PET.
+   - **Colormap file import** (Phase 1c) — a user-defined colormap from `.csv`
+     or `.json`.
+   - **From DICOM** — a Modality LUT that replaces rescale and a VOI LUT that
+     replaces window/level (PS3.3 C.11.1/C.11.2), not a post-window LUT.
    **Manual smoke is written but not yet run or filed** — the steps are at
    [`AGENT_SMOKE.md` §LUT](orchestration/AGENT_SMOKE.md) and are **not** yet a line
    in [Manual Smoke Checks](#manual-smoke-checks), so slot 1 does not yet apply to
@@ -356,6 +348,7 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
 
+- [ ] **[P2]** **Window top can truncate to 254.** `apply_window_level` computes `(x - low) * (255 / width)` and then truncates with `astype(np.uint8)`. For some widths, such as 200 and 400, a value at the top of the window comes out as 254.99999 and truncates to **254**, so the window's top edge is never full white. Widths such as 256 and 1000 are exact. A fix is to multiply by 255 before dividing, but that changes rendered bytes on every display path, so it needs its own change with updated golden tests. Found while writing `tests/gui/test_lut_curve_editor.py` (2026-10-03).
 - [ ] **[P2]** **Consider a 10- or 12-bit display path.** Stored pixels are already 10-, 12-, or 16-bit. Window/level uses that range, then the display path quantizes to 8-bit (`uint8`, then `QImage.Format_Grayscale8` / `Format_RGB888`) before the LUT indexes a 256-entry table. Spike whether Qt can keep a 10-bit (`Format_RGB30`) or 16-bit grayscale (`Format_Grayscale16`) image through to the monitor on macOS and Windows, and which outputs must stay 8-bit (JPEG, cine, thumbnails). Keep the LUT after window/level. Wider display depth helps when one window contains more than 256 distinct stored steps, and it reduces banding on a steep LUT. It does not show values outside the window. Added 2026-09-28.
 
 ### MPR & fusion views
