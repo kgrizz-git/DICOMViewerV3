@@ -128,6 +128,8 @@ class DialogCoordinator:
         self.get_histogram_callbacks_for_subwindow = get_histogram_callbacks_for_subwindow
         self.get_focused_subwindow_index = get_focused_subwindow_index
         self.histogram_dialogs: dict[int, HistogramDialog | None] = {}
+        # (pane index, center, width) -> None; applies a histogram edge drag.
+        self.histogram_window_level_setter: Callable[[int, float, float], None] | None = None
         self.manage_wl_presets_callback = manage_wl_presets_callback
         self.clear_study_index_callback = clear_study_index_callback
         self.clear_mpr_cache_callback = clear_mpr_cache_callback
@@ -393,6 +395,9 @@ class DialogCoordinator:
                 return
             callbacks["get_restore_geometry"] = self.config_manager.get_histogram_window_geometry
             callbacks["save_geometry_callback"] = self.config_manager.set_histogram_window_geometry
+            setter = self.histogram_window_level_setter
+            if setter is not None:
+                callbacks["set_window_level"] = lambda c, w, i=idx: setter(i, c, w)
             dialog = HistogramDialog(
                 self.main_window,
                 title_suffix=f" (View {idx + 1})",

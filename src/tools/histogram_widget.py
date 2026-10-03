@@ -11,6 +11,8 @@ Inputs:
     
 Outputs:
     - Histogram plot with window/level indicators
+    - ``window_level_dragged(center, width)`` when the user drags a window
+      edge of the composed curve (see ``tools.histogram_window_drag``)
     
 Requirements:
     - PySide6 for widget
@@ -24,7 +26,10 @@ from typing import Any, ClassVar
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+from tools.histogram_window_drag import Edge, dragged_window, edge_near, window_edges
 
 
 def _paint_lut_input_axis(output_axis: Any, paths: Any) -> Any:
@@ -138,7 +143,10 @@ class HistogramWidget(QWidget):
     - Display histogram for whole slice or ROI
     - Show window/level indicators
     - Update dynamically
+    - Drag a window edge of the composed curve to change window/level
     """
+
+    window_level_dragged = Signal(float, float)
 
     def __init__(self, parent=None):
         """
@@ -167,6 +175,10 @@ class HistogramWidget(QWidget):
         self._show_composed_curve = True
         self._transfer_axis: Any = None
         self._lut_input_axis: Any = None
+        self._drag_edge: Edge | None = None
+        self.canvas.mpl_connect("button_press_event", self._on_press)
+        self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self.canvas.mpl_connect("button_release_event", self._on_release)
 
     # Font size tiers for responsive scaling (min width threshold -> (title_pt, label_pt, tick_pt))
     # label_pt is clamped to ≥ 11 at medium and larger sizes (C12).
@@ -207,6 +219,14 @@ class HistogramWidget(QWidget):
             pixel_array: Image pixel array, or None to clear
         """
         self.pixel_array = pixel_array
+        if pixel_array is None:
+            # Nothing to plot: drop the old curves and any edge being dragged,
+            # so a motion event cannot report a window for a cleared pane.
+            self._drag_edge = None
+            self._clear_transfer_axis()
+            self.axes.clear()
+            self.canvas.draw_idle()
+            return
         self._update_histogram()
 
     def set_roi_mask(self, roi_mask: np.ndarray | None) -> None:
@@ -230,6 +250,49 @@ class HistogramWidget(QWidget):
         self.window_center = center
         self.window_width = width
         self._update_histogram()
+
+    def _edge_at(self, event: Any) -> Edge | None:
+        """The composed-curve window edge under a press, or None."""
+        if self.pixel_array is None:
+            return None
+        if not self._show_composed_curve or self._transfer_axis is None:
+            return None
+        if self.window_center is None or self.window_width is None or self.window_width <= 0:
+            return None
+        if event.x is None or event.inaxes is None:
+            return None
+        low, high = window_edges(self.window_center, self.window_width)
+        to_px = self.axes.transData.transform
+        low_px = float(to_px((low, 0.0))[0])
+        high_px = float(to_px((high, 0.0))[0])
+        return edge_near(float(event.x), low_px, high_px)
+
+    def _on_press(self, event: Any) -> None:
+        """Grab a window edge with the left button."""
+        if getattr(event, "button", None) != 1:
+            return
+        self._drag_edge = self._edge_at(event)
+
+    def _on_motion(self, event: Any) -> None:
+        """Move the grabbed edge and report the new window."""
+        edge = self._drag_edge
+        if self.pixel_array is None:
+            self._drag_edge = None
+            return
+        if edge is None or event.x is None or event.y is None:
+            return
+        if self.window_center is None or self.window_width is None:
+            return
+        # Convert through the histogram axes, not ``event.xdata``: the pointer
+        # may be over the LUT-input axis, whose x runs 0-255 rather than over
+        # stored values.
+        x = float(self.axes.transData.inverted().transform((event.x, event.y))[0])
+        center, width = dragged_window(edge, x, self.window_center, self.window_width)
+        self.window_level_dragged.emit(center, width)
+
+    def _on_release(self, _event: Any) -> None:
+        """Drop the grabbed edge."""
+        self._drag_edge = None
 
     def set_log_scale(self, use_log: bool) -> None:
         """

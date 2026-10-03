@@ -47,6 +47,12 @@ import numpy as np
 
 from core.dicom_window_level import apply_window_level
 from core.display_normalize import normalize_to_uint8
+from core.lut_color_stops import (
+    ColorInterpolation,
+    ColorStop,
+    normalize_color_stops,
+    sample_color_stops,
+)
 from core.lut_curve import CATMULL_ROM, clamp_unit_interval, evaluate_univariate
 
 LutType = Literal["grayscale_ramp", "colormap"]
@@ -120,6 +126,9 @@ class LookUpTable:
     gamma: float | None = None  # 0.1–5.0, used when transfer_fn is gamma
     sigmoid_k: float | None = None  # steepness > 0, used when transfer_fn is sigmoid
     exp_k: float = 1.0  # 0.1–5.0, used when transfer_fn is exponential
+    # Editable colormap (Phase 4b). When set, ``colormap`` is sampled from it.
+    color_stops: tuple[ColorStop, ...] | None = None
+    color_interpolation: ColorInterpolation = "linear"
 
     def __post_init__(self) -> None:
         """Validate fields and normalize control points via ``object.__setattr__``.
@@ -133,6 +142,16 @@ class LookUpTable:
             "control_points",
             _normalized_control_points(self.control_points),
         )
+        if self.color_stops is not None:
+            if self.lut_type != "colormap":
+                raise ValueError("color_stops require lut_type 'colormap'")
+            stops = normalize_color_stops(self.color_stops)
+            object.__setattr__(  # privacy-check: allow[structural-event-private-mutation] review=kgrizz-git
+                self, "color_stops", stops
+            )
+            object.__setattr__(  # privacy-check: allow[structural-event-private-mutation] review=kgrizz-git
+                self, "colormap", sample_color_stops(stops, self.color_interpolation)
+            )
         object.__setattr__(  # privacy-check: allow[structural-event-private-mutation] review=kgrizz-git
             self,
             "colormap",
@@ -163,6 +182,8 @@ class LookUpTable:
                 self.gamma,
                 self.sigmoid_k,
                 self.exp_k,
+                self.color_stops,
+                self.color_interpolation,
                 None if self.colormap is None else (self.colormap.shape, self.colormap.tobytes()),
             )
         )
@@ -365,6 +386,8 @@ def _fields_equal(left: LookUpTable, right: LookUpTable) -> bool:
         and left.gamma == right.gamma
         and left.sigmoid_k == right.sigmoid_k
         and left.exp_k == right.exp_k
+        and left.color_stops == right.color_stops
+        and left.color_interpolation == right.color_interpolation
         and _colormap_equal(left.colormap, right.colormap)
     )
 

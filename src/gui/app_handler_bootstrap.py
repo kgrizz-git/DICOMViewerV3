@@ -26,6 +26,7 @@ from PySide6.QtWidgets import QApplication
 
 from core.cine_app_facade import CineAppFacade
 from core.customization_handlers import CustomizationHandlers
+from core.histogram_window_level import apply_pane_window_level
 from core.privacy_controller import PrivacyController
 from core.study_index import LocalStudyIndexService
 from gui.cine_player import CinePlayer
@@ -120,6 +121,10 @@ def initialize_handlers(app: DICOMViewerApp) -> None:
     app.dialog_coordinator.annotation_options_applied_callback = app._on_annotation_options_applied
     # Set tag edited callback
     app.dialog_coordinator.tag_edited_callback = app._on_tag_edited
+    # A histogram edge drag sets that pane's window through the W/L controls
+    app.dialog_coordinator.histogram_window_level_setter = (
+        lambda i, c, w: apply_pane_window_level(app, i, app.get_focused_subwindow_index(), c, w)
+    )
     # Set undo/redo callbacks for tag viewer dialog
     app.dialog_coordinator.undo_redo_callbacks = (
         lambda: app._on_undo_requested(),

@@ -1,8 +1,8 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** In progress — Phases 1–3a/3b/3d merged (PR #161, then #166, 2026-09-28). Remaining, in order: the **missing tests for shipped UI** (the `tests/gui/test_lut_curve_editor.py` suite and the QImage stride-consistency regression — both are open boxes in the Test plan below and need no `src/` change), **3c**'s editor three-curve preview and the composed-curve endpoint W/L drag, **Phase 4** (4a persistence, pane LUT label, DICOM LUT sequences, per-series default, 4b color stops). The manual smoke steps are written at [`AGENT_SMOKE.md`](../../orchestration/AGENT_SMOKE.md) but have **not** been run or filed in [`TO_DO.md`](../../TO_DO.md#manual-smoke-checks).  
+**Status:** In progress — Phases 1–3 and 4a/4b are implemented on `feature/lut-plan-completion` (PR 1 of 2). Earlier phases merged in PR #161 and #166 (2026-09-28). PR 1 adds the missing Phase 3b/3c tests and the QImage stride regression, the editor's display-result trace, the histogram composed-curve W/L drag, `custom_luts.json` persistence, and editable color stops. **Remaining for PR 2:** the pane LUT label, per-series default LUT, user-defined colormap file import (1c), and **From DICOM** — implemented as a standards-correct VOI LUT that replaces window/level and a Modality LUT that replaces rescale, not as a post-window display LUT (decided 2026-10-03). The manual smoke steps are written at [`AGENT_SMOKE.md`](../../orchestration/AGENT_SMOKE.md) but have **not** been run or filed in [`TO_DO.md`](../../TO_DO.md#manual-smoke-checks).  
 **Priority:** P1  
-**Last updated:** 2026-09-30  
+**Last updated:** 2026-10-03  
 **TO_DO ref:** [`TO_DO.md` Next up slot 4](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps) — finish Phases 3c/4**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
@@ -750,7 +750,7 @@ needs to see which part of the curve moved.
     alongside it so the overlay is self-describing.
 - [x] Update the overlay when W/L or LUT changes (W/L drag re-samples the
   composed curve; LUT or gamma change re-samples the LUT and composed curves).
-- [ ] The editor (3b) shows the same three-curve arrangement: the edited curve
+- [x] The editor (3b) shows the same three-curve arrangement: the edited curve
   is the **LUT (post-polarity, post-user-invert)** curve, with the net-inversion
   composed result drawn behind it as a live preview against the current W/L, so
   editing stays in LUT space while the preview remains in display space. The preview must go
@@ -762,8 +762,11 @@ needs to see which part of the curve moved.
   exists inside the modal dialog today (Qt delivers the release through the
   mouse grab); if the editor ever becomes non-modal or gains gesture-cancel
   shortcuts, snapshot at the gesture boundary first.
-- [ ] Allow interactive W/L adjustment by dragging the composed curve's
-  endpoints (stretch goal).
+- [x] Allow interactive W/L adjustment by dragging the composed curve's
+  endpoints (stretch goal). **Shipped on the histogram:** dragging either bend
+  of the composed curve moves that window edge and keeps the other fixed
+  (`src/tools/histogram_window_drag.py`). The drag focuses the histogram's pane
+  if needed and goes through the W/L controls (`core.histogram_window_level`).
 - [x] The same three-curve widget is reused for the toolbar dropdown swatches
   and the LUT name/source readout (3a) so there is one implementation.
 
@@ -789,13 +792,23 @@ needs to see which part of the curve moved.
   the histogram legend, but not on the pane itself. Label text follows the same
   privacy masking as the other corner overlays.
 - [ ] **DICOM Modality LUT Sequence:** Parse `ModalityLUTSequence` (0028,3000) and `VOILUTSequence` (0028,3010) from datasets that embed non-linear LUTs — use them as an additional "From DICOM" option.
+  **Decision (2026-10-03):** these are not post-window display LUTs. Per PS3.3
+  C.11.1 and C.11.2, a Modality LUT replaces rescale slope/intercept and a VOI LUT
+  replaces window/level. **From DICOM** therefore maps stored values through the
+  Modality LUT (where rescale happens) and the VOI LUT (instead of window/level),
+  then applies polarity and the active display LUT as usual.
 - [ ] **Per-series default LUT:** E.g., always use "Hot" for PET, "Bone" for CT.
 
 ### 4a. Persistence schema
 
-- [ ] Custom LUTs persist as `custom_luts.json` in the app data directory, via
+- [x] Custom LUTs persist as `custom_luts.json` in the app data directory, via
   `ConfigManager` (`src/utils/config_manager.py`), not ad-hoc files.
-- [ ] `LookUpTable` gains `to_dict()` / `from_dict()`. Schema:
+- [x] `LookUpTable` gains `to_dict()` / `from_dict()`. **As built:** module
+  functions in `src/core/lut_persistence.py` (`lut_to_dict` / `lut_from_dict`),
+  with the file I/O in `utils.config.lut_config.LutConfigMixin` so `utils`
+  never imports `core`. The schema below gained a `transfer` field (the
+  built-in curve kind, so a saved gamma keeps its kind and parameter), and every
+  loaded entry has `source: "custom"`. Schema:
   ```json
   {
     "schema_version": 1,
@@ -813,7 +826,7 @@ needs to see which part of the curve moved.
     ]
   }
   ```
-- [ ] The 256 samples are at **`x = i / 255` for `i = 0..255`**
+- [x] The 256 samples are at **`x = i / 255` for `i = 0..255`**
   (`linspace(0, 1, 256)`, which matches `i/255` to ~1e-16). A control point at
   `x = 0.25` is therefore **not** itself a table abscissa (`63/255 ≈ 0.24706`,
   `64/255 ≈ 0.25098`): the piecewise-linear *function* passes through it exactly,
@@ -823,28 +836,32 @@ needs to see which part of the curve moved.
   ~0.098, far beyond the `0.5/255 ≈ 0.00196` half-step in *x*. Tests must
   evaluate the interpolant at `i/255`, not assert that a control point's `y`
   appears verbatim in the table.
-- [ ] Unknown/missing `interpolation` falls back to `linear`; a missing or null
+- [x] Unknown/missing `interpolation` falls back to `linear`; a missing or null
   `exp_k` maps to the `1.0` default; a LUT that fails validation is skipped with
   a warning rather than aborting app data load.
-- [ ] `tests/core/test_lut_persistence.py` (Phase 4a): `to_dict()` /
+- [x] `tests/core/test_lut_persistence.py` (Phase 4a): `to_dict()` /
   `from_dict()` round-trip preserves control points, interpolation, and
   parameters; an unknown `interpolation` falls back to `linear`; an invalid LUT
   is skipped with a warning rather than aborting the load.
 
 ### 4b. Editable color colormaps (deferred)
 
-- [ ] **Color stop model:** add an RGB(A) color-stop representation to
+- [x] **Color stop model:** add an RGB(A) color-stop representation to
   `LookUpTable` — e.g. `color_stops: tuple[tuple[float, tuple[int, int, int]], ...]`
   keyed on input position, plus a `color_interpolation` mode (`linear` in RGB
   space, or a perceptual space). Sample to the same `(256, 3)` uint8 array the
   fast path already consumes, so `apply_lut_to_uint8()` needs no special case.
-- [ ] **Editor support:** a color-gradient editing surface (add/move/delete
+- [x] **Editor support:** a color-gradient editing surface (add/move/delete
   stops, pick RGB, smooth vs stepped between stops) in the same dialog, kept
   clearly separate from the grayscale curve surface rather than overloading
   `(x, y)` breakpoints.
-- [ ] **Persistence:** extend the `custom_luts.json` schema with a
+- [x] **Persistence:** extend the `custom_luts.json` schema with a
   `"color_stops"` array and bump `schema_version`; `from_dict()` must accept the
-  v1 grayscale-only shape unchanged.
+  v1 grayscale-only shape unchanged. **As built:** schema v2, with
+  `color_interpolation` of `linear` or `step`. A file newer than the reader is
+  ignored rather than half-read. Editor: `src/gui/dialogs/lut_color_stops_dialog.py`
+  (**Edit Colors…**); the menu's **Saved** / **Delete Saved** / **Save Current
+  As…** entries live in `src/gui/lut_actions.py` over `src/gui/lut_library.py`.
 
 ---
 
@@ -885,7 +902,7 @@ needs to see which part of the curve moved.
   `render_grayscale_image()` and `create_slice_projection_pil_image()` under a
   color LUT, asserting polarity is applied before LUT expansion and the result is
   never double-inverted (`(H, W, 3)` output, not `(H, W)`).
-- [ ] **Regression — QImage stride consistency**: render a color LUT through every
+- [x] **Regression — QImage stride consistency**: render a color LUT through every
   QImage consumer. For consumers that accept a variable image width, use widths
   that are not multiples of 4 (63, 65, 101). `MprThumbnailWidget` cannot take
   those widths: it always builds a `THUMBNAIL_SIZE` square (`mpr_thumbnail_widget.py:50`,
@@ -925,7 +942,7 @@ needs to see which part of the curve moved.
   the one most likely to be forgotten — without it the navigator stops
   previewing its pane. Row 3 matters because "user sees what they exported"
   must hold when the export has no current window.
-- [ ] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
+- [x] **Qt/GUI** (`tests/gui/test_lut_curve_editor.py`): breakpoint add/delete/drag;
   freehand draw → simplified control points; interpolation switch; undo/redo;
   gamma slider re-samples; a LUT loaded into the selector keeps its name/source
   and reopens in the editor; the three-curve overlay renders W/L, LUT, and
@@ -936,7 +953,7 @@ needs to see which part of the curve moved.
   `[0, 0, 127.5, 255, 255]` as floats before the cast — `apply_window_level`
   ends in `astype(np.uint8)`, so the stored value is **127**). Save/load
   round-trip is covered in Phase 4a (`tests/core/test_lut_persistence.py`).
-- [ ] Follow [`dev-docs/info/TESTING_GUIDANCE.md`](../../info/TESTING_GUIDANCE.md)
+- [x] Follow [`dev-docs/info/TESTING_GUIDANCE.md`](../../info/TESTING_GUIDANCE.md)
   tiers; never construct a `QCoreApplication` in a test — use the session `qapp`
   fixture.
 
