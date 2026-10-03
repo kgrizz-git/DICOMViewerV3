@@ -6,7 +6,8 @@ buffer. A mismatched ``bytesPerLine`` skews each row by the difference, which
 is invisible on widths whose RGB rows happen to be 4-byte aligned. Widths 63,
 65 and 101 are not, so a hardcoded or padded stride shows up here.
 
-The MPR thumbnail always builds a ``THUMBNAIL_SIZE`` square, so it is tested
+The histogram and menu strip (``LutTransferFunctionWidget``) and the toolbar
+swatch are covered too. The MPR thumbnail always builds a ``THUMBNAIL_SIZE`` square, so it is tested
 with its real 68-pixel buffer. ``3 * 68 = 204`` is aligned: that case checks
 buffer/stride agreement, not the unaligned path.
 """
@@ -118,4 +119,18 @@ def test_lut_swatch_icon_stride_matches_its_buffer(qapp, monkeypatch) -> None:
     assert strides
     for packed, passed in strides:
         assert passed == packed
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_transfer_widget_strip_stride_matches_its_buffer(qapp, monkeypatch) -> None:
+    from gui.widgets.lut_transfer_function_widget import LutTransferFunctionWidget
+
+    spy = _spy(monkeypatch, "gui.widgets.lut_transfer_function_widget")
+    widget = LutTransferFunctionWidget()
+    widget.resize(200, 80)
+    widget.set_lut(colormap_lut("hot"), window_center=40.0, window_width=400.0)
+    assert not widget.grab().isNull()
+    strides = _buffer_strides(spy.calls)
+    assert strides == [(3 * 256, 3 * 256)]
     _ = qapp

@@ -24,7 +24,7 @@ from typing import Any
 from PySide6.QtWidgets import QWidget
 
 from core.lut_engine import LookUpTable
-from core.lut_persistence import luts_from_payload, luts_to_payload
+from core.lut_persistence import luts_from_payload, luts_to_payload, payload_is_writable
 
 
 def library_store(host: Any) -> Any:
@@ -53,19 +53,37 @@ def is_savable(lut: LookUpTable | None) -> bool:
 
 
 def save_lut(store: Any, lut: LookUpTable, name: str) -> LookUpTable | None:
-    """Save ``lut`` under ``name``, replacing an entry of that name. Returns the saved LUT."""
+    """Save ``lut`` under ``name``. Returns the saved LUT, or None when nothing was written.
+
+    An entry with the same name is replaced in place, keeping its position.
+    A file written by a newer build is left alone, because rewriting it would
+    drop every entry this build cannot read.
+    """
     clean = name.strip()
     if store is None or not clean or not is_savable(lut):
         return None
+    document = store.load_custom_luts_document()
+    if not payload_is_writable(document):
+        return None
     named = dataclasses.replace(lut, name=clean, source="custom")
-    kept = [existing for existing in saved_luts(store) if existing.name != clean]
-    kept.append(named)
-    return named if store.save_custom_luts_document(luts_to_payload(kept)) else None
+    current = luts_from_payload(document)
+    names = [existing.name for existing in current]
+    if clean in names:
+        current[names.index(clean)] = named
+    else:
+        current.append(named)
+    try:
+        payload = luts_to_payload(current)
+    except ValueError:
+        return None
+    return named if store.save_custom_luts_document(payload) else None
 
 
 def delete_lut(store: Any, name: str) -> bool:
     """Remove the saved LUT called ``name``. False when absent or the write fails."""
     if store is None:
+        return False
+    if not payload_is_writable(store.load_custom_luts_document()):
         return False
     current = saved_luts(store)
     kept = [existing for existing in current if existing.name != name]

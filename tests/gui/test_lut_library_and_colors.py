@@ -170,3 +170,68 @@ def test_color_dialog_step_mode_reaches_the_table(qapp) -> None:
     assert lut.color_interpolation == "step"
     assert np.array_equal(lut.colormap[0], lut.colormap[63])
     _ = qapp
+
+
+def test_resaving_keeps_the_entry_in_place() -> None:
+    store = _Store()
+    for name in ("A", "B", "C"):
+        save_lut(store, _CURVE, name)
+    save_lut(store, gamma_lut(2.0), "B")
+    assert [lut.name for lut in saved_luts(store)] == ["A", "B", "C"]
+    assert saved_luts(store)[1].gamma == 2.0
+
+
+def test_a_newer_file_is_never_overwritten() -> None:
+    store = _Store()
+    future = {"schema_version": 99, "luts": [{"name": "FromTheFuture"}]}
+    store.document = future
+    assert save_lut(store, _CURVE, "Mine") is None
+    assert delete_lut(store, "FromTheFuture") is False
+    assert store.document is future
+
+
+def test_an_unsavable_transfer_function_is_refused_not_raised() -> None:
+    odd = LookUpTable(name="Odd", transfer_fn=lambda x: np.asarray(x))
+    assert save_lut(_Store(), odd, "Odd") is None
+
+
+@pytest.mark.qt
+def test_a_saved_parameter_lut_checks_only_its_saved_entry(qapp) -> None:
+    store = _Store()
+    saved = save_lut(store, gamma_lut(2.2), "A")
+    assert saved is not None
+    pane = _Pane(saved, store)
+    menu = QMenu()
+    lut_actions.populate_lut_menu(menu, pane)
+    checked = [
+        action.text()
+        for sub in (a.menu() for a in menu.actions() if a.menu())
+        for action in sub.actions()
+        if action.isCheckable() and action.isChecked()
+    ]
+    assert checked == ["A"]
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_color_dialog_keeps_untouched_positions_exact(qapp) -> None:
+    lut = LookUpTable(
+        name="Fine",
+        lut_type="colormap",
+        source="custom",
+        color_stops=((0.0, (0, 0, 0)), (0.12345, (255, 0, 0)), (1.0, (255, 255, 255))),
+        color_interpolation="step",
+    )
+    dialog = LutColorStopsDialog(lut)
+    result = dialog.result_lut()
+    assert result is not None
+    assert result.color_stops == lut.color_stops
+    assert np.array_equal(result.colormap, lut.colormap)
+    spin = dialog._table.cellWidget(1, 0)
+    assert isinstance(spin, QDoubleSpinBox)
+    spin.setValue(0.5)
+    moved = dialog.result_lut()
+    assert moved is not None
+    assert moved.color_stops is not None
+    assert moved.color_stops[1][0] == 0.5
+    _ = qapp

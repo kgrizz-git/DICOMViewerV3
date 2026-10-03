@@ -249,6 +249,8 @@ def _same_builtin(current: LookUpTable | None, built: LookUpTable) -> bool:
     """True when ``current`` is the same built-in curve kind as ``built`` (parameters may differ)."""
     if current is None or current.lut_type != "grayscale_ramp" or current.control_points is not None:
         return False
+    if current.source == "custom":
+        return False  # a saved LUT is checked under Saved, not as its built-in kind
     return current.transfer_fn is built.transfer_fn
 
 

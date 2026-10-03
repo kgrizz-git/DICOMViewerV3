@@ -58,7 +58,8 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
   Histogram (**Ctrl+Shift+H**) shows the W/L ramp, LUT, and composed curves with
   the three checkboxes; drag a bend of the composed curve and the pane's window
   follows. **Edit Curve…** shows the dashed display result behind the curve.
-  **Save Current As…** → restart → the LUT is under **Saved** and reapplies.
+  **Save Current As…** → restart → the LUT is listed under **Saved**, and
+  selecting it reapplies it (panes start Linear after a restart).
   On a color map, **Edit Colors…** → add a stop, recolor it, switch to step.
   Export → PNG on that pane matches the viewport.
 

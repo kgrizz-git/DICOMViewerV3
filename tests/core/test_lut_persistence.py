@@ -153,3 +153,22 @@ def test_unreadable_document_loads_as_none(tmp_path) -> None:
     manager = ConfigManager(config_dir=tmp_path)
     manager.custom_luts_path().write_text("{not json", encoding="utf-8")
     assert manager.load_custom_luts_document() is None
+
+
+def test_object_shaped_color_stops_are_skipped_not_raised(caplog) -> None:
+    payload = luts_to_payload([_CURVE])
+    payload["luts"].append(
+        {"name": "X", "lut_type": "colormap", "color_stops": [{"x": 0.0, "color": [0, 0, 0]}]}
+    )
+    with caplog.at_level(logging.WARNING, logger="core.lut_persistence"):
+        loaded = luts_from_payload(payload)
+    assert [lut.name for lut in loaded] == ["My chest curve"]
+
+
+def test_newer_or_malformed_documents_are_not_writable() -> None:
+    from core.lut_persistence import payload_is_writable
+
+    assert payload_is_writable(None)
+    assert payload_is_writable(luts_to_payload([_CURVE]))
+    assert not payload_is_writable({"schema_version": SCHEMA_VERSION + 1, "luts": []})
+    assert not payload_is_writable(["not", "a", "document"])

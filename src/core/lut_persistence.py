@@ -152,7 +152,7 @@ def luts_from_payload(payload: Any) -> list[LookUpTable]:
     for index, entry in enumerate(entries):
         try:
             loaded.append(lut_from_dict(entry))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, KeyError, IndexError):
             _logger.warning(
                 "Skipped an invalid saved LUT",
                 extra={"operation": "lut.load", "entry_index": index},
@@ -160,10 +160,27 @@ def luts_from_payload(payload: Any) -> list[LookUpTable]:
     return loaded
 
 
+def payload_is_writable(payload: Any) -> bool:
+    """False when rewriting ``payload`` would drop entries this build cannot read.
+
+    A missing document is writable. A document from a newer schema is not:
+    saving over it would replace every entry with only what this build knows.
+    """
+    if payload is None:
+        return True
+    if not isinstance(payload, dict):
+        return False
+    version = payload.get("schema_version", 1)
+    return isinstance(version, int) and version <= SCHEMA_VERSION
+
+
 def _colormap_from_dict(name: str, entry: dict[str, Any]) -> LookUpTable:
     stops = entry.get("color_stops")
     if not isinstance(stops, list):
         raise ValueError("a saved colormap needs color_stops")
+    for stop in stops:
+        if not isinstance(stop, list) or len(stop) != 2 or not isinstance(stop[1], list):
+            raise ValueError("a saved color stop is [x, [r, g, b]]")
     mode = entry.get("color_interpolation", "linear")
     if mode not in COLOR_INTERPOLATIONS:
         mode = "linear"

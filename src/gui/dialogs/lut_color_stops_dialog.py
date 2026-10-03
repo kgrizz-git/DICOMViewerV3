@@ -47,6 +47,7 @@ from core.lut_engine import LookUpTable
 from gui.widgets.lut_transfer_function_widget import LutTransferFunctionWidget
 
 _SEED_POSITIONS = (0.0, 0.25, 0.5, 0.75, 1.0)
+_DECIMALS = 3
 _DEFAULT_STOPS: tuple[ColorStop, ...] = ((0.0, (0, 0, 0)), (1.0, (255, 255, 255)))
 
 
@@ -71,6 +72,9 @@ class LutColorStopsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Edit Colormap")
         self._colors: list[tuple[int, int, int]] = []
+        # Exact positions as loaded. The spin box shows 3 decimals; an
+        # untouched row keeps its saved value instead of the rounded display.
+        self._exact: list[float] = []
         self._table = QTableWidget(0, 2, self)
         self._table.setHorizontalHeaderLabels(["Position", "Color"])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -109,6 +113,9 @@ class LutColorStopsDialog(QDialog):
         for row, rgb in enumerate(self._colors):
             spin = self._table.cellWidget(row, 0)
             x = float(spin.value()) if isinstance(spin, QDoubleSpinBox) else 0.0
+            exact = self._exact[row]
+            if abs(x - round(exact, _DECIMALS)) < 0.5 * 10 ** -_DECIMALS:
+                x = exact
             found.append((x, rgb))
         return found
 
@@ -137,9 +144,10 @@ class LutColorStopsDialog(QDialog):
         row = self._table.rowCount()
         self._table.insertRow(row)
         self._colors.append(rgb)
+        self._exact.append(x)
         spin = QDoubleSpinBox(self._table)
         spin.setRange(0.0, 1.0)
-        spin.setDecimals(3)
+        spin.setDecimals(_DECIMALS)
         spin.setSingleStep(0.05)
         spin.setValue(x)
         spin.valueChanged.connect(lambda _value: self._refresh())
@@ -184,6 +192,7 @@ class LutColorStopsDialog(QDialog):
             return
         self._table.removeRow(row)
         del self._colors[row]
+        del self._exact[row]
         self._refresh()
 
     def _refresh(self) -> None:
