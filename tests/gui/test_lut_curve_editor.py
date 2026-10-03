@@ -189,7 +189,8 @@ def test_color_lut_overlay_draws_a_gradient_not_a_trace() -> None:
     paths = overlay_paths(colormap_lut("hot"), 500.0, 200.0, "MONOCHROME1", True, 0.0, 1000.0)
     assert paths is not None
     assert paths.lut_trace is None
-    assert paths.lut_colors is not None and paths.lut_colors.shape == (256, 3)
+    assert paths.lut_colors is not None
+    assert paths.lut_colors.shape == (256, 3)
     assert paths.collapse is False
 
 
@@ -205,7 +206,8 @@ def test_editor_trace_behind_the_curve_matches_the_viewport(photometric, inverte
     }
     trace = editor_module.composed_trace(lut, display)
     paths = overlay_paths(lut, 500.0, 200.0, photometric, inverted, 400.0, 600.0)
-    assert trace is not None and paths is not None
+    assert trace is not None
+    assert paths is not None
     assert np.array_equal(trace, paths.composed)
     expected_label = "Display result (inverted)" if net else "Display result"
     assert editor_module._composed_label(display) == expected_label

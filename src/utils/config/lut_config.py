@@ -56,7 +56,7 @@ class LutConfigMixin:
             )
             return True
         except (OSError, ValueError) as error:
-            _logger.error(
+            _logger.error(  # NOSONAR (python:S8572): raw logging.exception is prohibited by the PHI/PII sink gate.
                 "Custom LUT file could not be saved",
                 extra={"operation": "lut.save", "error_class": type(error).__name__},
             )

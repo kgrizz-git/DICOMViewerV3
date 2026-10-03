@@ -35,7 +35,8 @@ def test_malformed_stops_are_rejected(stops) -> None:
 
 def test_linear_two_stop_map_matches_the_gray_ramp() -> None:
     table = sample_color_stops(normalize_color_stops([(0.0, (0, 0, 0)), (1.0, (255, 255, 255))]))
-    assert table.shape == (256, 3) and table.dtype == np.uint8
+    assert table.shape == (256, 3)
+    assert table.dtype == np.uint8
     assert np.array_equal(table[:, 0], np.arange(256, dtype=np.uint8))
     assert not table.flags.writeable
 
@@ -78,5 +79,6 @@ def test_stops_require_a_colormap_and_affect_equality() -> None:
     a = LookUpTable(**base, color_stops=((0.0, (0, 0, 0)), (1.0, (9, 9, 9))))
     b = LookUpTable(**base, color_stops=((0.0, (0, 0, 0)), (1.0, (9, 9, 9))))
     c = LookUpTable(**base, color_stops=((0.0, (0, 0, 0)), (1.0, (9, 9, 9))), color_interpolation="step")
-    assert a == b and hash(a) == hash(b)
+    assert a == b
+    assert hash(a) == hash(b)
     assert a != c

@@ -67,8 +67,9 @@ def test_color_stops_round_trip_and_sample_the_same_table() -> None:
 
 
 def test_a_builtin_colormap_cannot_be_saved() -> None:
+    hot = colormap_lut("hot")
     with pytest.raises(ValueError, match="no color stops"):
-        lut_to_dict(colormap_lut("hot"))
+        lut_to_dict(hot)
 
 
 def test_unknown_interpolation_falls_back_to_linear() -> None:

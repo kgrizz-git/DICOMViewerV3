@@ -51,7 +51,9 @@ class _Pane(QWidget):
 def test_save_replaces_by_name_and_delete_removes() -> None:
     store = _Store()
     first = save_lut(store, _CURVE, "  Chest ")
-    assert first is not None and first.name == "Chest" and first.source == "custom"
+    assert first is not None
+    assert first.name == "Chest"
+    assert first.source == "custom"
     save_lut(store, gamma_lut(2.2), "Chest")
     save_lut(store, gamma_lut(1.5), "Soft")
     names = [lut.name for lut in saved_luts(store)]
@@ -139,16 +141,20 @@ def test_color_dialog_edits_stops_and_rejects_duplicates(qapp) -> None:
     assert [x for x, _rgb in dialog.stops()] == [0.0, 1.0, 0.5]
     dialog.set_stop_color(2, (255, 0, 0))
     lut = dialog.result_lut()
-    assert lut is not None and lut.lut_type == "colormap"
-    assert lut.colormap[128][0] == 255 and lut.colormap[128][1] <= 2
+    assert lut is not None
+    assert lut.lut_type == "colormap"
+    assert lut.colormap[128][0] == 255
+    assert lut.colormap[128][1] <= 2
     spin = dialog._table.cellWidget(2, 0)
     assert isinstance(spin, QDoubleSpinBox)
     spin.setValue(1.0)
     assert dialog.result_lut() is None
-    assert ok is not None and ok.isEnabled() is False
+    assert ok is not None
+    assert ok.isEnabled() is False
     dialog._table.setCurrentCell(2, 0)
     dialog._remove_stop()
-    assert dialog.result_lut() is not None and ok.isEnabled() is True
+    assert dialog.result_lut() is not None
+    assert ok.isEnabled() is True
     dialog._table.setCurrentCell(0, 0)
     dialog._remove_stop()
     assert len(dialog.stops()) == 2
@@ -160,6 +166,7 @@ def test_color_dialog_step_mode_reaches_the_table(qapp) -> None:
     dialog = LutColorStopsDialog(colormap_lut("viridis"))
     dialog._interpolation.setCurrentText("step")
     lut = dialog.result_lut()
-    assert lut is not None and lut.color_interpolation == "step"
+    assert lut is not None
+    assert lut.color_interpolation == "step"
     assert np.array_equal(lut.colormap[0], lut.colormap[63])
     _ = qapp
