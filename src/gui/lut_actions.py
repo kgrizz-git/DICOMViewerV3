@@ -55,6 +55,7 @@ from gui.widgets.lut_transfer_function_widget import (
     lut_samples,
 )
 
+_SAVE_TITLE = "Save LUT"
 
 def apply_lut_to_host(host: Any, lut: LookUpTable) -> None:
     """Store ``lut`` on the pane behind ``host`` and redisplay that pane."""
@@ -328,17 +329,17 @@ def _save_current(host: Any) -> None:
     if not is_savable(current) or store is None or current is None:
         return
     suggested = current.name if current.source == "custom" else f"My {current.name}"
-    name, accepted = QInputDialog.getText(_parent(host), "Save LUT", "Name:", text=suggested)
+    name, accepted = QInputDialog.getText(_parent(host), _SAVE_TITLE, "Name:", text=suggested)
     if not accepted:
         return
     if not name.strip():
-        QMessageBox.warning(_parent(host), "Save LUT", "Enter a name for the LUT.")
+        QMessageBox.warning(_parent(host), _SAVE_TITLE, "Enter a name for the LUT.")
         return
     named = save_lut(store, current, name)
     if named is None:
         QMessageBox.warning(
             _parent(host),
-            "Save LUT",
+            _SAVE_TITLE,
             "The LUT was not saved. The saved-LUT file may be read-only, or it was "
             "written by a newer version of the viewer and is left unchanged.",
         )
