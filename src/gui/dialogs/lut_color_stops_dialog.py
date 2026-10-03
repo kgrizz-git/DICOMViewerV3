@@ -150,12 +150,19 @@ class LutColorStopsDialog(QDialog):
         spin.setDecimals(_DECIMALS)
         spin.setSingleStep(0.05)
         spin.setValue(x)
-        spin.valueChanged.connect(lambda _value: self._refresh())
+        spin.valueChanged.connect(lambda _value, owner=spin: self._on_position_edited(owner))
         self._table.setCellWidget(row, 0, spin)
         button = QPushButton("", self._table)
         button.setStyleSheet(_swatch_style(rgb))
         button.clicked.connect(lambda _checked=False, owner=button: self._pick_color(owner))
         self._table.setCellWidget(row, 1, button)
+
+    def _on_position_edited(self, spin: QDoubleSpinBox) -> None:
+        """An edited row uses the spin box value from now on, not its loaded value."""
+        for row in range(self._table.rowCount()):
+            if self._table.cellWidget(row, 0) is spin:
+                self._exact[row] = float("nan")
+        self._refresh()
 
     def _row_of(self, button: QPushButton) -> int | None:
         for row in range(self._table.rowCount()):

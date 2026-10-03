@@ -268,3 +268,40 @@ def test_a_saved_colormap_named_like_a_builtin_checks_only_its_saved_entry(qapp)
     ]
     assert checked == [("Color", "hot")]
     _ = qapp
+
+
+@pytest.mark.qt
+def test_retyping_the_displayed_position_sets_it_exactly(qapp) -> None:
+    lut = LookUpTable(
+        name="Fine",
+        lut_type="colormap",
+        source="custom",
+        color_stops=((0.0, (0, 0, 0)), (0.12345, (255, 0, 0)), (1.0, (255, 255, 255))),
+    )
+    dialog = LutColorStopsDialog(lut)
+    spin = dialog._table.cellWidget(1, 0)
+    assert isinstance(spin, QDoubleSpinBox)
+    spin.setValue(0.124)
+    spin.setValue(0.123)
+    assert dialog.stops()[1][0] == 0.123
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_a_failed_save_is_reported(qapp, monkeypatch) -> None:
+    store = _Store()
+    store.document = {"schema_version": 99, "luts": []}
+    pane = _Pane(_CURVE, store)
+    warnings: list[str] = []
+    monkeypatch.setattr(lut_actions.QInputDialog, "getText", lambda *_a, **_k: ("Lung", True))
+    monkeypatch.setattr(
+        lut_actions.QMessageBox, "warning", lambda _p, _t, text: warnings.append(text)
+    )
+    lut_actions._save_current(pane)
+    assert len(warnings) == 1
+    assert "not saved" in warnings[0]
+    assert pane.lut is _CURVE
+    monkeypatch.setattr(lut_actions.QInputDialog, "getText", lambda *_a, **_k: ("  ", True))
+    lut_actions._save_current(pane)
+    assert len(warnings) == 2
+    _ = qapp

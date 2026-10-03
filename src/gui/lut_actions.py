@@ -29,7 +29,14 @@ from typing import Any
 
 import numpy as np
 from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QImage, QPixmap
-from PySide6.QtWidgets import QInputDialog, QMenu, QToolButton, QWidget, QWidgetAction
+from PySide6.QtWidgets import (
+    QInputDialog,
+    QMenu,
+    QMessageBox,
+    QToolButton,
+    QWidget,
+    QWidgetAction,
+)
 
 from core.lut_catalog import (
     DISPLAY_COLORMAP_NAMES,
@@ -324,6 +331,16 @@ def _save_current(host: Any) -> None:
     name, accepted = QInputDialog.getText(_parent(host), "Save LUT", "Name:", text=suggested)
     if not accepted:
         return
+    if not name.strip():
+        QMessageBox.warning(_parent(host), "Save LUT", "Enter a name for the LUT.")
+        return
     named = save_lut(store, current, name)
-    if named is not None:
-        apply_lut_to_host(host, named)
+    if named is None:
+        QMessageBox.warning(
+            _parent(host),
+            "Save LUT",
+            "The LUT was not saved. The saved-LUT file may be read-only, or it was "
+            "written by a newer version of the viewer and is left unchanged.",
+        )
+        return
+    apply_lut_to_host(host, named)
