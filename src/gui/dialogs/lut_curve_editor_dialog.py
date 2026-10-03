@@ -73,6 +73,9 @@ class _CurveCanvas(QWidget):
         self.on_changed: Any = None
         self.on_preview: Any = None
         self.display: dict[str, Any] = {}
+        # Returns the LUT the dialog would accept now: the opened LUT until an
+        # edit, then the edited curve. The dashed display trace samples it.
+        self.lut_provider: Any = None
         self._drag: int | None = None
         self._gesture_changed = False
         self._stroke: list[tuple[float, float]] = []
@@ -151,7 +154,10 @@ class _CurveCanvas(QWidget):
         except ValueError:
             painter.end()
             return
-        composed = composed_trace(lut, self.display)
+        provider = self.lut_provider
+        provided = provider() if callable(provider) else None
+        shown = provided if isinstance(provided, LookUpTable) else lut
+        composed = composed_trace(shown, self.display)
         if composed is not None:
             behind = QPen(QColor(230, 150, 60, 170))
             behind.setWidth(2)
@@ -223,6 +229,7 @@ class LutCurveEditorDialog(QDialog):
         self._display = display or {}
         self._canvas = _CurveCanvas(self)
         self._canvas.display = self._display
+        self._canvas.lut_provider = self.result_lut
         self._preview = LutTransferFunctionWidget(self)
         self._undo: list[tuple[Any, ...]] = []
         self._redo: list[tuple[Any, ...]] = []

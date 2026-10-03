@@ -227,3 +227,23 @@ def test_editor_paints_with_a_window_context(qapp) -> None:
     assert not image.isNull()
     assert dialog._canvas.display is display
     _ = qapp
+
+
+@pytest.mark.qt
+def test_editor_trace_samples_the_opened_lut_until_edited(qapp, monkeypatch) -> None:
+    display = {"window_center": 500.0, "window_width": 200.0, "photometric": "MONOCHROME2"}
+    opened = gamma_lut(2.2)
+    dialog = LutCurveEditorDialog(opened, display=display)
+    dialog._canvas.resize(320, 240)
+    seen: list[LookUpTable] = []
+    real = editor_module.composed_trace
+    monkeypatch.setattr(
+        editor_module, "composed_trace", lambda lut, d: (seen.append(lut), real(lut, d))[1]
+    )
+    dialog._canvas.grab()
+    assert seen[-1] is opened
+    _drag(dialog._canvas, dialog._canvas.points[2], (0.5, 0.9))
+    dialog._canvas.grab()
+    assert seen[-1].name == "Custom"
+    assert seen[-1] == dialog.result_lut()
+    _ = qapp

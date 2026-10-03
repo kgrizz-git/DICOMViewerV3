@@ -19,6 +19,7 @@ Requirements:
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtWidgets import QWidget
@@ -52,18 +53,39 @@ def is_savable(lut: LookUpTable | None) -> bool:
     return lut.lut_type == "grayscale_ramp" or lut.color_stops is not None
 
 
+def _writable_document(store: Any) -> tuple[bool, Any]:
+    """The current document, and whether rewriting it would lose nothing.
+
+    Not writable when the file exists but could not be read, when it comes from
+    a newer schema or is malformed, or when any entry fails to parse: a rewrite
+    would drop that entry. A missing file is writable.
+    """
+    document = store.load_custom_luts_document()
+    if document is None:
+        path_of = getattr(store, "custom_luts_path", None)
+        path = path_of() if callable(path_of) else None
+        exists = isinstance(path, Path) and path.exists()
+        return (not exists), None
+    if not payload_is_writable(document):
+        return False, document
+    entries = document.get("luts", [])
+    if not isinstance(entries, list) or len(luts_from_payload(document)) != len(entries):
+        return False, document
+    return True, document
+
+
 def save_lut(store: Any, lut: LookUpTable, name: str) -> LookUpTable | None:
     """Save ``lut`` under ``name``. Returns the saved LUT, or None when nothing was written.
 
     An entry with the same name is replaced in place, keeping its position.
-    A file written by a newer build is left alone, because rewriting it would
-    drop every entry this build cannot read.
+    A file that is unreadable, from a newer build, or holds an entry this build
+    cannot parse is left alone, because rewriting it would drop that content.
     """
     clean = name.strip()
     if store is None or not clean or not is_savable(lut):
         return None
-    document = store.load_custom_luts_document()
-    if not payload_is_writable(document):
+    writable, document = _writable_document(store)
+    if not writable:
         return None
     named = dataclasses.replace(lut, name=clean, source="custom")
     current = luts_from_payload(document)
@@ -83,9 +105,10 @@ def delete_lut(store: Any, name: str) -> bool:
     """Remove the saved LUT called ``name``. False when absent or the write fails."""
     if store is None:
         return False
-    if not payload_is_writable(store.load_custom_luts_document()):
+    writable, document = _writable_document(store)
+    if not writable:
         return False
-    current = saved_luts(store)
+    current = luts_from_payload(document)
     kept = [existing for existing in current if existing.name != name]
     if len(kept) == len(current):
         return False

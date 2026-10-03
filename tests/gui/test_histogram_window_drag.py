@@ -168,3 +168,22 @@ def test_coordinator_binds_the_setter_to_the_histogram_pane(qapp, monkeypatch) -
     setter(40.0, 400.0)
     assert applied == [(2, 40.0, 400.0)]
     _ = qapp
+
+
+@pytest.mark.qt
+def test_clearing_the_pixels_drops_the_plot_and_any_drag(qapp) -> None:
+    widget = _histogram(qapp)
+    emitted: list[tuple[float, float]] = []
+    widget.window_level_dragged.connect(lambda c, w: emitted.append((c, w)))
+    press = _event(widget, 600.0)
+    widget._on_press(press)
+    assert widget._drag_edge is not None
+    move = _event(widget, 800.0)
+    widget.set_pixel_array(None)
+    assert widget._drag_edge is None
+    assert widget._transfer_axis is None
+    assert len(widget.axes.lines) == 0
+    widget._on_motion(move)
+    widget._on_press(press)
+    widget._on_motion(move)
+    assert emitted == []

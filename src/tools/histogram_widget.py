@@ -219,6 +219,14 @@ class HistogramWidget(QWidget):
             pixel_array: Image pixel array, or None to clear
         """
         self.pixel_array = pixel_array
+        if pixel_array is None:
+            # Nothing to plot: drop the old curves and any edge being dragged,
+            # so a motion event cannot report a window for a cleared pane.
+            self._drag_edge = None
+            self._clear_transfer_axis()
+            self.axes.clear()
+            self.canvas.draw_idle()
+            return
         self._update_histogram()
 
     def set_roi_mask(self, roi_mask: np.ndarray | None) -> None:
@@ -245,6 +253,8 @@ class HistogramWidget(QWidget):
 
     def _edge_at(self, event: Any) -> Edge | None:
         """The composed-curve window edge under a press, or None."""
+        if self.pixel_array is None:
+            return None
         if not self._show_composed_curve or self._transfer_axis is None:
             return None
         if self.window_center is None or self.window_width is None or self.window_width <= 0:
@@ -266,6 +276,9 @@ class HistogramWidget(QWidget):
     def _on_motion(self, event: Any) -> None:
         """Move the grabbed edge and report the new window."""
         edge = self._drag_edge
+        if self.pixel_array is None:
+            self._drag_edge = None
+            return
         if edge is None or event.x is None or event.y is None:
             return
         if self.window_center is None or self.window_width is None:

@@ -305,3 +305,32 @@ def test_a_failed_save_is_reported(qapp, monkeypatch) -> None:
     lut_actions._save_current(pane)
     assert len(warnings) == 2
     _ = qapp
+
+
+def test_an_unreadable_file_or_unparsable_entry_blocks_writes(tmp_path) -> None:
+    from pathlib import Path as _Path
+
+    class _FileStore(_Store):
+        def __init__(self, path: _Path) -> None:
+            super().__init__()
+            self.path = path
+
+        def custom_luts_path(self) -> _Path:
+            return self.path
+
+    corrupt = tmp_path / "custom_luts.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+    store = _FileStore(corrupt)
+    assert save_lut(store, _CURVE, "Mine") is None
+    assert store.document is None
+
+    fresh = _FileStore(tmp_path / "missing.json")
+    assert save_lut(fresh, _CURVE, "Mine") is not None
+
+    store = _Store()
+    save_lut(store, _CURVE, "Good")
+    store.document["luts"].append({"name": "Broken", "control_points": [[0, 0], [0, 1]]})
+    before = store.document
+    assert save_lut(store, gamma_lut(2.0), "Other") is None
+    assert delete_lut(store, "Good") is False
+    assert store.document is before
