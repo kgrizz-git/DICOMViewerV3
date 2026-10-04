@@ -51,9 +51,14 @@ def _histogram(qapp):
     return widget
 
 
-def _event(widget, x_data: float, button: int | None = 1):
-    x_px, y_px = widget.axes.transData.transform((x_data, 1.0))
-    return SimpleNamespace(button=button, x=float(x_px), y=float(y_px), inaxes=widget.axes)
+def _event(widget, x_data: float, button: int | None = 1, output: float | None = None):
+    """Pointer at stored value ``x_data``, on the composed curve unless ``output`` is given."""
+    if output is None:
+        paths = widget._paths
+        output = float(np.interp(x_data, paths.xs, paths.composed))
+    x_px = float(widget.axes.transData.transform((x_data, 0.0))[0])
+    y_px = float(widget._transfer_axis.transData.transform((x_data, output))[1])
+    return SimpleNamespace(button=button, x=x_px, y=y_px, inaxes=widget.axes)
 
 
 @pytest.mark.qt
@@ -187,3 +192,12 @@ def test_clearing_the_pixels_drops_the_plot_and_any_drag(qapp) -> None:
     widget._on_press(press)
     widget._on_motion(move)
     assert emitted == []
+
+
+@pytest.mark.qt
+def test_a_press_in_the_edge_column_but_off_the_curve_does_not_drag(qapp) -> None:
+    widget = _histogram(qapp)
+    widget._on_press(_event(widget, 600.0, output=5.0))
+    assert widget._drag_edge is None
+    widget._on_press(_event(widget, 600.0))
+    assert widget._drag_edge == "high"

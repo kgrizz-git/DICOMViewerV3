@@ -334,3 +334,35 @@ def test_an_unreadable_file_or_unparsable_entry_blocks_writes(tmp_path) -> None:
     assert save_lut(store, gamma_lut(2.0), "Other") is None
     assert delete_lut(store, "Good") is False
     assert store.document is before
+
+
+@pytest.mark.qt
+def test_choosing_the_builtin_kind_does_not_keep_a_saved_identity(qapp, monkeypatch) -> None:
+    store = _Store()
+    saved = save_lut(store, gamma_lut(2.2), "Mine")
+    assert saved is not None
+    pane = _Pane(saved, store)
+    from gui.dialogs import lut_parameter_dialog
+
+    seen: list[LookUpTable] = []
+    monkeypatch.setattr(
+        lut_parameter_dialog, "edit_lut_parameters", lambda start, _p: (seen.append(start), start)[1]
+    )
+    lut_actions._select_builtin(pane, gamma_lut(1.0))
+    assert seen[0].source == "built_in"
+    assert pane.lut.name == "Gamma"
+    assert pane.lut.source == "built_in"
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_ok_without_edits_keeps_a_builtin_map_exactly(qapp) -> None:
+    viridis = colormap_lut("viridis")
+    dialog = LutColorStopsDialog(viridis)
+    assert dialog.result_lut() is viridis
+    dialog.set_stop_color(0, (1, 2, 3))
+    edited = dialog.result_lut()
+    assert edited is not None
+    assert edited is not viridis
+    assert edited.color_stops is not None
+    _ = qapp

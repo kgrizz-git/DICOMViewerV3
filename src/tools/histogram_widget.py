@@ -176,6 +176,7 @@ class HistogramWidget(QWidget):
         self._transfer_axis: Any = None
         self._lut_input_axis: Any = None
         self._drag_edge: Edge | None = None
+        self._paths: Any = None
         self.canvas.mpl_connect("button_press_event", self._on_press)
         self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.mpl_connect("button_release_event", self._on_release)
@@ -265,7 +266,15 @@ class HistogramWidget(QWidget):
         to_px = self.axes.transData.transform
         low_px = float(to_px((low, 0.0))[0])
         high_px = float(to_px((high, 0.0))[0])
-        return edge_near(float(event.x), low_px, high_px)
+        edge = edge_near(float(event.x), low_px, high_px)
+        if edge is None or self._paths is None or event.y is None:
+            return None
+        # The bend is a point on the composed curve, so the press must also be
+        # near the curve's height there, not anywhere in that column.
+        x_edge = low if edge == "low" else high
+        y_edge = float(np.interp(x_edge, self._paths.xs, self._paths.composed))
+        bend_px = float(self._transfer_axis.transData.transform((x_edge, y_edge))[1])
+        return edge if abs(float(event.y) - bend_px) <= 12.0 else None
 
     def _on_press(self, event: Any) -> None:
         """Grab a window edge with the left button."""
@@ -519,6 +528,7 @@ class HistogramWidget(QWidget):
         show_composed = self._show_composed_curve
         overlay = paths is not None and (show_window or show_lut or show_composed)
         _set_plot_margins(self.figure, output_axis=overlay, lut_axis=overlay and show_lut)
+        self._paths = paths if overlay else None
         if not overlay or paths is None:
             return
         twin = self.axes.twinx()

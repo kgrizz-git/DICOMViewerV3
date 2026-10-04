@@ -762,6 +762,9 @@ needs to see which part of the curve moved.
   exists inside the modal dialog today (Qt delivers the release through the
   mouse grab); if the editor ever becomes non-modal or gains gesture-cancel
   shortcuts, snapshot at the gesture boundary first.
+  **As built:** the canvas x-axis spans the current window, so the W/L ramp is
+  drawn as the dotted diagonal, the composed result as a dashed trace, and the
+  edited LUT as the solid curve on top.
 - [x] Allow interactive W/L adjustment by dragging the composed curve's
   endpoints (stretch goal). **Shipped on the histogram:** dragging either bend
   of the composed curve moves that window edge and keeps the other fixed

@@ -6,7 +6,8 @@ function of x, then simplified with ``simplify_freehand`` (epsilon 0.02),
 which pins those endpoints. A click that does not move leaves the curve
 unchanged. The painted
 curve is sampled with ``lut_samples`` (``apply_lut_to_uint8``). When the
-pane has a window, the canvas also draws the composed result
+pane has a window, the canvas also draws the W/L ramp (dotted; across the
+window it is the diagonal) and the composed result
 ``LUT(P_inv(uint8(WL(x))))`` behind the edited curve, across the window, from
 ``sample_window_and_composed``. Editing stays in LUT space; the trace behind
 it shows the display result. The preview strip under the graph is
@@ -159,6 +160,11 @@ class _CurveCanvas(QWidget):
         shown = provided if isinstance(provided, LookUpTable) else lut
         composed = composed_trace(shown, self.display)
         if composed is not None:
+            # Across the window, the W/L ramp alone is the diagonal 0 to 255.
+            ramp = QPen(QColor(140, 140, 140, 160))
+            ramp.setStyle(Qt.PenStyle.DotLine)
+            painter.setPen(ramp)
+            painter.drawLine(self._from_unit(0.0, 0.0), self._from_unit(1.0, 1.0))
             behind = QPen(QColor(230, 150, 60, 170))
             behind.setWidth(2)
             behind.setStyle(Qt.PenStyle.DashLine)
