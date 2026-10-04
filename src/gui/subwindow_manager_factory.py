@@ -36,6 +36,7 @@ from core.sr_sop_classes import is_structured_report_dataset
 from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
 from gui.fusion_coordinator import FusionCoordinator
+from gui.lut_library import default_resolver
 from gui.lut_pane_label import LutPaneLabel
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.overlay_coordinator import OverlayCoordinator
@@ -330,8 +331,14 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
     image_viewer.lut_display_context = lut_display_context
     image_viewer.dicom_lut_state = dicom_lut_state
     image_viewer.set_dicom_lut = set_dicom_lut
+    def current_modality() -> str:
+        dataset = getattr(managers["slice_display_manager"], "current_dataset", None)
+        return str(getattr(dataset, "Modality", "") or "")
+
+    image_viewer.current_modality = current_modality
     config = getattr(app, "config_manager", None)
     if config is not None:
+        managers["view_state_manager"].lut_default_resolver = default_resolver(config, current_modality)
         image_viewer.lut_pane_label = LutPaneLabel(
             image_viewer,
             show_label=config.get_show_lut_label,

@@ -41,11 +41,17 @@ def pane_lut_overlay(view_state: Any, dataset: Any) -> tuple[LookUpTable, str, b
 
 
 def get_series_lut(view_state: Any, series_identifier: str | None) -> LookUpTable:
-    """Return the series LUT, or linear when the series has not chosen one."""
+    """Return the series LUT; else the modality default for the shown series; else linear."""
     defaults = _defaults(view_state, series_identifier)
     stored = defaults.get("current_lut")
     if isinstance(stored, LookUpTable):
         return stored
+    # A series that never chose takes its modality's default, when one is set.
+    resolver = getattr(view_state, "lut_default_resolver", None)
+    if callable(resolver) and series_identifier == getattr(view_state, "current_series_identifier", None):
+        found = resolver()
+        if isinstance(found, LookUpTable):
+            return found
     return linear_lut()
 
 

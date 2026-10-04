@@ -2,7 +2,8 @@
 LUT Config Mixin
 
 Reads and writes ``custom_luts.json`` next to the main config file, and
-persists the pane LUT label toggle in the main config. The file
+persists the pane LUT label toggle and the per-modality default LUTs in the
+main config. The file
 holds user-made LUTs only. This mixin moves the raw JSON document; turning it
 into ``LookUpTable`` objects is ``core.lut_persistence``'s job, so ``utils``
 never imports ``core``.
@@ -38,6 +39,25 @@ class LutConfigMixin:
         """Persist the pane LUT label toggle."""
         config = cast(dict[str, Any], getattr(self, "config"))
         config["show_lut_pane_label"] = bool(enabled)
+        save = getattr(self, "save_config", None)
+        if callable(save):
+            save()
+
+    def get_lut_defaults(self) -> dict[str, Any]:
+        """Default LUT entries keyed by DICOM Modality (see ``core.lut_defaults``)."""
+        config = cast(dict[str, Any], getattr(self, "config"))
+        found = config.get("lut_defaults_by_modality", {})
+        return dict(found) if isinstance(found, dict) else {}
+
+    def set_lut_default(self, modality: str, entry: dict[str, Any] | None) -> None:
+        """Set or clear (``None``) the default for ``modality`` and save."""
+        config = cast(dict[str, Any], getattr(self, "config"))
+        defaults = self.get_lut_defaults()
+        if entry is None:
+            defaults.pop(modality, None)
+        else:
+            defaults[modality] = entry
+        config["lut_defaults_by_modality"] = defaults
         save = getattr(self, "save_config", None)
         if callable(save):
             save()

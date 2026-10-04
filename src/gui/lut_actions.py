@@ -43,6 +43,7 @@ from core.lut_catalog import (
     builtin_grayscale_luts,
     colormap_lut,
 )
+from core.lut_defaults import default_entry
 from core.lut_engine import (
     LookUpTable,
     exponential_transfer,
@@ -125,10 +126,35 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
     colors.setEnabled(current is not None and current.lut_type == "colormap")
     colors.triggered.connect(lambda: _edit_colors(host))
     menu.addAction(colors)
+    _add_default_actions(menu, host, current)
     save = QAction("Save Current As...", menu)
     save.setEnabled(is_savable(current) and library_store(host) is not None)
     save.triggered.connect(lambda: _save_current(host))
     menu.addAction(save)
+
+
+def _add_default_actions(menu: QMenu, host: Any, current: LookUpTable | None) -> None:
+    """Set or clear the default LUT for the shown series' modality."""
+    store = library_store(host)
+    getter = getattr(_actor(host), "current_modality", None)
+    modality = getter() if callable(getter) else ""
+    usable = isinstance(modality, str) and bool(modality) and store is not None
+    if not usable or not callable(getattr(store, "get_lut_defaults", None)):
+        return
+    entry = default_entry(current) if current is not None else None
+    if entry is not None and entry["kind"] == "saved":
+        # An unsaved custom curve has no library entry to point at yet.
+        if entry["name"] not in {lut.name for lut in saved_luts(store)}:
+            entry = None
+    use = QAction(f"Use as Default for {modality}", menu)
+    use.setEnabled(entry is not None)
+    use.setToolTip("Series of this modality start with this LUT until you choose another")
+    use.triggered.connect(lambda: store.set_lut_default(modality, entry))
+    menu.addAction(use)
+    clear = QAction(f"Clear Default for {modality}", menu)
+    clear.setEnabled(modality in store.get_lut_defaults())
+    clear.triggered.connect(lambda: store.set_lut_default(modality, None))
+    menu.addAction(clear)
 
 
 def _add_dicom_lut_action(menu: QMenu, host: Any) -> None:

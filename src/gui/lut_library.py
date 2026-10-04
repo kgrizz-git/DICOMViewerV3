@@ -19,11 +19,13 @@ Requirements:
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtWidgets import QWidget
 
+from core.lut_defaults import resolve_default
 from core.lut_engine import LookUpTable
 from core.lut_persistence import luts_from_payload, luts_to_payload, payload_is_writable
 
@@ -113,3 +115,30 @@ def delete_lut(store: Any, name: str) -> bool:
     if len(kept) == len(current):
         return False
     return bool(store.save_custom_luts_document(luts_to_payload(kept)))
+
+
+def default_resolver(store: Any, modality: Callable[[], str]) -> Callable[[], LookUpTable | None]:
+    """A callable returning the shown series' modality default, or ``None``.
+
+    Display paths call it on every redraw, so the saved-LUT file is re-read only
+    when its modification time changes.
+    """
+    cache: dict[str, Any] = {"stamp": None, "luts": []}
+
+    def saved_now() -> list[LookUpTable]:
+        path_of = getattr(store, "custom_luts_path", None)
+        path = path_of() if callable(path_of) else None
+        stamp = path.stat().st_mtime_ns if isinstance(path, Path) and path.exists() else None
+        if stamp != cache["stamp"]:
+            cache["stamp"] = stamp
+            cache["luts"] = saved_luts(store)
+        return cache["luts"]
+
+    def resolve() -> LookUpTable | None:
+        entry = store.get_lut_defaults().get(modality())
+        if entry is None:
+            return None
+        needs_library = isinstance(entry, dict) and entry.get("kind") == "saved"
+        return resolve_default(entry, saved_now() if needs_library else [])
+
+    return resolve

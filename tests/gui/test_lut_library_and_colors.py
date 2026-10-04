@@ -441,3 +441,83 @@ def test_from_dicom_action_reflects_and_sets_the_pane_choice(qapp, available, en
         action.trigger()
         assert toggled == [not enabled]
     _ = qapp
+
+
+class _DefaultsStore(_Store):
+    def __init__(self) -> None:
+        super().__init__()
+        self.defaults: dict[str, Any] = {}
+
+    def get_lut_defaults(self) -> dict[str, Any]:
+        return dict(self.defaults)
+
+    def set_lut_default(self, modality: str, entry: Any) -> None:
+        if entry is None:
+            self.defaults.pop(modality, None)
+        else:
+            self.defaults[modality] = entry
+
+
+def _menu_action(pane: _Pane, text: str):
+    menu = QMenu()
+    lut_actions.populate_lut_menu(menu, pane)
+    return menu, next(a for a in menu.actions() if a.text() == text)
+
+
+@pytest.mark.qt
+def test_default_actions_set_and_clear_the_modality_default(qapp) -> None:
+    store = _DefaultsStore()
+    pane = _Pane(colormap_lut("hot"), store)
+    pane.current_modality = lambda: "PT"  # type: ignore[attr-defined]
+    _menu, use = _menu_action(pane, "Use as Default for PT")
+    assert use.isEnabled()
+    use.trigger()
+    assert store.defaults == {"PT": {"kind": "colormap", "name": "hot"}}
+    _menu, clear = _menu_action(pane, "Clear Default for PT")
+    assert clear.isEnabled()
+    clear.trigger()
+    assert store.defaults == {}
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_an_unsaved_custom_curve_cannot_be_a_default(qapp) -> None:
+    store = _DefaultsStore()
+    pane = _Pane(_CURVE, store)
+    pane.current_modality = lambda: "CT"  # type: ignore[attr-defined]
+    _menu, use = _menu_action(pane, "Use as Default for CT")
+    assert not use.isEnabled()
+    saved = save_lut(store, _CURVE, "Lung")
+    assert saved is not None
+    pane.lut = saved
+    _menu, use = _menu_action(pane, "Use as Default for CT")
+    assert use.isEnabled()
+    _ = qapp
+
+
+def test_default_resolver_rereads_the_library_only_when_it_changes(tmp_path) -> None:
+    from gui.lut_library import default_resolver
+
+    store = _DefaultsStore()
+    reads: list[bool] = []
+    real = store.load_custom_luts_document
+
+    def counted():
+        reads.append(True)
+        return real()
+
+    store.load_custom_luts_document = counted  # type: ignore[method-assign]
+    path = tmp_path / "custom_luts.json"
+    store.custom_luts_path = lambda: path  # type: ignore[attr-defined]
+    save_lut(store, _CURVE, "Lung")
+    path.write_text("x", encoding="utf-8")
+    store.defaults = {"CT": {"kind": "saved", "name": "Lung"}}
+    resolve = default_resolver(store, lambda: "CT")
+    reads.clear()
+    first = resolve()
+    second = resolve()
+    assert first is not None
+    assert second is not None
+    assert first.name == "Lung"
+    assert len(reads) == 1
+    assert default_resolver(store, lambda: "MR")() is None
