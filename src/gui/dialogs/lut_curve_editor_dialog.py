@@ -160,11 +160,7 @@ class _CurveCanvas(QWidget):
         shown = provided if isinstance(provided, LookUpTable) else lut
         composed = composed_trace(shown, self.display)
         if composed is not None:
-            # Across the window, the W/L ramp alone is the diagonal 0 to 255.
-            ramp = QPen(QColor(140, 140, 140, 160))
-            ramp.setStyle(Qt.PenStyle.DotLine)
-            painter.setPen(ramp)
-            painter.drawLine(self._from_unit(0.0, 0.0), self._from_unit(1.0, 1.0))
+            self._draw_window_ramp(painter)
             behind = QPen(QColor(230, 150, 60, 170))
             behind.setWidth(2)
             behind.setStyle(Qt.PenStyle.DashLine)
@@ -179,6 +175,13 @@ class _CurveCanvas(QWidget):
         for x, y in self.points:
             painter.drawEllipse(self._from_unit(x, y), 4, 4)
         painter.end()
+
+    def _draw_window_ramp(self, painter: QPainter) -> None:
+        """Across the window, the W/L ramp alone is the diagonal from 0 to 255."""
+        ramp = QPen(QColor(140, 140, 140, 160))
+        ramp.setStyle(Qt.PenStyle.DotLine)
+        painter.setPen(ramp)
+        painter.drawLine(self._from_unit(0.0, 0.0), self._from_unit(1.0, 1.0))
 
     def _draw_trace(self, painter: QPainter, samples: np.ndarray) -> None:
         """Polyline of 0–255 samples spread evenly across the unit x-axis."""

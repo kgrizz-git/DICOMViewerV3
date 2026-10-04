@@ -81,6 +81,7 @@ class LutColorStopsDialog(QDialog):
         # Exact positions as loaded. The spin box shows 3 decimals; an
         # untouched row keeps its saved value instead of the rounded display.
         self._exact: list[float] = []
+        self._loaded: list[float] = []
         self._table = QTableWidget(0, 2, self)
         self._table.setHorizontalHeaderLabels(["Position", "Color"])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -160,6 +161,7 @@ class LutColorStopsDialog(QDialog):
         self._table.insertRow(row)
         self._colors.append(rgb)
         self._exact.append(x)
+        self._loaded.append(x)
         spin = QDoubleSpinBox(self._table)
         spin.setRange(0.0, 1.0)
         spin.setDecimals(_DECIMALS)
@@ -173,10 +175,13 @@ class LutColorStopsDialog(QDialog):
         self._table.setCellWidget(row, 1, button)
 
     def _on_position_edited(self, spin: QDoubleSpinBox) -> None:
-        """An edited row uses the spin box value from now on, not its loaded value."""
+        """An edited row uses the spin box value, unless it was set back to its loaded value."""
         for row in range(self._table.rowCount()):
             if self._table.cellWidget(row, 0) is spin:
-                self._exact[row] = float("nan")
+                loaded = self._loaded[row]
+                # Typing the loaded value back restores its exact position.
+                reverted = abs(spin.value() - round(loaded, _DECIMALS)) < 0.5 * 10 ** -_DECIMALS
+                self._exact[row] = loaded if reverted else float("nan")
         self._refresh()
 
     def _on_interpolation_changed(self, _text: str) -> None:
@@ -218,6 +223,7 @@ class LutColorStopsDialog(QDialog):
         self._table.removeRow(row)
         del self._colors[row]
         del self._exact[row]
+        del self._loaded[row]
         self._refresh()
 
     def _refresh(self) -> None:

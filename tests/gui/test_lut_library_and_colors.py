@@ -271,7 +271,8 @@ def test_a_saved_colormap_named_like_a_builtin_checks_only_its_saved_entry(qapp)
 
 
 @pytest.mark.qt
-def test_retyping_the_displayed_position_sets_it_exactly(qapp) -> None:
+def test_retyping_the_displayed_position_restores_the_loaded_one(qapp) -> None:
+    """The spin box shows 3 decimals; putting it back to that display is a revert."""
     lut = LookUpTable(
         name="Fine",
         lut_type="colormap",
@@ -282,8 +283,9 @@ def test_retyping_the_displayed_position_sets_it_exactly(qapp) -> None:
     spin = dialog._table.cellWidget(1, 0)
     assert isinstance(spin, QDoubleSpinBox)
     spin.setValue(0.124)
+    assert dialog.stops()[1][0] == 0.124
     spin.setValue(0.123)
-    assert dialog.stops()[1][0] == 0.123
+    assert dialog.stops()[1][0] == 0.12345
     _ = qapp
 
 
@@ -379,4 +381,45 @@ def test_a_no_op_edit_keeps_a_builtin_map_exactly(qapp) -> None:
     assert dialog.result_lut() is not viridis
     dialog._interpolation.setCurrentText("linear")
     assert dialog.result_lut() is viridis
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_retyping_a_fine_position_restores_the_opened_map(qapp) -> None:
+    mine = LookUpTable(
+        name="Mine",
+        lut_type="colormap",
+        source="custom",
+        color_stops=((0.0, (0, 0, 0)), (0.12345, (255, 0, 0)), (1.0, (255, 255, 255))),
+    )
+    dialog = LutColorStopsDialog(mine)
+    spin = dialog._table.cellWidget(1, 0)
+    assert isinstance(spin, QDoubleSpinBox)
+    spin.setValue(0.5)
+    assert dialog.result_lut() is not mine
+    spin.setValue(0.123)
+    assert dialog.result_lut() is mine
+    _ = qapp
+
+
+@pytest.mark.qt
+@pytest.mark.parametrize("source", ["custom", "file", "dicom"])
+def test_only_a_builtin_carries_its_parameter_into_the_builtin_choice(qapp, monkeypatch, source) -> None:
+    import dataclasses
+
+    from gui.dialogs import lut_parameter_dialog
+
+    current = dataclasses.replace(gamma_lut(2.2), name="Other", source=source)
+    pane = _Pane(current, _Store())
+    seen: list[LookUpTable] = []
+    monkeypatch.setattr(
+        lut_parameter_dialog, "edit_lut_parameters", lambda start, _p: (seen.append(start), start)[1]
+    )
+    lut_actions._select_builtin(pane, gamma_lut(1.0))
+    assert seen[0].source == "built_in"
+    assert pane.lut.name == "Gamma"
+    builtin = gamma_lut(3.0)
+    pane.lut = builtin
+    lut_actions._select_builtin(pane, gamma_lut(1.0))
+    assert seen[-1] is builtin
     _ = qapp

@@ -247,3 +247,21 @@ def test_editor_trace_samples_the_opened_lut_until_edited(qapp, monkeypatch) -> 
     assert seen[-1].name == "Custom"
     assert seen[-1] == dialog.result_lut()
     _ = qapp
+
+
+@pytest.mark.qt
+def test_editor_draws_the_window_ramp_only_with_a_window(qapp, monkeypatch) -> None:
+    calls: list[bool] = []
+    monkeypatch.setattr(
+        editor_module._CurveCanvas, "_draw_window_ramp", lambda self, painter: calls.append(True)
+    )
+    with_window = LutCurveEditorDialog(gamma_lut(2.0), display={"window_center": 40.0, "window_width": 400.0})
+    with_window._canvas.resize(320, 240)
+    with_window._canvas.grab()
+    assert calls
+    calls.clear()
+    without = LutCurveEditorDialog(gamma_lut(2.0))
+    without._canvas.resize(320, 240)
+    without._canvas.grab()
+    assert calls == []
+    _ = qapp

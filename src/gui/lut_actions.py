@@ -276,9 +276,10 @@ def _select_builtin(host: Any, lut: LookUpTable) -> None:
         from gui.dialogs.lut_parameter_dialog import edit_lut_parameters
 
         current = _current(host)
-        # A saved LUT keeps its own entry; choosing the built-in starts from the built-in.
+        # Only a built-in carries its parameter over; a saved, file, or DICOM LUT
+        # keeps its own entry, so choosing the built-in starts from the built-in.
         start = lut
-        if current is not None and current.transfer_fn is lut.transfer_fn and current.source != "custom":
+        if current is not None and current.transfer_fn is lut.transfer_fn and current.source == "built_in":
             start = current
         updated = edit_lut_parameters(start, _parent(host))
         if updated is None:
