@@ -311,6 +311,15 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
             "image_inverted": bool(getattr(image_viewer, "image_inverted", False)),
         }
 
+    image_viewer.apply_series_lut = apply_series_lut
+    image_viewer.current_series_lut = current_series_lut
+    image_viewer.lut_display_context = lut_display_context
+    _wire_dicom_and_defaults(app, idx, managers, image_viewer)
+
+
+def _wire_dicom_and_defaults(app: Any, idx: int, managers: dict[str, Any], image_viewer: Any) -> None:
+    """From DICOM state, modality defaults, a redraw-all hook, and the pane LUT label."""
+
     def dicom_lut_state() -> tuple[bool, bool]:
         """(the shown dataset has a VOI LUT this build can apply, the series asked for it)."""
         view_state = managers["view_state_manager"]
@@ -326,15 +335,12 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
         set_series_voi_from_dicom(view_state, enabled, series_id)
         app._redisplay_subwindow_slice(_i, preserve_view=True)
 
-    image_viewer.apply_series_lut = apply_series_lut
-    image_viewer.current_series_lut = current_series_lut
-    image_viewer.lut_display_context = lut_display_context
     image_viewer.dicom_lut_state = dicom_lut_state
     image_viewer.set_dicom_lut = set_dicom_lut
 
     def redisplay_all_panes() -> None:
         """Redraw every pane, for a change such as a modality default that can affect any."""
-        for pane in list(getattr(app, "subwindow_managers", {}) or {}):
+        for pane in getattr(app, "subwindow_managers", {}) or {}:
             app._redisplay_subwindow_slice(pane, preserve_view=True)
 
     image_viewer.redisplay_all_panes = redisplay_all_panes
