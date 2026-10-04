@@ -521,3 +521,36 @@ def test_default_resolver_rereads_the_library_only_when_it_changes(tmp_path) -> 
     assert first.name == "Lung"
     assert len(reads) == 1
     assert default_resolver(store, lambda: "MR")() is None
+
+
+@pytest.mark.qt
+def test_import_saves_and_applies_the_first_colormap(qapp, monkeypatch, tmp_path) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    path = tmp_path / "fire.csv"
+    path.write_text("0,0,0\n255,0,0\n", encoding="utf-8")
+    store = _Store()
+    pane = _Pane(gamma_lut(1.0), store)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a, **_k: (str(path), ""))
+    lut_actions._import_colormap(pane)
+    assert [lut.name for lut in saved_luts(store)] == ["fire"]
+    assert pane.lut.name == "fire"
+    assert pane.lut.source == "custom"
+
+
+@pytest.mark.qt
+def test_a_bad_import_is_reported_and_changes_nothing(qapp, monkeypatch, tmp_path) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    path = tmp_path / "bad.csv"
+    path.write_text("0,0,0\n", encoding="utf-8")
+    store = _Store()
+    pane = _Pane(gamma_lut(1.0), store)
+    warnings: list[str] = []
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a, **_k: (str(path), ""))
+    monkeypatch.setattr(lut_actions.QMessageBox, "warning", lambda _p, _t, text: warnings.append(text))
+    lut_actions._import_colormap(pane)
+    assert len(warnings) == 1
+    assert "not imported" in warnings[0]
+    assert saved_luts(store) == []
+    assert pane.lut.name == "Gamma"

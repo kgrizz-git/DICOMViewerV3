@@ -126,6 +126,11 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
     colors.setEnabled(current is not None and current.lut_type == "colormap")
     colors.triggered.connect(lambda: _edit_colors(host))
     menu.addAction(colors)
+    importer = QAction("Import Colormap...", menu)
+    importer.setEnabled(library_store(host) is not None)
+    importer.setToolTip("Add a .csv or .json colormap to the Saved list")
+    importer.triggered.connect(lambda: _import_colormap(host))
+    menu.addAction(importer)
     _add_default_actions(menu, host, current)
     save = QAction("Save Current As...", menu)
     save.setEnabled(is_savable(current) and library_store(host) is not None)
@@ -413,3 +418,44 @@ def _set_show_lut_label(config: Any, enabled: bool) -> None:
 
     config.set_show_lut_label(enabled)
     LutPaneLabel.refresh_all()
+
+
+def _import_colormap(host: Any) -> None:
+    """Pick a .csv/.json colormap, save each LUT it holds, and apply the first."""
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from core.lut_import import import_colormap_file
+
+    store = library_store(host)
+    if store is None:
+        return
+    chosen, _filter = QFileDialog.getOpenFileName(
+        _parent(host), "Import Colormap", "", "Colormaps (*.csv *.json)"
+    )
+    if not chosen:
+        return
+    try:
+        luts = import_colormap_file(Path(chosen))
+    except OSError:
+        QMessageBox.warning(_parent(host), "Import Colormap", "The file could not be read.")
+        return
+    except ValueError:
+        QMessageBox.warning(
+            _parent(host),
+            "Import Colormap",
+            "The colormap was not imported. Use a .csv of r,g,b or x,r,g,b rows "
+            "(0-255, or 0-1 floats), or a .json colormap or saved-LUT file.",
+        )
+        return
+    saved = [named for lut in luts if (named := save_lut(store, lut, lut.name)) is not None]
+    if not saved:
+        QMessageBox.warning(
+            _parent(host),
+            "Import Colormap",
+            "The colormap was read but not saved. The saved-LUT file may be read-only, "
+            "or it was written by a newer version of the viewer.",
+        )
+        return
+    apply_lut_to_host(host, saved[0])
