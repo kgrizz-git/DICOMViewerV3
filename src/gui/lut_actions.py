@@ -176,6 +176,14 @@ def attach_view_lut_menu(view_menu: QMenu, host: Any) -> None:
     """Add View → Look-Up Table. The menu is rebuilt each time it opens."""
     lut_menu = view_menu.addMenu("Look-Up &Table")
     lut_menu.aboutToShow.connect(lambda menu=lut_menu, owner=host: populate_lut_menu(menu, owner))
+    config = getattr(host, "config_manager", None)
+    if config is not None and callable(getattr(config, "get_show_lut_label", None)):
+        show = QAction("Show LUT Label", view_menu)
+        show.setCheckable(True)
+        show.setChecked(config.get_show_lut_label())
+        show.setToolTip("Name a non-Linear or DICOM LUT at the top of each pane")
+        show.toggled.connect(lambda checked, owner=config: _set_show_lut_label(owner, checked))
+        view_menu.addAction(show)
 
 
 def attach_context_lut_menu(context_menu: QMenu, viewer: Any) -> None:
@@ -370,3 +378,11 @@ def _save_current(host: Any) -> None:
         )
         return
     apply_lut_to_host(host, named)
+
+
+def _set_show_lut_label(config: Any, enabled: bool) -> None:
+    """Persist the toggle and refresh every pane's label."""
+    from gui.lut_pane_label import LutPaneLabel
+
+    config.set_show_lut_label(enabled)
+    LutPaneLabel.refresh_all()

@@ -1,13 +1,15 @@
 """
 LUT Config Mixin
 
-Reads and writes ``custom_luts.json`` next to the main config file. The file
+Reads and writes ``custom_luts.json`` next to the main config file, and
+persists the pane LUT label toggle in the main config. The file
 holds user-made LUTs only. This mixin moves the raw JSON document; turning it
 into ``LookUpTable`` objects is ``core.lut_persistence``'s job, so ``utils``
 never imports ``core``.
 
 Mixin contract:
-    Expects ``self.config_dir`` (``Path``) from the concrete ConfigManager.
+    Expects ``self.config_dir`` (``Path``), ``self.config`` (dict), and
+    ``self.save_config()`` from the concrete ConfigManager.
 """
 
 from __future__ import annotations
@@ -26,6 +28,19 @@ _logger = logging.getLogger(__name__)
 
 class LutConfigMixin:
     """Load and save the custom LUT document."""
+
+    def get_show_lut_label(self) -> bool:
+        """Whether panes name a non-Linear LUT in a corner label. On by default."""
+        config = cast(dict[str, Any], getattr(self, "config"))
+        return bool(config.get("show_lut_pane_label", True))
+
+    def set_show_lut_label(self, enabled: bool) -> None:
+        """Persist the pane LUT label toggle."""
+        config = cast(dict[str, Any], getattr(self, "config"))
+        config["show_lut_pane_label"] = bool(enabled)
+        save = getattr(self, "save_config", None)
+        if callable(save):
+            save()
 
     def custom_luts_path(self) -> Path:
         """Location of ``custom_luts.json``."""
