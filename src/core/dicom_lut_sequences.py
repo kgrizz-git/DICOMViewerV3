@@ -55,11 +55,12 @@ def voi_lut_supported(dataset: Any, index: int = 0) -> bool:
         item = dataset.VOILUTSequence[index]
         descriptor = item.LUTDescriptor
         bits = int(descriptor[2])
+        if not (bits == 8 or 10 <= bits <= 16) or "LUTData" not in item:
+            return False
+        return _lut_entry_count(item) >= (int(descriptor[0]) or 2**16)
     except (AttributeError, IndexError, TypeError, ValueError, KeyError):
+        # A malformed descriptor is unsupported, never an error for the caller.
         return False
-    if not (bits == 8 or 10 <= bits <= 16) or "LUTData" not in item:
-        return False
-    return _lut_entry_count(item) >= (int(descriptor[0]) or 2**16)
 
 
 def _lut_entry_count(item: Any) -> int:

@@ -179,3 +179,15 @@ def test_a_truncated_lut_is_not_supported() -> None:
     assert voi_lut_supported(_dataset(voi=packed))
     packed.LUTDescriptor = [3, 0, 16]
     assert not voi_lut_supported(_dataset(voi=packed))
+
+
+
+@pytest.mark.parametrize("first", ["x", None])
+def test_a_malformed_descriptor_is_unsupported_not_an_error(first) -> None:
+    from core.dicom_lut_sequences import voi_lut_supported
+
+    item = _lut_item([0, 255], 0, 8)
+    item.LUTDescriptor = [first, 0, 8]
+    ds = _dataset(voi=item)
+    assert not voi_lut_supported(ds)
+    assert dicom_voi_to_uint8(np.zeros((1, 2), dtype=np.uint16), ds) is None
