@@ -57,6 +57,7 @@ from gui.widgets.lut_transfer_function_widget import (
 )
 
 _SAVE_TITLE = "Save LUT"
+_IMPORT_TITLE = "Import Colormap"
 
 def apply_lut_to_host(host: Any, lut: LookUpTable) -> None:
     """Store ``lut`` on the pane behind ``host`` and redisplay that pane."""
@@ -432,19 +433,19 @@ def _import_colormap(host: Any) -> None:
     if store is None:
         return
     chosen, _filter = QFileDialog.getOpenFileName(
-        _parent(host), "Import Colormap", "", "Colormaps (*.csv *.json)"
+        _parent(host), _IMPORT_TITLE, "", "Colormaps (*.csv *.json)"
     )
     if not chosen:
         return
     try:
         luts = import_colormap_file(Path(chosen))
     except OSError:
-        QMessageBox.warning(_parent(host), "Import Colormap", "The file could not be read.")
+        QMessageBox.warning(_parent(host), _IMPORT_TITLE, "The file could not be read.")
         return
     except ValueError:
         QMessageBox.warning(
             _parent(host),
-            "Import Colormap",
+            _IMPORT_TITLE,
             "The colormap was not imported. Use a .csv of r,g,b or x,r,g,b rows "
             "(0-255, or 0-1 floats), or a .json colormap or saved-LUT file.",
         )
@@ -453,7 +454,7 @@ def _import_colormap(host: Any) -> None:
     if not saved:
         QMessageBox.warning(
             _parent(host),
-            "Import Colormap",
+            _IMPORT_TITLE,
             "The colormap was read but not saved. The saved-LUT file may be read-only, "
             "or it was written by a newer version of the viewer.",
         )

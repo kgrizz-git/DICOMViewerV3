@@ -84,7 +84,7 @@ class LutPaneLabel(QObject):
     @classmethod
     def refresh_all(cls) -> None:
         """Re-read every pane, for example after the View-menu toggle."""
-        for instance in list(cls._instances):
+        for instance in cls._instances:
             instance.refresh()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:

@@ -44,8 +44,9 @@ def test_xrgb_rows_and_unit_floats(tmp_path) -> None:
     ["0,0,0\n", "0,0\n1,1\n", "0,0,0\n0.5,1,1,1\n", "0,0,0\n300,0,0\n", "0,0,0\n1.5,2,3\n"],
 )
 def test_malformed_csv_is_rejected(tmp_path, text) -> None:
+    path = _write(tmp_path, "bad.csv", text)
     with pytest.raises(ValueError):
-        import_colormap_file(_write(tmp_path, "bad.csv", text))
+        import_colormap_file(path)
 
 
 def test_json_stops_object_entry_and_document(tmp_path) -> None:
@@ -61,13 +62,15 @@ def test_json_stops_object_entry_and_document(tmp_path) -> None:
 
 @pytest.mark.parametrize("text", ["{not json", "[]", '{"luts": []}'])
 def test_unusable_json_is_rejected(tmp_path, text) -> None:
+    path = _write(tmp_path, "x.json", text)
     with pytest.raises(ValueError):
-        import_colormap_file(_write(tmp_path, "x.json", text))
+        import_colormap_file(path)
 
 
 def test_other_extensions_and_huge_files_are_rejected(tmp_path) -> None:
+    text_file = _write(tmp_path, "x.txt", "0,0,0\n1,1,1\n")
     with pytest.raises(ValueError, match=r"\.csv or \.json"):
-        import_colormap_file(_write(tmp_path, "x.txt", "0,0,0\n1,1,1\n"))
+        import_colormap_file(text_file)
     big = _write(tmp_path, "big.csv", "0,0,0\n" * (MAX_IMPORT_BYTES // 6 + 10))
     with pytest.raises(ValueError, match="too large"):
         import_colormap_file(big)

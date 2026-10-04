@@ -51,10 +51,10 @@ def import_colormap_file(path: Path) -> list[LookUpTable]:
 
 def _from_csv(text: str, name: str) -> LookUpTable:
     rows = _positioned(_numeric_rows(text))
-    scale = _unit_scale(rows)
+    unit = _is_unit_scale(rows)
     stops = []
     for x, r, g, b in rows:
-        color = tuple(_channel(value, scale) for value in (r, g, b))
+        color = tuple(_channel(value, unit) for value in (r, g, b))
         stops.append((x, (color[0], color[1], color[2])))
     return LookUpTable(name=name, lut_type="colormap", source="file", color_stops=tuple(stops))
 
@@ -89,18 +89,18 @@ def _positioned(rows: list[list[float]]) -> list[list[float]]:
     return [[index / last, *row] for index, row in enumerate(rows)]
 
 
-def _unit_scale(rows: list[list[float]]) -> float:
-    """255 when the channels are 0-1 floats (any fractional value), else 1."""
+def _is_unit_scale(rows: list[list[float]]) -> bool:
+    """True when the channels are 0-1 floats: all in range and any fractional."""
     channels = [value for row in rows for value in row[1:]]
     in_unit = all(0.0 <= value <= 1.0 for value in channels)
-    fractional = any(value != int(value) for value in channels)
-    return 255.0 if in_unit and fractional else 1.0
+    fractional = any(not float(value).is_integer() for value in channels)
+    return in_unit and fractional
 
 
-def _channel(value: float, scale: float) -> int:
+def _channel(value: float, unit: bool) -> int:
     """One 0-255 channel. Unit floats are scaled and rounded; others must be integers."""
-    if scale != 1.0:
-        return int(round(value * scale))
+    if unit:
+        return int(round(value * 255.0))
     rounded = round(value)
     if abs(value - rounded) > 1e-6:
         raise ValueError("color channels must be 0-255 integers or 0-1 floats")
