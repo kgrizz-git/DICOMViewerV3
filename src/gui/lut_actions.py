@@ -138,8 +138,9 @@ def _add_default_actions(menu: QMenu, host: Any, current: LookUpTable | None) ->
     store = library_store(host)
     getter = getattr(_actor(host), "current_modality", None)
     modality = getter() if callable(getter) else ""
-    usable = isinstance(modality, str) and bool(modality) and store is not None
-    if not usable or not callable(getattr(store, "get_lut_defaults", None)):
+    if store is None or not isinstance(modality, str) or not modality:
+        return
+    if not callable(getattr(store, "get_lut_defaults", None)):
         return
     entry = default_entry(current) if current is not None else None
     if entry is not None and entry["kind"] == "saved":
