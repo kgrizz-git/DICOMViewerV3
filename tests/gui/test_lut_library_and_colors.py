@@ -366,3 +366,17 @@ def test_ok_without_edits_keeps_a_builtin_map_exactly(qapp) -> None:
     assert edited is not viridis
     assert edited.color_stops is not None
     _ = qapp
+
+
+@pytest.mark.qt
+def test_a_no_op_edit_keeps_a_builtin_map_exactly(qapp) -> None:
+    viridis = colormap_lut("viridis")
+    dialog = LutColorStopsDialog(viridis)
+    original = dialog.stops()[0][1]
+    dialog.set_stop_color(0, original)
+    assert dialog.result_lut() is viridis
+    dialog._interpolation.setCurrentText("step")
+    assert dialog.result_lut() is not viridis
+    dialog._interpolation.setCurrentText("linear")
+    assert dialog.result_lut() is viridis
+    _ = qapp

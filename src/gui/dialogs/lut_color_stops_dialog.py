@@ -75,8 +75,9 @@ class LutColorStopsDialog(QDialog):
         self._colors: list[tuple[int, int, int]] = []
         self._opened = lut
         # A built-in map is seeded from five samples, which only approximate
-        # it. Until the user edits, OK returns the opened map unchanged.
-        self._edited = False
+        # it. While the stops and interpolation still equal their opening
+        # values, OK returns the opened map unchanged.
+        self._initial: tuple[list[ColorStop], str] | None = None
         # Exact positions as loaded. The spin box shows 3 decimals; an
         # untouched row keeps its saved value instead of the rounded display.
         self._exact: list[float] = []
@@ -110,6 +111,7 @@ class LutColorStopsDialog(QDialog):
         layout.addWidget(self._buttons)
         for x, rgb in seed_stops(lut):
             self._append_row(x, rgb)
+        self._initial = (self.stops(), self._interpolation.currentText())
         self._refresh()
 
     def stops(self) -> list[tuple[float, tuple[int, int, int]]]:
@@ -126,8 +128,9 @@ class LutColorStopsDialog(QDialog):
 
     def result_lut(self) -> LookUpTable | None:
         """The edited colormap, the opened one when unedited, or None while invalid."""
-        if not self._edited and self._opened is not None and self._opened.lut_type == "colormap":
-            return self._opened
+        opened = self._opened
+        if opened is not None and opened.lut_type == "colormap" and self._unchanged():
+            return opened
         try:
             return LookUpTable(
                 name="Custom Colors",
@@ -139,10 +142,14 @@ class LutColorStopsDialog(QDialog):
         except ValueError:
             return None
 
+    def _unchanged(self) -> bool:
+        """True while the stops and interpolation equal what the dialog opened with."""
+        current = (self.stops(), self._interpolation.currentText())
+        return self._initial is None or current == self._initial
+
     def set_stop_color(self, row: int, rgb: tuple[int, int, int]) -> None:
         """Replace one stop's color and repaint its swatch."""
         self._colors[row] = rgb
-        self._edited = True
         button = self._table.cellWidget(row, 1)
         if isinstance(button, QPushButton):
             button.setStyleSheet(_swatch_style(rgb))
@@ -167,14 +174,12 @@ class LutColorStopsDialog(QDialog):
 
     def _on_position_edited(self, spin: QDoubleSpinBox) -> None:
         """An edited row uses the spin box value from now on, not its loaded value."""
-        self._edited = True
         for row in range(self._table.rowCount()):
             if self._table.cellWidget(row, 0) is spin:
                 self._exact[row] = float("nan")
         self._refresh()
 
     def _on_interpolation_changed(self, _text: str) -> None:
-        self._edited = True
         self._refresh()
 
     def _row_of(self, button: QPushButton) -> int | None:
@@ -193,7 +198,6 @@ class LutColorStopsDialog(QDialog):
 
     def _add_stop(self) -> None:
         """Insert a stop midway along the widest gap, colored as the map is there."""
-        self._edited = True
         stops = sorted(self.stops(), key=lambda item: item[0])
         gaps = [(b[0] - a[0], a, b) for a, b in pairwise(stops)]
         if not gaps:
@@ -212,7 +216,6 @@ class LutColorStopsDialog(QDialog):
         if row < 0 or self._table.rowCount() <= 2:
             return
         self._table.removeRow(row)
-        self._edited = True
         del self._colors[row]
         del self._exact[row]
         self._refresh()
