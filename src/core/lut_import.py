@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,8 @@ def _numeric_rows(text: str) -> tuple[list[list[float]], bool]:
             continue
         if len(numbers) not in (3, 4):
             raise ValueError("each CSV row must be r,g,b or x,r,g,b")
+        if not all(math.isfinite(number) for number in numbers):
+            raise ValueError("CSV values must be finite numbers")
         rows.append(numbers)
         float_written = float_written or any(_looks_float(cell) for cell in cells[-3:])
     if len(rows) < 2:

@@ -41,7 +41,7 @@ def test_xrgb_rows_and_unit_floats(tmp_path) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["0,0,0\n", "0,0\n1,1\n", "0,0,0\n0.5,1,1,1\n", "0,0,0\n300,0,0\n", "0,0,0\n1.5,2,3\n"],
+    ["0,0,0\n", "0,0\n1,1\n", "0,0,0\ninf,0,0\n", "0,0,0\nnan,0,0\n", "0,0,0\n0.5,1,1,1\n", "0,0,0\n300,0,0\n", "0,0,0\n1.5,2,3\n"],
 )
 def test_malformed_csv_is_rejected(tmp_path, text) -> None:
     path = _write(tmp_path, "bad.csv", text)
