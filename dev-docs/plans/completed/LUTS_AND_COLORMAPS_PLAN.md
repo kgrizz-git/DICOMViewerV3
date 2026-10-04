@@ -1,8 +1,8 @@
 # Look-Up Tables (LUTs) & Colormaps Plan
 
-**Status:** In progress — Phases 1–3 and 4a/4b are implemented on `feature/lut-plan-completion` (PR 1 of 2). Earlier phases merged in PR #161 and #166 (2026-09-28). PR 1 adds the missing Phase 3b/3c tests and the QImage stride regression, the editor's display-result trace, the histogram composed-curve W/L drag, `custom_luts.json` persistence, and editable color stops. **Remaining for PR 2:** the pane LUT label, per-series default LUT, user-defined colormap file import (1c), and **From DICOM** — implemented as a standards-correct VOI LUT that replaces window/level and a Modality LUT that replaces rescale, not as a post-window display LUT (decided 2026-10-03). The manual smoke steps are written at [`AGENT_SMOKE.md`](../../orchestration/AGENT_SMOKE.md) but have **not** been run or filed in [`TO_DO.md`](../../TO_DO.md#manual-smoke-checks).  
+**Status:** Complete — archived 2026-10-04. Phases 1–3 merged in PR #161 and #166; PR #173 added the missing tests, the editor display trace, the histogram composed-curve W/L drag, `custom_luts.json` persistence, and editable color stops; the final PR added From DICOM, the pane LUT label, per-modality defaults, and colormap file import. Manual smoke is tracked in [`TO_DO.md` → Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).  
 **Priority:** P1  
-**Last updated:** 2026-10-03  
+**Last updated:** 2026-10-04  
 **TO_DO ref:** [`TO_DO.md` Next up slot 4](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps) — finish Phases 3c/4**" (paraphrased; see the **Next up** entry for the authoritative wording)
 
 ---
@@ -285,8 +285,9 @@ for the shared-LUT design.
   the control-point representation is the **editable** form for user-defined
   curves (Phase 3b) and the **persisted** form once Phase 4a lands — sampling
   converts between the two.
-- [ ] Allow user-defined colormaps from a `.csv` or `.json` file (future — Phase 4).
+- [x] Allow user-defined colormaps from a `.csv` or `.json` file (future — Phase 4).
 
+  **As built:** **Import Colormap…** (`src/core/lut_import.py`) reads `r,g,b` or `x,r,g,b` CSV rows, or JSON color stops / saved-LUT entries, and saves them to the library.
 ### 1d. Tests
 
 - [x] `tests/core/test_lut_engine.py`:
@@ -785,7 +786,7 @@ needs to see which part of the curve moved.
 
 ## Phase 4 — Advanced (future)
 
-- [ ] **LUT display overlay on panes:** show the active LUT name — and an optional
+- [x] **LUT display overlay on panes:** show the active LUT name — and an optional
   curve/colormap mini-indicator — in a corner of each image pane when a non-Linear
   LUT is active, **toggleable from the View menu** and persisted via
   `ConfigManager` like the other overlay toggles (follow the existing
@@ -794,14 +795,17 @@ needs to see which part of the curve moved.
   question 4 below: today the LUT is named in the menu, the toolbar tooltip, and
   the histogram legend, but not on the pane itself. Label text follows the same
   privacy masking as the other corner overlays.
-- [ ] **DICOM Modality LUT Sequence:** Parse `ModalityLUTSequence` (0028,3000) and `VOILUTSequence` (0028,3010) from datasets that embed non-linear LUTs — use them as an additional "From DICOM" option.
+  **As built:** `src/gui/lut_pane_label.py`, a label at the top center of the viewport (the four corners belong to the tag overlay). **View → Show LUT Label** is persisted. Privacy mode shows a user-named LUT as "Custom"; built-in names are not identifiers.
+- [x] **DICOM Modality LUT Sequence:** Parse `ModalityLUTSequence` (0028,3000) and `VOILUTSequence` (0028,3010) from datasets that embed non-linear LUTs — use them as an additional "From DICOM" option.
   **Decision (2026-10-03):** these are not post-window display LUTs. Per PS3.3
   C.11.1 and C.11.2, a Modality LUT replaces rescale slope/intercept and a VOI LUT
   replaces window/level. **From DICOM** therefore maps stored values through the
   Modality LUT (where rescale happens) and the VOI LUT (instead of window/level),
   then applies polarity and the active display LUT as usual.
-- [ ] **Per-series default LUT:** E.g., always use "Hot" for PET, "Bone" for CT.
+  **As built:** `src/core/dicom_lut_sequences.py`, the per-series **From DICOM (VOI LUT)** menu toggle, PNG/JPG and cine export. Single-slice display only; projections and MPR keep windowing. The histogram overlay still draws the window, not the VOI LUT.
+- [x] **Per-series default LUT:** E.g., always use "Hot" for PET, "Bone" for CT.
 
+  **As built:** per **modality**, from the LUT menu (**Use as Default for** *modality* / **Clear Default**), stored in the config; `src/core/lut_defaults.py`. A series that never chose a LUT follows the current default.
 ### 4a. Persistence schema
 
 - [x] Custom LUTs persist as `custom_luts.json` in the app data directory, via

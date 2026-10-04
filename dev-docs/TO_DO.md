@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-03
+**Last updated:** 2026-10-04
 
 ---
 
@@ -42,23 +42,6 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
    `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
    during projection/3D export work.
-4. **[P1] More and custom look-up tables (LUTs & colormaps) — finish Phase 4 (PR 2 of 2).**
-   Phases 1–3 shipped in PR #161 + #166. PR 1 of the completion
-   (`feature/lut-plan-completion`) adds the missing editor and stride tests, the
-   editor's display-result trace, the histogram composed-curve W/L drag,
-   `custom_luts.json` persistence, and editable color stops (4a/4b). What
-   remains, for PR 2:
-   - **Pane LUT label** — active LUT name on each pane, View-menu toggle,
-     `ConfigManager`-persisted, privacy-masked like the other corner overlays.
-   - **Per-series default LUT** — for example Hot for PET.
-   - **Colormap file import** (Phase 1c) — a user-defined colormap from `.csv`
-     or `.json`.
-   - **From DICOM** — a Modality LUT that replaces rescale and a VOI LUT that
-     replaces window/level (PS3.3 C.11.1/C.11.2), not a post-window LUT.
-   **Manual smoke is written but not yet run or filed** — the steps are at
-   [`AGENT_SMOKE.md` §LUT](orchestration/AGENT_SMOKE.md) and are **not** yet a line
-   in [Manual Smoke Checks](#manual-smoke-checks), so slot 1 does not yet apply to
-   this item. **Plan:** [LUTs & colormaps](plans/supporting/LUTS_AND_COLORMAPS_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -93,6 +76,7 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** **W/L presets (US, CR, DX)** — **Steps:** load representative **US**, **CR**, and **DX** studies at available stored bit depths, including **MONOCHROME1** and **MONOCHROME2**; verify Default and Wide presets are sensible, manual Invert remains a user offset, and still/cine exports match the single-slice display. Record fixture coverage and modality-specific findings. **Related:** [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
 - [ ] **[P2]** **Pylinac ACR export and MRI batch (optional real-phantom smoke)** — **Env:** local de-identified CT and MRI ACR phantoms. **Steps:** verify single-run CT/MRI CSV and XLSX export, CT batch CSV, and MRI batch CSV/JSON/XLSX; confirm headline values and method labels lead, match the analyzed results, and leave full metrics in Detail/trailing CSV; with module images enabled, compare the XLSX Images module set with the PDF figures. **Pass:** exports are complete, readable, and consistent with the visible analysis; disabled images omit the sheet cleanly. **Archived plans:** [Pylinac ACR full metrics export and MRI batch](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) §G3; [ACR QA headline results export](plans/completed/ACR_QA_HEADLINE_RESULTS_EXPORT_PLAN.md).
 - [ ] **[P2]** **Histogram stacking and minimization** — **Env:** native macOS and Windows window managers. **Steps:** open a histogram, click the main viewer and navigate slices, then minimize and restore the histogram; repeat with two pane histograms and after switching to another application. **Pass:** visible histograms remain above their own viewer while navigating, minimized histograms stay minimized, restoration refreshes values, and unrelated applications can cover the viewer and histogram. Automated flag/event-filter tests pass; native window-manager behavior still needs this check.
+- [ ] **[P2]** **Look-up tables (LUTs & colormaps)** — **Steps:** follow [`AGENT_SMOKE.md` §LUT](orchestration/AGENT_SMOKE.md): Linear shows no change; a color map renders RGB with correct orientation and **I** does not double-invert; the curve editor (breakpoints, freehand, interpolation, Undo, the dotted ramp and dashed display trace); histogram curves, checkboxes, and the composed-curve edge drag; **Save Current As…** survives a restart under **Saved**; **Edit Colors…**; **Import Colormap…** from a `.csv`; **Use as Default for** a modality, then open another series of it; **Show LUT Label** and privacy mode; **From DICOM (VOI LUT)** on a file with a VOI LUT Sequence; PNG export and cine match the viewport. **Pass:** each step behaves as described and exports match the screen. **Archived plan:** [LUTs & colormaps](plans/completed/LUTS_AND_COLORMAPS_PLAN.md)
 
 ## Validation / QA
 

@@ -1,6 +1,6 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-10-03
+**Last updated:** 2026-10-04
 
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
 
@@ -61,6 +61,10 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
   **Save Current As…** → restart → the LUT is listed under **Saved**, and
   selecting it reapplies it (panes start Linear after a restart).
   On a color map, **Edit Colors…** → add a stop, recolor it, switch to step.
+  **Import Colormap…** from a small `.csv` → it appears under **Saved**.
+  **Use as Default for** the pane's modality → another series of that modality
+  opens with it. **View → Show LUT Label** names the LUT at the top of the pane.
+  On a file with a VOI LUT Sequence, **From DICOM (VOI LUT)** changes the image.
   Export → PNG on that pane matches the viewport.
 
 ---
