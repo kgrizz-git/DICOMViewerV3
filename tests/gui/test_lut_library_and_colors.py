@@ -469,14 +469,18 @@ def test_default_actions_set_and_clear_the_modality_default(qapp) -> None:
     store = _DefaultsStore()
     pane = _Pane(colormap_lut("hot"), store)
     pane.current_modality = lambda: "PT"  # type: ignore[attr-defined]
+    redraws: list[bool] = []
+    pane.redisplay_all_panes = lambda: redraws.append(True)  # type: ignore[attr-defined]
     _menu, use = _menu_action(pane, "Use as Default for PT")
     assert use.isEnabled()
     use.trigger()
     assert store.defaults == {"PT": {"kind": "colormap", "name": "hot"}}
+    assert redraws == [True]
     _menu, clear = _menu_action(pane, "Clear Default for PT")
     assert clear.isEnabled()
     clear.trigger()
     assert store.defaults == {}
+    assert redraws == [True, True]
     _ = qapp
 
 
@@ -554,3 +558,23 @@ def test_a_bad_import_is_reported_and_changes_nothing(qapp, monkeypatch, tmp_pat
     assert "not imported" in warnings[0]
     assert saved_luts(store) == []
     assert pane.lut.name == "Gamma"
+
+
+
+@pytest.mark.qt
+def test_import_never_overwrites_a_saved_lut(qapp, monkeypatch, tmp_path) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    store = _Store()
+    original = save_lut(store, gamma_lut(2.0), "fire")
+    save_lut(store, gamma_lut(1.5), "fire (2)")
+    path = tmp_path / "fire.csv"
+    path.write_text("0,0,255\n255,0,0\n", encoding="utf-8")
+    pane = _Pane(gamma_lut(1.0), store)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a, **_k: (str(path), ""))
+    lut_actions._import_colormap(pane)
+    luts = saved_luts(store)
+    assert [lut.name for lut in luts] == ["fire", "fire (2)", "fire (3)"]
+    assert luts[0] == original
+    assert pane.lut.name == "fire (3)"
+    _ = qapp

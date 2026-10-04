@@ -48,6 +48,23 @@ def has_modality_lut(dataset: Any) -> bool:
     return bool(sequence)
 
 
+def voi_lut_supported(dataset: Any, index: int = 0) -> bool:
+    """True when VOI LUT ``index`` exists and its descriptor is one this build applies.
+
+    PS3.3 C.8.11.3.1.5 allows 8 or 10-16 bits per entry. A file outside that
+    range falls back to window/level, so the UI must not offer it as applied.
+    """
+    if not has_voi_lut(dataset):
+        return False
+    try:
+        item = dataset.VOILUTSequence[index]
+        descriptor = item.LUTDescriptor
+        bits = int(descriptor[2])
+    except (AttributeError, IndexError, TypeError, ValueError, KeyError):
+        return False
+    return (bits == 8 or 10 <= bits <= 16) and "LUTData" in item
+
+
 def dicom_voi_to_uint8(pixel_array: np.ndarray, dataset: Any, index: int = 0) -> np.ndarray | None:
     """Stored pixels through the Modality LUT (or rescale), then VOI LUT ``index``.
 

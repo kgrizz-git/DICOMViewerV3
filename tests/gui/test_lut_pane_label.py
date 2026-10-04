@@ -108,3 +108,13 @@ def test_config_persists_the_toggle(tmp_path) -> None:
     assert manager.get_show_lut_label() is True
     manager.set_show_lut_label(False)
     assert ConfigManager(config_dir=tmp_path).get_show_lut_label() is False
+
+
+@pytest.mark.qt
+def test_label_does_not_claim_dicom_when_it_could_not_apply(qapp) -> None:
+    viewer = _viewer(qapp, linear_lut())
+    viewer.dicom_lut_state = lambda: (False, True)  # type: ignore[attr-defined]
+    pane_label = LutPaneLabel(viewer, show_label=lambda: True, privacy=lambda: False)
+    assert pane_label.current_text() == ""
+    viewer.dicom_lut_state = lambda: (True, True)  # type: ignore[attr-defined]
+    assert pane_label.current_text() == "VOI LUT: DICOM"

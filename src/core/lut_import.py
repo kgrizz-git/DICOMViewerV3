@@ -10,14 +10,16 @@ JSON: either one LUT entry in the ``custom_luts.json`` format, a whole
 ``custom_luts.json`` document (every valid entry is imported), or an object
 with ``color_stops`` (and optional ``name`` / ``color_interpolation``).
 
-Every imported LUT is a colormap built from color stops, so it can be saved,
-edited with **Edit Colors…**, and used as a default like any other.
+A CSV, or a JSON object with ``color_stops``, gives a colormap built from color
+stops. A JSON saved-LUT entry or document gives whatever it holds, which can
+include grayscale curves. Every imported LUT can be saved and used as a
+default like any other.
 
 Inputs:
     - A file path
 
 Outputs:
-    - A list of ``LookUpTable`` colormaps; ``ValueError`` when nothing valid is found
+    - A list of ``LookUpTable`` values; ``ValueError`` when nothing valid is found
 
 Requirements:
     - core.lut_color_stops, core.lut_persistence

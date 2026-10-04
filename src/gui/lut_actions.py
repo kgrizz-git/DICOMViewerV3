@@ -156,12 +156,20 @@ def _add_default_actions(menu: QMenu, host: Any, current: LookUpTable | None) ->
     use = QAction(f"Use as Default for {modality}", menu)
     use.setEnabled(entry is not None)
     use.setToolTip("Series of this modality start with this LUT until you choose another")
-    use.triggered.connect(lambda: store.set_lut_default(modality, entry))
+    use.triggered.connect(lambda: _set_default(host, store, modality, entry))
     menu.addAction(use)
     clear = QAction(f"Clear Default for {modality}", menu)
     clear.setEnabled(modality in store.get_lut_defaults())
-    clear.triggered.connect(lambda: store.set_lut_default(modality, None))
+    clear.triggered.connect(lambda: _set_default(host, store, modality, None))
     menu.addAction(clear)
+
+
+def _set_default(host: Any, store: Any, modality: str, entry: dict[str, Any] | None) -> None:
+    """Set or clear a modality default, then redraw so open panes on it follow."""
+    store.set_lut_default(modality, entry)
+    redraw = getattr(_actor(host), "redisplay_all_panes", None)
+    if callable(redraw):
+        redraw()
 
 
 def _add_dicom_lut_action(menu: QMenu, host: Any) -> None:
@@ -450,7 +458,15 @@ def _import_colormap(host: Any) -> None:
             "(0-255, or 0-1 floats), or a .json colormap or saved-LUT file.",
         )
         return
-    saved = [named for lut in luts if (named := save_lut(store, lut, lut.name)) is not None]
+    taken = {lut.name for lut in saved_luts(store)}
+    saved = []
+    for lut in luts:
+        # Never replace an existing saved LUT: an import adds, it does not overwrite.
+        name = _unused_name(lut.name, taken)
+        named = save_lut(store, lut, name)
+        if named is not None:
+            taken.add(name)
+            saved.append(named)
     if not saved:
         QMessageBox.warning(
             _parent(host),
@@ -460,3 +476,13 @@ def _import_colormap(host: Any) -> None:
         )
         return
     apply_lut_to_host(host, saved[0])
+
+
+def _unused_name(name: str, taken: set[str]) -> str:
+    """``name``, or ``name (2)``, ``name (3)``, ... when that is already saved."""
+    if name not in taken:
+        return name
+    number = 2
+    while f"{name} ({number})" in taken:
+        number += 1
+    return f"{name} ({number})"

@@ -118,5 +118,6 @@ class LutPaneLabel(QObject):
         lut = getter() if callable(getter) else None
         state = getattr(self._viewer, "dicom_lut_state", None)
         found = state() if callable(state) else None
-        enabled = bool(found[1]) if isinstance(found, tuple) and len(found) == 2 else False
+        # Only claim DICOM when it actually applied: asked for and supported.
+        enabled = bool(found[0] and found[1]) if isinstance(found, tuple) and len(found) == 2 else False
         return lut_label_text(lut if isinstance(lut, LookUpTable) else None, enabled, self._privacy())

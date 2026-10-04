@@ -3,7 +3,7 @@
 **Status:** Complete — archived 2026-10-04. Phases 1–3 merged in PR #161 and #166; PR #173 added the missing tests, the editor display trace, the histogram composed-curve W/L drag, `custom_luts.json` persistence, and editable color stops; the final PR added From DICOM, the pane LUT label, per-modality defaults, and colormap file import. Manual smoke is tracked in [`TO_DO.md` → Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).  
 **Priority:** P1  
 **Last updated:** 2026-10-04  
-**TO_DO ref:** [`TO_DO.md` Next up slot 4](../../TO_DO.md#next-up) — "**More and custom look-up tables (LUTs & colormaps) — finish Phases 3c/4**" (paraphrased; see the **Next up** entry for the authoritative wording)
+**TO_DO ref:** [`TO_DO.md` → Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks) — the Next-up item was removed when the plan was archived (2026-10-04).
 
 ---
 

@@ -151,3 +151,15 @@ def test_export_carries_the_choice_for_grayscale_only(photometric, kept) -> None
     ds.SamplesPerPixel = 1 if photometric.startswith("MONO") else 3
     kwargs = grayscale_export_kwargs(ds, False, None, True)
     assert kwargs.get("voi_from_dicom", False) is kept
+
+
+def test_supported_means_a_descriptor_this_build_can_apply() -> None:
+    from core.dicom_lut_sequences import voi_lut_supported
+
+    assert not voi_lut_supported(_dataset())
+    assert voi_lut_supported(_dataset(voi=_lut_item([0, 255], 0, 8)))
+    assert voi_lut_supported(_dataset(voi=_lut_item([0, 4095], 0, 12)))
+    assert not voi_lut_supported(_dataset(voi=_lut_item([0, 1], 0, 9)))
+    no_data = _lut_item([0, 255], 0, 8)
+    del no_data.LUTData
+    assert not voi_lut_supported(_dataset(voi=no_data))
