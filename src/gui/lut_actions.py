@@ -120,6 +120,7 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
     edit.setEnabled(current is None or current.lut_type == "grayscale_ramp")
     edit.triggered.connect(lambda: _edit_curve(host))
     menu.addAction(edit)
+    _add_dicom_lut_action(menu, host)
     colors = QAction("Edit Colors...", menu)
     colors.setEnabled(current is not None and current.lut_type == "colormap")
     colors.triggered.connect(lambda: _edit_colors(host))
@@ -128,6 +129,26 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
     save.setEnabled(is_savable(current) and library_store(host) is not None)
     save.triggered.connect(lambda: _save_current(host))
     menu.addAction(save)
+
+
+def _add_dicom_lut_action(menu: QMenu, host: Any) -> None:
+    """Checkable "From DICOM (VOI LUT)": the file's own LUTs replace window/level.
+
+    Enabled only when the shown dataset embeds a VOI LUT Sequence. The display
+    LUT still applies on top, after polarity, as it does for a windowed image.
+    """
+    state = getattr(_actor(host), "dicom_lut_state", None)
+    found = state() if callable(state) else None
+    available, enabled = found if isinstance(found, tuple) and len(found) == 2 else (False, False)
+    action = QAction("From DICOM (VOI LUT)", menu)
+    action.setCheckable(True)
+    action.setChecked(bool(enabled))
+    action.setEnabled(bool(available) or bool(enabled))
+    action.setToolTip("Use the VOI LUT in the file instead of window/level")
+    setter = getattr(_actor(host), "set_dicom_lut", None)
+    if callable(setter):
+        action.toggled.connect(setter)
+    menu.addAction(action)
 
 
 def _add_saved_menu(menu: QMenu, group: QActionGroup, host: Any, current: LookUpTable | None) -> None:

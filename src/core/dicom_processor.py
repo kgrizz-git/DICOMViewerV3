@@ -178,6 +178,7 @@ class DICOMProcessor:
     def dataset_to_image(dataset: Dataset, window_center: float | None = None,
                         window_width: float | None = None, apply_rescale: bool = False,
                         *, image_inverted: bool = False, lut: LookUpTable | None = None,
+                        voi_from_dicom: bool = False,
                         ) -> Image.Image | None:
         """
         Convert DICOM dataset to PIL Image.
@@ -187,6 +188,9 @@ class DICOMProcessor:
             window_center: Optional window center (uses dataset default if None)
             window_width: Optional window width (uses dataset default if None)
             apply_rescale: If True, apply rescale slope/intercept in window/level calculation
+            voi_from_dicom: If True and the dataset embeds a VOI LUT Sequence, map
+                grayscale pixels through its Modality LUT (or rescale) and VOI LUT
+                instead of the window ("From DICOM", ``core.dicom_lut_sequences``)
 
         Returns:
             PIL Image or None if conversion fails
@@ -237,11 +241,12 @@ class DICOMProcessor:
                 rescale_slope, rescale_intercept, is_multi_frame_color
             )
 
-        return dicom_image_render.render_grayscale_image(
-            pixel_array, window_center, window_width, rescale_slope, rescale_intercept,
+        return dicom_image_render.render_grayscale_for_dataset(
+            pixel_array, dataset, window_center, window_width, rescale_slope, rescale_intercept,
             photometric_interpretation=photometric_interpretation,
             image_inverted=image_inverted,
             lut=lut,
+            voi_from_dicom=voi_from_dicom,
         )
 
     @staticmethod

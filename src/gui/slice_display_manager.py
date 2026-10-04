@@ -488,7 +488,7 @@ class SliceDisplayManager:
         rescale_intercept: float | None,
         *,
         image_inverted: bool = False,
-        lut=None,
+        lut=None, voi_from_dicom: bool = False,  # a projection always windows; see core.dicom_lut_sequences
     ):
         """Return a projection PIL image when enabled, else None on skip/failure."""
         if not self.projection_enabled:

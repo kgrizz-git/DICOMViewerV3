@@ -160,6 +160,7 @@ class CineFrameRequest:
     subwindow_annotation_managers: list[dict[str, Any]] | None = None
     image_inverted: bool = False
     lut: Any = None
+    voi_from_dicom: bool = False
 
 
 def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None:
@@ -223,7 +224,9 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
                 window_center=window_center,
                 window_width=window_width,
                 apply_rescale=use_rescaled_values,
-                **grayscale_export_kwargs(dataset, request.image_inverted, request.lut),
+                **grayscale_export_kwargs(
+                    dataset, request.image_inverted, request.lut, request.voi_from_dicom
+                ),
             )
         else:
             is_projection_image = True
@@ -233,7 +236,9 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
             window_center=window_center,
             window_width=window_width,
             apply_rescale=use_rescaled_values,
-            **grayscale_export_kwargs(dataset, request.image_inverted, request.lut),
+            **grayscale_export_kwargs(
+                dataset, request.image_inverted, request.lut, request.voi_from_dicom
+            ),
         )
 
     if image is None:

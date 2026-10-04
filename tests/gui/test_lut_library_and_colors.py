@@ -423,3 +423,21 @@ def test_only_a_builtin_carries_its_parameter_into_the_builtin_choice(qapp, monk
     lut_actions._select_builtin(pane, gamma_lut(1.0))
     assert seen[-1] is builtin
     _ = qapp
+
+
+@pytest.mark.qt
+@pytest.mark.parametrize(("available", "enabled", "shown_enabled"), [(False, False, False), (True, False, True), (False, True, True)])
+def test_from_dicom_action_reflects_and_sets_the_pane_choice(qapp, available, enabled, shown_enabled) -> None:
+    pane = _Pane(gamma_lut(1.0), _Store())
+    toggled: list[bool] = []
+    pane.dicom_lut_state = lambda: (available, enabled)  # type: ignore[attr-defined]
+    pane.set_dicom_lut = toggled.append  # type: ignore[attr-defined]
+    menu = QMenu()
+    lut_actions.populate_lut_menu(menu, pane)
+    action = next(a for a in menu.actions() if a.text() == "From DICOM (VOI LUT)")
+    assert action.isChecked() is enabled
+    assert action.isEnabled() is shown_enabled
+    if shown_enabled:
+        action.trigger()
+        assert toggled == [not enabled]
+    _ = qapp

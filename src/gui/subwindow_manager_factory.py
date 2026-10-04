@@ -23,8 +23,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.dicom_lut_sequences import has_voi_lut
 from core.fusion_handler import FusionHandler
-from core.lut_series_state import get_series_lut, set_series_lut
+from core.lut_series_state import (
+    get_series_lut,
+    get_series_voi_from_dicom,
+    set_series_lut,
+    set_series_voi_from_dicom,
+)
 from core.photometric_polarity import dataset_photometric_interpretation
 from core.sr_sop_classes import is_structured_report_dataset
 from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
@@ -303,6 +309,23 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
             "image_inverted": bool(getattr(image_viewer, "image_inverted", False)),
         }
 
+    def dicom_lut_state() -> tuple[bool, bool]:
+        """(the shown dataset embeds a VOI LUT, the series uses it)."""
+        view_state = managers["view_state_manager"]
+        dataset = getattr(managers["slice_display_manager"], "current_dataset", None)
+        series_id = getattr(view_state, "current_series_identifier", None)
+        return has_voi_lut(dataset), get_series_voi_from_dicom(view_state, series_id)
+
+    def set_dicom_lut(enabled: bool, _i: int = idx) -> None:
+        view_state = managers["view_state_manager"]
+        series_id = getattr(view_state, "current_series_identifier", None)
+        if not series_id:
+            return
+        set_series_voi_from_dicom(view_state, enabled, series_id)
+        app._redisplay_subwindow_slice(_i, preserve_view=True)
+
     image_viewer.apply_series_lut = apply_series_lut
     image_viewer.current_series_lut = current_series_lut
     image_viewer.lut_display_context = lut_display_context
+    image_viewer.dicom_lut_state = dicom_lut_state
+    image_viewer.set_dicom_lut = set_dicom_lut

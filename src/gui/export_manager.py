@@ -82,6 +82,7 @@ class ExportSelectedRequest:
     deep_anonymized_items: dict[tuple[str, str, int], Dataset] | None = None
     image_inverted: bool = False
     lut: Any = None
+    voi_from_dicom: bool = False
 
 
 @dataclass
@@ -120,6 +121,7 @@ class ExportSliceRequest:
     subwindow_annotation_managers: list[dict[str, Any]] | None = None
     image_inverted: bool = False
     lut: Any = None
+    voi_from_dicom: bool = False
 
 
 class ExportManager:
@@ -317,6 +319,7 @@ class ExportManager:
         deep_anonymized_items = request.deep_anonymized_items
         image_inverted = request.image_inverted
         lut = request.lut
+        voi_from_dicom = request.voi_from_dicom
 
         _reject_legacy_anonymize(anonymize, deep_anonymize=deep_anonymize)
 
@@ -470,6 +473,7 @@ class ExportManager:
                             subwindow_annotation_managers=subwindow_annotation_managers,
                             image_inverted=image_inverted,
                             lut=lut,
+                            voi_from_dicom=voi_from_dicom,
                         )
                     )
                     if success:
@@ -533,6 +537,7 @@ class ExportManager:
         subwindow_annotation_managers = request.subwindow_annotation_managers
         image_inverted = request.image_inverted
         lut = request.lut
+        voi_from_dicom = request.voi_from_dicom
 
         _reject_legacy_anonymize(anonymize)
 
@@ -578,7 +583,7 @@ class ExportManager:
                             window_center=window_center,
                             window_width=window_width,
                             apply_rescale=use_rescaled_values,
-                            **grayscale_export_kwargs(dataset, image_inverted, lut),
+                            **grayscale_export_kwargs(dataset, image_inverted, lut, voi_from_dicom),
                         )
                         # is_projection_image remains False - this is a fallback single slice
                     else:
@@ -591,7 +596,7 @@ class ExportManager:
                         window_center=window_center,
                         window_width=window_width,
                         apply_rescale=use_rescaled_values,
-                        **grayscale_export_kwargs(dataset, image_inverted, lut),
+                        **grayscale_export_kwargs(dataset, image_inverted, lut, voi_from_dicom),
                     )
 
                 if image is None:

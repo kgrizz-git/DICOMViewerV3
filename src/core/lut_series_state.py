@@ -61,6 +61,25 @@ def set_series_lut(
     bucket["current_lut"] = lut
 
 
+def get_series_voi_from_dicom(view_state: Any, series_identifier: str | None) -> bool:
+    """True when the series displays through its embedded DICOM LUTs ("From DICOM")."""
+    return bool(_defaults(view_state, series_identifier).get("voi_from_dicom", False))
+
+
+def set_series_voi_from_dicom(view_state: Any, enabled: bool, series_identifier: str | None) -> None:
+    """Store the series' "From DICOM" choice next to its LUT."""
+    if not series_identifier:
+        return
+    view_state.series_defaults.setdefault(series_identifier, {})["voi_from_dicom"] = bool(enabled)
+
+
+def focused_pane_voi_from_dicom(view_state: Any) -> bool:
+    """The "From DICOM" choice for the series the pane shows. False without a pane."""
+    if view_state is None:
+        return False
+    return get_series_voi_from_dicom(view_state, getattr(view_state, "current_series_identifier", None))
+
+
 def active_image_inverted(
     view_state: Any,
     *,
@@ -132,6 +151,7 @@ def slice_lut_kwargs(
             photometric_interpretation=photometric_interpretation,
         ),
         "lut": get_series_lut(view_state, series_identifier),
+        "voi_from_dicom": get_series_voi_from_dicom(view_state, series_identifier),
     }
 
 

@@ -27,6 +27,7 @@ from PIL import Image
 from pydicom.dataset import Dataset
 
 from core import dicom_color
+from core.dicom_lut_sequences import dicom_voi_to_uint8
 from core.dicom_window_level import (
     apply_color_window_level_luminance,
     apply_window_level,
@@ -206,7 +207,60 @@ def render_grayscale_image(
     else:
         # No windowing, just normalize
         processed_array = normalize_to_uint8(pixel_array)
+    return finish_grayscale_image(
+        processed_array,
+        photometric_interpretation=photometric_interpretation,
+        image_inverted=image_inverted,
+        lut=lut,
+    )
 
+
+def render_grayscale_for_dataset(
+    pixel_array: np.ndarray,
+    dataset: Dataset,
+    window_center: float | None,
+    window_width: float | None,
+    rescale_slope: float | None,
+    rescale_intercept: float | None,
+    *,
+    photometric_interpretation: str | None = None,
+    image_inverted: bool = False,
+    lut: LookUpTable | None = None,
+    voi_from_dicom: bool = False,
+) -> Image.Image | None:
+    """The file's VOI LUT when asked and present ("From DICOM"), else window/level.
+
+    Everything after the VOI or window stage is ``finish_grayscale_image``.
+    """
+    if voi_from_dicom:
+        from_dicom = dicom_voi_to_uint8(pixel_array, dataset)
+        if from_dicom is not None:
+            return finish_grayscale_image(
+                from_dicom,
+                photometric_interpretation=photometric_interpretation,
+                image_inverted=image_inverted,
+                lut=lut,
+            )
+    return render_grayscale_image(
+        pixel_array, window_center, window_width, rescale_slope, rescale_intercept,
+        photometric_interpretation=photometric_interpretation,
+        image_inverted=image_inverted,
+        lut=lut,
+    )
+
+
+def finish_grayscale_image(
+    processed_array: np.ndarray,
+    *,
+    photometric_interpretation: str | None = None,
+    image_inverted: bool = False,
+    lut: LookUpTable | None = None,
+) -> Image.Image | None:
+    """Net inversion, then the LUT, on an already windowed uint8 array.
+
+    ``render_grayscale_image`` windows and then calls this. "From DICOM"
+    (``core.dicom_lut_sequences``) supplies the VOI-LUT output instead.
+    """
     # Handle 3D arrays (multi-frame grayscale)
     # Note: If this is reached, it means we're working with an original multi-frame dataset
     # that wasn't split by the organizer. Frame wrappers should already return 2D arrays.
