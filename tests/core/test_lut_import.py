@@ -74,3 +74,12 @@ def test_other_extensions_and_huge_files_are_rejected(tmp_path) -> None:
     big = _write(tmp_path, "big.csv", "0,0,0\n" * (MAX_IMPORT_BYTES // 6 + 10))
     with pytest.raises(ValueError, match="too large"):
         import_colormap_file(big)
+
+
+def test_whole_number_floats_are_unit_scale(tmp_path) -> None:
+    [ramp] = import_colormap_file(_write(tmp_path, "ramp.csv", "0.0,0.0,0.0\n1.0,1.0,1.0\n"))
+    assert ramp.color_stops == ((0.0, (0, 0, 0)), (1.0, (255, 255, 255)))
+    [ints] = import_colormap_file(_write(tmp_path, "ints.csv", "0,0,0\n1,1,1\n"))
+    assert ints.color_stops == ((0.0, (0, 0, 0)), (1.0, (1, 1, 1)))
+    [positioned] = import_colormap_file(_write(tmp_path, "pos.csv", "0.0,0,0,0\n1.0,1,1,1\n"))
+    assert positioned.color_stops == ((0.0, (0, 0, 0)), (1.0, (1, 1, 1)))
