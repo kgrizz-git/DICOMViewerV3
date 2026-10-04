@@ -17,8 +17,8 @@ Inputs:
     - A pydicom ``Dataset`` and its stored pixel array
 
 Outputs:
-    - Whether the dataset carries either sequence, and the uint8 display array
-      (or ``None`` when the embedded VOI LUT cannot be applied)
+    - Whether the dataset has a VOI LUT this build can apply, and the uint8
+      display array (or ``None`` when the embedded VOI LUT cannot be applied)
 
 Requirements:
     - numpy
@@ -42,17 +42,12 @@ def has_voi_lut(dataset: Any) -> bool:
     return bool(sequence)
 
 
-def has_modality_lut(dataset: Any) -> bool:
-    """True when the dataset embeds a Modality LUT Sequence with at least one item."""
-    sequence = getattr(dataset, "ModalityLUTSequence", None) if dataset is not None else None
-    return bool(sequence)
-
-
 def voi_lut_supported(dataset: Any, index: int = 0) -> bool:
     """True when VOI LUT ``index`` exists and its descriptor is one this build applies.
 
-    PS3.3 C.8.11.3.1.5 allows 8 or 10-16 bits per entry. A file outside that
-    range falls back to window/level, so the UI must not offer it as applied.
+    PS3.3 C.8.11.3.1.5 allows 8 or 10-16 bits per entry, and LUT Data must hold
+    the number of entries the descriptor declares. A file that fails either
+    falls back to window/level, so the UI must not offer it as applied.
     """
     if not has_voi_lut(dataset):
         return False
@@ -62,7 +57,21 @@ def voi_lut_supported(dataset: Any, index: int = 0) -> bool:
         bits = int(descriptor[2])
     except (AttributeError, IndexError, TypeError, ValueError, KeyError):
         return False
-    return (bits == 8 or 10 <= bits <= 16) and "LUTData" in item
+    if not (bits == 8 or 10 <= bits <= 16) or "LUTData" not in item:
+        return False
+    return _lut_entry_count(item) >= (int(descriptor[0]) or 2**16)
+
+
+def _lut_entry_count(item: Any) -> int:
+    """Entries actually present in LUT Data. OW holds packed 16-bit words."""
+    value = item["LUTData"].value
+    if value is None:
+        return 0
+    if isinstance(value, (bytes, bytearray)):
+        return len(value) // 2
+    if isinstance(value, int):
+        return 1
+    return len(value)
 
 
 def dicom_voi_to_uint8(pixel_array: np.ndarray, dataset: Any, index: int = 0) -> np.ndarray | None:
@@ -73,7 +82,12 @@ def dicom_voi_to_uint8(pixel_array: np.ndarray, dataset: Any, index: int = 0) ->
     Modality LUT alone does not make a display: without a VOI LUT the current
     window still applies, to the modality output.
     """
-    if not has_voi_lut(dataset):
+    if not voi_lut_supported(dataset, index):
+        if has_voi_lut(dataset):
+            _logger.warning(
+                "Embedded VOI LUT is not supported; using window/level",
+                extra={"operation": "dicom_lut.voi"},
+            )
         return None
     try:
         modality = np.asarray(apply_modality_lut(pixel_array, dataset))

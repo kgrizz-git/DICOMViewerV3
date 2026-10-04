@@ -578,3 +578,9 @@ def test_import_never_overwrites_a_saved_lut(qapp, monkeypatch, tmp_path) -> Non
     assert luts[0] == original
     assert pane.lut.name == "fire (3)"
     _ = qapp
+
+
+
+def test_unused_name_strips_like_save_does() -> None:
+    assert lut_actions._unused_name(" fire ", {"fire"}) == "fire (2)"
+    assert lut_actions._unused_name("new", {"fire"}) == "new"

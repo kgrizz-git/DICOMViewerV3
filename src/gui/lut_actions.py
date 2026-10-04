@@ -479,7 +479,11 @@ def _import_colormap(host: Any) -> None:
 
 
 def _unused_name(name: str, taken: set[str]) -> str:
-    """``name``, or ``name (2)``, ``name (3)``, ... when that is already saved."""
+    """``name``, or ``name (2)``, ``name (3)``, ... when that is already saved.
+
+    Stripped first, because ``save_lut`` saves under the stripped name.
+    """
+    name = name.strip()
     if name not in taken:
         return name
     number = 2

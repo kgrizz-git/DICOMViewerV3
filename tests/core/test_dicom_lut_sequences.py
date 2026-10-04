@@ -10,7 +10,7 @@ from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
 
 from core import dicom_lut_sequences as module
-from core.dicom_lut_sequences import dicom_voi_to_uint8, has_modality_lut, has_voi_lut
+from core.dicom_lut_sequences import dicom_voi_to_uint8, has_voi_lut
 from core.lut_catalog import inverse_lut
 from core.lut_display import grayscale_export_kwargs
 from core.lut_series_state import (
@@ -46,7 +46,6 @@ def test_presence_checks() -> None:
     assert not has_voi_lut(None)
     assert not has_voi_lut(_dataset())
     assert has_voi_lut(_dataset(voi=_lut_item([0, 255], 0, 8)))
-    assert has_modality_lut(_dataset(modality=_lut_item([0, 1], 0, 16)))
 
 
 def test_an_8_bit_voi_lut_maps_stored_values_directly() -> None:
@@ -163,3 +162,20 @@ def test_supported_means_a_descriptor_this_build_can_apply() -> None:
     no_data = _lut_item([0, 255], 0, 8)
     del no_data.LUTData
     assert not voi_lut_supported(_dataset(voi=no_data))
+
+
+
+def test_a_truncated_lut_is_not_supported() -> None:
+    from core.dicom_lut_sequences import voi_lut_supported
+
+    truncated = _lut_item([0, 255], 0, 12)
+    truncated.LUTDescriptor = [4096, 0, 12]
+    ds = _dataset(voi=truncated)
+    assert not voi_lut_supported(ds)
+    assert dicom_voi_to_uint8(np.zeros((1, 2), dtype=np.uint16), ds) is None
+    packed = _lut_item([0, 255], 0, 16)
+    packed["LUTData"].VR = "OW"
+    packed.LUTData = np.array([0, 65535], dtype="<u2").tobytes()
+    assert voi_lut_supported(_dataset(voi=packed))
+    packed.LUTDescriptor = [3, 0, 16]
+    assert not voi_lut_supported(_dataset(voi=packed))

@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false
 """The per-pane LUT callbacks ``subwindow_manager_factory`` installs on a viewer."""
 
 from __future__ import annotations
