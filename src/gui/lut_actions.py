@@ -14,7 +14,8 @@ Inputs:
     - A ``QMenu`` or toolbar to fill
 
 Outputs:
-    - Menu actions that select a LUT, adjust gamma/sigmoid/exp, or open the editor
+    - Menu actions that select a built-in or saved LUT, adjust gamma/sigmoid/exp,
+      open the curve or color-stop editor, and save or delete a user LUT
 
 Requirements:
     - PySide6
@@ -28,7 +29,14 @@ from typing import Any
 
 import numpy as np
 from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QImage, QPixmap
-from PySide6.QtWidgets import QMenu, QToolButton, QWidget, QWidgetAction
+from PySide6.QtWidgets import (
+    QInputDialog,
+    QMenu,
+    QMessageBox,
+    QToolButton,
+    QWidget,
+    QWidgetAction,
+)
 
 from core.lut_catalog import (
     DISPLAY_COLORMAP_NAMES,
@@ -41,11 +49,13 @@ from core.lut_engine import (
     gamma_transfer,
     sigmoid_transfer,
 )
+from gui.lut_library import delete_lut, is_savable, library_store, save_lut, saved_luts
 from gui.widgets.lut_transfer_function_widget import (
     LutTransferFunctionWidget,
     lut_samples,
 )
 
+_SAVE_TITLE = "Save LUT"
 
 def apply_lut_to_host(host: Any, lut: LookUpTable) -> None:
     """Store ``lut`` on the pane behind ``host`` and redisplay that pane."""
@@ -95,11 +105,12 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
         lut = colormap_lut(name)
         action = QAction(name, color)
         action.setCheckable(True)
-        action.setChecked(current is not None and current.lut_type == "colormap" and current.name == name)
+        action.setChecked(current is not None and current == lut)
         action.setIcon(swatch_icon(lut))
         action.triggered.connect(lambda _checked=False, built=lut, owner=host: apply_lut_to_host(owner, built))
         group.addAction(action)
         color.addAction(action)
+    _add_saved_menu(menu, group, host, current)
     menu.addSeparator()
     adjust = QAction("Adjust Parameters...", menu)
     adjust.setEnabled(_parameter_lut(current))
@@ -109,6 +120,35 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
     edit.setEnabled(current is None or current.lut_type == "grayscale_ramp")
     edit.triggered.connect(lambda: _edit_curve(host))
     menu.addAction(edit)
+    colors = QAction("Edit Colors...", menu)
+    colors.setEnabled(current is not None and current.lut_type == "colormap")
+    colors.triggered.connect(lambda: _edit_colors(host))
+    menu.addAction(colors)
+    save = QAction("Save Current As...", menu)
+    save.setEnabled(is_savable(current) and library_store(host) is not None)
+    save.triggered.connect(lambda: _save_current(host))
+    menu.addAction(save)
+
+
+def _add_saved_menu(menu: QMenu, group: QActionGroup, host: Any, current: LookUpTable | None) -> None:
+    """Saved LUTs to select, and a matching Delete submenu. Omitted when none are saved."""
+    store = library_store(host)
+    luts = saved_luts(store)
+    if not luts:
+        return
+    saved = menu.addMenu("Saved")
+    remove = menu.addMenu("Delete Saved")
+    for lut in luts:
+        action = QAction(lut.name, saved)
+        action.setCheckable(True)
+        action.setChecked(current is not None and current == lut)
+        action.setIcon(swatch_icon(lut))
+        action.triggered.connect(lambda _checked=False, built=lut, owner=host: apply_lut_to_host(owner, built))
+        group.addAction(action)
+        saved.addAction(action)
+        drop = QAction(lut.name, remove)
+        drop.triggered.connect(lambda _checked=False, name=lut.name, owner=store: delete_lut(owner, name))
+        remove.addAction(drop)
 
 
 def attach_view_lut_menu(view_menu: QMenu, host: Any) -> None:
@@ -217,6 +257,8 @@ def _same_builtin(current: LookUpTable | None, built: LookUpTable) -> bool:
     """True when ``current`` is the same built-in curve kind as ``built`` (parameters may differ)."""
     if current is None or current.lut_type != "grayscale_ramp" or current.control_points is not None:
         return False
+    if current.source == "custom":
+        return False  # a saved LUT is checked under Saved, not as its built-in kind
     return current.transfer_fn is built.transfer_fn
 
 
@@ -234,7 +276,11 @@ def _select_builtin(host: Any, lut: LookUpTable) -> None:
         from gui.dialogs.lut_parameter_dialog import edit_lut_parameters
 
         current = _current(host)
-        start = current if current is not None and current.transfer_fn is lut.transfer_fn else lut
+        # Only a built-in carries its parameter over; a saved, file, or DICOM LUT
+        # keeps its own entry, so choosing the built-in starts from the built-in.
+        start = lut
+        if current is not None and current.transfer_fn is lut.transfer_fn and current.source == "built_in":
+            start = current
         updated = edit_lut_parameters(start, _parent(host))
         if updated is None:
             return
@@ -266,3 +312,40 @@ def _edit_curve(host: Any) -> None:
     updated = edit_lut_curve(current, _parent(host), display if isinstance(display, dict) else {})
     if updated is not None:
         apply_lut_to_host(host, updated)
+
+
+def _edit_colors(host: Any) -> None:
+    """Open the color-stop editor for the active colormap and apply the result."""
+    current = _current(host)
+    if current is None or current.lut_type != "colormap":
+        return
+    from gui.dialogs.lut_color_stops_dialog import edit_color_stops
+
+    updated = edit_color_stops(current, _parent(host))
+    if updated is not None:
+        apply_lut_to_host(host, updated)
+
+
+def _save_current(host: Any) -> None:
+    """Ask for a name, save the active LUT to the library, and keep it selected."""
+    current = _current(host)
+    store = library_store(host)
+    if not is_savable(current) or store is None or current is None:
+        return
+    suggested = current.name if current.source == "custom" else f"My {current.name}"
+    name, accepted = QInputDialog.getText(_parent(host), _SAVE_TITLE, "Name:", text=suggested)
+    if not accepted:
+        return
+    if not name.strip():
+        QMessageBox.warning(_parent(host), _SAVE_TITLE, "Enter a name for the LUT.")
+        return
+    named = save_lut(store, current, name)
+    if named is None:
+        QMessageBox.warning(
+            _parent(host),
+            _SAVE_TITLE,
+            "The LUT was not saved. The saved-LUT file may be read-only, or it was "
+            "written by a newer version of the viewer and is left unchanged.",
+        )
+        return
+    apply_lut_to_host(host, named)

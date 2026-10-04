@@ -1,6 +1,6 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-10-03
 
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
 
@@ -56,7 +56,12 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
   double-invert); **Adjust Parameters…** moves the gamma slider; **Edit Curve…**
   → drag/add a breakpoint, draw a freehand stroke, switch interpolation, Undo.
   Histogram (**Ctrl+Shift+H**) shows the W/L ramp, LUT, and composed curves with
-  the three checkboxes. Export → PNG on that pane matches the viewport.
+  the three checkboxes; drag a bend of the composed curve and the pane's window
+  follows. **Edit Curve…** shows the dashed display result behind the curve.
+  **Save Current As…** → restart → the LUT is listed under **Saved**, and
+  selecting it reapplies it (panes start Linear after a restart).
+  On a color map, **Edit Colors…** → add a stop, recolor it, switch to step.
+  Export → PNG on that pane matches the viewport.
 
 ---
 

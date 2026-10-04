@@ -1,0 +1,63 @@
+"""
+LUT Config Mixin
+
+Reads and writes ``custom_luts.json`` next to the main config file. The file
+holds user-made LUTs only. This mixin moves the raw JSON document; turning it
+into ``LookUpTable`` objects is ``core.lut_persistence``'s job, so ``utils``
+never imports ``core``.
+
+Mixin contract:
+    Expects ``self.config_dir`` (``Path``) from the concrete ConfigManager.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any, cast
+
+from utils.privacy.safe_storage import atomic_write_private_text
+
+CUSTOM_LUTS_FILENAME = "custom_luts.json"
+_SOURCE_ROOT = Path(__file__).resolve().parents[3]
+_logger = logging.getLogger(__name__)
+
+
+class LutConfigMixin:
+    """Load and save the custom LUT document."""
+
+    def custom_luts_path(self) -> Path:
+        """Location of ``custom_luts.json``."""
+        return cast(Path, getattr(self, "config_dir")) / CUSTOM_LUTS_FILENAME
+
+    def load_custom_luts_document(self) -> Any:
+        """The decoded document, or ``None`` when missing or unreadable."""
+        path = self.custom_luts_path()
+        if not path.exists():
+            return None
+        try:
+            with open(path, encoding="utf-8") as handle:
+                return json.load(handle)
+        except (OSError, ValueError) as error:
+            _logger.warning(
+                "Custom LUT file could not be read",
+                extra={"operation": "lut.load", "error_class": type(error).__name__},
+            )
+            return None
+
+    def save_custom_luts_document(self, document: dict[str, Any]) -> bool:
+        """Atomically write the document. Returns False when the write fails."""
+        try:
+            atomic_write_private_text(
+                self.custom_luts_path(),
+                json.dumps(document, indent=2, ensure_ascii=False),
+                source_root=_SOURCE_ROOT,
+            )
+            return True
+        except (OSError, ValueError) as error:
+            _logger.error(  # NOSONAR (python:S8572): raw logging.exception is prohibited by the PHI/PII sink gate.
+                "Custom LUT file could not be saved",
+                extra={"operation": "lut.save", "error_class": type(error).__name__},
+            )
+            return False

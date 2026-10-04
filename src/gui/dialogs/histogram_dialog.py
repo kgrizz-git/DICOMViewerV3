@@ -91,6 +91,7 @@ class HistogramDialog(QDialog):
         get_histogram_use_projection_pixels: HistogramBoolFn | None = None,
         set_histogram_use_projection_pixels: HistogramVoidBoolFn | None = None,
         get_lut_overlay: Callable[[], tuple[Any, Any, bool]] | None = None,
+        set_window_level: Callable[[float, float], None] | None = None,
     ):
         """
         Initialize the histogram dialog.
@@ -106,6 +107,8 @@ class HistogramDialog(QDialog):
             title_suffix: Optional suffix for window title (e.g. " (View 1)")
             get_restore_geometry: Optional callback returning (x, y, width, height) to restore
             save_geometry_callback: Optional callback (x, y, width, height) to persist geometry
+            set_window_level: Optional callback (center, width) that applies a
+                window dragged on the composed curve to this dialog's pane
         """
         super().__init__(parent)
         # Keep the native minimize control of a normal dialog. Re-raise only
@@ -148,6 +151,7 @@ class HistogramDialog(QDialog):
         self.get_histogram_use_projection_pixels = get_histogram_use_projection_pixels
         self.set_histogram_use_projection_pixels = set_histogram_use_projection_pixels
         self.get_lut_overlay = get_lut_overlay
+        self.set_window_level = set_window_level
         self.use_log_scale = False
         self.series_global_frequency_max: float | None = None
         self.series_global_x_min: float | None = None
@@ -254,6 +258,7 @@ class HistogramDialog(QDialog):
 
         # Histogram widget
         self.histogram_widget = HistogramWidget(self)
+        self.histogram_widget.window_level_dragged.connect(self._on_window_level_dragged)
         layout.addWidget(self.histogram_widget)
 
         # Controls layout
@@ -424,6 +429,13 @@ class HistogramDialog(QDialog):
         window_width = self.get_window_width()
         self._push_lut_overlay()
         self.histogram_widget.set_window_level(window_center, window_width)
+
+    def _on_window_level_dragged(self, center: float, width: float) -> None:
+        """Apply a window dragged on the composed curve, then redraw the overlay."""
+        if not callable(self.set_window_level):
+            return
+        self.set_window_level(center, width)
+        self.update_window_level_only()
 
     def _push_lut_overlay(self) -> None:
         """Give the histogram the pane LUT, photometric interpretation, and user invert."""

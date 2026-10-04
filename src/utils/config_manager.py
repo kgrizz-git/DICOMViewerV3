@@ -36,6 +36,7 @@ from utils.config.cine_config import CineConfigMixin
 from utils.config.customizations_config import CustomizationsConfigMixin
 from utils.config.display_config import DisplayConfigMixin
 from utils.config.layout_config import LayoutConfigMixin
+from utils.config.lut_config import LutConfigMixin
 from utils.config.measurement_config import MeasurementConfigMixin
 from utils.config.metadata_ui_config import MetadataUIConfigMixin
 from utils.config.overlay_config import OverlayConfigMixin
@@ -81,6 +82,7 @@ class ConfigManager(
     StudyIndexConfigMixin,
     StudyLoadConfigMixin,
     PrivacyStorageConfigMixin,
+    LutConfigMixin,
 ):
     """
     Manages application configuration and user preferences.
@@ -113,6 +115,7 @@ class ConfigManager(
         QaPylinacConfigMixin    – persisted pylinac QA options (e.g. MRI LC method/threshold/sanity)
         StudyIndexConfigMixin   – local encrypted study index DB path, auto-add on open
         StudyLoadConfigMixin    – study-load memory budget fraction and study-count safety cap
+        LutConfigMixin          – user-made LUTs in a separate custom_luts.json
     """
 
     def __init__(

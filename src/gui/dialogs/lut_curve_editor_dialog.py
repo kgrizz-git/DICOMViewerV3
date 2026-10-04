@@ -5,10 +5,14 @@ Endpoints stay at x = 0 and x = 1. Freehand strokes are sorted into a
 function of x, then simplified with ``simplify_freehand`` (epsilon 0.02),
 which pins those endpoints. A click that does not move leaves the curve
 unchanged. The painted
-curve is sampled with ``lut_samples`` (``apply_lut_to_uint8``). The preview
-strip under the graph is ``LutTransferFunctionWidget``, so the composed
-result uses the same sampler as the histogram. Color colormaps are not
-editable here.
+curve is sampled with ``lut_samples`` (``apply_lut_to_uint8``). When the
+pane has a window, the canvas also draws the W/L ramp (dotted; across the
+window it is the diagonal) and the composed result
+``LUT(P_inv(uint8(WL(x))))`` behind the edited curve, across the window, from
+``sample_window_and_composed``. Editing stays in LUT space; the trace behind
+it shows the display result. The preview strip under the graph is
+``LutTransferFunctionWidget``, so both use the histogram's sampler. Color
+colormaps are not editable here.
 
 Inputs:
     - Optional starting grayscale ``LookUpTable``
@@ -48,6 +52,7 @@ from core.lut_engine import (
     gamma_transfer,
     sigmoid_transfer,
 )
+from core.lut_transfer import net_user_polarity_invert, sample_window_and_composed
 from gui.dialogs.lut_parameter_dialog import edit_lut_parameters
 from gui.widgets.lut_transfer_function_widget import (
     LutTransferFunctionWidget,
@@ -68,6 +73,10 @@ class _CurveCanvas(QWidget):
         self.selected: int | None = None
         self.on_changed: Any = None
         self.on_preview: Any = None
+        self.display: dict[str, Any] = {}
+        # Returns the LUT the dialog would accept now: the opened LUT until an
+        # edit, then the edited curve. The dashed display trace samples it.
+        self.lut_provider: Any = None
         self._drag: int | None = None
         self._gesture_changed = False
         self._stroke: list[tuple[float, float]] = []
@@ -146,9 +155,36 @@ class _CurveCanvas(QWidget):
         except ValueError:
             painter.end()
             return
+        provider = self.lut_provider
+        provided = provider() if callable(provider) else None
+        shown = provided if isinstance(provided, LookUpTable) else lut
+        composed = composed_trace(shown, self.display)
+        if composed is not None:
+            self._draw_window_ramp(painter)
+            behind = QPen(QColor(230, 150, 60, 170))
+            behind.setWidth(2)
+            behind.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(behind)
+            self._draw_trace(painter, composed)
+            painter.drawText(6, 14, _composed_label(self.display))
         pen = QPen(QColor(220, 220, 220))
         pen.setWidth(2)
         painter.setPen(pen)
+        self._draw_trace(painter, samples)
+        painter.setBrush(QColor(80, 160, 255))
+        for x, y in self.points:
+            painter.drawEllipse(self._from_unit(x, y), 4, 4)
+        painter.end()
+
+    def _draw_window_ramp(self, painter: QPainter) -> None:
+        """Across the window, the W/L ramp alone is the diagonal from 0 to 255."""
+        ramp = QPen(QColor(140, 140, 140, 160))
+        ramp.setStyle(Qt.PenStyle.DotLine)
+        painter.setPen(ramp)
+        painter.drawLine(self._from_unit(0.0, 0.0), self._from_unit(1.0, 1.0))
+
+    def _draw_trace(self, painter: QPainter, samples: np.ndarray) -> None:
+        """Polyline of 0–255 samples spread evenly across the unit x-axis."""
         previous: QPointF | None = None
         count = len(samples)
         for index, value in enumerate(samples):
@@ -156,10 +192,6 @@ class _CurveCanvas(QWidget):
             if previous is not None:
                 painter.drawLine(previous, point)
             previous = point
-        painter.setBrush(QColor(80, 160, 255))
-        for x, y in self.points:
-            painter.drawEllipse(self._from_unit(x, y), 4, 4)
-        painter.end()
 
     def _preview(self) -> None:
         """Refresh the dialog preview without recording an undo step."""
@@ -205,6 +237,8 @@ class LutCurveEditorDialog(QDialog):
         self.setWindowTitle("Edit LUT Curve")
         self._display = display or {}
         self._canvas = _CurveCanvas(self)
+        self._canvas.display = self._display
+        self._canvas.lut_provider = self.result_lut
         self._preview = LutTransferFunctionWidget(self)
         self._undo: list[tuple[Any, ...]] = []
         self._redo: list[tuple[Any, ...]] = []
@@ -375,6 +409,36 @@ def edit_lut_curve(
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     return dialog.result_lut()
+
+
+def composed_trace(lut: LookUpTable, display: dict[str, Any]) -> np.ndarray | None:
+    """``LUT(P_inv(uint8(WL(x))))`` at 256 stored values spanning the window.
+
+    ``None`` without a usable window. The x positions run from the window's
+    low edge to its high edge, so the trace shares the canvas's unit x-axis.
+    """
+    center = _optional_float(display.get("window_center"))
+    width = _optional_float(display.get("window_width"))
+    if center is None or width is None or width <= 0:
+        return None
+    stored = np.linspace(center - width / 2.0, center + width / 2.0, 256)
+    _windowed, composed = sample_window_and_composed(
+        stored,
+        center,
+        width,
+        lut,
+        display.get("photometric"),
+        bool(display.get("image_inverted", False)),
+    )
+    return composed if composed.ndim == 1 else composed.mean(axis=1)
+
+
+def _composed_label(display: dict[str, Any]) -> str:
+    """Legend for the trace behind the curve, naming the inversion that produced it."""
+    inverted = net_user_polarity_invert(
+        display.get("photometric"), bool(display.get("image_inverted", False))
+    )
+    return "Display result (inverted)" if inverted else "Display result"
 
 
 def _stroke_as_function(stroke: list[tuple[float, float]]) -> np.ndarray | None:
