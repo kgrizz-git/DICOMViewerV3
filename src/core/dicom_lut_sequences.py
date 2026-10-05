@@ -100,8 +100,16 @@ def dicom_voi_to_uint8(pixel_array: np.ndarray, dataset: Any, index: int = 0) ->
             # Rescale can return floats. The VOI LUT is indexed by integer
             # values, so round rather than truncate.
             modality = np.rint(modality).astype(np.int64)
+        descriptor = dataset.VOILUTSequence[index].LUTDescriptor
+        entries = int(descriptor[0]) or 2**16
+        first = int(descriptor[1])
+        # Clamp to the table's domain first (PS3.3 C.11.2.1.1: values below the
+        # first map to the first entry, above the last to the last). pydicom
+        # stores the index in the LUT's own dtype, so an 8-bit table would
+        # otherwise wrap an input above 255 instead of clamping it.
+        modality = np.clip(modality, first, first + entries - 1)
         mapped = np.asarray(apply_voi(modality, dataset, index))
-        bits = int(dataset.VOILUTSequence[index].LUTDescriptor[2])
+        bits = int(descriptor[2])
     except (NotImplementedError, ValueError, TypeError, IndexError, AttributeError, KeyError) as error:
         _logger.warning(
             "Embedded VOI LUT could not be applied; using window/level",

@@ -339,12 +339,14 @@ def _wire_dicom_and_defaults(app: Any, idx: int, managers: dict[str, Any], image
         """True when the image on screen went through the file's VOI LUT.
 
         The menu shows the series' choice; this reports the result. A drawn
-        projection always windows, while a projection that fell back to the
-        single slice does apply the VOI LUT.
+        projection and an MPR pane always window, while a projection that fell
+        back to the single slice does apply the VOI LUT.
         """
         supported, enabled = dicom_lut_state()
         drawn = bool(getattr(managers["slice_display_manager"], "projection_drawn", False))
-        return supported and enabled and not drawn
+        mpr = getattr(app, "_mpr_controller", None)
+        windowed_mpr = mpr is not None and bool(mpr.is_mpr(idx))
+        return supported and enabled and not drawn and not windowed_mpr
 
     image_viewer.dicom_lut_state = dicom_lut_state
     image_viewer.dicom_lut_applied = dicom_lut_applied

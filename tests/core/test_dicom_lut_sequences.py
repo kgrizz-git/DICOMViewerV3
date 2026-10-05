@@ -200,3 +200,15 @@ def test_an_8_bit_lut_over_256_entries_is_not_supported() -> None:
     assert voi_lut_supported(_dataset(voi=_lut_item(list(range(256)), 0, 8)))
     assert not voi_lut_supported(_dataset(voi=_lut_item([0] * 257, 0, 8)))
     assert voi_lut_supported(_dataset(voi=_lut_item([0] * 257, 0, 12)))
+
+
+
+def test_inputs_outside_an_8_bit_tables_domain_clamp_instead_of_wrapping() -> None:
+    identity = _dataset(voi=_lut_item(list(range(256)), 0, 8))
+    out = dicom_voi_to_uint8(np.array([[250, 255, 256, 300]], dtype=np.uint16), identity)
+    assert out is not None
+    assert out.tolist() == [[250, 255, 255, 255]]
+    offset = _dataset(voi=_lut_item([0, 128, 255], 100, 8))
+    out = dicom_voi_to_uint8(np.array([[0, 100, 101, 102, 900]], dtype=np.uint16), offset)
+    assert out is not None
+    assert out.tolist() == [[0, 0, 128, 255, 255]]

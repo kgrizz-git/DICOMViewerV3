@@ -24,10 +24,11 @@ def _voi_dataset(bits: int) -> Dataset:
     return ds
 
 
-def _wired(qapp, dataset: Dataset | None, *, config=None):
+def _wired(qapp, dataset: Dataset | None, *, config=None, mpr_panes: dict[int, bool] | None = None):
     from gui.image_viewer import ImageViewer
 
     redrawn: list[tuple[int, bool]] = []
+    mpr_panes = mpr_panes if mpr_panes is not None else {}
     view_state = SimpleNamespace(series_defaults={}, current_series_identifier="s1", image_viewer=None)
     managers = {
         "view_state_manager": view_state,
@@ -38,6 +39,7 @@ def _wired(qapp, dataset: Dataset | None, *, config=None):
         _redisplay_subwindow_slice=lambda i, preserve_view: redrawn.append((i, preserve_view)),
         config_manager=config,
         main_window=None,
+        _mpr_controller=SimpleNamespace(is_mpr=lambda i: mpr_panes.get(i, False)),
     )
     viewer = ImageViewer()
     viewer.slice_display_for_test = managers["slice_display_manager"]
@@ -97,4 +99,16 @@ def test_a_drawn_projection_reports_dicom_as_not_applied(qapp) -> None:
     assert viewer.dicom_lut_state() == (True, True)
     assert not viewer.dicom_lut_applied()
     viewer.slice_display_for_test.projection_drawn = False
+    assert viewer.dicom_lut_applied()
+
+
+
+@pytest.mark.qt
+def test_an_mpr_pane_reports_dicom_as_not_applied(qapp) -> None:
+    mpr_panes = {0: True}
+    viewer, _view_state, _redrawn = _wired(qapp, _voi_dataset(8), mpr_panes=mpr_panes)
+    viewer.set_dicom_lut(True)
+    assert viewer.dicom_lut_state() == (True, True)
+    assert not viewer.dicom_lut_applied()
+    mpr_panes[0] = False
     assert viewer.dicom_lut_applied()
