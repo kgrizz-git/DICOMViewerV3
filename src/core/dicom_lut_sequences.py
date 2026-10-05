@@ -58,6 +58,8 @@ def voi_lut_supported(dataset: Any, index: int = 0) -> bool:
         if not (bits == 8 or 10 <= bits <= 16) or "LUTData" not in item:
             return False
         entries = int(descriptor[0]) or 2**16
+        if entries < 0:
+            return False
         if bits == 8 and entries > 256:
             # pydicom indexes an 8-bit LUT with a uint8 array, which wraps past 255.
             return False
@@ -107,10 +109,14 @@ def dicom_voi_to_uint8(pixel_array: np.ndarray, dataset: Any, index: int = 0) ->
         # first map to the first entry, above the last to the last). pydicom
         # stores the index in the LUT's own dtype, so an 8-bit table would
         # otherwise wrap an input above 255 instead of clamping it.
-        modality = np.clip(modality, first, first + entries - 1)
+        # Widen first: a negative first input value is legal, and an unsigned
+        # Modality LUT output cannot hold it.
+        modality = np.clip(modality.astype(np.int64), first, first + entries - 1)
         mapped = np.asarray(apply_voi(modality, dataset, index))
         bits = int(descriptor[2])
-    except (NotImplementedError, ValueError, TypeError, IndexError, AttributeError, KeyError) as error:
+    except (
+        NotImplementedError, ValueError, TypeError, IndexError, AttributeError, KeyError, OverflowError
+    ) as error:
         _logger.warning(
             "Embedded VOI LUT could not be applied; using window/level",
             extra={"operation": "dicom_lut.voi", "error_class": type(error).__name__},

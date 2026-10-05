@@ -212,3 +212,23 @@ def test_inputs_outside_an_8_bit_tables_domain_clamp_instead_of_wrapping() -> No
     out = dicom_voi_to_uint8(np.array([[0, 100, 101, 102, 900]], dtype=np.uint16), offset)
     assert out is not None
     assert out.tolist() == [[0, 0, 128, 255, 255]]
+
+
+
+def test_a_negative_first_input_over_an_unsigned_modality_lut_still_maps() -> None:
+    ds = _dataset(
+        voi=_lut_item([0, 128, 255], -1, 8),
+        modality=_lut_item([0, 1, 2], 0, 16),
+    )
+    out = dicom_voi_to_uint8(np.array([[0, 1, 2]], dtype=np.uint16), ds)
+    assert out is not None
+    # Modality 0,1,2 -> VOI inputs 0,1,2 with first=-1 -> entries 1,2,2.
+    assert out.tolist() == [[128, 255, 255]]
+
+
+def test_a_negative_entry_count_is_unsupported() -> None:
+    from core.dicom_lut_sequences import voi_lut_supported
+
+    item = _lut_item([0, 255], 0, 8)
+    item.LUTDescriptor = [-2, 0, 8]
+    assert not voi_lut_supported(_dataset(voi=item))
