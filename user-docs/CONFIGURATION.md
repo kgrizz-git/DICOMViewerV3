@@ -1,6 +1,6 @@
 # Configuration and preferences
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-10-04
 
 This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features). For pane, slice-sync, and slice-location-line behavior that overlaps with this guide, see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md); for the keyboard shortcuts that drive these menus, see [Keyboard shortcuts](USER_GUIDE_SHORTCUTS.md).
 
@@ -77,6 +77,7 @@ The following are saved in the same JSON file but are usually changed from toolb
 | Slice sync | **`slice_sync_enabled`**, **`slice_sync_groups`**, slice-location line visibility flags (**View → Slice Sync** / **View → Show Slice Location Lines**) |
 | ACR / pylinac | **`acr_mri_low_contrast_*`**, **`acr_qa_vanilla_pylinac`**, **`acr_qa_embed_module_images_in_xlsx`** (default **true** — when on, XLSX **Images** sheet embeds per-module PNGs for PDF-parity output; unchecking skips the sheet. Set from the ACR CT / ACR MRI / CT batch options dialogs.) |
 | MPR | **`mpr_cache_max_mb`** |
+| Look-up tables | **`show_lut_pane_label`** (**View → Show LUT Label**, default **true**); **`lut_defaults_by_modality`** — the starting LUT per modality, set with **Use as Default for** on the Look-Up Table menu. Saved LUTs themselves are kept in a separate **`custom_luts.json`** next to this file. |
 | 3D volume render | Requires **VTK** (`vtk` package); not a persisted Settings field — launched from toolbar **3D View** or **Tools → 3D Volume Render…** |
 | Study index browser | **`study_index_browser_column_order`** (column layout in the index UI when present) |
 | Study index — auto-add on open | **`study_index_auto_add_on_open`** — when enabled, completed folder/file loads are indexed in the background. If you **cancel** a load after some files were read, those files may appear in the viewer but are **not** written to the index (status bar: *Study index update skipped*; centered warning toast: *Folder loading canceled — study not added to index*). Opening a study from the index rescans its **study folder** on disk when that folder still exists (not only the paths stored at index time). |

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from PySide6.QtCore import QEventLoop, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QProgressDialog
 
-from core.lut_series_state import focused_pane_lut
+from core.lut_series_state import focused_pane_lut, focused_pane_voi_from_dicom
 from core.sr_sop_classes import is_structured_report_dataset
 from gui.cine_video_export import (
     CineFrameRequest,
@@ -477,6 +477,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
                     subwindow_annotation_managers=subwindow_annotation_managers,
                     image_inverted=image_inverted,
                     lut=lut,
+                    voi_from_dicom=focused_pane_voi_from_dicom(vsm),
                 )
             )
             if img is None:

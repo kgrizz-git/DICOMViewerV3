@@ -23,13 +23,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.dicom_lut_sequences import voi_lut_supported
 from core.fusion_handler import FusionHandler
-from core.lut_series_state import get_series_lut, set_series_lut
+from core.lut_series_state import (
+    get_series_lut,
+    get_series_voi_from_dicom,
+    set_series_lut,
+    set_series_voi_from_dicom,
+)
 from core.photometric_polarity import dataset_photometric_interpretation
 from core.sr_sop_classes import is_structured_report_dataset
 from gui.arrow_annotation_coordinator import ArrowAnnotationCoordinator
 from gui.crosshair_coordinator import CrosshairCoordinator
 from gui.fusion_coordinator import FusionCoordinator
+from gui.lut_library import default_resolver
+from gui.lut_pane_label import LutPaneLabel
 from gui.measurement_coordinator import MeasurementCoordinator
 from gui.overlay_coordinator import OverlayCoordinator
 from gui.overlay_manager import OverlayManager
@@ -306,3 +314,61 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
     image_viewer.apply_series_lut = apply_series_lut
     image_viewer.current_series_lut = current_series_lut
     image_viewer.lut_display_context = lut_display_context
+    _wire_dicom_and_defaults(app, idx, managers, image_viewer)
+
+
+def _wire_dicom_and_defaults(app: Any, idx: int, managers: dict[str, Any], image_viewer: Any) -> None:
+    """From DICOM state, modality defaults, a redraw-all hook, and the pane LUT label."""
+
+    def dicom_lut_state() -> tuple[bool, bool]:
+        """(the shown dataset has a VOI LUT this build can apply, the series asked for it)."""
+        view_state = managers["view_state_manager"]
+        dataset = getattr(managers["slice_display_manager"], "current_dataset", None)
+        series_id = getattr(view_state, "current_series_identifier", None)
+        return voi_lut_supported(dataset), get_series_voi_from_dicom(view_state, series_id)
+
+    def set_dicom_lut(enabled: bool, _i: int = idx) -> None:
+        view_state = managers["view_state_manager"]
+        series_id = getattr(view_state, "current_series_identifier", None)
+        if not series_id:
+            return
+        set_series_voi_from_dicom(view_state, enabled, series_id)
+        app._redisplay_subwindow_slice(_i, preserve_view=True)
+
+    def dicom_lut_applied() -> bool:
+        """True when the image on screen went through the file's VOI LUT.
+
+        The menu shows the series' choice; this reports the result. A drawn
+        projection and an MPR pane always window, while a projection that fell
+        back to the single slice does apply the VOI LUT.
+        """
+        supported, enabled = dicom_lut_state()
+        drawn = bool(getattr(managers["slice_display_manager"], "projection_drawn", False))
+        mpr = getattr(app, "_mpr_controller", None)
+        windowed_mpr = mpr is not None and bool(mpr.is_mpr(idx))
+        return supported and enabled and not drawn and not windowed_mpr
+
+    image_viewer.dicom_lut_state = dicom_lut_state
+    image_viewer.dicom_lut_applied = dicom_lut_applied
+    image_viewer.set_dicom_lut = set_dicom_lut
+
+    def redisplay_all_panes() -> None:
+        """Redraw every pane, for a change such as a modality default that can affect any."""
+        for pane in getattr(app, "subwindow_managers", {}) or {}:
+            app._redisplay_subwindow_slice(pane, preserve_view=True)
+
+    image_viewer.redisplay_all_panes = redisplay_all_panes
+
+    def current_modality() -> str:
+        dataset = getattr(managers["slice_display_manager"], "current_dataset", None)
+        return str(getattr(dataset, "Modality", "") or "")
+
+    image_viewer.current_modality = current_modality
+    config = getattr(app, "config_manager", None)
+    if config is not None:
+        managers["view_state_manager"].lut_default_resolver = default_resolver(config, current_modality)
+        image_viewer.lut_pane_label = LutPaneLabel(
+            image_viewer,
+            show_label=config.get_show_lut_label,
+            privacy=config.get_privacy_view,
+        )

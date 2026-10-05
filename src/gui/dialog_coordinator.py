@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox
 
-from core.lut_series_state import focused_pane_lut
+from core.lut_series_state import focused_pane_lut, focused_pane_voi_from_dicom
 from gui.dialogs.about_this_file_dialog import AboutThisFileDialog
 from gui.dialogs.annotation_options_dialog import AnnotationOptionsDialog
 from gui.dialogs.deep_anonymizer_export_dialog import DeepAnonymizerExportDialog
@@ -57,15 +57,24 @@ def _export_managers(owner: Any) -> dict[Any, Any]:
     return hosted if isinstance(hosted, dict) else {}
 
 
-def _focused_export_lut(owner: Any, focused_subwindow_index: int | None) -> tuple[bool, Any]:
-    """Pane LUT for PNG/JPG export. Linear and not inverted when the pane is unknown."""
+def _focused_view_state(owner: Any, focused_subwindow_index: int | None) -> Any:
+    """View state of the export's pane, or None when the pane is unknown."""
     managers = _export_managers(owner)
     idx = focused_subwindow_index
     if idx is None:
         getter = getattr(owner, "get_focused_subwindow_index", None)
         idx = getter() if callable(getter) else getattr(owner, "focused_subwindow_index", 0)
-    view_state = managers.get(idx, {}).get("view_state_manager") if isinstance(managers, dict) else None
-    return focused_pane_lut(view_state)
+    return managers.get(idx, {}).get("view_state_manager")
+
+
+def _focused_export_voi(owner: Any, focused_subwindow_index: int | None) -> bool:
+    """The focused pane's "From DICOM" choice, so an export matches the viewport."""
+    return focused_pane_voi_from_dicom(_focused_view_state(owner, focused_subwindow_index))
+
+
+def _focused_export_lut(owner: Any, focused_subwindow_index: int | None) -> tuple[bool, Any]:
+    """Pane LUT for PNG/JPG export. Linear and not inverted when the pane is unknown."""
+    return focused_pane_lut(_focused_view_state(owner, focused_subwindow_index))
 
 
 class DialogCoordinator:
@@ -307,6 +316,7 @@ class DialogCoordinator:
             subwindow_annotation_managers=subwindow_annotation_managers,
             image_inverted=image_inverted,
             lut=lut,
+            voi_from_dicom=_focused_export_voi(self, focused_subwindow_index),
             parent=self.main_window
         )
         dialog.exec()

@@ -41,11 +41,17 @@ def pane_lut_overlay(view_state: Any, dataset: Any) -> tuple[LookUpTable, str, b
 
 
 def get_series_lut(view_state: Any, series_identifier: str | None) -> LookUpTable:
-    """Return the series LUT, or linear when the series has not chosen one."""
+    """Return the series LUT; else the modality default for the shown series; else linear."""
     defaults = _defaults(view_state, series_identifier)
     stored = defaults.get("current_lut")
     if isinstance(stored, LookUpTable):
         return stored
+    # A series that never chose takes its modality's default, when one is set.
+    resolver = getattr(view_state, "lut_default_resolver", None)
+    if callable(resolver) and series_identifier == getattr(view_state, "current_series_identifier", None):
+        found = resolver()
+        if isinstance(found, LookUpTable):
+            return found
     return linear_lut()
 
 
@@ -59,6 +65,25 @@ def set_series_lut(
         return
     bucket = view_state.series_defaults.setdefault(series_identifier, {})
     bucket["current_lut"] = lut
+
+
+def get_series_voi_from_dicom(view_state: Any, series_identifier: str | None) -> bool:
+    """True when the series displays through its embedded DICOM LUTs ("From DICOM")."""
+    return bool(_defaults(view_state, series_identifier).get("voi_from_dicom", False))
+
+
+def set_series_voi_from_dicom(view_state: Any, enabled: bool, series_identifier: str | None) -> None:
+    """Store the series' "From DICOM" choice next to its LUT."""
+    if not series_identifier:
+        return
+    view_state.series_defaults.setdefault(series_identifier, {})["voi_from_dicom"] = bool(enabled)
+
+
+def focused_pane_voi_from_dicom(view_state: Any) -> bool:
+    """The "From DICOM" choice for the series the pane shows. False without a pane."""
+    if view_state is None:
+        return False
+    return get_series_voi_from_dicom(view_state, getattr(view_state, "current_series_identifier", None))
 
 
 def active_image_inverted(
@@ -132,6 +157,7 @@ def slice_lut_kwargs(
             photometric_interpretation=photometric_interpretation,
         ),
         "lut": get_series_lut(view_state, series_identifier),
+        "voi_from_dicom": get_series_voi_from_dicom(view_state, series_identifier),
     }
 
 

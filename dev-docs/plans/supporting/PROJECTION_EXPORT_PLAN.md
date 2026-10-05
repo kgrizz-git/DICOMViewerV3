@@ -124,7 +124,7 @@ Allow users to export the current **intensity projection** (AIP, MIP, or MinIP) 
 1. **Slab thickness for export:** Should the export always use the currently configured slab thickness, or should the user be able to override it in the export dialog? Recommend: inherit with option to override.
 2. **Overlapping vs non-overlapping slabs:** The sliding-slab approach overlaps (slab at slice 0 = [0,7], slab at slice 1 = [1,8]). Should we also offer non-overlapping (slab at 0 = [0,7], next slab at 8 = [8,15])? This produces fewer output slices but loses detail. Recommend: overlapping by default, non-overlapping as an option.
 3. **Memory:** Computing MIP across a 500-slice series with slab=8 produces 493 float32 arrays. Should be manageable (~500 MB for 512×512 series) but worth a memory check. The background thread should release each array after writing to disk.
-4. **Interaction with LUTs:** If LUTs (from `LUTS_AND_COLORMAPS_PLAN.md`) are active, should the exported projection use the LUT? For DICOM: no (raw pixel data). For PNG/JPG: yes (matches display).
+4. **Interaction with LUTs:** If LUTs (from [`LUTS_AND_COLORMAPS_PLAN.md`](../completed/LUTS_AND_COLORMAPS_PLAN.md)) are active, should the exported projection use the LUT? For DICOM: no (raw pixel data). For PNG/JPG: yes (matches display).
 
 ---
 

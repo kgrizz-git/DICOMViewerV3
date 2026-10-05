@@ -242,7 +242,7 @@ class SliceDisplayManager:
         # Intensity projection state
         self.projection_enabled: bool = False
         self.projection_type, self.projection_slice_count = "aip", 4
-        self._display_lut, self._display_final = {}, False
+        self._display_lut, self._display_final, self.projection_drawn = {}, False, False
 
     def get_multiframe_overlay_context(
         self,
@@ -488,26 +488,24 @@ class SliceDisplayManager:
         rescale_intercept: float | None,
         *,
         image_inverted: bool = False,
-        lut=None,
+        lut=None, **_not_for_projection: object,  # e.g. voi_from_dicom: a projection always windows
     ):
-        """Return a projection PIL image when enabled, else None on skip/failure."""
+        """Return a projection PIL image when enabled, else None on skip/failure.
+
+        ``projection_drawn`` records whether this draw is a projection, which
+        always windows, so "From DICOM" did not apply to it.
+        """
+        self.projection_drawn = False
         if not self.projection_enabled:
             return None
         try:
-            return self._create_projection_image(
-                dataset,
-                current_studies,
-                current_study_uid,
-                current_series_uid,
-                current_slice_index,
-                window_center,
-                window_width,
-                use_rescaled_values,
-                rescale_slope,
-                rescale_intercept,
-                image_inverted=image_inverted,
-                lut=lut,
+            image = self._create_projection_image(
+                dataset, current_studies, current_study_uid, current_series_uid, current_slice_index,
+                window_center, window_width, use_rescaled_values, rescale_slope, rescale_intercept,
+                image_inverted=image_inverted, lut=lut,
             )
+            self.projection_drawn = image is not None
+            return image
         except Exception as e:
             error_type = type(e).__name__
             print_redacted(f"Error creating projection image ({error_type}): {e}")

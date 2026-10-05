@@ -423,3 +423,164 @@ def test_only_a_builtin_carries_its_parameter_into_the_builtin_choice(qapp, monk
     lut_actions._select_builtin(pane, gamma_lut(1.0))
     assert seen[-1] is builtin
     _ = qapp
+
+
+@pytest.mark.qt
+@pytest.mark.parametrize(("available", "enabled", "shown_enabled"), [(False, False, False), (True, False, True), (False, True, True)])
+def test_from_dicom_action_reflects_and_sets_the_pane_choice(qapp, available, enabled, shown_enabled) -> None:
+    pane = _Pane(gamma_lut(1.0), _Store())
+    toggled: list[bool] = []
+    pane.dicom_lut_state = lambda: (available, enabled)  # type: ignore[attr-defined]
+    pane.set_dicom_lut = toggled.append  # type: ignore[attr-defined]
+    menu = QMenu()
+    lut_actions.populate_lut_menu(menu, pane)
+    action = next(a for a in menu.actions() if a.text() == "From DICOM (VOI LUT)")
+    assert action.isChecked() is enabled
+    assert action.isEnabled() is shown_enabled
+    if shown_enabled:
+        action.trigger()
+        assert toggled == [not enabled]
+    _ = qapp
+
+
+class _DefaultsStore(_Store):
+    def __init__(self) -> None:
+        super().__init__()
+        self.defaults: dict[str, Any] = {}
+
+    def get_lut_defaults(self) -> dict[str, Any]:
+        return dict(self.defaults)
+
+    def set_lut_default(self, modality: str, entry: Any) -> None:
+        if entry is None:
+            self.defaults.pop(modality, None)
+        else:
+            self.defaults[modality] = entry
+
+
+def _menu_action(pane: _Pane, text: str):
+    menu = QMenu()
+    lut_actions.populate_lut_menu(menu, pane)
+    return menu, next(a for a in menu.actions() if a.text() == text)
+
+
+@pytest.mark.qt
+def test_default_actions_set_and_clear_the_modality_default(qapp) -> None:
+    store = _DefaultsStore()
+    pane = _Pane(colormap_lut("hot"), store)
+    pane.current_modality = lambda: "PT"  # type: ignore[attr-defined]
+    redraws: list[bool] = []
+    pane.redisplay_all_panes = lambda: redraws.append(True)  # type: ignore[attr-defined]
+    _menu, use = _menu_action(pane, "Use as Default for PT")
+    assert use.isEnabled()
+    use.trigger()
+    assert store.defaults == {"PT": {"kind": "colormap", "name": "hot"}}
+    assert redraws == [True]
+    _menu, clear = _menu_action(pane, "Clear Default for PT")
+    assert clear.isEnabled()
+    clear.trigger()
+    assert store.defaults == {}
+    assert redraws == [True, True]
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_an_unsaved_custom_curve_cannot_be_a_default(qapp) -> None:
+    store = _DefaultsStore()
+    pane = _Pane(_CURVE, store)
+    pane.current_modality = lambda: "CT"  # type: ignore[attr-defined]
+    _menu, use = _menu_action(pane, "Use as Default for CT")
+    assert not use.isEnabled()
+    saved = save_lut(store, _CURVE, "Lung")
+    assert saved is not None
+    pane.lut = saved
+    _menu, use = _menu_action(pane, "Use as Default for CT")
+    assert use.isEnabled()
+    _ = qapp
+
+
+def test_default_resolver_rereads_the_library_only_when_it_changes(tmp_path) -> None:
+    from gui.lut_library import default_resolver
+
+    store = _DefaultsStore()
+    reads: list[bool] = []
+    real = store.load_custom_luts_document
+
+    def counted():
+        reads.append(True)
+        return real()
+
+    store.load_custom_luts_document = counted  # type: ignore[method-assign]
+    path = tmp_path / "custom_luts.json"
+    store.custom_luts_path = lambda: path  # type: ignore[attr-defined]
+    save_lut(store, _CURVE, "Lung")
+    path.write_text("x", encoding="utf-8")
+    store.defaults = {"CT": {"kind": "saved", "name": "Lung"}}
+    resolve = default_resolver(store, lambda: "CT")
+    reads.clear()
+    first = resolve()
+    second = resolve()
+    assert first is not None
+    assert second is not None
+    assert first.name == "Lung"
+    assert len(reads) == 1
+    assert default_resolver(store, lambda: "MR")() is None
+
+
+@pytest.mark.qt
+def test_import_saves_and_applies_the_first_colormap(qapp, monkeypatch, tmp_path) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    path = tmp_path / "fire.csv"
+    path.write_text("0,0,0\n255,0,0\n", encoding="utf-8")
+    store = _Store()
+    pane = _Pane(gamma_lut(1.0), store)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a, **_k: (str(path), ""))
+    lut_actions._import_colormap(pane)
+    assert [lut.name for lut in saved_luts(store)] == ["fire"]
+    assert pane.lut.name == "fire"
+    assert pane.lut.source == "custom"
+
+
+@pytest.mark.qt
+def test_a_bad_import_is_reported_and_changes_nothing(qapp, monkeypatch, tmp_path) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    path = tmp_path / "bad.csv"
+    path.write_text("0,0,0\n", encoding="utf-8")
+    store = _Store()
+    pane = _Pane(gamma_lut(1.0), store)
+    warnings: list[str] = []
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a, **_k: (str(path), ""))
+    monkeypatch.setattr(lut_actions.QMessageBox, "warning", lambda _p, _t, text: warnings.append(text))
+    lut_actions._import_colormap(pane)
+    assert len(warnings) == 1
+    assert "not imported" in warnings[0]
+    assert saved_luts(store) == []
+    assert pane.lut.name == "Gamma"
+
+
+
+@pytest.mark.qt
+def test_import_never_overwrites_a_saved_lut(qapp, monkeypatch, tmp_path) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    store = _Store()
+    original = save_lut(store, gamma_lut(2.0), "fire")
+    save_lut(store, gamma_lut(1.5), "fire (2)")
+    path = tmp_path / "fire.csv"
+    path.write_text("0,0,255\n255,0,0\n", encoding="utf-8")
+    pane = _Pane(gamma_lut(1.0), store)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a, **_k: (str(path), ""))
+    lut_actions._import_colormap(pane)
+    luts = saved_luts(store)
+    assert [lut.name for lut in luts] == ["fire", "fire (2)", "fire (3)"]
+    assert luts[0] == original
+    assert pane.lut.name == "fire (3)"
+    _ = qapp
+
+
+
+def test_unused_name_strips_like_save_does() -> None:
+    assert lut_actions._unused_name(" fire ", {"fire"}) == "fire (2)"
+    assert lut_actions._unused_name("new", {"fire"}) == "new"

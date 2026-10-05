@@ -84,6 +84,7 @@ class ExportDialog(QDialog):
         subwindow_annotation_managers: list[dict[str, Any]] | None = None,
         image_inverted: bool = False,
         lut=None,
+        voi_from_dicom: bool = False,
         parent=None
     ):
         """
@@ -130,6 +131,7 @@ class ExportDialog(QDialog):
         self.subwindow_annotation_managers = subwindow_annotation_managers or []
         self.image_inverted = bool(image_inverted)
         self.lut = lut
+        self.voi_from_dicom = bool(voi_from_dicom)
 
         self.export_format = "PNG"
         self.window_level_option = "current"  # "current" or "dataset"
@@ -698,6 +700,7 @@ class ExportDialog(QDialog):
                     deep_anonymized_items=deep_anonymized_items,
                     image_inverted=self.image_inverted,
                     lut=self.lut,
+                    voi_from_dicom=self.voi_from_dicom,
                 )
             )
 

@@ -43,6 +43,7 @@ from core.lut_catalog import (
     builtin_grayscale_luts,
     colormap_lut,
 )
+from core.lut_defaults import default_entry
 from core.lut_engine import (
     LookUpTable,
     exponential_transfer,
@@ -56,6 +57,7 @@ from gui.widgets.lut_transfer_function_widget import (
 )
 
 _SAVE_TITLE = "Save LUT"
+_IMPORT_TITLE = "Import Colormap"
 
 def apply_lut_to_host(host: Any, lut: LookUpTable) -> None:
     """Store ``lut`` on the pane behind ``host`` and redisplay that pane."""
@@ -120,14 +122,74 @@ def populate_lut_menu(menu: QMenu, host: Any) -> None:
     edit.setEnabled(current is None or current.lut_type == "grayscale_ramp")
     edit.triggered.connect(lambda: _edit_curve(host))
     menu.addAction(edit)
+    _add_dicom_lut_action(menu, host)
     colors = QAction("Edit Colors...", menu)
     colors.setEnabled(current is not None and current.lut_type == "colormap")
     colors.triggered.connect(lambda: _edit_colors(host))
     menu.addAction(colors)
+    importer = QAction("Import Colormap...", menu)
+    importer.setEnabled(library_store(host) is not None)
+    importer.setToolTip("Add a .csv or .json colormap to the Saved list")
+    importer.triggered.connect(lambda: _import_colormap(host))
+    menu.addAction(importer)
+    _add_default_actions(menu, host, current)
     save = QAction("Save Current As...", menu)
     save.setEnabled(is_savable(current) and library_store(host) is not None)
     save.triggered.connect(lambda: _save_current(host))
     menu.addAction(save)
+
+
+def _add_default_actions(menu: QMenu, host: Any, current: LookUpTable | None) -> None:
+    """Set or clear the default LUT for the shown series' modality."""
+    store = library_store(host)
+    getter = getattr(_actor(host), "current_modality", None)
+    modality = getter() if callable(getter) else ""
+    if store is None or not isinstance(modality, str) or not modality:
+        return
+    if not callable(getattr(store, "get_lut_defaults", None)):
+        return
+    entry = default_entry(current) if current is not None else None
+    if entry is not None and entry["kind"] == "saved":
+        # An unsaved custom curve has no library entry to point at yet.
+        if entry["name"] not in {lut.name for lut in saved_luts(store)}:
+            entry = None
+    use = QAction(f"Use as Default for {modality}", menu)
+    use.setEnabled(entry is not None)
+    use.setToolTip("Series of this modality start with this LUT until you choose another")
+    use.triggered.connect(lambda: _set_default(host, store, modality, entry))
+    menu.addAction(use)
+    clear = QAction(f"Clear Default for {modality}", menu)
+    clear.setEnabled(modality in store.get_lut_defaults())
+    clear.triggered.connect(lambda: _set_default(host, store, modality, None))
+    menu.addAction(clear)
+
+
+def _set_default(host: Any, store: Any, modality: str, entry: dict[str, Any] | None) -> None:
+    """Set or clear a modality default, then redraw so open panes on it follow."""
+    store.set_lut_default(modality, entry)
+    redraw = getattr(_actor(host), "redisplay_all_panes", None)
+    if callable(redraw):
+        redraw()
+
+
+def _add_dicom_lut_action(menu: QMenu, host: Any) -> None:
+    """Checkable "From DICOM (VOI LUT)": the file's own LUTs replace window/level.
+
+    Enabled only when the shown dataset embeds a VOI LUT Sequence. The display
+    LUT still applies on top, after polarity, as it does for a windowed image.
+    """
+    state = getattr(_actor(host), "dicom_lut_state", None)
+    found = state() if callable(state) else None
+    available, enabled = found if isinstance(found, tuple) and len(found) == 2 else (False, False)
+    action = QAction("From DICOM (VOI LUT)", menu)
+    action.setCheckable(True)
+    action.setChecked(bool(enabled))
+    action.setEnabled(bool(available) or bool(enabled))
+    action.setToolTip("Use the VOI LUT in the file instead of window/level")
+    setter = getattr(_actor(host), "set_dicom_lut", None)
+    if callable(setter):
+        action.toggled.connect(setter)
+    menu.addAction(action)
 
 
 def _add_saved_menu(menu: QMenu, group: QActionGroup, host: Any, current: LookUpTable | None) -> None:
@@ -155,6 +217,14 @@ def attach_view_lut_menu(view_menu: QMenu, host: Any) -> None:
     """Add View → Look-Up Table. The menu is rebuilt each time it opens."""
     lut_menu = view_menu.addMenu("Look-Up &Table")
     lut_menu.aboutToShow.connect(lambda menu=lut_menu, owner=host: populate_lut_menu(menu, owner))
+    config = getattr(host, "config_manager", None)
+    if config is not None and callable(getattr(config, "get_show_lut_label", None)):
+        show = QAction("Show LUT Label", view_menu)
+        show.setCheckable(True)
+        show.setChecked(config.get_show_lut_label())
+        show.setToolTip("Name a non-Linear or DICOM LUT at the top of each pane")
+        show.toggled.connect(lambda checked, owner=config: _set_show_lut_label(owner, checked))
+        view_menu.addAction(show)
 
 
 def attach_context_lut_menu(context_menu: QMenu, viewer: Any) -> None:
@@ -349,3 +419,74 @@ def _save_current(host: Any) -> None:
         )
         return
     apply_lut_to_host(host, named)
+
+
+def _set_show_lut_label(config: Any, enabled: bool) -> None:
+    """Persist the toggle and refresh every pane's label."""
+    from gui.lut_pane_label import LutPaneLabel
+
+    config.set_show_lut_label(enabled)
+    LutPaneLabel.refresh_all()
+
+
+def _import_colormap(host: Any) -> None:
+    """Pick a .csv/.json colormap, save each LUT it holds, and apply the first."""
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from core.lut_import import import_colormap_file
+
+    store = library_store(host)
+    if store is None:
+        return
+    chosen, _filter = QFileDialog.getOpenFileName(
+        _parent(host), _IMPORT_TITLE, "", "Colormaps (*.csv *.json)"
+    )
+    if not chosen:
+        return
+    try:
+        luts = import_colormap_file(Path(chosen))
+    except OSError:
+        QMessageBox.warning(_parent(host), _IMPORT_TITLE, "The file could not be read.")
+        return
+    except ValueError:
+        QMessageBox.warning(
+            _parent(host),
+            _IMPORT_TITLE,
+            "The colormap was not imported. Use a .csv of r,g,b or x,r,g,b rows "
+            "(0-255, or 0-1 floats), or a .json colormap or saved-LUT file.",
+        )
+        return
+    taken = {lut.name for lut in saved_luts(store)}
+    saved = []
+    for lut in luts:
+        # Never replace an existing saved LUT: an import adds, it does not overwrite.
+        name = _unused_name(lut.name, taken)
+        named = save_lut(store, lut, name)
+        if named is not None:
+            taken.add(name)
+            saved.append(named)
+    if not saved:
+        QMessageBox.warning(
+            _parent(host),
+            _IMPORT_TITLE,
+            "The colormap was read but not saved. The saved-LUT file may be read-only, "
+            "or it was written by a newer version of the viewer.",
+        )
+        return
+    apply_lut_to_host(host, saved[0])
+
+
+def _unused_name(name: str, taken: set[str]) -> str:
+    """``name``, or ``name (2)``, ``name (3)``, ... when that is already saved.
+
+    Stripped first, because ``save_lut`` saves under the stripped name.
+    """
+    name = name.strip()
+    if name not in taken:
+        return name
+    number = 2
+    while f"{name} ({number})" in taken:
+        number += 1
+    return f"{name} ({number})"

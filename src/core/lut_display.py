@@ -76,14 +76,20 @@ def pil_from_display_array(display: np.ndarray) -> Image.Image:
     return Image.fromarray(np.ascontiguousarray(display))
 
 
-def grayscale_export_kwargs(dataset: Any, image_inverted: bool, lut: LookUpTable | None) -> dict[str, Any]:
-    """Kwargs for a grayscale export render. Color DICOM skips the LUT and the baked invert."""
+def grayscale_export_kwargs(
+    dataset: Any, image_inverted: bool, lut: LookUpTable | None, voi_from_dicom: bool = False
+) -> dict[str, Any]:
+    """Kwargs for a grayscale export render. Color DICOM skips the LUT and the baked invert.
+
+    ``voi_from_dicom`` carries the pane's "From DICOM" choice so a PNG/JPG
+    matches the viewport. It is ignored for color data, which has no VOI LUT.
+    """
     from core.dicom_color import is_color_image
 
     color, _photometric = is_color_image(dataset)
     if color:
         return {"image_inverted": False, "lut": None}
-    return {"image_inverted": bool(image_inverted), "lut": lut}
+    return {"image_inverted": bool(image_inverted), "lut": lut, "voi_from_dicom": bool(voi_from_dicom)}
 
 
 def invert_color_export_image(image: Image.Image, dataset: Any, image_inverted: bool) -> Image.Image:

@@ -1,6 +1,6 @@
 # Agent manual smoke checklist
 
-**Last updated:** 2026-10-03
+**Last updated:** 2026-10-04
 
 **Automated prelude:** `python scripts/agent_smoke_harness.py --write-report` (see [`../HARNESS.md`](../HARNESS.md)).
 
@@ -59,9 +59,15 @@ Use this after UX, loading, MPR, 3D volume render, SR, study index, or navigator
   the three checkboxes; drag a bend of the composed curve and the pane's window
   follows. **Edit Curve…** shows the dashed display result behind the curve.
   **Save Current As…** → restart → the LUT is listed under **Saved**, and
-  selecting it reapplies it (panes start Linear after a restart).
+  selecting it reapplies it (after a restart a pane starts on its modality
+  default, or Linear when none is set).
   On a color map, **Edit Colors…** → add a stop, recolor it, switch to step.
-  Export → PNG on that pane matches the viewport.
+  **Import Colormap…** from a small `.csv` → it appears under **Saved**.
+  **Use as Default for** the pane's modality → another series of that modality
+  opens with it. **View → Show LUT Label** names the LUT at the top of the pane.
+  On a file with a VOI LUT Sequence, **From DICOM (VOI LUT)** changes the image.
+  With privacy mode on, a saved LUT's label reads "Custom".
+  Export → PNG on that pane, and a short cine export, match the viewport.
 
 ---
 
