@@ -191,3 +191,12 @@ def test_a_malformed_descriptor_is_unsupported_not_an_error(first) -> None:
     ds = _dataset(voi=item)
     assert not voi_lut_supported(ds)
     assert dicom_voi_to_uint8(np.zeros((1, 2), dtype=np.uint16), ds) is None
+
+
+
+def test_an_8_bit_lut_over_256_entries_is_not_supported() -> None:
+    from core.dicom_lut_sequences import voi_lut_supported
+
+    assert voi_lut_supported(_dataset(voi=_lut_item(list(range(256)), 0, 8)))
+    assert not voi_lut_supported(_dataset(voi=_lut_item([0] * 257, 0, 8)))
+    assert voi_lut_supported(_dataset(voi=_lut_item([0] * 257, 0, 12)))

@@ -335,7 +335,19 @@ def _wire_dicom_and_defaults(app: Any, idx: int, managers: dict[str, Any], image
         set_series_voi_from_dicom(view_state, enabled, series_id)
         app._redisplay_subwindow_slice(_i, preserve_view=True)
 
+    def dicom_lut_applied() -> bool:
+        """True when the image on screen went through the file's VOI LUT.
+
+        The menu shows the series' choice; this reports the result. A drawn
+        projection always windows, while a projection that fell back to the
+        single slice does apply the VOI LUT.
+        """
+        supported, enabled = dicom_lut_state()
+        drawn = bool(getattr(managers["slice_display_manager"], "projection_drawn", False))
+        return supported and enabled and not drawn
+
     image_viewer.dicom_lut_state = dicom_lut_state
+    image_viewer.dicom_lut_applied = dicom_lut_applied
     image_viewer.set_dicom_lut = set_dicom_lut
 
     def redisplay_all_panes() -> None:

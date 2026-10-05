@@ -11,7 +11,7 @@ the viewport repaints or resizes, so every redisplay path keeps it current
 without the display code knowing about it.
 
 Inputs:
-    - An image viewer with ``current_series_lut`` and ``dicom_lut_state``
+    - An image viewer with ``current_series_lut`` and ``dicom_lut_applied``
     - Callables for the show-label setting and privacy mode
 
 Outputs:
@@ -72,6 +72,8 @@ class LutPaneLabel(QObject):
         self._show_label = show_label
         self._privacy = privacy
         self.label = QLabel(viewport)
+        # A saved LUT name is free text; show it literally, never as markup.
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.label.setStyleSheet(
             "color: #f0f0f0; background-color: rgba(0, 0, 0, 140);"
@@ -116,8 +118,7 @@ class LutPaneLabel(QObject):
             return ""
         getter = getattr(self._viewer, "current_series_lut", None)
         lut = getter() if callable(getter) else None
-        state = getattr(self._viewer, "dicom_lut_state", None)
-        found = state() if callable(state) else None
-        # Only claim DICOM when it actually applied: asked for and supported.
-        enabled = bool(found[0] and found[1]) if isinstance(found, tuple) and len(found) == 2 else False
+        # Claim DICOM only when the image on screen went through the VOI LUT.
+        applied = getattr(self._viewer, "dicom_lut_applied", None)
+        enabled = bool(applied()) if callable(applied) else False
         return lut_label_text(lut if isinstance(lut, LookUpTable) else None, enabled, self._privacy())

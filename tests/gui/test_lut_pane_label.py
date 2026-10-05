@@ -36,7 +36,7 @@ def _viewer(qapp, lut: LookUpTable, voi: bool = False):
     viewer = ImageViewer()
     viewer.resize(400, 300)
     viewer.current_series_lut = lambda: lut  # type: ignore[attr-defined]
-    viewer.dicom_lut_state = lambda: (voi, voi)  # type: ignore[attr-defined]
+    viewer.dicom_lut_applied = lambda: voi  # type: ignore[attr-defined]
     _ = qapp
     return viewer
 
@@ -111,10 +111,22 @@ def test_config_persists_the_toggle(tmp_path) -> None:
 
 
 @pytest.mark.qt
-def test_label_does_not_claim_dicom_when_it_could_not_apply(qapp) -> None:
+def test_label_does_not_claim_dicom_when_it_did_not_apply(qapp) -> None:
     viewer = _viewer(qapp, linear_lut())
-    viewer.dicom_lut_state = lambda: (False, True)  # type: ignore[attr-defined]
+    viewer.dicom_lut_applied = lambda: False  # type: ignore[attr-defined]
     pane_label = LutPaneLabel(viewer, show_label=lambda: True, privacy=lambda: False)
     assert pane_label.current_text() == ""
-    viewer.dicom_lut_state = lambda: (True, True)  # type: ignore[attr-defined]
+    viewer.dicom_lut_applied = lambda: True  # type: ignore[attr-defined]
     assert pane_label.current_text() == "VOI LUT: DICOM"
+
+
+@pytest.mark.qt
+def test_a_saved_name_is_shown_as_plain_text(qapp) -> None:
+    from PySide6.QtCore import Qt
+
+    markup = LookUpTable(name="<b>bold</b>", source="custom", control_points=((0.0, 0.0), (1.0, 1.0)))
+    viewer = _viewer(qapp, markup)
+    pane_label = LutPaneLabel(viewer, show_label=lambda: True, privacy=lambda: False)
+    pane_label.refresh()
+    assert pane_label.label.textFormat() == Qt.TextFormat.PlainText
+    assert pane_label.label.text() == "LUT: <b>bold</b>"

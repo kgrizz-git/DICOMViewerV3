@@ -57,7 +57,11 @@ def voi_lut_supported(dataset: Any, index: int = 0) -> bool:
         bits = int(descriptor[2])
         if not (bits == 8 or 10 <= bits <= 16) or "LUTData" not in item:
             return False
-        return _lut_entry_count(item) >= (int(descriptor[0]) or 2**16)
+        entries = int(descriptor[0]) or 2**16
+        if bits == 8 and entries > 256:
+            # pydicom indexes an 8-bit LUT with a uint8 array, which wraps past 255.
+            return False
+        return _lut_entry_count(item) >= entries
     except (AttributeError, IndexError, TypeError, ValueError, KeyError):
         # A malformed descriptor is unsupported, never an error for the caller.
         return False

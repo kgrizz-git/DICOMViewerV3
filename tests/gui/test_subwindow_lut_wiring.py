@@ -40,6 +40,7 @@ def _wired(qapp, dataset: Dataset | None, *, config=None):
         main_window=None,
     )
     viewer = ImageViewer()
+    viewer.slice_display_for_test = managers["slice_display_manager"]
     _wire_series_lut(app, 0, managers, viewer)
     _ = qapp
     return viewer, view_state, redrawn
@@ -52,6 +53,7 @@ def test_the_viewer_reports_modality_and_dicom_lut_state(qapp) -> None:
     assert viewer.dicom_lut_state() == (True, False)
     viewer.set_dicom_lut(True)
     assert viewer.dicom_lut_state() == (True, True)
+    assert viewer.dicom_lut_applied()
     assert view_state.series_defaults["s1"]["voi_from_dicom"] is True
     assert redrawn == [(0, True)]
     viewer.redisplay_all_panes()
@@ -82,3 +84,17 @@ def test_the_resolver_and_label_use_the_app_config(qapp) -> None:
     plain, plain_state, _r = _wired(qapp, _voi_dataset(8))
     assert not hasattr(plain_state, "lut_default_resolver")
     assert plain.current_series_lut().name == linear_lut().name
+
+
+
+
+@pytest.mark.qt
+def test_a_drawn_projection_reports_dicom_as_not_applied(qapp) -> None:
+    viewer, _view_state, _redrawn = _wired(qapp, _voi_dataset(8))
+    viewer.set_dicom_lut(True)
+    viewer.slice_display_for_test.projection_drawn = True
+    # The menu still shows the choice; the label must not claim it applied.
+    assert viewer.dicom_lut_state() == (True, True)
+    assert not viewer.dicom_lut_applied()
+    viewer.slice_display_for_test.projection_drawn = False
+    assert viewer.dicom_lut_applied()
