@@ -135,9 +135,13 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
+          # uv resolves and installs the same requirements far faster than pip
+          # (pip took ~45s here even with a warm wheel cache). Pinned so CI is
+          # reproducible; bump deliberately. Other jobs keep pip, and so do the
+          # launch scripts, so pip resolution is still exercised in CI.
+          python -m pip install "uv==0.12.23"
           # requirements-dev.txt includes requirements.txt plus lizard, pytest-cov, etc.
-          pip install -r requirements-dev.txt
+          uv pip install --system -r requirements-dev.txt
 
       - name: Run tests with coverage
         env:
