@@ -2,7 +2,8 @@
 
 **Status:** Active (not started)
 **Last updated:** 2026-10-06
-**TO_DO refs:** Next up slot "Derived-image export batch"; 3D volume rendering
+**TO_DO refs:** Next up slots "Fix projection DICOM export" and "Save 3D
+render as PNG/JPG"; 3D volume rendering
 sub-items "Export current 3D volume render as image" and "…as Secondary Capture
 (SC) DICOM"; Measurements/projections item "Allow export of AIP, MIP, MinIP
 stack as DICOM or images".
@@ -14,13 +15,15 @@ for scope and ordering. That plan predates the shipped projection export and its
 
 Ship the derived-image exports users still lack, in order of value per effort:
 
-1. **Phase A:** save the current 3D volume render as PNG or JPG.
-2. **Phase B:** make the shipped projection **DICOM** export produce valid,
-   distinct derived instances.
+1. **Phase B first:** make the shipped projection **DICOM** export produce
+   valid, distinct derived instances. It ships today and can write unreadable
+   files, so it lands before new features.
+2. **Phase A:** save the current 3D volume render as PNG or JPG.
 3. **Phase C:** save the 3D render as a Secondary Capture DICOM.
 
-Each phase is one PR. Phase A is independent of B and C. Phase C reuses the
-writer helpers that Phase B settles.
+Phases keep their letters for stable links. Each phase is one PR. Phase A is
+independent of B and C. Phase C reuses the writer helpers that Phase B
+settles.
 
 ## Current state (verified 2026-10-06)
 
@@ -28,19 +31,20 @@ writer helpers that Phase B settles.
 
 When Combine Slices is on, the Export dialog already exports projections. The
 dialog shows a note naming the projection type and slab size
-(`gui/dialogs/export_dialog.py:185`).
+(`gui/dialogs/export_dialog.py:194`).
 
 - **PNG/JPG** route through `export_rendering.create_projection_for_export`
   with W/L, LUT, photometric polarity, and overlays
-  (`gui/export_manager.py:571`). Cine export uses the same path.
+  (`gui/export_manager.py:573`). Cine export uses the same path.
 - **DICOM** routes through `export_rendering.create_projection_dataset`
   (`gui/export_manager.py:549`).
 - Series and multi-slice scopes run per slice, so a projection **stack** export
   already works for all three formats. Filenames carry a
   `_MIP_8slices`-style suffix.
 
-That covers Phase 1a/1b and most of Phase 2 of the old plan. Phase 2's sliding
-slab exists. Its non-overlapping-slab option and caching remain unbuilt and are
+That covers Phase 1a/1b of the old plan and the sliding-slab loop of its
+Phase 2. Phase 2b geometry (slab position and thickness) is not done; see
+defect 8. Its non-overlapping-slab option and caching remain unbuilt and are
 not in scope here.
 
 ### Projection DICOM output has correctness gaps
@@ -58,16 +62,34 @@ It has these defects:
    is. For a compressed source (JPEG, JPEG 2000, RLE), raw `PixelData` is
    written under a compressed transfer syntax, and the file is unreadable.
 3. **Native bytes go under an encapsulated syntax.** This is the same root
-   cause as item 2. It also applies to the single-slice fallback.
-4. **AIP truncates.** `astype` floors the float mean instead of rounding it.
+   cause as item 2. The save also uses `save_as` with the source's
+   `write_like_original` behavior and never sets an explicit OW element. The
+   one-slice branch (a slab clipped to one slice at the series end) keeps the
+   source `PixelData`, so its transfer syntax is still correct there.
+4. **AIP truncates.** `astype` truncates the float mean toward zero instead
+   of rounding it.
 5. **Rescale assumptions are unchecked.** Projections reduce over **stored**
    values, and the copied `RescaleSlope`/`RescaleIntercept` come from the first
    slice. That is right only when every slice in the slab shares one rescale
    (CT normally does; PET often does not).
 6. **There is no derivation metadata.** There is no `DerivationDescription`, no
    `SourceImageSequence`, and no `ReferencedSeriesSequence`.
-   `mpr_dicom_export.py` already writes these.
-7. **Multi-frame `InstanceNumber` can collide.** `9000 + slice_index` is unique
+   `mpr_dicom_export.py:392` writes only `ReferencedSeriesSequence`. The other
+   two are new to the codebase.
+7. **Multi-frame sources are unguarded.** `get_pixel_array` returns
+   `(frames, rows, cols)` for a multi-frame instance, so the slab math breaks.
+   Expanded frames are `FrameDatasetWrapper` objects that proxy tags from the
+   original dataset (`core/multiframe_handler.py:710`), and the builder
+   deep-copies that wrapper.
+   The copied `SOPClassUID` also stays an enhanced or multi-frame class.
+8. **Slab position is wrong.** `SliceThickness` becomes a sum of slice thicknesses
+   rather than the geometric slab extent. `ImagePositionPatient` and
+   `SliceLocation` stay at the anchor slice.
+9. **Anonymization runs too early.** Deep-anonymize runs on the source batch
+   before projection (`gui/export_manager.py:348`). The projection builder
+   reads slab slices from the raw `studies` dict. Any reference sequence built
+   from those slices would carry original UIDs.
+10. **`InstanceNumber` can collide.** `9000 + slice_index` is unique
    within one export but not across two exports of the same series.
 
 ### 3D render
@@ -149,14 +171,20 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
 
 - [ ] **B1. New series per export run.** `ExportManager` creates one
   `SeriesInstanceUID` per (source series, projection type, slab) export run and
-  passes it to the builder. Set `SeriesNumber` to the source value plus 500,
-  matching `mpr_dicom_export.py:328`. Keep `SeriesDescription` as
+  passes it to the builder. Set `SeriesNumber` to the source value plus 600.
+  MPR export uses +500 (`mpr_dicom_export.py:328`), so a distinct offset keeps
+  the two derived series apart. Keep `SeriesDescription` as
   `"<source> - MIP"`.
 - [ ] **B2. Fresh `file_meta`.** Rebuild `file_meta` the way
   `mpr_dicom_export.py:350` does. Set `MediaStorageSOPClassUID` and
   `MediaStorageSOPInstanceUID` to match the dataset, use
-  `ExplicitVRLittleEndian`, and set the implementation UID. Apply this to the
-  single-slice fallback too, which fixes defects 2 and 3.
+  `ExplicitVRLittleEndian`, and set the implementation UID. Also match the
+  MPR writer's other steps: set `is_implicit_VR = False` and
+  `is_little_endian = True` (`mpr_dicom_export.py:356`), write `PixelData` as
+  an explicit OW element (`:410`), and save with `write_like_original=False`
+  (`:471`). Re-encode only when the builder replaced the pixels. The one-slice
+  branch keeps its source transfer syntax and only syncs
+  `MediaStorageSOPInstanceUID`. This fixes defects 2 and 3.
 - [ ] **B3. Round, don't floor.** Use `np.rint` before the integer cast.
 - [ ] **B4. Rescale guard.** If slab slices disagree on `RescaleSlope` or
   `RescaleIntercept`, project in **rescaled** space and re-encode to int16 with
@@ -170,9 +198,21 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
   skip them rather than guess.
 - [ ] **B6. Instance numbering.** Number instances 1..N within the new series
   instead of `9000 + index`.
-- [ ] **B7. Anonymization.** Confirm that deep-anonymize runs on the
-  **projection** dataset, after B1–B5, so the new reference sequences are also
-  scrubbed. Add a test for this.
+- [ ] **B7. Anonymize the derived datasets.** When deep-anonymize is on,
+  build projection datasets from the raw source and anonymize the **built**
+  batch, as `mpr_dicom_export.py:460` does. Do not feed the pre-anonymized
+  source batch to the builder. This scrubs the B5 reference sequences with one
+  consistent UID remap.
+- [ ] **B7a. Multi-frame sources.** For `FrameDatasetWrapper` inputs, build a
+  plain single-frame dataset rather than deep-copying the wrapper. Drop
+  `NumberOfFrames` and the per-frame functional groups, and use a
+  single-frame SOP class. If that proves too large for this PR, fall back to
+  a single-slice export with a user-visible note. Test a frame-wrapper source
+  either way.
+- [ ] **B7b. Slab geometry.** Set `ImagePositionPatient` to the slab center,
+  the midpoint of the first and last slice positions. Set `SliceThickness` to
+  the geometric slab extent in mm. Drop `SliceLocation` rather than leave a
+  value that disagrees with the slab. Add a test.
 - [ ] **B8. Tests** (`tests/core/test_projection_dicom_export.py`):
   - A two-slice MIP stack shares one new series UID that differs from the
     source.
@@ -181,11 +221,14 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
   - A compressed-source fixture (RLE via pydicom, generated in the test) writes
     a readable file.
   - AIP rounding works, and mixed-rescale slabs go through the rescaled path.
-  - Deep-anonymized output carries no source patient fields inside the
-    reference sequences.
+  - Deep-anonymized output carries no source patient fields or source UIDs
+    inside the reference sequences.
+  - A multi-frame source falls back cleanly.
 - [ ] **B9. Closeout.** Add a `CHANGELOG.md` entry (patch: export correctness).
   Mark `PROJECTION_EXPORT_PLAN.md` complete except for the deferred items, move
   it to `plans/completed/`, and remove the TO_DO projection-export item.
+  Update this plan's two links to the moved file (the header and Out of
+  scope).
 
 ## Phase C — 3D render as Secondary Capture DICOM
 
@@ -198,8 +241,9 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
   that names the preset and blend mode.
 - [ ] Reuse the Phase B `file_meta` and series-numbering helpers. Do not create
   a third copy.
-- [ ] Offer it as **Save Image…** format "DICOM (Secondary Capture)", with the
-  existing deep-anonymize option.
+- [ ] Offer it as **Save Image…** format "DICOM (Secondary Capture)". Phase A's
+  save dialog has no de-identify control, so add a **De-identify** checkbox
+  that reuses `DeepAnonymizerOptions`. Anonymize the built SC dataset.
 - [ ] Tests: round-trip read with pydicom, check the pixel shape and SOP class,
   and confirm anonymized output carries no source patient fields.
 - [ ] Closeout: add a CHANGELOG entry (minor) and remove the TO_DO SC sub-item.
