@@ -252,8 +252,9 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
 
 - Multi-frame or rotation-sweep 3D export (cine of the 3D view).
 - Non-overlapping projection slabs, projection caching, and the slab-override
-  control from the old plan's open questions. These are parked in
-  [`ICEBOX.md`](../ICEBOX.md) under Features (Near-Term).
+  control from the old plan's open questions. Non-overlapping slabs and
+  caching are one item in [`TO_DO.md`](../TO_DO.md). The slab override is parked
+  in [`ICEBOX.md`](../ICEBOX.md).
 - Changing MIP/MinIP polarity under MONOCHROME1. This is tracked separately in
   `TO_DO.md`.
 

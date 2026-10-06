@@ -324,6 +324,8 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P1]** **Line profile tool and CT film beam-width analysis:** add an interactive line profile measurement tool plus an automated workflow for scanned film CT beam-width analysis. The automated workflow should detect the direction where radiation darkening rises/falls, derive a baseline-corrected profile, report FWHM and FWTM using a local-window maximum rather than a single-pixel max, read DPI when available or prompt/report pixels when unavailable, and report calibrated width in mm when possible. Users should also be able to manually place and measure profiles. **Plan:** [Line profile and CT film beam-width analysis](plans/supporting/LINE_PROFILE_AND_CT_FILM_BEAM_WIDTH_PLAN.md).
 
+- [ ] **[P2]** **Projection stack export: non-overlapping slabs and caching.** Add a non-overlapping slab option to projection stack export, which steps a full slab at a time (slices 0–7, then 8–15) and writes fewer images. Cache the computed stack so a repeated export with the same projection type and slab size reuses it. Background: open questions in [`PROJECTION_EXPORT_PLAN.md`](plans/completed/PROJECTION_EXPORT_PLAN.md#open-questions).
+
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
 
 
