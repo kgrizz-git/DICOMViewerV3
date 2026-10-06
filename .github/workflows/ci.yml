@@ -463,7 +463,10 @@ jobs:
   semgrep:
     name: Semgrep Security Audit
     needs: [privacy-gates]
-    if: github.actor != 'dependabot[bot]'
+    # No Dependabot skip: KGRuleset1's code_scanning rule requires Semgrep OSS
+    # results, so a skipped scan leaves Dependabot PRs permanently blocked.
+    # Dependabot PR tokens honour the job's `security-events: write`, as the
+    # CodeQL uploads on those PRs already show.
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -665,7 +668,7 @@ jobs:
         # Fork guard, PRs only - see the semgrep upload above. The
         # event-name disjunction is load-bearing; without it this step would be
         # skipped on every push to main.
-        if: always() && steps.grype_sarif.outputs.upload == 'true' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: always() && steps.grype_sarif.outputs.upload == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           sarif_file: grype-upload.sarif
           category: grype
@@ -674,7 +677,6 @@ jobs:
         if: |
           github.event_name == 'pull_request' &&
           steps.grype_sarif.outputs.upload == 'true' &&
-          github.actor != 'dependabot[bot]' &&
           github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
