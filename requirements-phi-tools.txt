@@ -11,6 +11,11 @@ phi-scan==0.7.0; python_version >= "3.12"
 typer==0.24.1; python_version >= "3.12"
 presidio-analyzer==2.2.364
 presidio-image-redactor==0.0.60
+# Security floors for spaCy -> weasel -> httpx -> httpcore -> h11. httpcore
+# <1.0.9 caps h11 <0.15, so a minimum-version resolve (as Aikido does) lands on
+# h11 0.14.0 (CVE-2025-43859, chunked-body request smuggling; fixed in 0.16.0).
+httpcore>=1.0.9
+h11>=0.16.0
 # Presidio's default AnalyzerEngine otherwise tries to download this model at
 # scan time. Pin it here so installation is the only network-enabled phase.
 en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl

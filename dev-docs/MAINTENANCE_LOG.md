@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-06
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-06
+- **h11 security floor in the optional PHI-tools environment.** Aikido flagged h11 0.14.0 (`CVE-2025-43859`) in `requirements-phi-tools.txt`, reached via presidio/spaCy -> weasel -> httpx -> httpcore. A normal resolve already picks h11 0.16.0, but httpcore 1.0.0-1.0.8 cap `h11<0.15`, so Aikido's minimum-version resolve lands on 0.14.0. Added `httpcore>=1.0.9` and `h11>=0.16.0` floors. The app, dev and build requirement files do not depend on h11.
 
 ## 2026-10-05
 - **pytest now uses `--dist worksteal`, and the CI test job installs with uv.** Across five CI runs with logs, the test step spent ~80s on startup/collection under coverage and 72-81s on the first 95% of tests. The last 5% took 50-67s on normal runs and 218-341s on slow ones. On the slow runs one xdist worker drew a cluster of Qt main-window tests (`test_main_event_filter.py`, `test_metadata_table_model.py`, `test_metadata_panel_tree_chrome.py`) that take 10-20s each on CI while the other three idled. `worksteal` rebalances that tail; locally at 4 workers with coverage it measured 53-56s against 80-88s for the default `load`. Separately, `pip install -r requirements-dev.txt` took ~45s even with a warm cache, so the test job now uses pinned `uv` (`uv pip install --system`). Other jobs and the launch scripts keep pip. Coverage's faster `sysmon` core was ruled out: with `branch = True` it needs Python 3.14+ and silently falls back on 3.12.
