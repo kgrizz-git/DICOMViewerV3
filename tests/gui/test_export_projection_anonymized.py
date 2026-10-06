@@ -137,9 +137,11 @@ def test_written_files_have_no_source_identifiers(monkeypatch, tmp_path: Path) -
     for path in files:
         back = pydicom.dcmread(path)
         text = _all_text(back)
-        assert "Doe" not in text and "SRC-PID-77" not in text
+        assert "Doe" not in text
+        assert "SRC-PID-77" not in text
         assert not any(uid in text for uid in source_uids)
-        assert "SRC-PID-77" not in str(path) and "Doe" not in str(path)
+        assert "SRC-PID-77" not in str(path)
+        assert "Doe" not in str(path)
         series_uids.add(back.SeriesInstanceUID)
     assert len(series_uids) == 1
     assert sorted(pydicom.dcmread(p).InstanceNumber for p in files) == [1, 2, 3]
@@ -153,7 +155,8 @@ def test_failed_projection_writes_nothing_and_is_not_counted(monkeypatch, tmp_pa
     exported, _ = ExportManager().export_selected(_request(selected, studies, tmp_path))
     files = list(tmp_path.rglob("*.dcm"))
     # Item 1 is a single-slice slab (last slice) and still builds.
-    assert exported == 1 and len(files) == 1
+    assert exported == 1
+    assert len(files) == 1
     batch = ExportManager.build_anonymized_projections_for_selection(
         selected, studies, "mip", 2, False
     )
@@ -170,7 +173,8 @@ def test_failed_projection_without_anonymization_writes_nothing(tmp_path: Path) 
             projection_slice_count=2, studies=studies,
         )
     )
-    assert ok is False and not (tmp_path / "x.dcm").exists()
+    assert ok is False
+    assert not (tmp_path / "x.dcm").exists()
 
 
 def test_frame_wrapper_failure_writes_no_raw_source(tmp_path: Path) -> None:
@@ -188,7 +192,8 @@ def test_frame_wrapper_failure_writes_no_raw_source(tmp_path: Path) -> None:
             projection_slice_count=2, studies=studies,
         )
     )
-    assert ok is False and not (tmp_path / "f.dcm").exists()
+    assert ok is False
+    assert not (tmp_path / "f.dcm").exists()
 
 
 def test_anonymized_projection_without_prebuilt_dataset_is_refused(tmp_path: Path) -> None:
@@ -200,7 +205,8 @@ def test_anonymized_projection_without_prebuilt_dataset_is_refused(tmp_path: Pat
             projection_slice_count=2, studies=studies, dataset_pre_anonymized=True,
         )
     )
-    assert ok is False and not (tmp_path / "raw.dcm").exists()
+    assert ok is False
+    assert not (tmp_path / "raw.dcm").exists()
 
 
 def test_export_selected_fails_closed_when_batch_lacks_a_key(monkeypatch, tmp_path: Path) -> None:

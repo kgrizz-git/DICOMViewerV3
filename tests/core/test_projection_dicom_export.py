@@ -81,7 +81,8 @@ def test_stack_export_shares_new_series_uid_and_numbers_instances() -> None:
 def test_series_uid_generated_when_not_supplied() -> None:
     slices = [_slice([[1]]), _slice([[2]])]
     ds = _build(slices, 0)
-    assert ds is not None and ds.SeriesInstanceUID != SERIES
+    assert ds is not None
+    assert ds.SeriesInstanceUID != SERIES
 
 
 @pytest.mark.parametrize(
@@ -95,7 +96,8 @@ def test_series_number_offset(source, expected) -> None:
         else:
             s.SeriesNumber = source
     ds = _build(slices, 0)
-    assert ds is not None and ds.SeriesNumber == expected
+    assert ds is not None
+    assert ds.SeriesNumber == expected
 
 
 def test_series_number_helper_handles_unparseable() -> None:
@@ -110,7 +112,8 @@ def test_replaced_pixels_get_fresh_explicit_vr_file_meta() -> None:
     assert ds.file_meta.MediaStorageSOPInstanceUID == ds.SOPInstanceUID
     assert ds.file_meta.MediaStorageSOPInstanceUID != slices[0].SOPInstanceUID
     assert ds.file_meta.TransferSyntaxUID == ExplicitVRLittleEndian
-    assert ds.is_implicit_VR is False and ds.is_little_endian is True
+    assert ds.is_implicit_VR is False
+    assert ds.is_little_endian is True
     assert ds[0x7FE00010].VR == "OW"
     assert np.array_equal(_pixels(ds), [[5, 9], [3, 8]])
 
@@ -207,7 +210,8 @@ def test_mixed_rescale_slab_projects_in_rescaled_space(tmp_path) -> None:
     ]
     ds = _build(slices, 0, ptype="mip")
     assert ds is not None
-    assert ds.BitsAllocated == 16 and ds.PixelRepresentation == 1
+    assert ds.BitsAllocated == 16
+    assert ds.PixelRepresentation == 1
     path = str(tmp_path / "mixed.dcm")
     pde.save_projection_dataset(ds, path)
     back = pydicom.dcmread(path)
@@ -225,7 +229,8 @@ def test_uniform_rescale_slab_keeps_stored_values() -> None:
     ds = _build(slices, 0)
     assert ds is not None
     assert np.array_equal(_pixels(ds), [[5, 9], [3, 8]])
-    assert float(ds.RescaleSlope) == 1.0 and float(ds.RescaleIntercept) == -1024.0
+    assert float(ds.RescaleSlope) == 1.0
+    assert float(ds.RescaleIntercept) == -1024.0
 
 
 def test_derivation_metadata_present() -> None:
@@ -271,7 +276,8 @@ def test_deep_anonymized_projection_export_has_no_source_identifiers(tmp_path) -
         for elem in _walk(back.file_meta):
             values.append(str(elem.value))
         text = "\n".join(values)
-        assert "Doe" not in text and "SRC-PID-77" not in text
+        assert "Doe" not in text
+        assert "SRC-PID-77" not in text
         assert not any(uid in text for uid in source_uids)
     # One shared (remapped) series UID across the run; instances numbered 1..N.
     assert len({ds.SeriesInstanceUID for ds in out.values()}) == 1
@@ -364,7 +370,8 @@ def test_multiframe_source_builds_plain_single_frame_secondary_capture_dataset(t
     ds = pde.create_projection_dataset(
         frames[0], _studies(*frames), STUDY, SERIES, 0, "mip", 2, False
     )
-    assert ds is not None and type(ds) is Dataset
+    assert ds is not None
+    assert type(ds) is Dataset
     for kw in ("NumberOfFrames", "PerFrameFunctionalGroupsSequence", "SharedFunctionalGroupsSequence"):
         assert kw not in ds
     assert ds.SOPClassUID == pydicom.uid.SecondaryCaptureImageStorage
@@ -387,7 +394,8 @@ def test_multiframe_single_slab_slice_gets_its_frame_pixels() -> None:
     ds = pde.create_projection_dataset(
         frames[2], _studies(*frames), STUDY, SERIES, 2, "mip", 4, False
     )
-    assert ds is not None and "NumberOfFrames" not in ds
+    assert ds is not None
+    assert "NumberOfFrames" not in ds
     assert np.array_equal(_pixels(ds), [[2, 3], [4, 5]])
 
 
@@ -456,17 +464,20 @@ def test_stale_pixel_description_tags_removed_and_vr_ob_for_8_bit() -> None:
 
 def test_16_bit_pixel_data_vr_is_ow() -> None:
     ds = _build([_slice([[1]]), _slice([[2]])], 0)
-    assert ds is not None and ds[0x7FE00010].VR == "OW"
+    assert ds is not None
+    assert ds[0x7FE00010].VR == "OW"
 
 
 def test_series_description_suffix_not_duplicated_and_truncated() -> None:
     slices = [_slice([[1]]), _slice([[2]])]
     slices[0].SeriesDescription = "base - MIP"
     ds = _build(slices, 0, ptype="mip")
-    assert ds is not None and ds.SeriesDescription == "base - MIP"
+    assert ds is not None
+    assert ds.SeriesDescription == "base - MIP"
     slices[0].SeriesDescription = "x" * 64
     ds = _build(slices, 0, ptype="mip")
-    assert ds is not None and len(ds.SeriesDescription) == 64
+    assert ds is not None
+    assert len(ds.SeriesDescription) == 64
 
 
 def test_single_slice_has_no_projection_type_or_suffix_but_new_series() -> None:
