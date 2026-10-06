@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-05
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-05
+- **Semgrep and the Grype upload now run on Dependabot PRs.** The 2026-10-01 `KGRuleset1` edit added Semgrep OSS to the `code_scanning` rule, closing the follow-up recorded below. But `ci.yml` skipped the Semgrep job for `dependabot[bot]`, so Dependabot PRs never uploaded Semgrep results and sat `BLOCKED` with every status check green (PRs #175-#177). The job-level skip and the Grype upload/comment skips are removed. Dependabot PR tokens honour the job's `security-events: write`; CodeQL SARIF uploads already succeed on those PRs.
 
 ## 2026-10-02
 - **Two CodeRabbit findings on the Markdown coverage work, both correct.** First, `_repo_wide_doc_files` iterated `DOC_SUBDIRS_EXCLUDED` and *added* `sample-phantom-data-committed/` to the scan, the opposite of the policy its own comment and the entry below describe. The loop is gone. Second, the real-repo guard pruned every hidden directory except `.github/`, so a new tracked dot-directory would have been invisible. The guard no longer walks the disk at all: it enumerates tracked Markdown with `git ls-files`, because a disk walk either prunes hidden directories wholesale or fails on each contributor's untracked tool caches. Exclusions are `.agents/`, `.claude/`, `.cursor/` and `DOC_SUBDIRS_EXCLUDED`, imported from the checker. The test skips only when git or a work tree is absent and fails on any other git error. Mutation-verified: a newly tracked `.githooks/NOTE.md` fails it. This supersedes the "walks the tree" wording in the 2026-10-01 entry below.
