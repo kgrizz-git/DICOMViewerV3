@@ -18,6 +18,7 @@ from pydicom.uid import (
 from core import projection_dicom_export as pde
 
 STUDY = "1.2.3"
+FOR_UID = "1.2.3.99"
 SERIES = "1.2.3.4"
 
 
@@ -323,6 +324,10 @@ def _enhanced_multiframe(n_frames: int = 3) -> Dataset:
     ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.2.1"
     ds.file_meta.MediaStorageSOPClassUID = ds.SOPClassUID
     ds.NumberOfFrames = n_frames
+    ds.FrameOfReferenceUID = FOR_UID
+    ds.DimensionIndexSequence = pydicom.Sequence([Dataset()])
+    ds.ConcatenationUID = generate_uid()
+    ds.FrameIncrementPointer = 0x00181063
     frames = np.stack(
         [np.array([[f, f + 1], [f + 2, f + 3]], dtype=np.uint16) for f in range(n_frames)]
     )
@@ -354,7 +359,7 @@ def _frame_series(n_frames: int = 3):
     return mf, [create_frame_dataset(mf, i) for i in range(n_frames)]
 
 
-def test_multiframe_source_builds_plain_single_frame_classic_dataset(tmp_path) -> None:
+def test_multiframe_source_builds_plain_single_frame_secondary_capture_dataset(tmp_path) -> None:
     mf, frames = _frame_series()
     ds = pde.create_projection_dataset(
         frames[0], _studies(*frames), STUDY, SERIES, 0, "mip", 2, False
@@ -362,8 +367,12 @@ def test_multiframe_source_builds_plain_single_frame_classic_dataset(tmp_path) -
     assert ds is not None and type(ds) is Dataset
     for kw in ("NumberOfFrames", "PerFrameFunctionalGroupsSequence", "SharedFunctionalGroupsSequence"):
         assert kw not in ds
-    assert ds.SOPClassUID == CTImageStorage
-    assert ds.file_meta.MediaStorageSOPClassUID == CTImageStorage
+    assert ds.SOPClassUID == pydicom.uid.SecondaryCaptureImageStorage
+    assert ds.file_meta.MediaStorageSOPClassUID == pydicom.uid.SecondaryCaptureImageStorage
+    assert ds.Modality == "CT"
+    for kw in ("DimensionIndexSequence", "ConcatenationUID", "FrameIncrementPointer"):
+        assert kw not in ds
+    assert ds.FrameOfReferenceUID == FOR_UID
     assert [float(v) for v in ds.ImagePositionPatient] == [0.0, 0.0, 1.5]
     assert float(ds.SliceThickness) == 5.0
     assert [r.ReferencedFrameNumber for r in ds.SourceImageSequence] == [1, 2]
@@ -382,13 +391,123 @@ def test_multiframe_single_slab_slice_gets_its_frame_pixels() -> None:
     assert np.array_equal(_pixels(ds), [[2, 3], [4, 5]])
 
 
-def test_multiframe_non_classic_class_becomes_secondary_capture() -> None:
-    assert pde.single_frame_sop_class("1.2.840.10008.5.1.4.1.1.4.1") == pydicom.uid.MRImageStorage
-    assert pde.single_frame_sop_class("1.2.3.9") == pydicom.uid.SecondaryCaptureImageStorage
-
-
 def test_unsplit_multiframe_instance_returns_none() -> None:
     mf = _enhanced_multiframe()
     assert pde.create_projection_dataset(
         mf, _studies(mf, mf), STUDY, SERIES, 0, "mip", 2, False
+    ) is None
+
+
+def test_negative_slope_uniform_slab_uses_rescaled_path(tmp_path) -> None:
+    slices = [
+        _with_rescale(_slice([[10, 20]], signed=True), -1.0, 100.0),
+        _with_rescale(_slice([[30, 5]], signed=True), -1.0, 100.0),
+    ]
+    ds = _build(slices, 0, ptype="mip")
+    assert ds is not None
+    path = str(tmp_path / "neg.dcm")
+    pde.save_projection_dataset(ds, path)
+    back = pydicom.dcmread(path)
+    physical = back.pixel_array * float(back.RescaleSlope) + float(back.RescaleIntercept)
+    # physical values: [90, 80] and [70, 95]; MIP -> [90, 95]
+    assert np.allclose(physical, [[90.0, 95.0]], atol=float(back.RescaleSlope))
+
+
+def test_32_bit_values_above_float32_precision_survive() -> None:
+    big = 2**30 + 1
+    slices = []
+    for v in (big, big - 1):
+        s = _slice([[0]])
+        s.BitsAllocated = 32
+        s.BitsStored = 32
+        s.HighBit = 31
+        s.PixelRepresentation = 0
+        s.PixelData = np.array([[v]], dtype=np.uint32).tobytes()
+        slices.append(s)
+    ds = _build(slices, 0, ptype="mip")
+    assert ds is not None
+    assert int(np.frombuffer(ds.PixelData, dtype=np.uint32)[0]) == big
+    assert ds.BitsAllocated == 32
+
+
+def test_stale_pixel_description_tags_removed_and_vr_ob_for_8_bit() -> None:
+    slices = []
+    for v in (1, 2):
+        s = _slice([[0, 0]])
+        s.BitsAllocated = 8
+        s.BitsStored = 8
+        s.HighBit = 7
+        s.PixelData = np.array([[v, 0]], dtype=np.uint8).tobytes()
+        s.PixelPaddingValue = 0
+        s.SmallestImagePixelValue = 0
+        s.LargestImagePixelValue = 255
+        s.LossyImageCompression = "01"
+        s.VOILUTSequence = pydicom.Sequence([Dataset()])
+        slices.append(s)
+    ds = _build(slices, 0, ptype="mip")
+    assert ds is not None
+    assert ds[0x7FE00010].VR == "OB"
+    for kw in (
+        "PixelPaddingValue", "SmallestImagePixelValue", "LargestImagePixelValue",
+        "LossyImageCompression", "VOILUTSequence",
+    ):
+        assert kw not in ds
+
+
+def test_16_bit_pixel_data_vr_is_ow() -> None:
+    ds = _build([_slice([[1]]), _slice([[2]])], 0)
+    assert ds is not None and ds[0x7FE00010].VR == "OW"
+
+
+def test_series_description_suffix_not_duplicated_and_truncated() -> None:
+    slices = [_slice([[1]]), _slice([[2]])]
+    slices[0].SeriesDescription = "base - MIP"
+    ds = _build(slices, 0, ptype="mip")
+    assert ds is not None and ds.SeriesDescription == "base - MIP"
+    slices[0].SeriesDescription = "x" * 64
+    ds = _build(slices, 0, ptype="mip")
+    assert ds is not None and len(ds.SeriesDescription) == 64
+
+
+def test_single_slice_has_no_projection_type_or_suffix_but_new_series() -> None:
+    src = _slice([[1, 2]])
+    src.SeriesDescription = "base"
+    series_uid = generate_uid()
+    ds = _build([src], 0, ptype="mip", count=4, new_series_uid=series_uid)
+    assert ds is not None
+    assert ds.ImageType == ["DERIVED", "SECONDARY"]
+    assert ds.SeriesDescription == "base"
+    assert ds.SeriesInstanceUID == series_uid
+    assert ds.DerivationDescription == "Derived from instance 1"
+
+
+def test_single_slice_rle_source_round_trips(tmp_path) -> None:
+    src = _slice([[1, 9], [3, 4]])
+    try:
+        src.compress(pydicom.uid.RLELossless)
+    except Exception as exc:  # encoder unavailable
+        pytest.skip(f"RLE encoder unavailable: {type(exc).__name__}")
+    ds = _build([src], 0, count=3)
+    assert ds is not None
+    path = str(tmp_path / "rle1.dcm")
+    pde.save_projection_dataset(ds, path)
+    back = pydicom.dcmread(path)
+    assert back.file_meta.TransferSyntaxUID == pydicom.uid.RLELossless
+    assert np.array_equal(back.pixel_array, [[1, 9], [3, 4]])
+
+
+def test_save_handles_missing_file_meta(tmp_path) -> None:
+    ds = _slice([[1, 2]])
+    del ds.file_meta
+    path = str(tmp_path / "nometa.dcm")
+    pde.save_projection_dataset(ds, path)
+    assert pydicom.dcmread(path, force=True).SOPInstanceUID == ds.SOPInstanceUID
+
+
+def test_unbuildable_frame_wrapper_returns_none_without_raw_fallback() -> None:
+    mf, frames = _frame_series()
+    frames[0].BitsAllocated = 8  # frames stay valid, but a failing pixel read yields None
+    frames[0]._frame_index = 99  # out-of-range frame: pixel read fails
+    assert pde.create_projection_dataset(
+        frames[0], _studies(*frames), STUDY, SERIES, 0, "mip", 1, False
     ) is None

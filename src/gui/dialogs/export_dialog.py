@@ -47,7 +47,7 @@ from gui.dialogs.anonymization_options_widget import (
     BURNED_IN_PHI_WARNING,
     AnonymizationOptionsDialog,
 )
-from gui.export_manager import ExportManager, ExportSelectedRequest
+from gui.export_manager import ExportManager, ExportSelectedRequest, not_exported_note
 from gui.qt_tree_widget_utils import iter_tree_children
 from utils.deep_anonymizer import DeepAnonymizerOptions
 from utils.log_sanitizer import sanitize_message
@@ -597,6 +597,23 @@ class ExportDialog(QDialog):
                 if self.config_manager:
                     self.config_manager.set_last_export_path(self.output_path)
 
+    def _build_deep_anonymized_items(self) -> dict[tuple[str, str, int], Any]:
+        """Build the anonymized batch once; the overwrite preview and export share it."""
+        if self.projection_enabled and self.studies:
+            # Projections are built from the raw source, then anonymized as one batch.
+            return ExportManager.build_anonymized_projections_for_selection(
+                self.selected_items,
+                self.studies,
+                self.projection_type,
+                self.projection_slice_count,
+                self.use_rescaled_values,
+                self.anonymizer_options,
+            )
+        return ExportManager.build_deep_anonymized_selection(
+            self.selected_items,
+            self.anonymizer_options,
+        )
+
     def _on_export(self) -> None:
         """Handle export button click."""
         if not self.selected_items:
@@ -627,12 +644,7 @@ class ExportDialog(QDialog):
         # Routes through the shared deep metadata-de-identification path with the
         # selected preset/options — never the old group-0010-only path.
         deep_anonymize = self.anonymize_enabled and self.export_format == "DICOM"
-        deep_anonymized_items = None
-        if deep_anonymize:
-            deep_anonymized_items = ExportManager.build_deep_anonymized_selection(
-                self.selected_items,
-                self.anonymizer_options,
-            )
+        deep_anonymized_items = self._build_deep_anonymized_items() if deep_anonymize else None
 
         # Check for overwrites before exporting
         paths = ExportManager.get_export_paths_for_selection(
@@ -645,6 +657,8 @@ class ExportDialog(QDialog):
             deep_anonymize=deep_anonymize,
             deep_anonymizer_options=self.anonymizer_options if deep_anonymize else None,
             deep_anonymized_items=deep_anonymized_items,
+            studies=self.studies,
+            use_rescaled_values=self.use_rescaled_values,
         )
         existing = [p for p in paths if os.path.exists(p)]
         if existing:
@@ -709,6 +723,7 @@ class ExportDialog(QDialog):
                 self.config_manager.set_last_export_path(self.output_path)
 
             msg = f"Successfully exported {exported_count} file(s) to:\n{self.output_path}"
+            msg += not_exported_note(len(self.selected_items), exported_count)
             if downgraded_list:
                 def scale_label(s: float) -> str:
                     # Native label keyed on exact identity scale

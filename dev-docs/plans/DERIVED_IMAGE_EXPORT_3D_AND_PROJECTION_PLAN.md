@@ -36,8 +36,8 @@ dialog shows a note naming the projection type and slab size
 - **PNG/JPG** route through `export_rendering.create_projection_for_export`
   with W/L, LUT, photometric polarity, and overlays
   (`gui/export_manager.py:573`). Cine export uses the same path.
-- **DICOM** routes through `export_rendering.create_projection_dataset`
-  (`gui/export_manager.py:549`).
+- **DICOM** routes through `core/projection_dicom_export.create_projection_dataset`
+  (called from `gui/export_manager.py`).
 - Series and multi-slice scopes run per slice, so a projection **stack** export
   already works for all three formats. Filenames carry a
   `_MIP_8slices`-style suffix.
@@ -49,7 +49,8 @@ not in scope here.
 
 ### Projection DICOM output has correctness gaps
 
-`create_projection_dataset` (`gui/export_rendering.py:388`) deep-copies the
+`create_projection_dataset` (now `core/projection_dicom_export.py`; originally in
+`gui/export_rendering.py`) deep-copies the
 source instance and swaps in new pixels. It sets a new `SOPInstanceUID`,
 `ImageType = DERIVED\SECONDARY\{AIP|MIP|MINIP}`, and an `ImageComments` note.
 It has these defects:

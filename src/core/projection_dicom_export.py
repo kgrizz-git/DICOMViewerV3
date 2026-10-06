@@ -22,13 +22,7 @@ from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
 from pydicom.sequence import Sequence
-from pydicom.uid import (
-    CTImageStorage,
-    ExplicitVRLittleEndian,
-    MRImageStorage,
-    PositronEmissionTomographyImageStorage,
-    SecondaryCaptureImageStorage,
-)
+from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage
 
 from core.dicom_processor import DICOMProcessor
 from core.dicom_rescale import get_rescale_parameters
@@ -48,11 +42,19 @@ _logger = logging.getLogger(__name__)
 PROJECTION_SERIES_NUMBER_OFFSET = 600
 _PIXEL_DATA_TAG = 0x7FE00010
 
-_PROJECTION_FUNCS = {
-    "aip": "average_intensity_projection",
-    "mip": "maximum_intensity_projection",
-    "minip": "minimum_intensity_projection",
-}
+_REDUCERS = {"aip": np.mean, "mip": np.max, "minip": np.min}
+# Pixel-description tags that no longer describe replaced pixel data.
+_STALE_PIXEL_KEYWORDS = (
+    "PixelPaddingValue",
+    "PixelPaddingRangeLimit",
+    "SmallestImagePixelValue",
+    "LargestImagePixelValue",
+    "ModalityLUTSequence",
+    "VOILUTSequence",
+    "LossyImageCompression",
+    "LossyImageCompressionRatio",
+    "LossyImageCompressionMethod",
+)
 _PROJECTION_NAMES = {
     "aip": "Average Intensity Projection (AIP)",
     "mip": "Maximum Intensity Projection (MIP)",
@@ -89,9 +91,13 @@ def _to_integer_pixels(projection_array: np.ndarray, target_dtype: type) -> np.n
 
 
 def _apply_pixel_layout(ds: Dataset, pixels: np.ndarray) -> None:
-    """Write pixels as explicit OW and sync the image-pixel attributes."""
+    """Write pixels as explicit OB/OW and sync the image-pixel attributes."""
     bits = pixels.dtype.itemsize * 8
-    ds[_PIXEL_DATA_TAG] = DataElement(_PIXEL_DATA_TAG, "OW", pixels.tobytes())
+    vr = "OB" if bits == 8 else "OW"
+    ds[_PIXEL_DATA_TAG] = DataElement(_PIXEL_DATA_TAG, vr, pixels.tobytes())
+    for keyword in _STALE_PIXEL_KEYWORDS:
+        if keyword in ds:
+            del ds[keyword]
     ds.Rows = pixels.shape[0]
     ds.Columns = pixels.shape[1]
     ds.BitsAllocated = bits
@@ -122,11 +128,22 @@ def _sync_single_slice_file_meta(ds: Dataset) -> None:
     meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
 
 
-def _compute_projection(projection_type: str, slices: list[Dataset]) -> np.ndarray | None:
-    func_name = _PROJECTION_FUNCS.get(projection_type)
-    if func_name is None:
+def _project(projection_type: str, slab: list[Dataset], *, rescaled: bool) -> np.ndarray | None:
+    """Reduce the slab in float64, over stored or rescaled (physical) values."""
+    reducer = _REDUCERS.get(projection_type)
+    if reducer is None:
         return None
-    return getattr(DICOMProcessor, func_name)(slices)
+    planes = []
+    for s in slab:
+        arr = DICOMProcessor.get_pixel_array(s)
+        if arr is None or arr.ndim != 2:
+            return None
+        plane = arr.astype(np.float64)
+        if rescaled:
+            slope, intercept = _slice_rescale(s)
+            plane = plane * slope + intercept
+        planes.append(plane)
+    return reducer(np.stack(planes, axis=0), axis=0)
 
 
 def _replace_pixels(ds: Dataset, source: Dataset, projection_array: np.ndarray) -> bool:
@@ -149,22 +166,6 @@ def slab_rescale_is_uniform(slab: list[Dataset]) -> bool:
     """True when every slab slice shares one RescaleSlope/RescaleIntercept."""
     first = _slice_rescale(slab[0])
     return all(_slice_rescale(s) == first for s in slab[1:])
-
-
-def _project_rescaled(projection_type: str, slab: list[Dataset]) -> np.ndarray | None:
-    """Reduce the slab in rescaled (physical) space."""
-    reducers = {"aip": np.mean, "mip": np.max, "minip": np.min}
-    reducer = reducers.get(projection_type)
-    if reducer is None:
-        return None
-    planes = []
-    for s in slab:
-        arr = DICOMProcessor.get_pixel_array(s)
-        if arr is None:
-            return None
-        slope, intercept = _slice_rescale(s)
-        planes.append(arr.astype(np.float64) * slope + intercept)
-    return reducer(np.stack(planes, axis=0), axis=0)
 
 
 def _replace_pixels_rescaled(ds: Dataset, physical: np.ndarray) -> None:
@@ -210,11 +211,15 @@ def _set_derivation_metadata(
 def _set_projection_pixels(
     ds: Dataset, source: Dataset, projection_type: str, slab: list[Dataset]
 ) -> bool:
-    """Compute and store the projection; rescaled path only for mixed-rescale slabs."""
-    if slab_rescale_is_uniform(slab):
-        array = _compute_projection(projection_type, slab)
+    """Compute and store the projection.
+
+    The stored-value path needs a uniform, positive-slope rescale; otherwise the
+    slab is reduced in rescaled space and re-encoded.
+    """
+    if slab_rescale_is_uniform(slab) and _slice_rescale(slab[0])[0] > 0:
+        array = _project(projection_type, slab, rescaled=False)
         return array is not None and _replace_pixels(ds, source, array)
-    physical = _project_rescaled(projection_type, slab)
+    physical = _project(projection_type, slab, rescaled=True)
     if physical is None:
         return False
     _replace_pixels_rescaled(ds, physical)
@@ -233,27 +238,42 @@ def _set_descriptions(
     existing = getattr(ds, "ImageComments", "")
     ds.ImageComments = f"{existing}; {info}" if existing else info
 
-    label = projection_type.upper()
-    desc = getattr(ds, "SeriesDescription", "")
-    ds.SeriesDescription = f"{desc} - {label}" if desc else label
-    ds.ImageType = ["DERIVED", "SECONDARY", _IMAGE_TYPE_VALUES.get(projection_type, "PROJECTION")]
+    desc = str(getattr(ds, "SeriesDescription", "") or "")
+    if is_projection:
+        label = projection_type.upper()
+        if desc and not (desc == label or desc.endswith(f" - {label}")):
+            desc = f"{desc} - {label}"
+        elif not desc:
+            desc = label
+        ds.ImageType = ["DERIVED", "SECONDARY", _IMAGE_TYPE_VALUES.get(projection_type, "PROJECTION")]
+    else:
+        ds.ImageType = ["DERIVED", "SECONDARY"]
+    ds.SeriesDescription = desc[:64]
     if is_projection:
         kind = _PROJECTION_NAMES.get(projection_type, "Projection").split(" (")[0]
         return f"{kind} of {n_slices} slices, instances {start + 1}-{end + 1}"
     return f"Derived from instance {start + 1}"
 
 
-_ENHANCED_TO_CLASSIC_SOP = {
-    "1.2.840.10008.5.1.4.1.1.2.1": CTImageStorage,  # Enhanced CT
-    "1.2.840.10008.5.1.4.1.1.4.1": MRImageStorage,  # Enhanced MR
-    "1.2.840.10008.5.1.4.1.1.130": PositronEmissionTomographyImageStorage,  # Enhanced PET
-}
 _MULTIFRAME_DROP_KEYWORDS = (
     "NumberOfFrames",
     "PerFrameFunctionalGroupsSequence",
     "SharedFunctionalGroupsSequence",
     "SourceImageSequence",
     "ReferencedSeriesSequence",
+    "DimensionIndexSequence",
+    "DimensionOrganizationSequence",
+    "DimensionOrganizationType",
+    "ConcatenationUID",
+    "ConcatenationFrameOffsetNumber",
+    "InConcatenationNumber",
+    "InConcatenationTotalNumber",
+    "SOPInstanceUIDOfConcatenationSource",
+    "FrameIncrementPointer",
+    "RepresentativeFrameNumber",
+    "FrameTime",
+    "FrameTimeVector",
+    "FrameDelay",
 )
 
 
@@ -261,20 +281,17 @@ def _is_frame_wrapper(dataset: Dataset) -> bool:
     return hasattr(dataset, "_frame_index") and hasattr(dataset, "_original_dataset")
 
 
-def single_frame_sop_class(sop_class_uid: str) -> pydicom.uid.UID:
-    """Map an enhanced class to its classic single-frame class, else Secondary Capture."""
-    return _ENHANCED_TO_CLASSIC_SOP.get(str(sop_class_uid), SecondaryCaptureImageStorage)
-
-
 def _plain_frame_dataset(frame: Dataset) -> Dataset:
     """Copy a frame wrapper's visible metadata into a plain single-frame Dataset."""
     drop = {pydicom.datadict.tag_for_keyword(k) for k in _MULTIFRAME_DROP_KEYWORDS}
+    drop.discard(None)
     drop.add(_PIXEL_DATA_TAG)
     ds = Dataset()
     for tag in list(frame.keys()):
         if tag not in drop:
             ds[tag] = copy.deepcopy(frame[tag])
-    ds.SOPClassUID = single_frame_sop_class(str(getattr(frame, "SOPClassUID", "")))
+    # The enhanced IOD does not describe a flattened frame; Modality is kept.
+    ds.SOPClassUID = SecondaryCaptureImageStorage
     return ds
 
 
@@ -414,5 +431,6 @@ def create_projection_dataset(
 
 def save_projection_dataset(ds: Dataset, output_path: str) -> None:
     """Save a derived dataset with a strict file_meta (source fallbacks lacking one save as-is)."""
-    strict = "TransferSyntaxUID" in getattr(ds, "file_meta", {})
+    meta = getattr(ds, "file_meta", None)
+    strict = meta is not None and "TransferSyntaxUID" in meta
     dcmwrite(output_path, ds, write_like_original=not strict)
