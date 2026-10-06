@@ -53,7 +53,7 @@ requests>=2.34.2
 # cross-platform dependency-bump verification is complete.
 pylibjpeg>=2.1.0  # For JPEG 2000 and other compressed formats
 python-gdcm==3.2.6  # Classic JPEG Baseline/Extended/Lossless pydicom handler
-pylibjpeg-openjpeg>=2.5.0  # JPEG 2000 decoder plugin for pylibjpeg
+pylibjpeg-openjpeg>=2.6.0  # JPEG 2000 decoder plugin for pylibjpeg
 pylibjpeg-rle>=2.2.0  # RLE decoder plugin for pylibjpeg
 pyjpegls>=1.5.1  # For JPEG-LS compression
 
