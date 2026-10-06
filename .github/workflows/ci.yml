@@ -121,10 +121,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+          # No `cache: pip`: the requirements install below goes through uv,
+          # whose cache (~/.cache/uv) a pip cache would not cover.
 
       - name: Install system dependencies (Qt offscreen)
         run: |
@@ -135,9 +133,13 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
+          # uv resolves and installs the same requirements far faster than pip
+          # (pip took ~45s here even with a warm wheel cache). Pinned so CI is
+          # reproducible; bump deliberately. Other jobs keep pip, and so do the
+          # launch scripts, so pip resolution is still exercised in CI.
+          python -m pip install "uv==0.12.23"
           # requirements-dev.txt includes requirements.txt plus lizard, pytest-cov, etc.
-          pip install -r requirements-dev.txt
+          uv pip install --system -r requirements-dev.txt
 
       - name: Run tests with coverage
         env:
