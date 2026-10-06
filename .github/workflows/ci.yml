@@ -121,10 +121,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+          # No `cache: pip`: the requirements install below goes through uv,
+          # whose cache (~/.cache/uv) a pip cache would not cover.
 
       - name: Install system dependencies (Qt offscreen)
         run: |
