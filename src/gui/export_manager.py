@@ -24,6 +24,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
+import pydicom.uid
 from PIL import Image
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt
@@ -31,6 +32,10 @@ from PySide6.QtWidgets import QProgressDialog
 
 from core.dicom_processor import DICOMProcessor
 from core.lut_display import grayscale_export_kwargs, invert_color_export_image
+from core.projection_dicom_export import (
+    create_projection_dataset,
+    save_projection_dataset,
+)
 from gui import export_rendering as _er
 from utils.deep_anonymizer import DeepDICOMAnonymizer
 from utils.privacy.console import print_redacted
@@ -122,6 +127,10 @@ class ExportSliceRequest:
     image_inverted: bool = False
     lut: Any = None
     voi_from_dicom: bool = False
+    # Projection DICOM: SeriesInstanceUID shared by the export run, and the
+    # 1-based InstanceNumber within that new series.
+    projection_series_uid: str | None = None
+    projection_instance_number: int | None = None
 
 
 class ExportManager:
@@ -410,7 +419,10 @@ class ExportManager:
 
                 os.makedirs(series_dir, exist_ok=True)
 
-                for slice_index, dataset in items:
+                # One derived series per (source series, projection type, slab) run.
+                projection_series_uid = pydicom.uid.generate_uid()
+
+                for position, (slice_index, dataset) in enumerate(items, start=1):
                     if progress.wasCanceled():
                         break
 
@@ -474,6 +486,8 @@ class ExportManager:
                             image_inverted=image_inverted,
                             lut=lut,
                             voi_from_dicom=voi_from_dicom,
+                            projection_series_uid=projection_series_uid,
+                            projection_instance_number=position,
                         )
                     )
                     if success:
@@ -546,14 +560,17 @@ class ExportManager:
                 # Export as DICOM (deep-anonymized or original dataset already selected by caller)
                 if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
                     # Create projection dataset for DICOM export
-                    projection_dataset = _er.create_projection_dataset(
+                    projection_dataset = create_projection_dataset(
                         dataset, studies, study_uid, series_uid, slice_index,
-                        projection_type, projection_slice_count, use_rescaled_values
+                        projection_type, projection_slice_count, use_rescaled_values,
+                        new_series_uid=request.projection_series_uid,
+                        instance_number=request.projection_instance_number,
                     )
                     if projection_dataset is None:
                         # Fall back to single slice if projection fails
-                        projection_dataset = dataset
-                    projection_dataset.save_as(output_path)
+                        dataset.save_as(output_path)
+                    else:
+                        save_projection_dataset(projection_dataset, output_path)
                 else:
                     dataset.save_as(output_path)
                 return (True, None)
