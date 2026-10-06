@@ -16,17 +16,29 @@ import logging
 from typing import Any
 
 import numpy as np
+import pydicom.datadict
 import pydicom.uid
 from pydicom.dataelem import DataElement
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
 from pydicom.sequence import Sequence
-from pydicom.uid import ExplicitVRLittleEndian
+from pydicom.uid import (
+    CTImageStorage,
+    ExplicitVRLittleEndian,
+    MRImageStorage,
+    PositronEmissionTomographyImageStorage,
+    SecondaryCaptureImageStorage,
+)
 
 from core.dicom_processor import DICOMProcessor
 from core.dicom_rescale import get_rescale_parameters
 from core.dicom_rescale_encoding import float_to_int16_with_rescale
-from utils.dicom_utils import get_slice_thickness
+from core.multiframe_handler import is_multiframe
+from utils.dicom_utils import (
+    get_image_orientation,
+    get_image_position,
+    get_slice_thickness,
+)
 from utils.log_sanitizer import sanitized_format_exc
 from utils.privacy.console import print_redacted
 
@@ -172,6 +184,8 @@ def _sop_ref_item(src: Dataset) -> Dataset | None:
     item = Dataset()
     item.ReferencedSOPClassUID = getattr(src, "SOPClassUID", "")
     item.ReferencedSOPInstanceUID = uid
+    if _is_frame_wrapper(src):
+        item.ReferencedFrameNumber = int(src._frame_index) + 1
     return item
 
 
@@ -229,10 +243,91 @@ def _set_descriptions(
     return f"Derived from instance {start + 1}"
 
 
-def _set_combined_thickness(ds: Dataset, slices: list[Dataset]) -> None:
-    thicknesses = [t for t in (get_slice_thickness(s) for s in slices) if t is not None]
-    if thicknesses:
-        ds.SliceThickness = sum(thicknesses)
+_ENHANCED_TO_CLASSIC_SOP = {
+    "1.2.840.10008.5.1.4.1.1.2.1": CTImageStorage,  # Enhanced CT
+    "1.2.840.10008.5.1.4.1.1.4.1": MRImageStorage,  # Enhanced MR
+    "1.2.840.10008.5.1.4.1.1.130": PositronEmissionTomographyImageStorage,  # Enhanced PET
+}
+_MULTIFRAME_DROP_KEYWORDS = (
+    "NumberOfFrames",
+    "PerFrameFunctionalGroupsSequence",
+    "SharedFunctionalGroupsSequence",
+    "SourceImageSequence",
+    "ReferencedSeriesSequence",
+)
+
+
+def _is_frame_wrapper(dataset: Dataset) -> bool:
+    return hasattr(dataset, "_frame_index") and hasattr(dataset, "_original_dataset")
+
+
+def single_frame_sop_class(sop_class_uid: str) -> pydicom.uid.UID:
+    """Map an enhanced class to its classic single-frame class, else Secondary Capture."""
+    return _ENHANCED_TO_CLASSIC_SOP.get(str(sop_class_uid), SecondaryCaptureImageStorage)
+
+
+def _plain_frame_dataset(frame: Dataset) -> Dataset:
+    """Copy a frame wrapper's visible metadata into a plain single-frame Dataset."""
+    drop = {pydicom.datadict.tag_for_keyword(k) for k in _MULTIFRAME_DROP_KEYWORDS}
+    drop.add(_PIXEL_DATA_TAG)
+    ds = Dataset()
+    for tag in list(frame.keys()):
+        if tag not in drop:
+            ds[tag] = copy.deepcopy(frame[tag])
+    ds.SOPClassUID = single_frame_sop_class(str(getattr(frame, "SOPClassUID", "")))
+    return ds
+
+
+def _frame_pixels(frame: Dataset) -> np.ndarray | None:
+    """Return the 2-D integer pixel array of one frame, or None if unusable."""
+    arr = DICOMProcessor.get_pixel_array(frame)
+    if arr is None or arr.ndim != 2 or not np.issubdtype(arr.dtype, np.integer):
+        return None
+    return arr
+
+
+def _start_derived_dataset(dataset: Dataset) -> Dataset | None:
+    """Return the working copy; None if a multi-frame source can't be flattened."""
+    if _is_frame_wrapper(dataset):
+        return _plain_frame_dataset(dataset)
+    if is_multiframe(dataset):
+        return None  # un-split multi-frame instance: pixel geometry is not 2-D
+    return copy.deepcopy(dataset)
+
+
+def _slab_step_extent(slab: list[Dataset]) -> tuple[np.ndarray, float] | None:
+    """Return (slab center IPP, geometric extent in mm), or None without positions."""
+    first, last = get_image_position(slab[0]), get_image_position(slab[-1])
+    if first is None or last is None:
+        return None
+    delta = np.asarray(last, dtype=float) - np.asarray(first, dtype=float)
+    orient = get_image_orientation(slab[0])
+    if orient is not None:
+        normal = np.cross(np.asarray(orient[0], dtype=float), np.asarray(orient[1], dtype=float))
+        span = abs(float(np.dot(delta, normal)))
+    else:
+        span = float(np.linalg.norm(delta))
+    one = get_slice_thickness(slab[0])
+    if one is None:
+        one = span / (len(slab) - 1)
+    center = (np.asarray(first, dtype=float) + np.asarray(last, dtype=float)) / 2.0
+    return center, span + float(one)
+
+
+def _apply_slab_geometry(ds: Dataset, slab: list[Dataset]) -> str:
+    """Set slab-center IPP and geometric thickness; return a description suffix."""
+    if "SliceLocation" in ds:
+        del ds.SliceLocation
+    geometry = _slab_step_extent(slab)
+    if geometry is None:
+        thicknesses = [t for t in (get_slice_thickness(s) for s in slab) if t is not None]
+        if thicknesses:
+            ds.SliceThickness = sum(thicknesses)
+        return ""
+    center, extent = geometry
+    ds.ImagePositionPatient = [round(float(v), 6) for v in center]
+    ds.SliceThickness = round(extent, 6)
+    return "; slab center at (" + ", ".join(f"{v:.2f}" for v in center) + ") mm"
 
 
 def _slab_range(total: int, slice_index: int, count: int) -> tuple[int, int]:
@@ -280,20 +375,29 @@ def create_projection_dataset(
         if not slab:
             return None
 
-        ds = copy.deepcopy(dataset)
+        ds = _start_derived_dataset(dataset)
+        if ds is None:
+            return None
         is_projection = len(slab) >= 2
         ds.SOPInstanceUID = pydicom.uid.generate_uid()
+        suffix = ""
         if is_projection:
             if not _set_projection_pixels(ds, dataset, projection_type, slab):
                 return None
             _fresh_file_meta(ds)
-            _set_combined_thickness(ds, slab)
+            suffix = _apply_slab_geometry(ds, slab)
+        elif _is_frame_wrapper(dataset):
+            pixels = _frame_pixels(dataset)
+            if pixels is None:
+                return None
+            _apply_pixel_layout(ds, pixels)
+            _fresh_file_meta(ds)
         else:
             _sync_single_slice_file_meta(ds)
 
         derivation = _set_descriptions(ds, projection_type, len(slab), start, end, is_projection)
         _set_derivation_metadata(
-            ds, slab, str(getattr(dataset, "SeriesInstanceUID", "") or ""), derivation
+            ds, slab, str(getattr(dataset, "SeriesInstanceUID", "") or ""), derivation + suffix
         )
         if "SpacingBetweenSlices" in ds:
             del ds.SpacingBetweenSlices

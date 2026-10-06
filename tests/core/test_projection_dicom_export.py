@@ -275,3 +275,120 @@ def test_deep_anonymized_projection_export_has_no_source_identifiers(tmp_path) -
     # One shared (remapped) series UID across the run; instances numbered 1..N.
     assert len({ds.SeriesInstanceUID for ds in out.values()}) == 1
     assert sorted(ds.InstanceNumber for ds in out.values()) == [1, 2, 3]
+
+
+def _positioned(ds: Dataset, z: float, thickness: float = 2.0) -> Dataset:
+    ds.ImagePositionPatient = [10.0, 20.0, z]
+    ds.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
+    ds.SliceThickness = thickness
+    ds.SliceLocation = z
+    return ds
+
+
+def test_slab_geometry_center_extent_and_slice_location_dropped() -> None:
+    slices = [_positioned(_slice([[1, 2]]), z, 2.0) for z in (0.0, 3.0, 6.0, 9.0)]
+    ds = _build(slices, 0, count=4)
+    assert ds is not None
+    assert [float(v) for v in ds.ImagePositionPatient] == [10.0, 20.0, 4.5]
+    assert float(ds.SliceThickness) == 11.0  # 9 mm between centers + 2 mm
+    assert "SliceLocation" not in ds
+    assert "slab center at (10.00, 20.00, 4.50) mm" in ds.DerivationDescription
+
+
+def test_slab_geometry_uses_normal_for_oblique_stacks() -> None:
+    slices = [_positioned(_slice([[1]]), z) for z in (0.0, 4.0)]
+    for s, y in zip(slices, (0.0, 3.0), strict=True):
+        s.ImagePositionPatient = [10.0, 20.0 + y, s.ImagePositionPatient[2]]
+    ds = _build(slices, 0)
+    assert ds is not None
+    # in-plane shift of 3 mm is ignored; normal distance 4 + thickness 2
+    assert float(ds.SliceThickness) == 6.0
+
+
+def test_missing_positions_fall_back_to_summed_thickness() -> None:
+    slices = [_slice([[1]]), _slice([[2]])]
+    for s in slices:
+        s.SliceThickness = 2.5
+        s.SliceLocation = 1.0
+    ds = _build(slices, 0)
+    assert ds is not None
+    assert float(ds.SliceThickness) == 5.0
+    assert "ImagePositionPatient" not in ds
+    assert "SliceLocation" not in ds
+    assert "slab center" not in ds.DerivationDescription
+
+
+def _enhanced_multiframe(n_frames: int = 3) -> Dataset:
+    ds = _slice([[0, 0], [0, 0]])
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.2.1"
+    ds.file_meta.MediaStorageSOPClassUID = ds.SOPClassUID
+    ds.NumberOfFrames = n_frames
+    frames = np.stack(
+        [np.array([[f, f + 1], [f + 2, f + 3]], dtype=np.uint16) for f in range(n_frames)]
+    )
+    ds.PixelData = frames.tobytes()
+    per_frame = []
+    for f in range(n_frames):
+        item = Dataset()
+        plane = Dataset()
+        plane.ImagePositionPatient = [0.0, 0.0, 3.0 * f]
+        item.PlanePositionSequence = pydicom.Sequence([plane])
+        per_frame.append(item)
+    ds.PerFrameFunctionalGroupsSequence = pydicom.Sequence(per_frame)
+    shared = Dataset()
+    orient = Dataset()
+    orient.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
+    shared.PlaneOrientationSequence = pydicom.Sequence([orient])
+    measures = Dataset()
+    measures.SliceThickness = 2.0
+    measures.PixelSpacing = [1.0, 1.0]
+    shared.PixelMeasuresSequence = pydicom.Sequence([measures])
+    ds.SharedFunctionalGroupsSequence = pydicom.Sequence([shared])
+    return ds
+
+
+def _frame_series(n_frames: int = 3):
+    from core.multiframe_handler import create_frame_dataset
+
+    mf = _enhanced_multiframe(n_frames)
+    return mf, [create_frame_dataset(mf, i) for i in range(n_frames)]
+
+
+def test_multiframe_source_builds_plain_single_frame_classic_dataset(tmp_path) -> None:
+    mf, frames = _frame_series()
+    ds = pde.create_projection_dataset(
+        frames[0], _studies(*frames), STUDY, SERIES, 0, "mip", 2, False
+    )
+    assert ds is not None and type(ds) is Dataset
+    for kw in ("NumberOfFrames", "PerFrameFunctionalGroupsSequence", "SharedFunctionalGroupsSequence"):
+        assert kw not in ds
+    assert ds.SOPClassUID == CTImageStorage
+    assert ds.file_meta.MediaStorageSOPClassUID == CTImageStorage
+    assert [float(v) for v in ds.ImagePositionPatient] == [0.0, 0.0, 1.5]
+    assert float(ds.SliceThickness) == 5.0
+    assert [r.ReferencedFrameNumber for r in ds.SourceImageSequence] == [1, 2]
+    path = str(tmp_path / "mf.dcm")
+    pde.save_projection_dataset(ds, path)
+    back = pydicom.dcmread(path)
+    assert np.array_equal(back.pixel_array, [[1, 2], [3, 4]])
+
+
+def test_multiframe_single_slab_slice_gets_its_frame_pixels() -> None:
+    mf, frames = _frame_series()
+    ds = pde.create_projection_dataset(
+        frames[2], _studies(*frames), STUDY, SERIES, 2, "mip", 4, False
+    )
+    assert ds is not None and "NumberOfFrames" not in ds
+    assert np.array_equal(_pixels(ds), [[2, 3], [4, 5]])
+
+
+def test_multiframe_non_classic_class_becomes_secondary_capture() -> None:
+    assert pde.single_frame_sop_class("1.2.840.10008.5.1.4.1.1.4.1") == pydicom.uid.MRImageStorage
+    assert pde.single_frame_sop_class("1.2.3.9") == pydicom.uid.SecondaryCaptureImageStorage
+
+
+def test_unsplit_multiframe_instance_returns_none() -> None:
+    mf = _enhanced_multiframe()
+    assert pde.create_projection_dataset(
+        mf, _studies(mf, mf), STUDY, SERIES, 0, "mip", 2, False
+    ) is None
