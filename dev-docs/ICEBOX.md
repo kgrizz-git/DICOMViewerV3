@@ -1,6 +1,6 @@
 # Icebox
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-10-06
 
 Parked work, split out of [`TO_DO.md`](TO_DO.md) on 2026-08-23. Everything here
 is **self-labelled** in its own text as P3, Optional, Deferred, or a spike — it
@@ -29,6 +29,8 @@ disappear.
   in [`TO_DO.md`](TO_DO.md) under Documentation.
 
 ## From: Features (Near-Term)
+
+- [ ] **[P3]** **Projection export extras:** non-overlapping slabs, caching of repeated projection stacks, and a slab-thickness override in the Export dialog. Projection export itself shipped; see the open questions in [`PROJECTION_EXPORT_PLAN.md`](plans/completed/PROJECTION_EXPORT_PLAN.md#open-questions).
 
     - [ ] **[P3]** **Mesh export (OBJ / STL / PLY) from the 3D viewer:** let the user export the displayed anatomy as a 3D mesh for printing, external tooling, or teaching. **Depends on isosurface extraction** (next item): volume rendering has no polygonal geometry, so a surface must first be extracted (`vtkFlyingEdges3D` / `vtkMarchingCubes`) at a threshold before `vtkOBJWriter` / `vtkSTLWriter` / `vtkPLYWriter` can write anything — `vtkOBJExporter` on the current scene would export an empty file. Scope to consider: threshold/preset-derived surface, optional decimation + smoothing, units (mm) and LPS→mesh axis convention, and whether to offer it beyond the 3D viewer (e.g. from a segmentation/ROI). **Two caveats to resolve in the plan:** (1) an extracted surface is *visualization-derived, not a validated segmentation* — the threshold drives the geometry, so the UI must not imply clinical/dimensional fidelity; (2) **PHI risk** — a mesh from a head/face CT is re-identifiable surface geometry and carries no DICOM de-identification, so exports need an explicit warning and should follow [PHI/PII guardrails](PHI_PII_REPOSITORY_GUARDRAILS.md).
 

@@ -34,13 +34,8 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-3. **[P1] Fix projection DICOM export** — Phase B of the
-   [derived-image export plan](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-b--projection-dicom-correctness).
-   Projection export to PNG/JPG/DICOM already ships through the Export dialog.
-   Its DICOM output reuses the source `SeriesInstanceUID` and keeps stale
-   `file_meta`, so a compressed source writes an unreadable file.
-4. **[P1] Save 3D render as PNG/JPG** — Phase A of the
-   [same plan](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-a--save-3d-render-as-pngjpg).
+3. **[P1] Save 3D render as PNG/JPG** — Phase A of the
+   [derived-image export plan](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-a--save-3d-render-as-pngjpg).
    Add a **Save Image…** action that writes the offscreen surface's cached `QImage`.
    SC DICOM (Phase C) follows.
 
@@ -331,7 +326,6 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
 
-- [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Partial:** PNG/JPG/DICOM projection export, including stacks, ships through the Export dialog. DICOM output needs correctness fixes. **Plan:** [Derived-image export, Phase B](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-b--projection-dicom-correctness)
 
 - [ ] **[P2]** **Window top can truncate to 254.** `apply_window_level` computes `(x - low) * (255 / width)` and then truncates with `astype(np.uint8)`. For some widths, such as 200 and 400, a value at the top of the window comes out as 254.99999 and truncates to **254**, so the window's top edge is never full white. Widths such as 256 and 1000 are exact. A fix is to multiply by 255 before dividing, but that changes rendered bytes on every display path, so it needs its own change with updated golden tests. Found while writing `tests/gui/test_lut_curve_editor.py` (2026-10-03).
 - [ ] **[P2]** **Consider a 10- or 12-bit display path.** Stored pixels are already 10-, 12-, or 16-bit. Window/level uses that range, then the display path quantizes to 8-bit (`uint8`, then `QImage.Format_Grayscale8` / `Format_RGB888`) before the LUT indexes a 256-entry table. Spike whether Qt can keep a 10-bit (`Format_RGB30`) or 16-bit grayscale (`Format_Grayscale16`) image through to the monitor on macOS and Windows, and which outputs must stay 8-bit (JPEG, cine, thumbnails). Keep the LUT after window/level. Wider display depth helps when one window contains more than 256 distinct stored steps, and it reduces banding on a steep LUT. It does not show values outside the window. Added 2026-09-28.

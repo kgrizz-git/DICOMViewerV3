@@ -1,13 +1,13 @@
 # Derived-Image Export Plan — 3D Render Images and Projection DICOM
 
-**Status:** Active (not started)
+**Status:** Active. Phase B shipped 2026-10-06; Phases A and C remain.
 **Last updated:** 2026-10-06
 **TO_DO refs:** Next up slots "Fix projection DICOM export" and "Save 3D
 render as PNG/JPG"; 3D volume rendering
 sub-items "Export current 3D volume render as image" and "…as Secondary Capture
 (SC) DICOM"; Measurements/projections item "Allow export of AIP, MIP, MinIP
 stack as DICOM or images".
-**Supersedes:** [`PROJECTION_EXPORT_PLAN.md`](supporting/PROJECTION_EXPORT_PLAN.md)
+**Supersedes:** [`PROJECTION_EXPORT_PLAN.md`](completed/PROJECTION_EXPORT_PLAN.md)
 for scope and ordering. That plan predates the shipped projection export and its
 "Current state" section is stale.
 
@@ -169,13 +169,13 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
 `mpr_dicom_export.py` already lives in `core/`. Check the move with
 `scripts/check_architecture_boundaries.py`.
 
-- [ ] **B1. New series per export run.** `ExportManager` creates one
+- [x] **B1. New series per export run.** `ExportManager` creates one
   `SeriesInstanceUID` per (source series, projection type, slab) export run and
   passes it to the builder. Set `SeriesNumber` to the source value plus 600.
   MPR export uses +500 (`mpr_dicom_export.py:328`), so a distinct offset keeps
   the two derived series apart. Keep `SeriesDescription` as
   `"<source> - MIP"`.
-- [ ] **B2. Fresh `file_meta`.** Rebuild `file_meta` the way
+- [x] **B2. Fresh `file_meta`.** Rebuild `file_meta` the way
   `mpr_dicom_export.py:350` does. Set `MediaStorageSOPClassUID` and
   `MediaStorageSOPInstanceUID` to match the dataset, use
   `ExplicitVRLittleEndian`, and set the implementation UID. Also match the
@@ -185,35 +185,35 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
   (`:471`). Re-encode only when the builder replaced the pixels. The one-slice
   branch keeps its source transfer syntax and only syncs
   `MediaStorageSOPInstanceUID`. This fixes defects 2 and 3.
-- [ ] **B3. Round, don't floor.** Use `np.rint` before the integer cast.
-- [ ] **B4. Rescale guard.** If slab slices disagree on `RescaleSlope` or
+- [x] **B3. Round, don't floor.** Use `np.rint` before the integer cast.
+- [x] **B4. Rescale guard.** If slab slices disagree on `RescaleSlope` or
   `RescaleIntercept`, project in **rescaled** space and re-encode to int16 with
   a computed slope and intercept (the MPR export encoding). Otherwise keep the
   current stored-value path, which preserves exact pixel values.
-- [ ] **B5. Derivation metadata.** Add `DerivationDescription` (for example,
+- [x] **B5. Derivation metadata.** Add `DerivationDescription` (for example,
   "Maximum Intensity Projection of 8 slices, instances 42–49"). Add
   `SourceImageSequence` entries for the slab's SOP instances and a
   `ReferencedSeriesSequence` for the source series. Use the
   `DerivationCodeSequence` codes from CID 7203 only if they map cleanly. If not,
   skip them rather than guess.
-- [ ] **B6. Instance numbering.** Number instances 1..N within the new series
+- [x] **B6. Instance numbering.** Number instances 1..N within the new series
   instead of `9000 + index`.
-- [ ] **B7. Anonymize the derived datasets.** When deep-anonymize is on,
+- [x] **B7. Anonymize the derived datasets.** When deep-anonymize is on,
   build projection datasets from the raw source and anonymize the **built**
   batch, as `mpr_dicom_export.py:460` does. Do not feed the pre-anonymized
   source batch to the builder. This scrubs the B5 reference sequences with one
   consistent UID remap.
-- [ ] **B7a. Multi-frame sources.** For `FrameDatasetWrapper` inputs, build a
+- [x] **B7a. Multi-frame sources.** For `FrameDatasetWrapper` inputs, build a
   plain single-frame dataset rather than deep-copying the wrapper. Drop
   `NumberOfFrames` and the per-frame functional groups, and use a
   single-frame SOP class. If that proves too large for this PR, fall back to
   a single-slice export with a user-visible note. Test a frame-wrapper source
   either way.
-- [ ] **B7b. Slab geometry.** Set `ImagePositionPatient` to the slab center,
+- [x] **B7b. Slab geometry.** Set `ImagePositionPatient` to the slab center,
   the midpoint of the first and last slice positions. Set `SliceThickness` to
   the geometric slab extent in mm. Drop `SliceLocation` rather than leave a
   value that disagrees with the slab. Add a test.
-- [ ] **B8. Tests** (`tests/core/test_projection_dicom_export.py`):
+- [x] **B8. Tests** (`tests/core/test_projection_dicom_export.py`):
   - A two-slice MIP stack shares one new series UID that differs from the
     source.
   - `file_meta` SOP UID equals the dataset SOP UID, and the transfer syntax is
@@ -224,7 +224,7 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
   - Deep-anonymized output carries no source patient fields or source UIDs
     inside the reference sequences.
   - A multi-frame source falls back cleanly.
-- [ ] **B9. Closeout.** Add a `CHANGELOG.md` entry (patch: export correctness).
+- [x] **B9. Closeout.** Add a `CHANGELOG.md` entry (patch: export correctness).
   Mark `PROJECTION_EXPORT_PLAN.md` complete except for the deferred items, move
   it to `plans/completed/`, and remove the TO_DO projection-export item.
   Update this plan's two links to the moved file (the header and Out of
@@ -252,8 +252,8 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
 
 - Multi-frame or rotation-sweep 3D export (cine of the 3D view).
 - Non-overlapping projection slabs, projection caching, and the slab-override
-  control from the old plan's open questions. These stay in the superseded plan
-  until someone promotes them.
+  control from the old plan's open questions. These are parked in
+  [`ICEBOX.md`](../ICEBOX.md) under Features (Near-Term).
 - Changing MIP/MinIP polarity under MONOCHROME1. This is tracked separately in
   `TO_DO.md`.
 
