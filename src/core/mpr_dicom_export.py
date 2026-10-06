@@ -72,6 +72,7 @@ from pydicom.uid import (
 )
 
 from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
+from core.dicom_rescale_encoding import float_to_int16_with_rescale
 from core.mpr_builder import MprResult
 from utils.deep_anonymizer import DeepAnonymizerOptions, DeepDICOMAnonymizer
 
@@ -121,25 +122,6 @@ def _stack_min_max(slices: list[np.ndarray]) -> tuple[float, float]:
     mins = [float(np.min(s)) for s in slices]
     maxs = [float(np.max(s)) for s in slices]
     return min(mins), max(maxs)
-
-
-def _float_to_int16_with_rescale(
-    physical: np.ndarray, p_min: float, p_max: float
-) -> tuple[np.ndarray, float, float]:
-    """Map physical float values to int16 with DICOM rescale tags."""
-    if p_max <= p_min:
-        slope = 1.0
-        intercept = float(p_min)
-        stored = np.zeros_like(physical, dtype=np.int16)
-        return stored, slope, intercept
-    slope = (p_max - p_min) / 65535.0
-    intercept = p_min + 32768.0 * slope
-    stored = np.clip(
-        np.rint((physical.astype(np.float64) - intercept) / slope),
-        -32768,
-        32767,
-    ).astype(np.int16)
-    return stored, float(slope), float(intercept)
 
 
 def _choose_sop_class_uid(modality: str) -> UID:
@@ -394,7 +376,7 @@ def write_mpr_series(
             pass
 
         phys = physical_slices[i]
-        pixel_array, rs, ri = _float_to_int16_with_rescale(phys, p_min, p_max)
+        pixel_array, rs, ri = float_to_int16_with_rescale(phys, p_min, p_max)
         rows, cols = int(pixel_array.shape[0]), int(pixel_array.shape[1])
         ds.Rows = rows
         ds.Columns = cols

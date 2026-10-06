@@ -131,6 +131,8 @@ class ExportSliceRequest:
     # 1-based InstanceNumber within that new series.
     projection_series_uid: str | None = None
     projection_instance_number: int | None = None
+    # Projection already built (and anonymized) by export_selected; saved as is.
+    prebuilt_projection: Dataset | None = None
 
 
 class ExportManager:
@@ -153,6 +155,35 @@ class ExportManager:
         deep_anonymizer = DeepDICOMAnonymizer(deep_anonymizer_options)
         anon_datasets = deep_anonymizer.anonymize_batch(ordered_datasets)
         return {ordered_keys[i]: anon_datasets[i] for i in range(len(ordered_keys))}
+
+    @staticmethod
+    def build_anonymized_projections(
+        items_by_study_series: dict[tuple[str, str], list[tuple[int, Dataset]]],
+        studies: dict[str, dict[str, list[Dataset]]],
+        projection_type: str,
+        projection_slice_count: int,
+        use_rescaled_values: bool,
+        deep_anonymizer_options: Optional["DeepAnonymizerOptions"] = None,
+    ) -> dict[tuple[str, str, int], Dataset]:
+        """Build raw projection datasets for every item, then anonymize them as one batch.
+
+        Items whose projection cannot be built fall back to the raw source dataset.
+        """
+        keys: list[tuple[str, str, int]] = []
+        built: list[Dataset] = []
+        for (study_uid, series_uid), items in items_by_study_series.items():
+            new_series_uid = pydicom.uid.generate_uid()
+            for position, (slice_index, dataset) in enumerate(items, start=1):
+                projection = create_projection_dataset(
+                    dataset, studies, study_uid, series_uid, slice_index,
+                    projection_type, projection_slice_count, use_rescaled_values,
+                    new_series_uid=new_series_uid,
+                    instance_number=position,
+                )
+                keys.append((study_uid, series_uid, slice_index))
+                built.append(projection if projection is not None else dataset)
+        anonymized = DeepDICOMAnonymizer(deep_anonymizer_options).anonymize_batch(built)
+        return dict(zip(keys, anonymized, strict=True))
 
     @staticmethod
     def _effective_scale_for_image(width: int, height: int, requested_scale: float) -> float:
@@ -320,12 +351,10 @@ class ExportManager:
         scale_annotations_with_image = request.scale_annotations_with_image
         anonymize = request.anonymize
         deep_anonymize = request.deep_anonymize
-        deep_anonymizer_options = request.deep_anonymizer_options
         projection_enabled = request.projection_enabled
         projection_type = request.projection_type
         projection_slice_count = request.projection_slice_count
         subwindow_annotation_managers = request.subwindow_annotation_managers
-        deep_anonymized_items = request.deep_anonymized_items
         image_inverted = request.image_inverted
         lut = request.lut
         voi_from_dicom = request.voi_from_dicom
@@ -352,13 +381,9 @@ class ExportManager:
         for key in items_by_study_series:
             items_by_study_series[key].sort(key=lambda x: x[0])
 
-        # Deep anonymize batch (DICOM): consistent UID remap and date shift across selection
-        pre_anonymized: dict[tuple[str, str, int], Dataset] = {}
-        if deep_anonymize and export_format == "DICOM":
-            pre_anonymized = deep_anonymized_items or self.build_deep_anonymized_selection(
-                selected_items,
-                deep_anonymizer_options,
-            )
+        pre_anonymized, projection_dicom_anon = self._select_pre_anonymized(
+            request, items_by_study_series
+        )
 
         try:
             for (study_uid, series_uid), items in items_by_study_series.items():
@@ -488,6 +513,11 @@ class ExportManager:
                             voi_from_dicom=voi_from_dicom,
                             projection_series_uid=projection_series_uid,
                             projection_instance_number=position,
+                            prebuilt_projection=(
+                                pre_anonymized.get((study_uid, series_uid, slice_index))
+                                if projection_dicom_anon
+                                else None
+                            ),
                         )
                     )
                     if success:
@@ -504,6 +534,58 @@ class ExportManager:
             raise e
 
         return (exported, downgraded)
+
+    def _select_pre_anonymized(
+        self,
+        request: ExportSelectedRequest,
+        items_by_study_series: dict[tuple[str, str], list[tuple[int, Dataset]]],
+    ) -> tuple[dict[tuple[str, str, int], Dataset], bool]:
+        """Return (pre-anonymized map, whether it holds built projection datasets)."""
+        if not (request.deep_anonymize and request.format == "DICOM"):
+            return {}, False
+        options = request.deep_anonymizer_options
+        if request.projection_enabled and request.studies:
+            # Build from the raw source, then anonymize the built batch so the
+            # reference sequences get the same UID remap as the datasets.
+            return self.build_anonymized_projections(
+                items_by_study_series,
+                request.studies,
+                request.projection_type,
+                request.projection_slice_count,
+                request.use_rescaled_values,
+                options,
+            ), True
+        return request.deep_anonymized_items or self.build_deep_anonymized_selection(
+            request.selected_items, options
+        ), False
+
+    @staticmethod
+    def _export_dicom_slice(request: ExportSliceRequest) -> None:
+        """Write one DICOM (deep-anonymized or original dataset already selected by caller)."""
+        dataset = request.dataset
+        output_path = request.output_path
+        if request.prebuilt_projection is not None:
+            save_projection_dataset(request.prebuilt_projection, output_path)
+            return
+        studies = request.studies
+        if (
+            request.projection_enabled and studies and request.study_uid
+            and request.series_uid and request.slice_index is not None
+        ):
+            projection_dataset = create_projection_dataset(
+                dataset, studies, request.study_uid, request.series_uid, request.slice_index,
+                request.projection_type, request.projection_slice_count,
+                request.use_rescaled_values,
+                new_series_uid=request.projection_series_uid,
+                instance_number=request.projection_instance_number,
+            )
+            if projection_dataset is None:
+                # Fall back to single slice if projection fails
+                dataset.save_as(output_path)
+            else:
+                save_projection_dataset(projection_dataset, output_path)
+        else:
+            dataset.save_as(output_path)
 
     def export_slice(
         self, request: ExportSliceRequest
@@ -557,22 +639,7 @@ class ExportManager:
 
         try:
             if export_format == "DICOM":
-                # Export as DICOM (deep-anonymized or original dataset already selected by caller)
-                if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
-                    # Create projection dataset for DICOM export
-                    projection_dataset = create_projection_dataset(
-                        dataset, studies, study_uid, series_uid, slice_index,
-                        projection_type, projection_slice_count, use_rescaled_values,
-                        new_series_uid=request.projection_series_uid,
-                        instance_number=request.projection_instance_number,
-                    )
-                    if projection_dataset is None:
-                        # Fall back to single slice if projection fails
-                        dataset.save_as(output_path)
-                    else:
-                        save_projection_dataset(projection_dataset, output_path)
-                else:
-                    dataset.save_as(output_path)
+                self._export_dicom_slice(request)
                 return (True, None)
             else:
                 # Export as image (PNG or JPG)

@@ -191,3 +191,87 @@ def test_metadata_and_no_dicom_cs_warnings() -> None:
 def test_missing_series_returns_none() -> None:
     src = _slice([[1]])
     assert pde.create_projection_dataset(src, {}, STUDY, SERIES, 0, "aip", 2, False) is None
+
+
+def _with_rescale(ds: Dataset, slope: float, intercept: float) -> Dataset:
+    ds.RescaleSlope = slope
+    ds.RescaleIntercept = intercept
+    return ds
+
+
+def test_mixed_rescale_slab_projects_in_rescaled_space(tmp_path) -> None:
+    slices = [
+        _with_rescale(_slice([[10, 20], [30, 40]], signed=True), 1.0, -1000.0),
+        _with_rescale(_slice([[5, 25], [10, 60]], signed=True), 2.0, -1000.0),
+    ]
+    ds = _build(slices, 0, ptype="mip")
+    assert ds is not None
+    assert ds.BitsAllocated == 16 and ds.PixelRepresentation == 1
+    path = str(tmp_path / "mixed.dcm")
+    pde.save_projection_dataset(ds, path)
+    back = pydicom.dcmread(path)
+    physical = back.pixel_array * float(back.RescaleSlope) + float(back.RescaleIntercept)
+    expected = np.array([[-990.0, -950.0], [-970.0, -880.0]])
+    tol = float(back.RescaleSlope)
+    assert np.allclose(physical, expected, atol=tol)
+
+
+def test_uniform_rescale_slab_keeps_stored_values() -> None:
+    slices = [
+        _with_rescale(_slice([[1, 9], [3, 4]]), 1.0, -1024.0),
+        _with_rescale(_slice([[5, 2], [3, 8]]), 1.0, -1024.0),
+    ]
+    ds = _build(slices, 0)
+    assert ds is not None
+    assert np.array_equal(_pixels(ds), [[5, 9], [3, 8]])
+    assert float(ds.RescaleSlope) == 1.0 and float(ds.RescaleIntercept) == -1024.0
+
+
+def test_derivation_metadata_present() -> None:
+    slices = [_slice([[1]], number=n) for n in (1, 2, 3)]
+    ds = _build(slices, 1, ptype="mip", count=2)
+    assert ds is not None
+    assert ds.DerivationDescription == "Maximum Intensity Projection of 2 slices, instances 2-3"
+    refs = [i.ReferencedSOPInstanceUID for i in ds.SourceImageSequence]
+    assert refs == [slices[1].SOPInstanceUID, slices[2].SOPInstanceUID]
+    assert ds.SourceImageSequence[0].ReferencedSOPClassUID == CTImageStorage
+    assert ds.ReferencedSeriesSequence[0].SeriesInstanceUID == SERIES
+    assert ds.SeriesInstanceUID != SERIES
+
+
+def _walk(ds: Dataset):
+    for elem in ds:
+        yield elem
+        if elem.VR == "SQ":
+            for item in elem.value:
+                yield from _walk(item)
+
+
+def test_deep_anonymized_projection_export_has_no_source_identifiers(tmp_path) -> None:
+    from gui.export_manager import ExportManager
+
+    slices = [_slice([[1, 9], [3, 4]], number=n) for n in (1, 2, 3)]
+    for s in slices:
+        s.PatientName = "Doe^Jane"
+        s.PatientID = "SRC-PID-77"
+    items = {(STUDY, SERIES): list(enumerate(slices))}
+    out = ExportManager.build_anonymized_projections(
+        items, _studies(*slices), "mip", 2, False
+    )
+    assert len(out) == 3
+    source_uids = {STUDY, SERIES} | {s.SOPInstanceUID for s in slices}
+    for i, ds in enumerate(v for _, v in sorted(out.items())):
+        path = str(tmp_path / f"a{i}.dcm")
+        pde.save_projection_dataset(ds, path)
+        back = pydicom.dcmread(path)
+        values: list[str] = []
+        for elem in _walk(back):
+            values.extend(str(v) for v in (elem.value if elem.VM > 1 else [elem.value]))
+        for elem in _walk(back.file_meta):
+            values.append(str(elem.value))
+        text = "\n".join(values)
+        assert "Doe" not in text and "SRC-PID-77" not in text
+        assert not any(uid in text for uid in source_uids)
+    # One shared (remapped) series UID across the run; instances numbered 1..N.
+    assert len({ds.SeriesInstanceUID for ds in out.values()}) == 1
+    assert sorted(ds.InstanceNumber for ds in out.values()) == [1, 2, 3]
