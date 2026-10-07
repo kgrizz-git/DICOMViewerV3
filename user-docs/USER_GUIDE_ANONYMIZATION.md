@@ -1,6 +1,6 @@
 # De-identification (anonymized export)
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-10-07
 
 The viewer offers DICOM **metadata de-identification** settings that remove or
 replace selected identifiers during the DICOM export workflows described below.
@@ -26,6 +26,7 @@ unreviewed sharing.
 | **File → Export…**, then check **De-identify DICOM metadata** | A quick metadata-de-identified export alongside a normal export, using the default preset (or a preset you pick via **Options…**). |
 | **File → De-identify & Export DICOM…** | A dedicated dialog focused on DICOM metadata de-identification, with the same selection tree, presets, and per-option control. |
 | **File → Save MPR as DICOM…**, then check **De-identify DICOM metadata** | Derived MPR DICOM only. Uses the same metadata settings and preset defaults after the MPR instances are constructed. |
+| **File → Save 3D View…** (or **Save Image…** in the 3D window), format **DICOM (Secondary Capture)**, with **De-identify** checked | A single rendered 3D view. **De-identify** is on by default and applies the default metadata de-identification settings, not a preset you chose in the export dialogs. |
 
 The normal and dedicated DICOM export dialogs use the same settings. MPR export
 applies those settings to its derived instances; its pixels remain out of scope.

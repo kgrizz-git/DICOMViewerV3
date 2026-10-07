@@ -99,6 +99,61 @@ class VolumeRenderFacade:
         dialog.destroyed.connect(_on_destroyed)
         dialog.show()
 
+    def _live_dialogs(self) -> list[Any]:
+        """Open, visible 3D dialogs, most recently opened last."""
+        live = []
+        for dialog in self._alive:
+            try:
+                if dialog.isVisible():
+                    live.append(dialog)
+            except RuntimeError:
+                continue  # already deleted by Qt
+        return live
+
+    def has_open_dialog(self) -> bool:
+        """True while at least one 3D window is open."""
+        return bool(self._live_dialogs())
+
+    def target_dialog(self, subwindow_idx: int | None = None) -> Any | None:
+        """The 3D window File → Save 3D View… acts on.
+
+        Prefers the active 3D window, then the one for the focused pane's
+        series, then the most recently opened one.
+        """
+        live = self._live_dialogs()
+        if not live:
+            return None
+        active = QApplication.activeWindow()
+        if active in live:
+            return active
+        if subwindow_idx is not None:
+            key = self._get_series_key(int(subwindow_idx))
+            focused = self._open_dialogs.get(key) if key else None
+            if focused in live:
+                return focused
+        return live[-1]
+
+    def save_3d_view(self, subwindow_idx: int | None = None) -> bool:
+        """Run the target 3D window's Save Image… flow; ``True`` if a file was written."""
+        dialog = self.target_dialog(subwindow_idx)
+        if dialog is None:
+            QMessageBox.information(
+                self._app.main_window,
+                "Save 3D View",
+                "Open a 3D view first (Tools → 3D Volume Render…).",
+            )
+            return False
+        dialog.raise_()
+        dialog.activateWindow()
+        if not dialog.can_save_image():
+            QMessageBox.information(
+                self._app.main_window,
+                "Save 3D View",
+                "The 3D view is not ready yet. Wait for the first frame to appear.",
+            )
+            return False
+        return bool(dialog.save_image())
+
     def _get_series_key(self, idx: int) -> str | None:
         """Return a unique key for the series in subwindow *idx*."""
         data = self._app.subwindow_data.get(idx, {})

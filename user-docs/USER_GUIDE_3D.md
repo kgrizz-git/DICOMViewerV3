@@ -15,6 +15,7 @@ The viewer can open a **GPU-accelerated 3D volume render** of the **focused** 2D
 |----------|--------|
 | **Toolbar** | **3D View** (cube icon; after **MPR** on the main toolbar) |
 | **Tools** | **3D Volume Render…** |
+| **File** | **Save 3D View…** saves an open 3D window (see [Saving the 3D view](#saving-the-3d-view)) |
 
 Both use the **currently focused** image subwindow’s series.
 
@@ -67,14 +68,20 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 
 ## Saving the 3D view
 
-Click **Save Image…** or press **Ctrl+S** in the 3D window. The button is unavailable until the first frame is drawn.
+You can save the current 3D view in three ways:
+
+- Click **Save Image…** in the 3D window's control panel.
+- Press **Ctrl+S** while the 3D window is active.
+- Choose **File → Save 3D View…** in the main window. It is available while a 3D window is open. With several 3D windows open, it saves the active one, then the one for the focused pane's series, then the most recently opened one.
+
+Saving is unavailable until the first frame is drawn. You can save the view as an image (PNG or JPG) or as a DICOM Secondary Capture.
 
 1. Choose a **Format**: **PNG**, **JPG**, or **DICOM (Secondary Capture)**.
 2. For PNG or JPG, you can tick **Burn in overlay text**. This draws the top-left overlay (preset, opacity, detail, blend mode) onto the image. It never adds patient or study text. It is off by default.
 3. For DICOM, **De-identify** is on by default. It removes patient identity from the saved file. Turn it off only when the file stays inside your organisation.
 4. Choose where to save. The suggested name uses the preset and the time, for example `3D_CT_Bone_20261007-142501.png`. It never contains patient details.
 
-The viewer remembers your format and option choices. The image is saved at the rendered pixel size, which is larger than the on-screen size on high-DPI displays.
+The viewer remembers your format and option choices. The save captures the current viewport at its rendered resolution. That is the viewport's device-pixel size, so it is larger than the on-screen size on high-DPI displays.
 
 Preset names you saved yourself are never written into filenames, burned-in text, or DICOM files. They appear as **Custom preset** instead. Built-in preset names are kept.
 
@@ -84,7 +91,7 @@ A DICOM file is a single-frame RGB **Secondary Capture** in a new series. It cop
 
 - No **fusion overlay** in the 3D view.
 - No full **transfer-function curve editor** in the UI yet (saved presets store control values, not arbitrary curves).
-- Saved images are captured at screen size; higher-resolution capture is not available yet.
+- Saving captures the current viewport at its rendered (device-pixel) resolution. A separate higher-resolution re-render is not available yet.
 - Large volumes may need a future memory warning or optional downsampling.
 
 ## Technical detail

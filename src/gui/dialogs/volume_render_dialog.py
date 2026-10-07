@@ -366,6 +366,17 @@ class VolumeRenderDialog(QDialog):
         )
         self.close()
 
+    def can_save_image(self) -> bool:
+        """True once the viewer exists and Save Image… is enabled."""
+        button = getattr(self._viewer_widget, "_save_image_btn", None)
+        return button is not None and button.isEnabled()
+
+    def save_image(self) -> bool:
+        """Save the 3D frame (Save Image… flow); ``False`` until the viewer has painted."""
+        if self._viewer_widget is None:
+            return False
+        return bool(save_from_viewer(self._viewer_widget))
+
     def _on_save_image_shortcut(self) -> None:
         """Ctrl+S: save the 3D frame once the viewer exists and has painted."""
         if self._viewer_widget is not None:
