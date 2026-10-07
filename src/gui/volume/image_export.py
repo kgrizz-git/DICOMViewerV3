@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from gui.volume.dicom_sc_save import save_dicom_sc
 from utils.log_sanitizer import sanitized_format_exc
 
 _log = logging.getLogger(__name__)
@@ -40,7 +41,13 @@ PNG_FILTER = "PNG image (*.png)"
 JPG_FILTER = "JPEG image (*.jpg *.jpeg)"
 FORMAT_PNG = "PNG"
 FORMAT_JPG = "JPG"
-FORMAT_FILTERS = {FORMAT_PNG: PNG_FILTER, FORMAT_JPG: JPG_FILTER}
+FORMAT_DICOM = "DICOM"
+DICOM_FILTER = "DICOM Secondary Capture (*.dcm)"
+FORMAT_FILTERS = {
+    FORMAT_PNG: PNG_FILTER,
+    FORMAT_JPG: JPG_FILTER,
+    FORMAT_DICOM: DICOM_FILTER,
+}
 JPG_QUALITY = 95
 OPTIONS_CONFIG_KEY = "volume_3d_save_image_options"
 
@@ -78,6 +85,8 @@ def resolve_output_path(path: str, fmt: str) -> str:
     """
     root, ext = os.path.splitext(path)
     ext = ext.lower()
+    if fmt == FORMAT_DICOM:
+        return path if ext == ".dcm" else _swap_ext(path, root, ext, ".dcm")
     if fmt == FORMAT_JPG:
         return path if ext in (".jpg", ".jpeg") else _swap_ext(path, root, ext, ".jpg")
     return path if ext == ".png" else _swap_ext(path, root, ext, ".png")
@@ -85,7 +94,7 @@ def resolve_output_path(path: str, fmt: str) -> str:
 
 def _swap_ext(path: str, root: str, ext: str, new_ext: str) -> str:
     """Replace a known image extension, otherwise append *new_ext*."""
-    if ext in (".png", ".jpg", ".jpeg"):
+    if ext in (".png", ".jpg", ".jpeg", ".dcm"):
         return root + new_ext
     return path + new_ext
 
@@ -138,6 +147,7 @@ class SaveOptions:
 
     fmt: str = FORMAT_PNG
     burn_in: bool = False
+    deidentify: bool = True
 
 
 def load_save_options(config: Any) -> SaveOptions:
@@ -150,6 +160,7 @@ def load_save_options(config: Any) -> SaveOptions:
     return SaveOptions(
         fmt=fmt if fmt in FORMAT_FILTERS else FORMAT_PNG,
         burn_in=stored.get("burn_in") is True,
+        deidentify=stored.get("deidentify") is not False,
     )
 
 
@@ -158,7 +169,14 @@ def store_save_options(config: Any, options: SaveOptions) -> None:
     setter = getattr(config, "set", None)
     if not callable(setter):
         return
-    setter(OPTIONS_CONFIG_KEY, {"format": options.fmt, "burn_in": options.burn_in})
+    setter(
+        OPTIONS_CONFIG_KEY,
+        {
+            "format": options.fmt,
+            "burn_in": options.burn_in,
+            "deidentify": options.deidentify,
+        },
+    )
     saver = getattr(config, "save_config", None)
     if callable(saver):
         saver()
@@ -173,6 +191,7 @@ class SaveImageOptionsDialog(QDialog):
         self._format_combo = QComboBox(self)
         self._format_combo.addItem("PNG", FORMAT_PNG)
         self._format_combo.addItem("JPG", FORMAT_JPG)
+        self._format_combo.addItem("DICOM (Secondary Capture)", FORMAT_DICOM)
         self._format_combo.setCurrentIndex(
             max(0, self._format_combo.findData(initial.fmt))
         )
@@ -182,9 +201,17 @@ class SaveImageOptionsDialog(QDialog):
             "mode) onto the saved image.  No patient or study text is added."
         )
         self._burn_in_check.setChecked(initial.burn_in)
+        self._deid_check = QCheckBox("De-identify", self)
+        self._deid_check.setToolTip(
+            "Remove patient identity and re-mint UIDs in the saved DICOM file."
+        )
+        self._deid_check.setChecked(initial.deidentify)
+        self._format_combo.currentIndexChanged.connect(self._sync_enabled)
+        self._sync_enabled()
         form = QFormLayout()
         form.addRow("Format:", self._format_combo)
         form.addRow("", self._burn_in_check)
+        form.addRow("", self._deid_check)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
@@ -195,11 +222,19 @@ class SaveImageOptionsDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(buttons)
 
+    def _sync_enabled(self, _index: int = 0) -> None:
+        """Burn-in is raster-only; de-identify applies to DICOM only."""
+        is_dicom = self._format_combo.currentData() == FORMAT_DICOM
+        self._burn_in_check.setEnabled(not is_dicom)
+        self._deid_check.setEnabled(is_dicom)
+
     def options(self) -> SaveOptions:
-        """Return the choices currently shown."""
+        """Return the choices currently shown (burn-in is never set for DICOM)."""
+        is_dicom = self._format_combo.currentData() == FORMAT_DICOM
         return SaveOptions(
             fmt=str(self._format_combo.currentData()),
-            burn_in=self._burn_in_check.isChecked(),
+            burn_in=self._burn_in_check.isChecked() and not is_dicom,
+            deidentify=self._deid_check.isChecked(),
         )
 
 
@@ -262,6 +297,9 @@ def prompt_and_save_image(
     preset_name: str,
     config_manager: Any = None,
     overlay_text: str = "",
+    *,
+    dicom_template: Any = None,
+    blend_mode: str = "",
 ) -> bool:
     """Ask for a destination and save the surface's current frame.
 
@@ -275,8 +313,9 @@ def prompt_and_save_image(
         return False
     start_dir = _config_get_path(config_manager)
     suggested = os.path.join(start_dir, default_image_filename(preset_name))
-    if options.fmt == FORMAT_JPG:
-        suggested = os.path.splitext(suggested)[0] + ".jpg"
+    if options.fmt != FORMAT_PNG:
+        ext = ".dcm" if options.fmt == FORMAT_DICOM else ".jpg"
+        suggested = os.path.splitext(suggested)[0] + ext
     path, _selected = QFileDialog.getSaveFileName(
         parent, "Save 3D Image", suggested, FORMAT_FILTERS[options.fmt]
     )
@@ -287,7 +326,17 @@ def prompt_and_save_image(
     if options.burn_in:
         image = burn_in_overlay(image, overlay_text)
     try:
-        ok = write_image(image, path, fmt)
+        if fmt == FORMAT_DICOM:
+            ok = save_dicom_sc(
+                image,
+                path,
+                dicom_template,
+                preset_name=preset_name,
+                blend_mode=blend_mode,
+                deidentify=options.deidentify,
+            )
+        else:
+            ok = write_image(image, path, fmt)
     except Exception:
         _log.error("3D image save failed; details withheld")
         _log.debug("%s", sanitized_format_exc())
@@ -328,6 +377,12 @@ def add_save_button(widget: Any, panel: QWidget, row: Any) -> QPushButton:
     return button
 
 
+def _current_blend_mode(widget: Any) -> str:
+    """Return the viewer's blend mode name (empty when unavailable)."""
+    combo = getattr(widget, "_blend_mode_combo", None)
+    return str(combo.currentText()) if combo is not None else ""
+
+
 def save_from_viewer(widget: Any, preset_name: str | None = None) -> bool:
     """Save the viewer's current frame if the action is currently allowed."""
     if preset_name is None:
@@ -342,4 +397,6 @@ def save_from_viewer(widget: Any, preset_name: str | None = None) -> bool:
         preset_name,
         getattr(widget, "_config_manager", None),
         str(getattr(widget, "_overlay_text_prev", "") or ""),
+        dicom_template=getattr(widget, "_source_template", None),
+        blend_mode=_current_blend_mode(widget),
     )

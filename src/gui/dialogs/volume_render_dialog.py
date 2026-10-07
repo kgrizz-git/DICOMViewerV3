@@ -333,6 +333,9 @@ class VolumeRenderDialog(QDialog):
                 parent=self,
                 config_manager=self._config_manager,
             )
+            self._viewer_widget._source_template = (
+                self._datasets[0] if self._datasets else None
+            )
             self._layout.addWidget(self._viewer_widget)
             if DEBUG_VOLUME_3D:
                 print("[DEBUG-VOLUME-3D] VolumeViewerWidget added to layout, calling initialize().")

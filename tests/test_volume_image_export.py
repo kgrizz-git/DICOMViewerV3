@@ -351,3 +351,86 @@ def test_cancelled_options_dialog_skips_file_dialog(monkeypatch) -> None:
 
 def test_burn_in_on_null_image_returns_null_image(qapp) -> None:
     assert ie.burn_in_overlay(QImage(), "CT Bone").isNull()
+
+
+def test_qimage_with_row_padding_converts_exactly(qapp: Any) -> None:
+    from gui.volume.dicom_sc_save import qimage_to_rgb_array
+
+    img = QImage(5, 3, QImage.Format.Format_RGB888)
+    assert img.bytesPerLine() % 4 == 0 and img.bytesPerLine() > 15  # padded rows
+    for y in range(3):
+        for x in range(5):
+            img.setPixelColor(x, y, QColor(x * 40, y * 80, 7))
+    arr = qimage_to_rgb_array(img)
+    assert arr.shape == (3, 5, 3)
+    assert tuple(arr[2, 4]) == (160, 160, 7)
+    assert tuple(arr[0, 1]) == (40, 0, 7)
+
+
+def test_dialog_enables_options_per_format(qapp: Any) -> None:
+    dialog = ie.SaveImageOptionsDialog(ie.SaveOptions())
+    assert dialog._burn_in_check.isEnabled()
+    assert not dialog._deid_check.isEnabled()
+    assert dialog._deid_check.isChecked()  # default ON
+    dialog._burn_in_check.setChecked(True)
+    dialog._format_combo.setCurrentIndex(dialog._format_combo.findData("DICOM"))
+    assert not dialog._burn_in_check.isEnabled()
+    assert dialog._deid_check.isEnabled()
+    assert dialog.options() == ie.SaveOptions("DICOM", False, True)
+    dialog._deid_check.setChecked(False)
+    assert dialog.options().deidentify is False
+
+
+def test_dicom_options_persist(qapp: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _Config()
+    monkeypatch.setattr(
+        ie.SaveImageOptionsDialog,
+        "exec",
+        lambda self: (
+            self._format_combo.setCurrentIndex(self._format_combo.findData("DICOM")),
+            self._deid_check.setChecked(False),
+            1,
+        )[-1],
+    )
+    chosen = ie.ask_save_options(None, config)
+    assert chosen == ie.SaveOptions("DICOM", False, False)
+    assert ie.load_save_options(config) == chosen
+    assert ie.SaveImageOptionsDialog(chosen).options() == chosen
+
+
+def test_resolve_output_path_dicom() -> None:
+    assert ie.resolve_output_path("a", "DICOM") == "a.dcm"
+    assert ie.resolve_output_path("a.png", "DICOM") == "a.dcm"
+    assert ie.resolve_output_path("a.dcm", "PNG") == "a.png"
+
+
+def test_save_dicom_end_to_end_deidentified(
+    qapp: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pydicom
+    from pydicom.dataset import Dataset
+
+    template = Dataset()
+    template.PatientName = "Doe^Jane"
+    template.PatientID = "PID-1"
+    template.StudyInstanceUID = "1.2.9.1"
+    template.SeriesInstanceUID = "1.2.9.2"
+    template.Modality = "CT"
+    _choose(monkeypatch, ie.SaveOptions("DICOM", False, True))
+    seen: list[str] = []
+
+    def fake_dialog(_p: Any, _t: str, suggested: str, filters: str) -> tuple[str, str]:
+        seen.append(suggested)
+        assert filters == ie.DICOM_FILTER
+        return str(tmp_path / "shot"), filters
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", fake_dialog)
+    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    assert ie.prompt_and_save_image(
+        None, surf, "CT Bone", None, "", dicom_template=template, blend_mode="Composite"
+    ) is True
+    assert seen[0].endswith(".dcm") and "Doe" not in seen[0]
+    ds = pydicom.dcmread(str(tmp_path / "shot.dcm"))
+    assert ds.pixel_array.shape == (7, 12, 3)
+    assert "Doe" not in str(ds.PatientName)
+    assert "CT Bone" in ds.DerivationDescription
