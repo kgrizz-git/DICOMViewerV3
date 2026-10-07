@@ -53,6 +53,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    raise likely races the window manager's reordering. Try a deferred raise
    (`QTimer.singleShot(0, ...)`) first; fall back to a native child-window
    relationship. Fix the histogram and the 3D window together.
+   **Plan:** [3D window and histogram keep-in-front](plans/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
