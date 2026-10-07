@@ -166,3 +166,45 @@ def test_deidentified_empty_template_round_trips(tmp_path: Any) -> None:
     assert back.file_meta.MediaStorageSOPInstanceUID == back.SOPInstanceUID
     assert back.SOPInstanceUID == written.SOPInstanceUID
     assert np.array_equal(back.pixel_array, rgb)
+
+
+_TYPE2 = (
+    "PatientName", "PatientID", "PatientBirthDate", "PatientSex", "StudyDate",
+    "StudyTime", "ReferringPhysicianName", "StudyID", "AccessionNumber",
+    "Manufacturer", "PatientOrientation",
+)
+_REFS = [
+    ("1.2.840.10008.5.1.4.1.1.2", "1.2.840.99.31"),
+    ("1.2.840.10008.5.1.4.1.1.2", "1.2.840.99.32"),
+]
+
+
+@pytest.mark.parametrize("deidentify", [False, True])
+@pytest.mark.parametrize("full", [True, False])
+def test_type2_attributes_always_present(tmp_path: Any, deidentify: bool, full: bool) -> None:
+    path = str(tmp_path / "t.dcm")
+    sc.write_volume_sc(
+        _rgb(), _template() if full else Dataset(), path, deidentify=deidentify
+    )
+    ds = pydicom.dcmread(path)
+    for keyword in _TYPE2:
+        assert keyword in ds, keyword
+    assert ds.StudyInstanceUID
+    assert ds.PatientOrientation in ("", None)
+
+
+@pytest.mark.parametrize("deidentify", [False, True])
+def test_referenced_instance_sequence(tmp_path: Any, deidentify: bool) -> None:
+    path = str(tmp_path / "r.dcm")
+    sc.write_volume_sc(
+        _rgb(), _template(), path, deidentify=deidentify, source_refs=_REFS
+    )
+    ds = pydicom.dcmread(path)
+    items = ds.ReferencedSeriesSequence[0].ReferencedInstanceSequence
+    assert len(items) == 2
+    got = [(str(i.ReferencedSOPClassUID), str(i.ReferencedSOPInstanceUID)) for i in items]
+    if deidentify:
+        assert [u for _c, u in got] != [u for _c, u in _REFS]
+        assert len({u for _c, u in got}) == 2
+    else:
+        assert got == _REFS

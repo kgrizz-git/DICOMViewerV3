@@ -71,6 +71,10 @@ class LegacyInteractorSurface(QWidget):
 
     supports_image_capture = False
 
+    def has_image(self) -> bool:
+        """The legacy path never caches a frame."""
+        return False
+
     def current_image(self) -> QImage | None:
         """The legacy path has no cached frame; image export is disabled."""
         return None

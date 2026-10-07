@@ -12,6 +12,7 @@ Requirements: numpy, pydicom, ``core.derived_dicom_io``, ``utils.deep_anonymizer
 from __future__ import annotations
 
 import copy
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
@@ -51,6 +52,24 @@ _COPIED_KEYWORDS = (
 )
 
 
+# Type 2 attributes of the SC image / SC equipment / patient / study modules:
+# present, empty when unknown.
+_TYPE2_KEYWORDS = (
+    "PatientName", "PatientID", "PatientBirthDate", "PatientSex",
+    "StudyDate", "StudyTime", "ReferringPhysicianName", "StudyID",
+    "AccessionNumber", "Manufacturer", "PatientOrientation",
+)
+
+
+def ensure_type2_attributes(ds: Dataset) -> None:
+    """Add every missing Type 2 attribute (empty) and a StudyInstanceUID."""
+    for keyword in _TYPE2_KEYWORDS:
+        if keyword not in ds:
+            setattr(ds, keyword, "")
+    if not getattr(ds, "StudyInstanceUID", ""):
+        ds.StudyInstanceUID = pydicom.uid.generate_uid()
+
+
 def qimage_rgb_array(width: int, height: int, data: bytes, bytes_per_line: int) -> np.ndarray:
     """Return an (H, W, 3) uint8 array from RGB888 rows that may be padded."""
     rows = np.frombuffer(data, dtype=np.uint8, count=height * bytes_per_line)
@@ -67,9 +86,18 @@ def volume_sc_series_description(source_description: str) -> str:
 
 
 def build_volume_sc_dataset(
-    rgb: np.ndarray, template: Dataset, *, preset_name: str = "", blend_mode: str = ""
+    rgb: np.ndarray,
+    template: Dataset,
+    *,
+    preset_name: str = "",
+    blend_mode: str = "",
+    source_refs: Iterable[tuple[str, str]] | None = None,
 ) -> Dataset:
-    """Build the SC dataset from an (H, W, 3) uint8 array and a source template."""
+    """Build the SC dataset from an (H, W, 3) uint8 array and a source template.
+
+    ``source_refs`` are ``(SOPClassUID, SOPInstanceUID)`` pairs of the source
+    instances; they populate the Type 1 ReferencedInstanceSequence.
+    """
     if rgb.ndim != 3 or rgb.shape[2] != 3 or rgb.dtype != np.uint8:
         raise ValueError("RGB uint8 array of shape (rows, columns, 3) required")
     ds = Dataset()
@@ -103,6 +131,13 @@ def build_volume_sc_dataset(
     if source_series_uid:
         ref = Dataset()
         ref.SeriesInstanceUID = source_series_uid
+        instances = []
+        for class_uid, instance_uid in source_refs or ():
+            item = Dataset()
+            item.ReferencedSOPClassUID = class_uid
+            item.ReferencedSOPInstanceUID = instance_uid
+            instances.append(item)
+        ref.ReferencedInstanceSequence = Sequence(instances)
         ds.ReferencedSeriesSequence = Sequence([ref])
     ds.SamplesPerPixel = 3
     ds.PhotometricInterpretation = "RGB"
@@ -117,6 +152,7 @@ def build_volume_sc_dataset(
     if len(data) % 2:
         data += b"\x00"
     ds[_PIXEL_DATA_TAG] = DataElement(_PIXEL_DATA_TAG, "OB", data)
+    ensure_type2_attributes(ds)
     fresh_file_meta(ds)
     return ds
 
@@ -129,7 +165,9 @@ def deidentify_dataset(
     The anonymizer syncs File Meta to the remapped UIDs and records the
     de-identifying application, so File Meta is not rebuilt afterwards.
     """
-    return DeepDICOMAnonymizer(options or DeepAnonymizerOptions()).anonymize_batch([ds])[0]
+    result = DeepDICOMAnonymizer(options or DeepAnonymizerOptions()).anonymize_batch([ds])[0]
+    ensure_type2_attributes(result)  # the anonymizer may have deleted some
+    return result
 
 
 def save_volume_sc(ds: Dataset, output_path: str) -> None:
@@ -146,9 +184,16 @@ def write_volume_sc(
     blend_mode: str = "",
     deidentify: bool = True,
     options: Any = None,
+    source_refs: Iterable[tuple[str, str]] | None = None,
 ) -> Dataset:
     """Build, optionally de-identify, and save; return the written dataset."""
-    ds = build_volume_sc_dataset(rgb, template, preset_name=preset_name, blend_mode=blend_mode)
+    ds = build_volume_sc_dataset(
+        rgb,
+        template,
+        preset_name=preset_name,
+        blend_mode=blend_mode,
+        source_refs=source_refs,
+    )
     if deidentify:
         ds = deidentify_dataset(ds, options)
     save_volume_sc(ds, output_path)

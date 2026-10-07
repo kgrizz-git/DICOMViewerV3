@@ -130,6 +130,7 @@ def render_interactive_frame(widget: Any) -> None:
     """Render an interactive frame and perform its conditional fallback probe."""
     if widget._initialized and widget._surface is not None:
         widget._surface.render_frame()
+        refresh_save_button(widget)
         check_interactive_gpu_fallback(widget)
 
 
@@ -208,3 +209,4 @@ def stop_first_paint_timers(widget: Any) -> None:
     widget._preview_timer.stop()
     cancel_pending_refine(widget)
     widget._render_timer.stop()
+    refresh_save_button(widget)  # cleanup() set _cleaned_up first

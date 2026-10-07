@@ -58,8 +58,13 @@ LEGACY_TOOLTIP = (
     "Save Image is unavailable on the legacy 3D interactor, which has no "
     "cached frame to save."
 )
-READY_TOOLTIP = "Save the current 3D view as a PNG or JPG image (Ctrl+S)."
+READY_TOOLTIP = "Save the current 3D view as PNG, JPG, or DICOM (Ctrl+S)."
 WAITING_TOOLTIP = "Available once the first 3D frame has been drawn."
+
+# User-saved preset names are free text and may carry identifying words, so
+# only built-in preset names are ever used outside the app.
+CUSTOM_PRESET_LABEL = "Custom preset"
+_CUSTOM_FILENAME_TOKEN = "Custom"
 
 _UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -74,7 +79,39 @@ def sanitize_preset_for_filename(preset_name: str) -> str:
 def default_image_filename(preset_name: str, now: datetime | None = None) -> str:
     """Return ``3D_<preset>_<YYYYMMDD-HHMMSS>.png``."""
     stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
-    return f"3D_{sanitize_preset_for_filename(preset_name)}_{stamp}.png"
+    token = (
+        _CUSTOM_FILENAME_TOKEN
+        if preset_name == CUSTOM_PRESET_LABEL
+        else sanitize_preset_for_filename(preset_name)
+    )
+    return f"3D_{token}_{stamp}.png"
+
+
+def public_preset_name(widget: Any) -> str:
+    """Return the preset name that may leave the app (built-ins only)."""
+    logical_of = getattr(widget, "_current_logical_index", None)
+    is_user = getattr(widget, "_is_user_preset_logical", None)
+    if callable(logical_of) and callable(is_user):
+        logical = logical_of()
+        if isinstance(logical, int) and logical >= 0 and is_user(logical):
+            return CUSTOM_PRESET_LABEL
+    namer = getattr(widget, "_current_base_preset_name", None)
+    return str(namer()) if callable(namer) else ""
+
+
+def redact_custom_preset_line(widget: Any, text: str) -> str:
+    """Replace a user preset's name in the overlay's first line."""
+    if public_preset_name(widget) != CUSTOM_PRESET_LABEL:
+        return text
+    names = {
+        str(p.get("name", ""))
+        for p in getattr(widget, "_user_presets", [])
+        if isinstance(p, dict)
+    }
+    lines = text.split("\n")
+    if lines and lines[0] in names:
+        lines[0] = CUSTOM_PRESET_LABEL
+    return "\n".join(lines)
 
 
 def resolve_output_path(path: str, fmt: str) -> str:
@@ -117,7 +154,8 @@ def save_enabled_state(surface: Any, *, first_paint_complete: bool) -> tuple[boo
         return False, WAITING_TOOLTIP
     if not getattr(surface, "supports_image_capture", True):
         return False, LEGACY_TOOLTIP
-    if not first_paint_complete:
+    has_image = getattr(surface, "has_image", None)
+    if not first_paint_complete or not callable(has_image) or not has_image():
         return False, WAITING_TOOLTIP
     return True, READY_TOOLTIP
 
@@ -291,6 +329,19 @@ def burn_in_overlay(image: QImage, text: str) -> QImage:
     return out
 
 
+def _confirm_overwrite(parent: QWidget | None) -> bool:
+    """Ask before overwriting a file the dialog did not already confirm."""
+    answer = QMessageBox.question(
+        parent,
+        "Save Image",
+        "A file with that name already exists once the extension is applied. "
+        "Replace it?",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    return answer == QMessageBox.StandardButton.Yes
+
+
 def prompt_and_save_image(
     parent: QWidget | None,
     surface: Any,
@@ -300,6 +351,7 @@ def prompt_and_save_image(
     *,
     dicom_template: Any = None,
     blend_mode: str = "",
+    source_refs: list[tuple[str, str]] | None = None,
 ) -> bool:
     """Ask for a destination and save the surface's current frame.
 
@@ -322,7 +374,10 @@ def prompt_and_save_image(
     if not path:
         return False
     fmt = options.fmt
-    path = resolve_output_path(path, fmt)
+    chosen = path
+    path = resolve_output_path(chosen, fmt)
+    if path != chosen and os.path.exists(path) and not _confirm_overwrite(parent):
+        return False
     if options.burn_in:
         image = burn_in_overlay(image, overlay_text)
     try:
@@ -334,6 +389,7 @@ def prompt_and_save_image(
                 preset_name=preset_name,
                 blend_mode=blend_mode,
                 deidentify=options.deidentify,
+                source_refs=source_refs,
             )
         else:
             ok = write_image(image, path, fmt)
@@ -361,7 +417,8 @@ def refresh_save_button(widget: Any) -> None:
         return
     enabled, tip = save_enabled_state(
         getattr(widget, "_surface", None),
-        first_paint_complete=bool(getattr(widget, "_first_paint_complete", False)),
+        first_paint_complete=bool(getattr(widget, "_first_paint_complete", False))
+        and not getattr(widget, "_cleaned_up", False),
     )
     button.setEnabled(enabled)
     button.setToolTip(tip)
@@ -386,8 +443,7 @@ def _current_blend_mode(widget: Any) -> str:
 def save_from_viewer(widget: Any, preset_name: str | None = None) -> bool:
     """Save the viewer's current frame if the action is currently allowed."""
     if preset_name is None:
-        namer = getattr(widget, "_current_base_preset_name", None)
-        preset_name = str(namer()) if callable(namer) else ""
+        preset_name = public_preset_name(widget)
     button = getattr(widget, "_save_image_btn", None)
     if button is None or not button.isEnabled():
         return False
@@ -396,7 +452,10 @@ def save_from_viewer(widget: Any, preset_name: str | None = None) -> bool:
         getattr(widget, "_surface", None),
         preset_name,
         getattr(widget, "_config_manager", None),
-        str(getattr(widget, "_overlay_text_prev", "") or ""),
+        redact_custom_preset_line(
+            widget, str(getattr(widget, "_overlay_text_prev", "") or "")
+        ),
         dicom_template=getattr(widget, "_source_template", None),
         blend_mode=_current_blend_mode(widget),
+        source_refs=getattr(widget, "_source_refs", None),
     )

@@ -178,6 +178,22 @@ def _sop_ref_item(src: Dataset) -> Dataset | None:
     return item
 
 
+def _unique_instance_refs(items: list[Dataset]) -> list[Dataset]:
+    """Return one class/instance reference per distinct source instance."""
+    seen: set[str] = set()
+    refs: list[Dataset] = []
+    for item in items:
+        uid = str(item.ReferencedSOPInstanceUID)
+        if uid in seen:
+            continue
+        seen.add(uid)
+        ref = Dataset()
+        ref.ReferencedSOPClassUID = item.ReferencedSOPClassUID
+        ref.ReferencedSOPInstanceUID = uid
+        refs.append(ref)
+    return refs
+
+
 def _set_derivation_metadata(
     ds: Dataset, slab: list[Dataset], source_series_uid: str, description: str
 ) -> None:
@@ -193,6 +209,7 @@ def _set_derivation_metadata(
     if source_series_uid:
         ref = Dataset()
         ref.SeriesInstanceUID = source_series_uid
+        ref.ReferencedInstanceSequence = Sequence(_unique_instance_refs(items))
         ds.ReferencedSeriesSequence = Sequence([ref])
 
 
@@ -442,5 +459,6 @@ def create_projection_dataset(
         return None
 
 
-# Same strict-file_meta save used by every derived export.
-save_projection_dataset = save_derived_dataset
+def save_projection_dataset(ds: Dataset, output_path: str) -> None:
+    """Save a derived dataset with a strict file_meta (source fallbacks lacking one save as-is)."""
+    save_derived_dataset(ds, output_path)

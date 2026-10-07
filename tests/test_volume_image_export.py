@@ -79,7 +79,7 @@ def test_resolve_output_path_chosen_format_wins() -> None:
 
 
 def test_save_enabled_state() -> None:
-    ready = SimpleNamespace(supports_image_capture=True)
+    ready = SimpleNamespace(supports_image_capture=True, has_image=lambda: True)
     assert ie.save_enabled_state(ready, first_paint_complete=False)[0] is False
     assert ie.save_enabled_state(ready, first_paint_complete=True)[0] is True
     assert ie.save_enabled_state(None, first_paint_complete=True)[0] is False
@@ -103,7 +103,7 @@ def _viewer(qapp: Any, surface: Any, config: Any = None) -> Any:
 
 
 def test_button_disabled_until_frame_then_enabled(qapp: Any) -> None:
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     widget = _viewer(qapp, surf)
     ie.refresh_save_button(widget)
     assert not widget._save_image_btn.isEnabled()
@@ -139,7 +139,7 @@ def test_save_writes_png_and_remembers_folder(
         lambda *_a, **_k: (str(target), ie.PNG_FILTER),
     )
     _choose(monkeypatch, ie.SaveOptions())
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     widget = _viewer(qapp, surf, config)
     widget._first_paint_complete = True
     ie.refresh_save_button(widget)
@@ -161,14 +161,14 @@ def test_save_failure_shows_message_without_path(
     monkeypatch.setattr(
         QMessageBox, "warning", lambda _p, _t, text: shown.append(text)
     )
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     assert ie.prompt_and_save_image(None, surf, "CT Bone") is False
     assert len(shown) == 1
     assert "missing_dir" not in shown[0]
 
 
 def test_save_blocked_when_button_disabled(qapp: Any) -> None:
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     widget = _viewer(qapp, surf)
     ie.refresh_save_button(widget)
     assert ie.save_from_viewer(widget, "CT Bone") is False
@@ -266,7 +266,7 @@ def test_save_burn_in_ignores_patient_fields(
         "getSaveFileName",
         lambda *_a, **_k: (str(tmp_path / "o"), ie.PNG_FILTER),
     )
-    widget = _viewer(qapp, SimpleNamespace(supports_image_capture=True, current_image=_image))
+    widget = _viewer(qapp, SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image))
     widget._datasets = [SimpleNamespace(PatientName="Doe^Jane", PatientID="123")]
     widget._overlay_text_prev = "CT Bone"
     widget._first_paint_complete = True
@@ -288,7 +288,7 @@ def test_burn_in_off_does_not_call_overlay(
         "getSaveFileName",
         lambda *_a, **_k: (str(tmp_path / "o"), ie.PNG_FILTER),
     )
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     assert ie.prompt_and_save_image(None, surf, "CT", None, "CT Bone") is True
 
 
@@ -304,7 +304,7 @@ def test_jpg_save_is_readable_and_extension_replaced(
         return str(tmp_path / "shot.png"), filters
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", fake_dialog)
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     assert ie.prompt_and_save_image(None, surf, "CT") is True
     assert seen_filters == [ie.JPG_FILTER]
     out = tmp_path / "shot.jpg"
@@ -323,7 +323,7 @@ def test_jpeg_extension_kept_for_jpg(
         "getSaveFileName",
         lambda *_a, **_k: (str(tmp_path / "x.jpeg"), ie.JPG_FILTER),
     )
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     assert ie.prompt_and_save_image(None, surf, "CT") is True
     assert (tmp_path / "x.jpeg").exists()
 
@@ -344,7 +344,7 @@ def test_cancelled_options_dialog_skips_file_dialog(monkeypatch) -> None:
     monkeypatch.setattr(
         QFileDialog, "getSaveFileName", lambda *_a, **_k: opened.append(True) or ("", "")
     )
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     assert ie.prompt_and_save_image(None, surf, "CT Bone") is False
     assert opened == []
 
@@ -425,7 +425,7 @@ def test_save_dicom_end_to_end_deidentified(
         return str(tmp_path / "shot"), filters
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", fake_dialog)
-    surf = SimpleNamespace(supports_image_capture=True, current_image=_image)
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
     assert ie.prompt_and_save_image(
         None, surf, "CT Bone", None, "", dicom_template=template, blend_mode="Composite"
     ) is True
@@ -434,3 +434,182 @@ def test_save_dicom_end_to_end_deidentified(
     assert ds.pixel_array.shape == (7, 12, 3)
     assert "Doe" not in str(ds.PatientName)
     assert "CT Bone" in ds.DerivationDescription
+
+
+def _custom_widget(qapp: Any, user_name: str = "Doe^Jane") -> Any:
+    surf = SimpleNamespace(
+        supports_image_capture=True, has_image=lambda: True, current_image=_image
+    )
+    widget = _viewer(qapp, surf)
+    widget._first_paint_complete = True
+    widget._current_logical_index = lambda: 99
+    widget._is_user_preset_logical = lambda logical: logical >= 50
+    widget._current_base_preset_name = lambda: "CT Bone"
+    widget._user_presets = [{"name": user_name, "base_preset": "CT Bone"}]
+    widget._overlay_text_prev = f"{user_name}\nOpacity 50.0%"
+    widget._blend_mode_combo = SimpleNamespace(currentText=lambda: "Composite")
+    ie.refresh_save_button(widget)
+    return widget
+
+
+def test_custom_preset_never_leaks(
+    qapp: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pydicom
+
+    widget = _custom_widget(qapp)
+    assert ie.public_preset_name(widget) == "Custom preset"
+    assert "Doe" not in ie.redact_custom_preset_line(widget, widget._overlay_text_prev)
+    assert ie.redact_custom_preset_line(widget, "Doe^Jane\nOpacity 50.0%") == (
+        "Custom preset\nOpacity 50.0%"
+    )
+    assert ie.default_image_filename("Custom preset", datetime(2026, 1, 1)).startswith(
+        "3D_Custom_2026"
+    )
+    suggested: list[str] = []
+    drawn: list[str] = []
+    real = ie.QPainter.drawText
+
+    def spy(self: Any, *args: Any) -> Any:
+        drawn.extend(a for a in args if isinstance(a, str))
+        return real(self, *args)
+
+    monkeypatch.setattr(ie.QPainter, "drawText", spy)
+    for fmt, burn in (("PNG", True), ("DICOM", False)):
+        _choose(monkeypatch, ie.SaveOptions(fmt, burn, False))
+
+        def fake(_p: Any, _t: str, sug: str, filters: str, _f: str = fmt) -> tuple[str, str]:
+            suggested.append(sug)
+            return str(tmp_path / f"o_{_f}"), filters
+
+        monkeypatch.setattr(QFileDialog, "getSaveFileName", fake)
+        assert ie.save_from_viewer(widget) is True
+    assert all("Doe" not in name for name in suggested)
+    assert "Custom_" in suggested[0]
+    assert drawn and all("Doe" not in text for text in drawn)
+    assert "Custom preset" in "".join(drawn)
+    ds = pydicom.dcmread(str(tmp_path / "o_DICOM.dcm"))
+    assert "Doe" not in ds.DerivationDescription
+    assert "Custom preset" in ds.DerivationDescription
+
+
+def test_builtin_preset_name_is_kept(qapp: Any) -> None:
+    widget = _custom_widget(qapp)
+    widget._is_user_preset_logical = lambda _l: False
+    assert ie.public_preset_name(widget) == "CT Bone"
+    assert ie.redact_custom_preset_line(widget, "CT Bone\nX") == "CT Bone\nX"
+
+
+def test_overwrite_confirmation_after_extension_change(
+    qapp: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "x.png").write_bytes(b"old")
+    _choose(monkeypatch, ie.SaveOptions("PNG", False))
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", lambda *_a, **_k: (str(tmp_path / "x"), ie.PNG_FILTER)
+    )
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
+    asked: list[bool] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *_a, **_k: asked.append(True) or QMessageBox.StandardButton.No,
+    )
+    assert ie.prompt_and_save_image(None, surf, "CT") is False
+    assert asked == [True]
+    assert (tmp_path / "x.png").read_bytes() == b"old"
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes
+    )
+    assert ie.prompt_and_save_image(None, surf, "CT") is True
+    assert (tmp_path / "x.png").read_bytes() != b"old"
+
+
+def test_no_confirmation_when_path_unchanged(
+    qapp: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "x.png").write_bytes(b"old")
+    _choose(monkeypatch, ie.SaveOptions("PNG", False))
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", lambda *_a, **_k: (str(tmp_path / "x.png"), ie.PNG_FILTER)
+    )
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_a, **_k: pytest.fail("dialog already confirmed")
+    )
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image)
+    assert ie.prompt_and_save_image(None, surf, "CT") is True
+
+
+def test_painted_but_no_image_stays_disabled(qapp: Any) -> None:
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: False)
+    widget = _viewer(qapp, surf)
+    widget._first_paint_complete = True
+    ie.refresh_save_button(widget)
+    assert not widget._save_image_btn.isEnabled()
+
+
+def test_cleanup_disables_button(qapp: Any) -> None:
+    surf = SimpleNamespace(supports_image_capture=True, has_image=lambda: True)
+    widget = _viewer(qapp, surf)
+    widget._first_paint_complete = True
+    ie.refresh_save_button(widget)
+    assert widget._save_image_btn.isEnabled()
+    widget._cleaned_up = True
+    ie.refresh_save_button(widget)
+    assert not widget._save_image_btn.isEnabled()
+
+
+def test_surface_has_image(surface: Any) -> None:
+    assert surface.has_image() is False
+    surface._image = _image()
+    assert surface.has_image() is True
+    surface.cleanup()
+    assert surface.has_image() is False
+
+
+def test_legacy_has_image_false() -> None:
+    from gui.volume.legacy_surface import LegacyInteractorSurface
+
+    assert LegacyInteractorSurface.has_image(None) is False  # type: ignore[arg-type]
+
+
+def test_hidpi_odd_width_dimensions(qapp: Any) -> None:
+    from gui.volume.dicom_sc_save import qimage_to_rgb_array
+
+    img = QImage(7, 5, QImage.Format.Format_RGB888)
+    img.fill(QColor(1, 2, 3))
+    img.setDevicePixelRatio(2.0)
+    arr = qimage_to_rgb_array(img)
+    assert arr.shape == (5, 7, 3)
+    out = ie.burn_in_overlay(
+        _hidpi(120, 61), "CT Bone"
+    )
+    assert (out.width(), out.height()) == (120, 61)
+    assert out.devicePixelRatio() == 2.0
+
+
+def _hidpi(w: int, h: int) -> QImage:
+    img = _image(w, h)
+    img.setDevicePixelRatio(2.0)
+    return img
+
+
+def test_resolve_output_path_case_and_missing_extension() -> None:
+    assert ie.resolve_output_path("a.PNG", "PNG") == "a.PNG"
+    assert ie.resolve_output_path("a.DCM", "DICOM") == "a.DCM"
+    assert ie.resolve_output_path("a.JPEG", "JPG") == "a.JPEG"
+    assert ie.resolve_output_path("a.PNG", "JPG") == "a.jpg"
+    assert ie.resolve_output_path("noext", "DICOM") == "noext.dcm"
+
+
+def test_ctrl_s_inert_when_button_disabled(
+    qapp: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        ie, "ask_save_options", lambda *_a: pytest.fail("must not prompt")
+    )
+    widget = _viewer(qapp, SimpleNamespace(supports_image_capture=True, has_image=lambda: True, current_image=_image))
+    ie.refresh_save_button(widget)  # first paint not complete: disabled
+    assert not widget._save_image_btn.isEnabled()
+    dialog = SimpleNamespace(_viewer_widget=widget)
+    VolumeRenderDialog._on_save_image_shortcut(dialog)  # type: ignore[arg-type]

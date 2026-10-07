@@ -74,9 +74,11 @@ Click **Save Image…** or press **Ctrl+S** in the 3D window. The button is unav
 3. For DICOM, **De-identify** is on by default. It removes patient identity from the saved file. Turn it off only when the file stays inside your organisation.
 4. Choose where to save. The suggested name uses the preset and the time, for example `3D_CT_Bone_20261007-142501.png`. It never contains patient details.
 
-The viewer remembers your format and option choices. The image is saved at the size shown on screen.
+The viewer remembers your format and option choices. The image is saved at the rendered pixel size, which is larger than the on-screen size on high-DPI displays.
 
-A DICOM file is a single-frame RGB **Secondary Capture** in a new series. It copies the patient, study, and equipment details of the source series unless you de-identify it. Its series number is the source series number plus 700. It records the preset and blend mode as its derivation, and it carries no 3D geometry.
+Preset names you saved yourself are never written into filenames, burned-in text, or DICOM files. They appear as **Custom preset** instead. Built-in preset names are kept.
+
+A DICOM file is a single-frame RGB **Secondary Capture** in a new series. It copies the patient, study, and equipment details of the source series unless you de-identify it. Its series number is the source series number plus 700, or 701 when the source has no series number. It records the preset and blend mode as its derivation, and it carries no 3D geometry.
 
 ## Roadmap / limitations
 

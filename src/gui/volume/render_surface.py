@@ -96,6 +96,14 @@ class VolumeRenderSurface(QWidget):
 
     supports_image_capture = True
 
+    def has_image(self) -> bool:
+        """Cheaply report whether a frame is cached (no copy)."""
+        return (
+            not self._cleaned_up
+            and self._image is not None
+            and not self._image.isNull()
+        )
+
     def current_image(self) -> QImage | None:
         """Return a detached copy of the cached frame.
 

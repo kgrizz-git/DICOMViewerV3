@@ -524,3 +524,29 @@ def test_unbuildable_frame_wrapper_returns_none_without_raw_fallback() -> None:
     assert pde.create_projection_dataset(
         frames[0], _studies(*frames), STUDY, SERIES, 0, "mip", 1, False
     ) is None
+
+
+def test_referenced_series_has_type1_instance_sequence() -> None:
+    slices = [_slice([[1, 2], [3, 4]], number=n) for n in (1, 2, 3)]
+    ds = _build(slices, 0, count=3)
+    assert ds is not None
+    items = ds.ReferencedSeriesSequence[0].ReferencedInstanceSequence
+    assert [i.ReferencedSOPInstanceUID for i in items] == [s.SOPInstanceUID for s in slices]
+    assert all(i.ReferencedSOPClassUID == CTImageStorage for i in items)
+
+
+def test_anonymized_instance_references_match_source_image_sequence() -> None:
+    from gui.export_manager import ExportManager
+
+    slices = [_slice([[1, 9], [3, 4]], number=n) for n in (1, 2, 3)]
+    items = {(STUDY, SERIES): list(enumerate(slices))}
+    out = ExportManager.build_anonymized_projections(
+        items, _studies(*slices), "mip", 2, False
+    )
+    for ds in out.values():
+        refs = [
+            str(i.ReferencedSOPInstanceUID)
+            for i in ds.ReferencedSeriesSequence[0].ReferencedInstanceSequence
+        ]
+        assert refs == [str(i.ReferencedSOPInstanceUID) for i in ds.SourceImageSequence]
+        assert not {s.SOPInstanceUID for s in slices} & set(refs)
