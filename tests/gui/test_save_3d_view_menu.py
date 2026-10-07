@@ -72,6 +72,26 @@ def test_target_prefers_focused_series_then_most_recent(monkeypatch) -> None:
     assert facade.target_dialog(None) is second
 
 
+def test_target_prefers_the_last_activated_dialog_over_focused_series(monkeypatch) -> None:
+    _no_active_window(monkeypatch)
+    used, focused = _Dialog(), _Dialog()
+    facade = _facade(used, focused, subwindow_data={0: {"study_uid": "s", "series_uid": "b"}})
+    facade._open_dialogs["s|b"] = focused
+    facade._last_active = used
+    assert facade.target_dialog(0) is used
+
+
+def test_window_activation_event_records_the_dialog(qapp) -> None:
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QWidget
+
+    facade = _facade()
+    window = QWidget()
+    window.installEventFilter(facade._activation_tracker)
+    qapp.sendEvent(window, QEvent(QEvent.Type.WindowActivate))
+    assert facade._last_active is window
+
+
 def test_target_prefers_the_active_3d_window(monkeypatch) -> None:
     first, second = _Dialog(), _Dialog()
     monkeypatch.setattr(facade_module.QApplication, "activeWindow", staticmethod(lambda: first))
@@ -121,3 +141,46 @@ def test_file_menu_action_enables_only_with_an_open_3d_window(qapp, tmp_path) ->
     assert action.isEnabled()
     action.trigger()
     assert calls == [2]
+
+
+class _DeletedDialog(_Dialog):
+    def isVisible(self) -> bool:
+        raise RuntimeError("wrapped C/C++ object has been deleted")
+
+
+def test_deleted_and_stale_dialogs_fall_back_to_most_recent(monkeypatch) -> None:
+    _no_active_window(monkeypatch)
+    live = _Dialog()
+    stale = _Dialog(visible=False)
+    facade = _facade(
+        _DeletedDialog(), stale, live, subwindow_data={0: {"study_uid": "s", "series_uid": "a"}}
+    )
+    facade._open_dialogs["s|a"] = stale
+    facade._last_active = stale
+    assert facade.has_open_dialog()
+    assert facade.target_dialog(0) is live
+
+
+def _dialog_with_button(enabled: bool | None) -> Any:
+    from PySide6.QtWidgets import QPushButton
+
+    if enabled is None:
+        return SimpleNamespace(_viewer_widget=None)
+    button = QPushButton()
+    button.setEnabled(enabled)
+    return SimpleNamespace(_viewer_widget=SimpleNamespace(_save_image_btn=button))
+
+
+@pytest.mark.parametrize(("enabled", "expected"), [(None, False), (False, False), (True, True)])
+def test_real_dialog_can_save_image_mirrors_the_button(qapp, enabled, expected) -> None:
+    from gui.dialogs.volume_render_dialog import VolumeRenderDialog
+
+    dialog = _dialog_with_button(enabled)
+    assert VolumeRenderDialog.can_save_image(dialog) is expected  # type: ignore[arg-type]
+
+
+def test_real_dialog_save_image_is_inert_without_viewer(monkeypatch) -> None:
+    from gui.dialogs import volume_render_dialog as vrd
+
+    monkeypatch.setattr(vrd, "save_from_viewer", lambda *_a: pytest.fail("must not save"))
+    assert vrd.VolumeRenderDialog.save_image(SimpleNamespace(_viewer_widget=None)) is False  # type: ignore[arg-type]

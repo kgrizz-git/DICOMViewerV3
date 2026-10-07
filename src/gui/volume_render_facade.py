@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from PySide6.QtCore import QEvent, QObject
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from core.volume_render_eligibility import (
@@ -18,6 +19,24 @@ from core.volume_render_eligibility import (
 from gui.dialogs.volume_render_dialog import VolumeRenderDialog
 
 _log = logging.getLogger(__name__)
+
+
+class _ActivationTracker(QObject):
+    """Records the most recently activated 3D dialog.
+
+    Opening the main window's File menu activates the main window, so the
+    3D dialog the user was just using is no longer the active window when
+    File → Save 3D View… runs.
+    """
+
+    def __init__(self, facade: VolumeRenderFacade) -> None:
+        super().__init__()
+        self._facade = facade
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.WindowActivate:
+            self._facade._last_active = watched
+        return False
 
 
 class VolumeRenderFacade:
@@ -30,6 +49,9 @@ class VolumeRenderFacade:
         # Strong refs for all open dialogs (parentless dialogs would
         # otherwise be garbage-collected immediately by Python).
         self._alive: list[Any] = []
+        # Most recently activated 3D dialog (see _ActivationTracker).
+        self._last_active: Any | None = None
+        self._activation_tracker = _ActivationTracker(self)
 
     def launch_3d_view(self, subwindow_idx: int | None = None) -> None:
         """
@@ -91,12 +113,16 @@ class VolumeRenderFacade:
 
         def _on_destroyed() -> None:
             self._open_dialogs.pop(series_key, None) if series_key else None
+            if self._last_active is dialog:
+                self._last_active = None
             try:
                 self._alive.remove(dialog)
             except ValueError:
                 pass
 
         dialog.destroyed.connect(_on_destroyed)
+        dialog.installEventFilter(self._activation_tracker)
+        self._last_active = dialog
         dialog.show()
 
     def _live_dialogs(self) -> list[Any]:
@@ -117,15 +143,16 @@ class VolumeRenderFacade:
     def target_dialog(self, subwindow_idx: int | None = None) -> Any | None:
         """The 3D window File → Save 3D View… acts on.
 
-        Prefers the active 3D window, then the one for the focused pane's
-        series, then the most recently opened one.
+        Prefers the active 3D window, then the most recently activated one,
+        then the one for the focused pane's series, then the most recently
+        opened one.
         """
         live = self._live_dialogs()
         if not live:
             return None
-        active = QApplication.activeWindow()
-        if active in live:
-            return active
+        for candidate in (QApplication.activeWindow(), self._last_active):
+            if candidate in live:
+                return candidate
         if subwindow_idx is not None:
             key = self._get_series_key(int(subwindow_idx))
             focused = self._open_dialogs.get(key) if key else None
@@ -189,6 +216,7 @@ class VolumeRenderFacade:
 
         self._alive.clear()
         self._open_dialogs.clear()
+        self._last_active = None
 
     @staticmethod
     def _get_series_description(datasets: list[Any]) -> str:

@@ -72,7 +72,7 @@ You can save the current 3D view in three ways:
 
 - Click **Save Image…** in the 3D window's control panel.
 - Press **Ctrl+S** while the 3D window is active.
-- Choose **File → Save 3D View…** in the main window. It is available while a 3D window is open. With several 3D windows open, it saves the active one, then the one for the focused pane's series, then the most recently opened one.
+- Choose **File → Save 3D View…** in the main window. It is available while a 3D window is open. With several 3D windows open, it saves the one you used most recently.
 
 Saving is unavailable until the first frame is drawn. You can save the view as an image (PNG or JPG) or as a DICOM Secondary Capture.
 
