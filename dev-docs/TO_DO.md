@@ -41,6 +41,13 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 4. **[P1] Fusion overlay rescaled values and units** — add a raw-vs-rescaled
    selector for overlay normalization and show units (HU, SUV) in the fusion
    controls. See [Fusion Follow-up](#fusion-follow-up).
+5. **[P2] 3D window: minimize, keep in front, show/hide** — combines the two
+   3D viewer items under [3D volume rendering](#3d-volume-rendering): a
+   minimize button, a "Keep 3D Viewer in Front" setting (on by default), and a
+   View-menu show/hide that restores the existing window. Follow the histogram
+   dialog's window flags and re-raise pattern (`gui/dialogs/histogram_dialog.py`).
+   First confirm that the histogram really stays above its viewer on native
+   macOS/Windows; the user doubts it does. If it doesn't, fix both together.
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
