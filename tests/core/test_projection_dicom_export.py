@@ -559,3 +559,4 @@ def test_projection_without_class_uids_omits_referenced_series() -> None:
     ds = _build(slices, 0, count=2)
     assert ds is not None
     assert "ReferencedSeriesSequence" not in ds
+    assert "SourceImageSequence" not in ds

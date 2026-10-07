@@ -168,10 +168,11 @@ def _replace_pixels_rescaled(ds: Dataset, physical: np.ndarray) -> None:
 
 def _sop_ref_item(src: Dataset) -> Dataset | None:
     uid = getattr(src, "SOPInstanceUID", None)
-    if not uid:
-        return None
+    sop_class = getattr(src, "SOPClassUID", None)
+    if not uid or not sop_class:
+        return None  # both are Type 1 in a reference item
     item = Dataset()
-    item.ReferencedSOPClassUID = getattr(src, "SOPClassUID", "")
+    item.ReferencedSOPClassUID = sop_class
     item.ReferencedSOPInstanceUID = uid
     if _is_frame_wrapper(src):
         item.ReferencedFrameNumber = int(src._frame_index) + 1
