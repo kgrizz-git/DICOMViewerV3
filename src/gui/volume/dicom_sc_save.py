@@ -20,24 +20,6 @@ def qimage_to_rgb_array(image: QImage) -> Any:
     )
 
 
-def source_instance_refs(datasets: list[Any]) -> list[tuple[str, str]]:
-    """Return ``(SOPClassUID, SOPInstanceUID)`` per distinct source instance.
-
-    Frame wrappers reference their parent instance once.
-    """
-    seen: set[str] = set()
-    refs: list[tuple[str, str]] = []
-    for ds in datasets:
-        base = getattr(ds, "_original_dataset", ds)
-        uid = str(getattr(base, "SOPInstanceUID", "") or "")
-        class_uid = str(getattr(base, "SOPClassUID", "") or "")
-        if not uid or not class_uid or uid in seen:
-            continue
-        seen.add(uid)
-        refs.append((class_uid, uid))
-    return refs
-
-
 def save_dicom_sc(
     image: QImage,
     path: str,

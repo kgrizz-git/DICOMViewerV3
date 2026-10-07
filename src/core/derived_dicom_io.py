@@ -9,11 +9,13 @@ Requirements: pydicom.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import pydicom.uid
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.filewriter import dcmwrite
+from pydicom.sequence import Sequence
 from pydicom.uid import ExplicitVRLittleEndian
 
 
@@ -43,3 +45,45 @@ def save_derived_dataset(ds: Dataset, output_path: str) -> None:
     meta = getattr(ds, "file_meta", None)
     strict = meta is not None and "TransferSyntaxUID" in meta
     dcmwrite(output_path, ds, write_like_original=not strict)
+
+
+def source_instance_refs(datasets: Iterable[Any]) -> list[tuple[str, str]]:
+    """Return ``(SOPClassUID, SOPInstanceUID)`` per distinct source instance.
+
+    Frame wrappers reference their parent instance once. Sources missing either
+    UID are skipped, because both are Type 1 in a reference item.
+    """
+    seen: set[str] = set()
+    refs: list[tuple[str, str]] = []
+    for ds in datasets:
+        base = getattr(ds, "_original_dataset", ds)
+        uid = str(getattr(base, "SOPInstanceUID", "") or "")
+        class_uid = str(getattr(base, "SOPClassUID", "") or "")
+        if not uid or not class_uid or uid in seen:
+            continue
+        seen.add(uid)
+        refs.append((class_uid, uid))
+    return refs
+
+
+def referenced_series_item(
+    series_uid: str, refs: Iterable[tuple[str, str]]
+) -> Dataset | None:
+    """Return a ReferencedSeriesSequence item, or None without usable refs.
+
+    The item always carries the Type 1 ReferencedInstanceSequence; with no
+    complete class/instance reference there is nothing valid to write.
+    """
+    instances = []
+    for class_uid, instance_uid in refs:
+        if class_uid and instance_uid:
+            item = Dataset()
+            item.ReferencedSOPClassUID = class_uid
+            item.ReferencedSOPInstanceUID = instance_uid
+            instances.append(item)
+    if not (series_uid and instances):
+        return None
+    ref = Dataset()
+    ref.SeriesInstanceUID = series_uid
+    ref.ReferencedInstanceSequence = Sequence(instances)
+    return ref

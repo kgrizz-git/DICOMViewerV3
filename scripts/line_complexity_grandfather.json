@@ -80,7 +80,7 @@
     "src/core/image_resampler.py::needs_resampling": 19,
     "src/core/key_object_handler.py::parse_content_sequence": 22,
     "src/core/mpr_builder.py::_build": 20,
-    "src/core/mpr_dicom_export.py::write_mpr_series": 34,
+    "src/core/mpr_dicom_export.py::write_mpr_series": 33,
     "src/core/multiframe_handler.py::get_frame_pixel_array": 23,
     "src/core/presentation_state_handler.py::parse_graphic_annotations": 17,
     "src/core/privacy_controller.py::refresh_overlays": 16,

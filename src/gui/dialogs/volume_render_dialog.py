@@ -47,7 +47,7 @@ _INITIAL_DIALOG_SCREEN_WIDTH_FRACTION = 0.50
 _INITIAL_DIALOG_MIN_SIDE = 480
 _INITIAL_DIALOG_MAX_SIDE = 1440
 
-from gui.volume.dicom_sc_save import source_instance_refs
+from core.derived_dicom_io import source_instance_refs
 from gui.volume.image_export import save_from_viewer
 from utils.debug_flags import DEBUG_VOLUME_3D
 

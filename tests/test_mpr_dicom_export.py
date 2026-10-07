@@ -4,6 +4,7 @@ Unit tests for ``core.mpr_dicom_export`` (synthetic MPR / template only, no PHI)
 
 from __future__ import annotations
 
+import copy
 from types import SimpleNamespace
 from typing import cast
 
@@ -322,3 +323,54 @@ def test_write_mpr_series_removes_user_suffix_when_stripping_free_text(tmp_path)
     for path in paths:
         ds = pydicom.dcmread(str(path), force=True)
         assert "SeriesDescription" not in ds
+
+
+def _two_source_mpr(template: Dataset) -> tuple[MprResult, list[Dataset]]:
+    sources = [template, copy.deepcopy(template)]
+    sources[1].SOPInstanceUID = generate_uid()
+    mpr = _synthetic_mpr_result(template)
+    mpr.source_volume = cast(MprVolume, cast(object, SimpleNamespace(source_datasets=sources)))
+    return mpr, sources
+
+
+def test_write_mpr_series_references_every_source_instance(tmp_path) -> None:
+    template = _synthetic_ct_template()
+    mpr, sources = _two_source_mpr(template)
+    paths = write_mpr_series(
+        tmp_path, mpr, template, MprDicomExportOptions(anonymize=False)
+    )
+    for path in paths:
+        ref = pydicom.dcmread(str(path)).ReferencedSeriesSequence[0]
+        assert ref.SeriesInstanceUID == template.SeriesInstanceUID
+        refs = [
+            (str(i.ReferencedSOPClassUID), str(i.ReferencedSOPInstanceUID))
+            for i in ref.ReferencedInstanceSequence
+        ]
+        assert refs == [(str(s.SOPClassUID), str(s.SOPInstanceUID)) for s in sources]
+
+
+def test_write_mpr_series_deidentified_instance_refs_are_remapped(tmp_path) -> None:
+    template = _synthetic_ct_template()
+    mpr, sources = _two_source_mpr(template)
+    source_uids = {str(s.SOPInstanceUID) for s in sources}
+    paths = write_mpr_series(
+        tmp_path, mpr, template, MprDicomExportOptions(anonymize=True)
+    )
+    seen: set[tuple[str, ...]] = set()
+    for path in paths:
+        ref = pydicom.dcmread(str(path)).ReferencedSeriesSequence[0]
+        uids = tuple(str(i.ReferencedSOPInstanceUID) for i in ref.ReferencedInstanceSequence)
+        assert len(uids) == 2
+        assert not source_uids & set(uids)
+        seen.add(uids)
+    assert len(seen) == 1  # one consistent remap across the batch
+
+
+def test_write_mpr_series_omits_reference_without_class_uid(tmp_path) -> None:
+    template = _synthetic_ct_template()
+    del template.SOPClassUID
+    mpr = _synthetic_mpr_result(template)
+    paths = write_mpr_series(
+        tmp_path, mpr, template, MprDicomExportOptions(anonymize=False)
+    )
+    assert "ReferencedSeriesSequence" not in pydicom.dcmread(str(paths[0]))

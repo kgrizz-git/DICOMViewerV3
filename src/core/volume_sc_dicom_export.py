@@ -26,7 +26,9 @@ from pydicom.uid import SecondaryCaptureImageStorage
 from core.derived_dicom_io import (
     derived_series_number,
     fresh_file_meta,
+    referenced_series_item,
     save_derived_dataset,
+    source_instance_refs,
 )
 from utils.deep_anonymizer import DeepAnonymizerOptions, DeepDICOMAnonymizer
 
@@ -90,30 +92,13 @@ def _referenced_series(
 ) -> Dataset | None:
     """Return the ReferencedSeriesSequence item, or None without usable refs.
 
-    Only references with both a class and an instance UID are kept.  With no
-    explicit refs, the template itself is the single referenced instance.
+    With no explicit refs, the template itself is the single referenced instance.
     """
-    series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
     if source_refs is None:
-        source_refs = [
-            (
-                str(getattr(template, "SOPClassUID", "") or ""),
-                str(getattr(template, "SOPInstanceUID", "") or ""),
-            )
-        ]
-    instances = []
-    for class_uid, instance_uid in source_refs:
-        if class_uid and instance_uid:
-            item = Dataset()
-            item.ReferencedSOPClassUID = class_uid
-            item.ReferencedSOPInstanceUID = instance_uid
-            instances.append(item)
-    if not (series_uid and instances):
-        return None
-    ref = Dataset()
-    ref.SeriesInstanceUID = series_uid
-    ref.ReferencedInstanceSequence = Sequence(instances)
-    return ref
+        source_refs = source_instance_refs([template])
+    return referenced_series_item(
+        str(getattr(template, "SeriesInstanceUID", "") or ""), source_refs
+    )
 
 
 def build_volume_sc_dataset(
