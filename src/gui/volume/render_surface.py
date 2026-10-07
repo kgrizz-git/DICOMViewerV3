@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -56,6 +56,9 @@ class VolumeRenderSurface(QWidget):
     via :meth:`add_renderer` and trigger frames with :meth:`render_frame`.
     """
 
+    # Emitted whenever a grab stores a new cached frame.
+    image_captured = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -89,6 +92,29 @@ class VolumeRenderSurface(QWidget):
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(_RESIZE_DEBOUNCE_MS)
         self._resize_timer.timeout.connect(self.render_frame)
+
+    # ------------------------------------------------------------------
+    # Frame access
+    # ------------------------------------------------------------------
+
+    supports_image_capture = True
+
+    def has_image(self) -> bool:
+        """Cheaply report whether a frame is cached (no copy)."""
+        return (
+            not self._cleaned_up
+            and self._image is not None
+            and not self._image.isNull()
+        )
+
+    def current_image(self) -> QImage | None:
+        """Return a detached copy of the cached frame.
+
+        ``None`` before the first grab or after :meth:`cleanup`.
+        """
+        if self._cleaned_up or self._image is None:
+            return None
+        return self._image.copy()
 
     # ------------------------------------------------------------------
     # Interactor
@@ -202,6 +228,7 @@ class VolumeRenderSurface(QWidget):
             self._grabbing = False
         if image is not None:
             self._image = image
+            self.image_captured.emit()
         self.update()
 
     def _grab(self, width: int, height: int) -> QImage | None:

@@ -136,6 +136,17 @@ def build_menu_bar(main_window) -> None:
     save_mpr_dicom_action.triggered.connect(main_window.save_mpr_dicom_requested.emit)
     file_menu.addAction(save_mpr_dicom_action)
 
+    # Enabled from the File menu's aboutToShow while a 3D window is open
+    # (wired in app_signal_wiring, which owns the 3D dialog facade).
+    save_3d_view_action = QAction("Save 3D View…", main_window)
+    save_3d_view_action.setStatusTip(
+        "Save the open 3D view as PNG, JPG, or DICOM Secondary Capture"
+    )
+    save_3d_view_action.setEnabled(False)
+    file_menu.addAction(save_3d_view_action)
+    main_window.save_3d_view_action = save_3d_view_action
+    main_window.file_menu = file_menu
+
     tag_export_action = QAction("Export DICOM &Tags...", main_window)
     tag_export_action.setShortcut(QKeySequence("Shift+Ctrl+T"))
     tag_export_action.triggered.connect(main_window.tag_export_requested.emit)

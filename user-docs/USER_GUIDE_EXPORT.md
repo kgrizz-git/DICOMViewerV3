@@ -1,6 +1,6 @@
 # Exporting images & data
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-10-07
 
 The viewer can export your loaded images as **DICOM**, **PNG**, or **JPG**, with a hierarchical study/series/instance picker. This guide covers the main **Export Images** dialog. Other, more specialized exports (screenshots, cine, de-identified DICOM, tags, ROI statistics) have their own entry points and are cross-linked at the bottom.
 
@@ -67,6 +67,8 @@ These are separate from the main Export Images dialog:
 | Export | Where | Covered in |
 |--------|-------|------------|
 | Rendered **screenshots** of panes / whole window | **File → Export Screenshots…** | Captures what is visible, including any image text/overlays. [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
+| **3D view** (PNG / JPG / DICOM Secondary Capture) | **File → Save 3D View…**, or **Save Image…** / **Ctrl+S** in the 3D window | DICOM saves are de-identified by default. Custom preset names never appear in the output. [Saving the 3D view](USER_GUIDE_3D.md#saving-the-3d-view) |
+| **MPR** as a derived DICOM series | **File → Save MPR as DICOM…** | Optional metadata de-identification. [MPR guide](USER_GUIDE_MPR.md) |
 | **Cine** loop (GIF / AVI / MP4 / MPG) | **File → Export Cine As…** | Can include rendered image text, overlays, ROIs, and measurements. [Hub → General viewing](USER_GUIDE.md#general-viewing-2d) |
 | DICOM with metadata de-identification (dedicated dialog) | **File → De-identify & Export DICOM…** | [Metadata de-identification export](USER_GUIDE_ANONYMIZATION.md) |
 | **DICOM tags** (CSV / TXT / XLSX) | **File → Export DICOM Tags…** (**Ctrl+Shift+T**) | May contain identifiers, including private-tag values. [Hub → DICOM tags](USER_GUIDE.md) · [Tag export dialog](#dicom-tag-export-dialog) |

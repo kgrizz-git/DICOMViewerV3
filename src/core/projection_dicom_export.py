@@ -19,11 +19,15 @@ import numpy as np
 import pydicom.datadict
 import pydicom.uid
 from pydicom.dataelem import DataElement
-from pydicom.dataset import Dataset, FileMetaDataset
-from pydicom.filewriter import dcmwrite
+from pydicom.dataset import Dataset
 from pydicom.sequence import Sequence
-from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage
+from pydicom.uid import SecondaryCaptureImageStorage
 
+from core.derived_dicom_io import (
+    derived_series_number,
+    fresh_file_meta,
+    save_derived_dataset,
+)
 from core.dicom_processor import DICOMProcessor
 from core.dicom_rescale import get_rescale_parameters
 from core.dicom_rescale_encoding import float_to_int16_with_rescale
@@ -65,11 +69,7 @@ _IMAGE_TYPE_VALUES = {"mip": "MIP", "aip": "AIP", "minip": "MINIP"}
 
 def projection_series_number(source_series_number: Any) -> int:
     """Return the derived SeriesNumber: source + 600, or 601 when unusable."""
-    try:
-        base = int(source_series_number) if source_series_number not in (None, "") else 1
-    except (TypeError, ValueError):
-        return PROJECTION_SERIES_NUMBER_OFFSET + 1
-    return base + PROJECTION_SERIES_NUMBER_OFFSET
+    return derived_series_number(source_series_number, PROJECTION_SERIES_NUMBER_OFFSET)
 
 
 def _target_dtype(original_dtype: np.dtype, bits_stored: int) -> type:
@@ -106,24 +106,12 @@ def _apply_pixel_layout(ds: Dataset, pixels: np.ndarray) -> None:
     ds.PixelRepresentation = 0 if np.issubdtype(pixels.dtype, np.unsignedinteger) else 1
 
 
-def _fresh_file_meta(ds: Dataset) -> None:
-    """Rebuild file_meta for natively encoded, replaced pixel data."""
-    meta = FileMetaDataset()
-    meta.MediaStorageSOPClassUID = pydicom.uid.UID(str(getattr(ds, "SOPClassUID", "")))
-    meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
-    meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    meta.ImplementationClassUID = pydicom.uid.PYDICOM_IMPLEMENTATION_UID
-    ds.file_meta = meta
-    ds.is_implicit_VR = False
-    ds.is_little_endian = True
-
-
 def _sync_single_slice_file_meta(ds: Dataset) -> None:
     """Keep the source transfer syntax; only sync the media-storage instance UID."""
     meta = getattr(ds, "file_meta", None)
     if meta is None or "TransferSyntaxUID" not in meta:
         # No source syntax to keep; the retained PixelData is native.
-        _fresh_file_meta(ds)
+        fresh_file_meta(ds)
         return
     meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
 
@@ -180,14 +168,31 @@ def _replace_pixels_rescaled(ds: Dataset, physical: np.ndarray) -> None:
 
 def _sop_ref_item(src: Dataset) -> Dataset | None:
     uid = getattr(src, "SOPInstanceUID", None)
-    if not uid:
-        return None
+    sop_class = getattr(src, "SOPClassUID", None)
+    if not uid or not sop_class:
+        return None  # both are Type 1 in a reference item
     item = Dataset()
-    item.ReferencedSOPClassUID = getattr(src, "SOPClassUID", "")
+    item.ReferencedSOPClassUID = sop_class
     item.ReferencedSOPInstanceUID = uid
     if _is_frame_wrapper(src):
         item.ReferencedFrameNumber = int(src._frame_index) + 1
     return item
+
+
+def _unique_instance_refs(items: list[Dataset]) -> list[Dataset]:
+    """Return one class/instance reference per distinct source instance."""
+    seen: set[str] = set()
+    refs: list[Dataset] = []
+    for item in items:
+        uid = str(item.ReferencedSOPInstanceUID)
+        if uid in seen or not str(item.ReferencedSOPClassUID or ""):
+            continue
+        seen.add(uid)
+        ref = Dataset()
+        ref.ReferencedSOPClassUID = item.ReferencedSOPClassUID
+        ref.ReferencedSOPInstanceUID = uid
+        refs.append(ref)
+    return refs
 
 
 def _set_derivation_metadata(
@@ -202,9 +207,11 @@ def _set_derivation_metadata(
         ds.SourceImageSequence = Sequence(items)
     if "ReferencedSeriesSequence" in ds:
         del ds.ReferencedSeriesSequence
-    if source_series_uid:
+    instance_refs = _unique_instance_refs(items)
+    if source_series_uid and instance_refs:
         ref = Dataset()
         ref.SeriesInstanceUID = source_series_uid
+        ref.ReferencedInstanceSequence = Sequence(instance_refs)
         ds.ReferencedSeriesSequence = Sequence([ref])
 
 
@@ -426,14 +433,14 @@ def create_projection_dataset(
         if is_projection:
             if not _set_projection_pixels(ds, dataset, projection_type, slab):
                 return None
-            _fresh_file_meta(ds)
+            fresh_file_meta(ds)
             suffix = _apply_slab_geometry(ds, slab)
         elif _is_frame_wrapper(dataset):
             pixels = _frame_pixels(dataset)
             if pixels is None:
                 return None
             _apply_pixel_layout(ds, pixels)
-            _fresh_file_meta(ds)
+            fresh_file_meta(ds)
         else:
             _sync_single_slice_file_meta(ds)
 
@@ -456,6 +463,4 @@ def create_projection_dataset(
 
 def save_projection_dataset(ds: Dataset, output_path: str) -> None:
     """Save a derived dataset with a strict file_meta (source fallbacks lacking one save as-is)."""
-    meta = getattr(ds, "file_meta", None)
-    strict = meta is not None and "TransferSyntaxUID" in meta
-    dcmwrite(output_path, ds, write_like_original=not strict)
+    save_derived_dataset(ds, output_path)

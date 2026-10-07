@@ -28,7 +28,7 @@ Requirements:
 """
 
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from gui.subwindow_image_viewer_sync import apply_theme_viewer_background_all
 
@@ -103,6 +103,7 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.main_window.create_3d_view_requested.connect(
         app._volume_render_facade.launch_3d_view
     )
+    _wire_save_3d_view_action(app)
     # Series navigator close actions
     app.series_navigator.close_series_requested.connect(app._close_series)
     app.series_navigator.close_study_requested.connect(app._close_study)
@@ -213,3 +214,17 @@ def _wire_subwindow_signals(app: DICOMViewerApp) -> None:
 def _wire_focused_subwindow_signals(app: DICOMViewerApp) -> None:
     """Connect signals for the currently focused subwindow. Delegates to subwindow lifecycle controller."""
     app._subwindow_lifecycle_controller.connect_focused_subwindow_signals()
+
+
+def _wire_save_3d_view_action(app: Any) -> None:
+    """File → Save 3D View…: enabled only while a 3D window is open."""
+    action = getattr(app.main_window, "save_3d_view_action", None)
+    file_menu = getattr(app.main_window, "file_menu", None)
+    if action is None:
+        return
+    facade = app._volume_render_facade
+    action.triggered.connect(
+        lambda _checked=False: facade.save_3d_view(app.get_focused_subwindow_index())
+    )
+    if file_menu is not None:
+        file_menu.aboutToShow.connect(lambda: action.setEnabled(facade.has_open_dialog()))

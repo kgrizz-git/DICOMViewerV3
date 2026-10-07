@@ -56,6 +56,7 @@ import copy
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pydicom.uid
@@ -71,6 +72,7 @@ from pydicom.uid import (
     SecondaryCaptureImageStorage,
 )
 
+from core.derived_dicom_io import referenced_series_item, source_instance_refs
 from core.dicom_rescale import get_rescale_parameters, infer_rescale_type
 from core.dicom_rescale_encoding import float_to_int16_with_rescale
 from core.mpr_builder import MprResult
@@ -243,6 +245,13 @@ def _export_rescale_type(
     return infer_rescale_type(template, slope, intercept, rescale_type)
 
 
+def _mpr_source_datasets(mpr_result: MprResult, template: Dataset) -> list[Any]:
+    """Source slices the MPR was resampled from; the template when unknown."""
+    volume = getattr(mpr_result, "source_volume", None)
+    datasets = list(getattr(volume, "source_datasets", None) or [])
+    return datasets or [template]
+
+
 def write_mpr_series(
     output_dir: str | Path,
     mpr_result: MprResult,
@@ -300,6 +309,9 @@ def write_mpr_series(
     new_series_uid = pydicom.uid.generate_uid()
     study_uid = str(getattr(template, "StudyInstanceUID", "") or pydicom.uid.generate_uid())
     source_series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
+    series_ref = referenced_series_item(
+        source_series_uid, source_instance_refs(_mpr_source_datasets(mpr_result, template))
+    )
     frame_of_ref = getattr(template, "FrameOfReferenceUID", None)
     for_uid = str(frame_of_ref) if frame_of_ref else None
 
@@ -365,15 +377,8 @@ def write_mpr_series(
         if for_uid:
             ds.FrameOfReferenceUID = for_uid
 
-        try:
-            if source_series_uid:
-                ref_item = Dataset()
-                ref_item.SeriesInstanceUID = source_series_uid
-                rsq = Sequence()
-                rsq.append(ref_item)
-                ds.ReferencedSeriesSequence = rsq
-        except Exception:
-            pass
+        if series_ref is not None:
+            ds.ReferencedSeriesSequence = Sequence([copy.deepcopy(series_ref)])
 
         phys = physical_slices[i]
         pixel_array, rs, ri = float_to_int16_with_rescale(phys, p_min, p_max)

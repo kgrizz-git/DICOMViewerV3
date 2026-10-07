@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-07
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-07
+- **Removed a stale TO_DO item: basedpyright already runs in the local pre-push hook.** `.githooks/pre-push` runs `scripts/check_basedpyright_errors.py` as an error gate that matches CI, so the P2 item asking for that hook was already done.
 
 ## 2026-10-06
 - **h11 security floor in the optional PHI-tools environment.** Aikido flagged h11 0.14.0 (`CVE-2025-43859`) in `requirements-phi-tools.txt`, reached via presidio/spaCy -> weasel -> httpx -> httpcore. A normal resolve already picks h11 0.16.0, but httpcore 1.0.0-1.0.8 cap `h11<0.15`, so Aikido's minimum-version resolve lands on 0.14.0. Added `httpcore>=1.0.9` and `h11>=0.16.0` floors. The app, dev and build requirement files do not depend on h11.

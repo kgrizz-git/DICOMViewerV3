@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
 
@@ -67,6 +68,16 @@ class LegacyInteractorSurface(QWidget):
 
     def add_renderer(self, renderer: Any) -> None:
         self._render_window.AddRenderer(renderer)
+
+    supports_image_capture = False
+
+    def has_image(self) -> bool:
+        """The legacy path never caches a frame."""
+        return False
+
+    def current_image(self) -> QImage | None:
+        """The legacy path has no cached frame; image export is disabled."""
+        return None
 
     def render_frame(self) -> None:
         if self._cleaned_up or self._render_window is None:
