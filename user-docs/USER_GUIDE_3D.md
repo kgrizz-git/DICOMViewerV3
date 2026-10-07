@@ -1,6 +1,6 @@
 # User guide — 3D volume rendering
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-10-07
 
 The viewer can open a **GPU-accelerated 3D volume render** of the **focused** 2D subwindow’s series. This is a **separate** non-modal dialog; it does not replace the multi-pane 2D layout.
 
@@ -54,6 +54,7 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 | **Detail / Auto** | Detail controls ray-sampling quality. Auto selects detail from the preset and limits it for large volumes; the viewer starts with a Fast preview and refines only when the preview is responsive. Select High or Ultra manually when you want more detail and accept a potentially slower render. |
 | **Background** | Viewport background colour: Black, Dark Gray, Light Gray, or White. |
 | **Reset Camera** | Default 3D view orientation and framing. |
+| **Save Image…** | Saves the current 3D view as PNG, JPG, or DICOM Secondary Capture (shortcut **Ctrl+S**). Available once the first frame is drawn. |
 | **Help…** | Opens this guide in your web browser (requires network for GitHub-hosted docs in release builds). |
 
 ## Tips
@@ -64,22 +65,30 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 - Large volumes may be slow on integrated GPUs; VTK may use a CPU ray-cast path on some systems.
 - If the viewer keeps a Fast preview and says higher detail may be slow, it avoided an automatic render likely to make the window unresponsive. You can still select a higher Detail level manually.
 
-## Export (not yet available)
+## Saving the 3D view
 
-Saving the current 3D view as a **PNG/JPG image** or as a **Secondary Capture (SC) DICOM** series is planned (tracked as a roadmap item). Until then, use your OS screenshot tools for a quick capture of the viewport.
+Click **Save Image…** or press **Ctrl+S** in the 3D window. The button is unavailable until the first frame is drawn.
+
+1. Choose a **Format**: **PNG**, **JPG**, or **DICOM (Secondary Capture)**.
+2. For PNG or JPG, you can tick **Burn in overlay text**. This draws the top-left overlay (preset, opacity, detail, blend mode) onto the image. It never adds patient or study text. It is off by default.
+3. For DICOM, **De-identify** is on by default. It removes patient identity from the saved file. Turn it off only when the file stays inside your organisation.
+4. Choose where to save. The suggested name uses the preset and the time, for example `3D_CT_Bone_20261007-142501.png`. It never contains patient details.
+
+The viewer remembers your format and option choices. The image is saved at the size shown on screen.
+
+A DICOM file is a single-frame RGB **Secondary Capture** in a new series. It copies the patient, study, and equipment details of the source series unless you de-identify it. Its series number is the source series number plus 700. It records the preset and blend mode as its derivation, and it carries no 3D geometry.
 
 ## Roadmap / limitations
 
 - No **fusion overlay** in the 3D view.
 - No full **transfer-function curve editor** in the UI yet (saved presets store control values, not arbitrary curves).
-- No in-app **export** of the 3D render to image or DICOM yet.
+- Saved images are captured at screen size; higher-resolution capture is not available yet.
 - Large volumes may need a future memory warning or optional downsampling.
 
 ## Technical detail
 
-Planned 3D render export (to image or DICOM Secondary Capture) and a transfer-function
-curve editor are tracked as roadmap items above. See the in-repo user documentation set
+A transfer-function curve editor is tracked as a roadmap item above. See the in-repo user documentation set
 for the current feature list; implementation-plan and design notes are maintained
 separately from these user docs.
 
-Secondary Capture background (for planned DICOM export): DICOM Secondary Capture export is tracked as a roadmap item. Online contributor notes (requires network): [DICOM GSPS / KO / Secondary Capture](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).
+Secondary Capture background for the DICOM save option. Online contributor notes (requires network): [DICOM GSPS / KO / Secondary Capture](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/dev-docs/info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md).

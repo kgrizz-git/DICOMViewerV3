@@ -1,13 +1,13 @@
 # Derived-Image Export Plan — 3D Render Images and Projection DICOM
 
-**Status:** Active. Phase B shipped 2026-10-06; Phases A and C remain.
-**Last updated:** 2026-10-06
+**Status:** Completed 2026-10-07. All three phases shipped; manual smoke is tracked in `TO_DO.md`.
+**Last updated:** 2026-10-07
 **TO_DO refs:** Next up slots "Fix projection DICOM export" and "Save 3D
 render as PNG/JPG"; 3D volume rendering
 sub-items "Export current 3D volume render as image" and "…as Secondary Capture
 (SC) DICOM"; Measurements/projections item "Allow export of AIP, MIP, MinIP
 stack as DICOM or images".
-**Supersedes:** [`PROJECTION_EXPORT_PLAN.md`](completed/PROJECTION_EXPORT_PLAN.md)
+**Supersedes:** [`PROJECTION_EXPORT_PLAN.md`](PROJECTION_EXPORT_PLAN.md)
 for scope and ordering. That plan predates the shipped projection export and its
 "Current state" section is stale.
 
@@ -110,16 +110,16 @@ It has these defects:
 
 ### A1. Surface accessor
 
-- [ ] Add `VolumeRenderSurface.current_image() -> QImage | None`. It returns a
+- [x] Add `VolumeRenderSurface.current_image() -> QImage | None`. It returns a
   copy of `_image`, or `None` when no frame has been grabbed or the surface was
   cleaned up.
-- [ ] Add the same method to the legacy surface, returning `None`. Do not add a
+- [x] Add the same method to the legacy surface, returning `None`. Do not add a
   `vtkWindowToImageFilter` readback for a path that is being removed. The UI
   disables the action instead.
 
 ### A2. Optional high-resolution capture
 
-- [ ] Decide during implementation whether to offer a **scale factor** (1×, 2×,
+- [x] Decide during implementation whether to offer a **scale factor** (1×, 2×,
   4×). This would re-render the offscreen window at a larger size, grab once,
   and restore the size. Start with **1× only**, the cached frame, and keep the
   scale option as a follow-up unless it falls out cheaply from `_grab(width,
@@ -128,40 +128,40 @@ It has these defects:
 
 ### A3. UI
 
-- [ ] Add a **Save Image…** button to the 3D viewer's bottom button row, next to
+- [x] Add a **Save Image…** button to the 3D viewer's bottom button row, next to
   **Reset View**. Bind `Ctrl+S` as a `QShortcut` on the 3D dialog.
   `gui/volume/shortcuts.py` dispatches bare VTK keysyms, so it is the wrong
   home for a modified key.
-- [ ] Disable the button until the first frame is painted and while a build is
+- [x] Disable the button until the first frame is painted and while a build is
   in progress. Disable it on the legacy surface, with a tooltip saying why.
-- [ ] Use a `QFileDialog` save dialog with PNG/JPG filters. Default the filename
+- [x] Use a `QFileDialog` save dialog with PNG/JPG filters. Default the filename
   to `3D_<preset>_<YYYYMMDD-HHMMSS>.png`. Use the preset name only, never
   patient or study fields. Remember the last folder through
   `get_last_export_path` / `set_last_export_path` (`utils/config/paths_config.py`).
-- [ ] Save with `QImage.save` (JPG quality 95). Report failure in a message box
+- [x] Save with `QImage.save` (JPG quality 95). Report failure in a message box
   without the path text in logs (use the redacting logger helpers).
 
 ### A4. Optional overlay burn-in
 
-- [ ] Add a checkbox in the save dialog, or a persisted option, to burn in the
+- [x] Add a checkbox in the save dialog, or a persisted option, to burn in the
   viewport overlay text. **Default off.** The overlay holds only render state
   today, but burn-in must reuse `build_overlay_text` output and never add
   patient fields.
 
 ### A5. Tests
 
-- [ ] Unit: `current_image()` returns a detached copy, and mutating it does not
+- [x] Unit: `current_image()` returns a detached copy, and mutating it does not
   change the surface. It returns `None` before the first grab and after cleanup.
-- [ ] Qt: the button stays disabled until a frame exists. Saving to `tmp_path`
+- [x] Qt: the button stays disabled until a frame exists. Saving to `tmp_path`
   writes a PNG of the expected size. Use a stub surface, not real VTK, so the
   test does not need native graphics.
-- [ ] Filename builder: covers preset names with path-unsafe characters.
+- [x] Filename builder: covers preset names with path-unsafe characters.
 
 ### A6. Docs and closeout
 
-- [ ] User docs: add a 3D viewer section on saving an image.
-- [ ] Add a `CHANGELOG.md` entry (minor: new user-visible capability).
-- [ ] Remove the TO_DO 3D "export as image" sub-item.
+- [x] User docs: add a 3D viewer section on saving an image.
+- [x] Add a `CHANGELOG.md` entry (minor: new user-visible capability).
+- [x] Remove the TO_DO 3D "export as image" sub-item.
 
 ## Phase B — Projection DICOM correctness
 
@@ -233,29 +233,29 @@ into `core/projection_dicom_export.py`. It has no Qt dependency, and
 
 ## Phase C — 3D render as Secondary Capture DICOM
 
-- [ ] Write a single-frame RGB SC instance from the Phase A `QImage`. Use
+- [x] Write a single-frame RGB SC instance from the Phase A `QImage`. Use
   `SecondaryCaptureImageStorage`, `PhotometricInterpretation = RGB`,
   `SamplesPerPixel = 3`, `PlanarConfiguration = 0`, and a new Series and SOP UID.
   Set `ImageType = DERIVED\SECONDARY` and `ConversionType = WSD`.
-- [ ] Copy the patient, study, and equipment modules from the source series
+- [x] Copy the patient, study, and equipment modules from the source series
   template. Add a `ReferencedSeriesSequence`, and a `DerivationDescription`
   that names the preset and blend mode.
-- [ ] Reuse the Phase B `file_meta` and series-numbering helpers. Do not create
+- [x] Reuse the Phase B `file_meta` and series-numbering helpers. Do not create
   a third copy.
-- [ ] Offer it as **Save Image…** format "DICOM (Secondary Capture)". Phase A's
+- [x] Offer it as **Save Image…** format "DICOM (Secondary Capture)". Phase A's
   save dialog has no de-identify control, so add a **De-identify** checkbox
   that reuses `DeepAnonymizerOptions`. Anonymize the built SC dataset.
-- [ ] Tests: round-trip read with pydicom, check the pixel shape and SOP class,
+- [x] Tests: round-trip read with pydicom, check the pixel shape and SOP class,
   and confirm anonymized output carries no source patient fields.
-- [ ] Closeout: add a CHANGELOG entry (minor) and remove the TO_DO SC sub-item.
+- [x] Closeout: add a CHANGELOG entry (minor) and remove the TO_DO SC sub-item.
 
 ## Out of scope
 
 - Multi-frame or rotation-sweep 3D export (cine of the 3D view).
 - Non-overlapping projection slabs, projection caching, and the slab-override
   control from the old plan's open questions. Non-overlapping slabs and
-  caching are one item in [`TO_DO.md`](../TO_DO.md). The slab override is parked
-  in [`ICEBOX.md`](../ICEBOX.md).
+  caching are one item in [`TO_DO.md`](../../TO_DO.md). The slab override is parked
+  in [`ICEBOX.md`](../../ICEBOX.md).
 - Changing MIP/MinIP polarity under MONOCHROME1. This is tracked separately in
   `TO_DO.md`.
 
