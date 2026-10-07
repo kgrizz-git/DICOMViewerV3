@@ -299,6 +299,8 @@ class ExportManager:
         """
         Return the list of file paths that would be written by export_selected.
         Used to check for overwrites before exporting.
+        Identified projection DICOM is predicted without building pixels, so a
+        projection that later fails to build may appear here but not on disk.
         
         Args:
             selected_items: Same as export_selected

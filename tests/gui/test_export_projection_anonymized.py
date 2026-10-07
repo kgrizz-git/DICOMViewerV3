@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pydicom
+import pytest
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
 
@@ -245,3 +246,45 @@ def test_identified_projection_folder_and_names_match_written_series(
         assert path.parent.name == f"{back.SeriesNumber}-{sanitize_name(back.SeriesDescription)}"
         assert path.name.startswith(f"Instance_{back.InstanceNumber:04d}_MIP")
     assert {p.parent.name for p in files} == {"602-Synthetic_-_MIP"}
+
+
+@pytest.mark.parametrize(
+    ("export_format", "projection_enabled", "deep_anonymize"),
+    [
+        ("DICOM", False, False),
+        ("DICOM", False, True),
+        ("DICOM", True, False),
+        ("DICOM", True, True),
+        ("PNG", False, False),
+        ("PNG", True, False),
+    ],
+)
+def test_preview_matches_written_paths_for_each_mode(
+    monkeypatch, tmp_path: Path, export_format: str, projection_enabled: bool,
+    deep_anonymize: bool,
+) -> None:
+    monkeypatch.setattr(export_manager_module, "QProgressDialog", _NoopProgress)
+    _, selected, studies = _selection()
+    options = DeepAnonymizerOptions() if deep_anonymize else None
+    batch = None
+    if deep_anonymize and projection_enabled:
+        batch = ExportManager.build_anonymized_projections_for_selection(
+            selected, studies, "mip", 2, False, options
+        )
+    elif deep_anonymize:
+        batch = ExportManager.build_deep_anonymized_selection(selected, options)
+    preview = ExportManager.get_export_paths_for_selection(
+        selected, str(tmp_path), export_format, projection_enabled=projection_enabled,
+        projection_type="mip", projection_slice_count=2, deep_anonymize=deep_anonymize,
+        deep_anonymizer_options=options, deep_anonymized_items=batch, studies=studies,
+    )
+    request = ExportSelectedRequest(
+        selected, str(tmp_path), export_format, studies=studies,
+        deep_anonymize=deep_anonymize, deep_anonymizer_options=options,
+        projection_enabled=projection_enabled, projection_type="mip",
+        projection_slice_count=2, deep_anonymized_items=batch,
+    )
+    exported, _ = ExportManager().export_selected(request)
+    written = sorted(str(p) for p in tmp_path.rglob("*") if p.is_file())
+    assert exported == 3
+    assert sorted(preview) == written
