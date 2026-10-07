@@ -226,3 +226,44 @@ def test_export_handoff_success_and_error(qapp, tmp_path, monkeypatch) -> None:
     assert messages[-1][0] == "Export Failed"
     assert "synthetic export failure" in messages[-1][1]
     dlg.close()
+
+
+@pytest.mark.qt
+def test_projection_anonymized_export_shares_one_batch_with_preview(qapp, tmp_path, monkeypatch) -> None:
+    manager = MagicMock()
+    manager.export_selected.return_value = (1, [])
+    export_api = MagicMock(return_value=manager)
+    export_api.get_export_paths_for_selection.return_value = []
+    batch = {"built": "projection"}
+    export_api.build_anonymized_projections_for_selection.return_value = batch
+    monkeypatch.setattr("gui.dialogs.export_dialog.ExportManager", export_api)
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: QMessageBox.StandardButton.Ok)
+
+    dlg = _dialog(tmp_path)
+    dlg.projection_enabled = True
+    study = dlg.tree_widget.topLevelItem(0)
+    study.setCheckState(0, Qt.CheckState.Checked)
+    dlg._on_item_changed(study, 0)
+    dlg.dicom_radio.setChecked(True)
+    dlg._on_format_changed()
+    dlg.anonymize_checkbox.setChecked(True)
+    dlg.output_path = str(tmp_path)
+    dlg._on_export()
+
+    export_api.build_anonymized_projections_for_selection.assert_called_once()
+    export_api.build_deep_anonymized_selection.assert_not_called()
+    preview_kwargs = export_api.get_export_paths_for_selection.call_args.kwargs
+    request = manager.export_selected.call_args.args[0]
+    assert preview_kwargs["deep_anonymized_items"] is batch
+    assert request.deep_anonymized_items is batch
+    dlg.close()
+
+
+def test_not_exported_note_reports_missing_items() -> None:
+    from gui.export_manager import not_exported_note as _not_exported_note
+
+    assert _not_exported_note(5, 5) == ""
+    assert _not_exported_note(5, 7) == ""
+    note = _not_exported_note(5, 3)
+    assert "2 of 5 selected image(s) were not exported" in note
+    assert "projection" not in note

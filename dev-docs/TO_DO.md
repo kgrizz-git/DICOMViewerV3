@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-06
 
 ---
 
@@ -34,14 +34,10 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-3. **[P1] Derived-image export batch — 3D + projection stacks.** **3D:** export the
-   current volume render as **PNG/JPG** (reuse the offscreen `QImage`; plan:
-   [3D Volume Rendering](plans/3D_VOLUME_RENDERING_PLAN.md)); SC DICOM can follow in
-   the same slice once image export lands. **Projection:** export **AIP / MIP /
-   MinIP** stacks as images and/or DICOM ([Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)).
-   **MPR DICOM export is already shipped** (`File → Save MPR as DICOM…` via
-   `mpr_dicom_export.py`) — not part of this slot; only extend if a gap is found
-   during projection/3D export work.
+3. **[P1] Save 3D render as PNG/JPG** — Phase A of the
+   [derived-image export plan](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-a--save-3d-render-as-pngjpg).
+   Add a **Save Image…** action that writes the offscreen surface's cached `QImage`.
+   SC DICOM (Phase C) follows.
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -294,8 +290,8 @@ Release blockers (license compliance, versioned executables) live in
     - **Volume memory guard (implementation complete):** automatic pre-allocation downsampling guard ([plan §4.2](plans/3D_VOLUME_RENDERING_PLAN.md#42-memory-management)); Windows/Parallels manual verification — [Manual Smoke Checks](#manual-smoke-checks). **Archived plan:** [Volume render fallback & memory hardening](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)
     - [ ] **[P2]** HU-range structure coloring — multi-segment TF editor, anatomical presets (CT Abdomen/Chest/Head), save/name custom presets, persist to `QSettings` ([plan Phase 5](plans/3D_VOLUME_RENDERING_PLAN.md#phase-5-p2--future-hu-based-structure-coloring))
     - [ ] **[P1]** Complete plan verification gates (manual QA on Windows 11, completion-criteria checklist, mark plan/TO_DO done when verified) ([plan Completion Criteria](plans/3D_VOLUME_RENDERING_PLAN.md#completion-criteria))
-    - [ ] **[P1]** Export current 3D volume render as **image** (PNG/JPG) — **now nearly free:** since the offscreen-surface refactor the viewer already holds the displayed frame as a `QImage` (`VolumeRenderSurface._image`), so this no longer needs a GPU/window readback — expose a save action and reuse the existing export dialog. Capture viewport or off-screen VTK render; optional W/L and anonymize hooks consistent with [Export Screenshots](plans/completed/EXPORT_ANNOTATIONS_AND_SCREENSHOTS_PLAN.md) where applicable ([plan](plans/3D_VOLUME_RENDERING_PLAN.md))
-    - [ ] **[P1]** Export 3D volume render as **Secondary Capture (SC) DICOM** — persist rendered RGB/grayscale frames as a derived series (not GSPS); see [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#secondary-capture-sc-image) and mirror patterns from [`mpr_dicom_export.py`](../src/core/mpr_dicom_export.py) ([plan](plans/3D_VOLUME_RENDERING_PLAN.md))
+    - [ ] **[P1]** Export current 3D volume render as **image** (PNG/JPG) — **now nearly free:** since the offscreen-surface refactor the viewer already holds the displayed frame as a `QImage` (`VolumeRenderSurface._image`), so this no longer needs a GPU/window readback ([plan, Phase A](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-a--save-3d-render-as-pngjpg))
+    - [ ] **[P1]** Export 3D volume render as **Secondary Capture (SC) DICOM** — persist rendered RGB/grayscale frames as a derived series (not GSPS); see [DICOM_GSPS_KO_SECONDARY_CAPTURE.md](info/DICOM_GSPS_KO_SECONDARY_CAPTURE.md#secondary-capture-sc-image) and mirror patterns from [`mpr_dicom_export.py`](../src/core/mpr_dicom_export.py) ([plan, Phase C](plans/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md#phase-c--3d-render-as-secondary-capture-dicom))
     - [ ] **[P2]** **3D viewer minimize button:** add a standard minimize control to the volume-render window (non-modal dialog should minimize to taskbar like other top-level windows).
     - [ ] **[P2]** **3D viewer visibility and pinning:** add a View-menu show/hide action and a “Keep 3D Viewer in Front” setting, **on by default** now that users can minimize it. Reopening must restore the existing dialog rather than rebuilding the volume.
     - [ ] **[P2]** **GPU jittering (`SetUseJittering`):** randomize ray-start offsets so wood-grain banding becomes fine noise instead of concentric rings. **GPU-path only** — no effect on Parallels/CPU fallback; needs native-GPU verification. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) T7C
@@ -328,9 +324,10 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P1]** **Line profile tool and CT film beam-width analysis:** add an interactive line profile measurement tool plus an automated workflow for scanned film CT beam-width analysis. The automated workflow should detect the direction where radiation darkening rises/falls, derive a baseline-corrected profile, report FWHM and FWTM using a local-window maximum rather than a single-pixel max, read DPI when available or prompt/report pixels when unavailable, and report calibrated width in mm when possible. Users should also be able to manually place and measure profiles. **Plan:** [Line profile and CT film beam-width analysis](plans/supporting/LINE_PROFILE_AND_CT_FILM_BEAM_WIDTH_PLAN.md).
 
+- [ ] **[P2]** **Projection stack export: non-overlapping slabs and caching.** Add a non-overlapping slab option to projection stack export, which steps a full slab at a time (slices 0–7, then 8–15) and writes fewer images. Cache the computed stack so a repeated export with the same projection type and slab size reuses it. Background: open questions in [`PROJECTION_EXPORT_PLAN.md`](plans/completed/PROJECTION_EXPORT_PLAN.md#open-questions).
+
 - [ ] **[P2]** Enable adding multiple images distributions to histogram for comparison (probably via button histogram). Use different colors for each distribution. ([plan](plans/supporting/SCREENSHOT_COMPOSITE_OVERLAY_DETAIL_HISTOGRAM_COMPARE_PLAN.md#4-histogram-multiple-distributions-for-comparison))
 
-- [ ] **[P1]** Allow export of AIP, MIP, MinIP stack as DICOM or images. **Plan:** [Projection export](plans/supporting/PROJECTION_EXPORT_PLAN.md)
 
 - [ ] **[P2]** **Window top can truncate to 254.** `apply_window_level` computes `(x - low) * (255 / width)` and then truncates with `astype(np.uint8)`. For some widths, such as 200 and 400, a value at the top of the window comes out as 254.99999 and truncates to **254**, so the window's top edge is never full white. Widths such as 256 and 1000 are exact. A fix is to multiply by 255 before dividing, but that changes rendered bytes on every display path, so it needs its own change with updated golden tests. Found while writing `tests/gui/test_lut_curve_editor.py` (2026-10-03).
 - [ ] **[P2]** **Consider a 10- or 12-bit display path.** Stored pixels are already 10-, 12-, or 16-bit. Window/level uses that range, then the display path quantizes to 8-bit (`uint8`, then `QImage.Format_Grayscale8` / `Format_RGB888`) before the LUT indexes a 256-entry table. Spike whether Qt can keep a 10-bit (`Format_RGB30`) or 16-bit grayscale (`Format_Grayscale16`) image through to the monitor on macOS and Windows, and which outputs must stay 8-bit (JPEG, cine, thumbnails). Keep the LUT after window/level. Wider display depth helps when one window contains more than 256 distinct stored steps, and it reduces banding on a steep LUT. It does not show values outside the window. Added 2026-09-28.

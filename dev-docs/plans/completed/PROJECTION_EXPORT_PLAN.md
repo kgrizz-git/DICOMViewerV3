@@ -1,6 +1,6 @@
 # AIP / MIP / MinIP Projection Export Plan
 
-**Status:** Not started  
+**Status:** Completed 2026-10-06. Single-image and stack projection export ship through the Export dialog, and Phase B of [`DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md`](../DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md) fixed the DICOM output. The "Current state" section below is historical. Non-overlapping slabs and caching are one item in [`TO_DO.md`](../../TO_DO.md). The slab override is parked in [`ICEBOX.md`](../../ICEBOX.md).  
 **Priority:** P1  
 **TO_DO ref:** Features (Near-Term) — "Allow export of AIP, MIP, MinIP stack as DICOM or images."
 

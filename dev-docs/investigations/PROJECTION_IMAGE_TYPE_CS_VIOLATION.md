@@ -5,7 +5,7 @@
 
 ## Summary
 
-`create_projection_dataset()` previously wrote the third component of DICOM
+`create_projection_dataset()` (now in `src/core/projection_dicom_export.py`) previously wrote the third component of DICOM
 `(0008,0008) ImageType` as descriptive text such as `MAXIMUM INTENSITY
 PROJECTION`. DICOM VR `CS` permits at most 16 characters per component.
 
@@ -16,10 +16,10 @@ Run:
 ```bash
 source .venv/bin/activate
 QT_QPA_PLATFORM=offscreen python -m pytest -n 0 \
-  tests/gui/test_export_rendering_coverage.py -q
+  tests/core/test_projection_dicom_export.py -q
 ```
 
-`test_projection_dataset_image_type_values_are_dicom_cs_valid` is now an
+`test_metadata_and_no_dicom_cs_warnings` is now an
 ordinary passing regression. Projection values are `MIP`, `AIP`, and `MINIP`;
 the fuller description remains in `SeriesDescription` and `ImageComments`.
 
