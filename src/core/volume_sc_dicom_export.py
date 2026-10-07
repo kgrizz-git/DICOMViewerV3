@@ -85,6 +85,37 @@ def volume_sc_series_description(source_description: str) -> str:
     return source_description[: 64 - len(_SERIES_SUFFIX)] + _SERIES_SUFFIX
 
 
+def _referenced_series(
+    template: Dataset, source_refs: Iterable[tuple[str, str]] | None
+) -> Dataset | None:
+    """Return the ReferencedSeriesSequence item, or None without usable refs.
+
+    Only references with both a class and an instance UID are kept.  With no
+    explicit refs, the template itself is the single referenced instance.
+    """
+    series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
+    if source_refs is None:
+        source_refs = [
+            (
+                str(getattr(template, "SOPClassUID", "") or ""),
+                str(getattr(template, "SOPInstanceUID", "") or ""),
+            )
+        ]
+    instances = []
+    for class_uid, instance_uid in source_refs:
+        if class_uid and instance_uid:
+            item = Dataset()
+            item.ReferencedSOPClassUID = class_uid
+            item.ReferencedSOPInstanceUID = instance_uid
+            instances.append(item)
+    if not (series_uid and instances):
+        return None
+    ref = Dataset()
+    ref.SeriesInstanceUID = series_uid
+    ref.ReferencedInstanceSequence = Sequence(instances)
+    return ref
+
+
 def build_volume_sc_dataset(
     rgb: np.ndarray,
     template: Dataset,
@@ -127,18 +158,9 @@ def build_volume_sc_dataset(
     if blend_mode:
         parts.append(f"blend: {blend_mode}")
     ds.DerivationDescription = ", ".join(parts)[:1024]
-    source_series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
-    if source_series_uid:
-        ref = Dataset()
-        ref.SeriesInstanceUID = source_series_uid
-        instances = []
-        for class_uid, instance_uid in source_refs or ():
-            item = Dataset()
-            item.ReferencedSOPClassUID = class_uid
-            item.ReferencedSOPInstanceUID = instance_uid
-            instances.append(item)
-        ref.ReferencedInstanceSequence = Sequence(instances)
-        ds.ReferencedSeriesSequence = Sequence([ref])
+    series_ref = _referenced_series(template, source_refs)
+    if series_ref is not None:
+        ds.ReferencedSeriesSequence = Sequence([series_ref])
     ds.SamplesPerPixel = 3
     ds.PhotometricInterpretation = "RGB"
     ds.PlanarConfiguration = 0

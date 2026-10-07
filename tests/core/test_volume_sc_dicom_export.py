@@ -68,7 +68,7 @@ def test_round_trip_identified(tmp_path: Any) -> None:
     path = str(tmp_path / "a.dcm")
     sc.write_volume_sc(
         rgb, _template(), path, preset_name="CT Bone", blend_mode="Composite",
-        deidentify=False,
+        deidentify=False, source_refs=_REFS,
     )
     ds = pydicom.dcmread(path)
     assert ds.pixel_array.shape == (6, 9, 3)
@@ -139,7 +139,7 @@ def test_deidentified_output_has_no_source_identity(tmp_path: Any) -> None:
     path = str(tmp_path / "d.dcm")
     sc.write_volume_sc(
         _rgb(), _template(), path, preset_name="CT Bone", blend_mode="Composite",
-        deidentify=True,
+        deidentify=True, source_refs=_REFS,
     )
     ds = pydicom.dcmread(path)
     text = _all_text(ds)
@@ -208,3 +208,27 @@ def test_referenced_instance_sequence(tmp_path: Any, deidentify: bool) -> None:
         assert len({u for _c, u in got}) == 2
     else:
         assert got == _REFS
+
+
+def test_no_refs_means_no_referenced_series_sequence() -> None:
+    ds = sc.build_volume_sc_dataset(_rgb(), _template(), source_refs=[])
+    assert "ReferencedSeriesSequence" not in ds
+    # The template has no SOPClassUID, so a derived ref is also impossible.
+    assert "ReferencedSeriesSequence" not in sc.build_volume_sc_dataset(_rgb(), _template())
+
+
+def test_template_derived_reference() -> None:
+    t = _template()
+    t.SOPClassUID = "1.2.840.10008.5.1.4.1.1.2"
+    ds = sc.build_volume_sc_dataset(_rgb(), t)
+    items = ds.ReferencedSeriesSequence[0].ReferencedInstanceSequence
+    assert [str(i.ReferencedSOPInstanceUID) for i in items] == [SRC_SOP]
+
+
+def test_refs_with_empty_class_are_skipped() -> None:
+    refs = [("", "1.2.840.99.41"), ("1.2.840.10008.5.1.4.1.1.2", "1.2.840.99.42")]
+    ds = sc.build_volume_sc_dataset(_rgb(), _template(), source_refs=refs)
+    items = ds.ReferencedSeriesSequence[0].ReferencedInstanceSequence
+    assert [str(i.ReferencedSOPInstanceUID) for i in items] == ["1.2.840.99.42"]
+    only_bad = sc.build_volume_sc_dataset(_rgb(), _template(), source_refs=refs[:1])
+    assert "ReferencedSeriesSequence" not in only_bad

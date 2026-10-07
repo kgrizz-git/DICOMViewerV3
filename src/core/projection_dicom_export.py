@@ -184,7 +184,7 @@ def _unique_instance_refs(items: list[Dataset]) -> list[Dataset]:
     refs: list[Dataset] = []
     for item in items:
         uid = str(item.ReferencedSOPInstanceUID)
-        if uid in seen:
+        if uid in seen or not str(item.ReferencedSOPClassUID or ""):
             continue
         seen.add(uid)
         ref = Dataset()
@@ -206,10 +206,11 @@ def _set_derivation_metadata(
         ds.SourceImageSequence = Sequence(items)
     if "ReferencedSeriesSequence" in ds:
         del ds.ReferencedSeriesSequence
-    if source_series_uid:
+    instance_refs = _unique_instance_refs(items)
+    if source_series_uid and instance_refs:
         ref = Dataset()
         ref.SeriesInstanceUID = source_series_uid
-        ref.ReferencedInstanceSequence = Sequence(_unique_instance_refs(items))
+        ref.ReferencedInstanceSequence = Sequence(instance_refs)
         ds.ReferencedSeriesSequence = Sequence([ref])
 
 

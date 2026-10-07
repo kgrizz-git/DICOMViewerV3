@@ -99,19 +99,40 @@ def public_preset_name(widget: Any) -> str:
     return str(namer()) if callable(namer) else ""
 
 
-def redact_custom_preset_line(widget: Any, text: str) -> str:
-    """Replace a user preset's name in the overlay's first line."""
+def export_overlay_text(widget: Any) -> str:
+    """Return the overlay text that may be burned into an export.
+
+    Built-in presets use the text the viewer shows.  For a custom preset the
+    text is rebuilt with the generic label and the viewer's current opacity,
+    detail, and blend values, so a user-chosen name can never reach the image.
+    """
+    shown = str(getattr(widget, "_overlay_text_prev", "") or "")
     if public_preset_name(widget) != CUSTOM_PRESET_LABEL:
-        return text
-    names = {
-        str(p.get("name", ""))
-        for p in getattr(widget, "_user_presets", [])
-        if isinstance(p, dict)
-    }
-    lines = text.split("\n")
-    if lines and lines[0] in names:
-        lines[0] = CUSTOM_PRESET_LABEL
-    return "\n".join(lines)
+        return shown
+    from core.volume_renderer import BLEND_MODES, QUALITY_MODES
+    from gui.volume.overlay_text import build_overlay_text
+
+    def pick(table: Any, index: Any) -> str:
+        return str(table[index][0]) if isinstance(index, int) and 0 <= index < len(table) else ""
+
+    opacity = getattr(widget, "_opacity_spin", None)
+    detail = getattr(widget, "_detail_slider", None)
+    blend = getattr(widget, "_blend_mode_combo", None)
+    return build_overlay_text(
+        preset_name=CUSTOM_PRESET_LABEL,
+        opacity_pct=float(opacity.value()) if opacity is not None else 100.0,
+        detail=pick(QUALITY_MODES, detail.value() if detail is not None else None),
+        blend=pick(BLEND_MODES, blend.currentIndex() if blend is not None else None),
+    )
+
+
+def builtin_or_custom_label(preset_name: str) -> str:
+    """Map any preset name that is not a built-in to the generic label."""
+    from core.volume_render_presets import BUILTIN_PRESETS
+
+    if preset_name in {p.name for p in BUILTIN_PRESETS}:
+        return preset_name
+    return CUSTOM_PRESET_LABEL if preset_name else ""
 
 
 def resolve_output_path(path: str, fmt: str) -> str:
@@ -360,6 +381,7 @@ def prompt_and_save_image(
     image = surface.current_image() if surface is not None else None
     if image is None or image.isNull():
         return False
+    preset_name = builtin_or_custom_label(preset_name)
     options = ask_save_options(parent, config_manager)
     if options is None:
         return False
@@ -430,6 +452,9 @@ def add_save_button(widget: Any, panel: QWidget, row: Any) -> QPushButton:
     button.clicked.connect(lambda _checked=False: save_from_viewer(widget))
     row.addWidget(button)
     widget._save_image_btn = button
+    captured = getattr(getattr(widget, "_surface", None), "image_captured", None)
+    if captured is not None:
+        captured.connect(lambda: refresh_save_button(widget))
     refresh_save_button(widget)
     return button
 
@@ -452,9 +477,7 @@ def save_from_viewer(widget: Any, preset_name: str | None = None) -> bool:
         getattr(widget, "_surface", None),
         preset_name,
         getattr(widget, "_config_manager", None),
-        redact_custom_preset_line(
-            widget, str(getattr(widget, "_overlay_text_prev", "") or "")
-        ),
+        export_overlay_text(widget),
         dicom_template=getattr(widget, "_source_template", None),
         blend_mode=_current_blend_mode(widget),
         source_refs=getattr(widget, "_source_refs", None),

@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -55,6 +55,9 @@ class VolumeRenderSurface(QWidget):
     The widget owns the ``vtkRenderWindow``.  Callers attach their renderer
     via :meth:`add_renderer` and trigger frames with :meth:`render_frame`.
     """
+
+    # Emitted whenever a grab stores a new cached frame.
+    image_captured = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -225,6 +228,7 @@ class VolumeRenderSurface(QWidget):
             self._grabbing = False
         if image is not None:
             self._image = image
+            self.image_captured.emit()
         self.update()
 
     def _grab(self, width: int, height: int) -> QImage | None:

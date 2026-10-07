@@ -550,3 +550,12 @@ def test_anonymized_instance_references_match_source_image_sequence() -> None:
         ]
         assert refs == [str(i.ReferencedSOPInstanceUID) for i in ds.SourceImageSequence]
         assert not {s.SOPInstanceUID for s in slices} & set(refs)
+
+
+def test_projection_without_class_uids_omits_referenced_series() -> None:
+    slices = [_slice([[1, 2], [3, 4]], number=n) for n in (1, 2)]
+    for s in slices:
+        s.SOPClassUID = ""
+    ds = _build(slices, 0, count=2)
+    assert ds is not None
+    assert "ReferencedSeriesSequence" not in ds

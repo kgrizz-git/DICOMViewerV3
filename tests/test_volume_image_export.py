@@ -447,7 +447,11 @@ def _custom_widget(qapp: Any, user_name: str = "Doe^Jane") -> Any:
     widget._current_base_preset_name = lambda: "CT Bone"
     widget._user_presets = [{"name": user_name, "base_preset": "CT Bone"}]
     widget._overlay_text_prev = f"{user_name}\nOpacity 50.0%"
-    widget._blend_mode_combo = SimpleNamespace(currentText=lambda: "Composite")
+    widget._blend_mode_combo = SimpleNamespace(
+        currentText=lambda: "Composite", currentIndex=lambda: 0
+    )
+    widget._opacity_spin = SimpleNamespace(value=lambda: 50.0)
+    widget._detail_slider = SimpleNamespace(value=lambda: 1)
     ie.refresh_save_button(widget)
     return widget
 
@@ -459,10 +463,10 @@ def test_custom_preset_never_leaks(
 
     widget = _custom_widget(qapp)
     assert ie.public_preset_name(widget) == "Custom preset"
-    assert "Doe" not in ie.redact_custom_preset_line(widget, widget._overlay_text_prev)
-    assert ie.redact_custom_preset_line(widget, "Doe^Jane\nOpacity 50.0%") == (
-        "Custom preset\nOpacity 50.0%"
-    )
+    text = ie.export_overlay_text(widget)
+    assert "Doe" not in text
+    assert text.splitlines()[0] == "Custom preset"
+    assert "Opacity 50.0%" in text
     assert ie.default_image_filename("Custom preset", datetime(2026, 1, 1)).startswith(
         "3D_Custom_2026"
     )
@@ -497,7 +501,7 @@ def test_builtin_preset_name_is_kept(qapp: Any) -> None:
     widget = _custom_widget(qapp)
     widget._is_user_preset_logical = lambda _l: False
     assert ie.public_preset_name(widget) == "CT Bone"
-    assert ie.redact_custom_preset_line(widget, "CT Bone\nX") == "CT Bone\nX"
+    assert ie.export_overlay_text(widget) == widget._overlay_text_prev
 
 
 def test_overwrite_confirmation_after_extension_change(
@@ -613,3 +617,78 @@ def test_ctrl_s_inert_when_button_disabled(
     assert not widget._save_image_btn.isEnabled()
     dialog = SimpleNamespace(_viewer_widget=widget)
     VolumeRenderDialog._on_save_image_shortcut(dialog)  # type: ignore[arg-type]
+
+
+def test_multiline_custom_name_never_reaches_drawn_text(
+    qapp: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    name = "Doe^Jane\nMRN 123"
+    widget = _custom_widget(qapp, name)
+    widget._overlay_text_prev = f"{name}\nOpacity 50.0%"
+    drawn: list[str] = []
+    real = ie.QPainter.drawText
+
+    def spy(self: Any, *args: Any) -> Any:
+        drawn.extend(a for a in args if isinstance(a, str))
+        return real(self, *args)
+
+    monkeypatch.setattr(ie.QPainter, "drawText", spy)
+    _choose(monkeypatch, ie.SaveOptions("PNG", True))
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName",
+        lambda *_a, **_k: (str(tmp_path / "m"), ie.PNG_FILTER),
+    )
+    assert ie.save_from_viewer(widget) is True
+    joined = "".join(drawn)
+    assert "Doe" not in joined and "MRN" not in joined
+    assert "Custom preset" in joined
+
+
+def test_explicit_custom_preset_name_is_mapped(
+    qapp: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pydicom
+
+    _choose(monkeypatch, ie.SaveOptions("DICOM", False, False))
+    names: list[str] = []
+
+    def fake(_p: Any, _t: str, sug: str, filters: str) -> tuple[str, str]:
+        names.append(sug)
+        return str(tmp_path / "e"), filters
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", fake)
+    widget = _custom_widget(qapp)
+    assert ie.save_from_viewer(widget, "Doe^Jane") is True
+    assert "Doe" not in names[0] and "Custom_" in names[0]
+    ds = pydicom.dcmread(str(tmp_path / "e.dcm"))
+    assert "Doe" not in ds.DerivationDescription
+    assert "Custom preset" in ds.DerivationDescription
+    assert ie.builtin_or_custom_label("CT Bone") == "CT Bone"
+    assert ie.builtin_or_custom_label("") == ""
+
+
+class _GrabWindow:
+    def GetSize(self) -> tuple[int, int]:
+        return (4, 4)
+
+
+def test_button_recovers_after_failed_first_capture(
+    qapp: Any, surface: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    surface._render_window = _GrabWindow()
+    button = QPushButton("Save Image…")
+    widget = SimpleNamespace(
+        _surface=surface, _first_paint_complete=True, _save_image_btn=button,
+        _config_manager=None,
+    )
+    surface.image_captured.connect(lambda: ie.refresh_save_button(widget))
+    ie.refresh_save_button(widget)
+    assert not button.isEnabled()
+    results = iter([None, _image()])
+    monkeypatch.setattr(surface, "_grab", lambda _w, _h: next(results))
+    surface._on_render_end()
+    assert not button.isEnabled()  # painted flag set but no image yet
+    ie.refresh_save_button(widget)
+    assert not button.isEnabled()
+    surface._on_render_end()
+    assert button.isEnabled()

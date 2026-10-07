@@ -30,10 +30,11 @@ def source_instance_refs(datasets: list[Any]) -> list[tuple[str, str]]:
     for ds in datasets:
         base = getattr(ds, "_original_dataset", ds)
         uid = str(getattr(base, "SOPInstanceUID", "") or "")
-        if not uid or uid in seen:
+        class_uid = str(getattr(base, "SOPClassUID", "") or "")
+        if not uid or not class_uid or uid in seen:
             continue
         seen.add(uid)
-        refs.append((str(getattr(base, "SOPClassUID", "") or ""), uid))
+        refs.append((class_uid, uid))
     return refs
 
 
