@@ -6,9 +6,8 @@
 show/hide"); the two 3D viewer sub-items "3D viewer minimize button" and
 "3D viewer visibility and pinning"; the manual smoke check "Histogram stacking
 and minimization".
-**Branch:** `feature/3d-window-and-histogram-keep-in-front`. It starts from
-PR #182's branch, because that PR adds the Next up item. Rebase onto `main`
-after #182 merges.
+**Branch:** `feature/3d-window-and-histogram-keep-in-front`, based on `main`
+after PR #182 merged.
 
 ## Goal
 
@@ -28,8 +27,9 @@ Make the histogram and 3D windows behave like tool windows of the viewer:
 - `HistogramDialog` (`gui/dialogs/histogram_dialog.py:117`) is parented to the
   main window. It sets `Dialog | WindowMinimizeButtonHint | ...` flags and no
   stay-on-top flag.
-- It installs an event filter on its parent and calls `raise_()` on the main
-  window's `WindowActivate` (`histogram_dialog.py:164`).
+- It installs an event filter on its parent. When the main window receives
+  `WindowActivate`, the filter raises the histogram dialog
+  (`histogram_dialog.py:164`).
 - **Native bug (macOS, reported by the user 2026-10-07):** the histogram stays
   in front when you click the image viewer. It falls behind the main window
   when you click the left metadata pane or the right statistics pane.
@@ -43,11 +43,16 @@ Make the histogram and 3D windows behave like tool windows of the viewer:
   (`volume_render_dialog.py:173`). The legacy VTK interactor needs a true
   top-level host. The default offscreen surface does not, but the legacy
   escape hatch still exists.
-- It sets no window flags, so it has no minimize button on some platforms
-  and no keep-in-front behavior. It is `WA_DeleteOnClose`.
+- It sets no explicit window flags, so whether it shows a minimize button
+  depends on the platform's defaults. It has no keep-in-front behavior. It is
+  `WA_DeleteOnClose`.
 - `VolumeRenderFacade.launch_3d_view` focuses an existing dialog for the same
   series only when `isVisible()` is true. A hidden dialog is dropped and the
-  volume is **rebuilt**. A minimized dialog is raised but not restored.
+  volume is **rebuilt**. A minimized dialog still reports `isVisible()` as
+  true, so it takes the raise path, and it is raised but not restored.
+- `VolumeRenderFacade.target_dialog()` and `has_open_dialog()` consider only
+  visible dialogs. A hidden 3D window would therefore be unreachable from the
+  menu.
 - PR #182 added `VolumeRenderFacade._last_active` tracking and File → Save 3D
   View…, which this plan reuses.
 
@@ -66,8 +71,10 @@ Phase 0 must confirm one of these before any fix. Each comes with a probe.
   This is unlikely: the side panes are children of the main window's
   `QSplitter` (`main_window.py:427`), not dock widgets or separate native
   windows. A native child widget (`WA_NativeWindow`) inside a pane could
-  still change which `QWindow` receives activation. Probe: log `QGuiApplication.focusWindowChanged` and
-  `QApplication.activeWindow()` for clicks in each region.
+  still change which `QWindow` receives activation, and the image viewer may
+  host one too. Probe: log `QGuiApplication.focusWindowChanged`,
+  `QGuiApplication.focusWindow()`, and `QApplication.activeWindow()` for
+  clicks in all three regions (viewer, metadata pane, statistics pane).
 - **H3 — the image viewer path raises the histogram on its own.** For
   example, a focus or slice change might call a refresh that shows or raises
   the dialog. That would make the viewer case work by accident. Probe: trace
@@ -88,22 +95,37 @@ Phase 0 must confirm one of these before any fix. Each comes with a probe.
 Build one Qt helper in `gui/window_stacking.py` that both windows use, and
 pick the mechanism from Phase 0's finding:
 
-- **Option A — deferred re-raise (H1).** Keep today's design, but raise on
-  `QTimer.singleShot(0, ...)` after `WindowActivate`. Also raise on
-  `focusWindowChanged` when the new focus window belongs to this app and is
-  not the tool window itself. This is cheap, but it may still flicker.
+- **Option A — deferred re-raise (H1, experimental).** Keep today's design,
+  but raise on `QTimer.singleShot(0, ...)` after the main window's
+  `WindowActivate`. A zero timer does not guarantee the raise runs after
+  native stacking finishes, so treat this as an experiment. When the callback
+  runs, recheck that the window is still visible, not minimized, and that the
+  app is still active. Trigger only from the main-window anchor, not from
+  every focus change in the app. Skip the raise while a modal dialog or popup
+  is open (`QApplication.activeModalWidget()` / `activePopupWidget()`), so a
+  tool window never covers a modal prompt. On Windows the foreground lock can
+  turn a raise into a taskbar flash; check that in the spike.
 - **Option B — application-scoped stay-on-top.** Set `WindowStaysOnTopHint`
   while the app is active, and clear it when
-  `QGuiApplication.applicationStateChanged` reports the app inactive. This
-  meets goals 1 and 3 on every platform. Changing that flag on a visible
-  window re-creates the native window, so the helper must restore geometry
-  and the minimized state, and must not steal focus. Spike it before
-  committing to it.
+  `QGuiApplication.applicationStateChanged` reports the app inactive.
+  `WindowStaysOnTopHint` is system-wide topmost, so goal 3 holds only if the
+  flag is cleared promptly on every deactivation. That must be verified per
+  platform rather than assumed. Changing the flag hides the widget and can
+  re-create its native window, which can invalidate native handles used by
+  the legacy VTK surface. The spike must therefore:
+  - preserve visibility and the full window state (minimized, maximized,
+    fullscreen) and geometry;
+  - avoid activation loops and focus stealing;
+  - measure flicker on every app switch, and z-order loss on Windows;
+  - run against both the offscreen and the legacy 3D surfaces.
 - **Option C — native child window (macOS only).** Attach the tool window as
   an `NSWindow` child of the main window, which macOS then keeps above its
   parent. This needs PyObjC or a ctypes bridge and a new dependency review
-  (`security/security-tool-inventory.json`). Use it only if A and B both
-  fail.
+  (`security/security-tool-inventory.json`). A child window moves with its
+  parent, and ordering it out detaches it. The design must therefore define
+  who owns the bridge and when to detach and reattach (hide/show, minimize).
+  Smoke checks must cover independent minimization, moving the parent, and
+  Spaces and fullscreen. Use it only if A and B both fail.
 
 Recommendation: try A first, because it is the smallest change and H1 is the
 most likely cause. Move to B if native testing still shows the window falling
@@ -112,12 +134,17 @@ behind. Keep C as a last resort.
 - [ ] Implement the helper with an `install_keep_in_front(tool_window,
   main_window, *, enabled: Callable[[], bool])` entry point. It returns an
   object that can be removed when the window closes.
-- [ ] Use it for the histogram in place of the current event filter. Keep the
-  minimize behavior. A minimized window is never restored by a re-raise.
+- [ ] Use it for the histogram in place of the current event filter, in
+  `gui/dialogs/histogram_dialog.py`. Keep the minimize behavior. A minimized
+  window is never restored by a re-raise. Update or replace the existing
+  event-filter tests in `tests/gui/test_histogram_dialog.py` so they test the
+  helper rather than the removed filter.
 - [ ] Tests: unit-test the helper's decision logic, such as when to raise and
-  when to skip because the window is minimized, hidden, or the app is
-  inactive. Use a fake clock or `qtbot.wait`-free event posting. Native
-  ordering stays a manual smoke check.
+  when to skip because the window is minimized, hidden, closed before the
+  deferred callback runs, a modal dialog is open, or the app is inactive.
+  Cover a histogram and a 3D window open at the same time, so the two tool
+  windows do not fight over the top. Post events directly rather than
+  waiting on real time. Native ordering stays a manual smoke check.
 
 ## Phase 2 — 3D window behavior
 
@@ -132,21 +159,29 @@ behind. Keep C as a last resort.
   using the existing getter/setter pattern. Turning it off removes the
   helper's effect immediately.
 - [ ] **Show/hide.** Add a View-menu action, **Show 3D Viewer**, that toggles
-  the visibility of the 3D window the user used most recently (reuse
-  `VolumeRenderFacade.target_dialog`). It is disabled when no 3D window
-  exists. Hiding keeps the dialog and its volume alive.
+  the visibility of the 3D window the user used most recently. Hiding keeps
+  the dialog and its volume alive. Split the facade's targeting into
+  "existing" (any live, not-deleted dialog, visible or hidden) and "visible"
+  sets. The show/hide action and File → Save 3D View… enablement use the
+  existing set, so hiding the last 3D window leaves it recoverable. Test
+  target selection with several dialogs, some hidden.
 - [ ] **Reopen without rebuilding.** In `launch_3d_view`, an existing dialog
-  for the same series that is hidden or minimized must be restored with
-  `showNormal()`, raised, and activated. It must not be dropped and rebuilt.
-  Only a closed (deleted) dialog is rebuilt.
+  for the same series that is hidden or minimized must be reused, raised, and
+  activated. It must not be dropped and rebuilt. Check `isMinimized()`
+  explicitly, because a minimized window still reports `isVisible()`. Restore
+  by clearing only the minimized bit of `windowState()`, and unhide with
+  `show()`, so a maximized or fullscreen window keeps that state. Only a
+  closed (deleted) dialog is rebuilt.
 - [ ] **Line caps.** `volume_viewer_widget.py` and `main_window.py` are at
   their caps. Keep new logic in `gui/window_stacking.py`,
-  `volume_render_facade.py`, and the menu builder.
+  `volume_render_facade.py`, `gui/dialogs/volume_render_dialog.py` (flags),
+  `gui/dialogs/histogram_dialog.py`, and the menu builder.
 - [ ] Tests:
   - flags include minimize;
   - the setting persists and toggling it updates live dialogs;
   - show/hide keeps the same dialog object and never starts a new build;
-  - reopen after hide or minimize reuses the dialog;
+  - reopen after hide or minimize reuses the dialog and keeps a maximized or
+    fullscreen state;
   - the menu action's enablement follows open dialogs.
 
 ## Phase 3 — Docs, smoke, and closeout
@@ -156,10 +191,18 @@ behind. Keep C as a last resort.
 - [ ] Replace the manual smoke item "Histogram stacking and minimization"
   with one combined check covering the histogram and the 3D window on native
   macOS and Windows: click every region of the main window, minimize and
-  restore, switch to another app, and toggle the setting.
+  restore, minimize and restore the main window, switch to another app and
+  back, open a modal dialog while a tool window is up, and toggle the
+  setting.
 - [ ] `CHANGELOG.md`: a **Fixed** entry for the histogram falling behind the
   side panes (patch), and an **Added** entry for the 3D window controls
-  (minor).
+  (minor). Follow the repo's current convention for unreleased changes: add
+  the SemVer note, and bump `src/version.py` only if a release is being cut
+  (`dev-docs/RELEASING.md`).
+- [ ] Verify: `python -m pytest tests/ -v`, `python scripts/check_user_docs_links.py`,
+  `python scripts/check_repo_harness.py`,
+  `python scripts/check_architecture_boundaries.py`, and
+  `python scripts/agent_smoke_harness.py`.
 - [ ] Remove Next up item 5 and the two 3D sub-items from `TO_DO.md`, and
   archive this plan.
 
@@ -178,6 +221,9 @@ behind. Keep C as a last resort.
 - **Option B flicker and focus stealing.** Re-creating the native window when
   the flag changes can flash it or steal focus. The spike must check both
   before Option B is chosen.
+- **Regressions in today's working cases.** The histogram must still stay up
+  when you click the image viewer, when the main window is minimized and
+  restored, and when the app regains focus from another application.
 - **PHI.** The debug tracing must log only window class names and event
   types. It must never log window titles, because 3D titles include the
   series description.
