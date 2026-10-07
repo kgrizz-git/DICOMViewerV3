@@ -37,7 +37,12 @@ from core.projection_dicom_export import (
     save_projection_dataset,
 )
 from gui import export_rendering as _er
-from gui.export_paths import export_filename, series_directory, series_folder_dataset
+from gui.export_paths import (
+    export_filename,
+    instance_number_for,
+    series_directory,
+    series_folder_dataset,
+)
 from utils.deep_anonymizer import DeepDICOMAnonymizer
 from utils.privacy.console import print_redacted
 
@@ -57,6 +62,13 @@ def _reject_legacy_anonymize(anonymize: bool, *, deep_anonymize: bool = False) -
 
 
 
+def _projection_dicom_type(request: "ExportSelectedRequest") -> str | None:
+    """Projection type when the request writes projection DICOM, else None."""
+    if request.projection_enabled and request.format == "DICOM" and request.studies:
+        return request.projection_type
+    return None
+
+
 def not_exported_note(selected_count: int, exported_count: int) -> str:
     """Return a dialog note for selected images that produced no file, or ""."""
     missing = selected_count - exported_count
@@ -64,7 +76,7 @@ def not_exported_note(selected_count: int, exported_count: int) -> str:
         return ""
     return (
         f"\n\n{missing} of {selected_count} selected image(s) were not exported. "
-        "A projection that cannot be built is skipped rather than saved as the source slice."
+        "The export was cancelled, or those images could not be written."
     )
 
 @dataclass
@@ -314,6 +326,7 @@ class ExportManager:
         paths: list[str] = []
         items_by_study_series = ExportManager.group_selection(selected_items)
         deep_dicom = bool(deep_anonymize and format == "DICOM")
+        projection_dicom = bool(projection_enabled and format == "DICOM" and studies)
         projection_anon = ExportManager.projection_anonymization_active(
             deep_anonymize, format, projection_enabled, studies
         )
@@ -332,17 +345,20 @@ class ExportManager:
             )
         for (study_uid, series_uid), items in items_by_study_series.items():
             folder_dataset = series_folder_dataset(
-                study_uid, series_uid, items, pre_anonymized, deep_dicom, projection_anon
+                study_uid, series_uid, items, pre_anonymized, deep_dicom, projection_anon,
+                projection_type if projection_dicom else None,
             )
             if folder_dataset is None:
                 continue
             series_dir = series_directory(output_dir, folder_dataset)
-            for slice_index, dataset in items:
+            for position, (slice_index, dataset) in enumerate(items, start=1):
                 slice_key = (study_uid, series_uid, slice_index)
                 if projection_anon and slice_key not in pre_anonymized:
                     continue  # projection could not be built; nothing is written
                 output_dataset = pre_anonymized.get(slice_key, dataset)
-                instance_num = getattr(output_dataset, 'InstanceNumber', slice_index + 1)
+                instance_num = instance_number_for(
+                    position, output_dataset, slice_index, projection_dicom
+                )
                 filename = export_filename(
                     instance_num, format, projection_enabled,
                     projection_type, projection_slice_count,
@@ -407,6 +423,7 @@ class ExportManager:
         # Group by study and series for directory structure (sorted by slice index)
         items_by_study_series = self.group_selection(selected_items)
         deep_dicom = bool(deep_anonymize and export_format == "DICOM")
+        folder_projection_type = _projection_dicom_type(request)
 
         pre_anonymized, projection_dicom_anon = self._select_pre_anonymized(
             request, items_by_study_series
@@ -420,6 +437,7 @@ class ExportManager:
                 folder_dataset = series_folder_dataset(
                     study_uid, series_uid, items, pre_anonymized, deep_dicom,
                     projection_dicom_anon,
+                    folder_projection_type,
                 )
                 if folder_dataset is None:
                     failed += len(items)
@@ -443,7 +461,10 @@ class ExportManager:
                     if deep_dicom:
                         export_dataset = pre_anonymized.get(slice_key, dataset)
 
-                    instance_num = getattr(export_dataset, 'InstanceNumber', slice_index + 1)
+                    instance_num = instance_number_for(
+                        position, export_dataset, slice_index,
+                        folder_projection_type is not None,
+                    )
                     filename = export_filename(
                         instance_num, export_format, projection_enabled,
                         projection_type, projection_slice_count,

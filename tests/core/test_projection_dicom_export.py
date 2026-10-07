@@ -482,14 +482,14 @@ def test_series_description_suffix_not_duplicated_and_truncated() -> None:
     assert len(ds.SeriesDescription) == 64
 
 
-def test_single_slice_has_no_projection_type_or_suffix_but_new_series() -> None:
+def test_single_slice_has_no_projection_type_but_shares_series_description() -> None:
     src = _slice([[1, 2]])
     src.SeriesDescription = "base"
     series_uid = generate_uid()
     ds = _build([src], 0, ptype="mip", count=4, new_series_uid=series_uid)
     assert ds is not None
     assert ds.ImageType == ["DERIVED", "SECONDARY"]
-    assert ds.SeriesDescription == "base"
+    assert ds.SeriesDescription == "base - MIP"
     assert ds.SeriesInstanceUID == series_uid
     assert ds.DerivationDescription == "Derived from instance 1"
 

@@ -12,6 +12,7 @@ from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
 from core.multiframe_handler import create_frame_dataset
 from gui import export_manager as export_manager_module
 from gui.export_manager import ExportManager, ExportSelectedRequest, ExportSliceRequest
+from gui.export_paths import sanitize_name
 from utils.deep_anonymizer import DeepAnonymizerOptions
 
 STUDY = generate_uid()
@@ -75,13 +76,15 @@ def _selection(n: int = 3):
     return slices, selected, {STUDY: {SERIES: slices}}
 
 
-def _request(selected, studies, out: Path, items=None, **kw) -> ExportSelectedRequest:
+def _request(
+    selected, studies, out: Path, items=None, deep_anonymize: bool = True, **kw
+) -> ExportSelectedRequest:
     return ExportSelectedRequest(
         selected,
         str(out),
         "DICOM",
         studies=studies,
-        deep_anonymize=True,
+        deep_anonymize=deep_anonymize,
         deep_anonymizer_options=DeepAnonymizerOptions(),
         projection_enabled=True,
         projection_type="mip",
@@ -220,3 +223,25 @@ def test_export_selected_fails_closed_when_batch_lacks_a_key(monkeypatch, tmp_pa
     assert exported == 2
     for path in tmp_path.rglob("*.dcm"):
         assert "SRC-PID-77" not in _all_text(pydicom.dcmread(path))
+
+
+def test_identified_projection_folder_and_names_match_written_series(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(export_manager_module, "QProgressDialog", _NoopProgress)
+    _, selected, studies = _selection()
+    preview = ExportManager.get_export_paths_for_selection(
+        selected, str(tmp_path), "DICOM", projection_enabled=True, projection_type="mip",
+        projection_slice_count=2, studies=studies,
+    )
+    request = _request(selected, studies, tmp_path, deep_anonymize=False)
+    request.deep_anonymizer_options = None
+    exported, _ = ExportManager().export_selected(request)
+    files = sorted(tmp_path.rglob("*.dcm"))
+    assert exported == 3
+    assert sorted(preview) == [str(p) for p in files]
+    for path in files:
+        back = pydicom.dcmread(path)
+        assert path.parent.name == f"{back.SeriesNumber}-{sanitize_name(back.SeriesDescription)}"
+        assert path.name.startswith(f"Instance_{back.InstanceNumber:04d}_MIP")
+    assert {p.parent.name for p in files} == {"602-Synthetic_-_MIP"}

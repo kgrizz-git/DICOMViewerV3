@@ -226,6 +226,33 @@ def _set_projection_pixels(
     return True
 
 
+def projection_series_description(source_description: str, projection_type: str) -> str:
+    """Return the derived SeriesDescription ("<source> - MIP"), capped at 64 chars."""
+    label = projection_type.upper()
+    desc = source_description
+    if desc and not (desc == label or desc.endswith(f" - {label}")):
+        desc = f"{desc} - {label}"
+    elif not desc:
+        desc = label
+    return desc[:64]
+
+
+def projection_folder_dataset(source: Dataset, projection_type: str) -> Dataset:
+    """Return the tags that name a derived projection series folder.
+
+    Matches what :func:`create_projection_dataset` writes, without building pixels.
+    """
+    view = Dataset()
+    for keyword in ("PatientID", "StudyDate", "StudyDescription"):
+        if keyword in source:
+            setattr(view, keyword, getattr(source, keyword))
+    view.SeriesNumber = projection_series_number(getattr(source, "SeriesNumber", None))
+    view.SeriesDescription = projection_series_description(
+        str(getattr(source, "SeriesDescription", "") or ""), projection_type
+    )
+    return view
+
+
 def _set_descriptions(
     ds: Dataset, projection_type: str, n_slices: int, start: int, end: int, is_projection: bool
 ) -> str:
@@ -238,17 +265,15 @@ def _set_descriptions(
     existing = getattr(ds, "ImageComments", "")
     ds.ImageComments = f"{existing}; {info}" if existing else info
 
-    desc = str(getattr(ds, "SeriesDescription", "") or "")
+    # Series-level: every file in the derived series carries the same description,
+    # including a slab clipped to one slice at the series end.
+    ds.SeriesDescription = projection_series_description(
+        str(getattr(ds, "SeriesDescription", "") or ""), projection_type
+    )
     if is_projection:
-        label = projection_type.upper()
-        if desc and not (desc == label or desc.endswith(f" - {label}")):
-            desc = f"{desc} - {label}"
-        elif not desc:
-            desc = label
         ds.ImageType = ["DERIVED", "SECONDARY", _IMAGE_TYPE_VALUES.get(projection_type, "PROJECTION")]
     else:
         ds.ImageType = ["DERIVED", "SECONDARY"]
-    ds.SeriesDescription = desc[:64]
     if is_projection:
         kind = _PROJECTION_NAMES.get(projection_type, "Projection").split(" (")[0]
         return f"{kind} of {n_slices} slices, instances {start + 1}-{end + 1}"

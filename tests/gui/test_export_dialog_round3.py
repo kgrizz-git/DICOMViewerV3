@@ -264,4 +264,6 @@ def test_not_exported_note_reports_missing_items() -> None:
 
     assert _not_exported_note(5, 5) == ""
     assert _not_exported_note(5, 7) == ""
-    assert "2 of 5 selected image(s) were not exported" in _not_exported_note(5, 3)
+    note = _not_exported_note(5, 3)
+    assert "2 of 5 selected image(s) were not exported" in note
+    assert "projection" not in note

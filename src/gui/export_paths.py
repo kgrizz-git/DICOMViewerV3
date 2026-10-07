@@ -11,6 +11,8 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 
+from core.projection_dicom_export import projection_folder_dataset
+
 
 def sanitize_name(name: Any) -> str:
     text = str(name)
@@ -52,6 +54,15 @@ def export_filename(
     return f"Instance_{instance_num:04d}{suffix}.{extension}"
 
 
+def instance_number_for(
+    position: int, output_dataset: Dataset, slice_index: int, projection_dicom: bool
+) -> Any:
+    """Projection DICOM files are numbered 1..N within the derived series."""
+    if projection_dicom:
+        return position
+    return getattr(output_dataset, "InstanceNumber", slice_index + 1)
+
+
 def series_folder_dataset(
     study_uid: str,
     series_uid: str,
@@ -59,6 +70,7 @@ def series_folder_dataset(
     pre_anonymized: dict[tuple[str, str, int], Dataset],
     deep_dicom: bool,
     projection_anon: bool,
+    projection_type: str | None = None,
 ) -> Dataset | None:
     """Dataset whose tags name the series folder; None when nothing is written."""
     if projection_anon:
@@ -68,6 +80,9 @@ def series_folder_dataset(
                 return built
         return None
     first_index, first_dataset = items[0]
+    if projection_type is not None:
+        # Non-anonymized projection DICOM: name the folder after the derived series.
+        return projection_folder_dataset(first_dataset, projection_type)
     if deep_dicom:
         return pre_anonymized.get((study_uid, series_uid, first_index), first_dataset)
     return first_dataset
