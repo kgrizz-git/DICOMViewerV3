@@ -131,8 +131,10 @@ def test_odd_size_pixel_data_padded_and_readable(tmp_path: Any) -> None:
 
 
 def test_rejects_bad_array() -> None:
+    flat = np.zeros((4, 4), dtype=np.uint8)
+    template = _template()
     with pytest.raises(ValueError):
-        sc.build_volume_sc_dataset(np.zeros((4, 4), dtype=np.uint8), _template())
+        sc.build_volume_sc_dataset(flat, template)
 
 
 def test_deidentified_output_has_no_source_identity(tmp_path: Any) -> None:

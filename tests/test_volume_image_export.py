@@ -357,7 +357,8 @@ def test_qimage_with_row_padding_converts_exactly(qapp: Any) -> None:
     from gui.volume.dicom_sc_save import qimage_to_rgb_array
 
     img = QImage(5, 3, QImage.Format.Format_RGB888)
-    assert img.bytesPerLine() % 4 == 0 and img.bytesPerLine() > 15  # padded rows
+    assert img.bytesPerLine() % 4 == 0
+    assert img.bytesPerLine() > 15  # padded rows
     for y in range(3):
         for x in range(5):
             img.setPixelColor(x, y, QColor(x * 40, y * 80, 7))
@@ -429,7 +430,8 @@ def test_save_dicom_end_to_end_deidentified(
     assert ie.prompt_and_save_image(
         None, surf, "CT Bone", None, "", dicom_template=template, blend_mode="Composite"
     ) is True
-    assert seen[0].endswith(".dcm") and "Doe" not in seen[0]
+    assert seen[0].endswith(".dcm")
+    assert "Doe" not in seen[0]
     ds = pydicom.dcmread(str(tmp_path / "shot.dcm"))
     assert ds.pixel_array.shape == (7, 12, 3)
     assert "Doe" not in str(ds.PatientName)
@@ -490,7 +492,8 @@ def test_custom_preset_never_leaks(
         assert ie.save_from_viewer(widget) is True
     assert all("Doe" not in name for name in suggested)
     assert "Custom_" in suggested[0]
-    assert drawn and all("Doe" not in text for text in drawn)
+    assert drawn
+    assert all("Doe" not in text for text in drawn)
     assert "Custom preset" in "".join(drawn)
     ds = pydicom.dcmread(str(tmp_path / "o_DICOM.dcm"))
     assert "Doe" not in ds.DerivationDescription
@@ -640,7 +643,8 @@ def test_multiline_custom_name_never_reaches_drawn_text(
     )
     assert ie.save_from_viewer(widget) is True
     joined = "".join(drawn)
-    assert "Doe" not in joined and "MRN" not in joined
+    assert "Doe" not in joined
+    assert "MRN" not in joined
     assert "Custom preset" in joined
 
 
@@ -659,7 +663,8 @@ def test_explicit_custom_preset_name_is_mapped(
     monkeypatch.setattr(QFileDialog, "getSaveFileName", fake)
     widget = _custom_widget(qapp)
     assert ie.save_from_viewer(widget, "Doe^Jane") is True
-    assert "Doe" not in names[0] and "Custom_" in names[0]
+    assert "Doe" not in names[0]
+    assert "Custom_" in names[0]
     ds = pydicom.dcmread(str(tmp_path / "e.dcm"))
     assert "Doe" not in ds.DerivationDescription
     assert "Custom preset" in ds.DerivationDescription
