@@ -357,13 +357,17 @@ def test_write_mpr_series_deidentified_instance_refs_are_remapped(tmp_path) -> N
         tmp_path, mpr, template, MprDicomExportOptions(anonymize=True)
     )
     seen: set[tuple[str, ...]] = set()
+    series_refs: set[str] = set()
     for path in paths:
         ref = pydicom.dcmread(str(path)).ReferencedSeriesSequence[0]
         uids = tuple(str(i.ReferencedSOPInstanceUID) for i in ref.ReferencedInstanceSequence)
         assert len(uids) == 2
         assert not source_uids & set(uids)
+        assert str(ref.SeriesInstanceUID) != str(template.SeriesInstanceUID)
         seen.add(uids)
+        series_refs.add(str(ref.SeriesInstanceUID))
     assert len(seen) == 1  # one consistent remap across the batch
+    assert len(series_refs) == 1
 
 
 def test_write_mpr_series_omits_reference_without_class_uid(tmp_path) -> None:
