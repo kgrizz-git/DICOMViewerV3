@@ -46,8 +46,13 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
    minimize button, a "Keep 3D Viewer in Front" setting (on by default), and a
    View-menu show/hide that restores the existing window. Follow the histogram
    dialog's window flags and re-raise pattern (`gui/dialogs/histogram_dialog.py`).
-   First confirm that the histogram really stays above its viewer on native
-   macOS/Windows; the user doubts it does. If it doesn't, fix both together.
+   **Histogram bug (confirmed 2026-10-07 on macOS):** the histogram stays above
+   the main window when you click the image viewer, but falls behind when you
+   click the left metadata pane or the right statistics pane. It re-raises only
+   on the main window's `WindowActivate` (`histogram_dialog.py:164`), so the
+   raise likely races the window manager's reordering. Try a deferred raise
+   (`QTimer.singleShot(0, ...)`) first; fall back to a native child-window
+   relationship. Fix the histogram and the 3D window together.
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
