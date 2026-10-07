@@ -91,6 +91,21 @@ class VolumeRenderSurface(QWidget):
         self._resize_timer.timeout.connect(self.render_frame)
 
     # ------------------------------------------------------------------
+    # Frame access
+    # ------------------------------------------------------------------
+
+    supports_image_capture = True
+
+    def current_image(self) -> QImage | None:
+        """Return a detached copy of the cached frame.
+
+        ``None`` before the first grab or after :meth:`cleanup`.
+        """
+        if self._cleaned_up or self._image is None:
+            return None
+        return self._image.copy()
+
+    # ------------------------------------------------------------------
     # Interactor
     # ------------------------------------------------------------------
 

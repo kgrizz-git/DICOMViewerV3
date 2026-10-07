@@ -13,6 +13,7 @@ from core.volume_render_quality import (
     auto_detail_cap_index,
     should_auto_refine,
 )
+from gui.volume.image_export import refresh_save_button
 
 _EXPECTED_BLANK_GUIDANCE = (
     "Nothing is visible with this preset — try CT Soft Tissue or another preset."
@@ -84,6 +85,7 @@ def run_first_preview(widget: Any) -> None:
     elapsed_ms = (perf_counter() - started) * 1000.0
     widget._first_paint_pending = False
     widget._first_paint_complete = True
+    refresh_save_button(widget)
     widget._expected_blank_guidance = (
         fallback_outcome is GpuFallbackOutcome.EXPECTED_BLANK
     )

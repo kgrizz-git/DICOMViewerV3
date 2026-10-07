@@ -97,6 +97,7 @@ from gui.volume.first_paint import (
     setup_first_paint_state,
     stop_first_paint_timers,
 )
+from gui.volume.image_export import add_save_button
 from gui.volume.overlay_text import build_overlay_text
 from gui.volume.render_status import memory_guard_status_lines
 from gui.volume.shortcuts import handle_shortcut
@@ -430,11 +431,9 @@ class VolumeViewerWidget(QWidget):
         )
         self._reset_camera_btn.clicked.connect(self._on_reset_camera)
         view_row.addWidget(self._reset_camera_btn)
-
+        add_save_button(self, panel, view_row)
         self._help_btn = QPushButton("Help…", panel)
-        self._help_btn.setToolTip(
-            "Open the 3D volume rendering user guide (controls and how it works)."
-        )
+        self._help_btn.setToolTip("Open the 3D volume rendering user guide.")
         self._help_btn.clicked.connect(self._on_open_documentation)
         view_row.addWidget(self._help_btn)
         layout.addLayout(view_row)

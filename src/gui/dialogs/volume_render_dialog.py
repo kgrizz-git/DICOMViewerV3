@@ -32,7 +32,7 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 from PySide6.QtCore import QByteArray, QRect, QSize, Qt, QThread, Signal
-from PySide6.QtGui import QCursor, QGuiApplication
+from PySide6.QtGui import QCursor, QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -47,6 +47,7 @@ _INITIAL_DIALOG_SCREEN_WIDTH_FRACTION = 0.50
 _INITIAL_DIALOG_MIN_SIDE = 480
 _INITIAL_DIALOG_MAX_SIDE = 1440
 
+from gui.volume.image_export import save_from_viewer
 from utils.debug_flags import DEBUG_VOLUME_3D
 
 _log = logging.getLogger(__name__)
@@ -201,6 +202,8 @@ class VolumeRenderDialog(QDialog):
         if not restored:
             self.resize(_initial_dialog_size())
 
+        self._save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self._save_shortcut.activated.connect(self._on_save_image_shortcut)
         self._setup_ui()
         self._start_build()
 
@@ -357,6 +360,11 @@ class VolumeRenderDialog(QDialog):
             f"Could not build 3D volume:\n\n{message}",
         )
         self.close()
+
+    def _on_save_image_shortcut(self) -> None:
+        """Ctrl+S: save the 3D frame once the viewer exists and has painted."""
+        if self._viewer_widget is not None:
+            save_from_viewer(self._viewer_widget)
 
     # ------------------------------------------------------------------
     # Cleanup
