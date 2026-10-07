@@ -382,6 +382,8 @@ def test_multiframe_source_builds_plain_single_frame_secondary_capture_dataset(t
     assert ds.FrameOfReferenceUID == FOR_UID
     assert [float(v) for v in ds.ImagePositionPatient] == [0.0, 0.0, 1.5]
     assert float(ds.SliceThickness) == 5.0
+    assert [float(v) for v in ds.PixelSpacing] == [1.0, 1.0]
+    assert [float(v) for v in ds.ImageOrientationPatient] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     assert [r.ReferencedFrameNumber for r in ds.SourceImageSequence] == [1, 2]
     path = str(tmp_path / "mf.dcm")
     pde.save_projection_dataset(ds, path)

@@ -1,6 +1,6 @@
 # Competitive feature backlog (vs other DICOM viewers)
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-10-06
 
 Split out of [`TO_DO.md`](TO_DO.md) on 2026-08-23. This is product-strategy
 scope on a different cadence from the active engineering backlog: it answers
@@ -26,7 +26,6 @@ Keeping it separate means `TO_DO.md` shows work that is actually in play.
 
 - [ ] **[P1]** **2D↔MPR↔3D navigation polish:** extend sync to 3D plane indicator and shared focus behavior where feasible — **Gap:** §3. **Dup:** 3D spikes (MPR plane in 3D).
 - [ ] **[P2]** **Interactive oblique MPR** (drag handles / crosshairs) — **Gap:** §3. **Dup:** Features.
-- [ ] **[P1]** **Export AIP/MIP/MinIP stacks** (DICOM + images) — **Gap:** §5. **Dup:** Features (projection export). **Plan:** [Projection export](plans/completed/PROJECTION_EXPORT_PLAN.md).
 - [ ] **[P2]** **Save fused view as DICOM (SC)** — **Gap:** §5. **Dup:** Fusion follow-up.
 - [ ] **[P1]** **Export 3D volume render as image (PNG/JPG)** — **Gap:** §5. **Dup:** 3D visualization sub-items.
 - [ ] **[P1]** **Export 3D volume render as Secondary Capture DICOM** — **Gap:** §5. **Dup:** 3D visualization sub-items.
