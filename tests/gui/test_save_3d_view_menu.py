@@ -102,7 +102,8 @@ def test_save_without_3d_window_informs_and_saves_nothing(monkeypatch) -> None:
     shown: list[str] = []
     monkeypatch.setattr(QMessageBox, "information", lambda _p, _t, text: shown.append(text))
     assert _facade().save_3d_view() is False
-    assert shown and "Open a 3D view first" in shown[0]
+    assert shown
+    assert "Open a 3D view first" in shown[0]
 
 
 def test_save_before_first_frame_informs_and_saves_nothing(monkeypatch) -> None:
@@ -112,7 +113,8 @@ def test_save_before_first_frame_informs_and_saves_nothing(monkeypatch) -> None:
     dialog = _Dialog(ready=False)
     assert _facade(dialog).save_3d_view() is False
     assert dialog.saved == 0
-    assert shown and "not ready" in shown[0]
+    assert shown
+    assert "not ready" in shown[0]
 
 
 def test_save_runs_the_dialog_save_flow(monkeypatch) -> None:
