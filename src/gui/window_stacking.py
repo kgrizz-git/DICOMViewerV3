@@ -69,13 +69,41 @@ class _ModalWatcher(QObject):
     def __init__(self) -> None:
         super().__init__()
         self._helpers: weakref.WeakSet[AppScopedStayOnTop] = weakref.WeakSet()
+        self._installed_app: QApplication | None = None
 
     def register(self, helper: AppScopedStayOnTop) -> None:
-        if not self._helpers:
-            app = QApplication.instance()
-            if app is not None:
-                app.installEventFilter(self)
         self._helpers.add(helper)
+        helper_ref = weakref.ref(helper)
+        helper.destroyed.connect(lambda *_args: self._discard(helper_ref))
+        self._install_filter()
+
+    def _install_filter(self) -> None:
+        """Install on the current application, retrying after early registration."""
+        app = QApplication.instance()
+        if not isinstance(app, QApplication) or self._installed_app is app:
+            return
+        if self._installed_app is not None:
+            try:
+                self._installed_app.removeEventFilter(self)
+            except RuntimeError:
+                pass  # Qt is already shutting down.
+        app.installEventFilter(self)
+        self._installed_app = app
+
+    def _discard(self, helper_ref: weakref.ReferenceType[AppScopedStayOnTop]) -> None:
+        helper = helper_ref()
+        if helper is not None:
+            self._helpers.discard(helper)
+        self._remove_filter_if_unused()
+
+    def _remove_filter_if_unused(self) -> None:
+        if self._helpers or self._installed_app is None:
+            return
+        try:
+            self._installed_app.removeEventFilter(self)
+        except RuntimeError:
+            pass  # The watcher or QApplication was already deleted at shutdown.
+        self._installed_app = None
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if event.type() in self._WATCHED and isinstance(watched, QWidget):
@@ -95,6 +123,7 @@ class _ModalWatcher(QObject):
                 helper._reapply()
             except RuntimeError:  # its window was deleted
                 self._helpers.discard(helper)
+        self._remove_filter_if_unused()
 
 
 _modal_watcher: _ModalWatcher | None = None

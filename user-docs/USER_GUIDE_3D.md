@@ -69,8 +69,8 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 ## Window controls
 
 - **Minimize and maximize:** the 3D window has standard minimize and maximize buttons.
-- **View → Keep 3D Viewer in Front** (on by default) keeps 3D windows above the main viewer while you use the app. They drop behind other applications when you switch away, and they never cover the viewer's own dialogs. The setting is remembered. On Windows it has no effect yet; full keep-in-front is still being verified there.
-- **View → Show 3D Viewer** hides or shows the 3D window you used most recently. Hiding keeps the volume loaded, so showing it again is instant. Opening **3D View** again for the same series also brings back a hidden or minimized window instead of rebuilding it.
+- **View → Keep 3D Viewer in Front** (on by default) keeps 3D windows above the main viewer while you use the app. They drop behind other applications when you switch away, and they never cover the viewer's own dialogs. The setting is remembered. It applies on macOS and Linux window managers that support keep-above; on Windows it has no effect yet while full keep-in-front is still being verified there.
+- **View → Show 3D Viewer** hides or shows the 3D window you used most recently. Hiding keeps the volume loaded, so showing it again is instant. Opening **3D View** again for the same loaded series also brings back a hidden or minimized window instead of rebuilding it. Closing that series or its study closes the associated 3D window, including when hidden.
 
 ## Saving the 3D view
 

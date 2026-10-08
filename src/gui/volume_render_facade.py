@@ -113,7 +113,8 @@ class VolumeRenderFacade:
             self._open_dialogs[series_key] = dialog
 
         def _on_destroyed() -> None:
-            self._open_dialogs.pop(series_key, None) if series_key else None
+            if series_key and self._open_dialogs.get(series_key) is dialog:
+                self._open_dialogs.pop(series_key)
             if self._last_active is dialog:
                 self._last_active = None
             try:
@@ -146,10 +147,6 @@ class VolumeRenderFacade:
     def has_open_dialog(self) -> bool:
         """True while at least one 3D window exists (visible, minimized, or hidden)."""
         return bool(self._existing_dialogs())
-
-    def has_visible_dialog(self) -> bool:
-        """True while at least one 3D window is shown (a minimized one still counts)."""
-        return bool(self._live_dialogs())
 
     @staticmethod
     def restore_dialog(dialog: Any) -> None:
@@ -232,8 +229,10 @@ class VolumeRenderFacade:
     def _get_series_key(self, idx: int) -> str | None:
         """Return a unique key for the series in subwindow *idx*."""
         data = self._app.subwindow_data.get(idx, {})
-        study_uid = data.get("study_uid")
-        series_uid = data.get("series_uid")
+        # Pane records use the ``current_*`` names. Keep the short-name
+        # fallback for lightweight integrations that predate that convention.
+        study_uid = data.get("current_study_uid") or data.get("study_uid")
+        series_uid = data.get("current_series_uid") or data.get("series_uid")
         if study_uid and series_uid:
             return f"{study_uid}|{series_uid}"
         return None
@@ -252,7 +251,38 @@ class VolumeRenderFacade:
                 if isinstance(widget, VolumeRenderDialog) and widget not in dialogs:
                     dialogs.append(widget)
 
+        self._close_dialogs(dialogs, process_events=True)
+
+        self._open_dialogs.clear()
+        self._last_active = None
+
+    def close_dialogs_for(self, study_uid: str, series_key: str | None = None) -> None:
+        """Close 3D dialogs for a closed study or one of its series.
+
+        A hidden dialog owns its source datasets just as a visible one does.
+        Closing it before its series pixels are released prevents a later reopen
+        from restoring an obsolete volume or retaining the closed study's data.
+        """
+        key_prefix = f"{study_uid}|"
+        target_key = f"{key_prefix}{series_key}" if series_key is not None else None
+        dialogs = [
+            dialog
+            for key, dialog in self._open_dialogs.items()
+            if key == target_key or (target_key is None and key.startswith(key_prefix))
+        ]
+        # ``close()`` synchronously stops the worker and releases VTK resources.
+        # Do not pump the event loop during a navigator close; that would allow
+        # unrelated UI actions to re-enter before the study map is updated.
+        self._close_dialogs(dialogs)
+
+    def _close_dialogs(self, dialogs: list[Any], *, process_events: bool = False) -> None:
+        """Close *dialogs* and immediately make them unavailable for reuse."""
         for dialog in dialogs:
+            for key, candidate in list(self._open_dialogs.items()):
+                if candidate is dialog:
+                    self._open_dialogs.pop(key)
+            if self._last_active is dialog:
+                self._last_active = None
             try:
                 closed = dialog.close()
                 if not closed and hasattr(dialog, "hide"):
@@ -260,12 +290,11 @@ class VolumeRenderFacade:
             except RuntimeError:
                 pass  # already deleted by Qt
 
-        if app is not None:
+        app = QApplication.instance()
+        if process_events and app is not None:
             app.processEvents()
 
-        self._alive.clear()
-        self._open_dialogs.clear()
-        self._last_active = None
+        self._alive = [dialog for dialog in self._alive if dialog not in dialogs]
 
     @staticmethod
     def _get_series_description(datasets: list[Any]) -> str:

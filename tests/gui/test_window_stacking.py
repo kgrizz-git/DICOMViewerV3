@@ -301,3 +301,20 @@ def test_destroyed_native_window_drops_its_block_entry(qapp) -> None:
     assert not helper.is_blocked()
     assert not helper.suppressed()
     assert all(h is not handle for h in helper._watched_handles)
+
+
+def test_modal_watcher_uninstalls_and_reinstalls_with_live_helpers(qapp, monkeypatch) -> None:
+    watcher = window_stacking._ModalWatcher()
+    monkeypatch.setattr(window_stacking, "_modal_watcher", watcher)
+    w, _helper = _shown(qapp)
+    assert watcher._installed_app is qapp
+    w.close()
+    w.deleteLater()
+    qapp.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not watcher._helpers
+    assert watcher._installed_app is None
+
+    second, _second_helper = _shown(qapp)
+    assert watcher._installed_app is qapp
+    second.close()

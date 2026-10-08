@@ -65,9 +65,9 @@ def _no_active_window(monkeypatch) -> None:
 def test_has_open_dialog_counts_hidden_dialogs_but_visible_does_not() -> None:
     assert not _facade().has_open_dialog()
     assert _facade(_Dialog(visible=False)).has_open_dialog()
-    assert not _facade(_Dialog(visible=False)).has_visible_dialog()
+    assert not _facade(_Dialog(visible=False))._live_dialogs()
     assert _facade(_Dialog()).has_open_dialog()
-    assert _facade(_Dialog()).has_visible_dialog()
+    assert _facade(_Dialog())._live_dialogs()
 
 
 def test_target_prefers_focused_series_then_most_recent(monkeypatch) -> None:

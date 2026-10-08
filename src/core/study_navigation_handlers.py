@@ -206,6 +206,10 @@ def close_series(app: Any, study_uid: str, series_key: str) -> None:
         and data.get("current_series_uid") == series_key
     ]
 
+    facade = getattr(app, "_volume_render_facade", None)
+    if facade is not None:
+        facade.close_dialogs_for(study_uid, series_key)
+
     for ds in series_datasets:
         clear_cached_pixel_array(ds)
 
@@ -243,6 +247,10 @@ def close_study(app: Any, study_uid: str) -> None:
         for idx, data in app.subwindow_data.items()
         if data.get("current_study_uid") == study_uid
     ]
+
+    facade = getattr(app, "_volume_render_facade", None)
+    if facade is not None:
+        facade.close_dialogs_for(study_uid)
 
     for datasets in study_series.values():
         for ds in datasets:

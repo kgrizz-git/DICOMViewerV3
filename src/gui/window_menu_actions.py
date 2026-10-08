@@ -22,7 +22,7 @@ def attach_3d_window_menu_actions(view_menu: QMenu, main_window: Any) -> None:
     keep_action.setChecked(main_window.config_manager.get_keep_3d_viewer_in_front())
     keep_action.setToolTip(
         "Keeps 3D viewer windows above the main window while this app is active. "
-        "Currently applies on macOS and Linux only."
+        "Applies on macOS and on Linux window managers that support keep-above."
     )
     view_menu.addAction(keep_action)
     main_window.keep_3d_viewer_in_front_action = keep_action

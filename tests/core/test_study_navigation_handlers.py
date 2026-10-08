@@ -18,6 +18,7 @@ def _app() -> MagicMock:
     app = MagicMock()
     app.subwindow_data = {}
     app.subwindow_managers = {}
+    app._volume_render_facade = None
     return app
 
 
@@ -192,6 +193,21 @@ def test_close_series_removes_and_refreshes(monkeypatch) -> None:
     app._slice_sync_coordinator.invalidate_cache.assert_called_once_with("st", "sr")
 
 
+def test_close_series_closes_its_3d_dialog_before_releasing_pixels(monkeypatch) -> None:
+    call_order: list[str] = []
+    monkeypatch.setattr(snh, "clear_subwindow", MagicMock())
+    monkeypatch.setattr(
+        snh, "clear_cached_pixel_array", lambda _dataset: call_order.append("pixels")
+    )
+    app = _app()
+    app.current_studies = {"st": {"sr": [object()]}}
+    app._volume_render_facade = MagicMock()
+    app._volume_render_facade.close_dialogs_for.side_effect = lambda *_args: call_order.append("dialogs")
+    snh.close_series(app, "st", "sr")
+    app._volume_render_facade.close_dialogs_for.assert_called_once_with("st", "sr")
+    assert call_order == ["dialogs", "pixels"]
+
+
 def test_close_study_empty_returns_early() -> None:
     app = _app()
     app.current_studies = {}
@@ -211,3 +227,18 @@ def test_close_study_removes_and_refreshes(monkeypatch) -> None:
     app.annotation_manager.remove_study_annotations.assert_called_once_with("st")
     snh.clear_subwindow.assert_called_once_with(app, 2)
     app._slice_sync_coordinator.invalidate_cache.assert_called_once_with("st")
+
+
+def test_close_study_closes_all_its_3d_dialogs_before_releasing_pixels(monkeypatch) -> None:
+    call_order: list[str] = []
+    monkeypatch.setattr(snh, "clear_subwindow", MagicMock())
+    monkeypatch.setattr(
+        snh, "clear_cached_pixel_array", lambda _dataset: call_order.append("pixels")
+    )
+    app = _app()
+    app.current_studies = {"st": {"sr": [object()]}}
+    app._volume_render_facade = MagicMock()
+    app._volume_render_facade.close_dialogs_for.side_effect = lambda *_args: call_order.append("dialogs")
+    snh.close_study(app, "st")
+    app._volume_render_facade.close_dialogs_for.assert_called_once_with("st")
+    assert call_order == ["dialogs", "pixels"]
