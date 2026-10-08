@@ -228,7 +228,8 @@ class TestLaunch3dView:
         facade.launch_3d_view(subwindow_idx=0)
         mock_dlg_cls.assert_not_called()
         assert facade._open_dialogs["SU|SE"] is hidden
-        assert hidden.isVisible() and hidden.raise_called
+        assert hidden.isVisible()
+        assert hidden.raise_called
 
     @patch("gui.volume_render_facade.can_launch_3d_volume_render", return_value=(True, "ok"))
     @patch("gui.volume_render_facade.get_datasets_for_subwindow", return_value=["d1", "d2", "d3"])

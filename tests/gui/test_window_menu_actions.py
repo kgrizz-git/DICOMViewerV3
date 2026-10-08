@@ -101,7 +101,8 @@ def test_toggling_setting_persists_and_refreshes_live_dialogs(qapp, tmp_path) ->
 
     wire_3d_window_menu_actions(app)
     action = window.keep_3d_viewer_in_front_action
-    assert action.isCheckable() and action.isChecked()
+    assert action.isCheckable()
+    assert action.isChecked()
     action.trigger()
     assert window.config_manager.get_keep_3d_viewer_in_front() is False
     assert (a.refreshed, b.refreshed) == (1, 1)
@@ -124,12 +125,15 @@ def test_show_action_enablement_and_checked_follow_dialogs(qapp, tmp_path) -> No
     facade._alive.append(dlg)
     dlg.show()
     window.view_menu.aboutToShow.emit()
-    assert action.isEnabled() and action.isChecked()
+    assert action.isEnabled()
+    assert action.isChecked()
     action.trigger()  # hide
-    assert not dlg.isVisible() and not action.isChecked()
+    assert not dlg.isVisible()
+    assert not action.isChecked()
     assert action.isEnabled()  # hidden window stays recoverable
     action.trigger()  # show again
-    assert dlg.isVisible() and action.isChecked()
+    assert dlg.isVisible()
+    assert action.isChecked()
     assert facade._alive == [dlg]
     dlg.close()
 
@@ -142,7 +146,8 @@ def test_toggle_keeps_same_dialog_and_never_builds(qapp) -> None:
         assert facade.toggle_dialog_visibility() is False
         assert facade.toggle_dialog_visibility() is True
         ctor.assert_not_called()
-    assert facade._alive == [dlg] and dlg.isVisible()
+    assert facade._alive == [dlg]
+    assert dlg.isVisible()
     assert _facade().toggle_dialog_visibility() is None
     dlg.close()
 
@@ -157,7 +162,8 @@ def test_minimized_then_hidden_then_shown(qapp) -> None:
     assert not facade.target_is_shown()
     dlg.hide()
     facade.restore_dialog(dlg)
-    assert dlg.isVisible() and not dlg.isMinimized()
+    assert dlg.isVisible()
+    assert not dlg.isMinimized()
     dlg.close()
 
 
@@ -169,7 +175,9 @@ def test_restore_keeps_maximized_state(qapp) -> None:
     dlg.hide()
     dlg.setWindowState(dlg.windowState() | Qt.WindowState.WindowMinimized)
     VolumeRenderFacade.restore_dialog(dlg)
-    assert dlg.isVisible() and not dlg.isMinimized() and dlg.isMaximized()
+    assert dlg.isVisible()
+    assert not dlg.isMinimized()
+    assert dlg.isMaximized()
     dlg.close()
 
 
@@ -210,7 +218,8 @@ def test_launch_reuses_hidden_or_minimized_dialog(qapp, minimize) -> None:
     ):
         facade.launch_3d_view(0)
         ctor.assert_not_called()
-    assert dlg.isVisible() and not dlg.isMinimized()
+    assert dlg.isVisible()
+    assert not dlg.isMinimized()
     assert facade._open_dialogs["s|a"] is dlg
     dlg.close()
 

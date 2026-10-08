@@ -168,7 +168,8 @@ def test_blocked_through_widget_and_qwindow_returns_to_unblocked(qapp) -> None:
     handle = w.windowHandle()
     for target in (w, handle):
         QCoreApplication.sendEvent(target, QEvent(QEvent.Type.WindowBlocked))
-    assert helper.is_blocked() and not _on_top(w)
+    assert helper.is_blocked()
+    assert not _on_top(w)
     for target in (w, handle):
         QCoreApplication.sendEvent(target, QEvent(QEvent.Type.WindowUnblocked))
     assert not helper.is_blocked()
@@ -202,7 +203,8 @@ def test_modal_dialog_on_another_window_suppresses_stay_on_top(qapp, modality) -
     main = QWidget()
     main.show()
     tool, helper = _shown(qapp)  # parentless, like the 3D window
-    assert _on_top(tool) and not helper.suppressed()
+    assert _on_top(tool)
+    assert not helper.suppressed()
     dlg = _modal_dialog(main, modality, qapp)
     if qapp.activeModalWidget() is not dlg:
         dlg.close()
