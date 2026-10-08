@@ -140,9 +140,11 @@ pick the mechanism from Phase 0's finding:
   `QGuiApplication.applicationStateChanged` reports the app inactive.
   `WindowStaysOnTopHint` is system-wide topmost, so goal 3 holds only if the
   flag is cleared promptly on every deactivation. That must be verified per
-  platform rather than assumed. Changing the flag hides the widget and can
-  re-create its native window, which can invalidate native handles used by
-  the legacy VTK surface. The spike must therefore:
+  platform rather than assumed. `QWidget.setWindowFlags` hides the widget and
+  can re-create its native window, which could invalidate native handles used
+  by the legacy VTK surface. `QWindow.setFlag` on the existing native window
+  updates it in place on macOS and Windows and keeps it visible, so the helper
+  uses that. The spike must still:
   - preserve visibility and the full window state (minimized, maximized,
     fullscreen) and geometry;
   - avoid activation loops and focus stealing;
@@ -157,8 +159,12 @@ pick the mechanism from Phase 0's finding:
   Smoke checks must cover independent minimization, moving the parent, and
   Spaces and fullscreen. Use it only if A and B both fail.
 
-Decision (from Phase 0): **Option B.** Option A was tried and rejected. Keep
-C as a last resort if Windows testing fails.
+Decision (from Phase 0): **Option B.** Option A was tried and rejected.
+Option C is macOS-only, so it is the last resort only for macOS. If the
+Windows native check fails, gate Option B off on Windows through the helper's
+`enabled` callback, keep today's `WindowActivate` raise there, and record a
+Windows-specific follow-up (for example a native owned window). Do not ship
+Option B on Windows until its native check passes.
 
 - [ ] Promote `AppScopedStayOnTop` in `gui/window_stacking.py` from the spike
   to the real helper. It takes the tool window and an `enabled` callback, and
@@ -166,12 +172,18 @@ C as a last resort if Windows testing fails.
   `QWidget.setWindowFlags`, which hides and re-creates the window.
 - [ ] **Modal dialogs.** A stay-on-top tool window can cover the app's own
   modal dialogs (message boxes, file pickers, progress dialogs), which are not
-  stay-on-top. Clear the flag while `QApplication.activeModalWidget()` is set,
-  and restore it when the modal closes, by watching `focusWindowChanged`.
-  The spike did not test this.
+  stay-on-top. `QApplication.activeModalWidget()` misses native file dialogs,
+  and focus changes do not track a modal's lifetime reliably. Instead, watch
+  the tool window's own `QEvent.WindowBlocked` and `QEvent.WindowUnblocked`,
+  which Qt sends when an application-modal window starts and stops blocking
+  it, including native dialogs opened through `QDialog.exec`. Clear the flag
+  while blocked and restore it when unblocked. Test nested modals and a
+  modal that never takes focus, and smoke-test a native file dialog. The
+  spike did not test this.
 - [ ] Use it for the histogram in `gui/dialogs/histogram_dialog.py`. Keep the
-  existing `WindowActivate` raise for the in-app case, and keep the minimize
-  behavior. Remove the spike's debug flags
+  existing `WindowActivate` raise for the in-app case, but apply the same
+  blocked-by-modal guard to it, so it never raises over a prompt. Keep the
+  minimize behavior. Remove the spike's debug flags
   (`DEBUG_WINDOW_STACKING_DEFERRED_RAISE`, `DEBUG_WINDOW_STACKING_APP_TOPMOST`)
   and the deferred-raise code. Keep `DEBUG_WINDOW_STACKING` tracing for future
   diagnosis.
@@ -198,7 +210,9 @@ C as a last resort if Windows testing fails.
   helper's effect immediately.
 - [ ] **Show/hide.** Add a View-menu action, **Show 3D Viewer**, that toggles
   the visibility of the 3D window the user used most recently. Hiding keeps
-  the dialog and its volume alive. Split the facade's targeting into
+  the dialog and its volume alive. Showing a minimized or hidden window clears
+  only `WindowMinimized`, then shows, raises, and activates it, so a maximized
+  or fullscreen state survives. Test minimized, then hidden, then shown. Split the facade's targeting into
   "existing" (any live, not-deleted dialog, visible or hidden) and "visible"
   sets. The show/hide action and File → Save 3D View… enablement use the
   existing set, so hiding the last 3D window leaves it recoverable. Test
@@ -211,9 +225,14 @@ C as a last resort if Windows testing fails.
   `show()`, so a maximized or fullscreen window keeps that state. Only a
   closed (deleted) dialog is rebuilt.
 - [ ] **Line caps.** `volume_viewer_widget.py` and `main_window.py` are at
-  their caps. Keep new logic in `gui/window_stacking.py`,
-  `volume_render_facade.py`, `gui/dialogs/volume_render_dialog.py` (flags),
-  `gui/dialogs/histogram_dialog.py`, and the menu builder.
+  their caps, and `main_window_menu_builder.py` is within a few lines of its
+  750-line cap. Keep new logic in `gui/window_stacking.py`,
+  `volume_render_facade.py`, `gui/dialogs/volume_render_dialog.py` (flags), and
+  `gui/dialogs/histogram_dialog.py`. Put the new View-menu actions in a
+  separate helper module (for example `gui/window_menu_actions.py`) that the
+  menu builder calls in one line. Run
+  `python scripts/git_hook_line_complexity.py --staged` as part of
+  verification.
 - [ ] Tests:
   - flags include minimize;
   - the setting persists and toggling it updates live dialogs;
