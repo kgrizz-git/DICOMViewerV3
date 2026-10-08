@@ -1,6 +1,6 @@
 # DICOM Viewer V3 — User guide
 
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-08
 
 <!-- Absolute GitHub links below must stay in sync with GITHUB_BLOB_BASE in src/utils/doc_urls.py -->
 **Quick orientation:** **Help → Quick Start Guide** (in the app) | **this hub** | [Configuration / Settings](CONFIGURATION.md) | [CHANGELOG](https://github.com/kgrizz-git/DICOMViewerV3/blob/main/CHANGELOG.md) | [Report issues](https://github.com/kgrizz-git/DICOMViewerV3/issues) (GitHub).
