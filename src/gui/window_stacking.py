@@ -199,6 +199,11 @@ class AppScopedStayOnTop(QObject):
         self._app_active = _app_is_active()
         self._reapply()
 
+    def _forget_handle(self, handle: object) -> None:
+        """Forget a destroyed native window so its wrapper is not kept alive."""
+        self._block_depth.pop(handle, None)
+        self._watched_handles = [h for h in self._watched_handles if h is not handle]
+
     def on_shown(self) -> None:
         """Call from the window's ``showEvent``: the native handle now exists."""
         handle = self._window.windowHandle()
@@ -206,7 +211,6 @@ class AppScopedStayOnTop(QObject):
             handle.installEventFilter(self)
             if not any(h is handle for h in self._watched_handles):
                 self._watched_handles.append(handle)
-                depths = self._block_depth
                 # Drop a destroyed QWindow's block entry; no unblock will follow.
-                handle.destroyed.connect(lambda *_a, h=handle: depths.pop(h, None))
+                handle.destroyed.connect(lambda *_a, h=handle: self._forget_handle(h))
         self._reapply()  # uses the app state tracked via applicationStateChanged

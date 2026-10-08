@@ -298,3 +298,4 @@ def test_destroyed_native_window_drops_its_block_entry(qapp) -> None:
     qapp.processEvents()
     assert not helper.is_blocked()
     assert not helper.suppressed()
+    assert all(h is not handle for h in helper._watched_handles)
