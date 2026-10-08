@@ -220,3 +220,41 @@ def test_menu_builder_registers_actions(qapp, tmp_path) -> None:
     assert window.show_3d_viewer_action.isCheckable()
     assert not window.show_3d_viewer_action.isEnabled()
     assert "macOS" in window.keep_3d_viewer_in_front_action.toolTip()
+
+
+def test_wiring_twice_does_not_double_toggle(qapp, tmp_path) -> None:
+    dlg = _Dlg()
+    dlg.show()
+    facade = _facade(dlg)
+    window, app = _window_and_app(tmp_path, facade)
+    from gui.window_menu_actions import wire_3d_window_menu_actions
+
+    wire_3d_window_menu_actions(app)
+    wire_3d_window_menu_actions(app)
+    window.view_menu.aboutToShow.emit()
+    window.show_3d_viewer_action.trigger()
+    assert not dlg.isVisible()  # a double toggle would have re-shown it
+    window.keep_3d_viewer_in_front_action.trigger()
+    assert dlg.refreshed == 1
+    dlg.close()
+
+
+def test_launch_reuse_marks_dialog_as_last_active(qapp) -> None:
+    other, dlg = _Dlg(), _Dlg()
+    dlg.hide()
+    app = SimpleNamespace(
+        main_window=None,
+        subwindow_data={0: {"study_uid": "s", "series_uid": "a"}},
+        get_focused_subwindow_index=lambda: 0,
+    )
+    facade = VolumeRenderFacade(app)
+    facade._alive.extend([dlg, other])
+    facade._open_dialogs["s|a"] = dlg
+    facade._last_active = other
+    with (
+        patch.object(facade_module, "can_launch_3d_volume_render", return_value=(True, "")),
+        patch.object(facade_module, "get_datasets_for_subwindow", return_value=["d"]),
+    ):
+        facade.launch_3d_view(0)
+    assert facade._last_active is dlg
+    dlg.close()

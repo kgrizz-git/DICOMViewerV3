@@ -67,16 +67,40 @@ class AppScopedStayOnTop(QObject):
         self._app_active = _app_is_active()
         # Block depth per event source (widget and native window may both
         # report the same transition, so sources are tracked separately).
-        self._block_depth: dict[int, int] = {}
+        # Entries are dropped when they reach zero.
+        self._block_depth: dict[QObject, int] = {}
         window.installEventFilter(self)
+        depths = self._block_depth
+        window.destroyed.connect(depths.clear)
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.applicationStateChanged.connect(self._on_state_changed)
+            # A window-modal dialog on another window sends no WindowBlocked
+            # to a parentless tool window, so also watch the modal stack.
+            app.focusWindowChanged.connect(self._on_focus_window_changed)
         self._reapply()
 
     def is_blocked(self) -> bool:
-        """Return True while an application-modal window blocks the tool window."""
-        return any(depth > 0 for depth in self._block_depth.values())
+        """Return True while Qt reports an application-modal window blocking the tool window."""
+        return bool(self._block_depth)
+
+    def _modal_other_active(self) -> bool:
+        """True while a modal widget other than this window (or its children) is up."""
+        modal = QApplication.activeModalWidget()
+        # isAncestorOf() stops at window boundaries, so walk the parent chain.
+        node: QWidget | None = modal
+        while node is not None:
+            if node is self._window:
+                return False
+            node = node.parentWidget()
+        return modal is not None
+
+    def suppressed(self) -> bool:
+        """True while the tool window must not cover or raise over a modal prompt."""
+        return self.is_blocked() or self._modal_other_active()
+
+    def _on_focus_window_changed(self, _window: object) -> None:
+        self._reapply()
 
     def _on_state_changed(self, state: Qt.ApplicationState) -> None:
         self._app_active = state == Qt.ApplicationState.ApplicationActive
@@ -85,19 +109,24 @@ class AppScopedStayOnTop(QObject):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         kind = event.type()
         if kind == QEvent.Type.WindowBlocked:
-            key = id(watched)
-            self._block_depth[key] = self._block_depth.get(key, 0) + 1
+            self._block_depth[watched] = self._block_depth.get(watched, 0) + 1
             _trace(f"{type(self._window).__name__} blocked by modal")
             self._reapply()
         elif kind == QEvent.Type.WindowUnblocked:
-            key = id(watched)
-            self._block_depth[key] = max(0, self._block_depth.get(key, 0) - 1)
+            depth = self._block_depth.get(watched, 0) - 1
+            if depth > 0:
+                self._block_depth[watched] = depth
+            else:
+                self._block_depth.pop(watched, None)
             _trace(f"{type(self._window).__name__} unblocked")
             self._reapply()
+        elif kind == QEvent.Type.Hide and watched is self._window:
+            # An unblock may never be delivered to a hidden window.
+            self._block_depth.clear()
         return False
 
     def _reapply(self) -> None:
-        on = bool(self._app_active and not self.is_blocked() and self._enabled())
+        on = bool(self._app_active and not self.suppressed() and self._enabled())
         handle = self._window.windowHandle()
         if handle is None:
             return  # not shown yet; on_shown() runs again from showEvent

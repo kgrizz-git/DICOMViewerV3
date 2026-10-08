@@ -174,7 +174,7 @@ class HistogramDialog(QDialog):
             and event.type() == QEvent.Type.WindowActivate
             and self.isVisible()
             and not self.isMinimized()
-            and not self._stay_on_top.is_blocked()
+            and not self._stay_on_top.suppressed()
         ):
             if DEBUG_WINDOW_STACKING:
                 from gui.window_stacking_debug import trace

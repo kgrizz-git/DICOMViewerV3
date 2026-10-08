@@ -60,6 +60,13 @@ def clear_data(app: DICOMViewerApp) -> None:
     app.roi_statistics_panel.clear_statistics()
 
 
+def _close_3d_dialogs(app: DICOMViewerApp) -> None:
+    """Close every 3D volume render dialog, hidden ones included."""
+    facade = getattr(app, "_volume_render_facade", None)
+    if facade is not None:
+        facade.close_all_dialogs()
+
+
 def close_all_files(app: DICOMViewerApp) -> None:
     """Close currently open files/folder and clear all data."""
     # Clear MPR from any subwindow before clearing overlays and data.
@@ -68,6 +75,9 @@ def close_all_files(app: DICOMViewerApp) -> None:
         for idx in list(app.subwindow_data.keys()):
             if app.subwindow_data.get(idx, {}).get("is_mpr"):
                 app._mpr_controller.clear_mpr(idx)
+
+    # Close every 3D window (hidden ones too) so no closed study's volume lingers.
+    _close_3d_dialogs(app)
 
     # Clear all ROIs, measurements, and related data for all subwindows
     clear_data(app)
@@ -190,8 +200,7 @@ def finalize_for_application_quit(app: DICOMViewerApp) -> None:
     """Reset view–slot mapping and dissolve slice sync groups when the application is exiting."""
     # Close any open 3D volume render dialogs (parentless, would otherwise
     # outlive the main window).
-    if hasattr(app, "_volume_render_facade") and app._volume_render_facade is not None:
-        app._volume_render_facade.close_all_dialogs()
+    _close_3d_dialogs(app)
 
     app._drain_tag_export_union_worker(timeout_sec=30.0)
     app.multi_window_layout.reset_slot_to_view_default()

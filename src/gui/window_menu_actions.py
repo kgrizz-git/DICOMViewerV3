@@ -35,6 +35,9 @@ def wire_3d_window_menu_actions(app: Any) -> None:
     keep_action = getattr(window, "keep_3d_viewer_in_front_action", None)
     if show_action is None or keep_action is None:
         return
+    if getattr(show_action, "_wired_3d_menu", False):
+        return  # already wired; avoid double toggles
+    show_action._wired_3d_menu = True  # type: ignore[attr-defined]
     facade = app._volume_render_facade
 
     def _idx() -> int:

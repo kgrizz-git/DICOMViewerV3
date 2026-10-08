@@ -125,6 +125,14 @@ def test_save_before_first_frame_informs_and_saves_nothing(monkeypatch) -> None:
     assert "not ready" in shown[0]
 
 
+def test_not_ready_hidden_dialog_is_not_restored(monkeypatch) -> None:
+    _no_active_window(monkeypatch)
+    monkeypatch.setattr(QMessageBox, "information", lambda *_a: None)
+    hidden = _Dialog(visible=False, ready=False)
+    assert _facade(hidden).save_3d_view() is False
+    assert not hidden.visible
+
+
 def test_save_runs_the_dialog_save_flow(monkeypatch) -> None:
     _no_active_window(monkeypatch)
     dialog = _Dialog()

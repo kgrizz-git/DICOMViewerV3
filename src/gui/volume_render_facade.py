@@ -94,6 +94,7 @@ class VolumeRenderFacade:
             existing = self._open_dialogs[series_key]
             if existing is not None and self._is_alive(existing):
                 # Hidden or minimized dialogs are reused, never rebuilt.
+                self._last_active = existing
                 self.restore_dialog(existing)
                 return
             del self._open_dialogs[series_key]
@@ -217,8 +218,6 @@ class VolumeRenderFacade:
                 "Open a 3D view first (Tools → 3D Volume Render…).",
             )
             return False
-        # A hidden or minimized window is shown first so the user sees what is saved.
-        self.restore_dialog(dialog)
         if not dialog.can_save_image():
             QMessageBox.information(
                 self._app.main_window,
@@ -226,6 +225,8 @@ class VolumeRenderFacade:
                 "The 3D view is not ready yet. Wait for the first frame to appear.",
             )
             return False
+        # A hidden or minimized window is shown first so the user sees what is saved.
+        self.restore_dialog(dialog)
         return bool(dialog.save_image())
 
     def _get_series_key(self, idx: int) -> str | None:

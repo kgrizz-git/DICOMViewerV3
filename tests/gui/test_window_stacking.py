@@ -144,3 +144,87 @@ def test_windows_gate_disables_stay_on_top(qapp, monkeypatch) -> None:
     monkeypatch.setattr(window_stacking, "_current_platform", lambda: "darwin")
     assert window_stacking.platform_supports_stay_on_top()
     w.close()
+
+
+def test_block_depth_dropped_at_zero_and_cleared_on_destroy(qapp) -> None:
+    w, helper = _shown(qapp)
+    _block(w)
+    assert len(helper._block_depth) == 1
+    _unblock(w)
+    assert helper._block_depth == {}
+    _unblock(w)  # stray unblock must not go negative or leave an entry
+    assert helper._block_depth == {}
+    _block(w)
+    depths = helper._block_depth
+    w.close()
+    w.deleteLater()
+    qapp.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert depths == {}
+
+
+def test_blocked_through_widget_and_qwindow_returns_to_unblocked(qapp) -> None:
+    w, helper = _shown(qapp)
+    handle = w.windowHandle()
+    for target in (w, handle):
+        QCoreApplication.sendEvent(target, QEvent(QEvent.Type.WindowBlocked))
+    assert helper.is_blocked() and not _on_top(w)
+    for target in (w, handle):
+        QCoreApplication.sendEvent(target, QEvent(QEvent.Type.WindowUnblocked))
+    assert not helper.is_blocked()
+    assert _on_top(w)
+    w.close()
+
+
+def test_hide_show_cycle_clears_stuck_block(qapp) -> None:
+    w, helper = _shown(qapp)
+    _block(w)
+    w.hide()  # the unblock may never arrive while hidden
+    w.show()
+    helper.on_shown()
+    assert not helper.is_blocked()
+    assert _on_top(w)
+    w.close()
+
+
+def _modal_dialog(parent, modality, qapp):
+    from PySide6.QtWidgets import QProgressDialog
+
+    dlg = QProgressDialog("working", "cancel", 0, 10, parent)
+    dlg.setWindowModality(modality)
+    dlg.show()
+    qapp.processEvents()
+    return dlg
+
+
+@pytest.mark.parametrize("modality", [Qt.WindowModality.WindowModal, Qt.WindowModality.ApplicationModal])
+def test_modal_dialog_on_another_window_suppresses_stay_on_top(qapp, modality) -> None:
+    main = QWidget()
+    main.show()
+    tool, helper = _shown(qapp)  # parentless, like the 3D window
+    assert _on_top(tool) and not helper.suppressed()
+    dlg = _modal_dialog(main, modality, qapp)
+    if qapp.activeModalWidget() is not dlg:
+        dlg.close()
+        pytest.skip("platform does not report the active modal widget")
+    assert helper.suppressed()
+    helper._reapply()
+    assert not _on_top(tool)
+    dlg.close()
+    qapp.processEvents()
+    helper._reapply()
+    assert not helper.suppressed()
+    assert _on_top(tool)
+    tool.close()
+    main.close()
+
+
+def test_own_modal_child_does_not_suppress(qapp) -> None:
+    tool, helper = _shown(qapp)
+    dlg = _modal_dialog(tool, Qt.WindowModality.WindowModal, qapp)
+    if qapp.activeModalWidget() is not dlg:
+        dlg.close()
+        pytest.skip("platform does not report the active modal widget")
+    assert not helper._modal_other_active()
+    dlg.close()
+    tool.close()
