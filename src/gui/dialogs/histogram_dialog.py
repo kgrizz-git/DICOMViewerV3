@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 from pydicom.dataset import Dataset
-from PySide6.QtCore import QEvent, QObject, QRect, Qt
+from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -46,6 +46,10 @@ from gui.dialogs.histogram_frequency import (
     resolve_series_datasets,
 )
 from tools.histogram_widget import HistogramWidget
+from utils.debug_flags import (
+    DEBUG_WINDOW_STACKING,
+    DEBUG_WINDOW_STACKING_DEFERRED_RAISE,
+)
 
 # Callback type aliases (keeps ``__init__`` annotations readable for Pyright)
 HistogramDatasetFn = Callable[[], Dataset | None]
@@ -169,8 +173,27 @@ class HistogramDialog(QDialog):
             and self.isVisible()
             and not self.isMinimized()
         ):
-            self.raise_()
+            if DEBUG_WINDOW_STACKING:
+                from gui.window_stacking_debug import trace
+
+                trace(
+                    "histogram raise on parent WindowActivate"
+                    f" deferred={DEBUG_WINDOW_STACKING_DEFERRED_RAISE}"
+                )
+            if DEBUG_WINDOW_STACKING_DEFERRED_RAISE:
+                QTimer.singleShot(0, self._deferred_raise)
+            else:
+                self.raise_()
         return super().eventFilter(watched, event)
+
+    def _deferred_raise(self) -> None:
+        """H1 experiment: raise after activation, rechecking eligibility."""
+        if self.isVisible() and not self.isMinimized():
+            if DEBUG_WINDOW_STACKING:
+                from gui.window_stacking_debug import trace
+
+                trace("histogram deferred raise ran")
+            self.raise_()
 
     def _compute_series_global_frequency_max(self, use_rescaled: bool) -> None:
         """
