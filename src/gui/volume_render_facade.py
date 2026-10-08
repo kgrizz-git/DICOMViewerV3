@@ -241,8 +241,9 @@ class VolumeRenderFacade:
     def close_all_dialogs(self) -> None:
         """Close all open 3D volume render dialogs.
 
-        Called when the main application is about to quit so that orphaned
-        parentless dialogs are cleaned up properly.
+        Called when the application is about to quit (so orphaned parentless
+        dialogs are cleaned up) and from File → Close All, so no closed
+        study's volume lingers in a visible, minimized, or hidden 3D window.
         """
         dialogs = list(self._alive)
         app = QApplication.instance()

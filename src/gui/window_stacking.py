@@ -19,9 +19,10 @@ flag is also cleared while Qt reports the window as blocked by a modal
 from __future__ import annotations
 
 import sys
+import weakref
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import QApplication, QWidget
 
 from utils.debug_flags import DEBUG_WINDOW_STACKING
@@ -55,6 +56,57 @@ def _app_is_active() -> bool:
     )
 
 
+class _ModalWatcher(QObject):
+    """One application-wide filter that tells every helper when a modal comes or goes.
+
+    ``focusWindowChanged`` alone misses a modal that never takes focus and the
+    moment a modal closes, so watch Show/Hide/Close of modal top-level widgets
+    and re-evaluate after Qt has updated its modal stack.
+    """
+
+    _WATCHED = (QEvent.Type.Show, QEvent.Type.Hide, QEvent.Type.Close)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._helpers: weakref.WeakSet[AppScopedStayOnTop] = weakref.WeakSet()
+
+    def register(self, helper: AppScopedStayOnTop) -> None:
+        if not self._helpers:
+            app = QApplication.instance()
+            if app is not None:
+                app.installEventFilter(self)
+        self._helpers.add(helper)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() in self._WATCHED and isinstance(watched, QWidget):
+            if watched.isWindow() and watched.windowModality() != Qt.WindowModality.NonModal:
+                if event.type() == QEvent.Type.Show and not watched.property("_stackWatch"):
+                    watched.setProperty("_stackWatch", True)
+                    watched.destroyed.connect(self._schedule)
+                self._schedule()
+        return False
+
+    def _schedule(self, *_args: object) -> None:
+        QTimer.singleShot(0, self._notify)
+
+    def _notify(self) -> None:
+        for helper in list(self._helpers):
+            try:
+                helper._reapply()
+            except RuntimeError:  # its window was deleted
+                self._helpers.discard(helper)
+
+
+_modal_watcher: _ModalWatcher | None = None
+
+
+def _watcher() -> _ModalWatcher:
+    global _modal_watcher
+    if _modal_watcher is None:
+        _modal_watcher = _ModalWatcher()
+    return _modal_watcher
+
+
 class AppScopedStayOnTop(QObject):
     """Toggle stay-on-top on *window* with the application's active state."""
 
@@ -78,6 +130,8 @@ class AppScopedStayOnTop(QObject):
             # A window-modal dialog on another window sends no WindowBlocked
             # to a parentless tool window, so also watch the modal stack.
             app.focusWindowChanged.connect(self._on_focus_window_changed)
+            _watcher().register(self)
+        self._watched_handles: list[object] = []
         self._reapply()
 
     def is_blocked(self) -> bool:
@@ -150,4 +204,9 @@ class AppScopedStayOnTop(QObject):
         handle = self._window.windowHandle()
         if handle is not None:
             handle.installEventFilter(self)
+            if not any(h is handle for h in self._watched_handles):
+                self._watched_handles.append(handle)
+                depths = self._block_depth
+                # Drop a destroyed QWindow's block entry; no unblock will follow.
+                handle.destroyed.connect(lambda *_a, h=handle: depths.pop(h, None))
         self._reapply()  # uses the app state tracked via applicationStateChanged

@@ -228,3 +228,73 @@ def test_own_modal_child_does_not_suppress(qapp) -> None:
     assert not helper._modal_other_active()
     dlg.close()
     tool.close()
+
+
+@pytest.mark.parametrize(
+    ("modality", "focus"),
+    [
+        (Qt.WindowModality.WindowModal, True),
+        (Qt.WindowModality.WindowModal, False),
+        (Qt.WindowModality.ApplicationModal, True),
+    ],
+)
+@pytest.mark.parametrize("how", ["close", "hide"])
+def test_modal_show_and_hide_reapply_without_focus_or_manual_calls(
+    qapp, modality, focus, how
+) -> None:
+    from PySide6.QtWidgets import QProgressDialog
+
+    main = QWidget()
+    main.show()
+    tool, helper = _shown(qapp)
+    qapp.processEvents()
+    assert _on_top(tool)
+    dlg = QProgressDialog("working", "cancel", 0, 10, main)
+    dlg.setWindowModality(modality)
+    if not focus:
+        dlg.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+    dlg.show()
+    qapp.processEvents()
+    if qapp.activeModalWidget() is not dlg:
+        dlg.close()
+        pytest.skip("platform does not report the active modal widget")
+    assert not _on_top(tool)
+    getattr(dlg, how)()
+    qapp.processEvents()
+    assert _on_top(tool)
+    tool.close()
+    main.close()
+
+
+def test_destroyed_modal_triggers_reapply(qapp) -> None:
+    from PySide6.QtWidgets import QProgressDialog
+
+    main = QWidget()
+    main.show()
+    tool, helper = _shown(qapp)
+    dlg = QProgressDialog("working", "cancel", 0, 10, main)
+    dlg.setWindowModality(Qt.WindowModality.WindowModal)
+    dlg.show()
+    qapp.processEvents()
+    if qapp.activeModalWidget() is not dlg:
+        dlg.close()
+        pytest.skip("platform does not report the active modal widget")
+    assert not _on_top(tool)
+    dlg.deleteLater()
+    qapp.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
+    assert _on_top(tool)
+    tool.close()
+    main.close()
+
+
+def test_destroyed_native_window_drops_its_block_entry(qapp) -> None:
+    w, helper = _shown(qapp)
+    handle = w.windowHandle()
+    QCoreApplication.sendEvent(handle, QEvent(QEvent.Type.WindowBlocked))
+    assert helper.is_blocked()
+    w.destroy()
+    qapp.processEvents()
+    assert not helper.is_blocked()
+    assert not helper.suppressed()
