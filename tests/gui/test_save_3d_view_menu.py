@@ -34,6 +34,12 @@ class _Dialog:
     def raise_(self) -> None:
         pass
 
+    def isMinimized(self) -> bool:
+        return False
+
+    def show(self) -> None:
+        self.visible = True
+
     def activateWindow(self) -> None:
         pass
 
@@ -56,10 +62,12 @@ def _no_active_window(monkeypatch) -> None:
     monkeypatch.setattr(facade_module.QApplication, "activeWindow", staticmethod(lambda: None))
 
 
-def test_has_open_dialog_ignores_hidden_dialogs() -> None:
+def test_has_open_dialog_counts_hidden_dialogs_but_visible_does_not() -> None:
     assert not _facade().has_open_dialog()
-    assert not _facade(_Dialog(visible=False)).has_open_dialog()
+    assert _facade(_Dialog(visible=False)).has_open_dialog()
+    assert not _facade(_Dialog(visible=False)).has_visible_dialog()
     assert _facade(_Dialog()).has_open_dialog()
+    assert _facade(_Dialog()).has_visible_dialog()
 
 
 def test_target_prefers_focused_series_then_most_recent(monkeypatch) -> None:
@@ -150,17 +158,28 @@ class _DeletedDialog(_Dialog):
         raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
-def test_deleted_and_stale_dialogs_fall_back_to_most_recent(monkeypatch) -> None:
+def test_deleted_dialogs_are_ignored_but_hidden_ones_stay_targetable(monkeypatch) -> None:
     _no_active_window(monkeypatch)
     live = _Dialog()
-    stale = _Dialog(visible=False)
+    hidden = _Dialog(visible=False)
     facade = _facade(
-        _DeletedDialog(), stale, live, subwindow_data={0: {"study_uid": "s", "series_uid": "a"}}
+        _DeletedDialog(), hidden, live, subwindow_data={0: {"study_uid": "s", "series_uid": "a"}}
     )
-    facade._open_dialogs["s|a"] = stale
-    facade._last_active = stale
+    facade._open_dialogs["s|a"] = hidden
     assert facade.has_open_dialog()
+    assert facade._existing_dialogs() == [hidden, live]
+    assert facade.target_dialog(0) is hidden  # focused series wins
+    facade._last_active = live
     assert facade.target_dialog(0) is live
+    assert _facade(_DeletedDialog()).target_dialog(0) is None
+
+
+def test_save_with_only_a_hidden_dialog_shows_it_first(monkeypatch) -> None:
+    _no_active_window(monkeypatch)
+    hidden = _Dialog(visible=False)
+    assert _facade(hidden).save_3d_view() is True
+    assert hidden.visible
+    assert hidden.saved == 1
 
 
 def _dialog_with_button(enabled: bool | None) -> Any:

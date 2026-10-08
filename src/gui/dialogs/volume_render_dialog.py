@@ -32,7 +32,7 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 from PySide6.QtCore import QByteArray, QRect, QSize, Qt, QThread, Signal
-from PySide6.QtGui import QCursor, QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtGui import QCursor, QGuiApplication, QKeySequence, QShortcut, QShowEvent
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -49,6 +49,7 @@ _INITIAL_DIALOG_MAX_SIDE = 1440
 
 from core.derived_dicom_io import source_instance_refs
 from gui.volume.image_export import save_from_viewer
+from gui.window_stacking import AppScopedStayOnTop, platform_supports_stay_on_top
 from utils.debug_flags import DEBUG_VOLUME_3D
 
 _log = logging.getLogger(__name__)
@@ -175,6 +176,16 @@ class VolumeRenderDialog(QDialog):
         # top-level widget.  We keep *parent* in the signature so the facade
         # call-site does not need to change.
         super().__init__(None)
+        # Normal top-level window with minimize and maximize controls.
+        self.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.CustomizeWindowHint
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowSystemMenuHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
         self._datasets = datasets
         self._series_description = series_description
         self._config_manager = config_manager
@@ -203,10 +214,31 @@ class VolumeRenderDialog(QDialog):
         if not restored:
             self.resize(_initial_dialog_size())
 
+        # Not parent-based: the dialog is parentless, so this only watches the
+        # application state and the window's own modal-block events.
+        self._stay_on_top = AppScopedStayOnTop(self, enabled=self._keep_in_front_enabled)
         self._save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         self._save_shortcut.activated.connect(self._on_save_image_shortcut)
         self._setup_ui()
         self._start_build()
+
+    def _keep_in_front_enabled(self) -> bool:
+        """Platform gate and the View > Keep 3D Viewer in Front setting."""
+        if not platform_supports_stay_on_top():
+            return False
+        getter = getattr(self._config_manager, "get_keep_3d_viewer_in_front", None)
+        return bool(getter()) if callable(getter) else True
+
+    def refresh_stay_on_top(self) -> None:
+        """Re-read the setting and update the native stay-on-top flag now."""
+        self._stay_on_top.refresh()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Re-apply stay-on-top once the native window exists."""
+        super().showEvent(event)
+        helper = getattr(self, "_stay_on_top", None)  # absent on init-less test stubs
+        if helper is not None:
+            helper.on_shown()
 
     # ------------------------------------------------------------------
     # UI

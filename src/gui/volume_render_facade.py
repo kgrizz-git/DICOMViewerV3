@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from core.volume_render_eligibility import (
@@ -92,9 +92,9 @@ class VolumeRenderFacade:
         series_key = self._get_series_key(focused_idx)
         if series_key and series_key in self._open_dialogs:
             existing = self._open_dialogs[series_key]
-            if existing is not None and existing.isVisible():
-                existing.raise_()
-                existing.activateWindow()
+            if existing is not None and self._is_alive(existing):
+                # Hidden or minimized dialogs are reused, never rebuilt.
+                self.restore_dialog(existing)
                 return
             del self._open_dialogs[series_key]
 
@@ -125,29 +125,76 @@ class VolumeRenderFacade:
         self._last_active = dialog
         dialog.show()
 
+    @staticmethod
+    def _is_alive(dialog: Any) -> bool:
+        """False once Qt has deleted the dialog's C++ object."""
+        try:
+            dialog.isVisible()
+        except RuntimeError:
+            return False
+        return True
+
+    def _existing_dialogs(self) -> list[Any]:
+        """Live (not deleted) 3D dialogs, visible or hidden, most recently opened last."""
+        return [d for d in self._alive if self._is_alive(d)]
+
     def _live_dialogs(self) -> list[Any]:
-        """Open, visible 3D dialogs, most recently opened last."""
-        live = []
-        for dialog in self._alive:
-            try:
-                if dialog.isVisible():
-                    live.append(dialog)
-            except RuntimeError:
-                continue  # already deleted by Qt
-        return live
+        """Visible 3D dialogs, most recently opened last."""
+        return [d for d in self._existing_dialogs() if d.isVisible()]
 
     def has_open_dialog(self) -> bool:
-        """True while at least one 3D window is open."""
+        """True while at least one 3D window exists (visible, minimized, or hidden)."""
+        return bool(self._existing_dialogs())
+
+    def has_visible_dialog(self) -> bool:
+        """True while at least one 3D window is shown (a minimized one still counts)."""
         return bool(self._live_dialogs())
 
-    def target_dialog(self, subwindow_idx: int | None = None) -> Any | None:
-        """The 3D window File → Save 3D View… acts on.
+    @staticmethod
+    def restore_dialog(dialog: Any) -> None:
+        """Show, raise and activate *dialog*, clearing only the minimized state.
 
-        Prefers the active 3D window, then the most recently activated one,
-        then the one for the focused pane's series, then the most recently
-        opened one.
+        A maximized or fullscreen window keeps that state.
         """
-        live = self._live_dialogs()
+        if dialog.isMinimized():
+            dialog.setWindowState(dialog.windowState() & ~Qt.WindowState.WindowMinimized)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def toggle_dialog_visibility(self, subwindow_idx: int | None = None) -> bool | None:
+        """Hide the target 3D window, or show it if hidden or minimized.
+
+        Returns ``True`` if it is now shown, ``False`` if hidden, ``None`` if no
+        3D window exists. Hiding keeps the dialog and its volume alive.
+        """
+        dialog = self.target_dialog(subwindow_idx)
+        if dialog is None:
+            return None
+        if dialog.isVisible() and not dialog.isMinimized():
+            dialog.hide()
+            return False
+        self.restore_dialog(dialog)
+        return True
+
+    def target_is_shown(self, subwindow_idx: int | None = None) -> bool:
+        """True if the target 3D window is visible and not minimized."""
+        dialog = self.target_dialog(subwindow_idx)
+        return dialog is not None and dialog.isVisible() and not dialog.isMinimized()
+
+    def refresh_stay_on_top(self) -> None:
+        """Re-apply the keep-in-front setting to every live 3D dialog."""
+        for dialog in self._existing_dialogs():
+            dialog.refresh_stay_on_top()
+
+    def target_dialog(self, subwindow_idx: int | None = None) -> Any | None:
+        """The 3D window File → Save 3D View… and Show 3D Viewer act on.
+
+        Considers every existing dialog, including hidden ones. Prefers the
+        active 3D window, then the most recently activated one, then the one
+        for the focused pane's series, then the most recently opened one.
+        """
+        live = self._existing_dialogs()
         if not live:
             return None
         for candidate in (QApplication.activeWindow(), self._last_active):
@@ -170,8 +217,8 @@ class VolumeRenderFacade:
                 "Open a 3D view first (Tools → 3D Volume Render…).",
             )
             return False
-        dialog.raise_()
-        dialog.activateWindow()
+        # A hidden or minimized window is shown first so the user sees what is saved.
+        self.restore_dialog(dialog)
         if not dialog.can_save_image():
             QMessageBox.information(
                 self._app.main_window,

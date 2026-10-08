@@ -92,6 +92,15 @@ class DisplayConfigMixin:
         self._config()["smooth_image_when_zoomed"] = enabled
         self._save_config()
 
+    def get_keep_3d_viewer_in_front(self) -> bool:
+        """Return whether 3D viewer windows stay in front of the main window (default True)."""
+        return bool(self._config().get("keep_3d_viewer_in_front", True))
+
+    def set_keep_3d_viewer_in_front(self, enabled: bool) -> None:
+        """Persist whether 3D viewer windows stay in front of the main window."""
+        self._config()["keep_3d_viewer_in_front"] = bool(enabled)
+        self._save_config()
+
     def get_show_scale_markers(self) -> bool:
         """
         Get whether viewer scale markers are enabled.
