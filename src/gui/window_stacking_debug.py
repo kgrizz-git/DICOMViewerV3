@@ -93,6 +93,6 @@ def install_window_stacking_trace(app: QApplication) -> None:
     def _state_changed(state: Any) -> None:
         trace(f"applicationStateChanged -> {getattr(state, 'name', state)}")
 
-    QGuiApplication.instance().focusWindowChanged.connect(_focus_window_changed)  # type: ignore[union-attr]
+    QGuiApplication.instance().focusWindowChanged.connect(_focus_window_changed)  # pyright: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
     app.applicationStateChanged.connect(_state_changed)
     trace("tracer installed")

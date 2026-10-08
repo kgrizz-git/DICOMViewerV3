@@ -24,10 +24,9 @@ from typing import Any
 
 import numpy as np
 from pydicom.dataset import Dataset
-from PySide6.QtCore import QEvent, QObject, QRect, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QRect, Qt
 from PySide6.QtGui import QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QDialog,
     QHBoxLayout,
@@ -46,12 +45,9 @@ from gui.dialogs.histogram_frequency import (
     parse_rescale_slope_intercept,
     resolve_series_datasets,
 )
+from gui.window_stacking import AppScopedStayOnTop, platform_supports_stay_on_top
 from tools.histogram_widget import HistogramWidget
-from utils.debug_flags import (
-    DEBUG_WINDOW_STACKING,
-    DEBUG_WINDOW_STACKING_APP_TOPMOST,
-    DEBUG_WINDOW_STACKING_DEFERRED_RAISE,
-)
+from utils.debug_flags import DEBUG_WINDOW_STACKING
 
 # Callback type aliases (keeps ``__init__`` annotations readable for Pyright)
 HistogramDatasetFn = Callable[[], Dataset | None]
@@ -117,9 +113,8 @@ class HistogramDialog(QDialog):
                 window dragged on the composed curve to this dialog's pane
         """
         super().__init__(parent)
-        # Keep the native minimize control of a normal dialog. Re-raise only
-        # when our own main window becomes active, rather than making this a
-        # system-wide always-on-top window (or a platform-specific Tool panel).
+        # Keep the native minimize control of a normal dialog. Stay-on-top is
+        # app-scoped (see AppScopedStayOnTop below), not a platform Tool panel.
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.CustomizeWindowHint
@@ -130,18 +125,11 @@ class HistogramDialog(QDialog):
         )
         if parent is not None:
             parent.installEventFilter(self)
-        if DEBUG_WINDOW_STACKING_DEFERRED_RAISE:
-            # H1 experiment: macOS finishes app activation (e.g. after Mission
-            # Control) ~50 ms after WindowActivate and re-orders windows, so
-            # raise again once the application reports itself active.
-            app = QApplication.instance()
-            if isinstance(app, QApplication):
-                app.applicationStateChanged.connect(self._on_application_state_changed)
-        self._stay_on_top = None
-        if DEBUG_WINDOW_STACKING_APP_TOPMOST:
-            from gui.window_stacking import AppScopedStayOnTop
-
-            self._stay_on_top = AppScopedStayOnTop(self)
+        # Stay on top only while the app is active and no modal blocks us.
+        # Gated off on Windows until the native check passes (plan, Phase 1).
+        self._stay_on_top = AppScopedStayOnTop(
+            self, enabled=platform_supports_stay_on_top
+        )
         self.get_restore_geometry = get_restore_geometry
         self.save_geometry_callback = save_geometry_callback
         self._geometry_restored = False
@@ -186,33 +174,14 @@ class HistogramDialog(QDialog):
             and event.type() == QEvent.Type.WindowActivate
             and self.isVisible()
             and not self.isMinimized()
+            and not self._stay_on_top.is_blocked()
         ):
             if DEBUG_WINDOW_STACKING:
                 from gui.window_stacking_debug import trace
 
-                trace(
-                    "histogram raise on parent WindowActivate"
-                    f" deferred={DEBUG_WINDOW_STACKING_DEFERRED_RAISE}"
-                )
-            if DEBUG_WINDOW_STACKING_DEFERRED_RAISE:
-                QTimer.singleShot(0, self._deferred_raise)
-            else:
-                self.raise_()
-        return super().eventFilter(watched, event)
-
-    def _on_application_state_changed(self, state: Qt.ApplicationState) -> None:
-        """H1 experiment: re-raise after the app becomes active."""
-        if state == Qt.ApplicationState.ApplicationActive:
-            QTimer.singleShot(0, self._deferred_raise)
-
-    def _deferred_raise(self) -> None:
-        """H1 experiment: raise after activation, rechecking eligibility."""
-        if self.isVisible() and not self.isMinimized():
-            if DEBUG_WINDOW_STACKING:
-                from gui.window_stacking_debug import trace
-
-                trace("histogram deferred raise ran")
+                trace("histogram raise on parent WindowActivate")
             self.raise_()
+        return super().eventFilter(watched, event)
 
     def _compute_series_global_frequency_max(self, use_rescaled: bool) -> None:
         """
@@ -521,8 +490,7 @@ class HistogramDialog(QDialog):
     def showEvent(self, event) -> None:
         """Restore saved geometry on first show; update histogram when dialog is shown."""
         super().showEvent(event)
-        if self._stay_on_top is not None:
-            self._stay_on_top.refresh()
+        self._stay_on_top.on_shown()
         if not self._geometry_restored and self.get_restore_geometry is not None:
             geom = self.get_restore_geometry()
             if isinstance(geom, (list, tuple)) and len(geom) >= 4:
