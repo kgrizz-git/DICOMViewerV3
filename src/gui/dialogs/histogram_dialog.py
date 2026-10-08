@@ -45,7 +45,9 @@ from gui.dialogs.histogram_frequency import (
     parse_rescale_slope_intercept,
     resolve_series_datasets,
 )
+from gui.window_stacking import AppScopedStayOnTop, platform_supports_stay_on_top
 from tools.histogram_widget import HistogramWidget
+from utils.debug_flags import DEBUG_WINDOW_STACKING
 
 # Callback type aliases (keeps ``__init__`` annotations readable for Pyright)
 HistogramDatasetFn = Callable[[], Dataset | None]
@@ -111,9 +113,8 @@ class HistogramDialog(QDialog):
                 window dragged on the composed curve to this dialog's pane
         """
         super().__init__(parent)
-        # Keep the native minimize control of a normal dialog. Re-raise only
-        # when our own main window becomes active, rather than making this a
-        # system-wide always-on-top window (or a platform-specific Tool panel).
+        # Keep the native minimize control of a normal dialog. Stay-on-top is
+        # app-scoped (see AppScopedStayOnTop below), not a platform Tool panel.
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.CustomizeWindowHint
@@ -124,6 +125,11 @@ class HistogramDialog(QDialog):
         )
         if parent is not None:
             parent.installEventFilter(self)
+        # Stay on top only while the app is active and no modal blocks us.
+        # Gated off on Windows until the native check passes (plan, Phase 1).
+        self._stay_on_top = AppScopedStayOnTop(
+            self, enabled=platform_supports_stay_on_top
+        )
         self.get_restore_geometry = get_restore_geometry
         self.save_geometry_callback = save_geometry_callback
         self._geometry_restored = False
@@ -168,7 +174,12 @@ class HistogramDialog(QDialog):
             and event.type() == QEvent.Type.WindowActivate
             and self.isVisible()
             and not self.isMinimized()
+            and not self._stay_on_top.suppressed()
         ):
+            if DEBUG_WINDOW_STACKING:
+                from gui.window_stacking_debug import trace
+
+                trace("histogram raise on parent WindowActivate")
             self.raise_()
         return super().eventFilter(watched, event)
 
@@ -479,6 +490,7 @@ class HistogramDialog(QDialog):
     def showEvent(self, event) -> None:
         """Restore saved geometry on first show; update histogram when dialog is shown."""
         super().showEvent(event)
+        self._stay_on_top.on_shown()
         if not self._geometry_restored and self.get_restore_geometry is not None:
             geom = self.get_restore_geometry()
             if isinstance(geom, (list, tuple)) and len(geom) >= 4:

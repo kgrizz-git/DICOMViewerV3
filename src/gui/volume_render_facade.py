@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from core.volume_render_eligibility import (
@@ -92,9 +92,10 @@ class VolumeRenderFacade:
         series_key = self._get_series_key(focused_idx)
         if series_key and series_key in self._open_dialogs:
             existing = self._open_dialogs[series_key]
-            if existing is not None and existing.isVisible():
-                existing.raise_()
-                existing.activateWindow()
+            if existing is not None and self._is_alive(existing):
+                # Hidden or minimized dialogs are reused, never rebuilt.
+                self._last_active = existing
+                self.restore_dialog(existing)
                 return
             del self._open_dialogs[series_key]
 
@@ -112,7 +113,8 @@ class VolumeRenderFacade:
             self._open_dialogs[series_key] = dialog
 
         def _on_destroyed() -> None:
-            self._open_dialogs.pop(series_key, None) if series_key else None
+            if series_key and self._open_dialogs.get(series_key) is dialog:
+                self._open_dialogs.pop(series_key)
             if self._last_active is dialog:
                 self._last_active = None
             try:
@@ -125,29 +127,72 @@ class VolumeRenderFacade:
         self._last_active = dialog
         dialog.show()
 
+    @staticmethod
+    def _is_alive(dialog: Any) -> bool:
+        """False once Qt has deleted the dialog's C++ object."""
+        try:
+            dialog.isVisible()
+        except RuntimeError:
+            return False
+        return True
+
+    def _existing_dialogs(self) -> list[Any]:
+        """Live (not deleted) 3D dialogs, visible or hidden, most recently opened last."""
+        return [d for d in self._alive if self._is_alive(d)]
+
     def _live_dialogs(self) -> list[Any]:
-        """Open, visible 3D dialogs, most recently opened last."""
-        live = []
-        for dialog in self._alive:
-            try:
-                if dialog.isVisible():
-                    live.append(dialog)
-            except RuntimeError:
-                continue  # already deleted by Qt
-        return live
+        """Visible 3D dialogs, most recently opened last."""
+        return [d for d in self._existing_dialogs() if d.isVisible()]
 
     def has_open_dialog(self) -> bool:
-        """True while at least one 3D window is open."""
-        return bool(self._live_dialogs())
+        """True while at least one 3D window exists (visible, minimized, or hidden)."""
+        return bool(self._existing_dialogs())
+
+    @staticmethod
+    def restore_dialog(dialog: Any) -> None:
+        """Show, raise and activate *dialog*, clearing only the minimized state.
+
+        A maximized or fullscreen window keeps that state.
+        """
+        if dialog.isMinimized():
+            dialog.setWindowState(dialog.windowState() & ~Qt.WindowState.WindowMinimized)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def toggle_dialog_visibility(self, subwindow_idx: int | None = None) -> bool | None:
+        """Hide the target 3D window, or show it if hidden or minimized.
+
+        Returns ``True`` if it is now shown, ``False`` if hidden, ``None`` if no
+        3D window exists. Hiding keeps the dialog and its volume alive.
+        """
+        dialog = self.target_dialog(subwindow_idx)
+        if dialog is None:
+            return None
+        if dialog.isVisible() and not dialog.isMinimized():
+            dialog.hide()
+            return False
+        self.restore_dialog(dialog)
+        return True
+
+    def target_is_shown(self, subwindow_idx: int | None = None) -> bool:
+        """True if the target 3D window is visible and not minimized."""
+        dialog = self.target_dialog(subwindow_idx)
+        return dialog is not None and dialog.isVisible() and not dialog.isMinimized()
+
+    def refresh_stay_on_top(self) -> None:
+        """Re-apply the keep-in-front setting to every live 3D dialog."""
+        for dialog in self._existing_dialogs():
+            dialog.refresh_stay_on_top()
 
     def target_dialog(self, subwindow_idx: int | None = None) -> Any | None:
-        """The 3D window File → Save 3D View… acts on.
+        """The 3D window File → Save 3D View… and Show 3D Viewer act on.
 
-        Prefers the active 3D window, then the most recently activated one,
-        then the one for the focused pane's series, then the most recently
-        opened one.
+        Considers every existing dialog, including hidden ones. Prefers the
+        active 3D window, then the most recently activated one, then the one
+        for the focused pane's series, then the most recently opened one.
         """
-        live = self._live_dialogs()
+        live = self._existing_dialogs()
         if not live:
             return None
         for candidate in (QApplication.activeWindow(), self._last_active):
@@ -170,8 +215,6 @@ class VolumeRenderFacade:
                 "Open a 3D view first (Tools → 3D Volume Render…).",
             )
             return False
-        dialog.raise_()
-        dialog.activateWindow()
         if not dialog.can_save_image():
             QMessageBox.information(
                 self._app.main_window,
@@ -179,13 +222,17 @@ class VolumeRenderFacade:
                 "The 3D view is not ready yet. Wait for the first frame to appear.",
             )
             return False
+        # A hidden or minimized window is shown first so the user sees what is saved.
+        self.restore_dialog(dialog)
         return bool(dialog.save_image())
 
     def _get_series_key(self, idx: int) -> str | None:
         """Return a unique key for the series in subwindow *idx*."""
         data = self._app.subwindow_data.get(idx, {})
-        study_uid = data.get("study_uid")
-        series_uid = data.get("series_uid")
+        # Pane records use the ``current_*`` names. Keep the short-name
+        # fallback for lightweight integrations that predate that convention.
+        study_uid = data.get("current_study_uid") or data.get("study_uid")
+        series_uid = data.get("current_series_uid") or data.get("series_uid")
         if study_uid and series_uid:
             return f"{study_uid}|{series_uid}"
         return None
@@ -193,8 +240,9 @@ class VolumeRenderFacade:
     def close_all_dialogs(self) -> None:
         """Close all open 3D volume render dialogs.
 
-        Called when the main application is about to quit so that orphaned
-        parentless dialogs are cleaned up properly.
+        Called when the application is about to quit (so orphaned parentless
+        dialogs are cleaned up) and from File → Close All, so no closed
+        study's volume lingers in a visible, minimized, or hidden 3D window.
         """
         dialogs = list(self._alive)
         app = QApplication.instance()
@@ -203,7 +251,38 @@ class VolumeRenderFacade:
                 if isinstance(widget, VolumeRenderDialog) and widget not in dialogs:
                     dialogs.append(widget)
 
+        self._close_dialogs(dialogs, process_events=True)
+
+        self._open_dialogs.clear()
+        self._last_active = None
+
+    def close_dialogs_for(self, study_uid: str, series_key: str | None = None) -> None:
+        """Close 3D dialogs for a closed study or one of its series.
+
+        A hidden dialog owns its source datasets just as a visible one does.
+        Closing it before its series pixels are released prevents a later reopen
+        from restoring an obsolete volume or retaining the closed study's data.
+        """
+        key_prefix = f"{study_uid}|"
+        target_key = f"{key_prefix}{series_key}" if series_key is not None else None
+        dialogs = [
+            dialog
+            for key, dialog in self._open_dialogs.items()
+            if key == target_key or (target_key is None and key.startswith(key_prefix))
+        ]
+        # ``close()`` synchronously stops the worker and releases VTK resources.
+        # Do not pump the event loop during a navigator close; that would allow
+        # unrelated UI actions to re-enter before the study map is updated.
+        self._close_dialogs(dialogs)
+
+    def _close_dialogs(self, dialogs: list[Any], *, process_events: bool = False) -> None:
+        """Close *dialogs* and immediately make them unavailable for reuse."""
         for dialog in dialogs:
+            for key, candidate in list(self._open_dialogs.items()):
+                if candidate is dialog:
+                    self._open_dialogs.pop(key)
+            if self._last_active is dialog:
+                self._last_active = None
             try:
                 closed = dialog.close()
                 if not closed and hasattr(dialog, "hide"):
@@ -211,12 +290,11 @@ class VolumeRenderFacade:
             except RuntimeError:
                 pass  # already deleted by Qt
 
-        if app is not None:
+        app = QApplication.instance()
+        if process_events and app is not None:
             app.processEvents()
 
-        self._alive.clear()
-        self._open_dialogs.clear()
-        self._last_active = None
+        self._alive = [dialog for dialog in self._alive if dialog not in dialogs]
 
     @staticmethod
     def _get_series_description(datasets: list[Any]) -> str:

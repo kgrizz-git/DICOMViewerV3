@@ -31,6 +31,7 @@ Requirements:
 from typing import TYPE_CHECKING, Any
 
 from gui.subwindow_image_viewer_sync import apply_theme_viewer_background_all
+from gui.window_menu_actions import wire_3d_window_menu_actions
 
 if TYPE_CHECKING:
     from main import DICOMViewerApp
@@ -104,6 +105,7 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
         app._volume_render_facade.launch_3d_view
     )
     _wire_save_3d_view_action(app)
+    wire_3d_window_menu_actions(app)
     # Series navigator close actions
     app.series_navigator.close_series_requested.connect(app._close_series)
     app.series_navigator.close_study_requested.connect(app._close_study)

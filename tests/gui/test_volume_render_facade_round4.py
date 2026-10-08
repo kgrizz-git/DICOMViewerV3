@@ -41,6 +41,10 @@ class _FakeDialog:
 
     def show(self) -> None:
         self._shown = True
+        self._visible = True
+
+    def isMinimized(self) -> bool:
+        return False
 
     def isVisible(self) -> bool:
         return self._visible
@@ -107,6 +111,43 @@ class TestGetSeriesDescription:
         assert VolumeRenderFacade._get_series_description([ds]) == "Unknown"
 
 
+class TestCloseDialogsFor:
+    def test_closes_only_the_requested_series_and_deregisters_it(self) -> None:
+        app = _FakeApp()
+        facade = VolumeRenderFacade(app)
+        target, other = _FakeDialog(), _FakeDialog()
+        facade._alive = [target, other]
+        facade._open_dialogs = {"study|series-a": target, "study|series-b": other}
+        facade._last_active = target
+
+        facade.close_dialogs_for("study", "series-a")
+
+        assert not target.isVisible()
+        assert other.isVisible()
+        assert facade._open_dialogs == {"study|series-b": other}
+        assert facade._alive == [other]
+        assert facade._last_active is None
+
+    def test_closes_every_dialog_for_a_closed_study(self) -> None:
+        app = _FakeApp()
+        facade = VolumeRenderFacade(app)
+        first, second, other = _FakeDialog(), _FakeDialog(), _FakeDialog()
+        facade._alive = [first, second, other]
+        facade._open_dialogs = {
+            "study-a|series-a": first,
+            "study-a|series-b": second,
+            "study-b|series-a": other,
+        }
+
+        facade.close_dialogs_for("study-a")
+
+        assert not first.isVisible()
+        assert not second.isVisible()
+        assert other.isVisible()
+        assert facade._open_dialogs == {"study-b|series-a": other}
+        assert facade._alive == [other]
+
+
 # ---------------------------------------------------------------------------
 # _get_series_key  (lines 102-109)
 # ---------------------------------------------------------------------------
@@ -114,6 +155,13 @@ class TestGetSeriesDescription:
 class TestGetSeriesKey:
     def test_returns_combined_key(self) -> None:
         app = _FakeApp(subwindow_data={0: {"study_uid": "SU1", "series_uid": "SE1"}})
+        facade = VolumeRenderFacade(app)
+        assert facade._get_series_key(0) == "SU1|SE1"
+
+    def test_uses_production_subwindow_data_keys(self) -> None:
+        app = _FakeApp(
+            subwindow_data={0: {"current_study_uid": "SU1", "current_series_uid": "SE1"}}
+        )
         facade = VolumeRenderFacade(app)
         assert facade._get_series_key(0) == "SU1|SE1"
 
@@ -192,6 +240,21 @@ class TestLaunch3dView:
     @patch("gui.volume_render_facade.can_launch_3d_volume_render", return_value=(True, "ok"))
     @patch("gui.volume_render_facade.get_datasets_for_subwindow", return_value=["d1", "d2", "d3"])
     @patch("gui.volume_render_facade.VolumeRenderDialog")
+    def test_dialog_registered_from_production_subwindow_data(
+        self, mock_dlg_cls, mock_get, mock_eligible
+    ) -> None:
+        app = _FakeApp(
+            subwindow_data={0: {"current_study_uid": "SU", "current_series_uid": "SE"}}
+        )
+        facade = VolumeRenderFacade(app)
+
+        facade.launch_3d_view(subwindow_idx=0)
+
+        assert facade._open_dialogs == {"SU|SE": mock_dlg_cls.return_value}
+
+    @patch("gui.volume_render_facade.can_launch_3d_volume_render", return_value=(True, "ok"))
+    @patch("gui.volume_render_facade.get_datasets_for_subwindow", return_value=["d1", "d2", "d3"])
+    @patch("gui.volume_render_facade.VolumeRenderDialog")
     def test_no_series_key_skips_open_dialogs_registration(self, mock_dlg_cls, mock_get, mock_eligible) -> None:
         app = _FakeApp(subwindow_data={0: {}})
         facade = VolumeRenderFacade(app)
@@ -215,15 +278,17 @@ class TestLaunch3dView:
     @patch("gui.volume_render_facade.can_launch_3d_volume_render", return_value=(True, "ok"))
     @patch("gui.volume_render_facade.get_datasets_for_subwindow", return_value=["d1", "d2", "d3"])
     @patch("gui.volume_render_facade.VolumeRenderDialog")
-    def test_duplicate_hidden_dialog_replaced(self, mock_dlg_cls, mock_get, mock_eligible) -> None:
+    def test_duplicate_hidden_dialog_reused_not_rebuilt(self, mock_dlg_cls, mock_get, mock_eligible) -> None:
         app = _FakeApp(subwindow_data={0: {"study_uid": "SU", "series_uid": "SE"}})
         facade = VolumeRenderFacade(app)
         hidden = _FakeDialog()
         hidden._visible = False
         facade._open_dialogs["SU|SE"] = hidden
         facade.launch_3d_view(subwindow_idx=0)
-        mock_dlg_cls.assert_called_once()
-        assert facade._open_dialogs["SU|SE"] is mock_dlg_cls.return_value
+        mock_dlg_cls.assert_not_called()
+        assert facade._open_dialogs["SU|SE"] is hidden
+        assert hidden.isVisible()
+        assert hidden.raise_called
 
     @patch("gui.volume_render_facade.can_launch_3d_volume_render", return_value=(True, "ok"))
     @patch("gui.volume_render_facade.get_datasets_for_subwindow", return_value=["d1", "d2", "d3"])

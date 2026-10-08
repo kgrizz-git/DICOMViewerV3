@@ -245,3 +245,17 @@ class TestFinalizeForApplicationQuit:
         session_reset_controller.finalize_for_application_quit(app)
 
         app._drain_tag_export_union_worker.assert_called_once_with(timeout_sec=30.0)
+
+
+def test_close_all_files_closes_3d_dialogs_before_clearing_data(monkeypatch) -> None:
+    order: list[str] = []
+    app = _make_app()
+    app._volume_render_facade.close_all_dialogs = MagicMock(
+        side_effect=lambda: order.append("close_3d")
+    )
+    monkeypatch.setattr(
+        session_reset_controller, "clear_data", lambda _a: order.append("clear_data")
+    )
+    session_reset_controller.close_all_files(app)
+    assert order[:2] == ["close_3d", "clear_data"]
+    app._volume_render_facade.close_all_dialogs.assert_called_once_with()

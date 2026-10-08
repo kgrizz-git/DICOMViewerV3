@@ -123,6 +123,12 @@ DEBUG_PYLINAC_QA: bool = False
 #          volume_render_eligibility.py, gui/volume_render_facade.py.
 DEBUG_VOLUME_3D: bool = False
 
+# Phase 0 window-stacking diagnostics: traces clicks, window activation, focus
+# window changes, app state, and histogram raises (class names only, no titles).
+# Affects: gui/window_stacking_debug.py, gui/window_stacking.py,
+#          main_app_initialization.py, gui/dialogs/histogram_dialog.py.
+DEBUG_WINDOW_STACKING: bool = False
+
 import os
 
 # Enables startup and section performance logging via [PERF] log lines.

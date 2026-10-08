@@ -75,3 +75,43 @@ def test_parent_activation_raises_visible_histogram_without_restoring_minimized(
     assert raised == [True]
     dlg.close()
     parent.close()
+
+
+@pytest.mark.qt
+def test_parent_activation_raise_skipped_while_blocked_by_modal(
+    qapp, monkeypatch
+) -> None:
+    parent = QWidget()
+    dlg = HistogramDialog(parent, get_current_dataset=lambda: None)
+    raised: list[bool] = []
+    monkeypatch.setattr(dlg, "raise_", lambda: raised.append(True))
+    dlg.show()
+
+    QCoreApplication.sendEvent(dlg, QEvent(QEvent.Type.WindowBlocked))
+    QCoreApplication.sendEvent(parent, QEvent(QEvent.Type.WindowActivate))
+    assert raised == []
+
+    QCoreApplication.sendEvent(dlg, QEvent(QEvent.Type.WindowUnblocked))
+    QCoreApplication.sendEvent(parent, QEvent(QEvent.Type.WindowActivate))
+    assert raised == [True]
+    dlg.close()
+    parent.close()
+
+
+@pytest.mark.qt
+def test_parent_activation_raise_skipped_while_hidden(qapp, monkeypatch) -> None:
+    parent = QWidget()
+    dlg = HistogramDialog(parent, get_current_dataset=lambda: None)
+    raised: list[bool] = []
+    monkeypatch.setattr(dlg, "raise_", lambda: raised.append(True))
+    QCoreApplication.sendEvent(parent, QEvent(QEvent.Type.WindowActivate))
+    assert raised == []
+    parent.close()
+
+
+@pytest.mark.qt
+def test_histogram_installs_stay_on_top_helper(qapp) -> None:
+    dlg = HistogramDialog(get_current_dataset=lambda: None)
+    assert dlg._stay_on_top is not None
+    assert not (dlg.windowFlags() & Qt.WindowType.WindowStaysOnTopHint)
+    dlg.close()

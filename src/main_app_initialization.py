@@ -64,6 +64,7 @@ from roi.roi_measurement_controller import ROIMeasurementController
 from utils.annotation_clipboard import AnnotationClipboard
 from utils.bundled_fonts import register_fonts_with_qt
 from utils.config_manager import ConfigManager
+from utils.debug_flags import DEBUG_WINDOW_STACKING
 from utils.debug_log import configure_debug_logging
 from utils.undo_redo import UndoRedoManager
 
@@ -91,6 +92,10 @@ class InitializationMixin:
             self.app = cast(QApplication, existing_app)
         self.app.setApplicationName("DICOM Viewer V3")
         self.app.setStyle(QStyleFactory.create("Fusion"))
+        if DEBUG_WINDOW_STACKING:
+            from gui.window_stacking_debug import install_window_stacking_trace
+
+            install_window_stacking_trace(self.app)
 
         # Register bundled TrueType fonts with Qt so they can be used by name
         register_fonts_with_qt()
