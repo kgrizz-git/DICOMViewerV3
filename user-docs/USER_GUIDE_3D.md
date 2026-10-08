@@ -1,6 +1,6 @@
 # User guide — 3D volume rendering
 
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-08
 
 The viewer can open a **GPU-accelerated 3D volume render** of the **focused** 2D subwindow’s series. This is a **separate** non-modal dialog; it does not replace the multi-pane 2D layout.
 
@@ -65,6 +65,12 @@ Use **Reset Camera** to return to the default anterior view with the patient’s
 - For **PET/CT fusion** or **MPR** workflows, see [IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md](IMAGE_FUSION_TECHNICAL_DOCUMENTATION.md) and [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md).
 - Large volumes may be slow on integrated GPUs; VTK may use a CPU ray-cast path on some systems.
 - If the viewer keeps a Fast preview and says higher detail may be slow, it avoided an automatic render likely to make the window unresponsive. You can still select a higher Detail level manually.
+
+## Window controls
+
+- **Minimize and maximize:** the 3D window has standard minimize and maximize buttons.
+- **View → Keep 3D Viewer in Front** (on by default) keeps 3D windows above the main viewer while you use the app. They drop behind other applications when you switch away, and they never cover the viewer's own dialogs. The setting is remembered. On Windows it has no effect yet; full keep-in-front is still being verified there.
+- **View → Show 3D Viewer** hides or shows the 3D window you used most recently. Hiding keeps the volume loaded, so showing it again is instant. Opening **3D View** again for the same series also brings back a hidden or minimized window instead of rebuilding it.
 
 ## Saving the 3D view
 

@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-08
 
 ---
 
@@ -41,17 +41,6 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 4. **[P1] Fusion overlay rescaled values and units** — add a raw-vs-rescaled
    selector for overlay normalization and show units (HU, SUV) in the fusion
    controls. See [Fusion Follow-up](#fusion-follow-up).
-5. **[P2] 3D window: minimize, keep in front, show/hide** — combines the two
-   3D viewer items under [3D volume rendering](#3d-volume-rendering): a
-   minimize button, a "Keep 3D Viewer in Front" setting (on by default), and a
-   View-menu show/hide that restores the existing window.
-   **Histogram bug (diagnosed 2026-10-07 on macOS):** the histogram falls behind
-   the main window after Mission Control or an app switch, because its re-raise
-   runs before macOS finishes activating the app. Native testing rejected a
-   deferred raise (Option A). An app-scoped stay-on-top (Option B) passed, so
-   both windows use it; a macOS native child window (Option C) stays the last
-   resort. Fix the histogram and the 3D window together.
-   **Plan:** [3D window and histogram keep-in-front](plans/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.
@@ -86,7 +75,7 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** **Large multi-frame load — first paint** — **Steps:** open one large single-file enhanced CT or XA sample; accept the large-file warning; confirm the first image, metadata panel, and series navigator render correctly without an apparent post-Continue stall (automated GUI benchmark and focused regressions already pass). **Archived plan:** [Slow post-load first paint](plans/completed/POST_LOAD_FIRST_PAINT_PERFORMANCE_PLAN.md)
 - [ ] **[P2]** **W/L presets (US, CR, DX)** — **Steps:** load representative **US**, **CR**, and **DX** studies at available stored bit depths, including **MONOCHROME1** and **MONOCHROME2**; verify Default and Wide presets are sensible, manual Invert remains a user offset, and still/cine exports match the single-slice display. Record fixture coverage and modality-specific findings. **Related:** [W/L presets bit-depth + MONOCHROME1 plan](plans/completed/WL_PRESETS_BIT_DEPTH_AND_MONOCHROME1_PLAN.md)
 - [ ] **[P2]** **Pylinac ACR export and MRI batch (optional real-phantom smoke)** — **Env:** local de-identified CT and MRI ACR phantoms. **Steps:** verify single-run CT/MRI CSV and XLSX export, CT batch CSV, and MRI batch CSV/JSON/XLSX; confirm headline values and method labels lead, match the analyzed results, and leave full metrics in Detail/trailing CSV; with module images enabled, compare the XLSX Images module set with the PDF figures. **Pass:** exports are complete, readable, and consistent with the visible analysis; disabled images omit the sheet cleanly. **Archived plans:** [Pylinac ACR full metrics export and MRI batch](plans/completed/PYLINAC_ACR_FULL_METRICS_EXPORT_AND_MRI_BATCH_PLAN.md) §G3; [ACR QA headline results export](plans/completed/ACR_QA_HEADLINE_RESULTS_EXPORT_PLAN.md).
-- [ ] **[P2]** **Histogram stacking and minimization** — **Env:** native macOS and Windows window managers. **Steps:** open a histogram, click the main viewer and navigate slices, then minimize and restore the histogram; repeat with two pane histograms and after switching to another application. **Pass:** visible histograms remain above their own viewer while navigating, minimized histograms stay minimized, restoration refreshes values, and unrelated applications can cover the viewer and histogram. Automated flag/event-filter tests pass; native window-manager behavior still needs this check.
+- [ ] **[P2]** **Histogram and 3D window keep-in-front** — **Env:** native macOS, and Windows under Parallels. **Steps:** open a histogram and a 3D window; click the image viewer, metadata pane, and statistics pane; use Mission Control and switch to another app and back; minimize and restore each tool window and the main window; open **File → Open** (a native file dialog) and a message box while they are up; toggle **View → Keep 3D Viewer in Front**; use **View → Show 3D Viewer** to hide and show the 3D window. **Pass:** tool windows stay above the viewer while the app is active, never cover other apps or the app's own dialogs, stay minimized until restored, and the 3D volume is not rebuilt on show. On Windows, record whether app-scoped stay-on-top (currently gated off) would pass, so it can be enabled. Plan: [keep-in-front](plans/completed/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md).
 - [ ] **[P2]** **Look-up tables (LUTs & colormaps)** — **Steps:** follow [`AGENT_SMOKE.md` §LUT](orchestration/AGENT_SMOKE.md): Linear shows no change; a color map renders RGB with correct orientation and **I** does not double-invert; the curve editor (breakpoints, freehand, interpolation, Undo, the dotted ramp and dashed display trace); histogram curves, checkboxes, and the composed-curve edge drag; **Save Current As…** survives a restart under **Saved**; **Edit Colors…**; **Import Colormap…** from a `.csv`; **Use as Default for** a modality, then open another series of it; **Show LUT Label** and privacy mode; **From DICOM (VOI LUT)** on a file with a VOI LUT Sequence; PNG export and cine match the viewport. **Pass:** each step behaves as described and exports match the screen. **Archived plan:** [LUTs & colormaps](plans/completed/LUTS_AND_COLORMAPS_PLAN.md)
 
 ## Validation / QA
@@ -304,8 +293,6 @@ Release blockers (license compliance, versioned executables) live in
     - **Volume memory guard (implementation complete):** automatic pre-allocation downsampling guard ([plan §4.2](plans/3D_VOLUME_RENDERING_PLAN.md#42-memory-management)); Windows/Parallels manual verification — [Manual Smoke Checks](#manual-smoke-checks). **Archived plan:** [Volume render fallback & memory hardening](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md)
     - [ ] **[P2]** HU-range structure coloring — multi-segment TF editor, anatomical presets (CT Abdomen/Chest/Head), save/name custom presets, persist to `QSettings` ([plan Phase 5](plans/3D_VOLUME_RENDERING_PLAN.md#phase-5-p2--future-hu-based-structure-coloring))
     - [ ] **[P1]** Complete plan verification gates (manual QA on Windows 11, completion-criteria checklist, mark plan/TO_DO done when verified) ([plan Completion Criteria](plans/3D_VOLUME_RENDERING_PLAN.md#completion-criteria))
-    - [ ] **[P2]** **3D viewer minimize button:** add a standard minimize control to the volume-render window (non-modal dialog should minimize to taskbar like other top-level windows).
-    - [ ] **[P2]** **3D viewer visibility and pinning:** add a View-menu show/hide action and a “Keep 3D Viewer in Front” setting, **on by default** now that users can minimize it. Reopening must restore the existing dialog rather than rebuilding the volume.
     - [ ] **[P2]** **GPU jittering (`SetUseJittering`):** randomize ray-start offsets so wood-grain banding becomes fine noise instead of concentric rings. **GPU-path only** — no effect on Parallels/CPU fallback; needs native-GPU verification. **Plan:** [3D Viewer Visual and UX Improvements](plans/supporting/3D_VIEWER_VISUAL_AND_UX_IMPROVEMENTS_PLAN.md) T7C
 
 ### DICOM editing & derived images

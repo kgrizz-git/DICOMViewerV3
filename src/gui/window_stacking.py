@@ -1,6 +1,6 @@
 """Keep a tool window in front of the main window while the app is active.
 
-Option B of ``dev-docs/plans/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md``:
+Option B of ``dev-docs/plans/completed/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md``:
 the window gets ``WindowStaysOnTopHint`` while the application is active and
 loses it when the application goes inactive, so it never floats above other
 applications. Phase 0 showed that timed re-raises lose a race with macOS after

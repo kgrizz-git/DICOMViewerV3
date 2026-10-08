@@ -12,7 +12,7 @@ Privacy: only class names, object names, event types, and states are printed.
 Window titles are never printed, because 3D titles carry the series
 description.
 
-See ``dev-docs/plans/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md`` Phase 0.
+See ``dev-docs/plans/completed/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md`` Phase 0.
 """
 
 from __future__ import annotations

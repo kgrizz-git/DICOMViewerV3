@@ -1,6 +1,6 @@
 # 3D Window and Histogram Keep-in-Front Plan
 
-**Status:** Active. Phase 0 is done on macOS, and Option B is chosen.
+**Status:** Completed 2026-10-08 on macOS. The Windows native check is tracked as a manual smoke item in `TO_DO.md`.
 **Last updated:** 2026-10-08
 **TO_DO refs:** Next up item 5 ("3D window: minimize, keep in front,
 show/hide"); the two 3D viewer sub-items "3D viewer minimize button" and
@@ -166,11 +166,11 @@ Windows native check fails, gate Option B off on Windows through the helper's
 Windows-specific follow-up (for example a native owned window). Do not ship
 Option B on Windows until its native check passes.
 
-- [ ] Promote `AppScopedStayOnTop` in `gui/window_stacking.py` from the spike
+- [x] Promote `AppScopedStayOnTop` in `gui/window_stacking.py` from the spike
   to the real helper. It takes the tool window and an `enabled` callback, and
   it sets `WindowStaysOnTopHint` through `windowHandle()` only. Never use
   `QWidget.setWindowFlags`, which hides and re-creates the window.
-- [ ] **Modal dialogs.** A stay-on-top tool window can cover the app's own
+- [x] **Modal dialogs.** A stay-on-top tool window can cover the app's own
   modal dialogs (message boxes, file pickers, progress dialogs), which are not
   stay-on-top. `QApplication.activeModalWidget()` misses native file dialogs,
   and focus changes do not track a modal's lifetime reliably. Instead, watch
@@ -180,14 +180,14 @@ Option B on Windows until its native check passes.
   while blocked and restore it when unblocked. Test nested modals and a
   modal that never takes focus, and smoke-test a native file dialog. The
   spike did not test this.
-- [ ] Use it for the histogram in `gui/dialogs/histogram_dialog.py`. Keep the
+- [x] Use it for the histogram in `gui/dialogs/histogram_dialog.py`. Keep the
   existing `WindowActivate` raise for the in-app case, but apply the same
   blocked-by-modal guard to it, so it never raises over a prompt. Keep the
   minimize behavior. Remove the spike's debug flags
   (`DEBUG_WINDOW_STACKING_DEFERRED_RAISE`, `DEBUG_WINDOW_STACKING_APP_TOPMOST`)
   and the deferred-raise code. Keep `DEBUG_WINDOW_STACKING` tracing for future
   diagnosis.
-- [ ] Tests: the flag follows the application state (active, then inactive,
+- [x] Tests: the flag follows the application state (active, then inactive,
   then active). It is skipped before the window has a native handle, and
   re-applied on show. It is off while a modal dialog is open. The `enabled`
   callback turns it off. Changing the flag never hides the window, and never
@@ -198,17 +198,17 @@ Option B on Windows until its native check passes.
 
 ## Phase 2 — 3D window behavior
 
-- [ ] **Minimize.** Add `WindowMinimizeButtonHint` (with title, system-menu,
+- [x] **Minimize.** Add `WindowMinimizeButtonHint` (with title, system-menu,
   and close hints) to the 3D dialog's flags. On Windows it must minimize to
   the taskbar. On macOS it must minimize to the Dock.
-- [ ] **Keep in front.** Apply the Phase 1 helper with the main window as the
+- [x] **Keep in front.** Apply the Phase 1 helper with the main window as the
   anchor. The dialog stays parentless, so the helper must not rely on Qt
   parenting.
-- [ ] **Setting.** Add a "Keep 3D Viewer in Front" checkable action under
+- [x] **Setting.** Add a "Keep 3D Viewer in Front" checkable action under
   **View**. It defaults to **on** and is persisted through `display_config`
   using the existing getter/setter pattern. Turning it off removes the
   helper's effect immediately.
-- [ ] **Show/hide.** Add a View-menu action, **Show 3D Viewer**, that toggles
+- [x] **Show/hide.** Add a View-menu action, **Show 3D Viewer**, that toggles
   the visibility of the 3D window the user used most recently. Hiding keeps
   the dialog and its volume alive. Showing a minimized or hidden window clears
   only `WindowMinimized`, then shows, raises, and activates it, so a maximized
@@ -217,14 +217,14 @@ Option B on Windows until its native check passes.
   sets. The show/hide action and File → Save 3D View… enablement use the
   existing set, so hiding the last 3D window leaves it recoverable. Test
   target selection with several dialogs, some hidden.
-- [ ] **Reopen without rebuilding.** In `launch_3d_view`, an existing dialog
+- [x] **Reopen without rebuilding.** In `launch_3d_view`, an existing dialog
   for the same series that is hidden or minimized must be reused, raised, and
   activated. It must not be dropped and rebuilt. Check `isMinimized()`
   explicitly, because a minimized window still reports `isVisible()`. Restore
   by clearing only the minimized bit of `windowState()`, and unhide with
   `show()`, so a maximized or fullscreen window keeps that state. Only a
   closed (deleted) dialog is rebuilt.
-- [ ] **Line caps.** `volume_viewer_widget.py` and `main_window.py` are at
+- [x] **Line caps.** `volume_viewer_widget.py` and `main_window.py` are at
   their caps, and `main_window_menu_builder.py` is within a few lines of its
   750-line cap. Keep new logic in `gui/window_stacking.py`,
   `volume_render_facade.py`, `gui/dialogs/volume_render_dialog.py` (flags), and
@@ -233,7 +233,7 @@ Option B on Windows until its native check passes.
   menu builder calls in one line. Run
   `python scripts/git_hook_line_complexity.py --staged` as part of
   verification.
-- [ ] Tests:
+- [x] Tests:
   - flags include minimize;
   - the setting persists and toggling it updates live dialogs;
   - show/hide keeps the same dialog object and never starts a new build;
@@ -243,28 +243,28 @@ Option B on Windows until its native check passes.
 
 ## Phase 3 — Docs, smoke, and closeout
 
-- [ ] User docs: the 3D guide covers minimize, keep in front, and View → Show
+- [x] User docs: the 3D guide covers minimize, keep in front, and View → Show
   3D Viewer. The histogram section notes the same in-front behavior.
-- [ ] Replace the manual smoke item "Histogram stacking and minimization"
+- [x] Replace the manual smoke item "Histogram stacking and minimization"
   with one combined check covering the histogram and the 3D window on native
   macOS and Windows: click every region of the main window, minimize and
   restore, minimize and restore the main window, switch to another app and
   back, open a modal dialog (for example File → Open) while a tool window is up and
   check the modal stays on top, and toggle the
   setting.
-- [ ] `CHANGELOG.md`: a **Fixed** entry for the histogram falling behind the
+- [x] `CHANGELOG.md`: a **Fixed** entry for the histogram falling behind the
   side panes (patch), and an **Added** entry for the 3D window controls
   (minor). Follow the repo's current convention for unreleased changes: add
   the SemVer note, and bump `src/version.py` only if a release is being cut
   (`dev-docs/RELEASING.md`).
-- [ ] Verify, after activating the project virtual environment
+- [x] Verify, after activating the project virtual environment
   (`source .venv/bin/activate` on macOS/Linux, `.venv\Scripts\Activate.ps1` on
   Windows): `python -m pytest tests/ -v`,
   `python scripts/check_user_docs_links.py`,
   `python scripts/check_repo_harness.py`,
   `python scripts/check_architecture_boundaries.py`, and
   `python scripts/agent_smoke_harness.py`.
-- [ ] Remove Next up item 5 and the two 3D sub-items from `TO_DO.md`, and move
+- [x] Remove Next up item 5 and the two 3D sub-items from `TO_DO.md`, and move
   this plan to `dev-docs/plans/completed/`.
 
 ## Out of scope
