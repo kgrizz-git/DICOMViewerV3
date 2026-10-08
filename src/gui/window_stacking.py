@@ -199,7 +199,7 @@ class AppScopedStayOnTop(QObject):
         self._app_active = _app_is_active()
         self._reapply()
 
-    def _forget_handle(self, handle: object) -> None:
+    def _forget_handle(self, handle: QObject) -> None:
         """Forget a destroyed native window so its wrapper is not kept alive."""
         self._block_depth.pop(handle, None)
         self._watched_handles = [h for h in self._watched_handles if h is not handle]
