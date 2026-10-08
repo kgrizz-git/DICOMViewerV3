@@ -134,6 +134,11 @@ DEBUG_WINDOW_STACKING: bool = False
 # Affects: gui/dialogs/histogram_dialog.py.
 DEBUG_WINDOW_STACKING_DEFERRED_RAISE: bool = False
 
+# Experiment for Option B: keep the histogram stay-on-top only while the app is
+# active (gui/window_stacking.AppScopedStayOnTop).
+# Affects: gui/dialogs/histogram_dialog.py, gui/window_stacking.py.
+DEBUG_WINDOW_STACKING_APP_TOPMOST: bool = False
+
 import os
 
 # Enables startup and section performance logging via [PERF] log lines.

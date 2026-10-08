@@ -1,6 +1,6 @@
 # 3D Window and Histogram Keep-in-Front Plan
 
-**Status:** Active (not started)
+**Status:** Active. Phase 0 is done on macOS, and Option B is chosen.
 **Last updated:** 2026-10-07
 **TO_DO refs:** Next up item 5 ("3D window: minimize, keep in front,
 show/hide"); the two 3D viewer sub-items "3D viewer minimize button" and
@@ -82,13 +82,43 @@ Phase 0 must confirm one of these before any fix. Each comes with a probe.
 
 ## Phase 0 — Diagnose on native macOS and Windows
 
-- [ ] Add a `DEBUG_WINDOW_STACKING` flag in `utils/debug_flags.py` (default
+- [x] Add a `DEBUG_WINDOW_STACKING` flag in `utils/debug_flags.py` (default
   `False`). Gate tracing of the main window's activation events,
   `focusWindowChanged`, and the histogram's raise calls behind it.
-- [ ] Ask the user to reproduce on macOS with the flag on: click the viewer,
+- [x] Ask the user to reproduce on macOS with the flag on: click the viewer,
   the metadata pane, and the statistics pane. Record which hypothesis holds.
 - [ ] Repeat the same check on Windows under Parallels.
-- [ ] Record the finding in this plan before Phase 1.
+- [x] Record the finding in this plan before Phase 1.
+
+### Phase 0 findings (native macOS, 2026-10-07)
+
+- **Run 1 (current code).** Within the app, every click on the main window,
+  including both side panes, delivered `WindowActivate` and raised the
+  histogram, and it stayed in front. The user's original report was narrower
+  than first described. The histogram fell behind **only** after Mission
+  Control ("show all windows") or an app switch, followed by a click on the
+  viewer. The raise ran at `WindowActivate`, about 50–70 ms **before**
+  `ApplicationActive`, and macOS then ordered the clicked window above it.
+  This confirms H1 for the app-activation path. H2 and H3 are ruled out.
+- **Run 2 (Option A, deferred raise).** Raising on `QTimer.singleShot(0)`
+  after `WindowActivate`, and again after `ApplicationActive`, made it
+  **worse**. Every deferred raise ran, 25–70 ms later, and the histogram still
+  ended up behind more often. A timed re-raise loses the race with the macOS
+  window manager, so **Option A is rejected**.
+- **Run 3 (Option B, app-scoped stay-on-top).** `gui/window_stacking.py`
+  (`AppScopedStayOnTop`) sets `WindowStaysOnTopHint` on the native `QWindow`
+  when the app becomes active and clears it when the app goes inactive. The
+  log shows each toggle within ~5 ms of the state change. The user confirmed
+  that it passes:
+  - The histogram stayed in front after Mission Control and after app
+    switches.
+  - It stayed in front when each main-window region was clicked.
+  - It stayed minimized across app switches.
+  - It never floated above another app, and there was no flicker.
+- **Decision.** Use Option B for Phase 1. Setting the flag on
+  `windowHandle()` rather than `QWidget.setWindowFlags` avoids the hide and
+  re-create that the reviews warned about. Windows under Parallels is still
+  unverified.
 
 ## Phase 1 — Shared keep-in-front helper
 
@@ -127,9 +157,8 @@ pick the mechanism from Phase 0's finding:
   Smoke checks must cover independent minimization, moving the parent, and
   Spaces and fullscreen. Use it only if A and B both fail.
 
-Recommendation: try A first, because it is the smallest change and H1 is the
-most likely cause. Move to B if native testing still shows the window falling
-behind. Keep C as a last resort.
+Decision (from Phase 0): **Option B.** Option A was tried and rejected. Keep
+C as a last resort if Windows testing fails.
 
 - [ ] Implement the helper with an `install_keep_in_front(tool_window,
   main_window, *, enabled: Callable[[], bool])` entry point. It returns an
