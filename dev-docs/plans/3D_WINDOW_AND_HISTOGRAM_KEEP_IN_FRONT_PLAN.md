@@ -1,7 +1,7 @@
 # 3D Window and Histogram Keep-in-Front Plan
 
 **Status:** Active. Phase 0 is done on macOS, and Option B is chosen.
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-08
 **TO_DO refs:** Next up item 5 ("3D window: minimize, keep in front,
 show/hide"); the two 3D viewer sub-items "3D viewer minimize button" and
 "3D viewer visibility and pinning"; the manual smoke check "Histogram stacking
@@ -30,9 +30,9 @@ Make the histogram and 3D windows behave like tool windows of the viewer:
 - It installs an event filter on its parent. When the main window receives
   `WindowActivate`, the filter raises the histogram dialog
   (`histogram_dialog.py:164`).
-- **Native bug (macOS, reported by the user 2026-10-07):** the histogram stays
-  in front when you click the image viewer. It falls behind the main window
-  when you click the left metadata pane or the right statistics pane.
+- **Native bug (macOS, reported by the user 2026-10-07):** the histogram falls
+  behind the main window. Phase 0 narrowed this to returning from Mission
+  Control or another app (see the findings below).
 - The raise and the event filter have automated tests
   (`tests/gui/test_histogram_dialog.py`). Those tests send synthetic events,
   so they cannot see window-manager ordering.
@@ -238,12 +238,15 @@ C as a last resort if Windows testing fails.
   (minor). Follow the repo's current convention for unreleased changes: add
   the SemVer note, and bump `src/version.py` only if a release is being cut
   (`dev-docs/RELEASING.md`).
-- [ ] Verify: `python -m pytest tests/ -v`, `python scripts/check_user_docs_links.py`,
+- [ ] Verify, after activating the project virtual environment
+  (`source .venv/bin/activate` on macOS/Linux, `.venv\Scripts\Activate.ps1` on
+  Windows): `python -m pytest tests/ -v`,
+  `python scripts/check_user_docs_links.py`,
   `python scripts/check_repo_harness.py`,
   `python scripts/check_architecture_boundaries.py`, and
   `python scripts/agent_smoke_harness.py`.
-- [ ] Remove Next up item 5 and the two 3D sub-items from `TO_DO.md`, and
-  archive this plan.
+- [ ] Remove Next up item 5 and the two 3D sub-items from `TO_DO.md`, and move
+  this plan to `dev-docs/plans/completed/`.
 
 ## Out of scope
 
@@ -257,9 +260,9 @@ C as a last resort if Windows testing fails.
 - **Native behavior differs from tests.** Window ordering cannot be asserted
   in CI. Phase 0 tracing and the combined manual smoke check are the real
   verification.
-- **Option B flicker and focus stealing.** Re-creating the native window when
-  the flag changes can flash it or steal focus. The spike must check both
-  before Option B is chosen.
+- **Option B flicker and focus stealing.** The macOS spike showed neither,
+  because it sets the flag on the native `QWindow` instead of re-creating the
+  window. Windows under Parallels is still unverified.
 - **Regressions in today's working cases.** The histogram must still stay up
   when you click the image viewer, when the main window is minimized and
   restored, and when the app regains focus from another application.

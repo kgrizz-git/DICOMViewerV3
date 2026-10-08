@@ -44,15 +44,13 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 5. **[P2] 3D window: minimize, keep in front, show/hide** — combines the two
    3D viewer items under [3D volume rendering](#3d-volume-rendering): a
    minimize button, a "Keep 3D Viewer in Front" setting (on by default), and a
-   View-menu show/hide that restores the existing window. Follow the histogram
-   dialog's window flags and re-raise pattern (`gui/dialogs/histogram_dialog.py`).
-   **Histogram bug (confirmed 2026-10-07 on macOS):** the histogram stays above
-   the main window when you click the image viewer, but falls behind when you
-   click the left metadata pane or the right statistics pane. It re-raises only
-   on the main window's `WindowActivate` (`histogram_dialog.py:164`), so the
-   raise likely races the window manager's reordering. Try a deferred raise
-   (`QTimer.singleShot(0, ...)`) first; fall back to a native child-window
-   relationship. Fix the histogram and the 3D window together.
+   View-menu show/hide that restores the existing window.
+   **Histogram bug (diagnosed 2026-10-07 on macOS):** the histogram falls behind
+   the main window after Mission Control or an app switch, because its re-raise
+   runs before macOS finishes activating the app. Native testing rejected a
+   deferred raise (Option A). An app-scoped stay-on-top (Option B) passed, so
+   both windows use it; a macOS native child window (Option C) stays the last
+   resort. Fix the histogram and the 3D window together.
    **Plan:** [3D window and histogram keep-in-front](plans/3D_WINDOW_AND_HISTOGRAM_KEEP_IN_FRONT_PLAN.md).
 
 Release blockers (license compliance, versioned executables) live in
