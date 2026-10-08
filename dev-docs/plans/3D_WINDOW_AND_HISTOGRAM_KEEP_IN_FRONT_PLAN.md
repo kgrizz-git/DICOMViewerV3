@@ -160,20 +160,29 @@ pick the mechanism from Phase 0's finding:
 Decision (from Phase 0): **Option B.** Option A was tried and rejected. Keep
 C as a last resort if Windows testing fails.
 
-- [ ] Implement the helper with an `install_keep_in_front(tool_window,
-  main_window, *, enabled: Callable[[], bool])` entry point. It returns an
-  object that can be removed when the window closes.
-- [ ] Use it for the histogram in place of the current event filter, in
-  `gui/dialogs/histogram_dialog.py`. Keep the minimize behavior. A minimized
-  window is never restored by a re-raise. Update or replace the existing
-  event-filter tests in `tests/gui/test_histogram_dialog.py` so they test the
-  helper rather than the removed filter.
-- [ ] Tests: unit-test the helper's decision logic, such as when to raise and
-  when to skip because the window is minimized, hidden, closed before the
-  deferred callback runs, a modal dialog is open, or the app is inactive.
-  Cover a histogram and a 3D window open at the same time, so the two tool
-  windows do not fight over the top. Post events directly rather than
-  waiting on real time. Native ordering stays a manual smoke check.
+- [ ] Promote `AppScopedStayOnTop` in `gui/window_stacking.py` from the spike
+  to the real helper. It takes the tool window and an `enabled` callback, and
+  it sets `WindowStaysOnTopHint` through `windowHandle()` only. Never use
+  `QWidget.setWindowFlags`, which hides and re-creates the window.
+- [ ] **Modal dialogs.** A stay-on-top tool window can cover the app's own
+  modal dialogs (message boxes, file pickers, progress dialogs), which are not
+  stay-on-top. Clear the flag while `QApplication.activeModalWidget()` is set,
+  and restore it when the modal closes, by watching `focusWindowChanged`.
+  The spike did not test this.
+- [ ] Use it for the histogram in `gui/dialogs/histogram_dialog.py`. Keep the
+  existing `WindowActivate` raise for the in-app case, and keep the minimize
+  behavior. Remove the spike's debug flags
+  (`DEBUG_WINDOW_STACKING_DEFERRED_RAISE`, `DEBUG_WINDOW_STACKING_APP_TOPMOST`)
+  and the deferred-raise code. Keep `DEBUG_WINDOW_STACKING` tracing for future
+  diagnosis.
+- [ ] Tests: the flag follows the application state (active, then inactive,
+  then active). It is skipped before the window has a native handle, and
+  re-applied on show. It is off while a modal dialog is open. The `enabled`
+  callback turns it off. Changing the flag never hides the window, and never
+  clears the minimized state. A histogram and a 3D window can both be
+  stay-on-top at once. Update the event-filter tests in
+  `tests/gui/test_histogram_dialog.py`. Native ordering stays a manual smoke
+  check.
 
 ## Phase 2 — 3D window behavior
 
@@ -221,7 +230,8 @@ C as a last resort if Windows testing fails.
   with one combined check covering the histogram and the 3D window on native
   macOS and Windows: click every region of the main window, minimize and
   restore, minimize and restore the main window, switch to another app and
-  back, open a modal dialog while a tool window is up, and toggle the
+  back, open a modal dialog (for example File → Open) while a tool window is up and
+  check the modal stays on top, and toggle the
   setting.
 - [ ] `CHANGELOG.md`: a **Fixed** entry for the histogram falling behind the
   side panes (patch), and an **Added** entry for the 3D window controls
