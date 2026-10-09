@@ -54,10 +54,16 @@ from core.mpr_dicom_export import (
     MprDicomExportOptions,
     write_mpr_series,
 )
+from core.mpr_session_types import MprCombineState
 from core.mpr_stack_combine import apply_mpr_stack_combine
+from core.mpr_view_display_state import (
+    capture_mpr_combine_state,
+    capture_mpr_display_state,
+    clear_mpr_lut_override,
+    restore_mpr_combine_state,
+)
 from core.mpr_view_math import (
     array_to_pil,
-    auto_window_level,
     build_mpr_banner_text,
     compute_mpr_combine_range,
 )
@@ -69,6 +75,11 @@ from core.mpr_volume import (
 )
 from gui.dialogs.mpr_orientation_choice_dialog import MprOrientationChoiceDialog
 from gui.lut_view_state import mpr_display_kwargs
+from gui.mpr_controller_display_state import (
+    install_apply_display_state,
+    preferred_mpr_window_level,
+    reset_window_level_for_mpr,
+)
 from utils.debug_flags import DEBUG_MPR
 from utils.dicom_utils import get_composite_series_key
 from utils.privacy.console import print_redacted
@@ -466,6 +477,7 @@ class MprController(QObject):
         previous_state = data.get("mpr_previous_state")
         image_viewer = self._get_image_viewer(idx)
         self._tear_down_clear_mpr_keys(data)
+        self._tear_down_clear_mpr_lut_override(idx)
         self._set_tools_enabled(idx, enabled=True)
         self._tear_down_clear_mpr_banner(idx)
 
@@ -502,6 +514,14 @@ class MprController(QObject):
             "mpr_combine_slice_count",
         ):
             data.pop(key, None)
+
+    def _tear_down_clear_mpr_lut_override(self, idx: int) -> None:
+        """Drop a stale per-pane MPR LUT override when leaving MPR mode."""
+        try:
+            managers = self._app.subwindow_managers.get(idx, {})
+            clear_mpr_lut_override(managers.get("view_state_manager"))
+        except Exception:
+            pass
 
     def _tear_down_clear_mpr_banner(self, idx: int) -> None:
         """Clear the MPR banner on the overlay manager, if present."""
@@ -689,6 +709,7 @@ class MprController(QObject):
         data = self._app.subwindow_data.get(idx, {})
         if not data.get("is_mpr") or data.get("mpr_result") is None:
             return None
+        managers = self._app.subwindow_managers.get(idx, {})
         return {
             "mpr_result": data["mpr_result"],
             "mpr_orientation": data.get("mpr_orientation", ""),
@@ -696,6 +717,10 @@ class MprController(QObject):
             "mpr_combine_enabled": bool(data.get("mpr_combine_enabled", False)),
             "mpr_combine_mode": str(data.get("mpr_combine_mode", "aip") or "aip"),
             "mpr_combine_slice_count": int(data.get("mpr_combine_slice_count", 4) or 4),
+            "mpr_combine": capture_mpr_combine_state(data),
+            "mpr_display": capture_mpr_display_state(
+                managers.get("view_state_manager"), self._get_image_viewer(idx)
+            ),
             "mpr_source_dataset": data.get("mpr_source_dataset"),
             "current_study_uid": str(data.get("current_study_uid", "") or ""),
             "current_series_uid": str(data.get("current_series_uid", "") or ""),
@@ -858,7 +883,7 @@ class MprController(QObject):
         try:
             self._sync_slice_navigator_for_mpr(idx, result.n_slices, data["mpr_slice_index"])
             self._set_tools_enabled(idx, enabled=False)
-            self._reset_window_level_for_mpr(idx, source_ds)
+            self._install_apply_display_state(idx, payload, source_ds)
 
             self.display_mpr_slice(idx, data["mpr_slice_index"])
             self._fit_image_viewer_after_mpr(idx)
@@ -899,10 +924,28 @@ class MprController(QObject):
         data["current_study_uid"] = str(payload.get("current_study_uid", "") or "")
         data["current_series_uid"] = str(payload.get("current_series_uid", "") or "")
         data["current_datasets"] = list(payload.get("current_datasets") or [])
+        combine = payload.get("mpr_combine")
+        if isinstance(combine, MprCombineState):
+            restore_mpr_combine_state(data, combine)
+            return
+        # Legacy payloads predate the combine snapshot; keep the flat keys.
         data["mpr_combine_enabled"] = bool(payload.get("mpr_combine_enabled", False))
         data["mpr_combine_mode"] = str(payload.get("mpr_combine_mode", "aip") or "aip")
         data["mpr_combine_slice_count"] = int(
             payload.get("mpr_combine_slice_count", 4) or 4
+        )
+
+    def _install_apply_display_state(
+        self, idx: int, payload: dict[str, Any], source_ds: Any
+    ) -> None:
+        """Restore carried display state, or reset to source defaults (see helper)."""
+        install_apply_display_state(
+            self._app,
+            self._get_image_viewer,
+            idx,
+            payload,
+            source_ds,
+            reset=self._reset_window_level_for_mpr,
         )
 
     def _sync_slice_navigator_for_mpr(
@@ -1717,189 +1760,20 @@ class MprController(QObject):
                 image_viewer._mpr_mode_override = False
 
     def _reset_window_level_for_mpr(self, idx: int, source_dataset) -> None:
+        """Reset window/level controls to defaults from the MPR source dataset.
+
+        See ``gui.mpr_controller_display_state`` for the full contract: pane
+        rescale/toggle always syncs for *idx*; shared toolbar and main-window
+        toggle sync only when *idx* is focused.
         """
-        Reset window/level controls to defaults from the MPR source dataset.
-
-        This ensures that when a new MPR is created, we use the window/level
-        from the new source series, not stale values from a previous series.
-
-        Per-pane rescale / HU alignment: ``ViewStateManager`` and the target
-        ``ImageViewer`` rescale toggle are **always** updated for *idx* so MPR
-        created in an unfocused pane still applies slope/intercept before the
-        first ``display_mpr_slice``. Global toolbar W/L spinboxes and the main
-        window rescale toggle are updated only when *idx* is the focused pane.
-
-        Args:
-            idx: Subwindow index
-            source_dataset: Source DICOM dataset for the MPR
-        """
-        focused = getattr(self._app, "focused_subwindow_index", -1)
-        wl_controls = getattr(self._app, "window_level_controls", None)
-
-        try:
-            from core.dicom_processor import DICOMProcessor
-            from core.dicom_rescale import get_rescale_parameters
-            from core.dicom_window_level import (
-                get_window_level_from_dataset,
-                get_window_level_presets_from_dataset,
-            )
-
-            rescale_slope, rescale_intercept, rescale_type = get_rescale_parameters(
-                source_dataset
-            )
-            if (
-                rescale_type is None
-                and rescale_slope is not None
-                and rescale_intercept is not None
-            ):
-                rescale_type = DICOMProcessor.infer_rescale_type(
-                    source_dataset, rescale_slope, rescale_intercept, None
-                )
-
-            view_state_manager = self._mpr_wl_sync_pane_rescale(
-                idx, focused, rescale_slope, rescale_intercept, rescale_type
-            )
-            wc, ww, is_rescaled = self._mpr_wl_resolve_center_width(
-                source_dataset,
-                rescale_slope,
-                rescale_intercept,
-                get_window_level_presets_from_dataset,
-                get_window_level_from_dataset,
-            )
-            self._mpr_wl_apply_values(
-                idx,
-                focused,
-                wl_controls,
-                view_state_manager,
-                wc,
-                ww,
-                is_rescaled,
-                rescale_slope,
-                rescale_intercept,
-                rescale_type,
-            )
-        except Exception as exc:
-            print_redacted(f"[MprController] Failed to reset W/L for MPR in window {idx}: {exc}")
-
-    def _mpr_wl_sync_pane_rescale(
-        self,
-        idx: int,
-        focused: int,
-        rescale_slope,
-        rescale_intercept,
-        rescale_type,
-    ):
-        """Sync per-pane rescale state; also sync main-window toggle when focused."""
-        managers = self._app.subwindow_managers.get(idx, {})
-        view_state_manager = managers.get("view_state_manager")
-        if view_state_manager is None:
-            return None
-        view_state_manager.set_rescale_parameters(
-            rescale_slope, rescale_intercept, rescale_type
+        reset_window_level_for_mpr(
+            self._app, self._get_image_viewer, idx, source_dataset
         )
-        use_rescaled_default = (
-            rescale_slope is not None and rescale_intercept is not None
-        )
-        view_state_manager.use_rescaled_values = use_rescaled_default
-        if idx == focused and hasattr(self._app, "main_window"):
-            self._app.main_window.set_rescale_toggle_state(use_rescaled_default)
-        image_viewer = self._get_image_viewer(idx)
-        if image_viewer is not None:
-            image_viewer.set_rescale_toggle_state(use_rescaled_default)
-        return view_state_manager
-
-    @staticmethod
-    def _mpr_wl_resolve_center_width(
-        source_dataset,
-        rescale_slope,
-        rescale_intercept,
-        get_presets,
-        get_single_wl,
-    ) -> tuple[Any, Any, Any]:
-        """Resolve window center/width from presets or single-tag fallback."""
-        presets = get_presets(source_dataset, rescale_slope, rescale_intercept)
-        if presets:
-            wc, ww, is_rescaled, _preset_name = presets[0]
-            return wc, ww, is_rescaled
-        wc, ww, is_rescaled = get_single_wl(
-            source_dataset, rescale_slope, rescale_intercept
-        )
-        return wc, ww, is_rescaled
-
-    def _mpr_wl_apply_values(
-        self,
-        idx: int,
-        focused: int,
-        wl_controls,
-        view_state_manager,
-        wc,
-        ww,
-        is_rescaled,
-        rescale_slope,
-        rescale_intercept,
-        rescale_type,
-    ) -> None:
-        """Write W/L into pane view state and optionally sync shared toolbar."""
-        if wc is None or ww is None or ww <= 0:
-            return
-        if view_state_manager is not None:
-            view_state_manager.current_window_center = wc
-            view_state_manager.current_window_width = ww
-            view_state_manager.window_level_user_modified = False
-        if idx != focused or wl_controls is None:
-            return
-        unit = None
-        if rescale_slope is not None and rescale_intercept is not None:
-            unit = rescale_type
-        wl_controls.set_window_level(wc, ww, block_signals=False, unit=unit)
-        _mpr_log(f"Reset W/L for MPR: center={wc:.1f} width={ww:.1f} rescaled={is_rescaled}")
 
     @staticmethod
     def _get_preferred_mpr_window_level(view_state_manager, wl_controls, array: np.ndarray):
-        """
-        Return the window/level to use for MPR display.
-
-        Preference order:
-        1. The target pane's own stored window/level in ``ViewStateManager``.
-        2. The shared toolbar controls (focused pane behavior).
-        3. Auto window/level from the current pixel data.
-        """
-        if view_state_manager is not None:
-            try:
-                wc = float(view_state_manager.current_window_center)
-                ww = float(view_state_manager.current_window_width)
-                if ww > 0:
-                    return wc, ww
-            except (AttributeError, TypeError, ValueError):
-                pass
-        return MprController._get_window_level(wl_controls, array)
-
-    @staticmethod
-    def _get_window_level(wl_controls, array: np.ndarray):
-        """
-        Read the current window centre/width from the window-level controls.
-
-        Falls back to (percentile-based) auto W/L from the array if controls
-        are unavailable.
-
-        Args:
-            wl_controls: WindowLevelControls widget (may be None).
-            array:       The pixel array to compute auto W/L from.
-
-        Returns:
-            (window_center, window_width) as floats.
-        """
-        if wl_controls is not None:
-            try:
-                wc = float(wl_controls.window_center)
-                ww = float(wl_controls.window_width)
-                if ww > 0:
-                    return wc, ww
-            except (AttributeError, TypeError, ValueError):
-                pass
-
-        # Auto W/L (percentile) — delegates to core.mpr_view_math.
-        return auto_window_level(array)
+        """Return the window/level to use for MPR display (see helper)."""
+        return preferred_mpr_window_level(view_state_manager, wl_controls, array)
 
     @staticmethod
     def _array_to_pil(

@@ -26,8 +26,10 @@ from typing import Any
 from core.dicom_lut_sequences import voi_lut_supported
 from core.fusion_handler import FusionHandler
 from core.lut_series_state import (
+    get_mpr_effective_lut,
     get_series_lut,
     get_series_voi_from_dicom,
+    set_mpr_lut_override,
     set_series_lut,
     set_series_voi_from_dicom,
 )
@@ -281,10 +283,32 @@ def build_managers_for_subwindow(
 
 
 def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer: Any) -> None:
-    """Store the pane LUT and redisplay. The viewer holds the callbacks the menus call."""
+    """Store the pane LUT and redisplay. The viewer holds the callbacks the menus call.
+
+    MPR panes keep their LUT in the isolated per-pane override slot instead
+    of the shared series slot, so choosing a LUT on a moved or reattached
+    view neither recolors the underlying 2-D series nor any sibling pane.
+    """
+
+    def _mpr_pane() -> bool:
+        mpr = getattr(app, "_mpr_controller", None)
+        is_mpr = getattr(mpr, "is_mpr", None)
+        if not callable(is_mpr):
+            return False
+        try:
+            return bool(is_mpr(idx))
+        except Exception:
+            return False
 
     def apply_series_lut(lut: Any, _i: int = idx) -> None:
         view_state = managers["view_state_manager"]
+        if _mpr_pane():
+            set_mpr_lut_override(view_state, lut)
+            app._redisplay_subwindow_slice(_i, preserve_view=True)
+            refresh = getattr(app, "_update_mpr_navigator_thumbnail", None)
+            if refresh is not None:
+                refresh(_i)
+            return
         series_id = getattr(view_state, "current_series_identifier", None)
         if not series_id:
             status = getattr(getattr(app, "main_window", None), "update_status", None)
@@ -299,6 +323,8 @@ def _wire_series_lut(app: Any, idx: int, managers: dict[str, Any], image_viewer:
 
     def current_series_lut() -> Any:
         view_state = managers["view_state_manager"]
+        if _mpr_pane():
+            return get_mpr_effective_lut(view_state)
         return get_series_lut(view_state, getattr(view_state, "current_series_identifier", None))
 
     def lut_display_context() -> dict[str, Any]:

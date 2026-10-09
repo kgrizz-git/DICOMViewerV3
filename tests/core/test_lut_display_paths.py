@@ -137,6 +137,28 @@ def test_missing_series_lut_is_linear():
     assert lut.name == linear_lut().name
 
 
+def test_focused_pane_lut_prefers_mpr_override():
+    from core.lut_catalog import sigmoid_lut
+    from core.lut_series_state import set_mpr_lut_override
+
+    series_lut = linear_lut()
+    override = sigmoid_lut()
+    view_state = type(
+        "V",
+        (),
+        {
+            "series_defaults": {"series-id": {"current_lut": series_lut}},
+            "current_series_identifier": "series-id",
+            "image_viewer": None,
+        },
+    )()
+    _inverted, lut = focused_pane_lut(view_state)
+    assert lut is series_lut
+    set_mpr_lut_override(view_state, override)
+    _inverted, lut = focused_pane_lut(view_state)
+    assert lut is override
+
+
 def test_color_array_skips_user_invert_and_lut():
     color = np.arange(12, dtype=np.uint8).reshape(2, 2, 3)
     out = apply_user_invert_and_lut(color, image_inverted=True, lut=inverse_lut())

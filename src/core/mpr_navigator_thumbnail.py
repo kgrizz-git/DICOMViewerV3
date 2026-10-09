@@ -23,7 +23,10 @@ from __future__ import annotations
 # pyright: reportImportCycles=false
 from typing import TYPE_CHECKING, Any
 
+from core.lut_catalog import linear_lut
+from core.lut_engine import LookUpTable
 from core.lut_series_state import mpr_display_kwargs
+from core.mpr_session_types import MprDisplayState
 from core.mpr_stack_combine import apply_mpr_stack_combine
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -131,17 +134,7 @@ def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
         except (TypeError, ValueError):
             n_slices = None
 
-    wc: float | None = None
-    ww: float | None = None
-    wl_controls = getattr(app, "window_level_controls", None)
-    if wl_controls is not None:
-        try:
-            wc_val = float(wl_controls.window_center)
-            ww_val = float(wl_controls.window_width)
-            if ww_val > 0:
-                wc, ww = wc_val, ww_val
-        except (AttributeError, TypeError, ValueError):
-            pass
+    wc, ww = _prefer_pane_window_level(app, idx)
 
     photometric = _result_photometric_interpretation(result)
     display = mpr_display_kwargs(_pane_managers(app, idx), photometric)
@@ -157,6 +150,55 @@ def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
         image_inverted=display["image_inverted"],
         lut=display["lut"],
     )
+
+
+def _prefer_pane_window_level(app: DICOMViewerApp, idx: int) -> tuple[float | None, float | None]:
+    """Attached tile W/L from the pane's own view state, else the shared toolbar.
+
+    The toolbar fallback only serves panes without usable view state.
+    """
+    pane_vsm = (_pane_managers(app, idx) or {}).get("view_state_manager")
+    own = _window_level_from_view_state(pane_vsm)
+    if own != (None, None):
+        return own
+    return _window_level_from_controls(getattr(app, "window_level_controls", None))
+
+
+def _window_level_from_view_state(view_state: Any) -> tuple[float | None, float | None]:
+    """Valid (center, width) from view state, else ``(None, None)``."""
+    raw_wc: Any = getattr(view_state, "current_window_center", None)
+    raw_ww: Any = getattr(view_state, "current_window_width", None)
+    return _valid_window_level(raw_wc, raw_ww)
+
+
+def _window_level_from_controls(wl_controls: Any) -> tuple[float | None, float | None]:
+    """Valid (center, width) from shared toolbar controls, else ``(None, None)``."""
+    if wl_controls is None:
+        return None, None
+    raw_wc: Any = getattr(wl_controls, "window_center", None)
+    raw_ww: Any = getattr(wl_controls, "window_width", None)
+    return _valid_window_level(raw_wc, raw_ww)
+
+
+def _valid_window_level(raw_wc: Any, raw_ww: Any) -> tuple[float | None, float | None]:
+    """Valid (center, width) pair, else ``(None, None)`` for missing/invalid input."""
+    try:
+        wc = float(raw_wc)
+        ww = float(raw_ww)
+    except (TypeError, ValueError):
+        return None, None
+    if ww <= 0:
+        return None, None
+    return wc, ww
+
+
+def _carried_window_level(carried: MprDisplayState) -> tuple[float | None, float | None]:
+    """Valid (center, width) from carried display state, else ``(None, None)``."""
+    if carried.window_center is None or carried.window_width is None:
+        return None, None
+    if carried.window_width <= 0:
+        return None, None
+    return float(carried.window_center), float(carried.window_width)
 
 
 def clear_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
@@ -184,15 +226,65 @@ def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
     if not app._mpr_controller.has_detached_mpr():
         app.series_navigator.clear_mpr_thumbnail(-1)
         return
-    focused = getattr(app, "focused_subwindow_index", 0)
-    vsm = app.subwindow_managers.get(focused, {}).get("view_state_manager")
-    use_rescaled = bool(getattr(vsm, "use_rescaled_values", True))
+    payload = getattr(app._mpr_controller, "_detached_mpr_payload", None)
+    use_rescaled, wc, ww, image_inverted, lut = _floating_display_choice(app, payload)
     pixel_array = app._mpr_controller.get_detached_mpr_thumbnail_pixels(
         use_rescaled
     )
     if pixel_array is None:
         return
-    payload = getattr(app._mpr_controller, "_detached_mpr_payload", None)
+    study_uid, series_uid, n_slices = _floating_source_parts(payload)
+    photometric = _result_photometric_interpretation(
+        payload.get("mpr_result") if isinstance(payload, dict) else None
+    )
+    app.series_navigator.set_mpr_thumbnail(
+        -1,
+        pixel_array,
+        study_uid,
+        series_uid,
+        wc,
+        ww,
+        n_slices,
+        photometric,
+        image_inverted=image_inverted,
+        lut=lut,
+    )
+
+
+def _floating_display_choice(
+    app: DICOMViewerApp, payload: Any
+) -> tuple[bool, float | None, float | None, bool, Any]:
+    """Detached tile display values: rescale flag, W/L, inversion, LUT.
+
+    A detached view carries its own display state, which supplies everything
+    and never consults the focused pane. Legacy payloads predate carried
+    state and keep the focused fallback.
+    """
+    carried = payload.get("mpr_display") if isinstance(payload, dict) else None
+    if isinstance(carried, MprDisplayState):
+        wc, ww = _carried_window_level(carried)
+        lut = carried.lut if isinstance(carried.lut, LookUpTable) else linear_lut()
+        return bool(carried.use_rescaled), wc, ww, bool(carried.inverted), lut
+    focused = getattr(app, "focused_subwindow_index", 0)
+    vsm = app.subwindow_managers.get(focused, {}).get("view_state_manager")
+    wc, ww = _window_level_from_controls(getattr(app, "window_level_controls", None))
+    display = mpr_display_kwargs(
+        _pane_managers(app, focused),
+        _result_photometric_interpretation(
+            payload.get("mpr_result") if isinstance(payload, dict) else None
+        ),
+    )
+    return (
+        bool(getattr(vsm, "use_rescaled_values", True)),
+        wc,
+        ww,
+        display["image_inverted"],
+        display["lut"],
+    )
+
+
+def _floating_source_parts(payload: Any) -> tuple[str, str, int | None]:
+    """Detached tile identity: study UID, series UID, slice count."""
     study_uid = ""
     series_uid = ""
     n_slices: int | None = None
@@ -206,33 +298,7 @@ def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
                 n_slices = n_raw if n_raw > 0 else None
             except (TypeError, ValueError):
                 n_slices = None
-    wc: float | None = None
-    ww: float | None = None
-    wl_controls = getattr(app, "window_level_controls", None)
-    if wl_controls is not None:
-        try:
-            wc_val = float(wl_controls.window_center)
-            ww_val = float(wl_controls.window_width)
-            if ww_val > 0:
-                wc, ww = wc_val, ww_val
-        except (AttributeError, TypeError, ValueError):
-            pass
-    photometric = _result_photometric_interpretation(
-        payload.get("mpr_result") if isinstance(payload, dict) else None
-    )
-    display = mpr_display_kwargs(_pane_managers(app, focused), photometric)
-    app.series_navigator.set_mpr_thumbnail(
-        -1,
-        pixel_array,
-        study_uid,
-        series_uid,
-        wc,
-        ww,
-        n_slices,
-        photometric,
-        image_inverted=display["image_inverted"],
-        lut=display["lut"],
-    )
+    return study_uid, series_uid, n_slices
 
 
 def on_mpr_detached(app: DICOMViewerApp, former_idx: int) -> None:

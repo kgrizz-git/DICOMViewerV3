@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import core.mpr_navigator_thumbnail as mpr_navigator_thumbnail
-from core.lut_catalog import linear_lut
+from core.lut_catalog import linear_lut, sigmoid_lut
+from core.mpr_session_types import MprDisplayState
 
 
 def _make_app(**overrides) -> SimpleNamespace:
@@ -254,3 +255,107 @@ def test_clear_and_detach_helpers_delegate() -> None:
 
     app.series_navigator.clear_mpr_thumbnail.assert_any_call(2)
     app.series_navigator.clear_mpr_thumbnail.assert_any_call(-1)
+
+
+class TestFloatingThumbnailCarriedState:
+    def test_detached_uses_carried_rescale_wl_lut_invert(self) -> None:
+        from typing import Any
+
+        carried = sigmoid_lut()
+        payload = {
+            "current_study_uid": "study",
+            "current_series_uid": "series",
+            "mpr_result": SimpleNamespace(n_slices=11),
+            "mpr_display": MprDisplayState(
+                window_center=55.0,
+                window_width=555.0,
+                use_rescaled=False,
+                inverted=True,
+                lut=carried,
+            ),
+        }
+        app: Any = _make_app(
+            _mpr_controller=SimpleNamespace(
+                has_detached_mpr=MagicMock(return_value=True),
+                get_detached_mpr_thumbnail_pixels=MagicMock(return_value="pixels"),
+                _detached_mpr_payload=payload,
+            ),
+            # Deliberately differing focus state: rescaled pixels, other W/L.
+            subwindow_managers={
+                0: {"view_state_manager": SimpleNamespace(use_rescaled_values=True)}
+            },
+            window_level_controls=SimpleNamespace(window_center=40.0, window_width=400.0),
+        )
+
+        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+
+        app._mpr_controller.get_detached_mpr_thumbnail_pixels.assert_called_once_with(False)
+        _args, kwargs = app.series_navigator.set_mpr_thumbnail.call_args
+        assert (_args[4], _args[5]) == (55.0, 555.0)
+        assert kwargs["lut"] is carried
+        assert kwargs["image_inverted"] is True
+
+    def test_detached_missing_carried_lut_falls_back_to_linear(self) -> None:
+        from typing import Any
+
+        payload = {
+            "current_study_uid": "study",
+            "current_series_uid": "series",
+            "mpr_result": SimpleNamespace(n_slices=11),
+            "mpr_display": MprDisplayState(lut=None),
+        }
+        app: Any = _make_app(
+            _mpr_controller=SimpleNamespace(
+                has_detached_mpr=MagicMock(return_value=True),
+                get_detached_mpr_thumbnail_pixels=MagicMock(return_value="pixels"),
+                _detached_mpr_payload=payload,
+            ),
+            subwindow_managers={
+                0: {
+                    "view_state_manager": SimpleNamespace(
+                        series_defaults={"series-id": {"current_lut": sigmoid_lut()}},
+                        current_series_identifier="series-id",
+                    )
+                }
+            },
+        )
+
+        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+
+        _args, kwargs = app.series_navigator.set_mpr_thumbnail.call_args
+        assert kwargs["lut"].name == linear_lut().name
+
+
+class TestAttachedThumbnailPaneWindowLevel:
+    def test_attached_tile_uses_pane_not_toolbar(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            mpr_navigator_thumbnail,
+            "get_subwindow_mpr_thumbnail_pixel_array",
+            MagicMock(return_value="pixels"),
+        )
+        app = _make_app(
+            subwindow_data={
+                0: {
+                    "is_mpr": True,
+                    "mpr_result": SimpleNamespace(n_slices=9),
+                    "current_study_uid": "study",
+                    "current_series_uid": "series",
+                }
+            },
+            subwindow_managers={
+                0: {
+                    "view_state_manager": SimpleNamespace(
+                        current_window_center=60.0,
+                        current_window_width=600.0,
+                        series_defaults={},
+                        current_series_identifier="series-id",
+                    )
+                }
+            },
+            window_level_controls=SimpleNamespace(window_center=40.0, window_width=400.0),
+        )
+
+        mpr_navigator_thumbnail.update_mpr_navigator_thumbnail(app, 0)
+
+        _args, _kwargs = app.series_navigator.set_mpr_thumbnail.call_args
+        assert (_args[4], _args[5]) == (60.0, 600.0)
