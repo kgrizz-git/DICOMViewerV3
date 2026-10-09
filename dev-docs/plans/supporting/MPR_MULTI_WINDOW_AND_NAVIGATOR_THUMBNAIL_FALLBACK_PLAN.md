@@ -2,9 +2,126 @@
 
 Supporting plan for two UX backlog items in `dev-docs/TO_DO.md` (UX / Workflow).
 
+**Last updated:** 2026-10-09
+
+## Pre-implementation review (2026-10-08)
+
+Code inspection confirms the single detached slot and activation-time discard
+still exist. This review covers the P1 MPR work only; the P2 thumbnail heuristic
+below remains separate. Detached means an in-memory session represented in the
+navigator, not a separate OS window or a session persisted across app restarts.
+
+### Agreed baseline (2026-10-08)
+
+- Support independent builds, multiple detached sessions, duplicate views sharing
+  one result, and optional linked scrolling between duplicate views.
+- Use stable session and view IDs independent of pane assignment. Negative IDs
+  may remain a navigator adapter for detached views; pane indices are not
+  session identity. Every attach/clear resolves the exact view; stale IDs are
+  harmless no-ops.
+- Preserve detached sessions when building a new MPR, including another build
+  from the same source series. Re-detaching preserves its view identity;
+  detaching an already empty/non-MPR pane creates nothing.
+- Show one tile per view after its source series in creation order, with an
+  orientation/session label to distinguish same-source sessions. Sorting negative
+  IDs numerically would reverse creation order; specify ordering explicitly.
+- Preserve a destination MPR as a detached session on a successful replacement.
+  Failed moves/attachments must preserve both sessions and the destination's
+  prior 2-D state. Do not discard a session as a side effect of a drop.
+
+### Bug risks and required plan additions
+
+1. **Transactional transfer:** `relocate_mpr_subwindow` tears down the source
+   and clears the destination before checking installation success.
+   `_install_mpr_payload_at_subwindow` mutates pane fields before display can
+   fail. Existing attach rollback covers a prior MPR, but not all partial state
+   or a prior ordinary image. Validate targets/payloads first; snapshot and
+   restore state on failure; publish thumbnail changes only after success.
+2. **Build races:** worker callbacks unconditionally pop the pane worker and
+   activate their result. Check worker identity or a pane generation token so
+   a late canceled/replaced build cannot overwrite a newly attached session or
+   remove a newer worker. Cancel destination builds before transfers.
+3. **Session display state:** the captured payload includes slice/combine state
+   but omits W/L, raw/rescaled mode, inversion, LUT, zoom and pan. Detached
+   thumbnails borrow focused-pane settings, and attached thumbnails also read
+   W/L from the focused controls. Decide and
+   test which settings travel with the session; at minimum make thumbnail
+   rendering independent of whichever unrelated pane currently has focus.
+4. **Source lifetime:** define close-series, close-study, close-all and app-exit
+   cleanup explicitly. Detached payloads retain source datasets/volume arrays;
+   closing a source must remove its attached/detached sessions and invalidate
+   pending builds so hidden references do not keep closed data alive.
+5. **Memory admission:** a detach moves existing array ownership, while a new
+   build allocates additional arrays. A detach-only limit cannot bound RAM.
+   Count unique source/result arrays across attached, detached and pending
+   builds. Admission limits apply to growth, not detach/reattach; never evict
+   older sessions silently.
+6. **Public API and UI refresh:** replace private payload reads with per-session
+   metadata/pixel accessors. Refresh/remove all relevant session tiles on
+   source closure and navigator rebuild; width accounting and same-source
+   grouping must handle every ID. Existing integer MIME can carry negative IDs;
+   the app dispatcher currently discards their identity and must change.
+
+### Confirmed decisions and implementation defaults
+
+The user approved duplicate/linked views, display-state preservation and the
+proposed admission policy. Preserve an occupied destination MPR as detached.
+Preserve slice/combine, W/L, rescale mode, inversion and LUT per view. Fit to the
+new viewport on attachment; zoom/pan restoration is deferred.
+
+Default to a configurable cap of **8 constructed MPR sessions**, including
+attached, detached and pending builds. A session is one independently built
+result; duplicates are views of that session and consume no new session slot.
+Reserve admission before volume construction/cache loading, release reservations
+on cancellation/failure/closure, and never evict automatically. Estimate unique
+array memory for visibility; defer a hard RAM budget. Eight is a UX limit, not a
+RAM guarantee. The user accepted **16 total views** as plenty. Keep this
+configurable default to limit navigator clutter; duplicates share session arrays,
+so lowering the view cap is not an effective volume-memory control. Count
+attached, detached and reserved views; moves/detach/reattach consume no additional
+slot. Duplication into an occupied pane is +1 view because the displaced view is
+retained. Validate `view_cap >= session_cap >= 1`; defaults are 16/8 but the knobs
+are separate. Do not silently evict to repair config or lower limits. Admission
+messages identify the limiting cap and show current/limit counts.
+
+Opus recommended 32 views to allow four duplicates per each of eight sessions;
+retain 16 because the user considers it sufficient and the cap is configurable.
+The proposed sync rule below now treats linked views as one scrolling unit,
+including incoming global sync, removing the earlier asymmetric exclusion rule.
+
+### Independent review
+
+MiMo V2.6 Flash Free and Claude Opus 5.5 Low reviewed the plan against code; both
+supported the design after refinements, and all three scratch bug reproductions
+passed (also independently rerun by the primary agent).
+
+### Required verification additions
+
+Controller tests must cover two same-source sessions, selective attach/clear,
+new-build preservation, repeated detach/reattach, occupied-target preservation,
+invalid/stale IDs, installation exceptions with rollback, source closure and
+late worker completion. GUI tests must exercise a second negative drag ID,
+individual context-menu deletion, tile order/width and navigator rebuild.
+Manual smoke must include independent attached MPRs, both detached tiles,
+display-state restoration, occupied-target drop and close-source cleanup.
+
+### Current code map (supersedes historical paths below)
+
+- Lifecycle/build callbacks: `src/gui/mpr_controller.py`.
+- Thumbnail orchestration: `src/core/mpr_navigator_thumbnail.py`.
+- App dispatch: `MPRNavigationMixin` in `src/main_app_subwindow_management.py`.
+- Clear Window/source closure: `src/core/study_navigation_handlers.py`.
+- Navigator layout/width: `src/gui/series_navigator.py`,
+  `src/gui/series_navigator_view.py`, `src/gui/series_navigator_model.py`.
+- Drag source/target: `src/gui/mpr_thumbnail_widget.py`,
+  `src/gui/sub_window_container.py`.
+
+The implementation phases below incorporate these lifecycle and rollback cases.
+Automated drag/dispatch coverage and manual smoke are required.
+
 | Item | Priority | Summary |
 |------|----------|---------|
-| Multiple MPR windows + multiple detached MPRs | P1 | Extend controller + navigator so more than one MPR can live off-pane without losing prior sessions, and clarify or extend in-pane multi-MPR workflows. |
+| Multiple MPR windows + detached/duplicate/linked views | P1 | Introduce session/view ownership, multiple detach, shared-result duplicates and explicit linked scrolling. |
 | Series thumbnail when first slice is empty / flat | P2 | If the representative slice for the navigator is visually empty or extremely low contrast, pick a better slice (e.g. middle of stack). |
 
 ---
@@ -13,7 +130,7 @@ Supporting plan for two UX backlog items in `dev-docs/TO_DO.md` (UX / Workflow).
 
 ### 1.1 In-pane MPR (per subwindow)
 
-- `MprController` documents that **each subwindow may independently be in MPR mode** via `subwindow_data[idx]["is_mpr"]` and related keys (`mpr_result`, `mpr_slice_index`, …). See module docstring and `is_mpr()` in `src/core/mpr_controller.py`.
+- `MprController` documents that **each subwindow may independently be in MPR mode** via `subwindow_data[idx]["is_mpr"]` and related keys (`mpr_result`, `mpr_slice_index`, …). See module docstring and `is_mpr()` in `src/gui/mpr_controller.py`.
 - `open_mpr_dialog(target_subwindow_idx)` always targets the pane that requested the dialog; there is **no** global guard that prevents a second pane from building its own MPR while another pane already shows MPR.
 - The series navigator can show **several** MPR tiles: `SeriesNavigator._mpr_thumbnail_specs` / `_mpr_thumbnails` are keyed by **subwindow index** (`set_mpr_thumbnail` / `clear_mpr_thumbnail` in `src/gui/series_navigator.py`).
 
@@ -21,9 +138,9 @@ Supporting plan for two UX backlog items in `dev-docs/TO_DO.md` (UX / Workflow).
 
 ### 1.2 Detached (“floating”) MPR — single session only
 
-- Detached state is stored as a **single** optional payload: `_detached_mpr_payload` on `MprController` (`src/core/mpr_controller.py`).
+- Detached state is stored as a **single** optional payload: `_detached_mpr_payload` on `MprController` (`src/gui/mpr_controller.py`).
 - `detach_mpr_from_subwindow(idx)` **always overwrites** that slot: a second detach **drops** the previous floating session from the controller (no stack, no LRU).
-- The navigator uses a **single** sentinel subwindow index **`-1`** for the detached thumbnail (`_update_floating_mpr_navigator_thumbnail` in `src/main.py`; `MprThumbnailWidget` treats `< 0` specially).
+- The navigator uses a **single** sentinel subwindow index **`-1`** for the detached thumbnail (`_update_floating_mpr_navigator_thumbnail` in `src/main_app_subwindow_management.py`; `MprThumbnailWidget` treats `< 0` specially).
 - Starting a **new** in-pane MPR clears any detached session: `_activate_mpr` sets `_detached_mpr_payload = None` so a new build does not leave stale floaters (`mpr_controller.py`).
 
 **Implication:** “More than one MPR constructed and **detached**” is **not** supported; it is the main technical gap behind the P1 backlog line.
@@ -37,53 +154,190 @@ Supporting plan for two UX backlog items in `dev-docs/TO_DO.md` (UX / Workflow).
 
 <a id="mpr-multi-window-detached"></a>
 
-## 2. Plan: MPR — multiple windows + multiple detached sessions (P1)
+## 2. Plan: multiple MPR sessions, duplicate views and linked scrolling (P1)
 
-### 2.1 Goals
+### 2.1 Session / view model and ownership
 
-1. **Multiple detached MPR sessions** can coexist without silently discarding earlier ones.
-2. **Navigator** shows one thumbnail per detached session (ordering TBD—see open questions).
-3. **Drag-drop** can target a specific detached session or attach the correct session to a pane.
-4. **Clear / discard** remains explicit (per-session context menu or equivalent).
-5. **Memory / UX guardrails:** cap the number of floaters or total estimated RAM; surface a message when the cap is hit instead of silent loss.
+- A session owns a stable session ID, immutable shared `MprResult`, source
+  identity and build metadata. NumPy result/source arrays are shared by
+  references, not copied for duplication; rendering/rescale/combine must not
+  mutate shared arrays. No manual reference counter is needed for ordinary
+  Python ownership, but registry lifetime must be explicit.
+- A view owns a stable view ID, session ID, optional pane assignment, slice
+  index, combine settings and display state. Detached views retain this state.
+  Multiple views of one session can be attached or detached independently.
+- Pane-to-view mapping and view-to-session mapping are authoritative. Keep
+  existing `subwindow_data` fields as adapters for display/export/tools while
+  migrating; avoid two mutable sources of truth. Define all controller APIs in
+  terms of view/session IDs, with public navigator metadata accessors.
+- `MprController` owns the registry; navigator specs are keyed by stable view
+  ID with pane display number stored separately. Each view has an immutable
+  creation sequence used for sorting across moves, detach and reattach.
+- One tile per view, grouped after the source series, ordered by creation.
+  Labels identify session, orientation, attached pane or detached state and
+  linked membership without patient-identifying text.
+- Clear MPR removes only that view; Clear Window detaches it. The session is
+  released after its last view is discarded. Close All releases every session,
+  view and pending reservation. Closing the source series/study
+  removes every dependent session/view and pending build; closing the app
+  releases all. No persistence across application restarts.
 
-### 2.2 Design directions (pick one in implementation)
+### 2.2 Duplicate and link UX
 
-**Option A — Stable floating IDs (recommended baseline)**
+- Preserve ordinary drag as move/attach. Add explicit navigator actions
+  **Duplicate into Window…** and **Duplicate Linked into Window…**, choosing
+  an existing visible target pane. Disable the current source pane as a target.
+  Duplication copies view state, shares the result and fits the target viewport.
+- Preserve an occupied destination as detached atomically, including at the
+  admission limits: replacement moves its view, rather than allocating one.
+  Do not modify either source/destination until target validation succeeds.
+- Plain duplication starts unlinked. Linked duplication joins the source's
+  session-local link group, or creates one with source and duplicate. Add a
+  **Unlink View** action and visible link indicator. Detached source tiles can
+  also be duplicated; a detached member is dormant until attached again.
+- Initial linking synchronizes **slice position only**, bidirectionally for
+  views of the exact same result. W/L, inversion, LUT, zoom/pan and combine
+  settings stay independent. Initial linked duplication copies the source's
+  current slice. On reattachment, linked views adopt the group canonical slice;
+  unlinked views retain their own slice.
+- User scrolling, slider, keyboard navigation and cine all update the group's
+  canonical slice once through a controller-owned slice setter called from
+  `core/slice_display_handlers.on_slice_changed`. It redraws attached peers
+  through `display_mpr_slice`; that rendering method never initiates link
+  propagation, since overlay/W/L/combine refreshes also call it.
+  Detached members retain/adopt that canonical slice without rendering.
+  Suppress recursive propagation and redundant redraws. Reuse the existing
+  single app-level cine player bound to the focused pane; its navigation uses
+  the same slice setter. Test focus changes during playback.
+- This session-local link is explicit and independent of the global anatomic
+  slice-sync toggle. Treat a linked group as one scrolling unit: any slice
+  update reaching a member, from user input or incoming global sync, updates
+  the whole group through `MprController.set_view_slice`. With A/B duplicate
+  views and native series C in global sync, scrolling A moves B and C; scrolling
+  C anatomically selects an MPR slice and moves A/B together. Existing geometric
+  overlap/tolerance rules still apply; no change when no valid match exists.
+- `SliceSyncCoordinator._update_target` calls the setter for MPR targets instead
+  of rendering directly. Before propagation, deduplicate global targets by
+  explicit group ID; exclude the source's already-updated explicit group. One
+  incoming target update reaches all linked members, even members not assigned
+  to that particular pane-based global group. Keep explicit group membership
+  in the registry, including detached members. This is intentional: linking
+  means those views always share slice position.
+- Use a setter-level guard separate from global `_syncing`, equal-index early
+  returns and one propagation origin/event. Peer redraws never call
+  `on_slice_changed` or start a new global propagation pass. User actions
+  initiate global sync once from the initiating pane; incoming global updates
+  update their explicit group without cascading into other global groups.
+  Test both directions, duplicate targets and links spanning global groups.
+- Linking different results/orientations by patient-space geometry continues
+  through the existing global sync workflow. New crosshair navigation,
+  orthogonal tri-planar reslicing, and linked display parameters are out of
+  scope for this batch. Duplication does not generate a different orientation.
 
-- Replace `_detached_mpr_payload: Optional[dict]` with `_detached_mpr_sessions: dict[int, dict]` (or a small list of named payloads with monotonic IDs).
-- Navigator keys MPR thumbnails not only by `0..3` for in-pane but by **opaque ids** for floaters (e.g. `-1`, `-2`, … internally, or positive ids with an enum `kind=in_pane|detached`).
-- `MprThumbnailWidget` / `SeriesNavigator.set_mpr_thumbnail` signatures evolve from `subwindow_index: int` to **`mpr_thumbnail_id: int`** (or a tiny dataclass) with documented ranges.
-- `attach_floating_mpr(to_idx, session_id)` selects which floater attaches.
-- MIME payload for drags encodes **session id** (not only `-1`).
+### 2.3 Transactions, builds and admission
 
-**Option B — Queue of floaters with single UI row**
+- Validate source view, target pane and source lifetime before allocation.
+  Snapshot destination 2-D/MPR state and managers; defer registry/tile changes
+  until install succeeds. Rollback includes all MPR keys/previous-state keys,
+  rendered image/context, mouse mode and `_mpr_mode_override`, tool enablement,
+  W/L and user-modified flag, rescale parameters/mode, inversion/LUT, banner,
+  navigator/slider and focused UI references. Snapshot without copying volume
+  arrays. Validate before writing `mpr_previous_state`; no success signals on
+  failure. Roll back complete display state on exceptions.
+  Failed move/attach/duplicate leaves the source and occupied destination usable.
+- Restoration/duplication carries window center/width, W/L user-modified flag,
+  rescale mode/slope/intercept/type, inversion and view LUT explicitly. Existing
+  views skip the new-build W/L reset. Avoid changing another duplicate through
+  a shared series LUT setting. Thumbnails read only their owning view state.
+- Existing sessions survive new builds, including builds from the same series.
+  Building over an MPR preserves its old view as detached only after success;
+  cancel/error retains the old view. A successful build creates a new session.
+- Reserve a session slot before building/loading; reserve a view slot for each
+  new build or duplicate. Count in-flight reservations to prevent concurrent
+  admission overrun. Apply the same admission to cache hits and direct
+  activation: activation requires a valid reservation or an existing view.
+  Reservation release is idempotent, exactly once even when cancel, closure
+  and error callbacks overlap. Same-pane replacement still preserves the old view, so a
+  new build needs a new slot. Lowering limits below current usage discards
+  nothing and blocks growth until usage falls below the limit.
+- Clear Window cancels pending builds even on an empty/non-MPR pane before
+  detaching its current view (if any); pending-only clear creates no view.
+  All transfer paths cancel destination builds, independent of `is_mpr`.
+- Route series/study/Close All and pane teardown through controller cleanup
+  before raw subwindow state resets. Clear MPR mouse/tool overrides, purge
+  orphan navigator specs and purge `("__mpr__", pane)` geometry-cache entries
+  whenever pane view assignments change, as well as on closure, so
+  reopening the same source cannot resurrect a stale tile or restriction.
+- Invalidate pane/source generations on close, reassignment and cancellation;
+  callback closures capture worker identity and pane/source generations and
+  compare them before popping worker entries, releasing reservations or
+  activating results. Activation never clears detached views.
+  Cancellation must retain worker ownership until actual termination; a
+  two-second wait is not proof that a native worker has stopped.
+- Estimate marginal MPR memory: per-session SimpleITK volume buffers, result
+  slices, pending build allocations and thumbnail buffers, deduplicated for
+  views sharing the same session/backing storage. Independent same-series
+  builds currently construct separate volumes; do not assume shared buffers.
+  Already loaded dataset PixelData is not additional MPR memory. Surface the
+  estimate during admission without claiming an exact process-RAM measurement.
+  Avoid full pixel copies for thumbnails and
+  transaction snapshots. Allocation errors roll back state and reservations.
 
-- Keep one visible “floating” tile but maintain a **stack** or queue in the controller; “cycle” or submenu to choose which to attach. Lower UI churn, worse discoverability.
+### 2.4 Implementation phases
 
-**Option C — Clone view (same volume, two panes)**
+- [ ] **Phase 0 — Contracts:** characterize global C-to-A/B scrolling exactly
+  once, A-to-B/C scrolling, and separate-global-group membership; inventory
+  every slice-change/cine/export/clear/layout consumer and characterize behavior.
+- [ ] **Phase 1 — Registry:** session/view types, pane adapters, public metadata,
+  display-state snapshot/restore, configurable limits and reservation lifecycle.
+  Define lifecycle signal pane/view contracts (`mpr_activated`, `mpr_cleared`,
+  `mpr_detached`) and update their wiring/tests with the registry adapters.
+- [ ] **Phase 2 — Lifecycle:** transactional move/attach/build replacement,
+  multiple detach, selective discard, source closure, worker generation guards.
+- [ ] **Phase 3 — Navigator/DnD:** stable view routing, exact-ID operations,
+  deterministic ordering, labels/link indicators, rebuild/width handling.
+  Use a versioned structured drag payload with view ID and operation; validate
+  malformed/stale/foreign IDs. Legacy pane-index payload support, if retained,
+  must resolve at dispatch and never guess a detached view. Update navigator
+  click/clear signals, `mpr_assign_requested`, widget MIME and app dispatch
+  together; batch tile changes to rebuild once per committed transaction.
+- [ ] **Phase 4 — Duplicate/link:** target chooser, shared-result duplication,
+  session-local slice propagation, unlink/group cleanup, cine arbitration and
+  coordination with global slice sync using group target deduplication. Avoid duplicate focused histogram work
+  on peer redraws; retain required per-pane overlay/slider correctness.
+- [ ] **Phase 5 — Regression and closeout:** focused controller/Qt integration
+  tests, full suite, automated/manual agent smoke, architecture/harness checks,
+  user-doc updates and link checker. Update version/changelog for product code;
+  archive this P1 implementation plan at completion while retaining the P2
+  supporting work and tracking any remaining manual smoke in TO_DO.
 
-- If product intent is “same MPR in two windows” without duplicating heavy arrays, hold **one** `MprResult` with refcount or shared pointer and two display states (`mpr_slice_index`, W/L) per pane. This is a **different** feature from multiple independent volumes; scope separately.
+### 2.5 Acceptance tests
 
-### 2.3 Implementation phases
+Existing single-slot characterization tests need deliberate migration:
+`tests/test_main_mixin_mpr_and_tag_wiring.py`,
+`tests/gui/test_mpr_controller_sonar_slice.py`,
+`tests/core/test_mpr_navigator_thumbnail.py`, and
+`tests/test_main_mixin_delegation.py`. Update signal-wiring tests during the
+relevant implementation phase, alongside slice-sync/cine integration coverage.
 
-- [ ] **Phase 0 — Product confirmation:** Confirm whether “multiple windows” means (i) independent MPR builds per pane, (ii) multiple floaters, (iii) linked duplicate views, or (iv) all of the above.
-- [ ] **Phase 1 — Data model:** Introduce multi-session detached storage on `MprController`; migrate `has_detached_mpr`, `clear_detached_mpr`, `get_detached_mpr_thumbnail_pixels`, `attach_floating_mpr`, `detach_mpr_from_subwindow`, and `_activate_mpr` clearing policy (clear none vs clear all vs clear only “orphaned” — document choice).
-- [ ] **Phase 2 — Navigator:** Extend `SeriesNavigator` / `set_mpr_thumbnail` to register **N** detached thumbnails next to the source series (or a dedicated sub-row); update width calculation that currently counts `_mpr_thumbnail_specs` per study/series.
-- [ ] **Phase 3 — DnD:** Update `MprThumbnailWidget` and `SubWindowContainer` decode path to pass **session id**; update `_on_mpr_assign_requested` in `main.py`.
-- [ ] **Phase 4 — Clear window / lifecycle:** Ensure **Clear Window** on each pane still detaches that pane’s MPR into a **new** session id; define what happens when the same user detaches twice from the same pane without reattach (two entries vs replace).
-- [ ] **Phase 5 — Tests:** Unit tests for controller session list + attach/clear; optional GUI smoke for drag of second floater (if harness exists).
 
-### 2.4 Risks
-
-- **Memory:** Each `MprResult` holds large numpy stacks; multiple floaters multiply RAM. A configurable cap (with user-visible warning) is strongly advised.
-- **API churn:** Any code reaching into `_detached_mpr_payload` privately (e.g. `main.py` `getattr(self._mpr_controller, "_detached_mpr_payload"`) should be replaced with a **public** accessor returning study/series metadata for thumbnails.
-
-### 2.5 Open questions
-
-- Maximum number of simultaneous detached MPRs (hard cap vs soft warning)?
-- Navigator layout when **two** floaters from the **same** source series exist (side-by-side vs overflow menu)?
-- Should **new in-pane MPR** still clear **all** floaters, only floaters from the same source series, or never clear floaters?
+- Two independent builds coexist, both detach, second attaches selectively;
+  new builds leave earlier sessions available, including same-source sessions.
+- Duplicate shares object/array identity and creates independent mutable view
+  state. Discarding either view leaves the other usable; last-view removal
+  releases session ownership. Detached/attached duplicates count correctly.
+- Unlinked duplicate scrolls independently. Linked duplicate synchronizes
+  bidirectionally via mouse, slider, keys and cine; W/L/combine remain separate.
+  Unlink, detach/reattach, hidden-layout panes and occupied-pane replacement do
+  not leave stale memberships or update an unrelated replacement view.
+- Global sync on/off, overlapping group membership and cine driver changes
+  cannot produce loops, competing updates or incorrect MPR slice indices.
+- Cap-boundary builds/duplicates, pending reservations, cancellation, cache hits,
+  allocation/install failures and lowering limits preserve all existing views.
+- Validate stale/malformed drags, navigator rebuilds, source closure and late
+  callbacks. Test rollback to both an ordinary image and an existing MPR.
+- Verify export, cine depth, overlay/photometric/rescale correctness, pane
+  expand/swap/layout changes and fit behavior for every attached duplicate.
 
 ---
 
@@ -139,7 +393,7 @@ After obtaining a **candidate** PIL image (post W/L) and/or the **rescaled float
 
 ## 4. Verification (when implemented)
 
-- **MPR:** Two panes each show different MPR stacks; two floaters visible; attach second floater to empty pane; verify first floater still attachable; verify memory cap message if enabled.
+- **MPR:** Two independent stacks and two detached views; selective attach; shared-result duplicates; linked/unlinked scrolling and cine; rollback and source cleanup; session/view admission messages.
 - **Thumbnails:** Series with intentional black first slice shows recognizable anatomy in navigator; multiframe series still correct; cache invalidation does not regress performance on large studies.
 
 ---
@@ -148,12 +402,12 @@ After obtaining a **candidate** PIL image (post W/L) and/or the **rescaled float
 
 | Area | Files |
 |------|--------|
-| MPR lifecycle, detach, attach | `src/core/mpr_controller.py` |
-| Floating thumbnail refresh | `src/main.py` (`_update_floating_mpr_navigator_thumbnail`, `_on_mpr_assign_requested`, `_on_mpr_clear_from_navigator_thumbnail`) |
+| MPR lifecycle, detach, attach | `src/gui/mpr_controller.py` |
+| Floating thumbnail refresh | `src/core/mpr_navigator_thumbnail.py`, `src/main_app_subwindow_management.py` (`MPRNavigationMixin`) |
 | Navigator MPR tiles | `src/gui/series_navigator.py`, `src/gui/mpr_thumbnail_widget.py` |
 | Drop targets | `src/gui/sub_window_container.py` |
 | Series thumbnail generation | `src/gui/series_navigator.py` (`update_series_list`, `_generate_thumbnail`, `regenerate_series_thumbnail`) |
 
 ---
 
-*Document version: 2026-04-16 — planning only; no product code changes in this commit.*
+*Document version: 2026-10-09 — planning only; no product code changes.*

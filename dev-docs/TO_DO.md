@@ -36,7 +36,8 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
 3. **[P1] Multiple MPR windows and detached MPR sessions** — MPR keeps a single
    detached session (`_detached_mpr_payload` in `gui/mpr_controller.py`), and a
-   new in-pane MPR discards it. Plan:
+   new in-pane MPR discards it. Include shared-result duplicate views and
+   optional linked scrolling, with preserved per-view display state. Plan:
    [MPR multi-window + multiple detached](plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#mpr-multi-window-detached).
 4. **[P1] Fusion overlay rescaled values and units** — add a raw-vs-rescaled
    selector for overlay normalization and show units (HU, SUV) in the fusion
