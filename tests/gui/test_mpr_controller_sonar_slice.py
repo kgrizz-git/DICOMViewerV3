@@ -393,7 +393,7 @@ def test_attach_floating_mpr_clears_detached_on_success() -> None:
     app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(-1)
 
 
-def test_attach_floating_mpr_restores_backup_on_install_failure() -> None:
+def test_attach_floating_mpr_warns_and_keeps_detached_on_install_failure() -> None:
     ctrl, app = _make_controller()
     result = _make_result()
     payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
@@ -411,23 +411,13 @@ def test_attach_floating_mpr_restores_backup_on_install_failure() -> None:
         "mpr_combine_slice_count": 1,
     }
     app.main_window = MagicMock()
-    installs: list[Any] = []
-
-    def _install(idx: int, p: dict[str, Any]) -> bool:
-        installs.append(p)
-        return len(installs) != 1
-
     with (
-        patch.object(ctrl, "_install_mpr_payload_at_subwindow", side_effect=_install),
-        patch.object(ctrl, "clear_mpr"),
-        patch.object(ctrl, "_capture_mpr_payload", return_value={"backup": True}),
-        patch("gui.mpr_controller.QMessageBox.warning") as warn,
+        patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=False),
+        patch("gui.mpr_controller_transactions.QMessageBox.warning") as warn,
     ):
         ctrl.attach_floating_mpr(0)
 
-    assert len(installs) == 2
-    assert installs[0] is payload
-    assert installs[1] == {"backup": True}
+    assert ctrl._detached_mpr_payload is payload
     warn.assert_called_once()
     assert "previous MPR" in warn.call_args[0][2]
 

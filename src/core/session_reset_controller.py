@@ -67,11 +67,19 @@ def _close_3d_dialogs(app: DICOMViewerApp) -> None:
         facade.close_all_dialogs()
 
 
+def _release_all_mpr_for_close_all(app: DICOMViewerApp) -> None:
+    """Retire every MPR build and release every MPR session/payload first, so
+    no worker, detached payload, or navigator spec outlives the studies —
+    including pending builds on panes with no MPR view."""
+    app._mpr_controller.release_all_mpr()
+
+
 def close_all_files(app: DICOMViewerApp) -> None:
     """Close currently open files/folder and clear all data."""
-    # Clear MPR from any subwindow before clearing overlays and data.
-    # This removes the MPR banner and restores or clears the view.
     if hasattr(app, "_mpr_controller"):
+        _release_all_mpr_for_close_all(app)
+        # Clear MPR from any subwindow before clearing overlays and data.
+        # This removes the MPR banner and restores or clears the view.
         for idx in list(app.subwindow_data.keys()):
             if app.subwindow_data.get(idx, {}).get("is_mpr"):
                 app._mpr_controller.clear_mpr(idx)

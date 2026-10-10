@@ -57,8 +57,6 @@ from core.mpr_dicom_export import (
 from core.mpr_session_types import MprCombineState
 from core.mpr_stack_combine import apply_mpr_stack_combine
 from core.mpr_view_display_state import (
-    capture_mpr_combine_state,
-    capture_mpr_display_state,
     clear_mpr_lut_override,
     restore_mpr_combine_state,
 )
@@ -79,6 +77,24 @@ from gui.mpr_controller_display_state import (
     install_apply_display_state,
     preferred_mpr_window_level,
     reset_window_level_for_mpr,
+)
+from gui.mpr_controller_transactions import (
+    attach_detached_mpr,
+    capture_destination_snapshot,
+    capture_mpr_payload,
+    detach_mpr_view,
+    relocate_mpr_view,
+    restore_failed_install,
+    validate_install_request,
+)
+from gui.mpr_source_closure import release_all_mpr, release_closed_source_sessions
+from gui.mpr_worker_fencing import (
+    drop_build_registration,
+    is_current_pane_build,
+    note_build_started,
+    retain_build_worker,
+    retire_pane_worker,
+    volume_source_key,
 )
 from utils.debug_flags import DEBUG_MPR
 from utils.dicom_utils import get_composite_series_key
@@ -176,6 +192,18 @@ class MprController(QObject):
         super().__init__()
         self._app = app
         self._workers: dict[int, MprBuilderWorker] = {}  # idx → active worker
+        # Fencing for in-flight builds: pane generations invalidate replaced
+        # or cancelled builds; source generations invalidate closed sources.
+        self._build_generations: dict[int, int] = {}
+        self._source_generations: dict[tuple[str, str], int] = {}
+        # Retired native workers kept alive until actually terminated.
+        self._retiring_builds: list[Any] = []
+        # Progress dialogs for in-flight builds (closed on retire/finish).
+        self._build_progress: dict[int, Any] = {}
+        # Authoritative build sources per pane (study/series of the volume).
+        self._build_sources: dict[int, tuple[str, str]] = {}
+        # GUI-owned retire poller (created on demand, parented to self).
+        self._retire_poller: Any = None
         self._cache: MprCache | None = None
         # MPR session detached from all panes (Clear Window); reassigned via drag-drop.
         self._detached_mpr_payload: dict[str, Any] | None = None
@@ -456,12 +484,15 @@ class MprController(QObject):
         )
 
     def _cancel_mpr_worker(self, idx: int) -> None:
-        """Cancel and remove any in-progress MPR build for *idx*."""
-        worker = self._workers.pop(idx, None)
-        if worker is not None:
-            worker.cancel()
-            worker.quit()
-            worker.wait(2000)
+        """Retire any in-progress MPR build for *idx* (see transactions helper)."""
+        retire_pane_worker(self, idx)
+
+    def cancel_pending_build(self, idx: int) -> None:
+        """Cancel a pending MPR build for *idx*, even with no MPR view present.
+
+        Used by Clear Window and source closure before touching pane state.
+        """
+        retire_pane_worker(self, idx)
 
 
     def _tear_down_mpr_at_subwindow(self, idx: int) -> None:
@@ -678,6 +709,22 @@ class MprController(QObject):
         """Discard a detached (unassigned) MPR session."""
         self._detached_mpr_payload = None
 
+    def release_mpr_for_closed_source(
+        self, study_uid: str, series_uid: str | None = None
+    ) -> dict[str, int]:
+        """Release MPR builds, views, and payloads tied to a closed source.
+
+        See ``gui.mpr_controller_transactions.release_closed_source_sessions``.
+        """
+        return release_closed_source_sessions(self, study_uid, series_uid)
+
+    def release_all_mpr(self) -> dict[str, int]:
+        """Release every MPR build, payload, override, and spec (Close All).
+
+        See ``gui.mpr_source_closure.release_all_mpr``.
+        """
+        return release_all_mpr(self)
+
     def get_detached_mpr_thumbnail_pixels(self, use_rescaled: bool) -> np.ndarray | None:
         """
         Return a 2-D array for the navigator thumbnail of the detached MPR
@@ -705,182 +752,59 @@ class MprController(QObject):
         return raw.astype(np.float32)
 
     def _capture_mpr_payload(self, idx: int) -> dict[str, Any] | None:
-        """Snapshot live MPR fields from *idx* for relocate / detach."""
-        data = self._app.subwindow_data.get(idx, {})
-        if not data.get("is_mpr") or data.get("mpr_result") is None:
-            return None
-        managers = self._app.subwindow_managers.get(idx, {})
-        return {
-            "mpr_result": data["mpr_result"],
-            "mpr_orientation": data.get("mpr_orientation", ""),
-            "mpr_slice_index": int(data.get("mpr_slice_index", 0)),
-            "mpr_combine_enabled": bool(data.get("mpr_combine_enabled", False)),
-            "mpr_combine_mode": str(data.get("mpr_combine_mode", "aip") or "aip"),
-            "mpr_combine_slice_count": int(data.get("mpr_combine_slice_count", 4) or 4),
-            "mpr_combine": capture_mpr_combine_state(data),
-            "mpr_display": capture_mpr_display_state(
-                managers.get("view_state_manager"), self._get_image_viewer(idx)
-            ),
-            "mpr_source_dataset": data.get("mpr_source_dataset"),
-            "current_study_uid": str(data.get("current_study_uid", "") or ""),
-            "current_series_uid": str(data.get("current_series_uid", "") or ""),
-            "current_datasets": list(data.get("current_datasets") or []),
-        }
+        """Snapshot live MPR fields from *idx* for relocate / detach (see helper)."""
+        return capture_mpr_payload(self, idx)
 
     def relocate_mpr_subwindow(self, from_idx: int, to_idx: int) -> None:
+        """Move an active MPR from *from_idx* to *to_idx*, transactionally.
+
+        See ``gui.mpr_controller_transactions.relocate_mpr_view``: the source
+        is preserved until the destination install succeeds, and a failed
+        install restores the destination without signals.
         """
-        Move an active MPR from *from_idx* to *to_idx*.
-
-        If the destination already shows MPR, it is cleared first. If *from_idx*
-        equals *to_idx*, only focuses that subwindow.
-        """
-        if from_idx == to_idx:
-            try:
-                sub = self._app.multi_window_layout.get_subwindow(to_idx)
-                if sub is not None:
-                    sub.set_focused(True)
-            except Exception:
-                pass
-            return
-        if not self.is_mpr(from_idx):
-            return
-
-        payload = self._capture_mpr_payload(from_idx)
-        if payload is None:
-            return
-
-        try:
-            sub = self._app.multi_window_layout.get_subwindow(to_idx)
-            if sub is not None:
-                sub.set_focused(True)
-        except Exception:
-            pass
-
-        if self.is_mpr(to_idx):
-            self.clear_mpr(to_idx)
-
-        self._cancel_mpr_worker(from_idx)
-        self._tear_down_mpr_at_subwindow(from_idx)
-        self.mpr_cleared.emit(from_idx)
-
-        ok = self._install_mpr_payload_at_subwindow(to_idx, payload)
-        if ok:
-            self.mpr_activated.emit(to_idx)
+        relocate_mpr_view(self, from_idx, to_idx)
 
     def attach_floating_mpr(self, to_idx: int) -> None:
-        """Assign a detached MPR session to *to_idx*."""
-        payload = self._detached_mpr_payload
-        if payload is None:
-            return
+        """Assign a detached MPR session to *to_idx*, transactionally.
 
-        self._attach_focus_destination(to_idx)
-        dest_backup = self._attach_backup_existing_mpr(to_idx)
-        ok = self._install_mpr_payload_at_subwindow(to_idx, payload)
-        if ok:
-            self._detached_mpr_payload = None
-            self._attach_clear_detached_thumbnail()
-            self.mpr_activated.emit(to_idx)
-            return
-        self._attach_restore_or_warn(to_idx, dest_backup)
-
-    def _attach_focus_destination(self, to_idx: int) -> None:
-        """Best-effort focus the destination subwindow before attach."""
-        try:
-            sub = self._app.multi_window_layout.get_subwindow(to_idx)
-            if sub is not None:
-                sub.set_focused(True)
-        except Exception:
-            pass
-
-    def _attach_backup_existing_mpr(self, to_idx: int) -> dict[str, Any] | None:
-        """Capture and clear an existing MPR at *to_idx*, if present."""
-        if not self.is_mpr(to_idx):
-            return None
-        dest_backup = self._capture_mpr_payload(to_idx)
-        self.clear_mpr(to_idx)
-        return dest_backup
-
-    def _attach_clear_detached_thumbnail(self) -> None:
-        """Clear the navigator's detached-MPR thumbnail slot."""
-        try:
-            if hasattr(self._app, "series_navigator"):
-                self._app.series_navigator.clear_mpr_thumbnail(-1)
-        except Exception:
-            pass
-
-    def _attach_restore_or_warn(
-        self, to_idx: int, dest_backup: dict[str, Any] | None
-    ) -> None:
-        """Restore a prior MPR backup if possible and warn about attach failure."""
-        if dest_backup is not None:
-            restored = self._install_mpr_payload_at_subwindow(to_idx, dest_backup)
-            if restored:
-                self.mpr_activated.emit(to_idx)
-        try:
-            QMessageBox.warning(
-                self._app.main_window,
-                "MPR",
-                "Could not attach the detached MPR to this window.\n"
-                "The detached session is still available in the navigator."
-                + (
-                    "\nThe previous MPR in this window was restored."
-                    if dest_backup is not None
-                    else ""
-                ),
-            )
-        except Exception:
-            pass
+        See ``gui.mpr_controller_transactions.attach_detached_mpr``.
+        """
+        attach_detached_mpr(self, to_idx)
 
     def detach_mpr_from_subwindow(self, idx: int) -> None:
-        """
-        Remove MPR from *idx* while keeping the MPR volume in memory for
-        reassignment (navigator uses internal key -1; same in-study placement).
-        """
-        if not self.is_mpr(idx):
-            return
-        payload = self._capture_mpr_payload(idx)
-        if payload is None:
-            return
-
-        self._detached_mpr_payload = payload
-        self._cancel_mpr_worker(idx)
-        self._tear_down_mpr_at_subwindow(idx)
-        self.mpr_detached.emit(idx)
+        """Remove MPR from *idx*, keeping the volume as the detached session."""
+        detach_mpr_view(self, idx)
 
 
     def _install_mpr_payload_at_subwindow(self, idx: int, payload: dict[str, Any]) -> bool:
         """
         Apply a captured MPR payload to *idx* (same end state as _activate_mpr).
 
+        Validates the target and payload before any mutation, including
+        before ``mpr_previous_state`` is written. On install failure the
+        destination is rolled back (pane teardown plus captured display
+        state) and no success signal is emitted.
+
         Returns:
             True if the MPR view was installed; False on missing data or install error.
         """
-        data = self._app.subwindow_data.get(idx)
-        if data is None:
+        validated = validate_install_request(self._app, self._get_image_viewer, idx, payload)
+        if validated is None:
             return False
-
-        result: MprResult | None = payload.get("mpr_result")
-        if result is None:
+        result, si, source_ds = validated
+        data = self._app.subwindow_data.get(idx)
+        if data is None:  # pragma: no cover (validated above)
             return False
 
         orientation_label = str(payload.get("mpr_orientation", "MPR") or "MPR")
-        self._ensure_mpr_previous_state(data)
-
-        try:
-            source_ds = result.source_volume.source_datasets[0]
-        except Exception:
-            return False
-        n_sl = max(int(getattr(result, "n_slices", 0) or 0), 0)
-        if n_sl < 1:
-            return False
-        si = int(payload.get("mpr_slice_index", 0))
-        si = max(0, min(si, n_sl - 1))
-
-        self._install_write_payload_fields(
-            data, payload, result, orientation_label, source_ds, si
+        snapshot = capture_destination_snapshot(
+            self._app, self._get_image_viewer, idx
         )
-
         try:
+            self._ensure_mpr_previous_state(data)
+            self._install_write_payload_fields(
+                data, payload, result, orientation_label, source_ds, si
+            )
             self._sync_slice_navigator_for_mpr(idx, result.n_slices, data["mpr_slice_index"])
             self._set_tools_enabled(idx, enabled=False)
             self._install_apply_display_state(idx, payload, source_ds)
@@ -891,6 +815,12 @@ class MprController(QObject):
             self._sync_intensity_projection_if_focused(idx, data)
         except Exception as exc:
             _mpr_log(f"_install_mpr_payload_at_subwindow failed: {exc}")
+            if not restore_failed_install(self, idx, snapshot, self._get_image_viewer):
+                QMessageBox.warning(
+                    self._app.main_window, "MPR",
+                    "The MPR could not be installed and the previous display could "
+                    "not be fully restored. Reload this window's series.",
+                )
             return False
         return True
 
@@ -1283,12 +1213,8 @@ class MprController(QObject):
         self._mpr_request_start_worker(target_idx, request, volume)
 
     def _mpr_request_cancel_prior_worker(self, target_idx: int) -> None:
-        """Cancel any in-flight MPR build for *target_idx*."""
-        old_worker = self._workers.pop(target_idx, None)
-        if old_worker:
-            old_worker.cancel()
-            old_worker.quit()
-            old_worker.wait(1000)
+        """Cancel any in-flight MPR build for *target_idx* (retires the worker)."""
+        self._cancel_mpr_worker(target_idx)
 
     def _mpr_request_resolve_datasets(
         self, request
@@ -1441,45 +1367,28 @@ class MprController(QObject):
         progress_dlg.show()
 
         worker.progress.connect(progress_dlg.setValue)
-        progress_dlg.canceled.connect(worker.cancel)
+        # Dialog Cancel retires through the controller so generations bump
+        # and a queued completion can no longer activate after Cancel.
+        progress_dlg.canceled.connect(lambda: self._cancel_mpr_worker(target_idx))
+        self._build_progress[target_idx] = progress_dlg
 
         orientation_label = request.orientation_label
+        source_key = volume_source_key(volume)
+        pane_generation, source_generation = note_build_started(
+            self, target_idx, source_key
+        )
 
         def on_finished(result: MprResult) -> None:
-            progress_dlg.close()
-            self._workers.pop(target_idx, None)
-            _mpr_log(
-                f"Build finished for window {target_idx}: "
-                f"slices={result.n_slices} interpolation={result.interpolation}"
-            )
-            if self._cache is not None:
-                try:
-                    self._cache.save(result)
-                except Exception as exc:
-                    print_redacted(f"[MprController] Cache save error: {exc}")
-
-            image_viewer = self._get_image_viewer(target_idx)
-            if image_viewer is None:
-                QMessageBox.critical(
-                    self._app.main_window,
-                    _TITLE_MPR_ERROR,
-                    "Cannot activate MPR: image viewer not ready. Please try again.",
-                )
-                return
-
-            self._activate_mpr(
-                target_idx, result, orientation_label, request=request
+            self._on_mpr_build_finished(
+                target_idx, worker, pane_generation, source_key,
+                source_generation, result, request, orientation_label,
+                progress_dlg,
             )
 
         def on_error(msg: str) -> None:
-            progress_dlg.close()
-            self._workers.pop(target_idx, None)
-            if "cancelled" in msg.lower() or "canceled" in msg.lower():
-                return
-            QMessageBox.critical(
-                self._app.main_window,
-                _TITLE_MPR_ERROR,
-                f"MPR build failed:\n{msg}",
+            self._on_mpr_build_error(
+                target_idx, worker, pane_generation, source_key,
+                source_generation, msg, progress_dlg,
             )
 
         worker.finished.connect(on_finished)
@@ -1487,6 +1396,81 @@ class MprController(QObject):
 
         self._workers[target_idx] = worker
         worker.start()
+
+    def _on_mpr_build_finished(
+        self,
+        target_idx: int,
+        worker: Any,
+        pane_generation: int,
+        source_key: tuple[str, str],
+        source_generation: int,
+        result: MprResult,
+        request: Any,
+        orientation_label: str,
+        progress_dlg: Any,
+    ) -> None:
+        """Activate a completed build only when it still owns its pane.
+
+        Late callbacks from replaced, cancelled, or closed builds are
+        dropped before popping any worker or touching pane state.
+        """
+        progress_dlg.close()
+        if not is_current_pane_build(
+            self, target_idx, worker, pane_generation, source_key, source_generation
+        ):
+            _mpr_log(f"Ignoring stale build finish for window {target_idx}")
+            return
+        drop_build_registration(self, target_idx)
+        retain_build_worker(self, worker)
+        _mpr_log(
+            f"Build finished for window {target_idx}: "
+            f"slices={result.n_slices} interpolation={result.interpolation}"
+        )
+        if self._cache is not None:
+            try:
+                self._cache.save(result)
+            except Exception as exc:
+                print_redacted(f"[MprController] Cache save error: {exc}")
+
+        image_viewer = self._get_image_viewer(target_idx)
+        if image_viewer is None:
+            QMessageBox.critical(
+                self._app.main_window,
+                _TITLE_MPR_ERROR,
+                "Cannot activate MPR: image viewer not ready. Please try again.",
+            )
+            return
+
+        self._activate_mpr(
+            target_idx, result, orientation_label, request=request
+        )
+
+    def _on_mpr_build_error(
+        self,
+        target_idx: int,
+        worker: Any,
+        pane_generation: int,
+        source_key: tuple[str, str],
+        source_generation: int,
+        msg: str,
+        progress_dlg: Any,
+    ) -> None:
+        """Report a build error only when it still owns its pane."""
+        progress_dlg.close()
+        if not is_current_pane_build(
+            self, target_idx, worker, pane_generation, source_key, source_generation
+        ):
+            _mpr_log(f"Ignoring stale build error for window {target_idx}")
+            return
+        drop_build_registration(self, target_idx)
+        retain_build_worker(self, worker)
+        if "cancelled" in msg.lower() or "canceled" in msg.lower():
+            return
+        QMessageBox.critical(
+            self._app.main_window,
+            _TITLE_MPR_ERROR,
+            f"MPR build failed:\n{msg}",
+        )
 
     # ------------------------------------------------------------------
     # Internal: activate MPR in a subwindow
