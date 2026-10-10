@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QMenu, QWidget
 
@@ -72,6 +73,9 @@ def show_duplicate_target_menu(
         choices,
         lambda idx: app._mpr_controller.duplicate_view(source_view_id, idx, linked=linked),
     )
+    # Popup menus are transient: delete on close instead of piling up under the
+    # main window for the rest of the session.
+    menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
     menu.popup(QCursor.pos())
     return menu
 

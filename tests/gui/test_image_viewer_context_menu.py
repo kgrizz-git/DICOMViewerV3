@@ -252,6 +252,9 @@ def test_show_image_background_context_menu_on_right_release_builds_full_menu(mo
     root_labels = [action.text for action in root.actions]
     submenu_labels = [label for label, _submenu in root.submenus]
     assert "Reset View (V, Shift+V)" in root_labels
+    assert "Clear This Window" in root_labels
+    clear_this = _require_action(root, "Clear This Window")
+    assert clear_this.enabled is True
     assert "Prev Series (←)" in root_labels
     assert "3D Volume Render…" in root_labels
     assert "Quick Window/Level (Q)" in root_labels
@@ -281,6 +284,7 @@ def test_show_image_background_context_menu_handles_disabled_callbacks_and_mpr_o
         get_available_series_callback=None,
         is_mpr_view_callback=MagicMock(return_value=True),
         get_3d_volume_render_enabled_callback=MagicMock(side_effect=RuntimeError("nope")),
+        get_clear_this_window_enabled_callback=MagicMock(side_effect=RuntimeError("nope")),
         _mpr_mode_override=True,
         get_file_path_callback=MagicMock(side_effect=RuntimeError("missing")),
         cine_controls_enabled=False,
@@ -294,6 +298,8 @@ def test_show_image_background_context_menu_handles_disabled_callbacks_and_mpr_o
     root = _FakeMenu.instances[0]
     root_labels = [action.text for action in root.actions]
     assert "Clear MPR View" in root_labels
+    assert "Clear This Window" in root_labels
+    assert _require_action(root, "Clear This Window").enabled is False  # raising callback
     assert "3D Volume Render…" in root_labels
     view_3d = _require_action(root, "3D Volume Render…")
     assert view_3d.enabled is False

@@ -215,7 +215,14 @@ class MprSessionRegistry:
             self._check_pane(pane_index)
         self._consume_pending(reservation_id, "build")
         session_id = self._add_session(result, reservation.source_study_uid, reservation.source_series_uid, orientation)
-        view_id = self._add_view(session_id, coerced_slice, pane_index, combine, display)
+        try:
+            view_id = self._add_view(session_id, coerced_slice, pane_index, combine, display)
+        except Exception:
+            # Keep the documented contract: on failure nothing is created
+            # and the reservation stays pending.
+            self._sessions.pop(session_id, None)
+            self._reservations[reservation_id] = reservation
+            raise
         return session_id, view_id
 
     def confirm_view(
@@ -233,14 +240,20 @@ class MprSessionRegistry:
         stays pending and nothing is created.
         """
         reservation = self._peek_pending(reservation_id, "view")
-        assert reservation.session_id is not None
+        if reservation.session_id is None:
+            raise ReservationError(f"view reservation {reservation_id} has no session")
         if reservation.session_id not in self._sessions:
             raise UnknownSessionError(reservation.session_id)
         coerced_slice = int(slice_index)
         if pane_index is not None:
             self._check_pane(pane_index)
         self._consume_pending(reservation_id, "view")
-        return self._add_view(reservation.session_id, coerced_slice, pane_index, combine, display)
+        try:
+            return self._add_view(reservation.session_id, coerced_slice, pane_index, combine, display)
+        except Exception:
+            # Nothing was created; keep the reservation pending per the contract.
+            self._reservations[reservation_id] = reservation
+            raise
 
     def create_session(
         self,

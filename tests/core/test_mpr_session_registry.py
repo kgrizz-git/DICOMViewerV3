@@ -390,6 +390,31 @@ class TestConfirmPrevalidation:
         assert reg.view_for_pane(0).view_id == first
         assert reg.cancel_reservation(rid) is True
 
+    def test_post_consume_failure_in_confirm_build_creates_nothing_and_keeps_the_token(self) -> None:
+        reg = _registry()
+        rid = reg.reserve_build("ST", "SER")
+        with pytest.raises(TypeError):
+            reg.confirm_build(rid, result=object(), combine=object())  # malformed value state
+        assert reg.counts()["sessions"] == 0  # no orphaned viewless session
+        assert reg.counts()["views"] == 0
+        assert reg.counts()["pending_sessions"] == 1  # token back to pending
+        session_id, view_id = reg.confirm_build(rid, result=object())  # retry succeeds
+        assert reg.counts() == {"sessions": 1, "session_cap": 8, "pending_sessions": 0,
+                                "views": 1, "view_cap": 16, "pending_views": 0}
+        assert reg.get_view(view_id).session_id == session_id
+
+    def test_post_consume_failure_in_confirm_view_creates_nothing_and_keeps_the_token(self) -> None:
+        reg = _registry()
+        session_id, first = reg.create_session(object(), pane_index=0)
+        rid = reg.reserve_view(session_id)
+        with pytest.raises(TypeError):
+            reg.confirm_view(rid, combine=object())  # malformed value state
+        assert reg.counts()["views"] == 1
+        assert reg.counts()["pending_views"] == 1
+        assert reg.view_for_pane(0).view_id == first
+        reg.confirm_view(rid, pane_index=1)  # retry succeeds
+        assert reg.counts()["views"] == 2 and reg.cancel_reservation(rid) is False
+
     def test_wrappers_cancel_own_reservation_on_failure(self) -> None:
         reg = _registry()
         with pytest.raises(ValueError):

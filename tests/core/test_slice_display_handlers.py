@@ -217,12 +217,33 @@ class TestOnSliceChanged:
                 is_mpr=MagicMock(return_value=True),
                 display_mpr_slice=MagicMock(),
                 set_pane_slice=MagicMock(return_value=None),
+                attached_view_id=MagicMock(return_value=None),
             ),
             subwindow_data={0: {"mpr_result": SimpleNamespace(n_slices=12)}},
             cine_player=SimpleNamespace(is_cine_advancing=MagicMock(return_value=False)),
         )
         slice_display_handlers.on_slice_changed(app, 3)
         app._mpr_controller.display_mpr_slice.assert_called_once_with(0, 3)
+
+    def test_mpr_navigation_rejected_mid_linked_pass_is_dropped_silently(self, monkeypatch) -> None:
+        monkeypatch.setattr(slice_display_handlers.QTimer, "singleShot", MagicMock())
+        app = _make_app(
+            _mpr_controller=SimpleNamespace(
+                is_mpr=MagicMock(return_value=True),
+                display_mpr_slice=MagicMock(),
+                set_pane_slice=MagicMock(return_value=None),  # rejected: setter is mid-pass
+                attached_view_id=MagicMock(return_value=4),  # the pane's view is registered
+            ),
+            subwindow_data={0: {"mpr_result": SimpleNamespace(n_slices=12), "mpr_slice_index": 5}},
+            cine_player=SimpleNamespace(is_cine_advancing=MagicMock(return_value=False)),
+        )
+        slice_display_handlers.on_slice_changed(app, 3)
+        # The outer linked pass owns the pane: no redraw, no outbound sync, no writes.
+        app._mpr_controller.display_mpr_slice.assert_not_called()
+        app._mpr_controller.attached_view_id.assert_called_once_with(0)
+        app._slice_sync_coordinator.on_slice_changed.assert_not_called()
+        app.cine_controls_widget.update_frame_position.assert_not_called()
+        assert app.subwindow_data[0]["mpr_slice_index"] == 5
 
     def test_regular_path_updates_subwindow_state_and_display(self, monkeypatch) -> None:
         single_shot = MagicMock()

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from main_mixin_delegation_support import _stub_for
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMenu, QWidget
 
 from gui.mpr_duplicate_menu import (
@@ -111,6 +112,7 @@ def test_tile_context_menu_to_controller_duplicate_chain(qapp, monkeypatch) -> N
 
     assert len(popped) == 1
     chooser = popped[0]
+    assert chooser.testAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)  # popup menus are transient
     texts = [a.text() for a in chooser.actions()]
     assert texts == ["Window 1", "Window 2", "Window 3 (shows this view)"]
     assert [a.isEnabled() for a in chooser.actions()] == [True, True, False]

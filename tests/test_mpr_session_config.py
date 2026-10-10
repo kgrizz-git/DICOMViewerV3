@@ -117,10 +117,18 @@ class TestPairInvariant:
 class TestPersistence:
     def test_save_failure_rolls_back(self):
         host = _make_host()
+        host.config["mpr_session_cap"] = 9  # a previously stored value
         host.save_result = False
         assert host.set_mpr_session_cap(4) is False
-        assert host.get_mpr_session_cap() == 8
-        assert host.config["mpr_session_cap"] == 8  # previous value restored
+        assert host.get_mpr_session_cap() == 9
+        assert host.config["mpr_session_cap"] == 9  # previous value restored
+
+    def test_save_failure_with_a_missing_key_restores_absence(self):
+        host = _make_host()
+        host.save_result = False
+        assert host.set_mpr_view_cap(20) is False
+        assert "mpr_view_cap" not in host.config  # absence restored, not the fallback
+        assert host.get_mpr_view_cap() == 16
 
     def test_round_trip_through_real_config_manager(self, tmp_path: Path):
         manager = ConfigManager(config_dir=str(tmp_path))

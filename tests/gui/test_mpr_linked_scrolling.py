@@ -455,12 +455,13 @@ class TestDetachedMembers:
     def test_an_invalid_drop_leaves_the_detached_view_exactly_as_it_was(self, world) -> None:
         a, b, group = self._stale_detached_member(world)
         before = self._view_state(world, b, group)
-        with patch("gui.mpr_controller_transactions.QMessageBox"):
+        with patch("gui.mpr_controller_transactions.QMessageBox") as box:
             world.ctrl.attach_detached_view(b, 99)  # no such pane
             world.app.multi_window_layout.get_subwindow = lambda i: None  # pane without a viewer
             world.ctrl.attach_detached_view(b, 2)
         assert self._view_state(world, b, group) == before
         assert world.ctrl._registry.get_view(b).slice_index == 1  # the stale index was NOT touched
+        assert box.warning.called  # the user is told why each drop was refused
 
     def test_a_render_failed_drop_leaves_the_detached_view_exactly_as_it_was(self, world) -> None:
         a, b, group = self._stale_detached_member(world)
@@ -469,16 +470,23 @@ class TestDetachedMembers:
         with (
             patch.object(world.ctrl, "display_mpr_slice", return_value=False),
             patch("gui.mpr_controller.QMessageBox"),
-            patch("gui.mpr_controller_transactions.QMessageBox"),
+            patch("gui.mpr_controller_transactions.QMessageBox") as txn_box,
         ):
             world.ctrl.attach_detached_view(b, 2)
         assert self._view_state(world, b, group) == before
         assert world.ctrl.detached_view_ids() == [b] and world.ctrl.attached_view_id(2) is None
         assert fired == {"activated": [], "cleared": [], "detached": []}
+        assert txn_box.warning.called  # the failure is reported, not silently swallowed
 
     def test_a_successful_reattach_adopts_and_commits_the_canonical_slice(self, world) -> None:
         a, b, group = self._stale_detached_member(world)
-        world.ctrl.attach_detached_view(b, 2)
+        with (
+            patch("gui.mpr_controller.QMessageBox") as ctrl_box,
+            patch("gui.mpr_controller_transactions.QMessageBox") as txn_box,
+        ):
+            world.ctrl.attach_detached_view(b, 2)
+        ctrl_box.warning.assert_not_called()
+        txn_box.warning.assert_not_called()
         assert world.live(2) == 7 and world.live(0) == 7
         assert world.ctrl._registry.get_view(b).slice_index == 7  # committed only now
         assert world.ctrl._registry.get_view(a).slice_index == 7

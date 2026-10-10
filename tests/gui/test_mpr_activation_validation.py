@@ -142,6 +142,7 @@ class TestRenderContract:
         _seed_mpr_pane(app, 0, _make_result(n_slices=3))
         assert ctrl.display_mpr_slice(0, 1) is True
         assert ctrl.display_mpr_slice(0, 9) is False  # beyond the stack
+        assert ctrl.display_mpr_slice(0, -1) is False  # before the stack
         with patch.object(ctrl, "_array_to_pil", return_value=None):
             assert ctrl.display_mpr_slice(0, 1) is False  # image could not be built
         _remove_viewer(app, 0)
@@ -227,3 +228,59 @@ class TestConfirmFailure:
         assert ctrl.attached_view_id(0) == resident and ctrl.detached_view_ids() == [floating]
         assert app.subwindow_data[0] == before
         assert fired == _NO_SIGNALS
+
+
+class TestPreInstallFailure:
+    """A failure between the reservation pop and the first pane write.
+
+    The pane state flush and destination snapshot run inside the failure
+    bracket: a raise there must release the admission slot exactly once and
+    never leak a pending session/view token into the registry.
+    """
+
+    def test_snapshot_capture_failure_releases_the_reservation_and_leaves_the_pane(self) -> None:
+        ctrl, app = _make_controller()
+        fired = _signals(ctrl)
+        before = dict(app.subwindow_data[0])
+        result = _result_for("ST", "SE")
+        with (
+            _build_flow(ctrl, result) as (_v, workers),
+            patch("gui.mpr_activation.capture_destination_snapshot", side_effect=RuntimeError("deleted")),
+            patch(_BOX) as box,
+        ):
+            ctrl._on_mpr_requested(0, _request(result))
+            _finish(workers[0], result)
+        assert _counts(ctrl) == (0, 0, 0, 0)  # no leaked session, view, or pending slot
+        assert ctrl._build_reservations == {}
+        assert app.subwindow_data[0] == before
+        assert fired == _NO_SIGNALS
+        box.warning.assert_called_once()
+
+    def test_snapshot_capture_failure_on_replacement_keeps_the_resident_view(self) -> None:
+        ctrl, app = _make_controller()
+        _seed_mpr_pane(app, 0, _make_result())
+        resident = ctrl.attached_view_id(0)
+        before = dict(app.subwindow_data[0])
+        with (
+            patch("gui.mpr_activation.capture_destination_snapshot", side_effect=RuntimeError("deleted")),
+            patch(_BOX) as box,
+        ):
+            ctrl._activate_mpr(0, _result_for("ST", "SE"), "Axial")
+        assert ctrl.attached_view_id(0) == resident and ctrl.detached_view_ids() == []
+        assert _counts(ctrl) == (1, 1, 0, 0)  # the resident session, no leaked token
+        assert app.subwindow_data[0] == before
+        box.warning.assert_called_once()
+
+    def test_state_flush_failure_also_releases_the_reservation(self) -> None:
+        ctrl, app = _make_controller()
+        result = _result_for("ST", "SE")
+        with (
+            _build_flow(ctrl, result) as (_v, workers),
+            patch("gui.mpr_activation.refresh_view_from_pane", side_effect=RuntimeError("deleted")),
+            patch(_BOX),
+        ):
+            ctrl._on_mpr_requested(0, _request(result))
+            _finish(workers[0], result)
+        assert _counts(ctrl) == (0, 0, 0, 0)
+        assert ctrl._build_reservations == {}
+        assert app.subwindow_data[0] == {}

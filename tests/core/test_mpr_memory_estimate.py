@@ -190,6 +190,8 @@ class TestPendingVolumeEstimate:
 
 def test_format_mib_is_concise() -> None:
     assert format_mib(0) == "0 MiB"
+    assert format_mib(MIB // 2 - 1) == "0 MiB"  # just under half a MiB
+    assert format_mib(MIB // 2) == "1 MiB"  # exactly half rounds up
     assert format_mib(400 * MIB) == "400 MiB"
     assert format_mib(1536 * MIB) == "1,536 MiB"
     assert format_mib(-5) == "0 MiB"

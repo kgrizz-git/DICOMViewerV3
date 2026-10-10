@@ -741,7 +741,7 @@ class MprController(QObject):
         if not data.get("is_mpr"):
             return False
         result: MprResult | None = data.get("mpr_result")
-        if result is None or slice_index >= result.n_slices:
+        if result is None or not (0 <= slice_index < result.n_slices):
             return False
 
         data["mpr_slice_index"] = slice_index

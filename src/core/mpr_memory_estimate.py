@@ -55,7 +55,8 @@ class MemoryEstimate:
 
 def format_mib(num_bytes: int) -> str:
     """Concise MiB figure for status text (``0 MiB`` for under half a MiB)."""
-    return f"{round(max(0, num_bytes) / (1024 * 1024)):,} MiB"
+    mib = max(0, num_bytes) / (1024 * 1024)
+    return f"{int(mib + 0.5):,} MiB"
 
 
 def sitk_volume_bytes(image: Any) -> int:

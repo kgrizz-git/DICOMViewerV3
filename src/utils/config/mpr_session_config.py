@@ -79,7 +79,7 @@ class MprSessionConfigMixin:
         """
         if type(cap) is not int or cap < 1 or cap > self.get_mpr_view_cap():
             return False
-        return self._store_mpr_cap("mpr_session_cap", cap, MPR_SESSION_CAP_DEFAULT)
+        return self._store_mpr_cap("mpr_session_cap", cap)
 
     def set_mpr_view_cap(self, cap: int) -> bool:
         """Persist the view cap.
@@ -90,7 +90,7 @@ class MprSessionConfigMixin:
         """
         if type(cap) is not int or cap < self.get_mpr_session_cap():
             return False
-        return self._store_mpr_cap("mpr_view_cap", cap, MPR_VIEW_CAP_DEFAULT)
+        return self._store_mpr_cap("mpr_view_cap", cap)
 
     def set_mpr_caps(self, session_cap: int, view_cap: int) -> bool:
         """Persist both caps as one atomic pair.
@@ -121,11 +121,15 @@ class MprSessionConfigMixin:
                 config[key] = value
         return False
 
-    def _store_mpr_cap(self, key: str, cap: int, fallback: int) -> bool:
+    def _store_mpr_cap(self, key: str, cap: int) -> bool:
         config = self._config()
-        previous = config.get(key, fallback)
+        missing = object()
+        previous = config.get(key, missing)
         config[key] = cap
         if self._save_mpr_session_config():
             return True
-        config[key] = previous
+        if previous is missing:
+            config.pop(key, None)
+        else:
+            config[key] = previous
         return False

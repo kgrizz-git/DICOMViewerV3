@@ -95,12 +95,13 @@ def activate_built_mpr(
     if held is None and not reserve_pane_build(controller, idx, source_key):
         return False
     reservation_id = controller._build_reservations.pop(idx)[0]
-    # Preserve an occupant's live state in its view before the pane is reused.
-    displaced = refresh_view_from_pane(controller, idx) is not None
-    snapshot = capture_destination_snapshot(app, controller._get_image_viewer, idx)
-    if DEBUG_MPR:
-        print(f"[DEBUG-MPR] Activating MPR: window={idx} displaced_view={displaced}")
+    snapshot = None
     try:
+        # Preserve an occupant's live state in its view before the pane is reused.
+        displaced = refresh_view_from_pane(controller, idx) is not None
+        snapshot = capture_destination_snapshot(app, controller._get_image_viewer, idx)
+        if DEBUG_MPR:
+            print(f"[DEBUG-MPR] Activating MPR: window={idx} displaced_view={displaced}")
         source_ds = result.source_volume.source_datasets[0]
         controller._ensure_mpr_previous_state(data)
         controller._activate_write_mpr_fields(
@@ -117,6 +118,12 @@ def activate_built_mpr(
         _confirm_first_view(controller, idx, reservation_id, result, orientation_label, data)
     except Exception:
         controller._registry.cancel_reservation(reservation_id)
+        if snapshot is None:
+            # The pane was never touched: only the admission slot needs releasing.
+            notify_mpr(
+                controller, "The MPR could not be activated; the window was left as it was."
+            )
+            return False
         restored = restore_failed_install(controller, idx, snapshot, controller._get_image_viewer)
         if DEBUG_MPR:
             print("[DEBUG-MPR] activation failed; destination restored where possible")
