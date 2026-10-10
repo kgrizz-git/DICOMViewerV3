@@ -413,7 +413,8 @@ class TestConfirmPrevalidation:
         assert reg.counts()["pending_views"] == 1
         assert reg.view_for_pane(0).view_id == first
         reg.confirm_view(rid, pane_index=1)  # retry succeeds
-        assert reg.counts()["views"] == 2 and reg.cancel_reservation(rid) is False
+        assert reg.counts()["views"] == 2
+        assert reg.cancel_reservation(rid) is False
 
     def test_wrappers_cancel_own_reservation_on_failure(self) -> None:
         reg = _registry()

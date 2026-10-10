@@ -266,7 +266,8 @@ class TestPreInstallFailure:
             patch(_BOX) as box,
         ):
             ctrl._activate_mpr(0, _result_for("ST", "SE"), "Axial")
-        assert ctrl.attached_view_id(0) == resident and ctrl.detached_view_ids() == []
+        assert ctrl.attached_view_id(0) == resident
+        assert ctrl.detached_view_ids() == []
         assert _counts(ctrl) == (1, 1, 0, 0)  # the resident session, no leaked token
         assert app.subwindow_data[0] == before
         box.warning.assert_called_once()
