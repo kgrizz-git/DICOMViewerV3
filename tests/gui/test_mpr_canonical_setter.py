@@ -34,12 +34,14 @@ class TestClampAndNoOp:
     def test_index_is_clamped_to_the_stack(self) -> None:
         ctrl, _app, view_id = _world(n_slices=8)
         update = ctrl.set_view_slice(view_id, 99)
-        assert update is not None and update.index == 7
+        assert update is not None
+        assert update.index == 7
 
     def test_negative_index_clamps_to_zero(self) -> None:
         ctrl, _app, view_id = _world(n_slices=8)
         update = ctrl.set_view_slice(view_id, -5)
-        assert update is not None and update.index == 0
+        assert update is not None
+        assert update.index == 0
 
     def test_unknown_view_changes_nothing(self) -> None:
         ctrl, _app, _view_id = _world()
@@ -84,7 +86,8 @@ class TestWritesBeforeRedraw:
         ctrl, app, view_id = _world(start=0)
         ctrl.display_mpr_slice.side_effect = RuntimeError("render failed")
         update = ctrl.set_view_slice(view_id, 6)
-        assert update is not None and update.index == 6
+        assert update is not None
+        assert update.index == 6
         assert ctrl._registry.get_view(view_id).slice_index == 6
         assert app.subwindow_data[0]["mpr_slice_index"] == 6
         assert ctrl._slice_propagating is False
