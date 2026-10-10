@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from core.mpr_session_types import DEFAULT_SESSION_CAP, DEFAULT_VIEW_CAP
 from utils.config.mpr_session_config import (
     MPR_SESSION_CAP_DEFAULT,
@@ -146,3 +148,48 @@ class TestPersistence:
         assert manager.set_mpr_session_cap(3) is True
         assert (tmp_path / "dicom_viewer_config.json").exists()
         assert not (tmp_path / "private-storage").exists()
+
+
+class TestAtomicPair:
+    def test_pair_can_raise_the_session_cap_above_the_old_view_cap(self):
+        host = _make_host()
+        host.config.update(mpr_session_cap=8, mpr_view_cap=16)
+        assert host.set_mpr_caps(20, 40) is True  # two single setters could not do this in either order
+        assert host.get_mpr_caps() == (20, 40)
+        assert host.save_calls == 1  # one save for the pair
+
+    def test_pair_can_lower_both_without_a_transient_invalid_state(self):
+        host = _make_host()
+        host.config.update(mpr_session_cap=8, mpr_view_cap=16)
+        assert host.set_mpr_caps(2, 3) is True
+        assert host.get_mpr_caps() == (2, 3)
+
+    @pytest.mark.parametrize(
+        "pair",
+        [(0, 4), (3, 2), (-1, 5), (True, 9), (2, True), ("2", 4), (2, "4"), (2.0, 4), (None, 4), (1, 0)],
+    )
+    def test_invalid_pairs_mutate_nothing_and_do_not_save(self, pair):
+        host = _make_host()
+        host.config.update(mpr_session_cap=8, mpr_view_cap=16)
+        assert host.set_mpr_caps(*pair) is False
+        assert host.config == {"mpr_session_cap": 8, "mpr_view_cap": 16}
+        assert host.save_calls == 0
+
+    def test_failed_save_restores_both_keys(self):
+        host = _make_host()
+        host.config.update(mpr_session_cap=8, mpr_view_cap=16)
+        host.save_result = False
+        assert host.set_mpr_caps(2, 3) is False
+        assert host.config == {"mpr_session_cap": 8, "mpr_view_cap": 16}
+        assert host.get_mpr_caps() == (8, 16)
+
+    def test_failed_save_restores_absent_keys_as_absent(self):
+        host = _make_host()
+        host.save_result = False
+        assert host.set_mpr_caps(2, 3) is False
+        assert host.config == {}
+
+    def test_pair_round_trips_through_a_real_config_manager(self, tmp_path):
+        config = ConfigManager(config_dir=tmp_path / "config")
+        assert config.set_mpr_caps(12, 30) is True
+        assert ConfigManager(config_dir=tmp_path / "config").get_mpr_caps() == (12, 30)

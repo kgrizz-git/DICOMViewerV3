@@ -25,6 +25,7 @@ from core.mpr_view_display_state import (
     capture_mpr_combine_state,
     capture_mpr_display_state,
 )
+from gui.mpr_admission import admission_summary, set_status
 from gui.mpr_controller_sessions import (
     emit_tiles_changed,
     notify_mpr,
@@ -132,6 +133,7 @@ def activate_built_mpr(
         controller.mpr_detached.emit(idx)
     controller.mpr_activated.emit(idx)
     emit_tiles_changed(controller, {controller.attached_view_id(idx)})
+    set_status(controller, f"MPR added. {admission_summary(controller)}")
     return True
 
 

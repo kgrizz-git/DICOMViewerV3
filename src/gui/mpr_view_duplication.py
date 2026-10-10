@@ -36,6 +36,7 @@ from core.mpr_view_display_state import (
     capture_mpr_combine_state,
     capture_mpr_display_state,
 )
+from gui.mpr_admission import admission_summary, refresh_session_caps, set_status
 from gui.mpr_controller_sessions import (
     build_view_payload,
     capture_pane_payload,
@@ -105,10 +106,11 @@ def duplicate_view_into_pane(
     if validate_install_request(app, controller._get_image_viewer, to_idx, payload) is None:
         return False
     registry = controller._registry
+    refresh_session_caps(controller)  # a Settings change governs this decision
     try:
         reservation_id = registry.reserve_view(source.session_id)
     except AdmissionError as exc:
-        notify_mpr(controller, f"{exc}\n{registry.admission_message()}")
+        notify_mpr(controller, f"{exc}\n{admission_summary(controller)}")
         return False
 
     confirmed = False
@@ -144,6 +146,10 @@ def duplicate_view_into_pane(
         controller.mpr_detached.emit(to_idx)
     controller.mpr_activated.emit(to_idx)
     emit_tiles_changed(controller, {controller.attached_view_id(to_idx)})
+    set_status(
+        controller,
+        f"MPR view added (shares the existing result). {admission_summary(controller)}",
+    )
     return True
 
 

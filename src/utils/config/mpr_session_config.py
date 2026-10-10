@@ -92,6 +92,35 @@ class MprSessionConfigMixin:
             return False
         return self._store_mpr_cap("mpr_view_cap", cap, MPR_VIEW_CAP_DEFAULT)
 
+    def set_mpr_caps(self, session_cap: int, view_cap: int) -> bool:
+        """Persist both caps as one atomic pair.
+
+        Requires exact ``int`` values with ``view_cap >= session_cap >= 1``
+        (``bool`` is rejected). Unlike the single-cap setters, raising the
+        session cap above the old view cap is fine when the new pair is valid.
+        Both keys are written, then saved once; a failed save restores both
+        keys exactly as they were (including their absence). Returns ``False``
+        and mutates nothing on invalid input or a failed save. Lowering never
+        evicts: it only blocks new MPR growth at runtime.
+        """
+        if type(session_cap) is not int or type(view_cap) is not int:
+            return False
+        if session_cap < 1 or view_cap < session_cap:
+            return False
+        config = self._config()
+        missing = object()
+        previous = {key: config.get(key, missing) for key in ("mpr_session_cap", "mpr_view_cap")}
+        config["mpr_session_cap"] = session_cap
+        config["mpr_view_cap"] = view_cap
+        if self._save_mpr_session_config():
+            return True
+        for key, value in previous.items():
+            if value is missing:
+                config.pop(key, None)
+            else:
+                config[key] = value
+        return False
+
     def _store_mpr_cap(self, key: str, cap: int, fallback: int) -> bool:
         config = self._config()
         previous = config.get(key, fallback)

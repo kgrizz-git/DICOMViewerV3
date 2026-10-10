@@ -38,10 +38,8 @@ from typing import Any
 import numpy as np
 from PySide6.QtWidgets import QMessageBox
 
-from core.mpr_session_registry import MprSessionRegistry
+from core.mpr_memory_estimate import THUMBNAIL_MAX_SIDE
 from core.mpr_session_types import (
-    DEFAULT_SESSION_CAP,
-    DEFAULT_VIEW_CAP,
     AdmissionError,
     MprDisplayState,
     MprView,
@@ -53,37 +51,19 @@ from core.mpr_view_display_state import (
     capture_mpr_combine_state,
     capture_mpr_display_state,
 )
+from gui.mpr_admission import (
+    PaneReservation,
+    admission_summary,
+    refresh_session_caps,
+    set_status,
+)
 
 _TITLE_MPR = "MPR"
-#: Longest side, in pixels, of the array handed to a navigator tile.
-THUMBNAIL_MAX_SIDE = 256
 
 
 # ---------------------------------------------------------------------------
 # Registry construction and user messages
 # ---------------------------------------------------------------------------
-
-
-def resolve_session_caps(app: Any) -> tuple[int, int]:
-    """Validated ``(session_cap, view_cap)`` from config, else the defaults.
-
-    Stubbed or broken config objects must not stop the controller from
-    starting, so anything that is not an exact ``1 <= session <= view`` int
-    pair falls back to the compiled defaults.
-    """
-    try:
-        session_cap, view_cap = app.config_manager.get_mpr_caps()
-    except Exception:
-        return DEFAULT_SESSION_CAP, DEFAULT_VIEW_CAP
-    if type(session_cap) is int and type(view_cap) is int and 1 <= session_cap <= view_cap:
-        return session_cap, view_cap
-    return DEFAULT_SESSION_CAP, DEFAULT_VIEW_CAP
-
-
-def create_registry(app: Any) -> MprSessionRegistry:
-    """Registry sized from the configured admission caps."""
-    session_cap, view_cap = resolve_session_caps(app)
-    return MprSessionRegistry(session_cap, view_cap)
 
 
 def notify_mpr(controller: Any, text: str) -> None:
@@ -99,21 +79,27 @@ def notify_mpr(controller: Any, text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def reserve_pane_build(controller: Any, idx: int, source_key: tuple[str, str]) -> bool:
+def reserve_pane_build(
+    controller: Any, idx: int, source_key: tuple[str, str], pending_bytes: int = 0
+) -> bool:
     """Reserve one session plus one view slot for a new build into *idx*.
 
-    A pane holds at most one pending reservation: a stale one is released
-    first. On refusal the user sees the limiting cap with current/limit
-    counts and nothing is reserved.
+    Persisted caps are refreshed first, so a Settings change governs this
+    decision. A pane holds at most one pending reservation: a stale one is
+    released first. On refusal the user sees the limiting cap with the current
+    usage and nothing is reserved; on admission the status bar shows the new
+    usage. ``pending_bytes`` is the build's source-volume estimate.
     """
     release_pane_reservation(controller, idx)
+    refresh_session_caps(controller)
     registry = controller._registry
     try:
         reservation_id = registry.reserve_build(*source_key)
     except AdmissionError as exc:
-        notify_mpr(controller, f"{exc}\n{registry.admission_message()}")
+        notify_mpr(controller, f"{exc}\n{admission_summary(controller)}")
         return False
-    controller._build_reservations[idx] = (reservation_id, source_key)
+    controller._build_reservations[idx] = PaneReservation(reservation_id, source_key, pending_bytes)
+    set_status(controller, f"Building MPR. {admission_summary(controller)}")
     return True
 
 
@@ -398,7 +384,6 @@ __all__ = [
     "build_view_payload",
     "capture_pane_payload",
     "clear_view",
-    "create_registry",
     "detached_view_ids",
     "discard_detached",
     "emit_tiles_changed",
@@ -408,7 +393,6 @@ __all__ = [
     "refresh_view_from_pane",
     "release_pane_reservation",
     "reserve_pane_build",
-    "resolve_session_caps",
     "view_display_state",
     "view_metadata",
     "view_thumbnail_pixels",

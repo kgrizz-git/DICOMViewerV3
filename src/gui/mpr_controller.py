@@ -46,6 +46,7 @@ from core.dicom_parser import DICOMParser
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
 from core.mpr_cache import MprCache, resolve_cached_photometric_interpretation
 from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
+from core.mpr_memory_estimate import estimate_pending_volume_bytes
 from core.mpr_overlay_dataset import build_overlay_dataset
 from core.mpr_session_types import MprCombineState, MprDisplayState, MprViewMetadata
 from core.mpr_stack_combine import apply_mpr_stack_combine
@@ -65,6 +66,12 @@ from core.mpr_volume import (
 from gui.dialogs.mpr_orientation_choice_dialog import MprOrientationChoiceDialog
 from gui.lut_view_state import mpr_display_kwargs
 from gui.mpr_activation import activate_built_mpr
+from gui.mpr_admission import (
+    PaneReservation,
+    create_registry,
+    refresh_session_caps,
+    strict_session_caps,
+)
 from gui.mpr_controller_display_state import (
     install_apply_display_state,
     preferred_mpr_window_level,
@@ -73,7 +80,6 @@ from gui.mpr_controller_display_state import (
 from gui.mpr_controller_sessions import (
     all_view_ids,
     clear_view,
-    create_registry,
     detached_view_ids,
     discard_detached,
     emit_tiles_changed,
@@ -96,6 +102,7 @@ from gui.mpr_controller_transactions import (
     validate_install_request,
 )
 from gui.mpr_dicom_save_flow import prompt_save_mpr_as_dicom
+from gui.mpr_loaded_series import collect_loaded_series
 from gui.mpr_pane_teardown import tear_down_mpr_at_subwindow
 from gui.mpr_source_closure import release_all_mpr, release_closed_source_sessions
 from gui.mpr_view_duplication import duplicate_view_into_pane
@@ -240,6 +247,7 @@ class MprController(QObject):
         # IDs, pane mapping and admission. Pane ``subwindow_data`` is its live
         # display adapter while attached (see ``gui.mpr_controller_sessions``).
         self._registry = create_registry(app)
+        self._seen_caps = strict_session_caps(app)  # last persisted caps applied (see mpr_admission)
         # Opaque per-controller drag-origin token (see ``core.mpr_view_drag``): view
         # IDs collide across controllers/instances, so drops must prove their origin.
         self._drag_origin = new_drag_origin()
@@ -249,7 +257,7 @@ class MprController(QObject):
         self._tile_refresh_dirty: set[int] = set()
         self._tile_refresh_timer: QTimer | None = None
         # Pane -> (reservation id, source key) for an in-flight/just-loaded build.
-        self._build_reservations: dict[int, tuple[int, tuple[str, str]]] = {}
+        self._build_reservations: dict[int, PaneReservation] = {}
         self._init_cache()
 
     # ------------------------------------------------------------------
@@ -319,6 +327,10 @@ class MprController(QObject):
     # Public API
     # ------------------------------------------------------------------
 
+    def apply_session_caps(self) -> bool:
+        """Apply changed persisted session/view caps to the live registry (no eviction)."""
+        return refresh_session_caps(self)
+
     def is_mpr(self, idx: int) -> bool:
         """Return True if subwindow *idx* is currently in MPR mode."""
         data = self._app.subwindow_data.get(idx, {})
@@ -352,7 +364,7 @@ class MprController(QObject):
             _mpr_log(f"Clearing stale MPR state in window {target_subwindow_idx}")
             self.clear_mpr(target_subwindow_idx)
 
-        loaded_series = self._collect_loaded_series()
+        loaded_series = collect_loaded_series(self._app)
         _mpr_log(
             f"Open MPR dialog for window {target_subwindow_idx}: "
             f"loaded_series={len(loaded_series)}"
@@ -977,7 +989,10 @@ class MprController(QObject):
 
         # Admission is reserved before any volume construction or cache load.
         if not reserve_pane_build(
-            self, target_idx, dataset_source_key(datasets_to_use)
+            self,
+            target_idx,
+            dataset_source_key(datasets_to_use),
+            estimate_pending_volume_bytes(datasets_to_use),
         ):
             return
         try:
@@ -1367,40 +1382,6 @@ class MprController(QObject):
         except Exception:
             pass
         return None
-
-    def _collect_loaded_series(self) -> dict[str, dict[str, Any]]:
-        """
-        Build the ``loaded_series`` dict required by MprDialog.
-
-        Returns a mapping of ``series_key → info_dict`` for all currently
-        loaded series across all studies.
-
-        Returns:
-            Dict with keys: "description", "modality", "n_slices",
-            "study_uid", "datasets".
-        """
-        result: dict[str, dict[str, Any]] = {}
-        try:
-            current_studies = self._app.current_studies
-        except AttributeError:
-            return result
-
-        for study_uid, series_dict in current_studies.items():
-            for series_key, datasets in series_dict.items():
-                if not datasets:
-                    continue
-                ds0 = datasets[0]
-                description = getattr(ds0, "SeriesDescription", "") or ""
-                modality = getattr(ds0, "Modality", "") or ""
-                result[series_key] = {
-                    "description": description,
-                    "modality": modality,
-                    "n_slices": len(datasets),
-                    "study_uid": study_uid,
-                    "datasets": datasets,
-                }
-        return result
-
 
     def _build_overlay_dataset(self, result: MprResult, slice_index: int):
         """Synthetic overlay dataset for one MPR slice (see ``core.mpr_overlay_dataset``)."""
