@@ -31,6 +31,9 @@ Design notes
   not updated (prevents spurious jumps when stacks don't overlap).
 * A ``_syncing`` reentrancy guard prevents feedback loops when slices are
   set programmatically.
+* MPR targets are moved through the controller's canonical slice setter
+  (``MprController.set_pane_slice``). The setter never calls back into this
+  coordinator, so an incoming update never cascades into other groups.
 * SliceStack geometry is cached per ``(study_uid, series_uid)`` and
   invalidated when a series is closed or reassigned.
 """
@@ -352,7 +355,7 @@ class SliceSyncCoordinator:
         target_data = self.app.subwindow_data.get(target_idx, {})
         if target_data.get("is_mpr") and hasattr(self.app, "_mpr_controller"):
             try:
-                self.app._mpr_controller.display_mpr_slice(target_idx, new_dataset_idx)
+                self.app._mpr_controller.set_pane_slice(target_idx, new_dataset_idx)
             except Exception as exc:  # pragma: no cover
                 print_redacted(f"[SliceSyncCoordinator] Error updating MPR subwindow {target_idx}: {exc}")
             return None

@@ -27,7 +27,7 @@ def _make_app(**overrides) -> SimpleNamespace:
         roi_list_panel=SimpleNamespace(update_roi_list=MagicMock()),
         roi_statistics_panel=SimpleNamespace(clear_statistics=MagicMock()),
         subwindow_data={},
-        _mpr_controller=SimpleNamespace(clear_mpr=MagicMock()),
+        _mpr_controller=SimpleNamespace(clear_mpr=MagicMock(), release_all_mpr=MagicMock()),
         _reset_fusion_for_all_subwindows=MagicMock(),
         metadata_panel=SimpleNamespace(set_dataset=MagicMock()),
         intensity_projection_controls_widget=SimpleNamespace(
@@ -159,6 +159,7 @@ class TestCloseAllFiles:
         session_reset_controller.close_all_files(app)
 
         app._mpr_controller.clear_mpr.assert_called_once_with(0)
+        app._mpr_controller.release_all_mpr.assert_called_once_with()
         session_reset_controller.clear_data.assert_called_once_with(app)
         scene0.clear.assert_called_once_with()
         scene1.clear.assert_called_once_with()

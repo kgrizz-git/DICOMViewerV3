@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import core.slice_display_handlers as slice_display_handlers
+from gui.mpr_view_links import SliceUpdate
 
 
 def _make_app(**overrides) -> SimpleNamespace:
@@ -174,19 +175,75 @@ class TestOnSliceChanged:
         single_shot = MagicMock()
         monkeypatch.setattr(slice_display_handlers.QTimer, "singleShot", single_shot)
         app = _make_app(
-            _mpr_controller=SimpleNamespace(is_mpr=MagicMock(return_value=True), display_mpr_slice=MagicMock()),
+            _mpr_controller=SimpleNamespace(
+                is_mpr=MagicMock(return_value=True),
+                display_mpr_slice=MagicMock(),
+                set_pane_slice=MagicMock(return_value=SliceUpdate(4, True)),
+            ),
             subwindow_data={0: {"mpr_result": SimpleNamespace(n_slices=12)}},
             cine_player=SimpleNamespace(is_cine_advancing=MagicMock(return_value=True), reset_cine_advancing_flag=MagicMock()),
         )
 
         slice_display_handlers.on_slice_changed(app, 4)
 
-        app._mpr_controller.display_mpr_slice.assert_called_once_with(0, 4)
+        # The canonical setter (not a bare redraw) moves the pane and its link group.
+        app._mpr_controller.set_pane_slice.assert_called_once_with(0, 4)
+        app._mpr_controller.display_mpr_slice.assert_not_called()
         app.cine_controls_widget.update_frame_position.assert_called_once_with(4, 12)
         app.image_viewer.set_navigation_slider_state.assert_called_once()
         app._slice_sync_coordinator.on_slice_changed.assert_called_once_with(0)
         app._slice_location_line_coordinator.refresh_all.assert_called_once_with()
         single_shot.assert_called_once_with(0, app.cine_player.reset_cine_advancing_flag)
+
+    def test_mpr_path_reports_the_clamped_index_to_the_slider_and_cine_readout(self, monkeypatch) -> None:
+        monkeypatch.setattr(slice_display_handlers.QTimer, "singleShot", MagicMock())
+        app = _make_app(
+            _mpr_controller=SimpleNamespace(
+                is_mpr=MagicMock(return_value=True),
+                display_mpr_slice=MagicMock(),
+                set_pane_slice=MagicMock(return_value=SliceUpdate(11, True)),
+            ),
+            subwindow_data={0: {"mpr_result": SimpleNamespace(n_slices=12)}},
+            cine_player=SimpleNamespace(is_cine_advancing=MagicMock(return_value=False)),
+        )
+        slice_display_handlers.on_slice_changed(app, 99)
+        app.cine_controls_widget.update_frame_position.assert_called_once_with(11, 12)
+        assert app.image_viewer.set_navigation_slider_state.call_args.kwargs["value"] == 12
+
+    def test_mpr_pane_without_a_registry_view_falls_back_to_a_plain_redraw(self, monkeypatch) -> None:
+        monkeypatch.setattr(slice_display_handlers.QTimer, "singleShot", MagicMock())
+        app = _make_app(
+            _mpr_controller=SimpleNamespace(
+                is_mpr=MagicMock(return_value=True),
+                display_mpr_slice=MagicMock(),
+                set_pane_slice=MagicMock(return_value=None),
+                attached_view_id=MagicMock(return_value=None),
+            ),
+            subwindow_data={0: {"mpr_result": SimpleNamespace(n_slices=12)}},
+            cine_player=SimpleNamespace(is_cine_advancing=MagicMock(return_value=False)),
+        )
+        slice_display_handlers.on_slice_changed(app, 3)
+        app._mpr_controller.display_mpr_slice.assert_called_once_with(0, 3)
+
+    def test_mpr_navigation_rejected_mid_linked_pass_is_dropped_silently(self, monkeypatch) -> None:
+        monkeypatch.setattr(slice_display_handlers.QTimer, "singleShot", MagicMock())
+        app = _make_app(
+            _mpr_controller=SimpleNamespace(
+                is_mpr=MagicMock(return_value=True),
+                display_mpr_slice=MagicMock(),
+                set_pane_slice=MagicMock(return_value=None),  # rejected: setter is mid-pass
+                attached_view_id=MagicMock(return_value=4),  # the pane's view is registered
+            ),
+            subwindow_data={0: {"mpr_result": SimpleNamespace(n_slices=12), "mpr_slice_index": 5}},
+            cine_player=SimpleNamespace(is_cine_advancing=MagicMock(return_value=False)),
+        )
+        slice_display_handlers.on_slice_changed(app, 3)
+        # The outer linked pass owns the pane: no redraw, no outbound sync, no writes.
+        app._mpr_controller.display_mpr_slice.assert_not_called()
+        app._mpr_controller.attached_view_id.assert_called_once_with(0)
+        app._slice_sync_coordinator.on_slice_changed.assert_not_called()
+        app.cine_controls_widget.update_frame_position.assert_not_called()
+        assert app.subwindow_data[0]["mpr_slice_index"] == 5
 
     def test_regular_path_updates_subwindow_state_and_display(self, monkeypatch) -> None:
         single_shot = MagicMock()

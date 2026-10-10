@@ -153,7 +153,8 @@ def test_clear_subwindow_content_mpr_branch() -> None:
     app.subwindow_data = {1: {"current_dataset": None, "is_mpr": True}}
     app.focused_subwindow_index = 1
     snh.clear_subwindow_content(app, 1)
-    app._mpr_controller.detach_mpr_from_subwindow.assert_called_once_with(1)
+    # Interim (parking slice): no park action, so the mapped view is removed.
+    app._mpr_controller.clear_mpr.assert_called_once_with(1)
     app._update_focused_subwindow_references.assert_called_once()
 
 

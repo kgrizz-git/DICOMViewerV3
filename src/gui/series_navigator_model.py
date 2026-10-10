@@ -226,14 +226,13 @@ def compute_study_section_width(
     *,
     show_instances_separately: bool,
     multiframe_info_map: dict[tuple[str, str], Any],
-    mpr_thumbnail_specs: dict[Any, dict[str, Any]],
     thumbnail_width: int = 68,
     thumbnail_spacing: int = 5,
     instance_thumbnail_width: int = 48,
     instance_spacing: int = 4,
 ) -> int:
     """
-    Pixel width for one study section from visible thumbnail groups and MPR slots.
+    Pixel width for one study section from visible thumbnail groups.
 
     When no series contribute width, returns *thumbnail_width* as a minimum.
     """
@@ -256,14 +255,6 @@ def compute_study_section_width(
         if section_width > 0:
             section_width += thumbnail_spacing
         section_width += group_width
-        mpr_count = sum(
-            1
-            for spec in mpr_thumbnail_specs.values()
-            if spec.get("study_uid") == study_uid
-            and spec.get("source_series_uid") == series_uid
-        )
-        if mpr_count > 0:
-            section_width += mpr_count * (thumbnail_spacing + thumbnail_width)
     if section_width <= 0:
         return thumbnail_width
     return section_width

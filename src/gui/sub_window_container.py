@@ -23,7 +23,7 @@ Requirements:
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QByteArray, QMimeData, Qt, Signal
+from PySide6.QtCore import QMimeData, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QDragEnterEvent,
@@ -37,7 +37,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from gui.image_viewer import ImageViewer
-from gui.mpr_thumbnail_widget import MPR_ASSIGN_MIME
 from gui.style_constants import get_focus_border_color
 
 _SERIES_UID_PREFIX = "series_uid:"
@@ -161,9 +160,6 @@ class SubWindowContainer(QFrame):
     assign_series_requested = Signal(str, int, str)
     context_menu_requested = Signal()  # Emitted when context menu is requested
     expand_to_1x1_requested = Signal()  # Emitted when user double-clicks on image/background to expand this pane to 1x1
-    # Emitted when an MPR thumbnail is dragged onto this container:
-    # (source_subwindow_index, target_subwindow_index). Source -1 = detached MPR.
-    mpr_assign_requested = Signal(int, int)
 
     def __init__(self, image_viewer: ImageViewer, parent=None):
         """
@@ -249,8 +245,6 @@ class SubWindowContainer(QFrame):
             self._pane_title_bar.show()
 
     def _mime_accepts_series_or_mpr(self, mime: QMimeData) -> bool:
-        if mime.hasFormat(MPR_ASSIGN_MIME):
-            return True
         if mime.hasText():
             text = mime.text()
             if text.startswith(_SERIES_UID_PREFIX) or text.startswith("dv3_assign\t"):
@@ -499,26 +493,6 @@ class SubWindowContainer(QFrame):
             event: Drop event
         """
         mime = event.mimeData()
-
-        # MPR thumbnail drop: relocate or attach floating MPR to this pane.
-        if mime.hasFormat(MPR_ASSIGN_MIME):
-            try:
-                ba = mime.data(MPR_ASSIGN_MIME)
-                if isinstance(ba, QByteArray):
-                    inner = ba.data()
-                    raw_bytes = inner.tobytes() if isinstance(inner, memoryview) else inner
-                else:
-                    raw_bytes = ba
-                source_idx = int(raw_bytes.decode("ascii"))
-                target_idx = getattr(self.image_viewer, "subwindow_index", None)
-                if target_idx is None:
-                    event.ignore()
-                    return
-                self.mpr_assign_requested.emit(source_idx, int(target_idx))
-                event.acceptProposedAction()
-            except Exception:
-                event.ignore()
-            return
 
         if not mime.hasText():
             event.ignore()
