@@ -1,6 +1,6 @@
 # Configuration and preferences
 
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-09
 
 This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features). For pane, slice-sync, and slice-location-line behavior that overlaps with this guide, see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md); for the keyboard shortcuts that drive these menus, see [Keyboard shortcuts](USER_GUIDE_SHORTCUTS.md).
 
@@ -9,6 +9,17 @@ This guide describes **where** to change behavior that is saved between sessions
 Open **Edit → Settings…** for cross-cutting preferences that are **not** under the View menu.
 
 The dialog explains that **overlay** density and tag lists live under **View → Overlay Settings** and **View → Overlay Tags Configuration**; **annotation** defaults under **View → Annotation Options**; **privacy** under **View → Privacy Mode**.
+
+### MPR Limits
+
+The **MPR Limits** group caps how many MPRs you can keep at once. See [Limits and memory](USER_GUIDE_MPR.md#limits-and-memory) in the MPR guide for what counts and the messages you will see.
+
+| Control | Meaning |
+|--------|---------|
+| **Maximum MPR sessions** | Independently built MPRs, including detached ones and builds in progress. Default **8**. |
+| **Maximum MPR views** | Windows and navigator tiles showing those MPRs (duplicates share their MPR's volume). Default **16**; never lower than the session limit. |
+
+Both values are saved together when you press **OK**, in the ordinary settings file (not in the privacy-storage group). They take effect for the next MPR or duplicate you create, without a restart. Lowering a limit never closes an existing MPR. The memory figure shown when you create an MPR is an approximate estimate, not a limit.
 
 ### Local study index (encrypted)
 
@@ -76,7 +87,7 @@ The following are saved in the same JSON file but are usually changed from toolb
 | Customizations | Bulk **File → Import Customizations…** / **File → Export Customizations…** (JSON covering overlay, annotation, metadata columns, and theme sections when present) |
 | Slice sync | **`slice_sync_enabled`**, **`slice_sync_groups`**, slice-location line visibility flags (**View → Slice Sync** / **View → Show Slice Location Lines**) |
 | ACR / pylinac | **`acr_mri_low_contrast_*`**, **`acr_qa_vanilla_pylinac`**, **`acr_qa_embed_module_images_in_xlsx`** (default **true** — when on, XLSX **Images** sheet embeds per-module PNGs for PDF-parity output; unchecking skips the sheet. Set from the ACR CT / ACR MRI / CT batch options dialogs.) |
-| MPR | **`mpr_cache_max_mb`** |
+| MPR | **`mpr_cache_max_mb`**; **`mpr_session_cap`** and **`mpr_view_cap`** (**Edit → Settings… → MPR Limits**; defaults 8 and 16) |
 | Look-up tables | **`show_lut_pane_label`** (**View → Show LUT Label**, default **true**); **`lut_defaults_by_modality`** — the starting LUT per modality, set with **Use as Default for** on the Look-Up Table menu. Saved LUTs themselves are kept in a separate **`custom_luts.json`** next to this file. |
 | 3D volume render | Requires **VTK** (`vtk` package); not a persisted Settings field — launched from toolbar **3D View** or **Tools → 3D Volume Render…** |
 | Study index browser | **`study_index_browser_column_order`** (column layout in the index UI when present) |

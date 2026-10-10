@@ -1,8 +1,14 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-10
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-10
+- **MPR sessions engine (PR-A of the three-way split of the multi-session work).** The single detached-MPR slot and per-pane `mpr_result` ownership were replaced by a pure `MprSessionRegistry` (sessions own the `MprResult`; views have stable IDs; reservations enforce the 8-session / 16-view defaults). `MprController` stays far under its grandfathered size cap by delegating to small helpers: `mpr_controller_sessions` (admission + pane/view adapters), `mpr_controller_transactions` (install validation and rollback), `mpr_activation` (fenced builds with the failure bracket from the review fixes), `mpr_view_links` (single-view canonical slice setter), `mpr_admission` (live limits and usage line), `mpr_worker_fencing` / `mpr_source_closure`, `mpr_pane_teardown`, `mpr_dicom_save_flow` and `mpr_loaded_series`. Pure helpers moved to `core/` (`mpr_memory_estimate`, `mpr_overlay_dataset`). Review fixes folded in: pre-install activation failures release their reservation exactly once (no leaked admission token), registry confirms roll back on post-consume failures, and `format_mib` rounds the half-MiB boundary per its docstring.
+- **Interim UX contract (parking arrives with the next slice).** The navigator carries no MPR representation in this slice, and **Clear This Window** is disabled on MPR panes (only **Clear MPR View** applies); pane-reset safety nets discard the mapped view rather than orphaning it. A regression note ships in the PR description only if a release is cut before the parking slice lands.
+- **Test-suite changes that matter to maintainers.** The real-`QThread` retirement tests use `threading.Event` start/release gates instead of sleeps; controller tests share `tests/gui/mpr_lifecycle_harness.py`; the interim Clear-Window contract is pinned by `tests/gui/test_mpr_clear_window_interim.py` (that file is replaced by the parking slice).
+- **Split provenance.** This PR is slice A of a three-way stacked split of PR #184 applied per the AGENTS.md over-100-files rule; the full review history (three independent reviews plus fixes) attaches to the end-state tree, which is required to be byte-identical to `feature/multiple-mpr-sessions` @ `2c9bf7e`.
 
 ## 2026-10-07
 - **Removed a stale TO_DO item: basedpyright already runs in the local pre-push hook.** `.githooks/pre-push` runs `scripts/check_basedpyright_errors.py` as an error gate that matches CI, so the P2 item asking for that hook was already done.
