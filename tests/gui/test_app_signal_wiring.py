@@ -129,6 +129,7 @@ def mock_app() -> SimpleNamespace:
         close_study_requested=DummySignal(),
         mpr_thumbnail_clicked=DummySignal(),
         mpr_thumbnail_clear_requested=DummySignal(),
+        mpr_thumbnail_duplicate_requested=DummySignal(),
     )
 
     # Metadata panel signals
@@ -160,6 +161,7 @@ def mock_app() -> SimpleNamespace:
         mpr_activated=DummySignal(),
         mpr_cleared=DummySignal(),
         mpr_detached=DummySignal(),
+        mpr_tiles_changed=DummySignal(),
         open_mpr_dialog=MagicMock(),
         clear_persistent_cache=MagicMock(),
     )
@@ -272,9 +274,8 @@ def mock_app() -> SimpleNamespace:
     app._on_import_customizations = MagicMock()
     app._on_export_tag_presets = MagicMock()
     app._on_import_tag_presets = MagicMock()
-    app._update_mpr_navigator_thumbnail = MagicMock()
-    app._clear_mpr_navigator_thumbnail = MagicMock()
-    app._on_mpr_detached = MagicMock()
+    app._sync_mpr_navigator_tiles = MagicMock()
+    app._on_mpr_duplicate_requested = MagicMock()
     app.get_focused_subwindow_index = MagicMock(return_value=1)
 
     return app
@@ -305,6 +306,12 @@ def test_wire_all_signals_connects_all(mock_app: SimpleNamespace) -> None:
         mock_app._mpr_controller.mpr_detached.emit(0)
 
         assert mock_app.cine_app_facade.update_cine_player_context.call_count == 3
+
+        # Navigator tiles reconcile once per transaction via the single batch signal.
+        mock_app._mpr_controller.mpr_tiles_changed.emit(frozenset({3}))
+        mock_app._sync_mpr_navigator_tiles.assert_called_once_with(frozenset({3}))
+        mock_app.series_navigator.mpr_thumbnail_duplicate_requested.emit(5)
+        mock_app._on_mpr_duplicate_requested.assert_called_once_with(5)
 
 
 def test_wire_signals_requires_complete_application_graph() -> None:

@@ -8,6 +8,7 @@ viewer dialog (``TagEditingMixin``).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -16,27 +17,44 @@ from main_mixin_delegation_support import _stub_for
 # --- MPRNavigationMixin: detached sessions and thumbnails ---------------------------
 
 
-def test_on_mpr_thumbnail_clicked_focuses_an_unfocused_pane() -> None:
-    """Clicking a navigator thumbnail focuses the pane that hosts the MPR."""
+_OWN_ORIGIN = "AbCdEfGhIjKlMnOpQr_-12"
+
+
+def _controller_with_view(pane_index: int | None) -> MagicMock:
+    controller = MagicMock()
+    controller.get_view_metadata.return_value = SimpleNamespace(view_id=5, pane_index=pane_index)
+    return controller
+
+
+def test_on_mpr_thumbnail_clicked_focuses_the_pane_showing_the_view() -> None:
+    """The tile is keyed by view ID; the pane is resolved from the view at click time."""
     subwindow = MagicMock(name="subwindow")
     subwindow.is_focused = False
     layout = MagicMock()
     layout.get_subwindow.return_value = subwindow
-    stub = _stub_for("MPRNavigationMixin", multi_window_layout=layout)
+    controller = _controller_with_view(2)
+    stub = _stub_for("MPRNavigationMixin", multi_window_layout=layout, _mpr_controller=controller)
 
-    stub._on_mpr_thumbnail_clicked(2)
+    stub._on_mpr_thumbnail_clicked(5)
 
+    controller.get_view_metadata.assert_called_once_with(5)
     layout.get_subwindow.assert_called_once_with(2)
     subwindow.set_focused.assert_called_once_with(True)
 
 
-def test_on_mpr_thumbnail_clicked_ignores_the_detached_session() -> None:
-    """The detached MPR has no pane, so a click on it must not touch the layout."""
+def test_on_mpr_thumbnail_clicked_ignores_detached_and_unknown_views() -> None:
+    """A detached or vanished view has no pane, so a click must not touch the layout."""
     layout = MagicMock()
-    stub = _stub_for("MPRNavigationMixin", multi_window_layout=layout)
-
-    stub._on_mpr_thumbnail_clicked(-1)
-
+    detached = _stub_for(
+        "MPRNavigationMixin", multi_window_layout=layout, _mpr_controller=_controller_with_view(None)
+    )
+    detached._on_mpr_thumbnail_clicked(5)
+    unknown_controller = MagicMock()
+    unknown_controller.get_view_metadata.return_value = None
+    unknown = _stub_for(
+        "MPRNavigationMixin", multi_window_layout=layout, _mpr_controller=unknown_controller
+    )
+    unknown._on_mpr_thumbnail_clicked(99)
     layout.get_subwindow.assert_not_called()
 
 
@@ -46,9 +64,11 @@ def test_on_mpr_thumbnail_clicked_does_not_refocus_the_focused_pane() -> None:
     subwindow.is_focused = True
     layout = MagicMock()
     layout.get_subwindow.return_value = subwindow
-    stub = _stub_for("MPRNavigationMixin", multi_window_layout=layout)
+    stub = _stub_for(
+        "MPRNavigationMixin", multi_window_layout=layout, _mpr_controller=_controller_with_view(1)
+    )
 
-    stub._on_mpr_thumbnail_clicked(1)
+    stub._on_mpr_thumbnail_clicked(5)
 
     subwindow.set_focused.assert_not_called()
 
@@ -57,68 +77,45 @@ def test_on_mpr_thumbnail_clicked_swallows_a_layout_failure() -> None:
     """A disappearing pane during teardown must not propagate out of the Qt slot."""
     layout = MagicMock()
     layout.get_subwindow.side_effect = RuntimeError("pane destroyed")
-    stub = _stub_for("MPRNavigationMixin", multi_window_layout=layout)
+    stub = _stub_for(
+        "MPRNavigationMixin", multi_window_layout=layout, _mpr_controller=_controller_with_view(1)
+    )
 
-    stub._on_mpr_thumbnail_clicked(1)
+    stub._on_mpr_thumbnail_clicked(5)
 
 
-def test_on_mpr_assign_requested_attaches_the_exact_detached_view() -> None:
-    """A negative source is -view_id: it attaches that exact view, never "the" floating one."""
+def test_on_mpr_view_drop_requested_moves_the_exact_view() -> None:
+    """A "move" drop is dispatched by stable view ID, never by a source pane index."""
     controller = MagicMock()
+    controller.drag_origin = _OWN_ORIGIN
     stub = _stub_for("MPRNavigationMixin", _mpr_controller=controller)
 
-    stub._on_mpr_assign_requested(-7, 2)
+    stub._on_mpr_view_drop_requested(7, "move", _OWN_ORIGIN, 2)
 
-    controller.attach_detached_view.assert_called_once_with(7, 2)
+    controller.move_view.assert_called_once_with(7, 2)
     controller.relocate_mpr_subwindow.assert_not_called()
-
-
-def test_on_mpr_assign_requested_relocates_an_attached_mpr() -> None:
-    """Dropping an attached MPR onto another pane moves it rather than re-attaching."""
-    controller = MagicMock()
-    stub = _stub_for("MPRNavigationMixin", _mpr_controller=controller)
-
-    stub._on_mpr_assign_requested(0, 3)
-
-    controller.relocate_mpr_subwindow.assert_called_once_with(0, 3)
     controller.attach_detached_view.assert_not_called()
 
 
-def test_on_mpr_clear_from_navigator_thumbnail_discards_only_that_detached_view() -> None:
-    """Clearing a detached tile discards that exact view and removes only its tile."""
+def test_on_mpr_view_drop_requested_ignores_unknown_operations() -> None:
     controller = MagicMock()
-    navigator = MagicMock()
-    stub = _stub_for(
-        "MPRNavigationMixin", _mpr_controller=controller, series_navigator=navigator
-    )
-
-    stub._on_mpr_clear_from_navigator_thumbnail(-4)
-
-    controller.discard_detached_view.assert_called_once_with(4)
-    navigator.clear_mpr_thumbnail.assert_called_once_with(-4)
-    controller.clear_mpr.assert_not_called()
-
-
-def test_on_mpr_clear_from_navigator_thumbnail_clears_an_attached_pane() -> None:
-    """An attached pane is only cleared when it really is showing an MPR."""
-    controller = MagicMock()
-    controller.is_mpr.return_value = True
+    controller.drag_origin = _OWN_ORIGIN
     stub = _stub_for("MPRNavigationMixin", _mpr_controller=controller)
 
-    stub._on_mpr_clear_from_navigator_thumbnail(1)
+    stub._on_mpr_view_drop_requested(7, "swap", _OWN_ORIGIN, 2)
 
-    controller.clear_mpr.assert_called_once_with(1)
+    controller.move_view.assert_not_called()
 
 
-def test_on_mpr_clear_from_navigator_thumbnail_ignores_a_native_pane() -> None:
-    """Clearing the MPR action on a native series must not clear anything."""
+def test_on_mpr_view_drop_requested_ignores_a_foreign_origin() -> None:
+    """Another controller/instance can name a view ID that exists here; its origin differs."""
     controller = MagicMock()
-    controller.is_mpr.return_value = False
+    controller.drag_origin = _OWN_ORIGIN
     stub = _stub_for("MPRNavigationMixin", _mpr_controller=controller)
 
-    stub._on_mpr_clear_from_navigator_thumbnail(1)
+    stub._on_mpr_view_drop_requested(7, "move", "ZyXwVuTsRqPoNmLkJi_-99", 2)
 
-    controller.clear_mpr.assert_not_called()
+    controller.move_view.assert_not_called()
 
 
 def test_get_subwindow_mpr_output_pixel_spacing_returns_the_mpr_spacing() -> None:

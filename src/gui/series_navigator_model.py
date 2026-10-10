@@ -225,14 +225,54 @@ def ordered_mpr_spec_items(
 ) -> list[tuple[int, dict[str, Any]]]:
     """MPR tile specs in creation order (``order`` = view creation sequence).
 
-    Detached tiles use negative keys, so key order would reverse creation
-    order. The sort is stable: specs without ``order`` keep insertion order,
-    after those that have one.
+    Tiles are keyed by view ID, but ordering still comes from the creation
+    sequence so it stays stable across detach/attach. The sort is stable:
+    specs without ``order`` keep insertion order, after those that have one.
     """
     return sorted(
         specs.items(),
         key=lambda item: (item[1].get("order") is None, item[1].get("order") or 0),
     )
+
+
+#: Spec fields that come from pixel generation; a "keep" update reuses them.
+_PIXEL_FIELDS = (
+    "pixel_array", "window_center", "window_width", "photometric_interpretation",
+    "image_inverted", "lut", "stamp",
+)
+#: Spec fields compared by identity (large or opaque); everything else by value.
+_IDENTITY_FIELDS = frozenset({"pixel_array", "lut"})
+
+
+def _same_spec(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    if a.keys() != b.keys():
+        return False
+    return all(
+        (a[k] is b[k]) if k in _IDENTITY_FIELDS else (a[k] == b[k]) for k in a
+    )
+
+
+def reconcile_mpr_specs(
+    current: dict[int, dict[str, Any]], incoming: dict[int, dict[str, Any]]
+) -> dict[int, dict[str, Any]] | None:
+    """New MPR tile set from *incoming* (view ID -> spec, in creation order).
+
+    A spec whose ``pixel_array`` is ``None`` means "keep the pixels already
+    shown for this view" (only labels/pane/order changed); with nothing to
+    keep it is dropped. Views absent from *incoming* are removed. Returns
+    ``None`` when the result equals *current*, so callers skip the rebuild.
+    """
+    new: dict[int, dict[str, Any]] = {}
+    for view_id, spec in incoming.items():
+        if spec.get("pixel_array") is None:
+            old = current.get(view_id)
+            if old is None:
+                continue
+            spec = {**spec, **{f: old.get(f) for f in _PIXEL_FIELDS}}
+        new[view_id] = spec
+    if list(new) == list(current) and all(_same_spec(new[k], current[k]) for k in new):
+        return None
+    return new
 
 
 def compute_study_section_width(

@@ -26,6 +26,7 @@ from core.mpr_view_display_state import (
     capture_mpr_display_state,
 )
 from gui.mpr_controller_sessions import (
+    emit_tiles_changed,
     notify_mpr,
     refresh_view_from_pane,
     release_pane_reservation,
@@ -130,6 +131,7 @@ def activate_built_mpr(
     if displaced:
         controller.mpr_detached.emit(idx)
     controller.mpr_activated.emit(idx)
+    emit_tiles_changed(controller, {controller.attached_view_id(idx)})
     return True
 
 

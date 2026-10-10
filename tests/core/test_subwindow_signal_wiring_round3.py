@@ -49,7 +49,7 @@ def _signals(names: list[str] | tuple[str, ...]) -> SimpleNamespace:
 
 
 def _layout_app(viewer: SimpleNamespace, subwindow: SimpleNamespace) -> tuple[SimpleNamespace, SimpleNamespace]:
-    callbacks = ["_open_files_from_paths", "_on_layout_change_requested", "_on_privacy_view_toggled", "_on_smooth_when_zoomed_toggled", "_on_scale_markers_toggled", "_on_direction_labels_toggled", "_on_slice_sync_toggled", "_open_slice_sync_dialog", "_on_slice_location_lines_toggled", "_on_slice_location_lines_same_group_only_toggled", "_on_slice_location_lines_focused_only_toggled", "_on_slice_location_lines_mode_toggled", "_open_about_this_file", "_on_assign_series_requested", "_on_assign_series_from_context_menu", "_on_expand_to_1x1_requested", "_on_swap_view_requested", "_on_window_slot_map_popup_requested", "_on_mpr_assign_requested", "_open_structured_report_browser", "_get_current_slice_file_path", "_on_clear_subwindow_content_requested", "_get_subwindow_dataset", "_get_subwindow_slice_index"]
+    callbacks = ["_open_files_from_paths", "_on_layout_change_requested", "_on_privacy_view_toggled", "_on_smooth_when_zoomed_toggled", "_on_scale_markers_toggled", "_on_direction_labels_toggled", "_on_slice_sync_toggled", "_open_slice_sync_dialog", "_on_slice_location_lines_toggled", "_on_slice_location_lines_same_group_only_toggled", "_on_slice_location_lines_focused_only_toggled", "_on_slice_location_lines_mode_toggled", "_open_about_this_file", "_on_assign_series_requested", "_on_assign_series_from_context_menu", "_on_expand_to_1x1_requested", "_on_swap_view_requested", "_on_window_slot_map_popup_requested", "_on_mpr_view_drop_requested", "_open_structured_report_browser", "_get_current_slice_file_path", "_on_clear_subwindow_content_requested", "_get_subwindow_dataset", "_get_subwindow_slice_index"]
     app = SimpleNamespace(
         multi_window_layout=SimpleNamespace(
             get_all_subwindows=MagicMock(return_value=[subwindow]),
@@ -94,7 +94,7 @@ def _layout_app(viewer: SimpleNamespace, subwindow: SimpleNamespace) -> tuple[Si
 def test_layout_reconnect_is_idempotent_and_tracks_all_optional_slots() -> None:
     viewer = _signals(_LAYOUT_VIEWER_SIGNALS)
     subwindow = SimpleNamespace(
-        image_viewer=viewer, assign_series_requested=_Signal(), expand_to_1x1_requested=_Signal(), mpr_assign_requested=_Signal()
+        image_viewer=viewer, assign_series_requested=_Signal(), expand_to_1x1_requested=_Signal(), mpr_view_drop_requested=_Signal()
     )
     app, ctrl = _layout_app(viewer, subwindow)
     app.subwindow_managers[0] = {"view_state_manager": SimpleNamespace(handle_transform_changed=MagicMock(), handle_zoom_changed=MagicMock())}

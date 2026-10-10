@@ -163,7 +163,7 @@ def _disconnect_layout_viewer_signals(
         )
         _pop_tracked_disconnect(image_viewer.cine_stop_requested, ctrl._cine_stop_slots, vid)
         _disconnect_ignore_missing(
-            subwindow.mpr_assign_requested, app._on_mpr_assign_requested
+            subwindow.mpr_view_drop_requested, app._on_mpr_view_drop_requested
         )
 
 
@@ -279,7 +279,7 @@ def _connect_layout_viewer_signals(
     image_viewer.get_slot_to_view_callback = lambda lay=layout: lay.get_slot_to_view()
 
     # Disconnect before connect so layout changes do not accumulate duplicate handlers.
-    subwindow.mpr_assign_requested.connect(app._on_mpr_assign_requested)
+    subwindow.mpr_view_drop_requested.connect(app._on_mpr_view_drop_requested)
 
     _connect_clear_and_cine_slots(ctrl, app, image_viewer, idx, vid)
     _connect_mpr_and_3d_slots(ctrl, app, image_viewer, idx, vid)

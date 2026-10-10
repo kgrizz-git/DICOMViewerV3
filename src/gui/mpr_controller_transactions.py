@@ -36,10 +36,10 @@ from typing import Any
 from PySide6.QtWidgets import QMessageBox
 
 from core.lut_series_state import clear_mpr_lut_override
-from core.mpr_session_types import detached_nav_key
 from gui.mpr_controller_sessions import (
     build_view_payload,
     capture_pane_payload,
+    emit_tiles_changed,
     find_view,
     refresh_view_from_pane,
 )
@@ -380,7 +380,7 @@ def restore_failed_install(
 # ---------------------------------------------------------------------------
 
 
-def _focus_destination(controller: Any, idx: int) -> None:
+def focus_destination(controller: Any, idx: int) -> None:
     """Best-effort focus the destination subwindow before a transfer."""
     try:
         sub = controller._app.multi_window_layout.get_subwindow(idx)
@@ -413,6 +413,7 @@ def detach_mpr_view(controller: Any, idx: int) -> None:
     controller._tear_down_mpr_at_subwindow(idx)
     controller._registry.detach_view(view.view_id)
     controller.mpr_detached.emit(idx)
+    emit_tiles_changed(controller)
 
 
 def detach_view_on_pane_reset(controller: Any, idx: int) -> bool:
@@ -428,6 +429,7 @@ def detach_view_on_pane_reset(controller: Any, idx: int) -> bool:
         return False
     controller._registry.detach_view(view.view_id)
     controller.mpr_detached.emit(idx)
+    emit_tiles_changed(controller)
     return True
 
 
@@ -471,7 +473,7 @@ def relocate_mpr_view(controller: Any, from_idx: int, to_idx: int) -> None:
     cancelled regardless of pane mode. Emits no signals on failure.
     """
     if from_idx == to_idx:
-        _focus_destination(controller, to_idx)
+        focus_destination(controller, to_idx)
         return
     if not controller.is_mpr(from_idx):
         return
@@ -486,7 +488,7 @@ def relocate_mpr_view(controller: Any, from_idx: int, to_idx: int) -> None:
     if validate_install_request(app, controller._get_image_viewer, to_idx, payload) is None:
         _txn_log(f"relocate to window {to_idx} refused: invalid payload")
         return
-    _focus_destination(controller, to_idx)
+    focus_destination(controller, to_idx)
     controller._cancel_mpr_worker(to_idx)
     refresh_view_from_pane(controller, to_idx)
     if not controller._install_mpr_payload_at_subwindow(to_idx, payload):
@@ -498,6 +500,23 @@ def relocate_mpr_view(controller: Any, from_idx: int, to_idx: int) -> None:
     if displaced:
         controller.mpr_detached.emit(to_idx)
     controller.mpr_activated.emit(to_idx)
+    emit_tiles_changed(controller, {view.view_id})
+
+
+def move_view(controller: Any, view_id: int, to_idx: int) -> None:
+    """Move a view by its stable ID: attach it if detached, else relocate its pane.
+
+    The ID is resolved at drop time, so a stale drag moves the original view
+    wherever it now is, or does nothing when it is gone; it can never move
+    whatever view now occupies the pane it used to be in.
+    """
+    view = find_view(controller, view_id)
+    if view is None:
+        return
+    if view.pane_index is None:
+        attach_detached_view(controller, view_id, to_idx)
+    else:
+        relocate_mpr_view(controller, view.pane_index, to_idx)
 
 
 def attach_detached_view(controller: Any, view_id: int, to_idx: int) -> None:
@@ -524,26 +543,17 @@ def attach_detached_view(controller: Any, view_id: int, to_idx: int) -> None:
     if validate_install_request(app, controller._get_image_viewer, to_idx, payload) is None:
         _warn_attach_failed(controller, dest_was_mpr)
         return
-    _focus_destination(controller, to_idx)
+    focus_destination(controller, to_idx)
     controller._cancel_mpr_worker(to_idx)
     refresh_view_from_pane(controller, to_idx)
     if not controller._install_mpr_payload_at_subwindow(to_idx, payload):
         _warn_attach_failed(controller, dest_was_mpr)
         return
     displaced = _commit_install(controller, view_id, to_idx)
-    _clear_detached_thumbnail(controller, view_id)
     if displaced:
         controller.mpr_detached.emit(to_idx)
     controller.mpr_activated.emit(to_idx)
-
-
-def _clear_detached_thumbnail(controller: Any, view_id: int) -> None:
-    """Clear the navigator tile of a view that just left the detached state."""
-    try:
-        if hasattr(controller._app, "series_navigator"):
-            controller._app.series_navigator.clear_mpr_thumbnail(detached_nav_key(view_id))
-    except Exception:
-        pass
+    emit_tiles_changed(controller, {view_id})
 
 
 def _warn_attach_failed(controller: Any, had_backup: bool) -> None:
@@ -567,6 +577,8 @@ __all__ = [
     "capture_mpr_payload",
     "detach_mpr_view",
     "detach_view_on_pane_reset",
+    "focus_destination",
+    "move_view",
     "relocate_mpr_view",
     "restore_destination_snapshot",
     "restore_failed_install",

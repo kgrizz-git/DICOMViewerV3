@@ -1,21 +1,21 @@
 """
-MPR navigator thumbnail helpers for the series navigator.
+MPR navigator tile reconciliation and pane pixel access.
 
-Holds pixel-array extraction and thumbnail update/clear logic moved from
-``DICOMViewerApp`` so ``main.py`` stays smaller. ``app_signal_wiring`` and
-other callers still use ``DICOMViewerApp._update_mpr_navigator_thumbnail`` etc.
-as one-line delegates into this module.
+Navigator tiles represent stable MPR *view IDs* (attached or detached alike);
+the pane number is a spec field, never the identity. ``sync_mpr_navigator_tiles``
+reads only the controller's public per-view API (metadata, display state,
+bounded thumbnail pixels) and hands the navigator the complete tile set in one
+call, so a transaction costs at most one navigator rebuild and none when
+nothing changed.
+
+Dirty seam: a tile's pixels are regenerated only when its view is named
+``dirty`` (live pane state changed), is new, or its ``content_stamp`` differs
+from the stamp already shown. A detached view whose slice later changes
+through a linked group changes its stamp and refreshes with no extra wiring.
 
 Inputs:
-    ``app``: ``DICOMViewerApp`` composition root (subwindow_data, managers,
-    series_navigator, window_level_controls, ``_mpr_controller``).
-
-Outputs:
-    Mutates series navigator MPR thumbnail state; read-only on pixel arrays
-    except through MPR combine helpers.
-
-Requirements:
-    PySide6 GUI app context; ``apply_mpr_stack_combine`` from ``mpr_controller``.
+    ``app``: ``DICOMViewerApp`` composition root (``series_navigator``,
+    ``_mpr_controller``, ``subwindow_data`` / managers for measurement pixels).
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING, Any
 
 from core.lut_catalog import linear_lut
 from core.lut_engine import LookUpTable
-from core.lut_series_state import mpr_display_kwargs
-from core.mpr_session_types import MprDisplayState, detached_nav_key
+from core.mpr_session_types import MprDisplayState
 from core.mpr_stack_combine import apply_mpr_stack_combine
+from core.mpr_tile_label import tile_tag, tile_tooltip
 
 if TYPE_CHECKING:  # pragma: no cover
     from main import DICOMViewerApp
@@ -70,138 +70,6 @@ def get_subwindow_mpr_pixel_array(
         return None
 
 
-def get_subwindow_mpr_thumbnail_pixel_array(app: DICOMViewerApp, idx: int):
-    """Return a representative MPR thumbnail slice, preferring the stack midpoint."""
-    data = app.subwindow_data.get(idx, {})
-    result = data.get("mpr_result")
-    if result is None:
-        return None
-    n_slices = int(getattr(result, "n_slices", 0) or 0)
-    if n_slices <= 0:
-        return None
-    middle_index = n_slices // 2
-    return get_subwindow_mpr_pixel_array(app, idx, middle_index)
-
-
-def _result_photometric_interpretation(result: object | None) -> str | None:
-    """Source-series PI carried on an MprResult, or None when unavailable.
-
-    Keeps the thumbnail at the same polarity as the pane it previews.
-    """
-    if result is None:
-        return None
-    value = getattr(result, "photometric_interpretation", None)
-    return str(value) if value else None
-
-
-def _pane_managers(app: DICOMViewerApp, idx: int) -> dict[str, Any] | None:
-    """Return one pane's manager dict. Missing on stubs that predate the LUT wiring."""
-    managers = getattr(app, "subwindow_managers", None)
-    if not isinstance(managers, dict):
-        return None
-    found = managers.get(idx)
-    return found if isinstance(found, dict) else None
-
-
-def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
-    """
-    Show or refresh the MPR thumbnail in the series navigator for subwindow *idx*.
-
-    Called automatically when ``MprController.mpr_activated`` is emitted.
-    The thumbnail is built from the currently-displayed MPR slice pixel
-    array with the active W/L values so it matches what is on screen.
-
-    Args:
-        idx: Zero-based subwindow index hosting the MPR view.
-    """
-    if not hasattr(app, "series_navigator"):
-        return
-    data = app.subwindow_data.get(idx, {})
-    if not data.get("is_mpr") or data.get("mpr_result") is None:
-        app.series_navigator.clear_mpr_thumbnail(idx)
-        return
-
-    pixel_array = get_subwindow_mpr_thumbnail_pixel_array(app, idx)
-    if pixel_array is None:
-        return
-
-    result = data.get("mpr_result")
-    n_slices: int | None = None
-    if result is not None:
-        try:
-            n_raw = int(getattr(result, "n_slices", 0) or 0)
-            n_slices = n_raw if n_raw > 0 else None
-        except (TypeError, ValueError):
-            n_slices = None
-
-    wc, ww = _prefer_pane_window_level(app, idx)
-
-    photometric = _result_photometric_interpretation(result)
-    display = mpr_display_kwargs(_pane_managers(app, idx), photometric)
-    app.series_navigator.set_mpr_thumbnail(
-        idx,
-        pixel_array,
-        str(data.get("current_study_uid", "") or ""),
-        str(data.get("current_series_uid", "") or ""),
-        wc,
-        ww,
-        n_slices,
-        photometric,
-        image_inverted=display["image_inverted"],
-        lut=display["lut"],
-        order=_pane_view_order(app, idx),
-    )
-
-
-def _pane_view_order(app: DICOMViewerApp, idx: int) -> int | None:
-    """Creation sequence of the view attached to pane *idx* (navigator tile order)."""
-    controller = getattr(app, "_mpr_controller", None)
-    getter = getattr(controller, "get_pane_view_metadata", None)
-    meta = getter(idx) if callable(getter) else None
-    order = getattr(meta, "creation_seq", None)
-    return order if isinstance(order, int) and not isinstance(order, bool) else None
-
-
-def _prefer_pane_window_level(app: DICOMViewerApp, idx: int) -> tuple[float | None, float | None]:
-    """Attached tile W/L from the pane's own view state, else the shared toolbar.
-
-    The toolbar fallback only serves panes without usable view state.
-    """
-    pane_vsm = (_pane_managers(app, idx) or {}).get("view_state_manager")
-    own = _window_level_from_view_state(pane_vsm)
-    if own != (None, None):
-        return own
-    return _window_level_from_controls(getattr(app, "window_level_controls", None))
-
-
-def _window_level_from_view_state(view_state: Any) -> tuple[float | None, float | None]:
-    """Valid (center, width) from view state, else ``(None, None)``."""
-    raw_wc: Any = getattr(view_state, "current_window_center", None)
-    raw_ww: Any = getattr(view_state, "current_window_width", None)
-    return _valid_window_level(raw_wc, raw_ww)
-
-
-def _window_level_from_controls(wl_controls: Any) -> tuple[float | None, float | None]:
-    """Valid (center, width) from shared toolbar controls, else ``(None, None)``."""
-    if wl_controls is None:
-        return None, None
-    raw_wc: Any = getattr(wl_controls, "window_center", None)
-    raw_ww: Any = getattr(wl_controls, "window_width", None)
-    return _valid_window_level(raw_wc, raw_ww)
-
-
-def _valid_window_level(raw_wc: Any, raw_ww: Any) -> tuple[float | None, float | None]:
-    """Valid (center, width) pair, else ``(None, None)`` for missing/invalid input."""
-    try:
-        wc = float(raw_wc)
-        ww = float(raw_ww)
-    except (TypeError, ValueError):
-        return None, None
-    if ww <= 0:
-        return None, None
-    return wc, ww
-
-
 def _carried_window_level(carried: MprDisplayState) -> tuple[float | None, float | None]:
     """Valid (center, width) from carried display state, else ``(None, None)``."""
     if carried.window_center is None or carried.window_width is None:
@@ -211,69 +79,71 @@ def _carried_window_level(carried: MprDisplayState) -> tuple[float | None, float
     return float(carried.window_center), float(carried.window_width)
 
 
-def clear_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
-    """
-    Remove the MPR thumbnail from the series navigator for subwindow *idx*.
+def _tile_spec(controller: Any, view_id: int, meta: Any, *, regenerate: bool) -> dict[str, Any] | None:
+    """Navigator spec for one view; ``pixel_array`` None means "keep the shown pixels"."""
+    spec: dict[str, Any] = {
+        "study_uid": meta.source_study_uid,
+        "source_series_uid": meta.source_series_uid,
+        "n_slices": meta.n_slices or None,
+        "order": meta.creation_seq,
+        "pane_index": meta.pane_index,
+        "origin": controller.drag_origin,
+        "tag": tile_tag(meta),
+        "tooltip": tile_tooltip(
+            meta, None if meta.pane_index is None else str(meta.pane_index + 1)
+        ),
+        "pixel_array": None,
+    }
+    if not regenerate:
+        return spec
+    carried = controller.get_view_display_state(view_id)
+    if carried is None:
+        return None
+    pixels = controller.get_view_thumbnail_pixels(view_id, carried.use_rescaled)
+    if pixels is None:
+        return None
+    wc, ww = _carried_window_level(carried)
+    spec.update(
+        pixel_array=pixels,
+        window_center=wc,
+        window_width=ww,
+        photometric_interpretation=meta.photometric_interpretation,
+        image_inverted=bool(carried.inverted),
+        lut=carried.lut if isinstance(carried.lut, LookUpTable) else linear_lut(),
+        stamp=meta.content_stamp,
+    )
+    return spec
 
-    Called automatically when ``MprController.mpr_cleared`` is emitted.
 
-    Args:
-        idx: Zero-based subwindow index whose MPR was cleared.
-    """
-    if hasattr(app, "series_navigator"):
-        app.series_navigator.clear_mpr_thumbnail(idx)
+def sync_mpr_navigator_tiles(app: DICOMViewerApp, dirty: Any = ()) -> None:
+    """Reconcile the navigator's MPR tiles with the controller's views, once.
 
-
-def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
-    """
-    Sync navigator tiles for every detached MPR view.
-
-    One tile per detached view, keyed by ``-view_id`` (``detached_nav_key``),
-    placed after its source series by creation order. A detached view's state
-    is frozen, so existing tiles are left alone: only missing tiles are added
-    and tiles for views that are no longer detached are removed.
+    *dirty* is a collection of view IDs whose pixels must be regenerated even
+    if their stamp matches. Everything else regenerates only when new or
+    changed; the navigator rebuilds at most once and not at all if the result
+    equals what it already shows.
     """
     navigator = getattr(app, "series_navigator", None)
     controller = getattr(app, "_mpr_controller", None)
     if navigator is None or controller is None:
         return
-    detached = controller.detached_view_ids()
-    wanted = {detached_nav_key(view_id) for view_id in detached}
-    shown = set(navigator.mpr_thumbnail_keys())
-    for key in sorted(k for k in shown if k < 0 and k not in wanted):
-        navigator.clear_mpr_thumbnail(key)
-    for view_id in detached:
-        if detached_nav_key(view_id) not in shown:
-            _show_detached_view_tile(navigator, controller, view_id)
+    dirty_ids = {d for d in dirty if isinstance(d, int)}
+    shown = navigator.mpr_tile_stamps()
+    incoming: dict[int, dict[str, Any]] = {}
+    for view_id in controller.all_view_ids():
+        meta = controller.get_view_metadata(view_id)
+        if meta is None:
+            continue
+        regenerate = view_id in dirty_ids or shown.get(view_id) != meta.content_stamp
+        spec = _tile_spec(controller, view_id, meta, regenerate=regenerate)
+        if spec is not None:
+            incoming[view_id] = spec
+    navigator.reconcile_mpr_thumbnails(incoming)
 
 
-def _show_detached_view_tile(navigator: Any, controller: Any, view_id: int) -> None:
-    """Render one detached view's tile from its own metadata and display state."""
-    meta = controller.get_view_metadata(view_id)
-    carried = controller.get_view_display_state(view_id)
-    if meta is None or carried is None:
-        return
-    pixel_array = controller.get_view_thumbnail_pixels(view_id, carried.use_rescaled)
-    if pixel_array is None:
-        return
-    wc, ww = _carried_window_level(carried)
-    lut = carried.lut if isinstance(carried.lut, LookUpTable) else linear_lut()
-    navigator.set_mpr_thumbnail(
-        detached_nav_key(view_id),
-        pixel_array,
-        meta.source_study_uid,
-        meta.source_series_uid,
-        wc,
-        ww,
-        meta.n_slices or None,
-        meta.photometric_interpretation,
-        image_inverted=bool(carried.inverted),
-        lut=lut,
-        order=meta.creation_seq,
-    )
-
-
-def on_mpr_detached(app: DICOMViewerApp, former_idx: int) -> None:
-    """MPR was detached from a pane; refresh navigator thumbnails."""
-    clear_mpr_navigator_thumbnail(app, former_idx)
-    update_floating_mpr_navigator_thumbnail(app)
+def refresh_pane_mpr_tile(app: DICOMViewerApp, idx: int) -> None:
+    """Regenerate the tile of the view attached to pane *idx* (look-up table / W/L change)."""
+    controller = getattr(app, "_mpr_controller", None)
+    view_id = controller.attached_view_id(idx) if controller is not None else None
+    if view_id is not None:
+        sync_mpr_navigator_tiles(app, {view_id})

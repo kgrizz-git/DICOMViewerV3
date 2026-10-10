@@ -389,13 +389,15 @@ def test_attach_detached_view_moves_view_on_success() -> None:
     ctrl, app = _make_controller()
     view_id = _add_detached_view(ctrl, _make_result())
     activated: list[int] = []
+    tiles: list[frozenset[int]] = []
     ctrl.mpr_activated.connect(activated.append)
+    ctrl.mpr_tiles_changed.connect(tiles.append)
     with patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=True):
         ctrl.attach_detached_view(view_id, 0)
     assert ctrl.detached_view_ids() == []
     assert ctrl.attached_view_id(0) == view_id
     assert activated == [0]
-    app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(-view_id)
+    assert tiles == [frozenset({view_id})]  # one batched tile announcement for the transaction
 
 
 def test_attach_detached_view_warns_and_keeps_detached_on_install_failure() -> None:

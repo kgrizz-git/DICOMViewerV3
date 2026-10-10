@@ -465,8 +465,7 @@ def _compound_allow_list() -> dict[str, set[str]]:
     },
     "MPRNavigationMixin": {
         "_on_mpr_thumbnail_clicked",
-        "_on_mpr_assign_requested",
-        "_on_mpr_clear_from_navigator_thumbnail",
+        "_on_mpr_view_drop_requested",
         "_get_subwindow_mpr_output_pixel_spacing",
     },
 }

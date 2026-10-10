@@ -55,9 +55,11 @@ from core.mpr_dicom_export import (
     MprDicomExportOptions,
     write_mpr_series,
 )
+from core.mpr_overlay_dataset import build_overlay_dataset
 from core.mpr_session_types import MprCombineState, MprDisplayState, MprViewMetadata
 from core.mpr_stack_combine import apply_mpr_stack_combine
 from core.mpr_view_display_state import restore_mpr_combine_state
+from core.mpr_view_drag import new_drag_origin
 from core.mpr_view_math import (
     array_to_pil,
     build_mpr_banner_text,
@@ -78,9 +80,12 @@ from gui.mpr_controller_display_state import (
     reset_window_level_for_mpr,
 )
 from gui.mpr_controller_sessions import (
+    all_view_ids,
+    clear_view,
     create_registry,
     detached_view_ids,
     discard_detached,
+    emit_tiles_changed,
     pane_view_metadata,
     release_pane_reservation,
     reserve_pane_build,
@@ -94,12 +99,14 @@ from gui.mpr_controller_transactions import (
     capture_mpr_payload,
     detach_mpr_view,
     detach_view_on_pane_reset,
+    move_view,
     relocate_mpr_view,
     restore_failed_install,
     validate_install_request,
 )
 from gui.mpr_pane_teardown import tear_down_mpr_at_subwindow
 from gui.mpr_source_closure import release_all_mpr, release_closed_source_sessions
+from gui.mpr_view_duplication import duplicate_view_into_pane
 from gui.mpr_worker_fencing import (
     dataset_source_key,
     drop_build_registration,
@@ -183,20 +190,29 @@ class MprController(QObject):
         mpr_orientation (str):   Human-readable label ("Axial", etc.)
         mpr_slice_index (int):   Current MPR stack index (0-based).
 
+    Views are owned by the session/view registry; ``subwindow_data`` is the
+    live display adapter of an attached view.
+
     Signals:
-        mpr_activated(int):  Emitted with the subwindow index after MPR is
-                             successfully loaded and the first slice displayed.
-        mpr_cleared(int):    Emitted with the subwindow index after MPR state
-                             has been fully removed from that subwindow.
+        mpr_activated(int):  Emitted with the subwindow index after an MPR view
+                             was installed there and its first slice displayed.
+        mpr_cleared(int):    Emitted with the subwindow index after that
+                             view was discarded or moved away.
+        mpr_detached(int):   Emitted with the former subwindow index when a view
+                             leaves a pane but stays alive (detached).
+        mpr_tiles_changed(object): Emitted once per transaction that can change
+                             navigator tiles (frozenset of dirty view IDs).
     """
 
     mpr_activated = Signal(int)  # subwindow index
     mpr_cleared = Signal(int)    # subwindow index
     # Emitted when a view leaves a pane but stays alive (Clear Window, or it
     # was displaced by a successful build/drop). Argument: that pane index.
-    # Detached views are registry views; the navigator keys them by
-    # ``-view_id`` (``core.mpr_session_types.detached_nav_key``).
     mpr_detached = Signal(int)
+    # Emitted once at the end of every transaction that can change navigator
+    # tiles; the payload is a frozenset of attached view IDs whose tile pixels
+    # must be regenerated. Tiles are keyed by stable view ID.
+    mpr_tiles_changed = Signal(object)
 
     def __init__(self, app: Any) -> None:
         """
@@ -224,6 +240,9 @@ class MprController(QObject):
         # IDs, pane mapping and admission. Pane ``subwindow_data`` is its live
         # display adapter while attached (see ``gui.mpr_controller_sessions``).
         self._registry = create_registry(app)
+        # Opaque per-controller drag-origin token (see ``core.mpr_view_drag``): view
+        # IDs collide across controllers/instances, so drops must prove their origin.
+        self._drag_origin = new_drag_origin()
         # Pane -> (reservation id, source key) for an in-flight/just-loaded build.
         self._build_reservations: dict[int, tuple[int, tuple[str, str]]] = {}
         self._init_cache()
@@ -538,10 +557,16 @@ class MprController(QObject):
             # Clear MPR discards only this view; its session goes with the last view.
             self._registry.discard_view(view.view_id)
         self.mpr_cleared.emit(idx)
+        emit_tiles_changed(self)
 
     # ------------------------------------------------------------------
     # Public per-view API (navigator-facing; exact view IDs, stale IDs no-op)
     # ------------------------------------------------------------------
+
+    @property
+    def drag_origin(self) -> str:
+        """This controller's opaque drag-origin token (never reset; no patient content)."""
+        return self._drag_origin
 
     def has_detached_mpr(self) -> bool:
         """Return True if any MPR view exists without an assigned subwindow."""
@@ -550,6 +575,22 @@ class MprController(QObject):
     def detached_view_ids(self) -> list[int]:
         """Detached view IDs in creation order."""
         return detached_view_ids(self)
+
+    def all_view_ids(self) -> list[int]:
+        """Every view ID (attached and detached) in creation order."""
+        return all_view_ids(self)
+
+    def clear_view(self, view_id: int) -> bool:
+        """Clear one view by exact ID (pane clear or detached discard); stale IDs no-op."""
+        return clear_view(self, view_id)
+
+    def move_view(self, view_id: int, to_idx: int) -> None:
+        """Move/attach a view by stable ID to pane *to_idx* (see transactions)."""
+        move_view(self, view_id, to_idx)
+
+    def duplicate_view(self, view_id: int, to_idx: int) -> bool:
+        """Duplicate a view into pane *to_idx* sharing its result (no new session)."""
+        return duplicate_view_into_pane(self, view_id, to_idx)
 
     def attached_view_id(self, idx: int) -> int | None:
         """View ID attached to pane *idx*, or None."""
@@ -1475,91 +1516,8 @@ class MprController(QObject):
 
 
     def _build_overlay_dataset(self, result: MprResult, slice_index: int):
-        """
-        Build a synthetic dataset for MPR overlay text.
-
-        The source metadata is preserved for patient/study/series text, but
-        slice-specific DICOM fields that are meaningless for a resampled stack
-        are replaced or removed:
-        - ``InstanceNumber`` becomes the MPR stack index (1-based).
-        - ``ImageOrientationPatient`` matches the **displayed** MPR plane (row/column
-          cosines from ``slice_stack.planes[slice_index]``) so direction labels and
-          geometry match the reformatted view.
-        - ``PixelSpacing`` matches ``result.output_spacing_mm`` for scale markers.
-        - ``SliceLocation`` is removed.
-        - ``ImagePositionPatient`` is removed.
-
-        Args:
-            result:      Current MPR result.
-            slice_index: Zero-based MPR stack index.
-
-        Returns:
-            Dataset-like object suitable for ``DICOMParser``.
-        """
-        # pydicom Dataset.copy() is ``copy.copy`` (shallow): mutating tags on the
-        # copy still updates the original dataset in ``current_studies``, which
-        # corrupts native-series overlays (InstanceNumber / IOP). Deep-copy the
-        # first source slice so MPR-only metadata edits stay isolated.
-        source_ds = copy.deepcopy(result.source_volume.source_datasets[0])
-        source_ds.InstanceNumber = int(slice_index + 1)
-        self._overlay_apply_thickness(source_ds, result)
-        self._overlay_apply_orientation(source_ds, result, slice_index)
-        self._overlay_apply_spacing(source_ds, result)
-        self._overlay_strip_location_attrs(source_ds)
-        return source_ds
-
-    def _overlay_apply_thickness(self, source_ds: Any, result: MprResult) -> None:
-        """Set SliceThickness / SpacingBetweenSlices from MPR output thickness."""
-        try:
-            source_ds.SliceThickness = float(result.output_thickness_mm)
-        except Exception:
-            pass
-        try:
-            source_ds.SpacingBetweenSlices = float(result.output_thickness_mm)
-        except Exception:
-            pass
-
-    def _overlay_apply_orientation(
-        self, source_ds: Any, result: MprResult, slice_index: int
-    ) -> None:
-        """Set ImageOrientationPatient from the displayed MPR plane."""
-        planes = getattr(result.slice_stack, "planes", None) or []
-        si = int(slice_index)
-        if not planes or not (0 <= si < len(planes)):
-            return
-        plane = planes[si]
-        rc = np.asarray(plane.row_cosine, dtype=float).reshape(-1)
-        cc = np.asarray(plane.col_cosine, dtype=float).reshape(-1)
-        if rc.size != 3 or cc.size != 3:
-            return
-        try:
-            source_ds.ImageOrientationPatient = [
-                float(rc[0]),
-                float(rc[1]),
-                float(rc[2]),
-                float(cc[0]),
-                float(cc[1]),
-                float(cc[2]),
-            ]
-        except Exception:
-            pass
-
-    def _overlay_apply_spacing(self, source_ds: Any, result: MprResult) -> None:
-        """Set PixelSpacing from MPR output spacing."""
-        try:
-            rs, cs = result.output_spacing_mm[0], result.output_spacing_mm[1]
-            source_ds.PixelSpacing = [float(rs), float(cs)]
-        except Exception:
-            pass
-
-    def _overlay_strip_location_attrs(self, source_ds: Any) -> None:
-        """Remove SliceLocation / ImagePositionPatient from the overlay dataset."""
-        for attr in ("SliceLocation", "ImagePositionPatient"):
-            if hasattr(source_ds, attr):
-                try:
-                    delattr(source_ds, attr)
-                except Exception:
-                    setattr(source_ds, attr, "")
+        """Synthetic overlay dataset for one MPR slice (see ``core.mpr_overlay_dataset``)."""
+        return build_overlay_dataset(result, slice_index)
 
     @staticmethod
     def _compute_mpr_combine_range(

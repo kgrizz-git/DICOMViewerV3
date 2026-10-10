@@ -20,6 +20,7 @@ from mpr_lifecycle_harness import (
     _register_worker,
     _seed_mpr_pane,
     _signals,
+    _tile_events,
 )
 
 from core.study_navigation_handlers import (
@@ -54,6 +55,7 @@ class TestFullReplaceLoad:
     def test_replace_load_releases_every_session_view_and_mpr_pane(self) -> None:
         ctrl, app = _make_controller()
         fired = _signals(ctrl)
+        tiles = _tile_events(ctrl)
         _full_app(ctrl, app)
         _seed_mpr_pane(app, 0, _make_result())
         detached = _add_detached_view(ctrl, _make_result())
@@ -70,8 +72,8 @@ class TestFullReplaceLoad:
         assert worker.cancel_calls == 1
         assert app.subwindow_data[0].get("is_mpr") is None
         assert fired["cleared"] == [0]
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached)
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(0)
+        assert ctrl.get_view_metadata(detached) is None
+        assert tiles and tiles[-1] == frozenset()  # tiles reconciled after the release
 
     def test_no_mpr_pane_survives_to_the_stale_data_pass_even_if_its_source_is_reloaded(self) -> None:
         ctrl, app = _make_controller()
@@ -153,6 +155,7 @@ class TestSourceClose:
     def test_close_series_discards_its_sessions_and_resets_the_pane(self) -> None:
         ctrl, app = _make_controller()
         _full_app(ctrl, app)
+        tiles = _tile_events(ctrl)
         app.focused_subwindow_index = 1
         series_datasets = [object()]
         app.current_studies = {"ST": {"SE": series_datasets}}
@@ -169,7 +172,8 @@ class TestSourceClose:
         assert ctrl.detached_view_ids() == [foreign]
         assert ctrl._registry.session_count == 1
         assert app.subwindow_data[0].get("is_mpr") is None
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-same_source)
+        assert ctrl.get_view_metadata(same_source) is None
+        assert tiles
 
 
 class TestOrdinaryAssignment:

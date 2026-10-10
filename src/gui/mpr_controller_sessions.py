@@ -55,6 +55,8 @@ from core.mpr_view_display_state import (
 )
 
 _TITLE_MPR = "MPR"
+#: Longest side, in pixels, of the array handed to a navigator tile.
+THUMBNAIL_MAX_SIDE = 256
 
 
 # ---------------------------------------------------------------------------
@@ -231,8 +233,36 @@ def _result_photometric(result: Any) -> str | None:
     return str(value) if value else None
 
 
+def _lut_signature(lut: Any) -> Any:
+    """Value signature of a (frozen, identity-compared) LUT, stable across re-creation."""
+    if lut is None:
+        return None
+    fields = (
+        getattr(lut, "name", None), getattr(lut, "lut_type", None), getattr(lut, "source", None),
+        getattr(lut, "gamma", None), getattr(lut, "sigmoid_k", None), getattr(lut, "exp_k", None),
+        getattr(lut, "control_points", None), getattr(lut, "color_stops", None),
+    )
+    try:
+        hash(fields)
+    except TypeError:
+        return id(lut)
+    return fields
+
+
+def _content_stamp(view: MprView, n_slices: int) -> tuple[Any, ...]:
+    """Hashable summary of everything that changes a view's tile pixels."""
+    display = view.display
+    return (
+        view.session_id, n_slices, view.slice_index,
+        view.combine.enabled, view.combine.mode, view.combine.slice_count,
+        display.window_center, display.window_width, display.use_rescaled,
+        display.inverted, _lut_signature(display.lut),
+    )
+
+
 def _metadata(controller: Any, view: MprView) -> MprViewMetadata:
     session = controller._registry.get_session(view.session_id)
+    siblings = controller._registry.views_for_session(view.session_id)
     try:
         n_slices = max(0, int(getattr(session.result, "n_slices", 0) or 0))
     except (TypeError, ValueError):
@@ -248,6 +278,10 @@ def _metadata(controller: Any, view: MprView) -> MprViewMetadata:
         n_slices=n_slices,
         slice_index=view.slice_index,
         photometric_interpretation=_result_photometric(session.result),
+        view_number=1 + next(i for i, v in enumerate(siblings) if v.view_id == view.view_id),
+        view_count=len(siblings),
+        link_group_id=view.link_group_id,
+        content_stamp=_content_stamp(view, n_slices),
     )
 
 
@@ -265,6 +299,20 @@ def pane_view_metadata(controller: Any, idx: int) -> MprViewMetadata | None:
     """Metadata for the view attached to pane *idx*, or None."""
     view = refresh_view_from_pane(controller, idx)
     return None if view is None else _metadata(controller, view)
+
+
+def all_view_ids(controller: Any) -> list[int]:
+    """Every view ID (attached and detached) in creation order."""
+    return [v.view_id for v in controller._registry.ordered_views()]
+
+
+def emit_tiles_changed(controller: Any, dirty: Any = ()) -> None:
+    """Announce, once per transaction, that navigator tiles need reconciling.
+
+    *dirty* names attached views whose pixels must be regenerated even though
+    their content stamp looks unchanged (their live pane state changed).
+    """
+    controller.mpr_tiles_changed.emit(frozenset(dirty))
 
 
 def detached_view_ids(controller: Any) -> list[int]:
@@ -288,8 +336,8 @@ def view_thumbnail_pixels(
     """Mid-stack slice for a view's navigator tile, honouring its combine state.
 
     ``use_rescaled`` defaults to the view's own display state. The returned
-    array may share memory with the session's slices only when no rescale or
-    cast is needed; callers must not mutate it.
+    array is a new copy with its longest side bounded by ``THUMBNAIL_MAX_SIDE``
+    (stride-subsampled), so tiles never copy full-resolution planes.
     """
     view = find_view(controller, view_id)
     if view is None:
@@ -307,8 +355,12 @@ def view_thumbnail_pixels(
         mode=view.combine.mode or "aip",
         n_planes=int(view.combine.slice_count or 4),
     )
+    # Bounded, owned copy (nearest-neighbour stride) before any rescale: the
+    # tile is ~68 px, so never copy or rescale the full-resolution plane.
+    stride = max(1, -(-max(raw.shape[:2]) // THUMBNAIL_MAX_SIDE)) if raw.ndim >= 2 else 1
+    small = np.array(raw[::stride, ::stride], dtype=np.float32, copy=True)
     rescaled = view.display.use_rescaled if use_rescaled is None else use_rescaled
-    return result.apply_rescale(raw) if rescaled else raw.astype(np.float32)
+    return result.apply_rescale(small) if rescaled else small
 
 
 def discard_detached(controller: Any, view_id: int) -> bool:
@@ -321,15 +373,33 @@ def discard_detached(controller: Any, view_id: int) -> bool:
     if view is None or view.pane_index is not None:
         return False
     controller._registry.discard_view(view_id)
+    emit_tiles_changed(controller)
+    return True
+
+
+def clear_view(controller: Any, view_id: int) -> bool:
+    """Clear one view by exact ID: via its pane when attached, else discard it.
+
+    Stale or unknown IDs are harmless no-ops returning False.
+    """
+    view = find_view(controller, view_id)
+    if view is None:
+        return False
+    if view.pane_index is None:
+        return discard_detached(controller, view_id)
+    controller.clear_mpr(view.pane_index)
     return True
 
 
 __all__ = [
+    "all_view_ids",
     "build_view_payload",
     "capture_pane_payload",
+    "clear_view",
     "create_registry",
     "detached_view_ids",
     "discard_detached",
+    "emit_tiles_changed",
     "find_view",
     "notify_mpr",
     "pane_view_metadata",

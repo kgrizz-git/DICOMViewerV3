@@ -80,7 +80,7 @@ def _wiring_app() -> tuple[SimpleNamespace, SimpleNamespace, SimpleNamespace]:
     viewer = _viewer()
     subwindow = SimpleNamespace(
         image_viewer=viewer,
-        mpr_assign_requested=_Signal(),
+        mpr_view_drop_requested=_Signal(),
         assign_series_requested=_Signal(),
         expand_to_1x1_requested=_Signal(),
     )
@@ -113,7 +113,7 @@ def _wiring_app() -> tuple[SimpleNamespace, SimpleNamespace, SimpleNamespace]:
         "_on_swap_view_requested",
         "_on_window_slot_map_popup_requested",
         "_get_current_slice_file_path",
-        "_on_mpr_assign_requested",
+        "_on_mpr_view_drop_requested",
         "_open_structured_report_browser",
         "_on_clear_subwindow_content_requested",
     )

@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.lut_series_state import clear_mpr_lut_override
-from core.mpr_session_types import detached_nav_key
+from gui.mpr_controller_sessions import emit_tiles_changed
 from gui.mpr_worker_fencing import retire_pane_worker
 
 # ---------------------------------------------------------------------------
@@ -39,13 +39,14 @@ def release_closed_source_sessions(
     """Release MPR state tied to a closed study (or single series).
 
     Retires dependent builds, clears per-pane LUT overrides and MPR banners,
-    resets the MPR tool override, drops a matching detached payload, purges
-    orphan navigator specs, and bumps source generations so late worker
-    callbacks cannot resurrect closed data. Study data itself is untouched
-    (callers clear it). Returns release counts.
+    resets the MPR tool override, discards every session (and so every attached
+    and detached view) built from the source, announces one navigator tile
+    reconcile, and bumps source generations so late worker callbacks cannot
+    resurrect closed data. Study data itself is untouched (callers clear it).
+    Returns release counts.
     """
     app = controller._app
-    released = {"panes": 0, "workers": 0, "detached": 0, "specs": 0}
+    released = {"panes": 0, "workers": 0, "detached": 0}
     panes = set(app.subwindow_data) | set(controller._workers.keys())
     for idx in sorted(panes):
         data = app.subwindow_data.get(idx, {})
@@ -60,11 +61,10 @@ def release_closed_source_sessions(
         if not display_match:
             continue
         _reset_pane_mpr_chrome(controller, app, idx)
-        if _clear_navigator_spec(app, idx):
-            released["specs"] += 1
         released["panes"] += 1
     released["detached"] += _discard_closed_sessions(controller, study_uid, series_uid)
     _bump_closed_source_generations(controller, study_uid, series_uid)
+    emit_tiles_changed(controller)
     return released
 
 
@@ -74,8 +74,8 @@ def _discard_closed_sessions(
     """Discard every session built from the closed source; return detached views released.
 
     Attached views leave through their panes (chrome reset and the caller's
-    pane clear); detached views also lose their navigator tile. Foreign
-    sessions are untouched.
+    pane clear). Their navigator tiles go with the single tiles-changed
+    announcement the caller emits. Foreign sessions are untouched.
     """
     registry = controller._registry
     session_ids: list[int] = []
@@ -89,7 +89,6 @@ def _discard_closed_sessions(
     for session_id in session_ids:
         for view in registry.views_for_session(session_id):
             if view.pane_index is None:
-                _clear_navigator_spec(controller._app, detached_nav_key(view.view_id))
                 detached += 1
         registry.discard_session(session_id)
     return detached
@@ -112,32 +111,29 @@ def _build_matches_close(
 
 
 def release_all_mpr(controller: Any) -> dict[str, int]:
-    """Release every MPR build, session payload, override, and spec.
+    """Release every MPR build, session, view, reservation, and override.
 
     Retires all registered workers (including pending builds on empty panes
-    whose source no pane displays), drops any detached payload, bumps every
-    source generation, and resets per-pane MPR chrome on every known pane.
+    whose source no pane displays), clears the registry, bumps every source
+    generation, and resets per-pane MPR chrome on every known pane.
     Study data itself is untouched (callers clear it).
     """
     app = controller._app
-    released = {"panes": 0, "workers": 0, "detached": 0, "specs": 0}
+    released = {"panes": 0, "workers": 0, "detached": 0}
     panes = set(app.subwindow_data) | set(controller._workers.keys())
     for idx in sorted(panes):
         if retire_pane_worker(controller, idx):
             released["workers"] += 1
         _reset_pane_mpr_chrome(controller, app, idx)
-        if _clear_navigator_spec(app, idx):
-            released["specs"] += 1
         released["panes"] += 1
     registry = controller._registry
     detached = [v.view_id for v in registry.ordered_views() if v.pane_index is None]
     registry.clear_all()
     controller._build_reservations.clear()
-    for view_id in detached:
-        _clear_navigator_spec(app, detached_nav_key(view_id))
     released["detached"] += len(detached)
     for key in list(controller._source_generations.keys()):
         controller._source_generations[key] += 1
+    emit_tiles_changed(controller)
     return released
 
 
@@ -160,19 +156,6 @@ def _reset_pane_mpr_chrome(controller: Any, app: Any, idx: int) -> None:
             banner(None)
         except Exception:
             pass
-
-
-def _clear_navigator_spec(app: Any, key: int) -> bool:
-    """Purge one orphan navigator MPR spec; True when cleared."""
-    navigator = getattr(app, "series_navigator", None)
-    clearer = getattr(navigator, "clear_mpr_thumbnail", None)
-    if not callable(clearer):
-        return False
-    try:
-        clearer(key)
-    except Exception:
-        return False
-    return True
 
 
 def _bump_closed_source_generations(

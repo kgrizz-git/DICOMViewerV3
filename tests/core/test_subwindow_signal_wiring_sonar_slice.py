@@ -114,7 +114,7 @@ def test_connect_subwindow_signals_wires_and_tracks_slots() -> None:
     subwindow.image_viewer = image_viewer
     subwindow.assign_series_requested = MagicMock()
     subwindow.expand_to_1x1_requested = MagicMock()
-    subwindow.mpr_assign_requested = MagicMock()
+    subwindow.mpr_view_drop_requested = MagicMock()
 
     config = MagicMock()
     config.get_slice_location_lines_same_group_only.return_value = False
@@ -153,7 +153,7 @@ def test_connect_subwindow_signals_wires_and_tracks_slots() -> None:
         _on_expand_to_1x1_requested=MagicMock(),
         _on_swap_view_requested=MagicMock(),
         _on_window_slot_map_popup_requested=MagicMock(),
-        _on_mpr_assign_requested=MagicMock(),
+        _on_mpr_view_drop_requested=MagicMock(),
         _open_structured_report_browser=MagicMock(),
         _get_current_slice_file_path=MagicMock(return_value=None),
         _on_clear_subwindow_content_requested=MagicMock(),
@@ -189,8 +189,8 @@ def test_connect_subwindow_signals_wires_and_tracks_slots() -> None:
     image_viewer.files_dropped.connect.assert_called_once_with(app._open_files_from_paths)
     image_viewer.set_subwindow_index.assert_called_once_with(0)
     wire_px.assert_called_once()
-    subwindow.mpr_assign_requested.connect.assert_called_once_with(
-        app._on_mpr_assign_requested
+    subwindow.mpr_view_drop_requested.connect.assert_called_once_with(
+        app._on_mpr_view_drop_requested
     )
 
     # Second pass should disconnect tracked slots before reconnecting.

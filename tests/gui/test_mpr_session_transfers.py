@@ -157,7 +157,7 @@ class TestTransfersConsumeNoAdmission:
         assert ctrl.attached_view_id(1) == floating
         assert ctrl.detached_view_ids() == [displaced]
         assert fired == {"activated": [1], "cleared": [], "detached": [1]}
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-floating)
+        assert ctrl.get_view_metadata(floating) is not None
 
     def test_failed_relocate_leaves_registry_and_signals_untouched(self) -> None:
         ctrl, app = _make_controller()
@@ -291,8 +291,8 @@ class TestSourceClosureAndCloseAll:
         assert ctrl.attached_view_id(0) is None
         assert ctrl.detached_view_ids() == [foreign, other_study]
         assert ctrl._registry.session_count == 2
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached_a)
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached_b)
+        assert ctrl.get_view_metadata(detached_a) is None
+        assert ctrl.get_view_metadata(detached_b) is None
 
     def test_close_study_discards_every_series_of_it(self) -> None:
         ctrl, _app = _make_controller()
@@ -336,7 +336,7 @@ class TestSourceClosureAndCloseAll:
         assert _counts(ctrl) == (0, 0, 0, 0)
         assert ctrl._build_reservations == {}
         assert released["detached"] == 1 and released["workers"] == 1
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-floating)
+        assert ctrl.get_view_metadata(floating) is None
 
     def test_release_is_idempotent(self) -> None:
         ctrl, _app = _make_controller()

@@ -240,6 +240,13 @@ def _register_worker(ctrl: MprController, idx: int, worker: Any) -> None:
     ctrl._workers[idx] = cast(Any, worker)
 
 
+def _tile_events(ctrl: MprController) -> list[frozenset[int]]:
+    """Record every ``mpr_tiles_changed`` emission (one per controller transaction)."""
+    events: list[frozenset[int]] = []
+    ctrl.mpr_tiles_changed.connect(events.append)
+    return events
+
+
 def _signals(ctrl: MprController) -> dict[str, list[Any]]:
     fired: dict[str, list[Any]] = {"activated": [], "cleared": [], "detached": []}
     ctrl.mpr_activated.connect(fired["activated"].append)

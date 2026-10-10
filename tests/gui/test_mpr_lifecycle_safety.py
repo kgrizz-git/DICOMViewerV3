@@ -297,7 +297,7 @@ class TestBuildSourceCloseMatching:
         assert worker.cancel_calls == 1
         assert released["panes"] == 0  # display chrome belongs to ST-B
         assert manager.series_defaults["SE-B"]["current_lut"].name == "Sigmoid"
-        app.series_navigator.clear_mpr_thumbnail.assert_not_called()
+        assert ctrl._registry.view_count == 0  # nothing was built, nothing was released
 
     def test_foreign_build_survives_close(self) -> None:
         ctrl, app = _make_controller()
@@ -308,7 +308,7 @@ class TestBuildSourceCloseMatching:
 
         released = ctrl.release_mpr_for_closed_source("ST-A", "SE-OTHER")
 
-        assert released == {"panes": 0, "workers": 0, "detached": 0, "specs": 0}
+        assert released == {"panes": 0, "workers": 0, "detached": 0}
         assert 0 in ctrl._workers
 
     def test_split_series_closure(self) -> None:
@@ -343,7 +343,7 @@ class TestBuildSourceCloseMatching:
         assert worker.cancel_calls == 1
         assert ctrl.detached_view_ids() == []
         assert ctrl._registry.view_count == 0 and ctrl._registry.session_count == 0
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached_view)
+        assert ctrl.get_view_metadata(detached_view) is None
         assert ctrl._source_generations[("ST-Y", "SE-Y")] == 4
 
 

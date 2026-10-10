@@ -15,6 +15,7 @@ import numpy as np
 
 import core.mpr_navigator_thumbnail as mpr_navigator_thumbnail
 from core.lut_catalog import colormap_lut, linear_lut
+from core.mpr_session_types import MprDisplayState, MprViewMetadata
 
 
 def _roi_stats(array: np.ndarray) -> tuple[float, float, float, float]:
@@ -56,26 +57,48 @@ def _make_app(lut, inverted: bool) -> tuple[SimpleNamespace, np.ndarray, np.ndar
             }
         },
         subwindow_managers={0: {"view_state_manager": view_state}},
-        series_navigator=SimpleNamespace(
-            set_mpr_thumbnail=MagicMock(),
-            clear_mpr_thumbnail=MagicMock(),
-        ),
-        window_level_controls=SimpleNamespace(window_center="40", window_width="400"),
-        _mpr_controller=SimpleNamespace(has_detached_mpr=MagicMock(return_value=False)),
         focused_subwindow_index=0,
     )
     return app, stored, apply_rescale(stored)
+
+
+def _tile_for_pane_view(lut, inverted: bool) -> dict:
+    """The navigator spec produced for a view carrying *lut* / *inverted* display state."""
+    shown: dict = {}
+
+    class _Navigator:
+        def mpr_tile_stamps(self) -> dict:
+            return {}
+
+        def reconcile_mpr_thumbnails(self, incoming: dict) -> bool:
+            shown.update(incoming)
+            return True
+
+    meta = MprViewMetadata(
+        view_id=1, session_id=1, creation_seq=1, pane_index=0, orientation="Axial",
+        source_study_uid="st", source_series_uid="sr", n_slices=5, slice_index=0,
+        photometric_interpretation="MONOCHROME1",
+    )
+    controller = SimpleNamespace(
+        drag_origin="AbCdEfGhIjKlMnOpQr_-12",
+        all_view_ids=lambda: [1],
+        get_view_metadata=lambda _v: meta,
+        get_view_display_state=lambda _v: MprDisplayState(lut=lut, inverted=inverted),
+        get_view_thumbnail_pixels=lambda _v, _r=None: np.zeros((4, 4), dtype=np.float32),
+    )
+    mpr_navigator_thumbnail.sync_mpr_navigator_tiles(
+        SimpleNamespace(series_navigator=_Navigator(), _mpr_controller=controller)
+    )
+    return shown[1]
 
 
 def test_color_lut_reaches_the_display_but_not_the_measurement_array() -> None:
     hot = colormap_lut("hot")
     app, stored, rescaled = _make_app(hot, inverted=True)
 
-    mpr_navigator_thumbnail.update_mpr_navigator_thumbnail(app, 0)
-
-    call = app.series_navigator.set_mpr_thumbnail.call_args
-    assert call.kwargs["lut"] is hot
-    assert call.kwargs["image_inverted"] is True
+    tile = _tile_for_pane_view(hot, inverted=True)
+    assert tile["lut"] is hot
+    assert tile["image_inverted"] is True
 
     measurement = mpr_navigator_thumbnail.get_subwindow_mpr_pixel_array(app, 0)
     assert measurement is not None

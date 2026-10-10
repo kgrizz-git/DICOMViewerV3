@@ -164,15 +164,14 @@ class TestClearWindowAndClosure:
 
         released = ctrl.release_mpr_for_closed_source("ST", "SE")
 
-        assert released == {"panes": 1, "workers": 1, "detached": 1, "specs": 1}
+        assert released == {"panes": 1, "workers": 1, "detached": 1}
         assert worker.cancel_calls == 1
         assert ctrl.detached_view_ids() == []
         assert ctrl.attached_view_id(0) is None
         assert ctrl.attached_view_id(1) is not None
         assert get_mpr_lut_override(manager) is None
         assert app.multi_window_layout.get_subwindow(0).image_viewer._mpr_mode_override is False
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(0)
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached_view)
+        assert ctrl.get_view_metadata(detached_view) is None and ctrl.attached_view_id(0) is None
         # Other-study pane untouched.
         assert app.subwindow_data[1].get("is_mpr") is True
         # Late callback for the closed source is dropped.

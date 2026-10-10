@@ -129,17 +129,11 @@ class MprViewMetadata:
     n_slices: int
     slice_index: int
     photometric_interpretation: str | None = None
-
-
-def detached_nav_key(view_id: int) -> int:
-    """Navigator/drag key for a detached view (negative exact view ID).
-
-    Attached views keep their pane index (``>= 0``) as the key. View IDs start
-    at one, so ``-1`` is simply view 1, never a "the detached one" sentinel.
-    """
-    return -int(view_id)
-
-
-def detached_view_id_from_nav_key(key: int) -> int | None:
-    """Exact view ID for a detached navigator key, or None for pane keys."""
-    return -int(key) if int(key) < 0 else None
+    #: 1-based position among its session's views (creation order) and their count.
+    view_number: int = 1
+    view_count: int = 1
+    #: Session-local link group, ``None`` when unlinked (see ``MprSessionRegistry`` link groups).
+    link_group_id: int | None = None
+    #: Hashable summary of everything that changes the tile's pixels. A detached
+    #: view whose stamp changes (e.g. a linked slice update) needs a fresh tile.
+    content_stamp: tuple[Any, ...] = ()

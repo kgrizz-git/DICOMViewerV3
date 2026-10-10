@@ -68,8 +68,8 @@ def _close_3d_dialogs(app: DICOMViewerApp) -> None:
 
 
 def _release_all_mpr_for_close_all(app: DICOMViewerApp) -> None:
-    """Retire every MPR build and release every MPR session/payload first, so
-    no worker, detached payload, or navigator spec outlives the studies —
+    """Retire every MPR build and release every MPR session and view first, so
+    no worker, detached view, or navigator tile outlives the studies —
     including pending builds on panes with no MPR view."""
     app._mpr_controller.release_all_mpr()
 
