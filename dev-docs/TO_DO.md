@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-08
+**Last updated:** 2026-10-09
 
 ---
 
@@ -34,12 +34,7 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 
 1. **Complete pending manual smoke checks** — see [Manual Smoke Checks](#manual-smoke-checks) (counts as **one queue slot** until that section has no open items)
 2. **Address open Aikido dashboard findings** — [Maintenance](#maintenance)
-3. **[P1] Multiple MPR windows and detached MPR sessions** — MPR keeps a single
-   detached session (`_detached_mpr_payload` in `gui/mpr_controller.py`), and a
-   new in-pane MPR discards it. Include shared-result duplicate views and
-   optional linked scrolling, with preserved per-view display state. Plan:
-   [MPR multi-window + multiple detached](plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#mpr-multi-window-detached).
-4. **[P1] Fusion overlay rescaled values and units** — add a raw-vs-rescaled
+3. **[P1] Fusion overlay rescaled values and units** — add a raw-vs-rescaled
    selector for overlay normalization and show units (HU, SUV) in the fusion
    controls. See [Fusion Follow-up](#fusion-follow-up).
 
@@ -69,6 +64,10 @@ Release blockers (license compliance, versioned executables) live in
 > 3. When a check passes: check it off here, note pass/fail in the PR or task summary, and record in [`MAINTENANCE_LOG.md`](MAINTENANCE_LOG.md) when the outcome is harness/CI/infrastructure-related. Add [`CHANGELOG.md`](../CHANGELOG.md) only for user-visible behavior confirmation.
 > 4. When **all** checks for an archived plan pass, remove those lines. Do not duplicate under feature parents — link here instead.
 
+- [ ] **[P1]** **MPR multiple sessions, detached views, and duplicates** — **Env:** any CT/MR series with consistent geometry; native macOS/Windows display. **Steps:** follow [`AGENT_SMOKE.md` §MPR multiple sessions](orchestration/AGENT_SMOKE.md#mpr-multiple-sessions-detached-views-and-duplicates). Build two MPRs from the same series (independent sessions); **Clear This Window** on both and confirm two navigator tiles remain; drag one tile onto a pane (only that one attaches); build a third MPR into a pane that already shows one and confirm the old one stays as a tile; drop a tile onto an occupied MPR pane and confirm the displaced MPR becomes a tile; **Duplicate into Window…** from an attached and a detached tile (target list shows only visible windows, the source's window is disabled); close the source series and confirm every dependent MPR tile disappears. **Pass:** nothing is silently lost, tiles keep creation order, labels (`S1`, `S1.2`) distinguish same-source MPRs, a failed drop leaves both MPRs as they were. **Archived plan:** [MPR multiple sessions and linked views](plans/completed/MPR_MULTI_SESSION_AND_LINKED_VIEWS_PLAN.md).
+- [ ] **[P1]** **MPR linked views, Slice Sync, and cine** — **Steps:** make a **Duplicate Linked into Window…**; scroll with the wheel, arrow keys, the in-window slider, and cine on each view in turn — both views move together and keep their own window/level, combine, LUT and inversion; detach one linked view, scroll the other, confirm the tooltip's "slice N of M" follows and reattaching shows the same slice; with **View → Slice Sync** on, put a normal series and the linked pair in one sync group and confirm scrolling either side moves the pair once with no stutter or loop; confirm linking still works with Slice Sync off; **Unlink View** stops following; clearing one linked view unlinks the other. **Pass:** no double redraw flicker, no drift between the two slice indicators, cine keeps playing through linked scrolling and pauses on a manual step. **Archived plan:** as above.
+- [ ] **[P1]** **MPR limits and memory estimate** — **Steps:** **Edit → Settings… → MPR Limits** — set sessions/views to small values (for example 2 and 3), accept, then try a third MPR and a fourth view and read the refusal text (limit name, counts, approximate MiB); lower the limits below current usage and confirm nothing closes; raise them and confirm the next build is admitted without restarting; confirm the status bar shows the usage line when an MPR is built and when a duplicate is added; confirm the view limit cannot be set below the session limit. **Pass:** wording is concise, the MiB figure is plausible for the volume size, no extra confirmation dialogs appear. **Archived plan:** as above.
+- [ ] **[P2]** **MPR cleanup on file replace and Close All** — **Steps:** with attached and detached MPRs present, **File → Close All**, and separately open a different folder using a normal (replace) open; confirm all MPR panes and tiles are gone, no stale tile reappears when the same series is reopened, and the app stays responsive. **Archived plan:** as above.
 - [ ] **[P1]** **Blank-frame GPU-fallback false positive** — **Env:** Windows under Parallels and/or native-GPU macOS/Windows with VTK. **Steps:** open a bone-free CT (QC/water phantom) with **CT Bone** preset — GPU path retained, no false CPU fallback, no hardware-blaming status. If reproducible in your env, also confirm a genuine GPU blank failure still falls back to CPU. **Pass:** expected-blank frames stay on GPU; real failures still fall back. **Archived plan:** [Volume render fallback & memory hardening](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md) §Verification gate
 - [ ] **[P2]** **3D Save Image (PNG/JPG/SC DICOM)** — **Env:** macOS and Windows/Parallels with VTK. **Steps:** open **3D View**, wait for the first frame, then use **Save Image…** and **Ctrl+S** for PNG, JPG with **Burn in overlay text**, and **DICOM (Secondary Capture)** with **De-identify** on and off. **Expect:** the button is disabled before the first frame; files open in an image viewer or re-load in the app; burn-in shows only render settings; the de-identified DICOM shows no patient name or ID. Plan: [derived-image export](plans/completed/DERIVED_IMAGE_EXPORT_3D_AND_PROJECTION_PLAN.md).
 - [ ] **[P2]** **Volume build memory amplification (~8× measured)** — **Env:** Windows/Parallels 3D. **Steps:** open **3D View** on a large multiframe CT (800+ slices if available); watch Task Manager during build; confirm peak RSS is materially lower than pre-fix and a downsampling notice appears when the guard triggers. **Pass:** no OOM; guard message accurate. **Archived plan:** [Volume render fallback & memory hardening](plans/completed/VOLUME_RENDER_FALLBACK_AND_MEMORY_HARDENING_PLAN.md) §Task B
@@ -208,13 +207,11 @@ Release blockers (license compliance, versioned executables) live in
 
 - [ ] **[P1]** Expand Structured Report support beyond dose SR: classify major SR families more clearly in UI/status, identify text-centric / radiologist-style SRs when possible, and add a roadmap for report-specific handling (narrative sections, KO/CAD/procedure-log workflows, measurement-report plugins) while preserving generic tree fallback. **Plan:** [SR expanded support](plans/supporting/SR_EXPANDED_SUPPORT_PLAN.md).
 
-- [ ] **[P1]** Allow MPRs to be loaded to multiple windows, and allow more than one MPR to be constructed and detached. **Plan:** [MPR multi-window + multiple detached](plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#mpr-multi-window-detached).
-
 - [ ] **[P2]** When the MPR builder dialog opens, include a control for choosing which window to assign the new MPR to, instead of always using whichever window is focused when the user launches the dialog
 
 - [ ] **[P2]** **Text/arrow annotations on MPR + right-pane "Combine Slices" for MPR.** Enable text and arrow annotations on MPR subwindows (slice-scoped, navigator/focus parity with non-MPR views) and let the right-panel **Combine Slices** control (AIP/MIP/MinIP, slice count) drive MPR slab preview without reopening the Create MPR dialog. **Plan:** [MPR annotations + right-pane combine slices](plans/MPR_ANNOTATIONS_AND_RIGHT_PANE_COMBINE_SLICES_PLAN.md). Surfaced 2026-08-11.
 
-- [ ] **[P2]** If a series's first image is totally empty (or perhaps has less than 0.1% contrast or something), instead of using that for the thumbnail in the navigator, use the middle image of the series. **Plan:** [Navigator thumbnail fallback](plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#navigator-thumbnail-fallback).
+- [ ] **[P2]** If a series's first image is totally empty (or perhaps has less than 0.1% contrast or something), instead of using that for the thumbnail in the navigator, use the middle image of the series. **Plan:** [Navigator thumbnail fallback](plans/supporting/NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md#navigator-thumbnail-fallback).
 
 ### Image interaction & loading
 

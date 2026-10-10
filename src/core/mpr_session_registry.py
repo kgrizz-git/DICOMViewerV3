@@ -1,7 +1,7 @@
 """MPR session/view registry (pure core, no Qt).
 
 First slice of the P1 multiple-MPR-sessions plan
-(``dev-docs/plans/supporting/MPR_MULTI_WINDOW_AND_NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md``):
+(``dev-docs/plans/completed/MPR_MULTI_SESSION_AND_LINKED_VIEWS_PLAN.md``):
 stable session/view ownership independent of pane assignment, shared-result
 duplicates, session-local link groups, configurable admission caps with
 idempotent pending reservations, and discard-last-view session lifetime.

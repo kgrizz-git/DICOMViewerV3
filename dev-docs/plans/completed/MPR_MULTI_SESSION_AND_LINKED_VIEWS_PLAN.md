@@ -1,10 +1,83 @@
-# Plan: MPR in multiple windows / multiple detached sessions + navigator thumbnail fallback
+# Plan (completed): MPR multiple sessions, detached views, duplicates and linked scrolling
 
-Supporting plan for two UX backlog items in `dev-docs/TO_DO.md` (UX / Workflow).
+**Created:** 2026-10-08
+**Completed:** 2026-10-09 (implementation)
+**Status:** **Implementation complete; verification pending.** All six phases
+shipped on the `feature/multiple-mpr-sessions` branch with automated tests and
+static gates. **Manual smoke and the final independent review have not been done
+yet** and are tracked in [`TO_DO.md` — Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).
+**Tracks:** [`CHANGELOG.md`](../../../CHANGELOG.md) (Unreleased, MPR entries) and
+[`MAINTENANCE_LOG.md`](../../MAINTENANCE_LOG.md) (2026-10-09).
+**Split:** this file was the combined "MPR multi-window + navigator thumbnail
+fallback" plan. The unfinished navigator-thumbnail work (P2) now lives on its own
+in [`NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md`](../supporting/NAVIGATOR_THUMBNAIL_FALLBACK_PLAN.md).
 
-**Last updated:** 2026-10-09
+User-facing behavior: [`user-docs/USER_GUIDE_MPR.md`](../../../user-docs/USER_GUIDE_MPR.md).
 
-## Pre-implementation review (2026-10-08)
+## As built
+
+The design below was followed, with these concrete outcomes (and the places the
+shipped form differs from the plan text, which is kept as the historical record):
+
+- **Ownership.** `MprSessionRegistry` (`src/core/mpr_session_registry.py`, pure core)
+  owns every `MprResult` (sessions), stable view IDs, the one-to-one pane map, link
+  groups and admission reservations. `MprController` owns one live registry; a
+  pane's `subwindow_data` is the live display adapter of an attached view and is
+  flushed into the view before every transfer, detach, read or thumbnail. The
+  transfer "payload" is an adapter built on demand, never stored.
+- **Admission.** Defaults **8 sessions / 16 views**, configurable in
+  **Edit → Settings… → MPR Limits** (atomic pair, `view >= session >= 1`). A
+  reservation is taken before volume construction, covers cache hits and direct
+  activation, and is released exactly once on cancel, error, closure, close-all or
+  activation failure. Moves, detach and reattach consume no admission. Lowering
+  limits evicts nothing. A concise "sessions / views / approximate MiB" line is
+  shown in refusals and status messages; the estimate (`core/mpr_memory_estimate.py`)
+  is **not** a RAM budget.
+- **Lifecycle.** Transactional move/attach/duplicate/build replacement with
+  snapshot rollback (a render that fails to produce an image counts as failure);
+  displaced MPRs are preserved as detached views; worker/source fencing with
+  native-thread lifetime retention; source/study close, Close All and a full-replace
+  load release dependent sessions and views.
+- **Navigator and drag.** Tiles are keyed by **stable view ID** (pane number is a
+  separate field), ordered by creation, labelled without patient data
+  (`S2`, `S2.1`, `S2.1L`), and reconciled once per controller transaction. The
+  negative-ID adapter proposed in the plan was **replaced** by a versioned drag
+  payload (`application/x-dv3-mpr-view`: view ID + operation + per-controller
+  origin token) that carries no pane index; foreign, stale and malformed drops are
+  no-ops. The legacy bare-integer MIME is no longer produced or accepted.
+- **Duplicate and link.** **Duplicate into Window…**, **Duplicate Linked into
+  Window…** and **Unlink View** on the tile context menu. A duplicate shares the
+  session's result (no array copy) and snapshots the source view's state. Linking
+  is session-local; one canonical setter (`gui/mpr_view_links.py`) moves a whole
+  link group once for wheel, keys, slider, cine and incoming global sync. Redraws
+  never propagate. Explicit links work with Slice Sync off; incoming sync moves a
+  linked group once and does not cascade into other sync groups. Detached members
+  follow the group silently (debounced tile refresh) and adopt the canonical slice
+  when reattached.
+- **Not changed (by decision).** Detached views are in-memory only (not saved
+  across restarts). No new keyboard shortcuts. No hard RAM budget.
+
+## Verification record
+
+- Automated: focused MPR, navigator, signal-wiring, settings, loader and privacy
+  suites per chunk; fault-injection checks on the new guards; ruff, basedpyright
+  (errors), architecture boundaries, repo harness, line/complexity and privacy
+  gates.
+- Full suite at `01acdda` (`python -m pytest tests/ -v`): **8126 passed, 15 skipped,
+  14 subtests passed, 34 failures — all worker crashes in four native VTK test files**
+  (`test_volume_interactor_bridge.py`, `test_volume_render_surface.py`,
+  `test_volume_shortcuts.py`, `test_volume_surface_factory.py`) under the sandbox.
+  The required narrow native-graphics retry of those four files (`-n0 --no-cov`)
+  passed **all 77**. No actual test failures remain. The original sandbox run is
+  reported as-is, not replaced by the retry.
+- **Not yet done:** manual smoke on a real display (TO_DO) and the final independent
+  code review.
+
+---
+
+## Pre-implementation review (2026-10-08, historical)
+
+This review records the starting point and the agreed design. Statements about the single detached slot, negative navigator IDs or behavior that "still exists" describe the code **before** this work.
 
 Code inspection confirms the single detached slot and activation-time discard
 still exist. This review covers the P1 MPR work only; the P2 thumbnail heuristic
@@ -84,16 +157,16 @@ retained. Validate `view_cap >= session_cap >= 1`; defaults are 16/8 but the kno
 are separate. Do not silently evict to repair config or lower limits. Admission
 messages identify the limiting cap and show current/limit counts.
 
-Opus recommended 32 views to allow four duplicates per each of eight sessions;
-retain 16 because the user considers it sufficient and the cap is configurable.
+A review suggested 32 views to allow four duplicates per each of eight sessions;
+16 was retained because it is sufficient for the intended use and the cap is configurable.
 The proposed sync rule below now treats linked views as one scrolling unit,
 including incoming global sync, removing the earlier asymmetric exclusion rule.
 
 ### Independent review
 
-MiMo V2.6 Flash Free and Claude Opus 5.5 Low reviewed the plan against code; both
-supported the design after refinements, and all three scratch bug reproductions
-passed (also independently rerun by the primary agent).
+Two independent reviews checked the plan against the code and supported the design
+after refinements; the three scratch bug reproductions were re-run independently.
+A final independent review of the finished implementation is still pending.
 
 ### Required verification additions
 
@@ -105,28 +178,9 @@ individual context-menu deletion, tile order/width and navigator rebuild.
 Manual smoke must include independent attached MPRs, both detached tiles,
 display-state restoration, occupied-target drop and close-source cleanup.
 
-### Current code map (supersedes historical paths below)
-
-- Lifecycle/build callbacks: `src/gui/mpr_controller.py`.
-- Thumbnail orchestration: `src/core/mpr_navigator_thumbnail.py`.
-- App dispatch: `MPRNavigationMixin` in `src/main_app_subwindow_management.py`.
-- Clear Window/source closure: `src/core/study_navigation_handlers.py`.
-- Navigator layout/width: `src/gui/series_navigator.py`,
-  `src/gui/series_navigator_view.py`, `src/gui/series_navigator_model.py`.
-- Drag source/target: `src/gui/mpr_thumbnail_widget.py`,
-  `src/gui/sub_window_container.py`.
-
-The implementation phases below incorporate these lifecycle and rollback cases.
-Automated drag/dispatch coverage and manual smoke are required.
-
-| Item | Priority | Summary |
-|------|----------|---------|
-| Multiple MPR windows + detached/duplicate/linked views | P1 | Introduce session/view ownership, multiple detach, shared-result duplicates and explicit linked scrolling. |
-| Series thumbnail when first slice is empty / flat | P2 | If the representative slice for the navigator is visually empty or extremely low contrast, pick a better slice (e.g. middle of stack). |
-
 ---
 
-## 1. Investigation summary (current behavior)
+## Historical baseline (before this work)
 
 ### 1.1 In-pane MPR (per subwindow)
 
@@ -149,6 +203,7 @@ Automated drag/dispatch coverage and manual smoke are required.
 
 - MIME type `application/x-dv3-mpr-assign` and `SubWindowContainer` treat source index **-1** as “attach floating MPR” (`src/main.py` `_on_mpr_assign_requested`).
 - Only one floating session exists, so the UI model **implicitly** assumes at most one `-1` thumbnail.
+
 
 ---
 
@@ -285,31 +340,35 @@ Automated drag/dispatch coverage and manual smoke are required.
 
 ### 2.4 Implementation phases
 
-- [ ] **Phase 0 — Contracts:** characterize global C-to-A/B scrolling exactly
+- [x] **Phase 0 — Contracts:** characterize global C-to-A/B scrolling exactly
   once, A-to-B/C scrolling, and separate-global-group membership; inventory
   every slice-change/cine/export/clear/layout consumer and characterize behavior.
-- [ ] **Phase 1 — Registry:** session/view types, pane adapters, public metadata,
+- [x] **Phase 1 — Registry:** session/view types, pane adapters, public metadata,
   display-state snapshot/restore, configurable limits and reservation lifecycle.
   Define lifecycle signal pane/view contracts (`mpr_activated`, `mpr_cleared`,
   `mpr_detached`) and update their wiring/tests with the registry adapters.
-- [ ] **Phase 2 — Lifecycle:** transactional move/attach/build replacement,
+- [x] **Phase 2 — Lifecycle:** transactional move/attach/build replacement,
   multiple detach, selective discard, source closure, worker generation guards.
-- [ ] **Phase 3 — Navigator/DnD:** stable view routing, exact-ID operations,
+- [x] **Phase 3 — Navigator/DnD:** stable view routing, exact-ID operations,
   deterministic ordering, labels/link indicators, rebuild/width handling.
   Use a versioned structured drag payload with view ID and operation; validate
   malformed/stale/foreign IDs. Legacy pane-index payload support, if retained,
   must resolve at dispatch and never guess a detached view. Update navigator
   click/clear signals, `mpr_assign_requested`, widget MIME and app dispatch
   together; batch tile changes to rebuild once per committed transaction.
-- [ ] **Phase 4 — Duplicate/link:** target chooser, shared-result duplication,
+- [x] **Phase 4 — Duplicate/link:** target chooser, shared-result duplication,
   session-local slice propagation, unlink/group cleanup, cine arbitration and
   coordination with global slice sync using group target deduplication. Avoid duplicate focused histogram work
   on peer redraws; retain required per-pane overlay/slider correctness.
-- [ ] **Phase 5 — Regression and closeout:** focused controller/Qt integration
+- [x] **Phase 5 — Regression and closeout:** focused controller/Qt integration
   tests, full suite, automated/manual agent smoke, architecture/harness checks,
   user-doc updates and link checker. Update version/changelog for product code;
   archive this P1 implementation plan at completion while retaining the P2
   supporting work and tracking any remaining manual smoke in TO_DO.
+  *Status:* the full automated suite and static gates pass (see
+  [Verification record](#verification-record)); manual smoke and the final
+  independent review are **pending** and tracked in
+  [`TO_DO.md` — Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).
 
 ### 2.5 Acceptance tests
 
@@ -341,73 +400,4 @@ relevant implementation phase, alongside slice-sync/cine integration coverage.
 
 ---
 
-<a id="navigator-thumbnail-fallback"></a>
-
-## 3. Plan: Navigator series thumbnail — skip empty / near-flat first slice (P2)
-
-### 3.1 Current behavior
-
-- `SeriesNavigator.update_series_list` builds `series_list` entries with `first_dataset = datasets[0]` (first element of the per-series list after organizer ordering) and passes that to `_generate_thumbnail(first_dataset, study_series[series_uid])` (`src/gui/series_navigator.py`).
-- `_generate_thumbnail` applies W/L via `_resolve_thumbnail_window_level` and `DICOMProcessor.dataset_to_image` (same philosophy as slice display). There is **no** check for “image is all black / flat” after rendering.
-- `regenerate_series_thumbnail` similarly assumes a single representative dataset (callers pass “first slice” semantics today).
-
-### 3.2 Proposed heuristic (configurable)
-
-After obtaining a **candidate** PIL image (post W/L) and/or the **rescaled float** pixel array used for display:
-
-1. **Compute contrast metrics** on the grayscale or luminance channel, e.g.:
-   - `p_low`, `p_high` = 2nd and 98th percentile (robust to outliers), or min/max;
-   - `contrast_ratio = (p_high - p_low) / max(mean_abs, eps)` or simple `(max - min)`;
-   - Optional: fraction of pixels outside a narrow mid-gray band.
-2. **Treat as “bad thumbnail”** if:
-   - `(max - min)` below a small epsilon (true flat), or
-   - `contrast_ratio` below threshold **T** (tune starting ~0.001 of full dynamic range or empirically from black-first-slice CT scouts), or
-   - mean luminance within **extreme** narrow band (optional guard for “all near zero”).
-3. If bad, **retry** with `datasets[len(datasets)//2]` (middle instance in current list order), then optionally **quarter** indices, then fall back to first.
-4. **Cache key** today is `(study_uid, series_uid)` only—if the chosen slice index changes, either:
-   - include `chosen_instance_index` in the cache key, or
-   - invalidate cache when heuristic path is used, or
-   - compute heuristic before caching so cache key remains per series (simplest: store “thumbnail_source_index” in a side map keyed by `(study_uid, series_uid)` for diagnostics).
-
-### 3.3 Edge cases
-
-- **Single-slice series:** Middle == first; no change.
-- **Multi-frame single dataset:** `datasets` may be one element with many frames—middle should mean **frame index**, not file index. May require using `NumberOfFrames` / per-frame pixel access (align with `MultiFrameSeriesInfo` in the same module).
-- **Compressed / lazy failures:** Existing compression-error placeholder path must remain; do not loop heavy decode on dozens of instances without a **cap** (e.g. try at most 3 candidates).
-- **Privacy / empty pixel data:** Do not treat SR/no-pixel as “low contrast”; keep existing placeholders.
-
-### 3.4 Implementation phases
-
-- [ ] **Phase 1 — Helper:** Add `_pick_series_thumbnail_dataset(datasets: list[Dataset]) -> Dataset` in `series_navigator.py` (or a small `core/` helper if reused) with unit tests on synthetic arrays (zeros; noise with amplitude 1e-6).
-- [ ] **Phase 2 — Wire `update_series_list`:** Replace bare `datasets[0]` for the **main** series thumbnail path; keep tooltips/SeriesNumber from first instance unless product prefers “display series” metadata from chosen file.
-- [ ] **Phase 3 — Instance mode:** When “show instances separately” builds per-instance thumbnails, apply the same heuristic **per instance** (first frame of that instance, then middle frame if needed).
-- [ ] **Phase 4 — `regenerate_series_thumbnail`:** Caller currently passes one dataset; either pass the series list and reuse picker, or document that regeneration is for W/L refresh only and re-pick slice.
-- [ ] **Phase 5 — Optional config:** Settings toggle “Navigator: prefer middle slice when first is flat” or advanced numeric threshold (default on).
-
-### 3.5 Open questions
-
-- Should ordering follow **Instance Number** / **Slice Location** rather than raw list order so “middle” is anatomically meaningful?
-- Is 0.1% contrast the right order of magnitude for CT, MRI, and CR/DR without per-modality thresholds?
-
----
-
-## 4. Verification (when implemented)
-
-- **MPR:** Two independent stacks and two detached views; selective attach; shared-result duplicates; linked/unlinked scrolling and cine; rollback and source cleanup; session/view admission messages.
-- **Thumbnails:** Series with intentional black first slice shows recognizable anatomy in navigator; multiframe series still correct; cache invalidation does not regress performance on large studies.
-
----
-
-## 5. Primary code touchpoints (reference)
-
-| Area | Files |
-|------|--------|
-| MPR lifecycle, detach, attach | `src/gui/mpr_controller.py` |
-| Floating thumbnail refresh | `src/core/mpr_navigator_thumbnail.py`, `src/main_app_subwindow_management.py` (`MPRNavigationMixin`) |
-| Navigator MPR tiles | `src/gui/series_navigator.py`, `src/gui/mpr_thumbnail_widget.py` |
-| Drop targets | `src/gui/sub_window_container.py` |
-| Series thumbnail generation | `src/gui/series_navigator.py` (`update_series_list`, `_generate_thumbnail`, `regenerate_series_thumbnail`) |
-
----
-
-*Document version: 2026-10-09 — planning only; no product code changes.*
+*Archived 2026-10-09. The shipped behavior is documented in the user guide; this file is the design and decision record.*

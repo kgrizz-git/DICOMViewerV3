@@ -1,6 +1,6 @@
 # Multi-window layouts & navigation
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-10-09
 
 The viewer shows your images in **panes** (subwindows). You can split the viewing area into several panes, put a different series in each, and move between slices and frames. This guide covers the pane layouts, how to fill and focus panes, and the basics of slice/cine navigation.
 
@@ -51,6 +51,7 @@ Use **View → Show/Hide Left Pane** and **View → Show/Hide Right Pane** (also
 
 - Toggle the series navigator with **N**, **View → Show/Hide Series Navigator**, or the toolbar. It lists loaded studies and series; double-click or drag entries to load them into a pane.
 - **View → Show Slice/Frame Count on Navigator Thumbnails** (default on) shows compact instance/frame counts on series and MPR thumbnails.
+- **MPR tiles:** every MPR you have built (shown in a window or parked after **Clear This Window**) has its own tile after its source series. Drag a tile onto a window, or right-click it to duplicate, link, unlink or clear it. See [MPR tiles in the series navigator](USER_GUIDE_MPR.md#mpr-tiles-in-the-series-navigator).
 - **View → Show Window Assignment Thumbnail** shows a small clickable window-slot map on the navigator bar so you can focus or assign panes quickly.
 - **View → Show Instances Separately** expands multi-frame series into per-instance navigator entries when enabled (also available from the navigator context menu). That changes how ← / → series navigation steps through multi-frame content.
 
@@ -58,6 +59,7 @@ Use **View → Show/Hide Left Pane** and **View → Show/Hide Right Pane** (also
 
 - **View → Slice Sync → Enable Slice Sync** links scrolling across panes that share a sync group (also available from the image context menu).
 - **View → Slice Sync → Manage Sync Groups…** opens the dialog that assigns panes to linked scroll groups.
+- **Linked MPR views** (made with **Duplicate Linked into Window…**) scroll together on their own, with Slice Sync on or off; inside a sync group they act as one unit. Details: [Linked scrolling](USER_GUIDE_MPR.md#linked-scrolling).
 
 ## Show Slice Location Lines
 
