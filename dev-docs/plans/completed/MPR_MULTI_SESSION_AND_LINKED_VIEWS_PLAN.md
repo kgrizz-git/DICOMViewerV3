@@ -2,10 +2,9 @@
 
 **Created:** 2026-10-08
 **Completed:** 2026-10-09 (implementation)
-**Status:** **Implementation complete; verification pending.** All six phases
+**Status:** **Implementation and independent review complete; real-display smoke pending.** All six phases
 shipped on the `feature/multiple-mpr-sessions` branch with automated tests and
-static gates. **Manual smoke and the final independent review have not been done
-yet** and are tracked in [`TO_DO.md` — Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).
+static gates. **Manual smoke on a real display remains pending** and is tracked in [`TO_DO.md` — Manual Smoke Checks](../../TO_DO.md#manual-smoke-checks).
 **Tracks:** [`CHANGELOG.md`](../../../CHANGELOG.md) (Unreleased, MPR entries) and
 [`MAINTENANCE_LOG.md`](../../MAINTENANCE_LOG.md) (2026-10-09).
 **Split:** this file was the combined "MPR multi-window + navigator thumbnail
@@ -70,8 +69,14 @@ shipped form differs from the plan text, which is kept as the historical record)
   The required narrow native-graphics retry of those four files (`-n0 --no-cov`)
   passed **all 77**. No actual test failures remain. The original sandbox run is
   reported as-is, not replaced by the retry.
-- **Not yet done:** manual smoke on a real display (TO_DO) and the final independent
-  code review.
+- Independent implementation review passed 999 focused tests and found no reproducible
+  correctness bug. The final slider/fencing correction (`6e2438c`) passed 104 focused
+  tests in the primary review and all 19 new tests in the independent review.
+- Automated Qt smoke and 77 documentation/harness tests passed. Real-display smoke
+  remains pending (TO_DO): local Computer Use could not access its trusted service.
+- Non-blocking review notes: failed moves do not restore focus or show a warning;
+  Settings can persist earlier changes before a later privacy-panel failure, following
+  its existing save ordering. Neither was changed in this implementation.
 
 ---
 
@@ -166,7 +171,8 @@ including incoming global sync, removing the earlier asymmetric exclusion rule.
 
 Two independent reviews checked the plan against the code and supported the design
 after refinements; the three scratch bug reproductions were re-run independently.
-A final independent review of the finished implementation is still pending.
+The finished implementation and final correction received independent review with no
+reproducible correctness bug. Approval remains conditional on real-display smoke.
 
 ### Required verification additions
 
