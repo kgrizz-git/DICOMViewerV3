@@ -202,6 +202,25 @@ def _redraw_member(controller: Any, pane: int, target: int, n_slices: int) -> No
     except Exception:
         # Constant text on purpose: no exception-derived content reaches the log sink.
         print_redacted("[MprLinks] a linked member could not be redrawn")
+    _sync_pane_slider(controller, pane)
+
+
+def _sync_pane_slider(controller: Any, pane: int) -> None:
+    """Make the pane's in-window slice slider show its current slice, focused or not.
+
+    Uses the app's own per-pane seam (the one the display path uses), which
+    sets the slider range and value with signals blocked, so it can never call
+    ``slider_navigate_callback`` and start another navigation. Runs after every
+    redraw attempt, so a peer whose redraw failed still shows the group's slice
+    on its slider rather than lagging behind it.
+    """
+    sync = getattr(controller._app, "_sync_navigation_slider_for_subwindow", None)
+    if not callable(sync):
+        return
+    try:
+        sync(pane)
+    except Exception:
+        print_redacted("[MprLinks] a linked member's slider could not be updated")
 
 
 def _sync_cine_position(controller: Any, pane: int, target: int, n_slices: int) -> None:

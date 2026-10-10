@@ -16,7 +16,7 @@ from typing import Any
 
 from core.lut_series_state import clear_mpr_lut_override
 from gui.mpr_controller_sessions import emit_tiles_changed
-from gui.mpr_worker_fencing import retire_pane_worker
+from gui.mpr_worker_fencing import bump_source_generation, retire_pane_worker
 
 # ---------------------------------------------------------------------------
 # Source closure release
@@ -131,8 +131,8 @@ def release_all_mpr(controller: Any) -> dict[str, int]:
     registry.clear_all()
     controller._build_reservations.clear()
     released["detached"] += len(detached)
-    for key in list(controller._source_generations.keys()):
-        controller._source_generations[key] += 1
+    for study_uid, series_uid in list(controller._source_generations):
+        bump_source_generation(controller, study_uid, series_uid)
     emit_tiles_changed(controller)
     return released
 
@@ -164,7 +164,7 @@ def _bump_closed_source_generations(
     """Invalidate late worker callbacks built from the closed source."""
     for key in [k for k in controller._source_generations if k[0] == study_uid
                 and (series_uid is None or k[1] == series_uid)]:
-        controller._source_generations[key] += 1
+        bump_source_generation(controller, *key)
 
 
 
