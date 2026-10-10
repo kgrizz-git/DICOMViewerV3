@@ -34,6 +34,7 @@ from core.mpr_navigator_thumbnail import (
 from core.mpr_navigator_thumbnail import (
     update_mpr_navigator_thumbnail as mpr_thumb_update_navigator,
 )
+from core.mpr_session_types import detached_view_id_from_nav_key
 from core.navigation_slider_state import navigation_slider_mode_label_for_dataset
 from core.overlay_settings_handlers import refresh_overlay_all_subwindows
 from core.session_reset_controller import (
@@ -592,22 +593,26 @@ class MPRNavigationMixin:
         self, source_subwindow_index: int, target_subwindow_index: int
     ) -> None:
         """
-        Handle MPR thumbnail drop onto a subwindow: relocate active MPR or
-        attach a detached session (source index -1).
+        Handle MPR thumbnail drop onto a subwindow.
+
+        A non-negative source is the pane whose attached view moves; a negative
+        source is ``-view_id`` of a detached view (exact ID, stale IDs no-op).
         """
-        if source_subwindow_index < 0:
-            self._mpr_controller.attach_floating_mpr(target_subwindow_index)
+        view_id = detached_view_id_from_nav_key(source_subwindow_index)
+        if view_id is not None:
+            self._mpr_controller.attach_detached_view(view_id, target_subwindow_index)
             return
         self._mpr_controller.relocate_mpr_subwindow(
             source_subwindow_index, target_subwindow_index
         )
 
     def _on_mpr_clear_from_navigator_thumbnail(self, subwindow_index: int) -> None:
-        """Clear MPR from the navigator context menu (attached or detached)."""
-        if subwindow_index < 0:
-            self._mpr_controller.clear_detached_mpr()
+        """Clear one MPR from the navigator context menu (attached pane or exact detached view)."""
+        view_id = detached_view_id_from_nav_key(subwindow_index)
+        if view_id is not None:
+            self._mpr_controller.discard_detached_view(view_id)
             if hasattr(self, "series_navigator"):
-                self.series_navigator.clear_mpr_thumbnail(-1)
+                self.series_navigator.clear_mpr_thumbnail(subwindow_index)
             return
         if self._mpr_controller.is_mpr(subwindow_index):
             self._mpr_controller.clear_mpr(subwindow_index)

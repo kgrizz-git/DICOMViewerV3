@@ -7,11 +7,13 @@ routing, and build-source close matching.
 
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from mpr_lifecycle_harness import (
     FakeWorker,
+    _add_detached_view,
     _make_controller,
     _make_result,
     _register_worker,
@@ -122,30 +124,42 @@ class TestWorkerRetirement:
 
 
 class ProbeWorker(QThread):
-    """Real minimal QThread with custom payload signal and silent cancel."""
+    """Real QThread that stays alive until the test releases it.
+
+    ``run`` signals ``started_evt``, optionally emits the custom payload
+    signal (which fires BEFORE the native thread returns, like a real build),
+    then blocks on ``release_evt``. ``cancel`` only records the request: a
+    native build may keep running after being asked to stop, which is exactly
+    the retire-while-alive case under test. Nothing here depends on timing;
+    the wait is bounded only so a broken test cannot hang the suite.
+    """
 
     done = Signal(object)
+    SAFETY_TIMEOUT_S = 30.0
 
-    def __init__(self, *, work_ms: int = 300):
+    def __init__(self, *, emit_result: bool = False):
         super().__init__()
-        self._work_ms = work_ms
-        self._cancel = False
+        self.started_evt = threading.Event()
+        self.release_evt = threading.Event()
+        self._emit_result = emit_result
         self.cancel_calls = 0
 
     def cancel(self) -> None:
         self.cancel_calls += 1
-        self._cancel = True
 
     def run(self) -> None:
-        import time
+        self.started_evt.set()
+        if self._emit_result:
+            self.done.emit({"ok": True})
+        self.release_evt.wait(self.SAFETY_TIMEOUT_S)
 
-        waited = 0
-        while waited < self._work_ms and not self._cancel:
-            time.sleep(0.02)
-            waited += 20
-        if self._cancel:
-            return  # silent cancel: no custom signal, thread still must join
-        self.done.emit({"ok": True})  # custom payload BEFORE run() returns
+    def start_and_wait_running(self) -> None:
+        self.start()
+        assert self.started_evt.wait(10), "worker thread never started"
+
+    def release_and_join(self) -> bool:
+        self.release_evt.set()
+        return self.wait(10000)
 
 
 class TestTrueTermination:
@@ -153,18 +167,21 @@ class TestTrueTermination:
         from gui.mpr_worker_fencing import sweep_retired_builds, truly_terminated
 
         ctrl, _app = _make_controller()
-        worker = ProbeWorker(work_ms=400)
-        worker.start()
-        assert not truly_terminated(worker)
-        _register_worker(ctrl, 0, worker)
-        ctrl._cancel_mpr_worker(0)
-        assert worker.cancel_calls == 1
-        assert worker in ctrl._retiring_builds
-        assert ctrl._retire_poller is not None and ctrl._retire_poller.isActive()
-        # Custom-signal backup must not drop a still-running thread.
-        sweep_retired_builds(ctrl)
-        assert worker in ctrl._retiring_builds
-        assert worker.wait(10000) is True
+        worker = ProbeWorker()
+        try:
+            worker.start_and_wait_running()
+            assert worker.isRunning() and not truly_terminated(worker)
+            _register_worker(ctrl, 0, worker)
+            ctrl._cancel_mpr_worker(0)
+            assert worker.cancel_calls == 1
+            assert worker in ctrl._retiring_builds
+            assert ctrl._retire_poller is not None and ctrl._retire_poller.isActive()
+            # A sweep while the native thread is still alive must keep it.
+            sweep_retired_builds(ctrl)
+            assert worker.isRunning()
+            assert worker in ctrl._retiring_builds
+        finally:
+            assert worker.release_and_join() is True
         sweep_retired_builds(ctrl)
         assert worker not in ctrl._retiring_builds
         assert ctrl._retire_poller is not None and not ctrl._retire_poller.isActive()
@@ -173,11 +190,17 @@ class TestTrueTermination:
         from gui.mpr_worker_fencing import retain_build_worker, sweep_retired_builds
 
         ctrl, _app = _make_controller()
-        worker = ProbeWorker(work_ms=100)
-        worker.start()
-        retain_build_worker(ctrl, worker)
-        assert worker in ctrl._retiring_builds
-        assert worker.wait(10000) is True
+        # The custom payload signal fires while the native thread is still alive.
+        worker = ProbeWorker(emit_result=True)
+        try:
+            worker.start_and_wait_running()
+            retain_build_worker(ctrl, worker)
+            assert worker.isRunning()
+            assert worker in ctrl._retiring_builds
+            sweep_retired_builds(ctrl)
+            assert worker in ctrl._retiring_builds
+        finally:
+            assert worker.release_and_join() is True
         sweep_retired_builds(ctrl)
         assert worker not in ctrl._retiring_builds
 
@@ -310,7 +333,7 @@ class TestBuildSourceCloseMatching:
         _register_worker(ctrl, 1, worker)
         ctrl._build_sources[1] = ("ST-X", "SE-X")
         app.subwindow_data[1] = {}  # pending on an empty pane
-        ctrl._detached_mpr_payload = {"mpr_result": _make_result(), "current_study_uid": "ST-Y"}
+        detached_view = _add_detached_view(ctrl, _make_result(), "ST-Y", "SE-Y")
         ctrl._source_generations[("ST-Y", "SE-Y")] = 3
 
         released = ctrl.release_all_mpr()
@@ -318,7 +341,9 @@ class TestBuildSourceCloseMatching:
         assert released["workers"] == 1
         assert released["detached"] == 1
         assert worker.cancel_calls == 1
-        assert ctrl._detached_mpr_payload is None
+        assert ctrl.detached_view_ids() == []
+        assert ctrl._registry.view_count == 0 and ctrl._registry.session_count == 0
+        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached_view)
         assert ctrl._source_generations[("ST-Y", "SE-Y")] == 4
 
 

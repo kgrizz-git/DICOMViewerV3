@@ -17,6 +17,7 @@ from typing import Any
 
 from PySide6.QtCore import QTimer
 
+from gui.mpr_controller_sessions import release_pane_reservation
 from utils.debug_flags import DEBUG_MPR
 from utils.dicom_utils import get_composite_series_key
 
@@ -48,14 +49,13 @@ def bump_source_generation(controller: Any, study_uid: str, series_uid: str) -> 
     return generations[key]
 
 
-def volume_source_key(volume: Any) -> tuple[str, str]:
-    """Authoritative ``(study_uid, composite series key)`` of a build volume.
+def dataset_source_key(datasets: Any) -> tuple[str, str]:
+    """``(study_uid, composite series key)`` of the first dataset, else ``("", "")``.
 
-    Uses the resolved volume datasets (not the request) and the composite
-    series key, matching the ``close_series`` API and pane ``current_series_uid``.
+    Uses the composite series key, matching the ``close_series`` API and
+    pane ``current_series_uid``.
     """
     try:
-        datasets = getattr(volume, "source_datasets", []) or []
         first = datasets[0]
         return (
             str(getattr(first, "StudyInstanceUID", "") or ""),
@@ -63,6 +63,11 @@ def volume_source_key(volume: Any) -> tuple[str, str]:
         )
     except Exception:
         return ("", "")
+
+
+def volume_source_key(volume: Any) -> tuple[str, str]:
+    """Authoritative source key of a build volume's resolved datasets."""
+    return dataset_source_key(getattr(volume, "source_datasets", []) or [])
 
 
 def is_current_pane_build(
@@ -172,10 +177,14 @@ def retire_pane_worker(controller: Any, idx: int) -> bool:
 
     Requests the native worker to stop, closes its progress dialog, keeps it
     alive until it actually terminates (a fixed wait is not proof), and
-    invalidates its callbacks via the pane generation. Returns True when a
-    worker was retired. Safe to call with no worker registered.
+    invalidates its callbacks via the pane generation. Also releases the
+    pane's pending admission reservation (idempotent), so cancel, source
+    closure, close-all and replacement all free the slot exactly once.
+    Returns True when a worker was retired. Safe to call with no worker
+    registered.
     """
     bump_pane_generation(controller, idx)
+    release_pane_reservation(controller, idx)
     worker = controller._workers.pop(idx, None)
     controller._build_sources.pop(idx, None)
     _close_build_dialog(controller, idx)
@@ -227,6 +236,7 @@ def drop_build_registration(controller: Any, idx: int) -> None:
 __all__ = [
     "bump_pane_generation",
     "bump_source_generation",
+    "dataset_source_key",
     "drop_build_registration",
     "ensure_retire_poller",
     "is_current_pane_build",

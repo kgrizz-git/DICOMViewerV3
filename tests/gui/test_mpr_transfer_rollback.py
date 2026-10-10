@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 from mpr_lifecycle_harness import (
     FakeWorker,
+    _add_detached_view,
     _make_controller,
     _make_result,
     _register_worker,
@@ -114,17 +115,7 @@ class TestInstallRollback:
         ctrl, app = _make_controller()
         fired = _signals(ctrl)
         floating = _make_result(n_slices=4)
-        ctrl._detached_mpr_payload = {
-            "mpr_result": floating,
-            "mpr_orientation": "Axial",
-            "mpr_slice_index": 0,
-            "mpr_combine_enabled": False,
-            "mpr_combine_mode": "aip",
-            "mpr_combine_slice_count": 4,
-            "current_study_uid": "st",
-            "current_series_uid": "se",
-            "current_datasets": [],
-        }
+        view_id = _add_detached_view(ctrl, floating, "st", "se")
         dest_result = _make_result(n_slices=4)
         _seed_mpr_pane(app, 1, dest_result)
         with (
@@ -134,9 +125,11 @@ class TestInstallRollback:
             patch.object(ctrl, "_set_tools_enabled"),
             patch("gui.mpr_controller_transactions.QMessageBox") as box,
         ):
-            ctrl.attach_floating_mpr(1)
-        assert ctrl._detached_mpr_payload["mpr_result"] is floating
+            ctrl.attach_detached_view(view_id, 1)
+        assert ctrl.detached_view_ids() == [view_id]
+        assert ctrl._registry.get_session(ctrl._registry.get_view(view_id).session_id).result is floating
         assert app.subwindow_data[1]["mpr_result"] is dest_result
+        assert ctrl.attached_view_id(1) is not None
         box.warning.assert_called_once()
         assert fired["activated"] == []
 
@@ -166,22 +159,20 @@ class TestClearWindowAndClosure:
         manager = app.subwindow_managers[0]["view_state_manager"]
         manager.series_defaults.setdefault("__mpr__", {})["current_lut"] = sigmoid_lut()
         app.multi_window_layout.get_subwindow(0).image_viewer._mpr_mode_override = True
-        ctrl._detached_mpr_payload = {
-            "mpr_result": _make_result(),
-            "current_study_uid": "ST",
-            "current_series_uid": "SE",
-        }
+        detached_view = _add_detached_view(ctrl, _make_result(), "ST", "SE")
         _seed_mpr_pane(app, 1, _make_result(), study="OTHER")
 
         released = ctrl.release_mpr_for_closed_source("ST", "SE")
 
         assert released == {"panes": 1, "workers": 1, "detached": 1, "specs": 1}
         assert worker.cancel_calls == 1
-        assert ctrl._detached_mpr_payload is None
+        assert ctrl.detached_view_ids() == []
+        assert ctrl.attached_view_id(0) is None
+        assert ctrl.attached_view_id(1) is not None
         assert get_mpr_lut_override(manager) is None
         assert app.multi_window_layout.get_subwindow(0).image_viewer._mpr_mode_override is False
         app.series_navigator.clear_mpr_thumbnail.assert_any_call(0)
-        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-1)
+        app.series_navigator.clear_mpr_thumbnail.assert_any_call(-detached_view)
         # Other-study pane untouched.
         assert app.subwindow_data[1].get("is_mpr") is True
         # Late callback for the closed source is dropped.
@@ -381,12 +372,12 @@ class TestTransferTargetValidation:
         app.subwindow_data[1] = {"current_datasets": []}
         layout = app.multi_window_layout
         layout.get_subwindow = MagicMock(return_value=None)
-        ctrl._detached_mpr_payload = {"mpr_result": _make_result()}
+        view_id = _add_detached_view(ctrl, _make_result())
         with patch("gui.mpr_controller_transactions.QMessageBox") as box:
-            ctrl.attach_floating_mpr(1)
+            ctrl.attach_detached_view(view_id, 1)
         assert worker.cancel_calls == 0
         assert 1 in ctrl._workers
-        assert ctrl._detached_mpr_payload is not None
+        assert ctrl.detached_view_ids() == [view_id]
         box.warning.assert_called_once()
 
     def test_invalid_destination_cancels_nothing(self) -> None:

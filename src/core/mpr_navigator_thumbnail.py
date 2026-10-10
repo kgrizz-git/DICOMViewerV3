@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 from core.lut_catalog import linear_lut
 from core.lut_engine import LookUpTable
 from core.lut_series_state import mpr_display_kwargs
-from core.mpr_session_types import MprDisplayState
+from core.mpr_session_types import MprDisplayState, detached_nav_key
 from core.mpr_stack_combine import apply_mpr_stack_combine
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -149,7 +149,17 @@ def update_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
         photometric,
         image_inverted=display["image_inverted"],
         lut=display["lut"],
+        order=_pane_view_order(app, idx),
     )
+
+
+def _pane_view_order(app: DICOMViewerApp, idx: int) -> int | None:
+    """Creation sequence of the view attached to pane *idx* (navigator tile order)."""
+    controller = getattr(app, "_mpr_controller", None)
+    getter = getattr(controller, "get_pane_view_metadata", None)
+    meta = getter(idx) if callable(getter) else None
+    order = getattr(meta, "creation_seq", None)
+    return order if isinstance(order, int) and not isinstance(order, bool) else None
 
 
 def _prefer_pane_window_level(app: DICOMViewerApp, idx: int) -> tuple[float | None, float | None]:
@@ -216,89 +226,51 @@ def clear_mpr_navigator_thumbnail(app: DICOMViewerApp, idx: int) -> None:
 
 def update_floating_mpr_navigator_thumbnail(app: DICOMViewerApp) -> None:
     """
-    Show or refresh detached MPR under navigator key -1 (internal id only).
+    Sync navigator tiles for every detached MPR view.
 
-    Layout matches attached MPR: same study/series keys place the thumbnail
-    immediately after the source series row.
+    One tile per detached view, keyed by ``-view_id`` (``detached_nav_key``),
+    placed after its source series by creation order. A detached view's state
+    is frozen, so existing tiles are left alone: only missing tiles are added
+    and tiles for views that are no longer detached are removed.
     """
-    if not hasattr(app, "series_navigator"):
+    navigator = getattr(app, "series_navigator", None)
+    controller = getattr(app, "_mpr_controller", None)
+    if navigator is None or controller is None:
         return
-    if not app._mpr_controller.has_detached_mpr():
-        app.series_navigator.clear_mpr_thumbnail(-1)
+    detached = controller.detached_view_ids()
+    wanted = {detached_nav_key(view_id) for view_id in detached}
+    shown = set(navigator.mpr_thumbnail_keys())
+    for key in sorted(k for k in shown if k < 0 and k not in wanted):
+        navigator.clear_mpr_thumbnail(key)
+    for view_id in detached:
+        if detached_nav_key(view_id) not in shown:
+            _show_detached_view_tile(navigator, controller, view_id)
+
+
+def _show_detached_view_tile(navigator: Any, controller: Any, view_id: int) -> None:
+    """Render one detached view's tile from its own metadata and display state."""
+    meta = controller.get_view_metadata(view_id)
+    carried = controller.get_view_display_state(view_id)
+    if meta is None or carried is None:
         return
-    payload = getattr(app._mpr_controller, "_detached_mpr_payload", None)
-    use_rescaled, wc, ww, image_inverted, lut = _floating_display_choice(app, payload)
-    pixel_array = app._mpr_controller.get_detached_mpr_thumbnail_pixels(
-        use_rescaled
-    )
+    pixel_array = controller.get_view_thumbnail_pixels(view_id, carried.use_rescaled)
     if pixel_array is None:
         return
-    study_uid, series_uid, n_slices = _floating_source_parts(payload)
-    photometric = _result_photometric_interpretation(
-        payload.get("mpr_result") if isinstance(payload, dict) else None
-    )
-    app.series_navigator.set_mpr_thumbnail(
-        -1,
+    wc, ww = _carried_window_level(carried)
+    lut = carried.lut if isinstance(carried.lut, LookUpTable) else linear_lut()
+    navigator.set_mpr_thumbnail(
+        detached_nav_key(view_id),
         pixel_array,
-        study_uid,
-        series_uid,
+        meta.source_study_uid,
+        meta.source_series_uid,
         wc,
         ww,
-        n_slices,
-        photometric,
-        image_inverted=image_inverted,
+        meta.n_slices or None,
+        meta.photometric_interpretation,
+        image_inverted=bool(carried.inverted),
         lut=lut,
+        order=meta.creation_seq,
     )
-
-
-def _floating_display_choice(
-    app: DICOMViewerApp, payload: Any
-) -> tuple[bool, float | None, float | None, bool, Any]:
-    """Detached tile display values: rescale flag, W/L, inversion, LUT.
-
-    A detached view carries its own display state, which supplies everything
-    and never consults the focused pane. Legacy payloads predate carried
-    state and keep the focused fallback.
-    """
-    carried = payload.get("mpr_display") if isinstance(payload, dict) else None
-    if isinstance(carried, MprDisplayState):
-        wc, ww = _carried_window_level(carried)
-        lut = carried.lut if isinstance(carried.lut, LookUpTable) else linear_lut()
-        return bool(carried.use_rescaled), wc, ww, bool(carried.inverted), lut
-    focused = getattr(app, "focused_subwindow_index", 0)
-    vsm = app.subwindow_managers.get(focused, {}).get("view_state_manager")
-    wc, ww = _window_level_from_controls(getattr(app, "window_level_controls", None))
-    display = mpr_display_kwargs(
-        _pane_managers(app, focused),
-        _result_photometric_interpretation(
-            payload.get("mpr_result") if isinstance(payload, dict) else None
-        ),
-    )
-    return (
-        bool(getattr(vsm, "use_rescaled_values", True)),
-        wc,
-        ww,
-        display["image_inverted"],
-        display["lut"],
-    )
-
-
-def _floating_source_parts(payload: Any) -> tuple[str, str, int | None]:
-    """Detached tile identity: study UID, series UID, slice count."""
-    study_uid = ""
-    series_uid = ""
-    n_slices: int | None = None
-    if isinstance(payload, dict):
-        study_uid = str(payload.get("current_study_uid", "") or "")
-        series_uid = str(payload.get("current_series_uid", "") or "")
-        res = payload.get("mpr_result")
-        if res is not None:
-            try:
-                n_raw = int(getattr(res, "n_slices", 0) or 0)
-                n_slices = n_raw if n_raw > 0 else None
-            except (TypeError, ValueError):
-                n_slices = None
-    return study_uid, series_uid, n_slices
 
 
 def on_mpr_detached(app: DICOMViewerApp, former_idx: int) -> None:

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import core.mpr_navigator_thumbnail as mpr_navigator_thumbnail
 from core.lut_catalog import linear_lut, sigmoid_lut
-from core.mpr_session_types import MprDisplayState
+from core.mpr_session_types import MprDisplayState, MprViewMetadata
 
 
 def _make_app(**overrides) -> SimpleNamespace:
@@ -17,16 +17,45 @@ def _make_app(**overrides) -> SimpleNamespace:
         "series_navigator": SimpleNamespace(
             set_mpr_thumbnail=MagicMock(),
             clear_mpr_thumbnail=MagicMock(),
+            mpr_thumbnail_keys=MagicMock(return_value=[]),
         ),
         "window_level_controls": SimpleNamespace(window_center="40", window_width="400"),
-        "_mpr_controller": SimpleNamespace(
-            has_detached_mpr=MagicMock(return_value=False),
-            get_detached_mpr_thumbnail_pixels=MagicMock(return_value=None),
-        ),
+        "_mpr_controller": _FakeController(),
         "focused_subwindow_index": 0,
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+class _FakeController:
+    """Public per-view API surface of ``MprController`` used by the tile sync."""
+
+    def __init__(self, views: dict[int, dict] | None = None) -> None:
+        # view_id -> {"seq", "study", "series", "n_slices", "display", "pixels", "pi"}
+        self.views = views or {}
+        self.pixel_requests: list[tuple[int, bool | None]] = []
+
+    def detached_view_ids(self) -> list[int]:
+        return sorted(self.views, key=lambda v: self.views[v]["seq"])
+
+    def get_view_metadata(self, view_id: int):
+        view = self.views.get(view_id)
+        if view is None:
+            return None
+        return MprViewMetadata(
+            view_id=view_id, session_id=view_id, creation_seq=view["seq"], pane_index=None,
+            orientation="Axial", source_study_uid=view.get("study", "study"),
+            source_series_uid=view.get("series", "series"), n_slices=view.get("n_slices", 11),
+            slice_index=0, photometric_interpretation=view.get("pi"),
+        )
+
+    def get_view_display_state(self, view_id: int):
+        view = self.views.get(view_id)
+        return None if view is None else view.get("display", MprDisplayState())
+
+    def get_view_thumbnail_pixels(self, view_id: int, use_rescaled=None):
+        self.pixel_requests.append((view_id, use_rescaled))
+        return self.views[view_id].get("pixels", "pixels")
 
 
 class TestGetSubwindowMprPixelArray:
@@ -142,6 +171,7 @@ class TestUpdateMprNavigatorThumbnail:
             None,
             image_inverted=False,
             lut=linear_lut(),
+            order=None,
         )
 
     def test_skips_set_when_pixels_missing_and_tolerates_bad_window_level(self, monkeypatch) -> None:
@@ -170,74 +200,88 @@ class TestUpdateMprNavigatorThumbnail:
             None,
             image_inverted=False,
             lut=linear_lut(),
+            order=None,
         )
 
 
 class TestFloatingMprThumbnail:
-    def test_clears_when_no_detached_mpr_exists(self) -> None:
+    def test_no_detached_views_shows_nothing_and_clears_stale_detached_tiles(self) -> None:
         app = _make_app()
+        app.series_navigator.mpr_thumbnail_keys.return_value = [2, -3, -1]
 
         mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
 
-        app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(-1)
-
-    def test_sets_floating_thumbnail_with_payload_and_wl(self) -> None:
-        payload = {
-            "current_study_uid": "study",
-            "current_series_uid": "series",
-            "mpr_result": SimpleNamespace(n_slices=11),
-        }
-        app = _make_app(
-            _mpr_controller=SimpleNamespace(
-                has_detached_mpr=MagicMock(return_value=True),
-                get_detached_mpr_thumbnail_pixels=MagicMock(return_value="pixels"),
-                _detached_mpr_payload=payload,
-            ),
-            subwindow_managers={0: {"view_state_manager": SimpleNamespace(use_rescaled_values=False)}},
-        )
-
-        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
-
-        app._mpr_controller.get_detached_mpr_thumbnail_pixels.assert_called_once_with(False)
-        app.series_navigator.set_mpr_thumbnail.assert_called_once_with(
-            -1,
-            "pixels",
-            "study",
-            "series",
-            40.0,
-            400.0,
-            11,
-            None,
-            image_inverted=False,
-            lut=linear_lut(),
-        )
-
-    def test_skips_when_floating_pixels_missing_or_payload_invalid(self) -> None:
-        app = _make_app(
-            _mpr_controller=SimpleNamespace(
-                has_detached_mpr=MagicMock(return_value=True),
-                get_detached_mpr_thumbnail_pixels=MagicMock(side_effect=[None, "pixels"]),
-                _detached_mpr_payload="not-a-dict",
-            ),
-            window_level_controls=SimpleNamespace(window_center=None, window_width="bad"),
-        )
-
-        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
         app.series_navigator.set_mpr_thumbnail.assert_not_called()
+        # Pane tiles (>= 0) are never touched by the detached sync.
+        assert [c.args for c in app.series_navigator.clear_mpr_thumbnail.call_args_list] == [(-3,), (-1,)]
+
+    def test_each_detached_view_gets_its_own_exact_id_tile_in_creation_order(self) -> None:
+        # View 9 was created before view 4: creation order, not key order, rules.
+        controller = _FakeController({
+            9: {"seq": 1, "study": "s1", "series": "a", "n_slices": 5, "pixels": "p9"},
+            4: {"seq": 2, "study": "s1", "series": "a", "n_slices": 7, "pixels": "p4"},
+        })
+        app = _make_app(_mpr_controller=controller)
 
         mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
-        app.series_navigator.set_mpr_thumbnail.assert_called_once_with(
-            -1,
-            "pixels",
-            "",
-            "",
-            None,
-            None,
-            None,
-            None,
-            image_inverted=False,
-            lut=linear_lut(),
+
+        calls = app.series_navigator.set_mpr_thumbnail.call_args_list
+        assert [(c.args[0], c.args[1], c.args[6], c.kwargs["order"]) for c in calls] == [
+            (-9, "p9", 5, 1),
+            (-4, "p4", 7, 2),
+        ]
+
+    def test_existing_detached_tiles_are_left_alone_and_removed_when_no_longer_detached(self) -> None:
+        controller = _FakeController({4: {"seq": 2}, 5: {"seq": 3}})
+        app = _make_app(_mpr_controller=controller)
+        app.series_navigator.mpr_thumbnail_keys.return_value = [-4, -8, 0]
+
+        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+
+        # -4 already shown (frozen state): untouched. -5 missing: added. -8 stale: removed.
+        assert [c.args[0] for c in app.series_navigator.set_mpr_thumbnail.call_args_list] == [-5]
+        assert [c.args for c in app.series_navigator.clear_mpr_thumbnail.call_args_list] == [(-8,)]
+
+    def test_tile_uses_view_carried_state_and_ignores_focused_pane(self) -> None:
+        carried = sigmoid_lut()
+        controller = _FakeController({3: {
+            "seq": 1, "pi": "MONOCHROME1",
+            "display": MprDisplayState(
+                window_center=55.0, window_width=555.0, use_rescaled=False, inverted=True, lut=carried
+            ),
+        }})
+        app = _make_app(
+            _mpr_controller=controller,
+            # Deliberately differing focus state: rescaled pixels, other W/L.
+            subwindow_managers={0: {"view_state_manager": SimpleNamespace(use_rescaled_values=True)}},
+            window_level_controls=SimpleNamespace(window_center=40.0, window_width=400.0),
         )
+
+        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+
+        assert controller.pixel_requests == [(3, False)]
+        args, kwargs = app.series_navigator.set_mpr_thumbnail.call_args
+        assert (args[4], args[5], args[7]) == (55.0, 555.0, "MONOCHROME1")
+        assert kwargs["lut"] is carried
+        assert kwargs["image_inverted"] is True
+
+    def test_missing_carried_lut_falls_back_to_linear_and_invalid_wl_is_auto(self) -> None:
+        controller = _FakeController({3: {"seq": 1, "display": MprDisplayState(lut=None, window_width=0.0)}})
+        app = _make_app(_mpr_controller=controller)
+
+        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+
+        args, kwargs = app.series_navigator.set_mpr_thumbnail.call_args
+        assert kwargs["lut"].name == linear_lut().name
+        assert (args[4], args[5]) == (None, None)
+
+    def test_view_without_pixels_gets_no_tile(self) -> None:
+        controller = _FakeController({3: {"seq": 1, "pixels": None}})
+        app = _make_app(_mpr_controller=controller)
+
+        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+
+        app.series_navigator.set_mpr_thumbnail.assert_not_called()
 
 
 def test_clear_and_detach_helpers_delegate() -> None:
@@ -247,83 +291,45 @@ def test_clear_and_detach_helpers_delegate() -> None:
     app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(3)
 
     app.series_navigator.clear_mpr_thumbnail.reset_mock()
-    app._mpr_controller = SimpleNamespace(
-        has_detached_mpr=MagicMock(return_value=False),
-        get_detached_mpr_thumbnail_pixels=MagicMock(return_value=None),
-    )
+    app._mpr_controller = _FakeController({6: {"seq": 1}})
     mpr_navigator_thumbnail.on_mpr_detached(app, 2)
 
-    app.series_navigator.clear_mpr_thumbnail.assert_any_call(2)
-    app.series_navigator.clear_mpr_thumbnail.assert_any_call(-1)
+    # The former pane's tile goes; the newly detached view gets its exact-ID tile.
+    app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(2)
+    assert app.series_navigator.set_mpr_thumbnail.call_args.args[0] == -6
 
 
-class TestFloatingThumbnailCarriedState:
-    def test_detached_uses_carried_rescale_wl_lut_invert(self) -> None:
-        from typing import Any
-
-        carried = sigmoid_lut()
-        payload = {
-            "current_study_uid": "study",
-            "current_series_uid": "series",
-            "mpr_result": SimpleNamespace(n_slices=11),
-            "mpr_display": MprDisplayState(
-                window_center=55.0,
-                window_width=555.0,
-                use_rescaled=False,
-                inverted=True,
-                lut=carried,
-            ),
-        }
-        app: Any = _make_app(
-            _mpr_controller=SimpleNamespace(
-                has_detached_mpr=MagicMock(return_value=True),
-                get_detached_mpr_thumbnail_pixels=MagicMock(return_value="pixels"),
-                _detached_mpr_payload=payload,
-            ),
-            # Deliberately differing focus state: rescaled pixels, other W/L.
-            subwindow_managers={
-                0: {"view_state_manager": SimpleNamespace(use_rescaled_values=True)}
-            },
-            window_level_controls=SimpleNamespace(window_center=40.0, window_width=400.0),
+class TestAttachedTileOrder:
+    def test_attached_tile_carries_the_views_creation_sequence(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            mpr_navigator_thumbnail, "get_subwindow_mpr_thumbnail_pixel_array",
+            MagicMock(return_value="pixels"),
+        )
+        meta = MprViewMetadata(
+            view_id=5, session_id=5, creation_seq=17, pane_index=0, orientation="Axial",
+            source_study_uid="study", source_series_uid="series", n_slices=9, slice_index=0,
+        )
+        controller = SimpleNamespace(get_pane_view_metadata=MagicMock(return_value=meta))
+        app = _make_app(
+            _mpr_controller=controller,
+            subwindow_data={0: {"is_mpr": True, "mpr_result": SimpleNamespace(n_slices=9)}},
         )
 
-        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
+        mpr_navigator_thumbnail.update_mpr_navigator_thumbnail(app, 0)
 
-        app._mpr_controller.get_detached_mpr_thumbnail_pixels.assert_called_once_with(False)
-        _args, kwargs = app.series_navigator.set_mpr_thumbnail.call_args
-        assert (_args[4], _args[5]) == (55.0, 555.0)
-        assert kwargs["lut"] is carried
-        assert kwargs["image_inverted"] is True
+        assert app.series_navigator.set_mpr_thumbnail.call_args.kwargs["order"] == 17
 
-    def test_detached_missing_carried_lut_falls_back_to_linear(self) -> None:
-        from typing import Any
-
-        payload = {
-            "current_study_uid": "study",
-            "current_series_uid": "series",
-            "mpr_result": SimpleNamespace(n_slices=11),
-            "mpr_display": MprDisplayState(lut=None),
-        }
-        app: Any = _make_app(
-            _mpr_controller=SimpleNamespace(
-                has_detached_mpr=MagicMock(return_value=True),
-                get_detached_mpr_thumbnail_pixels=MagicMock(return_value="pixels"),
-                _detached_mpr_payload=payload,
-            ),
-            subwindow_managers={
-                0: {
-                    "view_state_manager": SimpleNamespace(
-                        series_defaults={"series-id": {"current_lut": sigmoid_lut()}},
-                        current_series_identifier="series-id",
-                    )
-                }
-            },
+    def test_non_integer_order_is_ignored(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            mpr_navigator_thumbnail, "get_subwindow_mpr_thumbnail_pixel_array",
+            MagicMock(return_value="pixels"),
         )
-
-        mpr_navigator_thumbnail.update_floating_mpr_navigator_thumbnail(app)
-
-        _args, kwargs = app.series_navigator.set_mpr_thumbnail.call_args
-        assert kwargs["lut"].name == linear_lut().name
+        app = _make_app(
+            _mpr_controller=MagicMock(),  # MagicMock metadata is never a real sequence number
+            subwindow_data={0: {"is_mpr": True, "mpr_result": SimpleNamespace(n_slices=9)}},
+        )
+        mpr_navigator_thumbnail.update_mpr_navigator_thumbnail(app, 0)
+        assert app.series_navigator.set_mpr_thumbnail.call_args.kwargs["order"] is None
 
 
 class TestAttachedThumbnailPaneWindowLevel:

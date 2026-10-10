@@ -97,6 +97,24 @@ def test_mpr_thumbnail_set_and_clear(qapp) -> None:
 
 
 @pytest.mark.qt
+def test_mpr_tiles_follow_creation_order_not_key_order(qapp) -> None:
+    nav = SeriesNavigator(DICOMProcessor())
+    nav._generate_thumbnail = MagicMock(return_value=None)  # type: ignore[method-assign]
+    nav.update_series_list({"st": {"se": [_ds(SeriesDescription="Src", Modality="CT", SeriesNumber=1)]}}, "st", "se")
+    pixels = np.zeros((8, 8), dtype=np.float32)
+    # View 9 was created first, then an attached pane tile, then view 4: negative
+    # detached keys must not reverse (or group) creation order.
+    nav.set_mpr_thumbnail(-4, pixels, "st", "se", order=3)
+    nav.set_mpr_thumbnail(0, pixels, "st", "se", order=2)
+    nav.set_mpr_thumbnail(-9, pixels, "st", "se", order=1)
+    assert nav.mpr_thumbnail_keys() == [-4, 0, -9]
+    assert list(nav._mpr_thumbnails) == [-9, 0, -4]
+    nav.clear_mpr_thumbnail(-9)
+    assert nav.mpr_thumbnail_keys() == [-4, 0]
+    assert list(nav._mpr_thumbnails) == [0, -4]
+
+
+@pytest.mark.qt
 def test_arrow_key_emits_navigation(qapp) -> None:
     nav = SeriesNavigator(DICOMProcessor())
     deltas: list[int] = []

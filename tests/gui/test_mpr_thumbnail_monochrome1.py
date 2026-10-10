@@ -21,12 +21,14 @@ import numpy as np
 import pytest
 
 from core import mpr_navigator_thumbnail as nav_thumb
+from core.mpr_session_types import MprDisplayState, MprViewMetadata
 
 _ARRAY = np.array([[0.0, 64.0, 255.0]], dtype=np.float32)
 
 
 def _app(result, *, detached=False):
     navigator = MagicMock()
+    navigator.mpr_thumbnail_keys.return_value = []
     wl = SimpleNamespace(window_center=40.0, window_width=400.0)
     if detached:
         return SimpleNamespace(
@@ -35,13 +37,14 @@ def _app(result, *, detached=False):
             focused_subwindow_index=0,
             subwindow_managers={0: {"view_state_manager": SimpleNamespace(use_rescaled_values=False)}},
             _mpr_controller=SimpleNamespace(
-                has_detached_mpr=lambda: True,
-                get_detached_mpr_thumbnail_pixels=lambda _r: "pixels",
-                _detached_mpr_payload={
-                    "current_study_uid": "study",
-                    "current_series_uid": "series",
-                    "mpr_result": result,
-                },
+                detached_view_ids=lambda: [5],
+                get_view_metadata=lambda _v: MprViewMetadata(
+                    view_id=5, session_id=1, creation_seq=1, pane_index=None, orientation="Axial",
+                    source_study_uid="study", source_series_uid="series", n_slices=3,
+                    slice_index=0, photometric_interpretation=result.photometric_interpretation or None,
+                ),
+                get_view_display_state=lambda _v: MprDisplayState(),
+                get_view_thumbnail_pixels=lambda _v, _r=None: "pixels",
             ),
         )
     return SimpleNamespace(

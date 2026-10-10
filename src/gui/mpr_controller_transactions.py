@@ -10,15 +10,17 @@ behavior contracts:
 - Preserve the source view until the destination install succeeds.
 - Snapshot the destination's pane/manager/viewer/toolbar state and restore
   it when an install fails, for both ordinary 2-D and existing MPR
-  destinations. Replacing an occupied destination on success is unchanged
-  (preserving it as detached needs the multi-session registry slice).
+  destinations. Replacing an occupied destination on success keeps the
+  displaced view alive as a detached registry view (never discarded); the
+  registry commit happens only after the install succeeded.
+- Transfers move an existing view: they never reserve or confirm admission.
+  The payload handed to ``_install_mpr_payload_at_subwindow`` is an adapter
+  built from the owning view and session (``mpr_controller_sessions``).
 - Background builds are fenced by worker identity plus pane and source
   generations. Cancellation retires the native worker (request stop, keep
   alive until it actually terminates) and invalidates its callbacks; a late
   callback can neither pop a newer worker nor activate a stale result.
-- Source closure retires dependent builds, drops the detached payload when
-  its source closes, and resets per-pane tool/LUT/navigator state without
-  touching study data.
+- Source closure lives in ``gui.mpr_source_closure``.
 
 Conventions match the controller: ``app`` and ``controller`` are duck-typed,
 shared UI syncs only for the focused pane, and helpers never raise for
@@ -34,9 +36,12 @@ from typing import Any
 from PySide6.QtWidgets import QMessageBox
 
 from core.lut_series_state import clear_mpr_lut_override
-from core.mpr_view_display_state import (
-    capture_mpr_combine_state,
-    capture_mpr_display_state,
+from core.mpr_session_types import detached_nav_key
+from gui.mpr_controller_sessions import (
+    build_view_payload,
+    capture_pane_payload,
+    find_view,
+    refresh_view_from_pane,
 )
 from gui.mpr_frame_snapshot import capture_frame, restore_frame
 from utils.debug_flags import DEBUG_MPR
@@ -386,45 +391,44 @@ def _focus_destination(controller: Any, idx: int) -> None:
 
 
 def capture_mpr_payload(controller: Any, idx: int) -> dict[str, Any] | None:
-    """Snapshot live MPR fields from *idx* for relocate / detach (read-only)."""
-    app = controller._app
-    data = app.subwindow_data.get(idx, {})
-    if not data.get("is_mpr") or data.get("mpr_result") is None:
-        return None
-    managers = app.subwindow_managers.get(idx, {})
-    try:
-        viewer = controller._get_image_viewer(idx)
-    except Exception:
-        viewer = None
-    return {
-        "mpr_result": data["mpr_result"],
-        "mpr_orientation": data.get("mpr_orientation", ""),
-        "mpr_slice_index": int(data.get("mpr_slice_index", 0)),
-        "mpr_combine_enabled": bool(data.get("mpr_combine_enabled", False)),
-        "mpr_combine_mode": str(data.get("mpr_combine_mode", "aip") or "aip"),
-        "mpr_combine_slice_count": int(data.get("mpr_combine_slice_count", 4) or 4),
-        "mpr_combine": capture_mpr_combine_state(data),
-        "mpr_display": capture_mpr_display_state(
-            managers.get("view_state_manager"), viewer
-        ),
-        "mpr_source_dataset": data.get("mpr_source_dataset"),
-        "current_study_uid": str(data.get("current_study_uid", "") or ""),
-        "current_series_uid": str(data.get("current_series_uid", "") or ""),
-        "current_datasets": list(data.get("current_datasets") or []),
-    }
+    """Payload adapter for the view attached to *idx* (flushes live pane state)."""
+    return capture_pane_payload(controller, idx)
 
 
 def detach_mpr_view(controller: Any, idx: int) -> None:
-    """Remove MPR from *idx*, keeping the volume as the detached session."""
+    """Detach pane *idx*'s view; the registry keeps it (and its session) alive.
+
+    Nothing is created or discarded: detaching an empty or non-MPR pane is a
+    no-op, and the same view ID survives, so re-detach/reattach keeps its
+    identity and order.
+    """
     if not controller.is_mpr(idx):
         return
-    payload = capture_mpr_payload(controller, idx)
-    if payload is None:
+    if capture_mpr_payload(controller, idx) is None:
         return
-    controller._detached_mpr_payload = payload
+    view = controller._registry.view_for_pane(idx)
+    if view is None:  # pragma: no cover (capture requires a registry view)
+        return
     controller._cancel_mpr_worker(idx)
     controller._tear_down_mpr_at_subwindow(idx)
+    controller._registry.detach_view(view.view_id)
     controller.mpr_detached.emit(idx)
+
+
+def detach_view_on_pane_reset(controller: Any, idx: int) -> bool:
+    """Detach (never discard) a view still mapped to *idx* before the pane is reset.
+
+    Safety net for pathways that overwrite ``subwindow_data``: the pane's live
+    state is flushed into the view, the pane mapping is released, and the
+    view stays available as a detached tile. Returns True when a view was
+    detached; a no-op for panes without a mapped view.
+    """
+    view = refresh_view_from_pane(controller, idx)
+    if view is None:
+        return False
+    controller._registry.detach_view(view.view_id)
+    controller.mpr_detached.emit(idx)
+    return True
 
 
 def validate_transfer_target(
@@ -444,14 +448,27 @@ def validate_transfer_target(
     return viewer is not None
 
 
+def _commit_install(controller: Any, view_id: int, to_idx: int) -> bool:
+    """Commit a successful install to the registry; True when it displaced a view.
+
+    ``attach_view`` moves the view and detaches any occupant of *to_idx* in
+    one registry step, so the displaced view survives with its flushed
+    state. Runs only after the pane install succeeded.
+    """
+    displaced = controller._registry.view_for_pane(to_idx) is not None
+    controller._registry.attach_view(view_id, to_idx)
+    return displaced
+
+
 def relocate_mpr_view(controller: Any, from_idx: int, to_idx: int) -> None:
-    """Move an active MPR from *from_idx* to *to_idx*, transactionally.
+    """Move the view attached to *from_idx* to *to_idx*, transactionally.
 
     The source view is torn down only after the destination install
     succeeds. A failed install restores the destination (direct restore for
     an occupied MPR pane, install-time rollback otherwise) and leaves the
-    source untouched. Destination builds are cancelled regardless of pane
-    mode. Emits no signals on failure.
+    source and registry untouched. A successful install over an occupied MPR
+    pane preserves the displaced view as detached. Destination builds are
+    cancelled regardless of pane mode. Emits no signals on failure.
     """
     if from_idx == to_idx:
         _focus_destination(controller, to_idx)
@@ -459,7 +476,8 @@ def relocate_mpr_view(controller: Any, from_idx: int, to_idx: int) -> None:
     if not controller.is_mpr(from_idx):
         return
     payload = controller._capture_mpr_payload(from_idx)
-    if payload is None:
+    view = controller._registry.view_for_pane(from_idx)
+    if payload is None or view is None:
         return
     app = controller._app
     if not validate_transfer_target(app, controller._get_image_viewer, to_idx):
@@ -470,23 +488,31 @@ def relocate_mpr_view(controller: Any, from_idx: int, to_idx: int) -> None:
         return
     _focus_destination(controller, to_idx)
     controller._cancel_mpr_worker(to_idx)
-    ok = controller._install_mpr_payload_at_subwindow(to_idx, payload)
-    if not ok:
+    refresh_view_from_pane(controller, to_idx)
+    if not controller._install_mpr_payload_at_subwindow(to_idx, payload):
         return
+    displaced = _commit_install(controller, view.view_id, to_idx)
     controller._cancel_mpr_worker(from_idx)
     controller._tear_down_mpr_at_subwindow(from_idx)
     controller.mpr_cleared.emit(from_idx)
+    if displaced:
+        controller.mpr_detached.emit(to_idx)
     controller.mpr_activated.emit(to_idx)
 
 
-def attach_detached_mpr(controller: Any, to_idx: int) -> None:
-    """Assign the detached MPR session to *to_idx*, transactionally.
+def attach_detached_view(controller: Any, view_id: int, to_idx: int) -> None:
+    """Attach the detached view *view_id* to *to_idx*, transactionally.
 
-    The detached payload is kept until the install succeeds. A failed
-    install restores an occupied MPR destination directly and warns; the
-    detached session stays available in the navigator.
+    Stale, unknown or already-attached IDs are silent no-ops. The view stays
+    detached until the install succeeds; a failed install restores an
+    occupied destination directly and warns, leaving every view where it
+    was. A successful install over an occupied MPR pane preserves the
+    displaced view as detached.
     """
-    payload = controller._detached_mpr_payload
+    view = find_view(controller, view_id)
+    if view is None or view.pane_index is not None:
+        return
+    payload = build_view_payload(controller, view_id)
     if payload is None:
         return
     app = controller._app
@@ -500,20 +526,22 @@ def attach_detached_mpr(controller: Any, to_idx: int) -> None:
         return
     _focus_destination(controller, to_idx)
     controller._cancel_mpr_worker(to_idx)
-    ok = controller._install_mpr_payload_at_subwindow(to_idx, payload)
-    if ok:
-        controller._detached_mpr_payload = None
-        _clear_detached_thumbnail(controller)
-        controller.mpr_activated.emit(to_idx)
+    refresh_view_from_pane(controller, to_idx)
+    if not controller._install_mpr_payload_at_subwindow(to_idx, payload):
+        _warn_attach_failed(controller, dest_was_mpr)
         return
-    _warn_attach_failed(controller, dest_was_mpr)
+    displaced = _commit_install(controller, view_id, to_idx)
+    _clear_detached_thumbnail(controller, view_id)
+    if displaced:
+        controller.mpr_detached.emit(to_idx)
+    controller.mpr_activated.emit(to_idx)
 
 
-def _clear_detached_thumbnail(controller: Any) -> None:
-    """Clear the navigator's detached-MPR thumbnail slot."""
+def _clear_detached_thumbnail(controller: Any, view_id: int) -> None:
+    """Clear the navigator tile of a view that just left the detached state."""
     try:
         if hasattr(controller._app, "series_navigator"):
-            controller._app.series_navigator.clear_mpr_thumbnail(-1)
+            controller._app.series_navigator.clear_mpr_thumbnail(detached_nav_key(view_id))
     except Exception:
         pass
 
@@ -525,7 +553,7 @@ def _warn_attach_failed(controller: Any, had_backup: bool) -> None:
             controller._app.main_window,
             "MPR",
             "Could not attach the detached MPR to this window.\n"
-            "The detached session is still available in the navigator."
+            "The detached view is still available in the navigator."
             + ("\nThe previous MPR in this window was restored." if had_backup else ""),
         )
     except Exception:
@@ -534,10 +562,11 @@ def _warn_attach_failed(controller: Any, had_backup: bool) -> None:
 
 __all__ = [
     "DestinationSnapshot",
-    "attach_detached_mpr",
+    "attach_detached_view",
     "capture_destination_snapshot",
     "capture_mpr_payload",
     "detach_mpr_view",
+    "detach_view_on_pane_reset",
     "relocate_mpr_view",
     "restore_destination_snapshot",
     "restore_failed_install",

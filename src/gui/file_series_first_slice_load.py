@@ -27,6 +27,7 @@ from typing import Any
 from pydicom.dataset import Dataset
 from PySide6.QtCore import QTimer
 
+from core.session_reset_controller import release_all_mpr_sessions
 from utils.debug_flags import DEBUG_LOADING, DEBUG_SERIES
 from utils.dicom_utils import get_composite_series_key
 from utils.perf_timer import perf_mark, perf_timer
@@ -47,8 +48,11 @@ def pre_first_slice_reset(app: Any) -> None:
     Clear fusion, scenes, overlays, projection controls, and tag-viewer filter.
 
     Called before ``file_operations_handler.load_first_slice`` when opening files
-    via a full replace (not additive merge).
+    via a full replace (not additive merge). Every MPR session/view is released
+    first (as in Close All): the replaced datasets invalidate their sources, and
+    a pane left in MPR mode would otherwise stay mapped to a stale session.
     """
+    release_all_mpr_sessions(app)
     app._reset_fusion_for_all_subwindows()
 
     if app.current_dataset is not None and app.tag_edit_history:

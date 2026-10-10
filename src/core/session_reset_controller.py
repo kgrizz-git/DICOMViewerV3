@@ -74,15 +74,25 @@ def _release_all_mpr_for_close_all(app: DICOMViewerApp) -> None:
     app._mpr_controller.release_all_mpr()
 
 
+def release_all_mpr_sessions(app: DICOMViewerApp) -> None:
+    """Drop every MPR session, view, build and MPR pane before study data is replaced.
+
+    Used by Close All and by a full-replace file load: sessions hold the old
+    datasets and volume arrays, so none may outlive them, and no pane may
+    keep MPR keys that the registry no longer backs. The registry is released
+    first, then each MPR pane is torn down (restoring or clearing its view).
+    """
+    if not hasattr(app, "_mpr_controller"):
+        return
+    _release_all_mpr_for_close_all(app)
+    for idx in list(app.subwindow_data.keys()):
+        if app.subwindow_data.get(idx, {}).get("is_mpr"):
+            app._mpr_controller.clear_mpr(idx)
+
+
 def close_all_files(app: DICOMViewerApp) -> None:
     """Close currently open files/folder and clear all data."""
-    if hasattr(app, "_mpr_controller"):
-        _release_all_mpr_for_close_all(app)
-        # Clear MPR from any subwindow before clearing overlays and data.
-        # This removes the MPR banner and restores or clears the view.
-        for idx in list(app.subwindow_data.keys()):
-            if app.subwindow_data.get(idx, {}).get("is_mpr"):
-                app._mpr_controller.clear_mpr(idx)
+    release_all_mpr_sessions(app)
 
     # Close every 3D window (hidden ones too) so no closed study's volume lingers.
     _close_3d_dialogs(app)

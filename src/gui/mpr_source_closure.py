@@ -1,10 +1,13 @@
 """MPR source-closure release for ``MprController``.
 
-Retires builds tied to a closed study or series, drops matching detached
-payloads, and resets per-pane MPR tool/LUT/banner/navigator state without
-touching study data (callers clear it). Close-all releases every worker,
-payload, override, and spec. Matching uses authoritative build sources for
-workers and displayed study/series for chrome — never one for the other.
+Retires builds tied to a closed study or series (releasing their pending
+admission reservations), discards the registry sessions and every view of the
+closed source (attached and detached, with their navigator tiles), and resets
+per-pane MPR tool/LUT/banner/navigator state without touching study data
+(callers clear it). Close-all releases every worker, reservation, session,
+view, override, and spec. Matching uses authoritative build sources for
+workers, registry session sources for sessions, and displayed study/series
+for chrome — never one for another.
 """
 
 from __future__ import annotations
@@ -12,20 +15,12 @@ from __future__ import annotations
 from typing import Any
 
 from core.lut_series_state import clear_mpr_lut_override
+from core.mpr_session_types import detached_nav_key
 from gui.mpr_worker_fencing import retire_pane_worker
 
 # ---------------------------------------------------------------------------
 # Source closure release
 # ---------------------------------------------------------------------------
-
-
-def _payload_source(payload: Any) -> tuple[str, str] | None:
-    if not isinstance(payload, dict):
-        return None
-    return (
-        str(payload.get("current_study_uid", "") or ""),
-        str(payload.get("current_series_uid", "") or ""),
-    )
 
 
 def _source_matches(
@@ -68,12 +63,36 @@ def release_closed_source_sessions(
         if _clear_navigator_spec(app, idx):
             released["specs"] += 1
         released["panes"] += 1
-    if _source_matches(study_uid, series_uid, _payload_source(controller._detached_mpr_payload)):
-        controller._detached_mpr_payload = None
-        _clear_navigator_spec(app, -1)
-        released["detached"] += 1
+    released["detached"] += _discard_closed_sessions(controller, study_uid, series_uid)
     _bump_closed_source_generations(controller, study_uid, series_uid)
     return released
+
+
+def _discard_closed_sessions(
+    controller: Any, study_uid: str, series_uid: str | None
+) -> int:
+    """Discard every session built from the closed source; return detached views released.
+
+    Attached views leave through their panes (chrome reset and the caller's
+    pane clear); detached views also lose their navigator tile. Foreign
+    sessions are untouched.
+    """
+    registry = controller._registry
+    session_ids: list[int] = []
+    for view in registry.ordered_views():
+        if view.session_id in session_ids:
+            continue
+        session = registry.get_session(view.session_id)
+        if _source_matches(study_uid, series_uid, (session.source_study_uid, session.source_series_uid)):
+            session_ids.append(view.session_id)
+    detached = 0
+    for session_id in session_ids:
+        for view in registry.views_for_session(session_id):
+            if view.pane_index is None:
+                _clear_navigator_spec(controller._app, detached_nav_key(view.view_id))
+                detached += 1
+        registry.discard_session(session_id)
+    return detached
 
 
 def _build_matches_close(
@@ -110,10 +129,13 @@ def release_all_mpr(controller: Any) -> dict[str, int]:
         if _clear_navigator_spec(app, idx):
             released["specs"] += 1
         released["panes"] += 1
-    if controller._detached_mpr_payload is not None:
-        controller._detached_mpr_payload = None
-        _clear_navigator_spec(app, -1)
-        released["detached"] += 1
+    registry = controller._registry
+    detached = [v.view_id for v in registry.ordered_views() if v.pane_index is None]
+    registry.clear_all()
+    controller._build_reservations.clear()
+    for view_id in detached:
+        _clear_navigator_spec(app, detached_nav_key(view_id))
+    released["detached"] += len(detached)
     for key in list(controller._source_generations.keys()):
         controller._source_generations[key] += 1
     return released

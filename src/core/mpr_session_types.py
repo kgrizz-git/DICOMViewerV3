@@ -109,3 +109,37 @@ class MprViewSnapshot:
     slice_index: int
     combine: MprCombineState
     display: MprDisplayState
+
+
+@dataclass(frozen=True)
+class MprViewMetadata:
+    """Read-only public description of one view for navigator/tile consumers.
+
+    Carries no arrays: ``n_slices`` is the stack depth only. ``pane_index`` is
+    ``None`` for a detached view. Sort tiles by ``creation_seq``.
+    """
+
+    view_id: int
+    session_id: int
+    creation_seq: int
+    pane_index: int | None
+    orientation: str
+    source_study_uid: str
+    source_series_uid: str
+    n_slices: int
+    slice_index: int
+    photometric_interpretation: str | None = None
+
+
+def detached_nav_key(view_id: int) -> int:
+    """Navigator/drag key for a detached view (negative exact view ID).
+
+    Attached views keep their pane index (``>= 0``) as the key. View IDs start
+    at one, so ``-1`` is simply view 1, never a "the detached one" sentinel.
+    """
+    return -int(view_id)
+
+
+def detached_view_id_from_nav_key(key: int) -> int | None:
+    """Exact view ID for a detached navigator key, or None for pane keys."""
+    return -int(key) if int(key) < 0 else None

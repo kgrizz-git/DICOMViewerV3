@@ -8,9 +8,11 @@ both the worker-fencing and transfer-rollback suites. Not a test module
 
 from __future__ import annotations
 
+import warnings
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 from pydicom.dataset import Dataset
@@ -139,7 +141,9 @@ def _make_controller(*, focused: int = 0) -> tuple[MprController, Any]:
             "roi_coordinator": MagicMock(),
         }
         data[idx] = {}
-    layout = SimpleNamespace(get_subwindow=lambda i: panes.get(i))
+    layout = SimpleNamespace(
+        get_subwindow=lambda i: panes.get(i), get_all_subwindows=lambda: list(panes.values())
+    )
     app = SimpleNamespace(
         config_manager=MagicMock(),
         subwindow_data=data,
@@ -162,8 +166,40 @@ def _make_controller(*, focused: int = 0) -> tuple[MprController, Any]:
         _get_subwindow_assignments=MagicMock(return_value={}),
         _refresh_window_slot_map_widgets=MagicMock(),
         _slice_location_line_coordinator=MagicMock(),
+        _reset_fusion_handler_for_subwindow=MagicMock(),
     )
-    return MprController(app), app
+    ctrl = MprController(app)
+    app._mpr_controller = ctrl  # real app exposes the controller here
+    return ctrl, app
+
+
+def _register_pane_view(
+    ctrl: MprController, idx: int, result, study: str = "ST", series: str = "SE",
+    orientation: str = "Axial", slice_index: int = 1,
+) -> int:
+    """Give pane *idx* a registry session+view for *result*; returns the view ID.
+
+    Replaces any view already attached to the pane (test re-seeding) without
+    going through admission, mirroring what a completed activation leaves.
+    """
+    old = ctrl._registry.view_for_pane(idx)
+    if old is not None:
+        ctrl._registry.discard_view(old.view_id)
+    _sid, view_id = ctrl._registry.create_session(
+        result, study, series, orientation, slice_index=slice_index, pane_index=idx
+    )
+    return view_id
+
+
+def _add_detached_view(
+    ctrl: MprController, result, study: str = "ST", series: str = "SE",
+    orientation: str = "Axial", slice_index: int = 0,
+) -> int:
+    """Register an independent session whose only view is detached; returns its view ID."""
+    _sid, view_id = ctrl._registry.create_session(
+        result, study, series, orientation, slice_index=slice_index
+    )
+    return view_id
 
 
 def _seed_mpr_pane(app: Any, idx: int, result, study: str = "ST", **display) -> None:
@@ -194,6 +230,9 @@ def _seed_mpr_pane(app: Any, idx: int, result, study: str = "ST", **display) -> 
             "current_datasets": ["prior-ds"],
         },
     }
+    ctrl = getattr(app, "_mpr_controller", None)
+    if ctrl is not None:
+        _register_pane_view(ctrl, idx, result, study)
 
 
 def _register_worker(ctrl: MprController, idx: int, worker: Any) -> None:
@@ -209,3 +248,73 @@ def _signals(ctrl: MprController) -> dict[str, list[Any]]:
     return fired
 
 
+# ---------------------------------------------------------------------------
+# Build-flow and registry helpers (chunk 4: live session ownership)
+# ---------------------------------------------------------------------------
+
+
+def _result_for(study: str, series: str, *, n_slices: int = 3):
+    """Synthetic result whose source dataset carries the given study/series."""
+    result = _make_result(n_slices=n_slices)
+    dataset = result.source_volume.source_datasets[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # short labels are not valid UIDs
+        dataset.StudyInstanceUID = study
+        dataset.SeriesInstanceUID = series
+    return result
+
+
+@contextmanager
+def _light_display(ctrl: MprController):
+    """Skip real rendering; activation/install bookkeeping still runs."""
+    with (
+        patch.object(ctrl, "display_mpr_slice") as display,
+        patch.object(ctrl, "_set_tools_enabled"),
+        patch.object(ctrl, "_reset_window_level_for_mpr"),
+    ):
+        yield display
+
+
+def _request(result) -> SimpleNamespace:
+    dataset = result.source_volume.source_datasets[0]
+    return SimpleNamespace(
+        orientation_label="Axial", output_spacing_mm=0.5, output_thickness_mm=1.0,
+        interpolation="linear", output_plane=SimpleNamespace(normal=np.array([0.0, 0.0, 1.0])),
+        combine_mode="none", slab_thickness_mm=0.0, datasets=[dataset],
+    )
+
+
+@contextmanager
+def _build_flow(ctrl: MprController, result, workers: list[FakeWorker] | None = None):
+    """Drive ``_on_mpr_requested`` with a fake volume and native worker."""
+    dataset = result.source_volume.source_datasets[0]
+    created: list[FakeWorker] = workers if workers is not None else []
+
+    def _make_worker(**_kwargs: Any) -> FakeWorker:
+        worker = FakeWorker()
+        worker.progress = MagicMock()
+        worker.error = MagicMock()
+        created.append(worker)
+        return worker
+
+    with (
+        patch.object(ctrl, "_mpr_request_resolve_datasets", return_value=([dataset], False)),
+        patch.object(ctrl, "_mpr_request_build_volume", return_value=result.source_volume) as volume,
+        patch("gui.mpr_controller.MprBuilder.create_worker", side_effect=_make_worker),
+        patch("gui.mpr_controller.QProgressDialog"),
+    ):
+        yield volume, created
+
+
+def _finish(worker: FakeWorker, result) -> None:
+    """Deliver the worker's queued ``finished`` callback."""
+    worker.finished.connect.call_args_list[0].args[0](result)
+
+
+def _fail(worker: FakeWorker, message: str) -> None:
+    worker.error.connect.call_args_list[0].args[0](message)
+
+
+def _counts(ctrl: MprController) -> tuple[int, int, int, int]:
+    reg = ctrl._registry
+    return reg.session_count, reg.view_count, reg.pending_session_count, reg.pending_view_count

@@ -62,14 +62,14 @@ def test_on_mpr_thumbnail_clicked_swallows_a_layout_failure() -> None:
     stub._on_mpr_thumbnail_clicked(1)
 
 
-def test_on_mpr_assign_requested_attaches_a_detached_session() -> None:
-    """Dropping onto a pane with source -1 attaches the floating MPR session."""
+def test_on_mpr_assign_requested_attaches_the_exact_detached_view() -> None:
+    """A negative source is -view_id: it attaches that exact view, never "the" floating one."""
     controller = MagicMock()
     stub = _stub_for("MPRNavigationMixin", _mpr_controller=controller)
 
-    stub._on_mpr_assign_requested(-1, 2)
+    stub._on_mpr_assign_requested(-7, 2)
 
-    controller.attach_floating_mpr.assert_called_once_with(2)
+    controller.attach_detached_view.assert_called_once_with(7, 2)
     controller.relocate_mpr_subwindow.assert_not_called()
 
 
@@ -81,21 +81,21 @@ def test_on_mpr_assign_requested_relocates_an_attached_mpr() -> None:
     stub._on_mpr_assign_requested(0, 3)
 
     controller.relocate_mpr_subwindow.assert_called_once_with(0, 3)
-    controller.attach_floating_mpr.assert_not_called()
+    controller.attach_detached_view.assert_not_called()
 
 
-def test_on_mpr_clear_from_navigator_thumbnail_clears_the_detached_session() -> None:
-    """Clearing the detached thumbnail must also drop the navigator's -1 entry."""
+def test_on_mpr_clear_from_navigator_thumbnail_discards_only_that_detached_view() -> None:
+    """Clearing a detached tile discards that exact view and removes only its tile."""
     controller = MagicMock()
     navigator = MagicMock()
     stub = _stub_for(
         "MPRNavigationMixin", _mpr_controller=controller, series_navigator=navigator
     )
 
-    stub._on_mpr_clear_from_navigator_thumbnail(-1)
+    stub._on_mpr_clear_from_navigator_thumbnail(-4)
 
-    controller.clear_detached_mpr.assert_called_once_with()
-    navigator.clear_mpr_thumbnail.assert_called_once_with(-1)
+    controller.discard_detached_view.assert_called_once_with(4)
+    navigator.clear_mpr_thumbnail.assert_called_once_with(-4)
     controller.clear_mpr.assert_not_called()
 
 

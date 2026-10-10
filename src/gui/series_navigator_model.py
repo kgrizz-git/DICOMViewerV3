@@ -220,6 +220,21 @@ def series_thumbnail_display_label(first_dataset: Dataset, series_num: int) -> s
     return f"S{series_num}"
 
 
+def ordered_mpr_spec_items(
+    specs: dict[int, dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
+    """MPR tile specs in creation order (``order`` = view creation sequence).
+
+    Detached tiles use negative keys, so key order would reverse creation
+    order. The sort is stable: specs without ``order`` keep insertion order,
+    after those that have one.
+    """
+    return sorted(
+        specs.items(),
+        key=lambda item: (item[1].get("order") is None, item[1].get("order") or 0),
+    )
+
+
 def compute_study_section_width(
     series_list: list[tuple[int, str, Dataset]],
     study_uid: str,

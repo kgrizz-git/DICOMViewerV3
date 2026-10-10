@@ -51,6 +51,7 @@ from gui.series_navigator_model import (
     build_study_navigator_tooltip,
     compute_study_section_width,
     first_nonempty_series_dataset,
+    ordered_mpr_spec_items,
     series_thumbnail_display_label,
     sorted_series_entries,
     study_label_from_dataset,
@@ -145,12 +146,7 @@ class SeriesNavigator(QWidget):
         subwindow_index: int,
         parent: QWidget,
     ) -> MprThumbnailWidget:
-        """
-        Create a navigator widget for one active MPR entry.
-
-        The widget is ephemeral and tied to the current navigator layout build.
-        Persistent MPR state lives in ``_mpr_thumbnail_specs`` instead.
-        """
+        """Ephemeral widget for one MPR entry; persistent state is ``_mpr_thumbnail_specs``."""
         widget = MprThumbnailWidget(subwindow_index, parent=parent)
         widget.clicked.connect(self.mpr_thumbnail_clicked.emit)
         widget.clear_mpr_requested.connect(self.mpr_thumbnail_clear_requested.emit)
@@ -165,9 +161,9 @@ class SeriesNavigator(QWidget):
         source_series_uid: str,
         window_center: float | None = None, window_width: float | None = None,
         n_slices: int | None = None, photometric_interpretation: str | None = None,
-        image_inverted: bool = False, lut=None,
+        image_inverted: bool = False, lut=None, order: int | None = None,
     ) -> None:
-        """Show or update an MPR thumbnail. ``pixel_array=None`` clears it."""
+        """Show/update an MPR tile (key: pane index or ``-view_id``); ``None`` pixels clears it."""
         if pixel_array is None:
             self.clear_mpr_thumbnail(subwindow_index)
             return
@@ -182,16 +178,16 @@ class SeriesNavigator(QWidget):
             "photometric_interpretation": photometric_interpretation,
             "image_inverted": image_inverted,
             "lut": lut,
+            "order": order,
         }
         self._rebuild_from_cached_studies()
 
-    def clear_mpr_thumbnail(self, subwindow_index: int) -> None:
-        """
-        Remove the MPR thumbnail for *subwindow_index* from the navigator.
+    def mpr_thumbnail_keys(self) -> list[int]:
+        """Keys of the shown MPR tiles (pane index, or ``-view_id`` when detached)."""
+        return list(self._mpr_thumbnail_specs)
 
-        Args:
-            subwindow_index: Zero-based subwindow slot.
-        """
+    def clear_mpr_thumbnail(self, subwindow_index: int) -> None:
+        """Remove the MPR tile with this key (pane index or ``-view_id``)."""
         self._mpr_thumbnail_specs.pop(subwindow_index, None)
         self._rebuild_from_cached_studies()
 
@@ -635,7 +631,7 @@ class SeriesNavigator(QWidget):
         series_uid: str,
     ) -> None:
         """Insert MPR preview thumbnails that belong after *series_uid*."""
-        for mpr_idx, mpr_spec in self._mpr_thumbnail_specs.items():
+        for mpr_idx, mpr_spec in ordered_mpr_spec_items(self._mpr_thumbnail_specs):
             if (
                 mpr_spec.get("study_uid") != study_uid
                 or mpr_spec.get("source_series_uid") != series_uid

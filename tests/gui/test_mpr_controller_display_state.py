@@ -144,7 +144,9 @@ def _make_two_pane_controller(*, focused: int = 0) -> tuple[MprController, Any]:
         _refresh_window_slot_map_widgets=MagicMock(),
         _slice_location_line_coordinator=MagicMock(),
     )
-    return MprController(app), app
+    ctrl = MprController(app)
+    app._mpr_controller = ctrl
+    return ctrl, app
 
 
 def _seed_mpr_pane(app: Any, idx: int, result, **display) -> None:
@@ -171,6 +173,11 @@ def _seed_mpr_pane(app: Any, idx: int, result, **display) -> None:
         "mpr_combine_mode": display.get("combine_mode", "aip"),
         "mpr_combine_slice_count": display.get("combine_count", 4),
     }
+    registry = app._mpr_controller._registry
+    old = registry.view_for_pane(idx)
+    if old is not None:
+        registry.discard_view(old.view_id)
+    registry.create_session(result, "ST", "SE", "Axial", slice_index=1, pane_index=idx)
 
 
 class TestPayloadCapture:
