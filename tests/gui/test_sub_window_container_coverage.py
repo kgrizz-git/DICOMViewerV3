@@ -8,8 +8,10 @@ import pytest
 from PySide6.QtCore import QByteArray, QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QDragEnterEvent, QDragMoveEvent, QMouseEvent
 
+from core.mpr_view_drag import MPR_VIEW_MIME, encode_view_drag
+
+_ORIGIN = "AbCdEfGhIjKlMnOpQr_-12"
 from gui.image_viewer import ImageViewer
-from gui.mpr_thumbnail_widget import MPR_ASSIGN_MIME
 from gui.sub_window_container import (
     SubWindowContainer,
     _parse_series_drop_mime,
@@ -229,7 +231,7 @@ class TestMimeAccepts:
     def test_accepts_mpr_mime(self, qapp):
         viewer = ImageViewer()
         c = SubWindowContainer(viewer)
-        assert c._mime_accepts_series_or_mpr(self._make_mime(mime_type=MPR_ASSIGN_MIME)) is True
+        assert c._mime_accepts_series_or_mpr(self._make_mime(mime_type=MPR_VIEW_MIME)) is True
 
     def test_accepts_series_uid_prefix(self, qapp):
         viewer = ImageViewer()
@@ -324,7 +326,7 @@ class TestDragEvents:
         c = SubWindowContainer(viewer)
         from PySide6.QtCore import QMimeData
         md = QMimeData()
-        md.setData(MPR_ASSIGN_MIME, QByteArray(b"0"))
+        md.setData(MPR_VIEW_MIME, QByteArray(b"0"))
         ev = self._make_drag_event(md)
         c.dragEnterEvent(ev)
         assert ev.isAccepted()
@@ -392,41 +394,88 @@ class TestDropEvent:
         c.dropEvent(ev)
         ev.ignore.assert_called()
 
-    def test_drop_mpr_assign_emits_signal(self, qapp):
+    def _mpr_drop(self, payload: bytes):
+        from PySide6.QtCore import QMimeData
+
+        md = QMimeData()
+        md.setData(MPR_VIEW_MIME, QByteArray(payload))
+        ev = MagicMock()
+        ev.mimeData.return_value = md
+        return ev
+
+    def test_drop_mpr_view_emits_stable_view_id_operation_and_target(self, qapp):
         viewer = ImageViewer()
         viewer.subwindow_index = 2
         c = SubWindowContainer(viewer)
         received = []
-        c.mpr_assign_requested.connect(lambda s, t: received.append((s, t)))
-        ev = self._mock_drop(mime_type=MPR_ASSIGN_MIME)
+        c.mpr_view_drop_requested.connect(lambda v, op, o, t: received.append((v, op, o, t)))
+        ev = self._mpr_drop(encode_view_drag(17, _ORIGIN))
         c.dropEvent(ev)
-        assert received == [(1, 2)]
+        assert received == [(17, "move", _ORIGIN, 2)]
         ev.acceptProposedAction.assert_called_once()
 
-    def test_drop_mpr_assign_no_subwindow_index_ignored(self, qapp):
+    def test_drop_mpr_view_no_subwindow_index_ignored(self, qapp):
         viewer = ImageViewer()
         viewer.subwindow_index = None
         c = SubWindowContainer(viewer)
         received = []
-        c.mpr_assign_requested.connect(lambda s, t: received.append((s, t)))
-        ev = self._mock_drop(mime_type=MPR_ASSIGN_MIME)
+        c.mpr_view_drop_requested.connect(lambda v, op, o, t: received.append((v, op, o, t)))
+        ev = self._mpr_drop(encode_view_drag(17, _ORIGIN))
         c.dropEvent(ev)
         assert received == []
         ev.ignore.assert_called()
 
-    def test_drop_mpr_exception_ignored(self, qapp):
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            b"1",  # the old bare-integer pane/detached encoding is not a payload
+            b"-1",
+            b"not_a_number",
+            b"",
+            b'{"v":2,"op":"move","view":1}',  # foreign schema version
+            b'{"v":1,"op":"swap","view":1}',  # unknown operation
+            b'{"v":1,"op":"move","view":0}',
+            b'{"v":1,"op":"move","view":true}',
+            b'{"v":1,"op":"move","view":1,"pane":0}',  # extra key (pane ambiguity)
+            b'{"v":1,"op":"move","view":1}',  # missing origin
+            b'{"v":1,"op":"move","view":1,"origin":"short"}',  # malformed origin
+            b"x" * 4096,  # oversized
+        ],
+    )
+    def test_drop_malformed_foreign_or_oversized_mpr_payload_is_a_no_op(self, qapp, payload):
         viewer = ImageViewer()
         viewer.subwindow_index = 2
         c = SubWindowContainer(viewer)
-        from PySide6.QtCore import QMimeData
-        md = QMimeData()
-        md.setData(MPR_ASSIGN_MIME, QByteArray(b"not_a_number"))
-        ev = MagicMock()
-        ev.mimeData.return_value = md
-        ev.acceptProposedAction = MagicMock()
-        ev.ignore = MagicMock()
+        received = []
+        c.mpr_view_drop_requested.connect(lambda v, op, o, t: received.append((v, op, o, t)))
+        ev = self._mpr_drop(payload)
         c.dropEvent(ev)
+        assert received == []
         ev.ignore.assert_called()
+        ev.acceptProposedAction.assert_not_called()
+
+    def test_oversized_payload_is_rejected_before_it_is_copied_or_parsed(self, qapp):
+        from unittest.mock import patch
+
+        from core.mpr_view_drag import MAX_PAYLOAD_BYTES
+
+        viewer = ImageViewer()
+        viewer.subwindow_index = 1
+        c = SubWindowContainer(viewer)
+        ev = self._mpr_drop(b"x" * (MAX_PAYLOAD_BYTES + 1))
+        with patch("gui.sub_window_container.decode_view_drag") as decode:
+            c.dropEvent(ev)
+        decode.assert_not_called()
+        ev.ignore.assert_called()
+
+    def test_legacy_bare_integer_mime_is_not_accepted(self, qapp):
+        from PySide6.QtCore import QMimeData
+
+        md = QMimeData()
+        md.setData("application/x-dv3-mpr-assign", QByteArray(b"1"))
+        viewer = ImageViewer()
+        c = SubWindowContainer(viewer)
+        assert c._mime_accepts_series_or_mpr(md) is False
 
 
 # ---------------------------------------------------------------------------

@@ -31,6 +31,14 @@ Design notes
   not updated (prevents spurious jumps when stacks don't overlap).
 * A ``_syncing`` reentrancy guard prevents feedback loops when slices are
   set programmatically.
+* MPR targets are moved through the controller's canonical slice setter
+  (``MprController.set_pane_slice``), which also moves the target's explicit
+  link group (including detached members) in one step. Explicit links are
+  independent of this coordinator's enabled flag, and the setter never calls
+  back into the coordinator, so an incoming update never cascades into other
+  global groups. Targets are deduplicated by explicit link group: members of
+  the source's own group are already updated, and only one target per other
+  group is updated (the rest ride along), so nothing is redrawn twice.
 * SliceStack geometry is cached per ``(study_uid, series_uid)`` and
   invalidated when a series is closed or reassigned.
 """
@@ -182,7 +190,7 @@ class SliceSyncCoordinator:
         if group is None:
             return  # this subwindow is not in any group
 
-        targets = [idx for idx in group if idx != source_idx]
+        targets = self._dedupe_by_link_group(source_idx, [i for i in group if i != source_idx])
         if not targets:
             return
 
@@ -218,6 +226,33 @@ class SliceSyncCoordinator:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _dedupe_by_link_group(self, source_idx: int, targets: list[int]) -> list[int]:
+        """Drop targets an explicit link group already moves.
+
+        The source's own group has just been updated by the slice setter; for
+        any other group only its first target is kept, because updating one
+        member through the setter moves the rest.
+        """
+        mpr = getattr(self.app, "_mpr_controller", None)
+        group_of = getattr(mpr, "link_group_of_pane", None)
+        if not callable(group_of):
+            return targets
+
+        def explicit_group(idx: int) -> int | None:
+            link_group = group_of(idx)
+            return link_group if type(link_group) is int else None
+
+        handled = {explicit_group(source_idx)} - {None}
+        kept: list[int] = []
+        for target in targets:
+            link_group = explicit_group(target)
+            if link_group is not None:
+                if link_group in handled:
+                    continue
+                handled.add(link_group)
+            kept.append(target)
+        return kept
 
     def _find_group(self, idx: int) -> list[int] | None:
         """Return the group containing ``idx``, or None."""
@@ -352,7 +387,7 @@ class SliceSyncCoordinator:
         target_data = self.app.subwindow_data.get(target_idx, {})
         if target_data.get("is_mpr") and hasattr(self.app, "_mpr_controller"):
             try:
-                self.app._mpr_controller.display_mpr_slice(target_idx, new_dataset_idx)
+                self.app._mpr_controller.set_pane_slice(target_idx, new_dataset_idx)
             except Exception as exc:  # pragma: no cover
                 print_redacted(f"[SliceSyncCoordinator] Error updating MPR subwindow {target_idx}: {exc}")
             return None

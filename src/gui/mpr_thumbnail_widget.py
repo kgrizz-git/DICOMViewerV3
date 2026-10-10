@@ -5,7 +5,10 @@ A thumbnail widget representing an active MPR (Multi-Planar Reconstruction)
 view in the series navigator bar.
 
 Inputs:
-    subwindow_index (int): Index of the subwindow hosting the MPR view.
+    view_id (int): Stable ID of the MPR view this tile represents (attached
+        or detached; the tile identity never changes when the view moves).
+    pane_index (int | None): Pane currently showing the view, shown as the
+        window number; None when detached.
     pixel_array (np.ndarray): 2-D float array from the MPR slice.
     window_center, window_width (float): Optional W/L for rendering.
     dot_color (str): Hex color for the subwindow digit in the top-right corner.
@@ -14,16 +17,21 @@ Outputs:
     - Visual thumbnail with MPR badge, optional bottom-left slice count (same
       rules as series thumbnails for View → slice/frame count badge), and
       subwindow number tint.
-    - clicked(int) signal: emitted with subwindow_index on left-click.
+    - clicked(int) signal: emitted with view_id on left-click.
     - drag_started(int) signal: emitted when a drag begins.
-    - Drag MIME type ``application/x-dv3-mpr-assign`` with source subwindow
-      index encoded as UTF-8 bytes.
+    - Drag MIME type ``application/x-dv3-mpr-view`` carrying the versioned
+      ``core.mpr_view_drag`` payload (view ID + operation + the owning
+      controller's opaque origin token, never a pane index).
+    - Context menu: Duplicate into Window…, Duplicate Linked into Window…,
+      Unlink View (enabled only while linked) and Clear MPR, all by view_id.
 
 Requirements:
     PySide6, PIL (Pillow), numpy, gui.navigator_colors.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -43,12 +51,10 @@ from PySide6.QtWidgets import QMenu, QWidget
 from core.display_normalize import normalize_to_uint8
 from core.lut_display import apply_user_invert_and_lut, rgb_preview_image
 from core.lut_engine import LookUpTable
+from core.mpr_view_drag import MPR_VIEW_MIME, OP_MOVE, encode_view_drag
 from core.photometric_polarity import apply_monochrome1_polarity
 from gui.navigator_colors import SUBWINDOW_DOT_COLORS, subwindow_slot_display_number
 from utils.privacy.console import print_redacted
-
-# MIME type used to distinguish MPR thumbnail drags from regular series drags.
-MPR_ASSIGN_MIME = "application/x-dv3-mpr-assign"
 
 _THUMBNAIL_SIZE = 68  # pixels — matches SeriesThumbnail default
 
@@ -65,30 +71,40 @@ class MprThumbnailWidget(QWidget):
     - A very small colored window number in the top-right (same colors as
       series navigator slot indicators).
 
-    Clicking the widget emits ``clicked(subwindow_index)``.
-    Dragging the widget produces a ``application/x-dv3-mpr-assign`` MIME event
-    so drop targets (SubWindowContainer) can identify it as an MPR reassignment.
+    Clicking the widget emits ``clicked(view_id)``. Dragging it produces an
+    ``application/x-dv3-mpr-view`` MIME event so drop targets
+    (SubWindowContainer) can move/attach exactly this view.
     """
 
-    clicked = Signal(int)       # subwindow_index
-    drag_started = Signal(int)  # subwindow_index
-    clear_mpr_requested = Signal(int)  # subwindow_index (-1 = detached)
+    clicked = Signal(int)       # view_id
+    drag_started = Signal(int)  # view_id
+    clear_mpr_requested = Signal(int)  # view_id
+    duplicate_requested = Signal(int)  # view_id
+    duplicate_linked_requested = Signal(int)  # view_id
+    unlink_requested = Signal(int)  # view_id
 
     THUMBNAIL_SIZE: int = _THUMBNAIL_SIZE
 
-    def __init__(self, subwindow_index: int, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, view_id: int, pane_index: int | None = None, parent: QWidget | None = None
+    ) -> None:
         """
         Args:
-            subwindow_index: Zero-based index of the subwindow hosting the MPR.
+            view_id: Stable ID of the MPR view this tile represents.
+            pane_index: Pane showing the view, or None when detached.
             parent: Parent widget.
         """
         super().__init__(parent)
-        self._subwindow_index: int = subwindow_index
+        self._view_id: int = view_id
+        self._pane_index: int | None = pane_index
+        self._tag: str = ""
+        self._origin: str = ""  # controller drag-origin token; a tile without one cannot be dragged
+        self._linked: bool = False  # member of a session-local link group (enables Unlink View)
         self._preview_pixmap: QPixmap | None = None
         self._dot_color: str = (
             "#9E9E9E"
-            if subwindow_index < 0
-            else SUBWINDOW_DOT_COLORS.get(subwindow_index, "#2196F3")
+            if pane_index is None
+            else SUBWINDOW_DOT_COLORS.get(pane_index, "#2196F3")
         )
         self._drag_start_pos: QPoint | None = None
         self._img_bytes_ref: bytes | None = None
@@ -101,25 +117,43 @@ class MprThumbnailWidget(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
-        if subwindow_index < 0:
-            self.setToolTip(
-                "MPR — not assigned to a window\n"
-                "Drag onto an image pane to assign  |  Right-click: Clear MPR"
-            )
-        else:
-            self.setToolTip(
-                f"MPR View — Window {subwindow_index + 1}\n"
-                "Click to focus  |  Drag to move to another window  |  Right-click: Clear MPR"
-            )
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     @property
-    def subwindow_index(self) -> int:
-        """Return the subwindow index this thumbnail represents."""
-        return self._subwindow_index
+    def view_id(self) -> int:
+        """Stable ID of the view this tile represents."""
+        return self._view_id
+
+    @property
+    def pane_index(self) -> int | None:
+        """Pane currently showing the view (window number source), None if detached."""
+        return self._pane_index
+
+    def set_origin(self, origin: str) -> None:
+        """Set the owning controller's opaque drag-origin token (stamped into drag payloads)."""
+        self._origin = origin
+
+    def apply_spec(self, spec: dict[str, Any], show_count_badge: bool) -> None:
+        """Apply a navigator tile spec: caption, drag origin, link state, preview and badges."""
+        self.set_caption(spec.get("tag", ""), spec.get("tooltip", ""), spec.get("linked", False))
+        self.set_origin(spec.get("origin", ""))
+        self.update_preview(
+            spec.get("pixel_array"), spec.get("window_center"), spec.get("window_width"),
+            spec.get("photometric_interpretation"),
+            image_inverted=bool(spec.get("image_inverted", False)), lut=spec.get("lut"),
+        )
+        self.set_slice_count(spec.get("n_slices"))
+        self.set_show_slice_frame_count_badge(show_count_badge)
+
+    def set_caption(self, tag: str, tooltip: str, linked: bool = False) -> None:
+        """Set the compact corner tag (e.g. ``S2.1L``), full tooltip (no PHI) and link state."""
+        self._tag = tag
+        self._linked = bool(linked)
+        self.setToolTip(tooltip)
+        self.update()
 
     def update_preview(
         self,
@@ -299,14 +333,28 @@ class MprThumbnailWidget(QWidget):
                 indicator_text,
             )
 
-        # Subwindow number — top-right (detached MPR: no digit).
-        if self._subwindow_index >= 0:
+        if self._tag:
+            tag_font = QFont()
+            tag_font.setPointSize(7)
+            painter.setFont(tag_font)
+            tag_fm = painter.fontMetrics()
+            tag_rect = QRect(
+                self.THUMBNAIL_SIZE - 3 - tag_fm.horizontalAdvance(self._tag),
+                self.THUMBNAIL_SIZE - 3 - tag_fm.height(),
+                tag_fm.horizontalAdvance(self._tag),
+                tag_fm.height(),
+            )
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(tag_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom, self._tag)
+
+        # Window number — top-right (detached view: no digit).
+        if self._pane_index is not None:
             slot_font = QFont()
             slot_font.setBold(True)
             slot_font.setPointSize(9)
             painter.setFont(slot_font)
             fm = painter.fontMetrics()
-            label = subwindow_slot_display_number(self._subwindow_index)
+            label = subwindow_slot_display_number(self._pane_index)
             tw = fm.horizontalAdvance(label)
             th = fm.height()
             margin = 3
@@ -331,13 +379,22 @@ class MprThumbnailWidget(QWidget):
     # Context menu
     # ------------------------------------------------------------------
 
-    def _show_context_menu(self, pos) -> None:
+    def build_context_menu(self) -> QMenu:
+        """Menu for this tile; both actions act on this exact view ID."""
         menu = QMenu(self)
+        duplicate_act = menu.addAction("Duplicate into Window…")
+        duplicate_act.triggered.connect(lambda: self.duplicate_requested.emit(self._view_id))
+        linked_act = menu.addAction("Duplicate Linked into Window…")
+        linked_act.triggered.connect(lambda: self.duplicate_linked_requested.emit(self._view_id))
+        unlink_act = menu.addAction("Unlink View")
+        unlink_act.setEnabled(self._linked)
+        unlink_act.triggered.connect(lambda: self.unlink_requested.emit(self._view_id))
         clear_act = menu.addAction("Clear MPR")
-        clear_act.triggered.connect(
-            lambda: self.clear_mpr_requested.emit(self._subwindow_index)
-        )
-        menu.exec(self.mapToGlobal(pos))
+        clear_act.triggered.connect(lambda: self.clear_mpr_requested.emit(self._view_id))
+        return menu
+
+    def _show_context_menu(self, pos) -> None:
+        self.build_context_menu().exec(self.mapToGlobal(pos))
 
     # ------------------------------------------------------------------
     # Mouse events
@@ -369,7 +426,7 @@ class MprThumbnailWidget(QWidget):
                 else 0
             )
             if dist <= 10:
-                self.clicked.emit(self._subwindow_index)
+                self.clicked.emit(self._view_id)
         self._drag_start_pos = None
         super().mouseReleaseEvent(event)
 
@@ -379,17 +436,23 @@ class MprThumbnailWidget(QWidget):
 
     def _start_drag(self) -> None:
         """
-        Initiate a QDrag with the ``application/x-dv3-mpr-assign`` MIME type.
+        Initiate a QDrag carrying the versioned ``application/x-dv3-mpr-view`` payload.
 
-        The MIME payload is the source subwindow index encoded as ASCII bytes
-        so that drop targets (SubWindowContainer) can decode it without ambiguity.
+        The payload names the stable view ID and a "move" operation. It never
+        carries a pane index, so a drop after the pane was cleared or replaced
+        moves the original view (or does nothing), never the replacement. The
+        controller's origin token rides along so another instance cannot
+        collide on the same view ID; a tile with no/invalid token starts no drag.
         """
         self._drag_start_pos = None  # Prevent re-entry.
+        try:
+            payload = encode_view_drag(self._view_id, self._origin, OP_MOVE)
+        except ValueError:
+            return
 
         drag = QDrag(self)
         mime = QMimeData()
-        payload = QByteArray(str(self._subwindow_index).encode("ascii"))
-        mime.setData(MPR_ASSIGN_MIME, payload)
+        mime.setData(MPR_VIEW_MIME, QByteArray(payload))
         drag.setMimeData(mime)
 
         if self._preview_pixmap is not None and not self._preview_pixmap.isNull():
@@ -402,5 +465,5 @@ class MprThumbnailWidget(QWidget):
             drag.setPixmap(scaled)
             drag.setHotSpot(QPoint(scaled.width() // 2, scaled.height() // 2))
 
-        drag.exec(Qt.DropAction.CopyAction)
-        self.drag_started.emit(self._subwindow_index)
+        drag.exec(Qt.DropAction.MoveAction)
+        self.drag_started.emit(self._view_id)

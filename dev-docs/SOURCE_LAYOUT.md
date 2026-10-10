@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-09
 **Purpose:** Compact controller, bootstrap, and signal-wiring index. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules, then open the on-demand [detailed module tree](info/SOURCE_LAYOUT_MODULE_TREE.md) only when file-level navigation is needed.
 
 ---
@@ -52,7 +52,7 @@ Tests: `tests/core/test_slice_sync_coordinator_unit.py`, `tests/test_slice_geome
 |---|---|---|
 | `InitializationMixin` | `src/main_app_initialization.py` | `_init_*` / `_setup_*` orchestration; forwards to the handler bootstrap and `wire_all_signals` helpers below |
 | `SubwindowManagementMixin` | `src/main_app_subwindow_management.py` | Per-subwindow managers and lookups, focus changes, close/clear (files, series, study, subwindow), fusion reset, view-state capture around layout changes |
-| `MPRNavigationMixin` | `src/main_app_subwindow_management.py` | MPR navigator thumbnails, detach/assign/clear, save MPR as DICOM |
+| `MPRNavigationMixin` | `src/main_app_subwindow_management.py` | MPR navigator tile slots (click, drop by view ID, clear, duplicate, unlink), pane-view lookups, save MPR as DICOM |
 | `UIHandlersMixin` | `src/main_app_ui_and_files.py` | Menu/context-menu slots (orientation, slice-location lines, mouse and scroll-wheel modes), customization import/export, QA and MRI-compare workers, arrow-key navigation |
 | `FileOperationsMixin` | `src/main_app_ui_and_files.py` | Open files/folders/recent, dialog and export launchers, QA analysis entry points |
 | `DisplayProjectionMixin` | `src/main_app_display_settings.py` | Slice display/redisplay, intensity projection, smoothing toggle, overlay config/font, zoom and W/L preset status, histogram W/L throttle |

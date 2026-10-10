@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import numpy as np
 import pytest
 from pydicom.dataset import Dataset
 from PySide6.QtCore import Qt
@@ -79,21 +78,6 @@ def test_update_series_list_builds_thumbnails(qapp) -> None:
     assert nav.current_series_uid == "1.2.840.10008.10.20.0.20"
     nav.clear()
     assert nav.thumbnails == {}
-
-
-@pytest.mark.qt
-def test_mpr_thumbnail_set_and_clear(qapp) -> None:
-    nav = SeriesNavigator(DICOMProcessor())
-    nav._generate_thumbnail = MagicMock(return_value=None)  # type: ignore[method-assign]
-    ds = _ds(SeriesDescription="Src", Modality="CT", SeriesNumber=1)
-    studies = {"st": {"se": [ds]}}
-    nav.update_series_list(studies, "st", "se")
-    pixels = np.zeros((8, 8), dtype=np.float32)
-    nav.set_mpr_thumbnail(0, pixels, "st", "se", window_center=40.0, window_width=400.0, n_slices=3)
-    assert 0 in nav._mpr_thumbnail_specs
-    assert nav._mpr_thumbnail_specs[0]["n_slices"] == 3
-    nav.clear_mpr_thumbnail(0)
-    assert 0 not in nav._mpr_thumbnail_specs
 
 
 @pytest.mark.qt

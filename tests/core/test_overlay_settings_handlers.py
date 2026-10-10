@@ -377,6 +377,15 @@ class TestOnAnnotationOptionsApplied:
 
 
 class TestOnSettingsApplied:
+    def test_applies_cache_and_mpr_admission_settings_to_the_mpr_controller(self, monkeypatch):
+        monkeypatch.setattr(overlay_settings_handlers, "refresh_overlay_all_subwindows", MagicMock())
+        app = _make_app()
+        app.main_window.apply_toolbar_label_style = MagicMock()
+        app._mpr_controller = MagicMock()
+        overlay_settings_handlers.on_settings_applied(app)
+        app._mpr_controller.apply_cache_settings.assert_called_once_with()
+        app._mpr_controller.apply_session_caps.assert_called_once_with()
+
     def test_applies_theme(self, monkeypatch):
         monkeypatch.setattr(overlay_settings_handlers, "refresh_overlay_all_subwindows", MagicMock())
         app = _make_app()

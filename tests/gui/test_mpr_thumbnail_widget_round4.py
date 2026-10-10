@@ -14,14 +14,21 @@ import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QMouseEvent
 
-from gui.mpr_thumbnail_widget import MPR_ASSIGN_MIME, MprThumbnailWidget
+from core.mpr_view_drag import MPR_VIEW_MIME, OP_MOVE, decode_view_drag
+from gui.mpr_thumbnail_widget import MprThumbnailWidget
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_widget(subwindow_index: int = 0) -> MprThumbnailWidget:
-    return MprThumbnailWidget(subwindow_index)
+_ORIGIN = "AbCdEfGhIjKlMnOpQr_-12"
+
+
+def _make_widget(pane_index: int | None = 0, view_id: int = 7) -> MprThumbnailWidget:
+    """Tile for view *view_id*; *pane_index* is the window showing it (None = detached)."""
+    widget = MprThumbnailWidget(view_id, pane_index)
+    widget.set_origin(_ORIGIN)
+    return widget
 
 
 def _make_array(
@@ -75,29 +82,33 @@ def _mouse_release(pos: QPoint = QPoint(5, 5)) -> QMouseEvent:
 
 class TestConstructor:
     @pytest.mark.qt
-    def test_positive_index(self, qapp) -> None:
-        w = _make_widget(2)
-        assert w.subwindow_index == 2
+    def test_identity_is_the_view_id_and_the_pane_is_separate(self, qapp) -> None:
+        w = _make_widget(2, view_id=11)
+        assert (w.view_id, w.pane_index) == (11, 2)
         assert w._dot_color == "#FF9800"  # SUBWINDOW_DOT_COLORS[2]
-        assert w.toolTip().startswith("MPR View — Window 3")
 
     @pytest.mark.qt
-    def test_zero_index(self, qapp) -> None:
+    def test_zero_pane(self, qapp) -> None:
         w = _make_widget(0)
-        assert w.subwindow_index == 0
+        assert w.pane_index == 0
         assert w._dot_color == "#2196F3"
-        assert "Window 1" in w.toolTip()
 
     @pytest.mark.qt
-    def test_negative_index_uses_default_grey(self, qapp) -> None:
-        w = _make_widget(-1)
+    def test_detached_view_has_no_pane_and_grey_dot(self, qapp) -> None:
+        w = _make_widget(None, view_id=4)
+        assert (w.view_id, w.pane_index) == (4, None)
         assert w._dot_color == "#9E9E9E"
-        assert "not assigned" in w.toolTip()
 
     @pytest.mark.qt
-    def test_out_of_range_index_falls_back_to_default_blue(self, qapp) -> None:
+    def test_out_of_range_pane_falls_back_to_default_blue(self, qapp) -> None:
         w = _make_widget(99)
         assert w._dot_color == "#2196F3"  # default from dict.get
+
+    @pytest.mark.qt
+    def test_caption_sets_tag_and_tooltip(self, qapp) -> None:
+        w = _make_widget(1)
+        w.set_caption("S2.1", "MPR Axial\nSession 2")
+        assert w._tag == "S2.1" and w.toolTip() == "MPR Axial\nSession 2"
 
     @pytest.mark.qt
     def test_initial_state(self, qapp) -> None:
@@ -297,7 +308,7 @@ class TestMouseClick:
 
         w.mousePressEvent(_mouse_press(QPoint(5, 5)))
         w.mouseReleaseEvent(_mouse_release(QPoint(5, 5)))
-        assert received == [2]
+        assert received == [7]  # the view ID, not the pane
 
     @pytest.mark.qt
     def test_non_left_click_does_not_emit(self, qapp) -> None:
@@ -341,7 +352,7 @@ class TestMouseClick:
         w.clicked.connect(received.append)
         w.mouseReleaseEvent(_mouse_release(QPoint(5, 5)))
         # dist is 0 (None guard) <= 10, so clicked fires.
-        assert received == [1]
+        assert received == [7]
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +389,7 @@ class TestDragBehaviour:
         assert w._drag_start_pos is None
         drag_instance.setMimeData.assert_called_once()
         mime = drag_instance.setMimeData.call_args[0][0]
-        assert mime.hasFormat(MPR_ASSIGN_MIME)
+        assert mime.hasFormat(MPR_VIEW_MIME)
 
     @pytest.mark.qt
     def test_start_drag_without_preview_skips_pixmap(self, qapp) -> None:
@@ -438,8 +449,8 @@ class TestDragBehaviour:
             mock_drag.assert_not_called()
 
     @pytest.mark.qt
-    def test_start_drag_mimedata_payload(self, qapp) -> None:
-        w = _make_widget(3)
+    def test_start_drag_payload_names_the_view_not_the_pane(self, qapp) -> None:
+        w = _make_widget(3, view_id=42)
         w._drag_start_pos = QPoint(0, 0)
 
         captured_mime = None
@@ -454,11 +465,25 @@ class TestDragBehaviour:
             w._start_drag()
 
         assert captured_mime is not None
-        data = captured_mime.data(MPR_ASSIGN_MIME)
-        assert bytes(data).decode("ascii") == "3"
+        payload = decode_view_drag(bytes(captured_mime.data(MPR_VIEW_MIME)))
+        assert payload is not None
+        assert (payload.view_id, payload.operation, payload.origin) == (42, OP_MOVE, _ORIGIN)
+        assert b"pane" not in bytes(captured_mime.data(MPR_VIEW_MIME))  # no pane index
 
     @pytest.mark.qt
-    def test_start_drag_executes_copy_action(self, qapp) -> None:
+    @pytest.mark.parametrize("origin", ["", "short", "bad token with spaces!!"])
+    def test_a_tile_without_a_valid_origin_starts_no_drag(self, qapp, origin) -> None:
+        w = MprThumbnailWidget(7, 0)
+        if origin:
+            w.set_origin(origin)
+        w._drag_start_pos = QPoint(0, 0)
+        with patch("gui.mpr_thumbnail_widget.QDrag") as drag_cls:
+            w._start_drag()
+        drag_cls.assert_not_called()
+        assert w._drag_start_pos is None
+
+    @pytest.mark.qt
+    def test_start_drag_executes_move_action(self, qapp) -> None:
         w = _make_widget(0)
         w._drag_start_pos = QPoint(0, 0)
 
@@ -466,7 +491,7 @@ class TestDragBehaviour:
         with patch("gui.mpr_thumbnail_widget.QDrag", return_value=drag_instance):
             w._start_drag()
 
-        drag_instance.exec.assert_called_once_with(Qt.DropAction.CopyAction)
+        drag_instance.exec.assert_called_once_with(Qt.DropAction.MoveAction)
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +516,8 @@ class TestPaintEvent:
 
     @pytest.mark.qt
     def test_paint_detached_no_subwindow_digit(self, qapp) -> None:
-        w = _make_widget(-1)
+        w = _make_widget(None)
+        w.set_caption("S1", "tip")
         w.update_preview(_make_array())
         w.show()
         w.repaint()
@@ -535,24 +561,40 @@ class TestPaintEvent:
 # ---------------------------------------------------------------------------
 
 
-class TestShowContextMenu:
+class TestContextMenu2:
     @pytest.mark.qt
-    def test_context_menu_emits_clear_signal(self, qapp) -> None:
+    def test_menu_actions_target_this_exact_view(self, qapp) -> None:
+        w = _make_widget(2, view_id=13)
+        w.set_caption("S1.1L", "tip", linked=True)
+        seen: dict[str, list[int]] = {"dup": [], "linked": [], "unlink": [], "clear": []}
+        w.duplicate_requested.connect(seen["dup"].append)
+        w.duplicate_linked_requested.connect(seen["linked"].append)
+        w.unlink_requested.connect(seen["unlink"].append)
+        w.clear_mpr_requested.connect(seen["clear"].append)
+
+        menu = w.build_context_menu()
+        actions = menu.actions()
+        assert [a.text() for a in actions] == [
+            "Duplicate into Window…", "Duplicate Linked into Window…", "Unlink View", "Clear MPR",
+        ]
+        assert all(a.isEnabled() for a in actions)
+        for action in actions:
+            action.trigger()
+
+        assert seen == {"dup": [13], "linked": [13], "unlink": [13], "clear": [13]}
+
+    def test_unlink_is_disabled_for_an_unlinked_view_and_never_fires(self, qapp) -> None:
+        w = _make_widget(2, view_id=13)
+        fired: list[int] = []
+        w.unlink_requested.connect(fired.append)
+        unlink = next(a for a in w.build_context_menu().actions() if a.text() == "Unlink View")
+        assert unlink.isEnabled() is False
+        unlink.trigger()
+        assert fired == []
+
+    @pytest.mark.qt
+    def test_show_context_menu_executes_the_built_menu(self, qapp) -> None:
         w = _make_widget(2)
-        received: list[int] = []
-        w.clear_mpr_requested.connect(received.append)
-
-        with patch("gui.mpr_thumbnail_widget.QMenu") as MockMenu:
-            instance = MagicMock()
-            MockMenu.return_value = instance
-            action = MagicMock()
-            instance.addAction.return_value = action
-
+        with patch.object(w, "build_context_menu") as build:
             w._show_context_menu(QPoint(10, 10))
-
-            # Verify the action was connected to emit clear_mpr_requested
-            instance.addAction.assert_called_once_with("Clear MPR")
-            instance.exec.assert_called_once()
-            slot = action.triggered.connect.call_args.args[0]
-            slot()
-        assert received == [2]
+        build.return_value.exec.assert_called_once()

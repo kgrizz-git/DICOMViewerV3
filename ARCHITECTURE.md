@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-10-02  
+**Last updated:** 2026-10-09
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -22,7 +22,7 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 | **Slice sync / reference lines** | `slice_geometry.py`, `slice_sync_coordinator.py`, `slice_location_line_*` | Anatomic linked-pane sync; cross-view slice-location reference lines |
 | **Loading / organize** | `src/core/loading_*`, DICOM organizer, `FileOperationsHandler` | Open folder/files, navigator population |
 | **Compressed-pixel decode** | `decoder_capabilities.py`, `dicom_loader.py`, `dicom_pixel_array.py` | Transfer-syntax labels, installed-handler detection, safe decode-failure messages; `python-gdcm` for classic JPEG |
-| **MPR** | `src/core/mpr_*.py`, `mpr_controller.py`, `mpr_geometry.py` | Volume build, reslice, detached navigator thumbnail |
+| **MPR** | `src/core/mpr_*.py`, `src/gui/mpr_*.py`, `core/slice_sync_coordinator.py` | Volume build, reslice; session/view registry (several sessions, detached and duplicate views, linked scrolling); admission limits and approximate memory estimate; navigator tiles |
 | **Fusion** | `src/core/fusion_*`, `fusion_handler_io.py` | 2D/3D registration display |
 | **ROI / tools** | `src/roi/`, `src/tools/`, `src/gui/roi_*` | ROIs, measurements, annotations, crosshair |
 | **Metadata / tags** | `src/metadata/`, `dicom_parser.py`, tag export union/catalog | Panel, tag viewer, export presets |
@@ -71,6 +71,8 @@ first moving that dependency.
 | **Facades for menu slots** | `*_app_facade.py` keeps `main.py` small |
 | **Signal wiring only in `app_signal_wiring.py`** | Single place to audit connections |
 | **Config via `ConfigManager` mixins** | One persistence path per feature domain |
+| **MPR results are owned by `MprSessionRegistry`** | Sessions own the `MprResult`; `subwindow_data` is only the live adapter of an attached view (flushed into its view before any transfer). Views are addressed by stable view ID, never by pane index or negative key. Navigator drags carry a versioned payload (view ID, operation, per-controller origin token) |
+| **One canonical MPR slice setter** | `MprController.set_view_slice` / `set_pane_slice` (`gui/mpr_view_links.py`) is the only navigation path; it moves a link group once. `display_mpr_slice` is redraw-only and must never propagate. The setter never calls the global-sync coordinator, which in turn dedupes targets by explicit link group |
 
 Custom structural linting has an incremental guard: **`scripts/check_architecture_boundaries.py`** blocks new high-risk import edges while allowing the current legacy baseline in **`dev-docs/architecture_boundary_baseline.txt`**. Remove baseline entries as modules are refactored toward this map.
 
@@ -92,7 +94,7 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | Frozen-build decoder smoke | `decoder_fixture_smoke.py`, `decoder_fixture_contract.py`, `tests/fixtures/dicom_decoder/` |
 | Navigator / thumbnails | `src/gui/series_navigator_*` |
 | Overlay text / Spacebar cycle | `overlay_config`, `KeyboardEventHandler`, `OverlayManager` |
-| MPR behavior | `src/gui/mpr_controller.py`, `mpr_navigator_thumbnail.py` |
+| MPR behavior | `src/gui/mpr_controller.py` and its helpers (`mpr_controller_sessions.py`, `mpr_controller_transactions.py`, `mpr_activation.py`, `mpr_view_duplication.py`, `mpr_view_links.py`, `mpr_admission.py`, `mpr_worker_fencing.py`, `mpr_source_closure.py`), `core/mpr_session_registry.py`, `core/mpr_navigator_thumbnail.py` |
 | Slice sync / linked groups | `slice_sync_coordinator.py`, `utils/config/slice_sync_config.py`, `gui/dialogs/slice_sync_dialog.py` |
 | Slice location reference lines | `slice_location_line_helper.py`, `gui/slice_location_line_coordinator.py`, `gui/slice_location_line_manager.py` |
 | ROI statistics export | `roi_export_service.py`, `gui/dialogs/export_roi_statistics_dialog.py` |

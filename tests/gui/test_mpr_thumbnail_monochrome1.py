@@ -1,13 +1,12 @@
 """MONOCHROME1 polarity reaches the MPR navigator thumbnail.
 
 The thumbnail is built by its own inline windowing rather than through array_to_pil, and the
-photometric interpretation has to travel five links to get there:
+photometric interpretation has to travel four links to get there:
 
-    mpr_navigator_thumbnail.update_mpr_navigator_thumbnail / ..._floating_...
-      -> series_navigator.set_mpr_thumbnail
-        -> the _mpr_thumbnail_specs dict
-          -> series_navigator._append_mpr_thumbnails_for_series
-            -> MprThumbnailWidget.update_preview
+    mpr_navigator_thumbnail.sync_mpr_navigator_tiles (view metadata)
+      -> the _mpr_thumbnail_specs dict (via reconcile_mpr_thumbnails)
+        -> series_navigator._append_mpr_thumbnails_for_series
+          -> MprThumbnailWidget.update_preview
 
 A thumbnail whose polarity disagrees with the pane it previews is the bug this guards.
 """
@@ -21,73 +20,49 @@ import numpy as np
 import pytest
 
 from core import mpr_navigator_thumbnail as nav_thumb
+from core.mpr_session_types import MprDisplayState, MprViewMetadata
 
 _ARRAY = np.array([[0.0, 64.0, 255.0]], dtype=np.float32)
 
 
-def _app(result, *, detached=False):
-    navigator = MagicMock()
-    wl = SimpleNamespace(window_center=40.0, window_width=400.0)
-    if detached:
-        return SimpleNamespace(
-            series_navigator=navigator,
-            window_level_controls=wl,
-            focused_subwindow_index=0,
-            subwindow_managers={0: {"view_state_manager": SimpleNamespace(use_rescaled_values=False)}},
-            _mpr_controller=SimpleNamespace(
-                has_detached_mpr=lambda: True,
-                get_detached_mpr_thumbnail_pixels=lambda _r: "pixels",
-                _detached_mpr_payload={
-                    "current_study_uid": "study",
-                    "current_series_uid": "series",
-                    "mpr_result": result,
-                },
-            ),
-        )
+class _RecordingNavigator:
+    def __init__(self) -> None:
+        self.incoming: dict = {}
+
+    def mpr_tile_stamps(self) -> dict:
+        return {}
+
+    def reconcile_mpr_thumbnails(self, incoming: dict) -> bool:
+        self.incoming = dict(incoming)
+        return True
+
+
+def _app(photometric, *, pane_index):
+    meta = MprViewMetadata(
+        view_id=5, session_id=1, creation_seq=1, pane_index=pane_index, orientation="Axial",
+        source_study_uid="study", source_series_uid="series", n_slices=3, slice_index=0,
+        photometric_interpretation=photometric or None,
+    )
     return SimpleNamespace(
-        series_navigator=navigator,
-        window_level_controls=wl,
-        subwindow_data={
-            0: {
-                "is_mpr": True,
-                "mpr_result": result,
-                "current_study_uid": "study",
-                "current_series_uid": "series",
-            }
-        },
+        series_navigator=_RecordingNavigator(),
+        _mpr_controller=SimpleNamespace(
+            drag_origin="AbCdEfGhIjKlMnOpQr_-12",
+            all_view_ids=lambda: [5],
+            get_view_metadata=lambda _v: meta,
+            get_view_display_state=lambda _v: MprDisplayState(),
+            get_view_thumbnail_pixels=lambda _v, _r=None: _ARRAY,
+        ),
     )
 
 
-@pytest.mark.parametrize("detached", [False, True])
+@pytest.mark.parametrize("pane_index", [0, None])
 @pytest.mark.parametrize(
     ("stored", "expected"), [("MONOCHROME1", "MONOCHROME1"), ("MONOCHROME2", "MONOCHROME2"), ("", None)]
 )
-def test_photometric_interpretation_reaches_set_mpr_thumbnail(
-    monkeypatch, detached, stored, expected
-):
-    result = SimpleNamespace(n_slices=3, photometric_interpretation=stored)
-    app = _app(result, detached=detached)
-    monkeypatch.setattr(
-        nav_thumb, "get_subwindow_mpr_thumbnail_pixel_array", lambda _a, _i: "pixels"
-    )
-
-    if detached:
-        nav_thumb.update_floating_mpr_navigator_thumbnail(app)
-    else:
-        nav_thumb.update_mpr_navigator_thumbnail(app, 0)
-
-    args = app.series_navigator.set_mpr_thumbnail.call_args.args
-    assert args[-1] == expected
-
-
-def test_missing_field_on_a_legacy_result_is_tolerated(monkeypatch):
-    """A result predating the field (or any duck-typed stand-in) must not raise."""
-    app = _app(SimpleNamespace(n_slices=3))
-    monkeypatch.setattr(
-        nav_thumb, "get_subwindow_mpr_thumbnail_pixel_array", lambda _a, _i: "pixels"
-    )
-    nav_thumb.update_mpr_navigator_thumbnail(app, 0)
-    assert app.series_navigator.set_mpr_thumbnail.call_args.args[-1] is None
+def test_photometric_interpretation_reaches_the_tile_spec(pane_index, stored, expected):
+    app = _app(stored, pane_index=pane_index)
+    nav_thumb.sync_mpr_navigator_tiles(app)
+    assert app.series_navigator.incoming[5]["photometric_interpretation"] == expected
 
 
 def test_navigator_stores_and_forwards_the_photometric_interpretation(qapp):
@@ -96,11 +71,14 @@ def test_navigator_stores_and_forwards_the_photometric_interpretation(qapp):
 
     navigator = SeriesNavigator(MagicMock())
     navigator._rebuild_from_cached_studies = MagicMock()
-    navigator.set_mpr_thumbnail(
-        0, _ARRAY, "study", "series", 40.0, 400.0, 3, "MONOCHROME1"
-    )
-    spec = navigator._mpr_thumbnail_specs[0]
-    assert spec["photometric_interpretation"] == "MONOCHROME1"
+    navigator.reconcile_mpr_thumbnails({
+        5: {
+            "study_uid": "study", "source_series_uid": "series", "pixel_array": _ARRAY,
+            "window_center": 40.0, "window_width": 400.0, "n_slices": 3,
+            "photometric_interpretation": "MONOCHROME1", "order": 1, "pane_index": None,
+        }
+    })
+    assert navigator._mpr_thumbnail_specs[5]["photometric_interpretation"] == "MONOCHROME1"
 
 
 def _mean_luminance(widget) -> float:
@@ -131,8 +109,8 @@ def test_widget_inverts_for_monochrome1(qapp):
 
     # Window [150, 250]: the first two samples clip low, the third clips high.
     saturating = np.array([[100.0, 150.0, 900.0]], dtype=np.float32)
-    mono1 = MprThumbnailWidget(0)
-    mono2 = MprThumbnailWidget(0)
+    mono1 = MprThumbnailWidget(1, 0)
+    mono2 = MprThumbnailWidget(1, 0)
     mono1.update_preview(saturating, 200.0, 100.0, "MONOCHROME1")
     mono2.update_preview(saturating, 200.0, 100.0, "MONOCHROME2")
 
@@ -148,8 +126,8 @@ def test_widget_default_matches_monochrome2(qapp):
     """Omitting the argument keeps the pre-change rendering."""
     from gui.mpr_thumbnail_widget import MprThumbnailWidget
 
-    omitted = MprThumbnailWidget(0)
-    explicit = MprThumbnailWidget(0)
+    omitted = MprThumbnailWidget(1, 0)
+    explicit = MprThumbnailWidget(1, 0)
     omitted.update_preview(_ARRAY, 127.5, 255.0)
     explicit.update_preview(_ARRAY, 127.5, 255.0, "MONOCHROME2")
     assert omitted._preview_pixmap.toImage() == explicit._preview_pixmap.toImage()

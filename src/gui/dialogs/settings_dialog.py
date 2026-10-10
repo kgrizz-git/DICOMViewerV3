@@ -41,6 +41,9 @@ from utils.privacy.safe_storage import DeletionResult
 
 #: Mirrors the memory_floor_mb default StudyCache is constructed with in main.py.
 _STUDY_LOAD_MEMORY_FLOOR_MB = 1024.0
+#: Spin-box ceilings for the MPR limits (a larger stored value is still honored).
+_MPR_SESSION_CAP_MAX = 64
+_MPR_VIEW_CAP_MAX = 256
 
 
 class SettingsDialog(QDialog):
@@ -71,6 +74,8 @@ class SettingsDialog(QDialog):
         self.setModal(True)
         self.resize(520, 420)
 
+        self._mpr_session_cap_spin = QSpinBox()
+        self._mpr_view_cap_spin = QSpinBox()
         self._create_ui()
 
     def _create_ui(self) -> None:
@@ -209,6 +214,8 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(memory_group)
 
+        layout.addWidget(self._build_mpr_limits_group())
+
         self._privacy_storage_panel = PrivacyStorageSettingsPanel(
             self.config_manager,
             clear_study_index_callback=self._clear_study_index_callback,
@@ -228,6 +235,30 @@ class SettingsDialog(QDialog):
         button_box.accepted.connect(self._on_accept)
         button_box.rejected.connect(self.reject)
         outer.addWidget(button_box)
+
+    def _build_mpr_limits_group(self) -> QGroupBox:
+        """MPR session/view limits (persisted as an atomic pair; view >= session >= 1)."""
+        group = QGroupBox("MPR Limits")
+        form = QFormLayout(group)
+        hint = QLabel(
+            "Sessions are independently built MPR volumes; views are the windows and "
+            "navigator tiles showing them (duplicates share their session's volume). "
+            "Detached MPRs count too. Lowering a limit never closes an existing MPR; it "
+            "only blocks new ones until usage falls below it. The memory figure shown "
+            "when creating an MPR is an approximate estimate, not a limit."
+        )
+        hint.setWordWrap(True)
+        form.addRow(hint)
+        session_cap, view_cap = self.config_manager.get_mpr_caps()
+        self._mpr_session_cap_spin.setRange(1, max(_MPR_SESSION_CAP_MAX, session_cap))
+        self._mpr_session_cap_spin.setValue(session_cap)
+        self._mpr_view_cap_spin.setRange(session_cap, max(_MPR_VIEW_CAP_MAX, view_cap))
+        self._mpr_view_cap_spin.setValue(view_cap)
+        # The view limit can never drop below the session limit.
+        self._mpr_session_cap_spin.valueChanged.connect(self._mpr_view_cap_spin.setMinimum)
+        form.addRow("Maximum MPR sessions:", self._mpr_session_cap_spin)
+        form.addRow("Maximum MPR views:", self._mpr_view_cap_spin)
+        return group
 
     def _update_accent_swatch(self) -> None:
         """Update the small colour swatch next to the accent combo."""
@@ -269,6 +300,12 @@ class SettingsDialog(QDialog):
             return
         if not self.config_manager.set_study_load_max_studies_cap(
             self._max_studies_cap_spin.value()
+        ):
+            self._settings_not_saved()
+            return
+        mpr_caps = (self._mpr_session_cap_spin.value(), self._mpr_view_cap_spin.value())
+        if mpr_caps != self.config_manager.get_mpr_caps() and not self.config_manager.set_mpr_caps(
+            *mpr_caps
         ):
             self._settings_not_saved()
             return

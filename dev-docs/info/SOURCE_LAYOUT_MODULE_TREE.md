@@ -1,6 +1,6 @@
 # Detailed source module tree
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-09
 **Purpose:** On-demand file-level navigation. Paths in this document are repository-relative. Read [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md) first for bootstrap and signal-wiring rules, then read only the relevant domain below.
 
 ## Application shell
@@ -27,6 +27,9 @@ Mixin forwarding seams: `tests/test_main_mixin_delegation.py` (see [`../SOURCE_L
 | Loading/decoding | `src/core/dicom_loader_file.py`, `src/core/dicom_loader.py`, `src/core/dicom_pixel_array.py`, `src/core/decoder_capabilities.py`, `src/core/decoder_fixture_*.py`, `src/core/loading_progress_manager.py` |
 | Display/window level | `src/core/slice_display_*.py`, `src/core/slice_window_level_resolver.py`, `src/core/dicom_window_level.py`, `src/core/wl_preset_catalog.py`, `src/core/window_level_preset_handler.py` |
 | MPR/slice coordination | `src/gui/mpr_controller.py`, `src/core/mpr_geometry.py`, `src/core/mpr_navigator_thumbnail.py`, `src/core/slice_geometry.py`, `src/core/slice_sync_coordinator.py`, `src/core/slice_location_line_helper.py` |
+| MPR sessions, views, links | `src/core/mpr_session_registry.py` + `mpr_session_types.py` (pure registry, reservations, link groups); `src/gui/mpr_controller_sessions.py` (pane/view adapters, public per-view API), `mpr_controller_transactions.py` (move/attach/detach/rollback), `mpr_activation.py` (new-build activation), `mpr_view_duplication.py`, `mpr_view_links.py` (canonical slice setter, link/unlink), `mpr_admission.py` (live limits, usage line), `mpr_worker_fencing.py`, `mpr_source_closure.py`, `mpr_pane_teardown.py` |
+| MPR navigator tiles and drag | `src/core/mpr_view_drag.py` (versioned payload), `mpr_tile_label.py`, `mpr_navigator_thumbnail.py` (tile reconcile); `src/gui/mpr_thumbnail_widget.py`, `mpr_duplicate_menu.py`, `series_navigator_model.py`, `sub_window_container.py` (drop) |
+| MPR memory estimate and limits | `src/core/mpr_memory_estimate.py`, `src/utils/config/mpr_session_config.py`, `src/gui/dialogs/settings_dialog.py` (MPR Limits) |
 | Per-pane lifecycle | `src/core/subwindow_lifecycle_controller.py`, `src/gui/subwindow_manager_factory.py`, `src/gui/subwindow_image_viewer_sync.py`, `src/gui/layout_window_slot_controller.py` |
 | Export/tags | `src/gui/export_manager.py`, `src/gui/export_rendering.py`, `src/gui/export_app_facade.py`, `src/core/tag_export_*.py`, `src/core/roi_export_*.py`, `src/core/spreadsheet_safety.py` |
 | Privacy | `src/core/privacy_controller.py`; shared privacy helpers remain in `src/utils/privacy/` |

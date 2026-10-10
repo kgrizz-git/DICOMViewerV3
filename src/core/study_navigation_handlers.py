@@ -102,6 +102,10 @@ def update_3d_view_action_state(app: Any) -> None:
 
 def clear_subwindow(app: Any, idx: int) -> None:
     """Clear all viewer-owned state for a single subwindow."""
+    # Safety net: resetting a pane's data must never leave a registry view mapped
+    # to it. Normal paths release or detach first, making this a no-op.
+    if hasattr(app, "_mpr_controller"):
+        app._mpr_controller.detach_view_for_pane_reset(idx)
     app._reset_fusion_handler_for_subwindow(idx)
 
     subwindow = app.multi_window_layout.get_subwindow(idx)
@@ -176,6 +180,10 @@ def reset_focused_subwindow_state_after_close(app: Any) -> None:
 
 def clear_subwindow_content(app: Any, idx: int) -> None:
     """Clear one pane while keeping loaded studies/series intact."""
+    # Cancel a pending MPR build even on an empty/non-MPR pane; a
+    # pending-only build must not survive Clear Window or create a view.
+    if hasattr(app, "_mpr_controller"):
+        app._mpr_controller.cancel_pending_build(idx)
     data = app.subwindow_data.get(idx, {})
     if data.get("current_dataset") is None and not data.get("is_mpr"):
         return
@@ -220,6 +228,8 @@ def close_series(app: Any, study_uid: str, series_key: str) -> None:
     app.current_studies = app.dicom_organizer.studies
     app._schedule_tag_export_union_rebuild()
 
+    if hasattr(app, "_mpr_controller"):
+        app._mpr_controller.release_mpr_for_closed_source(study_uid, series_key)
     for idx in affected_indices:
         clear_subwindow(app, idx)
 
@@ -262,6 +272,8 @@ def close_study(app: Any, study_uid: str) -> None:
     app.current_studies = app.dicom_organizer.studies
     app._schedule_tag_export_union_rebuild()
 
+    if hasattr(app, "_mpr_controller"):
+        app._mpr_controller.release_mpr_for_closed_source(study_uid)
     for idx in affected_indices:
         clear_subwindow(app, idx)
 

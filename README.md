@@ -24,7 +24,7 @@ short orientation and **Help → Documentation** opens the full user guide.
 | Area | Capabilities |
 | --- | --- |
 | Viewing | Multi-pane layouts, window/level presets, slice navigation, cine playback, series navigator, configurable overlays, themes and settings. |
-| Reconstruction | Create and export MPRs; slab / intensity projections (AIP, MIP, MinIP); optional 3D volume rendering with presets and display controls. |
+| Reconstruction | Create, keep several, duplicate, link, and export MPRs; slab / intensity projections (AIP, MIP, MinIP); optional 3D volume rendering with presets and display controls. |
 | Clinical tools | ROIs with live statistics, distance/angle measurements, text and arrow annotations, pixel histogram, collapsible tag viewer, and DICOM tag editing. |
 | Fusion | PET/SPECT overlays on CT or MR with opacity, alignment, and display controls. |
 | Export | Images and screenshots, cine video, derived DICOM (including MPR), tags, ROI statistics, and structured reports. |

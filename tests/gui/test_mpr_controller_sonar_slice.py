@@ -371,33 +371,39 @@ def test_prompt_save_mpr_rejects_empty_stack() -> None:
     assert "No MPR slice stack" in info.call_args[0][2]
 
 
-def test_attach_floating_mpr_noop_without_payload() -> None:
+def _add_detached_view(ctrl: MprController, result: MprResult) -> int:
+    """Independent session whose only view is detached; returns the view ID."""
+    return ctrl._registry.create_session(result, "st", "se", "Axial")[1]
+
+
+def test_attach_detached_view_noop_for_stale_or_attached_id() -> None:
     ctrl, app = _make_controller()
-    ctrl._detached_mpr_payload = None
+    attached = ctrl._registry.create_session(_make_result(), "st", "se", "Axial", pane_index=0)[1]
     with patch.object(ctrl, "_install_mpr_payload_at_subwindow") as install:
-        ctrl.attach_floating_mpr(0)
+        ctrl.attach_detached_view(999, 0)
+        ctrl.attach_detached_view(attached, 0)
     install.assert_not_called()
 
 
-def test_attach_floating_mpr_clears_detached_on_success() -> None:
+def test_attach_detached_view_moves_view_on_success() -> None:
     ctrl, app = _make_controller()
-    result = _make_result()
-    payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
-    ctrl._detached_mpr_payload = payload
+    view_id = _add_detached_view(ctrl, _make_result())
     activated: list[int] = []
+    tiles: list[frozenset[int]] = []
     ctrl.mpr_activated.connect(activated.append)
+    ctrl.mpr_tiles_changed.connect(tiles.append)
     with patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=True):
-        ctrl.attach_floating_mpr(0)
-    assert ctrl._detached_mpr_payload is None
+        ctrl.attach_detached_view(view_id, 0)
+    assert ctrl.detached_view_ids() == []
+    assert ctrl.attached_view_id(0) == view_id
     assert activated == [0]
-    app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(-1)
+    assert tiles == [frozenset({view_id})]  # one batched tile announcement for the transaction
 
 
-def test_attach_floating_mpr_restores_backup_on_install_failure() -> None:
+def test_attach_detached_view_warns_and_keeps_detached_on_install_failure() -> None:
     ctrl, app = _make_controller()
     result = _make_result()
-    payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
-    ctrl._detached_mpr_payload = payload
+    view_id = _add_detached_view(ctrl, result)
     app.subwindow_data[0] = {
         "is_mpr": True,
         "mpr_result": result,
@@ -411,23 +417,13 @@ def test_attach_floating_mpr_restores_backup_on_install_failure() -> None:
         "mpr_combine_slice_count": 1,
     }
     app.main_window = MagicMock()
-    installs: list[Any] = []
-
-    def _install(idx: int, p: dict[str, Any]) -> bool:
-        installs.append(p)
-        return len(installs) != 1
-
     with (
-        patch.object(ctrl, "_install_mpr_payload_at_subwindow", side_effect=_install),
-        patch.object(ctrl, "clear_mpr"),
-        patch.object(ctrl, "_capture_mpr_payload", return_value={"backup": True}),
-        patch("gui.mpr_controller.QMessageBox.warning") as warn,
+        patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=False),
+        patch("gui.mpr_controller_transactions.QMessageBox.warning") as warn,
     ):
-        ctrl.attach_floating_mpr(0)
+        ctrl.attach_detached_view(view_id, 0)
 
-    assert len(installs) == 2
-    assert installs[0] is payload
-    assert installs[1] == {"backup": True}
+    assert ctrl.detached_view_ids() == [view_id]
     warn.assert_called_once()
     assert "previous MPR" in warn.call_args[0][2]
 
