@@ -99,6 +99,8 @@ class SeriesNavigatorStub(QObject):
     mpr_thumbnail_clicked = Signal()
     mpr_thumbnail_clear_requested = Signal()
     mpr_thumbnail_duplicate_requested = Signal()
+    mpr_thumbnail_duplicate_linked_requested = Signal()
+    mpr_thumbnail_unlink_requested = Signal()
 
 
 class FakeQApp(QObject):
@@ -248,6 +250,7 @@ def _build_dialog_app():
         _on_mpr_thumbnail_clicked = lambda self, *_a: None  # noqa: E731
         _on_mpr_clear_from_navigator_thumbnail = lambda self, *_a: None  # noqa: E731
         _on_mpr_duplicate_requested = lambda self, *_a: None  # noqa: E731
+        _on_mpr_unlink_requested = lambda self, *_a: None  # noqa: E731
 
     return _App(), mw, sn, open_export, close_series
 

@@ -433,6 +433,13 @@ COLLABORATOR_CASES: tuple[CollaboratorCase, ...] = (
         "clear_view",
         (7,),
     ),
+    CollaboratorCase(
+        "MPRNavigationMixin",
+        "_on_mpr_unlink_requested",
+        "_mpr_controller",
+        "unlink_view",
+        (8,),
+    ),
 )
 
 
@@ -491,6 +498,6 @@ LAYOUT_HANDLER_CASES: tuple[HandlerCase, ...] = (
         (1, 4),
     ),
     HandlerCase("MPRNavigationMixin", "_update_mpr_navigator_thumbnail", "mpr_thumb_refresh_pane_tile", (1,)),
-    HandlerCase("MPRNavigationMixin", "_on_mpr_duplicate_requested", "show_duplicate_target_menu", (9,)),
+    HandlerCase("MPRNavigationMixin", "_on_mpr_duplicate_requested", "show_duplicate_target_menu", (9, True)),
     HandlerCase("MPRNavigationMixin", "_sync_mpr_navigator_tiles", "mpr_thumb_sync_tiles", (frozenset({4}),)),
 )

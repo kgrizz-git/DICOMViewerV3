@@ -1,10 +1,11 @@
-"""Unlinked shared-result duplication of an MPR view into a pane.
+"""Shared-result duplication (plain or linked) of an MPR view into a pane.
 
 A duplicate is a new *view* of an existing session: it shares the session's
 ``MprResult`` by reference (no new session, no array copy) and takes its own
 copy of the source view's slice, combine and display state, so later edits to
-either view never alias the other. This is the unlinked form; linked
-duplication adds a link group on top of the same transaction.
+either view never alias the other. By default the duplicate is
+unlinked; ``linked=True`` adds a session-local link group inside the same
+transaction.
 
 Transaction order (nothing is created until the pane really rendered):
 
@@ -50,6 +51,7 @@ from gui.mpr_controller_transactions import (
     validate_install_request,
     validate_transfer_target,
 )
+from gui.mpr_view_links import link_after_duplicate
 
 
 def _source_payload(controller: Any, view_id: int) -> tuple[Any, dict[str, Any]] | None:
@@ -80,8 +82,17 @@ def _confirm_duplicate(controller: Any, to_idx: int, reservation_id: int) -> Non
     )
 
 
-def duplicate_view_into_pane(controller: Any, view_id: int, to_idx: int) -> bool:
-    """Duplicate view *view_id* into pane *to_idx*. Returns True on success."""
+def duplicate_view_into_pane(
+    controller: Any, view_id: int, to_idx: int, *, linked: bool = False
+) -> bool:
+    """Duplicate view *view_id* into pane *to_idx*. Returns True on success.
+
+    With ``linked=True`` the new view also joins the source's link group (the
+    group is created from source + duplicate when the source was unlinked).
+    Linking is part of the transaction: if it fails, the confirmed duplicate
+    is discarded, a displaced occupant is re-attached, the pane is restored and
+    existing links are untouched.
+    """
     resolved = _source_payload(controller, view_id)
     if resolved is None:
         return False
@@ -102,12 +113,13 @@ def duplicate_view_into_pane(controller: Any, view_id: int, to_idx: int) -> bool
 
     confirmed = False
     snapshot = None
-    displaced = False
+    occupant_id: int | None = None
     failure = ""
     try:
         focus_destination(controller, to_idx)
         controller._cancel_mpr_worker(to_idx)
-        displaced = refresh_view_from_pane(controller, to_idx) is not None
+        occupant = refresh_view_from_pane(controller, to_idx)
+        occupant_id = None if occupant is None else occupant.view_id
         snapshot = capture_destination_snapshot(app, controller._get_image_viewer, to_idx)
         if not controller._install_mpr_payload_at_subwindow(to_idx, payload):
             # The install rolled itself back (and warned if it could not).
@@ -115,7 +127,12 @@ def duplicate_view_into_pane(controller: Any, view_id: int, to_idx: int) -> bool
         else:
             _confirm_duplicate(controller, to_idx, reservation_id)
             confirmed = True
+            if linked:
+                link_after_duplicate(controller, source.view_id, controller.attached_view_id(to_idx))
     except Exception:
+        if confirmed:
+            _undo_commit(controller, to_idx, occupant_id)
+            confirmed = False
         failure = _restore_after_failure(controller, to_idx, snapshot)
     finally:
         if not confirmed:
@@ -123,11 +140,28 @@ def duplicate_view_into_pane(controller: Any, view_id: int, to_idx: int) -> bool
     if not confirmed:
         notify_mpr(controller, failure)
         return False
-    if displaced:
+    if occupant_id is not None:
         controller.mpr_detached.emit(to_idx)
     controller.mpr_activated.emit(to_idx)
     emit_tiles_changed(controller, {controller.attached_view_id(to_idx)})
     return True
+
+
+def _undo_commit(controller: Any, to_idx: int, occupant_id: int | None) -> None:
+    """Undo a confirmed duplicate: discard it, then re-attach the displaced occupant.
+
+    Discarding a view also removes it from any link group it had joined, so no
+    membership survives. Never raises; the caller restores the pane itself.
+    """
+    registry = controller._registry
+    try:
+        new_view = registry.view_for_pane(to_idx)
+        if new_view is not None and new_view.view_id != occupant_id:
+            registry.discard_view(new_view.view_id)
+        if occupant_id is not None:
+            registry.attach_view(occupant_id, to_idx)
+    except Exception:
+        pass
 
 
 def _restore_after_failure(controller: Any, to_idx: int, snapshot: Any) -> str:

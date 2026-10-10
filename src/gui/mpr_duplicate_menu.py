@@ -53,8 +53,14 @@ def build_target_menu(
     return menu
 
 
-def show_duplicate_target_menu(app: Any, source_view_id: int) -> QMenu | None:
-    """Pop up the chooser at the cursor. Returns the menu, or None when nothing is offered."""
+def show_duplicate_target_menu(
+    app: Any, source_view_id: int, linked: bool = False
+) -> QMenu | None:
+    """Pop up the chooser at the cursor. Returns the menu, or None when nothing is offered.
+
+    ``linked=True`` is the "Duplicate Linked into Window…" variant: the chosen
+    duplicate also joins the source's link group.
+    """
     choices = pane_choices(app, source_view_id)
     if not any(c.enabled for c in choices):
         toast = getattr(app.main_window, "show_toast_message", None)
@@ -64,7 +70,7 @@ def show_duplicate_target_menu(app: Any, source_view_id: int) -> QMenu | None:
     menu = build_target_menu(
         app.main_window,
         choices,
-        lambda idx: app._mpr_controller.duplicate_view(source_view_id, idx),
+        lambda idx: app._mpr_controller.duplicate_view(source_view_id, idx, linked=linked),
     )
     menu.popup(QCursor.pos())
     return menu

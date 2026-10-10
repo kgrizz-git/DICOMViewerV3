@@ -117,6 +117,10 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     app.series_navigator.mpr_thumbnail_duplicate_requested.connect(
         app._on_mpr_duplicate_requested
     )
+    app.series_navigator.mpr_thumbnail_duplicate_linked_requested.connect(
+        lambda view_id: app._on_mpr_duplicate_requested(view_id, True)
+    )
+    app.series_navigator.mpr_thumbnail_unlink_requested.connect(app._on_mpr_unlink_requested)
 
 
 def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:

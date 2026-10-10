@@ -130,6 +130,8 @@ def mock_app() -> SimpleNamespace:
         mpr_thumbnail_clicked=DummySignal(),
         mpr_thumbnail_clear_requested=DummySignal(),
         mpr_thumbnail_duplicate_requested=DummySignal(),
+        mpr_thumbnail_duplicate_linked_requested=DummySignal(),
+        mpr_thumbnail_unlink_requested=DummySignal(),
     )
 
     # Metadata panel signals
@@ -276,6 +278,7 @@ def mock_app() -> SimpleNamespace:
     app._on_import_tag_presets = MagicMock()
     app._sync_mpr_navigator_tiles = MagicMock()
     app._on_mpr_duplicate_requested = MagicMock()
+    app._on_mpr_unlink_requested = MagicMock()
     app.get_focused_subwindow_index = MagicMock(return_value=1)
 
     return app
@@ -311,7 +314,11 @@ def test_wire_all_signals_connects_all(mock_app: SimpleNamespace) -> None:
         mock_app._mpr_controller.mpr_tiles_changed.emit(frozenset({3}))
         mock_app._sync_mpr_navigator_tiles.assert_called_once_with(frozenset({3}))
         mock_app.series_navigator.mpr_thumbnail_duplicate_requested.emit(5)
-        mock_app._on_mpr_duplicate_requested.assert_called_once_with(5)
+        mock_app._on_mpr_duplicate_requested.assert_called_once_with(5)  # plain: view ID only
+        mock_app.series_navigator.mpr_thumbnail_duplicate_linked_requested.emit(6)
+        mock_app._on_mpr_duplicate_requested.assert_called_with(6, True)  # the linked variant
+        mock_app.series_navigator.mpr_thumbnail_unlink_requested.emit(7)
+        mock_app._on_mpr_unlink_requested.assert_called_once_with(7)
 
 
 def test_wire_signals_requires_complete_application_graph() -> None:

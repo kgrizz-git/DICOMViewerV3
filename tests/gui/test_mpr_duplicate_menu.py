@@ -115,4 +115,27 @@ def test_tile_context_menu_to_controller_duplicate_chain(qapp, monkeypatch) -> N
     assert texts == ["Window 1", "Window 2", "Window 3 (shows this view)"]
     assert [a.isEnabled() for a in chooser.actions()] == [True, True, False]
     chooser.actions()[1].trigger()  # pick Window 2
-    app._mpr_controller.duplicate_view.assert_called_once_with(5, 1)
+    app._mpr_controller.duplicate_view.assert_called_once_with(5, 1, linked=False)
+
+
+@pytest.mark.qt
+def test_linked_chooser_duplicates_with_the_link_flag(qapp, monkeypatch) -> None:
+    """Duplicate Linked into Window…: same chooser, but the chosen duplicate is linked."""
+    popped: list[QMenu] = []
+    monkeypatch.setattr(QMenu, "popup", lambda self, _pos=None, _action=None: popped.append(self))
+
+    class _Window(QWidget):
+        show_toast_message = MagicMock()
+
+    app = _app([_pane(), _pane()], source_pane=0)
+    app.main_window = _Window()
+    stub = _stub_for(
+        "MPRNavigationMixin", _mpr_controller=app._mpr_controller,
+        multi_window_layout=app.multi_window_layout, main_window=app.main_window,
+    )
+
+    stub._on_mpr_duplicate_requested(5, True)
+
+    assert len(popped) == 1 and [a.isEnabled() for a in popped[0].actions()] == [False, True]
+    popped[0].actions()[1].trigger()
+    app._mpr_controller.duplicate_view.assert_called_once_with(5, 1, linked=True)

@@ -82,6 +82,8 @@ class SeriesNavigator(QWidget):
     mpr_thumbnail_clicked = Signal(int)         # Emitted with the stable view_id when an MPR tile is clicked
     mpr_thumbnail_clear_requested = Signal(int)  # Right-click → Clear MPR (view_id)
     mpr_thumbnail_duplicate_requested = Signal(int)  # Right-click → Duplicate into Window… (view_id)
+    mpr_thumbnail_duplicate_linked_requested = Signal(int)  # … Duplicate Linked into Window… (view_id)
+    mpr_thumbnail_unlink_requested = Signal(int)  # … Unlink View (view_id)
 
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
@@ -151,6 +153,8 @@ class SeriesNavigator(QWidget):
         widget.clicked.connect(self.mpr_thumbnail_clicked.emit)
         widget.clear_mpr_requested.connect(self.mpr_thumbnail_clear_requested.emit)
         widget.duplicate_requested.connect(self.mpr_thumbnail_duplicate_requested.emit)
+        widget.duplicate_linked_requested.connect(self.mpr_thumbnail_duplicate_linked_requested.emit)
+        widget.unlink_requested.connect(self.mpr_thumbnail_unlink_requested.emit)
         self._mpr_thumbnails[view_id] = widget
         return widget
 
@@ -616,15 +620,7 @@ class SeriesNavigator(QWidget):
             mpr_widget = self._create_mpr_thumbnail_widget(
                 view_id, mpr_spec.get("pane_index"), thumbnails_container
             )
-            mpr_widget.set_caption(mpr_spec.get("tag", ""), mpr_spec.get("tooltip", ""))
-            mpr_widget.set_origin(mpr_spec.get("origin", ""))
-            mpr_widget.update_preview(
-                mpr_spec.get("pixel_array"), mpr_spec.get("window_center"),
-                mpr_spec.get("window_width"), mpr_spec.get("photometric_interpretation"),
-                image_inverted=bool(mpr_spec.get("image_inverted", False)),
-                lut=mpr_spec.get("lut"))
-            mpr_widget.set_slice_count(mpr_spec.get("n_slices"))
-            mpr_widget.set_show_slice_frame_count_badge(self._show_slice_frame_count_badge)
+            mpr_widget.apply_spec(mpr_spec, self._show_slice_frame_count_badge)
             thumbnails_layout.addWidget(mpr_widget)
 
     # ------------------------------------------------------------------

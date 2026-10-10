@@ -22,13 +22,16 @@ Outputs:
     - Drag MIME type ``application/x-dv3-mpr-view`` carrying the versioned
       ``core.mpr_view_drag`` payload (view ID + operation + the owning
       controller's opaque origin token, never a pane index).
-    - Context menu: Duplicate into Window… and Clear MPR (both by view_id).
+    - Context menu: Duplicate into Window…, Duplicate Linked into Window…,
+      Unlink View (enabled only while linked) and Clear MPR, all by view_id.
 
 Requirements:
     PySide6, PIL (Pillow), numpy, gui.navigator_colors.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -77,6 +80,8 @@ class MprThumbnailWidget(QWidget):
     drag_started = Signal(int)  # view_id
     clear_mpr_requested = Signal(int)  # view_id
     duplicate_requested = Signal(int)  # view_id
+    duplicate_linked_requested = Signal(int)  # view_id
+    unlink_requested = Signal(int)  # view_id
 
     THUMBNAIL_SIZE: int = _THUMBNAIL_SIZE
 
@@ -94,6 +99,7 @@ class MprThumbnailWidget(QWidget):
         self._pane_index: int | None = pane_index
         self._tag: str = ""
         self._origin: str = ""  # controller drag-origin token; a tile without one cannot be dragged
+        self._linked: bool = False  # member of a session-local link group (enables Unlink View)
         self._preview_pixmap: QPixmap | None = None
         self._dot_color: str = (
             "#9E9E9E"
@@ -130,9 +136,22 @@ class MprThumbnailWidget(QWidget):
         """Set the owning controller's opaque drag-origin token (stamped into drag payloads)."""
         self._origin = origin
 
-    def set_caption(self, tag: str, tooltip: str) -> None:
-        """Set the compact corner tag (e.g. ``S2.1``) and the full tooltip (no PHI)."""
+    def apply_spec(self, spec: dict[str, Any], show_count_badge: bool) -> None:
+        """Apply a navigator tile spec: caption, drag origin, link state, preview and badges."""
+        self.set_caption(spec.get("tag", ""), spec.get("tooltip", ""), spec.get("linked", False))
+        self.set_origin(spec.get("origin", ""))
+        self.update_preview(
+            spec.get("pixel_array"), spec.get("window_center"), spec.get("window_width"),
+            spec.get("photometric_interpretation"),
+            image_inverted=bool(spec.get("image_inverted", False)), lut=spec.get("lut"),
+        )
+        self.set_slice_count(spec.get("n_slices"))
+        self.set_show_slice_frame_count_badge(show_count_badge)
+
+    def set_caption(self, tag: str, tooltip: str, linked: bool = False) -> None:
+        """Set the compact corner tag (e.g. ``S2.1L``), full tooltip (no PHI) and link state."""
         self._tag = tag
+        self._linked = bool(linked)
         self.setToolTip(tooltip)
         self.update()
 
@@ -365,6 +384,11 @@ class MprThumbnailWidget(QWidget):
         menu = QMenu(self)
         duplicate_act = menu.addAction("Duplicate into Window…")
         duplicate_act.triggered.connect(lambda: self.duplicate_requested.emit(self._view_id))
+        linked_act = menu.addAction("Duplicate Linked into Window…")
+        linked_act.triggered.connect(lambda: self.duplicate_linked_requested.emit(self._view_id))
+        unlink_act = menu.addAction("Unlink View")
+        unlink_act.setEnabled(self._linked)
+        unlink_act.triggered.connect(lambda: self.unlink_requested.emit(self._view_id))
         clear_act = menu.addAction("Clear MPR")
         clear_act.triggered.connect(lambda: self.clear_mpr_requested.emit(self._view_id))
         return menu

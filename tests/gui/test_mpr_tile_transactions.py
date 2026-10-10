@@ -145,12 +145,13 @@ class TestViewMetadataForLabelsAndStamps:
         ctrl.detach_mpr_from_subwindow(0)
         assert ctrl.get_view_metadata(view).content_stamp == base  # pane moves are not pixel changes
         ctrl._registry.set_view_slice(view, 3)
-        slice_changed = ctrl.get_view_metadata(view).content_stamp
-        assert slice_changed != base  # e.g. a linked scroll while detached
+        meta = ctrl.get_view_metadata(view)
+        # Tiles show a fixed mid-stack plane: scrolling changes the position, not the pixels.
+        assert meta.slice_index == 3 and meta.content_stamp == base
         display = ctrl.get_view_display_state(view)
         display.window_width = 123.0
         ctrl._registry.set_view_display(view, display)
-        assert ctrl.get_view_metadata(view).content_stamp not in (base, slice_changed)
+        assert ctrl.get_view_metadata(view).content_stamp != base
 
 
 class TestBoundedThumbnailPixels:

@@ -88,6 +88,7 @@ def _tile_spec(controller: Any, view_id: int, meta: Any, *, regenerate: bool) ->
         "order": meta.creation_seq,
         "pane_index": meta.pane_index,
         "origin": controller.drag_origin,
+        "linked": meta.link_group_id is not None,
         "tag": tile_tag(meta),
         "tooltip": tile_tooltip(
             meta, None if meta.pane_index is None else str(meta.pane_index + 1)

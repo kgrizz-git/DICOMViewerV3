@@ -81,3 +81,53 @@ class TestTilesFollowViews:
         sync_mpr_navigator_tiles(app)
         ctrl.detach_view_for_pane_reset(1)  # no view in pane 1: nothing announced, nothing rebuilt
         assert nav._rebuild_from_cached_studies.call_count == 0
+
+
+@pytest.mark.qt
+class TestLinkedTiles:
+    def test_linked_duplicate_and_unlink_through_the_tile_menus(self, qapp) -> None:
+        from main_mixin_delegation_support import _stub_for
+
+        ctrl, app, nav = _wired(qapp)
+        stub = _stub_for("MPRNavigationMixin", _mpr_controller=ctrl)
+        nav.mpr_thumbnail_unlink_requested.connect(stub._on_mpr_unlink_requested)
+        _seed_mpr_pane(app, 0, _make_result(), study="ST")
+        source = ctrl.attached_view_id(0)
+
+        with _light_display(ctrl):
+            assert ctrl.duplicate_view(source, 1, linked=True) is True
+        duplicate = ctrl.attached_view_id(1)
+
+        assert [nav._mpr_thumbnails[v]._tag for v in (source, duplicate)] == ["S1.1L", "S1.2L"]
+        assert all(nav._mpr_thumbnails[v]._linked for v in (source, duplicate))
+        assert "Linked scrolling" in nav._mpr_thumbnails[duplicate].toolTip()
+
+        menu = nav._mpr_thumbnails[duplicate].build_context_menu()
+        unlink = next(a for a in menu.actions() if a.text() == "Unlink View")
+        assert unlink.isEnabled()
+        unlink.trigger()  # tile → navigator signal → app handler → controller
+
+        assert ctrl._registry.get_view(source).link_group_id is None
+        assert [nav._mpr_thumbnails[v]._tag for v in (source, duplicate)] == ["S1.1", "S1.2"]
+        assert not any(nav._mpr_thumbnails[v]._linked for v in (source, duplicate))
+        assert next(
+            a for a in nav._mpr_thumbnails[duplicate].build_context_menu().actions() if a.text() == "Unlink View"
+        ).isEnabled() is False
+
+    def test_a_detached_linked_tile_shows_its_dormant_position_after_the_debounced_refresh(self, qapp) -> None:
+        ctrl, app, nav = _wired(qapp)
+        _seed_mpr_pane(app, 0, _make_result(n_slices=12), study="ST")
+        source = ctrl.attached_view_id(0)
+        with _light_display(ctrl):
+            ctrl.duplicate_view(source, 1, linked=True)
+        duplicate = ctrl.attached_view_id(1)
+        ctrl.detach_mpr_from_subwindow(1)
+        assert "slice 2 of 12" in nav._mpr_thumbnails[duplicate].toolTip()  # seeded at index 1
+
+        ctrl.set_pane_slice(0, 8)
+        assert "slice 2 of 12" in nav._mpr_thumbnails[duplicate].toolTip()  # debounced: not yet
+        nav._rebuild_from_cached_studies.reset_mock()
+        ctrl.flush_tile_refresh()
+
+        assert "slice 9 of 12" in nav._mpr_thumbnails[duplicate].toolTip()
+        assert nav._rebuild_from_cached_studies.call_count == 1  # one rebuild for the whole burst

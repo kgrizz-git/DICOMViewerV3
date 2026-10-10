@@ -118,27 +118,41 @@ def update_roi_list(app: Any) -> None:
         app.roi_list_panel.update_roi_list(study_uid, series_uid, instance_identifier)
 
 
+def _on_mpr_slice_changed(app: Any, focused_idx: int, slice_index: int) -> None:
+    """Navigator change on a focused MPR pane.
+
+    Canonical navigation path (wheel, keys, slider and cine all arrive here):
+    the controller's setter clamps, redraws this pane and moves its whole link
+    group exactly once. Outbound global sync then starts once, from this pane.
+    """
+    update = app._mpr_controller.set_pane_slice(focused_idx, slice_index)
+    if update is not None:
+        slice_index = update.index
+    else:  # pane without a registry view (inconsistent state): plain redraw as before
+        app._mpr_controller.display_mpr_slice(focused_idx, slice_index)
+    result = app.subwindow_data.get(focused_idx, {}).get("mpr_result")
+    if result is not None:
+        app.cine_controls_widget.update_frame_position(slice_index, result.n_slices)
+        if app.image_viewer is not None:
+            app.image_viewer.set_navigation_slider_state(
+                enabled=True,
+                minimum=1,
+                maximum=result.n_slices,
+                value=slice_index + 1,
+                mode_label="Slice",
+                reveal=True,
+            )
+    app._slice_sync_coordinator.on_slice_changed(focused_idx)
+    app._slice_location_line_coordinator.refresh_all()
+
+
 def on_slice_changed(app: Any, slice_index: int) -> None:
     """Handle slice change from slice navigator (affects focused subwindow only)."""
     was_cine_advancing = app.cine_player.is_cine_advancing()
 
     focused_idx = app.focused_subwindow_index
     if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(focused_idx):
-        app._mpr_controller.display_mpr_slice(focused_idx, slice_index)
-        result = app.subwindow_data.get(focused_idx, {}).get("mpr_result")
-        if result is not None:
-            app.cine_controls_widget.update_frame_position(slice_index, result.n_slices)
-            if app.image_viewer is not None:
-                app.image_viewer.set_navigation_slider_state(
-                    enabled=True,
-                    minimum=1,
-                    maximum=result.n_slices,
-                    value=slice_index + 1,
-                    mode_label="Slice",
-                    reveal=True,
-                )
-        app._slice_sync_coordinator.on_slice_changed(focused_idx)
-        app._slice_location_line_coordinator.refresh_all()
+        _on_mpr_slice_changed(app, focused_idx, slice_index)
         if was_cine_advancing:
             QTimer.singleShot(0, app.cine_player.reset_cine_advancing_flag)
         return

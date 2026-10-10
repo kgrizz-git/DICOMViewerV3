@@ -34,13 +34,15 @@ def test_same_source_sessions_get_different_tags() -> None:
 def test_tooltip_for_a_detached_view() -> None:
     text = tile_tooltip(_meta(view_count=3, view_number=2), None)
     assert "MPR Axial" in text and "Session 2 · view 2 of 3" in text
-    assert "Not in a window" in text and "Duplicate into Window" in text
-    assert "Linked" not in text
+    assert "Not in a window (slice 4 of 12)" in text  # a dormant linked view shows where it is
+    assert "Duplicate into Window… / Duplicate Linked into Window… / Clear MPR" in text
+    assert "Linked scrolling" not in text and "Unlink" not in text
 
 
 def test_tooltip_for_an_attached_linked_view() -> None:
     text = tile_tooltip(_meta(pane_index=2, link_group_id=1), "3")
     assert "Window 3" in text and "Linked scrolling" in text
+    assert "Unlink View / Clear MPR" in text
 
 
 def test_text_never_contains_dicom_derived_identifiers() -> None:

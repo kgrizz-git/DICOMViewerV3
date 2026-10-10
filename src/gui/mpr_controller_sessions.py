@@ -252,8 +252,10 @@ def _lut_signature(lut: Any) -> Any:
 def _content_stamp(view: MprView, n_slices: int) -> tuple[Any, ...]:
     """Hashable summary of everything that changes a view's tile pixels."""
     display = view.display
+    # The current slice is deliberately absent: tiles show a fixed mid-stack plane,
+    # so scrolling (including linked scrolling) changes no tile pixels.
     return (
-        view.session_id, n_slices, view.slice_index,
+        view.session_id, n_slices,
         view.combine.enabled, view.combine.mode, view.combine.slice_count,
         display.window_center, display.window_width, display.use_rescaled,
         display.inverted, _lut_signature(display.lut),

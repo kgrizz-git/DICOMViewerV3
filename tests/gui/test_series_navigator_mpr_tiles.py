@@ -21,7 +21,7 @@ def _spec(view_id: int, *, order: int, pane: int | None = None, pixels=_PIXELS, 
         "window_center": 40.0, "window_width": 400.0, "n_slices": 3,
         "photometric_interpretation": None, "image_inverted": False, "lut": None,
         "order": order, "pane_index": pane, "tag": f"S{view_id}", "tooltip": f"tip {view_id}",
-        "origin": "AbCdEfGhIjKlMnOpQr_-12",
+        "origin": "AbCdEfGhIjKlMnOpQr_-12", "linked": view_id == 11,
         "stamp": ("s", view_id),
     }
     spec.update(extra)
@@ -128,17 +128,21 @@ class TestNavigatorTiles:
         clicked: list[int] = []
         cleared: list[int] = []
         duplicated: list[int] = []
+        linked: list[int] = []
+        unlinked: list[int] = []
         nav.mpr_thumbnail_clicked.connect(clicked.append)
         nav.mpr_thumbnail_clear_requested.connect(cleared.append)
         nav.mpr_thumbnail_duplicate_requested.connect(duplicated.append)
+        nav.mpr_thumbnail_duplicate_linked_requested.connect(linked.append)
+        nav.mpr_thumbnail_unlink_requested.connect(unlinked.append)
         tile = nav._mpr_thumbnails[11]
+        assert tile._linked is True  # the spec's link state reaches the tile
 
         tile.clicked.emit(11)
-        menu = tile.build_context_menu()
-        menu.actions()[0].trigger()
-        menu.actions()[1].trigger()
+        for action in tile.build_context_menu().actions():
+            action.trigger()
 
-        assert (clicked, duplicated, cleared) == ([11], [11], [11])
+        assert (clicked, duplicated, linked, unlinked, cleared) == ([11], [11], [11], [11], [11])
 
     def test_width_counts_every_tile_after_its_source_series(self, qapp) -> None:
         nav = _navigator()

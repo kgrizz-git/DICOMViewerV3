@@ -30,18 +30,14 @@ Requirements:
 
 from __future__ import annotations
 
-import copy
 import logging
-import os
 from typing import Any
 
 import numpy as np
 from PIL import Image
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
-    QFileDialog,
     QMessageBox,
     QProgressDialog,
 )
@@ -50,11 +46,6 @@ from core.dicom_parser import DICOMParser
 from core.mpr_builder import MprBuilder, MprBuilderWorker, MprResult
 from core.mpr_cache import MprCache, resolve_cached_photometric_interpretation
 from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
-from core.mpr_dicom_export import (
-    MprDicomExportError,
-    MprDicomExportOptions,
-    write_mpr_series,
-)
 from core.mpr_overlay_dataset import build_overlay_dataset
 from core.mpr_session_types import MprCombineState, MprDisplayState, MprViewMetadata
 from core.mpr_stack_combine import apply_mpr_stack_combine
@@ -104,9 +95,18 @@ from gui.mpr_controller_transactions import (
     restore_failed_install,
     validate_install_request,
 )
+from gui.mpr_dicom_save_flow import prompt_save_mpr_as_dicom
 from gui.mpr_pane_teardown import tear_down_mpr_at_subwindow
 from gui.mpr_source_closure import release_all_mpr, release_closed_source_sessions
 from gui.mpr_view_duplication import duplicate_view_into_pane
+from gui.mpr_view_links import (
+    SliceUpdate,
+    flush_tile_refresh,
+    link_group_of_pane,
+    set_pane_slice,
+    set_view_slice,
+    unlink_view,
+)
 from gui.mpr_worker_fencing import (
     dataset_source_key,
     drop_build_registration,
@@ -243,6 +243,11 @@ class MprController(QObject):
         # Opaque per-controller drag-origin token (see ``core.mpr_view_drag``): view
         # IDs collide across controllers/instances, so drops must prove their origin.
         self._drag_origin = new_drag_origin()
+        # Canonical slice setter / link state (see ``gui.mpr_view_links``): the
+        # re-entrancy guard is deliberately separate from global sync's ``_syncing``.
+        self._slice_propagating = False
+        self._tile_refresh_dirty: set[int] = set()
+        self._tile_refresh_timer: QTimer | None = None
         # Pane -> (reservation id, source key) for an in-flight/just-loaded build.
         self._build_reservations: dict[int, tuple[int, tuple[str, str]]] = {}
         self._init_cache()
@@ -376,150 +381,8 @@ class MprController(QObject):
         dlg.exec()
 
     def prompt_save_mpr_as_dicom(self) -> None:
-        """
-        Save the focused subwindow's MPR stack as a new DICOM series (File menu).
-
-        Requires a completed ``MprResult`` on the focused pane. Prompts for an
-        output root folder (mirrors export path memory), then a small options
-        dialog, then writes one file per plane with progress / cancel.
-        """
-        from gui.dialogs.mpr_dicom_save_dialog import MprDicomSaveDialog
-
-        app = self._app
-        mw = app.main_window
-        ctx = self._save_mpr_resolve_export_context(mw)
-        if ctx is None:
-            return
-        data, result, template = ctx
-
-        output_root = self._save_mpr_pick_output_root(mw)
-        if output_root is None:
-            return
-
-        orient = str(data.get("mpr_orientation", "") or "")
-        opt_dialog = MprDicomSaveDialog(parent=mw, orientation_label=orient)
-        if opt_dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        opts: MprDicomExportOptions = opt_dialog.build_options(orient)
-        self._save_mpr_write_series(mw, output_root, result, template, opts)
-
-    def _save_mpr_resolve_export_context(
-        self, mw
-    ) -> tuple[dict[str, Any], Any, Any] | None:
-        """Validate focused MPR pane and resolve export template dataset."""
-        app = self._app
-        idx = app.get_focused_subwindow_index()
-        data = app.subwindow_data.get(idx, {})
-        if not data.get("is_mpr"):
-            QMessageBox.information(
-                mw,
-                _TITLE_SAVE_MPR_DICOM,
-                "The focused window is not an MPR view.\n"
-                "Create an MPR in a pane and focus it, then try again.",
-            )
-            return None
-        result = data.get("mpr_result")
-        if result is None or getattr(result, "n_slices", 0) < 1:
-            QMessageBox.information(
-                mw,
-                _TITLE_SAVE_MPR_DICOM,
-                "No MPR slice stack is available to export yet.",
-            )
-            return None
-
-        template = data.get("mpr_source_dataset")
-        if template is None:
-            try:
-                template = result.source_volume.source_datasets[0]
-            except Exception:
-                template = None
-        if template is None:
-            QMessageBox.warning(
-                mw,
-                _TITLE_SAVE_MPR_DICOM,
-                "Could not resolve a source DICOM dataset for metadata export.",
-            )
-            return None
-        return data, result, template
-
-    def _save_mpr_pick_output_root(self, mw) -> str | None:
-        """Prompt for an export folder and remember it in config."""
-        app = self._app
-        start = app.config_manager.get_last_export_path() or ""
-        if not start or not os.path.exists(start):
-            start = os.getcwd()
-        folder_dialog = QFileDialog(mw)
-        folder_dialog.setFileMode(QFileDialog.FileMode.Directory)
-        folder_dialog.setWindowTitle("Select folder for MPR DICOM export")
-        folder_dialog.setDirectory(start)
-        folder_dialog.setWindowFlags(
-            folder_dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
-        )
-        folder_dialog.activateWindow()
-        folder_dialog.raise_()
-        if not folder_dialog.exec():
-            return None
-        selected = folder_dialog.selectedFiles()
-        if not selected:
-            return None
-        output_root = selected[0]
-        app.config_manager.set_last_export_path(output_root)
-        return output_root
-
-    def _save_mpr_write_series(
-        self,
-        mw,
-        output_root: str,
-        result: MprResult,
-        template: Any,
-        opts: MprDicomExportOptions,
-    ) -> None:
-        """Write MPR DICOM files with progress UI and success/error messaging."""
-        progress = QProgressDialog(
-            "Writing MPR DICOM files…",
-            "Cancel",
-            0,
-            result.n_slices,
-            mw,
-        )
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.setValue(0)
-
-        def _progress_cb(cur: int, total: int, msg: str) -> bool:
-            progress.setMaximum(max(total, 1))
-            progress.setValue(min(cur, total))
-            progress.setLabelText(msg)
-            QApplication.processEvents()
-            return not progress.wasCanceled()
-
-        template_copy = copy.deepcopy(template)
-        try:
-            paths = write_mpr_series(
-                output_root,
-                result,
-                template_copy,
-                opts,
-                progress_callback=_progress_cb,
-            )
-        except MprDicomExportError as exc:
-            progress.close()
-            if "cancelled" in str(exc).lower():
-                return
-            QMessageBox.critical(
-                mw,
-                _TITLE_SAVE_MPR_DICOM,
-                "Export failed. Details were withheld to protect private data.",
-            )
-            return
-
-        progress.close()
-        QMessageBox.information(
-            mw,
-            _TITLE_SAVE_MPR_DICOM,
-            f"Successfully wrote {len(paths)} file(s).\n\n"
-            f"First file:\n{paths[0]}",
-        )
+        """Save the focused pane's MPR stack as a DICOM series (see ``gui.mpr_dicom_save_flow``)."""
+        prompt_save_mpr_as_dicom(self)
 
     def _cancel_mpr_worker(self, idx: int) -> None:
         """Retire any in-progress MPR build for *idx* (see transactions helper)."""
@@ -588,9 +451,33 @@ class MprController(QObject):
         """Move/attach a view by stable ID to pane *to_idx* (see transactions)."""
         move_view(self, view_id, to_idx)
 
-    def duplicate_view(self, view_id: int, to_idx: int) -> bool:
-        """Duplicate a view into pane *to_idx* sharing its result (no new session)."""
-        return duplicate_view_into_pane(self, view_id, to_idx)
+    def duplicate_view(self, view_id: int, to_idx: int, *, linked: bool = False) -> bool:
+        """Duplicate a view into pane *to_idx* sharing its result (no new session).
+
+        ``linked=True`` also joins the duplicate to the source's link group
+        (creating it) in the same transaction; any failure rolls both back.
+        """
+        return duplicate_view_into_pane(self, view_id, to_idx, linked=linked)
+
+    def set_view_slice(self, view_id: int, slice_index: int) -> SliceUpdate | None:
+        """Canonical slice setter: clamps, moves the view's whole link group once."""
+        return set_view_slice(self, view_id, slice_index)
+
+    def set_pane_slice(self, idx: int, slice_index: int) -> SliceUpdate | None:
+        """:meth:`set_view_slice` for the view attached to pane *idx* (None if empty)."""
+        return set_pane_slice(self, idx, slice_index)
+
+    def link_group_of_pane(self, idx: int) -> int | None:
+        """Explicit link-group ID of the view in pane *idx*, or None."""
+        return link_group_of_pane(self, idx)
+
+    def unlink_view(self, view_id: int) -> bool:
+        """Remove a view from its link group (a pair dissolves); False if not linked."""
+        return unlink_view(self, view_id)
+
+    def flush_tile_refresh(self) -> None:
+        """Emit any debounced tile refresh now (linked scrolling of detached views)."""
+        flush_tile_refresh(self)
 
     def attached_view_id(self, idx: int) -> int | None:
         """View ID attached to pane *idx*, or None."""

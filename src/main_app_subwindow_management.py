@@ -561,9 +561,13 @@ class MPRNavigationMixin:
         """Clear exactly one MPR view from the tile context menu (stale IDs no-op)."""
         self._mpr_controller.clear_view(view_id)
 
-    def _on_mpr_duplicate_requested(self, view_id: int) -> None:
-        """Tile context menu → Duplicate into Window…: let the user pick a target pane."""
-        show_duplicate_target_menu(self, view_id)
+    def _on_mpr_duplicate_requested(self, view_id: int, linked: bool = False) -> None:
+        """Tile context menu → Duplicate [Linked] into Window…: let the user pick a target pane."""
+        show_duplicate_target_menu(self, view_id, linked)
+
+    def _on_mpr_unlink_requested(self, view_id: int) -> None:
+        """Tile context menu → Unlink View: leave the link group (a pair dissolves)."""
+        self._mpr_controller.unlink_view(view_id)
 
     def _sync_intensity_projection_widget_from_mpr_data(self, data: dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""

@@ -563,20 +563,34 @@ class TestPaintEvent:
 
 class TestContextMenu2:
     @pytest.mark.qt
-    def test_menu_offers_duplicate_then_clear_for_this_exact_view(self, qapp) -> None:
+    def test_menu_actions_target_this_exact_view(self, qapp) -> None:
         w = _make_widget(2, view_id=13)
-        duplicates: list[int] = []
-        clears: list[int] = []
-        w.duplicate_requested.connect(duplicates.append)
-        w.clear_mpr_requested.connect(clears.append)
+        w.set_caption("S1.1L", "tip", linked=True)
+        seen: dict[str, list[int]] = {"dup": [], "linked": [], "unlink": [], "clear": []}
+        w.duplicate_requested.connect(seen["dup"].append)
+        w.duplicate_linked_requested.connect(seen["linked"].append)
+        w.unlink_requested.connect(seen["unlink"].append)
+        w.clear_mpr_requested.connect(seen["clear"].append)
 
         menu = w.build_context_menu()
         actions = menu.actions()
-        assert [a.text() for a in actions] == ["Duplicate into Window…", "Clear MPR"]
-        actions[0].trigger()
-        actions[1].trigger()
+        assert [a.text() for a in actions] == [
+            "Duplicate into Window…", "Duplicate Linked into Window…", "Unlink View", "Clear MPR",
+        ]
+        assert all(a.isEnabled() for a in actions)
+        for action in actions:
+            action.trigger()
 
-        assert duplicates == [13] and clears == [13]
+        assert seen == {"dup": [13], "linked": [13], "unlink": [13], "clear": [13]}
+
+    def test_unlink_is_disabled_for_an_unlinked_view_and_never_fires(self, qapp) -> None:
+        w = _make_widget(2, view_id=13)
+        fired: list[int] = []
+        w.unlink_requested.connect(fired.append)
+        unlink = next(a for a in w.build_context_menu().actions() if a.text() == "Unlink View")
+        assert unlink.isEnabled() is False
+        unlink.trigger()
+        assert fired == []
 
     @pytest.mark.qt
     def test_show_context_menu_executes_the_built_menu(self, qapp) -> None:

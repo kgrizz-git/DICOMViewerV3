@@ -122,11 +122,11 @@ def _pane_view_state(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**base)
 
 
-def _make_controller(*, focused: int = 0) -> tuple[MprController, Any]:
+def _make_controller(*, focused: int = 0, pane_count: int = 2) -> tuple[MprController, Any]:
     panes: dict[int, SimpleNamespace] = {}
     managers: dict[int, dict[str, Any]] = {}
     data: dict[int, dict[str, Any]] = {}
-    for idx in (0, 1):
+    for idx in range(pane_count):
         viewer = MagicMock()
         viewer.image_inverted = False
         viewer.use_rescaled_values = True
@@ -325,3 +325,108 @@ def _fail(worker: FakeWorker, message: str) -> None:
 def _counts(ctrl: MprController) -> tuple[int, int, int, int]:
     reg = ctrl._registry
     return reg.session_count, reg.view_count, reg.pending_session_count, reg.pending_view_count
+
+
+# ---------------------------------------------------------------------------
+# Linked scrolling world: real controller + coordinator + navigator + cine
+# ---------------------------------------------------------------------------
+
+
+def _native_series(n: int, study: str = "NST", series: str = "NSE") -> list[Dataset]:
+    """A native axial series whose slice *i* lies at z = i (matches ``_make_result`` planes)."""
+    datasets = []
+    for i in range(n):
+        ds = _source_dataset()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)  # short labels are not valid UIDs
+            ds.StudyInstanceUID = study
+            ds.SeriesInstanceUID = series
+        ds.InstanceNumber = i + 1
+        ds.ImagePositionPatient = [0.0, 0.0, float(i)]
+        ds.SliceLocation = float(i)
+        ds.SliceThickness = 1.0
+        ds.Rows = ds.Columns = 4
+        datasets.append(ds)
+    return datasets
+
+
+def _seed_native_pane(app: Any, idx: int, datasets: list[Dataset], current: int = 0) -> None:
+    app.subwindow_data[idx] = {
+        "current_dataset": datasets[current],
+        "current_slice_index": current,
+        "current_series_uid": str(datasets[0].SeriesInstanceUID),
+        "current_study_uid": str(datasets[0].StudyInstanceUID),
+        "current_datasets": datasets,
+    }
+
+
+class LinkWorld(SimpleNamespace):
+    """Real controller, slice navigator, cine player and global sync coordinator."""
+
+    ctrl: MprController
+    app: Any
+    nav: Any
+    cine: Any
+    coord: Any
+
+    def focus(self, idx: int) -> None:
+        """Focus pane *idx* and point the shared navigator at its position (as the app does)."""
+        data = self.app.subwindow_data[idx]
+        self.app.focused_subwindow_index = idx
+        total = len(data["mpr_result"].slices) if data.get("is_mpr") else len(data["current_datasets"])
+        self.nav.blockSignals(True)
+        self.nav.set_total_slices(total)
+        self.nav.current_slice_index = int(data.get("mpr_slice_index", data.get("current_slice_index", 0)))
+        self.nav.blockSignals(False)
+
+    def live(self, idx: int) -> int:
+        return int(self.app.subwindow_data[idx]["mpr_slice_index"])
+
+    def redraws(self) -> dict[int, int]:
+        """Panes redrawn so far (pane -> count) since the spy was installed."""
+        counts: dict[int, int] = {}
+        for call in self.display_spy.call_args_list:
+            counts[call.args[0]] = counts.get(call.args[0], 0) + 1
+        return counts
+
+
+def _make_link_world(*, pane_count: int = 5, n_slices: int = 12) -> LinkWorld:
+    """Panes 0/1: MPR views of ONE session (linked when ``link`` is used); others native.
+
+    The shared navigator, a real ``CinePlayer`` (linear MPR mode), a real
+    ``SliceSyncCoordinator`` and the real ``on_slice_changed`` are wired the way
+    the app wires them, so wheel/keys/slider/cine all travel the production path.
+    """
+    from core.cine_app_facade import CineAppFacade
+    from core.slice_display_handlers import on_slice_changed
+    from core.slice_sync_coordinator import SliceSyncCoordinator
+    from gui.cine_player import CinePlayer
+    from gui.slice_navigator import SliceNavigator
+
+    ctrl, app = _make_controller(pane_count=pane_count)
+    nav = SliceNavigator()
+    app.slice_navigator = nav
+    app.cine_player = CinePlayer(nav, lambda: nav.total_slices, lambda: nav.current_slice_index)
+    app.cine_player.set_use_linear_cine_navigation(True)
+    app.cine_controls_widget = MagicMock()
+    app.image_viewer = MagicMock()
+    app._slice_location_line_coordinator = MagicMock()
+    coord = SliceSyncCoordinator(app)
+    app._slice_sync_coordinator = coord
+    app.current_studies = {}
+    facade = CineAppFacade(app)
+    app.cine_app_facade = facade
+    nav.slice_changed.connect(lambda i: on_slice_changed(app, i))
+    nav.slice_changed.connect(facade.on_manual_slice_navigation)
+    app.cine_player.frame_advance_requested.connect(facade.on_cine_frame_advance)
+    world = LinkWorld(ctrl=ctrl, app=app, nav=nav, cine=app.cine_player, coord=coord)
+    world.n_slices = n_slices
+    world.display_spy = None
+    return world
+
+
+def _spy_redraws(world: LinkWorld):
+    """Count ``display_mpr_slice`` calls (real redraw still runs)."""
+    spy = patch.object(world.ctrl, "display_mpr_slice", wraps=world.ctrl.display_mpr_slice)
+    world.display_spy = spy.start()
+    return spy
