@@ -15,17 +15,15 @@ Responsibilities:
   - Provides ``is_mpr(idx)`` and ``clear_mpr(idx)`` for callers.
 
 Inputs:
-    app — DICOMViewerApp instance (provides subwindow_managers,
-          subwindow_data, config_manager, focused_subwindow_index, etc.).
+    app — DICOMViewerApp instance (subwindow_managers, subwindow_data,
+          config_manager, focused_subwindow_index, etc.).
 
 Outputs:
-    Mutates subwindow_data[idx] with MPR-specific keys ("is_mpr",
-    "mpr_result", "mpr_slice_index") and drives the ImageViewer + SliceNavigator
-    for MPR subwindows.
+    Mutates subwindow_data[idx] with MPR-specific keys and drives the
+    ImageViewer + SliceNavigator for MPR subwindows.
 
-Requirements:
-    PySide6, numpy, PIL, pydicom (all already project dependencies).
-    SimpleITK (for MprBuilder/MprVolume).
+Requirements: PySide6, numpy, PIL, pydicom (already project
+    dependencies); SimpleITK (for MprBuilder/MprVolume).
 """
 
 from __future__ import annotations
@@ -79,6 +77,7 @@ from gui.mpr_controller_sessions import (
     release_pane_reservation,
     reserve_pane_build,
 )
+from gui.mpr_controller_transactions import discard_view_on_pane_reset
 from gui.mpr_dicom_save_flow import prompt_save_mpr_as_dicom
 from gui.mpr_loaded_series import collect_loaded_series
 from gui.mpr_pane_teardown import tear_down_mpr_at_subwindow
@@ -165,14 +164,11 @@ class MprController(QObject):
     Each subwindow may independently be in "MPR mode", indicated by
     ``subwindow_data[idx].get("is_mpr") == True``.
 
-    MPR-mode subwindow_data extra keys:
-        is_mpr (bool):           Always True when in MPR mode.
-        mpr_result (MprResult):  The current MprResult.
-        mpr_orientation (str):   Human-readable label ("Axial", etc.)
-        mpr_slice_index (int):   Current MPR stack index (0-based).
+    MPR-mode subwindow_data keys: is_mpr (bool), mpr_result (MprResult),
+    mpr_orientation (str) and mpr_slice_index (int, 0-based stack index).
 
-    Views are owned by the session/view registry; ``subwindow_data`` is the
-    live display adapter of an attached view.
+    Views are owned by the session/view registry; ``subwindow_data`` is the live
+    display adapter of an attached view.
 
     Signals:
         mpr_activated(int):  Emitted with the subwindow index after an MPR view
@@ -423,6 +419,10 @@ class MprController(QObject):
         """View ID attached to pane *idx*, or None."""
         view = self._registry.view_for_pane(idx)
         return None if view is None else view.view_id
+
+    def discard_view_on_pane_reset(self, idx: int) -> bool:
+        """Interim pane-reset safety net: discard the mapped view (parking slice)."""
+        return discard_view_on_pane_reset(self, idx)
 
     def release_mpr_for_closed_source(
         self, study_uid: str, series_uid: str | None = None

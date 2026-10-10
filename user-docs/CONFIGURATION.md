@@ -16,10 +16,10 @@ The **MPR Limits** group caps how many MPRs you can keep at once. See [Limits an
 
 | Control | Meaning |
 |--------|---------|
-| **Maximum MPR sessions** | Independently built MPRs, including detached ones and builds in progress. Default **8**. |
-| **Maximum MPR views** | Windows and navigator tiles showing those MPRs (duplicates share their MPR's volume). Default **16**; never lower than the session limit. |
+| **Maximum MPR sessions** | Independently built MPRs, including builds in progress. Default **8**. |
+| **Maximum MPR views** | Windows showing those MPRs, plus earlier results kept when a new MPR takes over a window. Default **16**; never lower than the session limit. |
 
-Both values are saved together when you press **OK**, in the ordinary settings file (not in the privacy-storage group). They take effect for the next MPR or duplicate you create, without a restart. Lowering a limit never closes an existing MPR. The memory figure shown when you create an MPR is an approximate estimate, not a limit.
+Both values are saved together when you press **OK**, in the ordinary settings file (not in the privacy-storage group). They take effect for the next MPR you create, without a restart. Lowering a limit never closes an existing MPR. The memory figure shown when you create an MPR is an approximate estimate, not a limit.
 
 ### Local study index (encrypted)
 

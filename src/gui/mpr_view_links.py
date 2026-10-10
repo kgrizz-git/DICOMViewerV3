@@ -26,7 +26,7 @@ Rules implemented here:
   coordinator.
 
 Session-local link groups (scrolling duplicates together) arrive with the
-parking update; this module currently moves exactly one view.
+duplicates-and-links slice; this module currently moves exactly one view.
 """
 
 from __future__ import annotations
@@ -116,10 +116,12 @@ def set_view_slice(controller: Any, view_id: int, slice_index: int) -> SliceUpda
     try:
         # Phase 1 writes the view BEFORE the redraw, so nothing that runs
         # synchronously during a redraw observes a half-updated view, and a
-        # failed redraw cannot leave drift behind. Phase 2 redraws when the
-        # displayed slice actually changed.
+        # failed redraw cannot leave drift behind. Phase 2 redraws only an
+        # attached view whose displayed slice actually changed; a detached
+        # view has no pane, so its registry index updates silently (the
+        # parking slice makes detached views navigable again).
         needs_redraw = _write_view(controller, view, target)
-        if needs_redraw:
+        if needs_redraw and view.pane_index is not None:
             _redraw_view(controller, view.pane_index, target, n_slices)
     finally:
         controller._slice_propagating = False

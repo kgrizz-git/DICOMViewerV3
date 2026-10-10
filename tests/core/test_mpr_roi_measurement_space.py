@@ -15,7 +15,6 @@ import numpy as np
 
 import core.mpr_navigator_thumbnail as mpr_navigator_thumbnail
 from core.lut_catalog import colormap_lut, linear_lut
-from core.mpr_session_types import MprDisplayState, MprViewMetadata
 
 
 def _roi_stats(array: np.ndarray) -> tuple[float, float, float, float]:
@@ -62,34 +61,6 @@ def _make_app(lut, inverted: bool) -> tuple[SimpleNamespace, np.ndarray, np.ndar
     return app, stored, apply_rescale(stored)
 
 
-def _tile_for_pane_view(lut, inverted: bool) -> dict:
-    """The navigator spec produced for a view carrying *lut* / *inverted* display state."""
-    shown: dict = {}
-
-    class _Navigator:
-        def mpr_tile_stamps(self) -> dict:
-            return {}
-
-        def reconcile_mpr_thumbnails(self, incoming: dict) -> bool:
-            shown.update(incoming)
-            return True
-
-    meta = MprViewMetadata(
-        view_id=1, session_id=1, creation_seq=1, pane_index=0, orientation="Axial",
-        source_study_uid="st", source_series_uid="sr", n_slices=5, slice_index=0,
-        photometric_interpretation="MONOCHROME1",
-    )
-    controller = SimpleNamespace(
-        drag_origin="AbCdEfGhIjKlMnOpQr_-12",
-        all_view_ids=lambda: [1],
-        get_view_metadata=lambda _v: meta,
-        get_view_display_state=lambda _v: MprDisplayState(lut=lut, inverted=inverted),
-        get_view_thumbnail_pixels=lambda _v, _r=None: np.zeros((4, 4), dtype=np.float32),
-    )
-    mpr_navigator_thumbnail.sync_mpr_navigator_tiles(
-        SimpleNamespace(series_navigator=_Navigator(), _mpr_controller=controller)
-    )
-    return shown[1]
 
 
 def test_color_lut_reaches_the_display_but_not_the_measurement_array() -> None:

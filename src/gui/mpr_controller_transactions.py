@@ -359,9 +359,26 @@ def restore_failed_install(
         return False
     return values_ok and picture_ok
 
+def discard_view_on_pane_reset(controller: Any, idx: int) -> bool:
+    """Interim (parking slice) pane-reset safety net: discard, never park.
+
+    Keyed off the registry mapping only — not the pane's ``is_mpr`` flag and
+    not ``subwindow_data`` — so an inconsistent pane (flag cleared or data
+    already reset) can never leave a view mapped to it. Returns True when a
+    view was discarded.
+    """
+    view = controller._registry.view_for_pane(idx)
+    if view is None:
+        return False
+    controller._registry.discard_view(view.view_id)
+    controller.mpr_cleared.emit(idx)
+    return True
+
+
 __all__ = [
     "DestinationSnapshot",
     "capture_destination_snapshot",
+    "discard_view_on_pane_reset",
     "restore_destination_snapshot",
     "restore_failed_install",
     "validate_install_request",

@@ -62,13 +62,37 @@ def _app_with_mpr_pane(is_mpr: bool) -> MagicMock:
 class TestPaneResetInterimDiscard:
     def test_clear_subwindow_discards_the_view_on_an_mpr_pane(self) -> None:
         app = _app_with_mpr_pane(is_mpr=True)
+        app._mpr_controller.attached_view_id.return_value = 7
         clear_subwindow(app, 0)
-        app._mpr_controller.clear_mpr.assert_called_once_with(0)
-
-    def test_clear_subwindow_leaves_non_mpr_panes_to_the_controller(self) -> None:
-        app = _app_with_mpr_pane(is_mpr=False)
-        clear_subwindow(app, 0)
+        app._mpr_controller.discard_view_on_pane_reset.assert_called_once_with(0)
         app._mpr_controller.clear_mpr.assert_not_called()
+
+    def test_clear_subwindow_discards_even_when_the_pane_flag_was_already_cleared(self) -> None:
+        # Review regression: the safety net is keyed off the registry mapping,
+        # not the pane's display flag.
+        app = _app_with_mpr_pane(is_mpr=False)
+        app._mpr_controller.attached_view_id.return_value = 7
+        clear_subwindow(app, 0)
+        app._mpr_controller.discard_view_on_pane_reset.assert_called_once_with(0)
+
+    def test_clear_subwindow_leaves_unmapped_panes_alone(self) -> None:
+        app = _app_with_mpr_pane(is_mpr=False)
+        app._mpr_controller.attached_view_id.return_value = None
+        clear_subwindow(app, 0)
+        app._mpr_controller.discard_view_on_pane_reset.assert_called_once_with(0)
+        app._mpr_controller.clear_mpr.assert_not_called()
+
+    def test_real_registry_discard_on_inconsistent_pane_state(self) -> None:
+        from mpr_lifecycle_harness import _make_controller, _make_result, _seed_mpr_pane
+
+        ctrl, app = _make_controller()
+        _seed_mpr_pane(app, 0, _make_result())
+        assert ctrl.attached_view_id(0) is not None
+        app.subwindow_data[0]["is_mpr"] = False  # inconsistent: view mapped, flag cleared
+        assert ctrl.discard_view_on_pane_reset(0) is True
+        assert ctrl.attached_view_id(0) is None
+        assert ctrl._registry.session_count == 0
+        assert ctrl.discard_view_on_pane_reset(0) is False  # idempotent
 
     def test_clear_subwindow_content_removes_the_view_instead_of_parking(self) -> None:
         app = _app_with_mpr_pane(is_mpr=True)

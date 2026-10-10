@@ -122,10 +122,10 @@ def _on_mpr_slice_changed(app: Any, focused_idx: int, slice_index: int) -> None:
     """Navigator change on a focused MPR pane.
 
     Canonical navigation path (wheel, keys, slider and cine all arrive here):
-    the controller's setter clamps, redraws this pane and moves its whole link
-    group exactly once. Outbound global sync then starts once, from this pane.
+    the controller's setter clamps and redraws this pane exactly once.
+    Outbound global sync then starts once, from this pane.
     A ``None`` answer with a registered view means the setter rejected the
-    call mid-linked-pass (re-entrancy): the outer pass owns the pane, so
+    call mid-pass (re-entrancy): the in-flight update owns the pane, so
     nothing may be written here. Without a registered view (inconsistent
     state) it falls back to the plain redraw, as before.
     """
@@ -133,7 +133,7 @@ def _on_mpr_slice_changed(app: Any, focused_idx: int, slice_index: int) -> None:
     if update is not None:
         slice_index = update.index
     elif app._mpr_controller.attached_view_id(focused_idx) is not None:
-        return  # rejected mid-pass; the outer linked pass updates the pane
+        return  # rejected mid-pass; the in-flight update owns the pane
     else:
         app._mpr_controller.display_mpr_slice(focused_idx, slice_index)
     result = app.subwindow_data.get(focused_idx, {}).get("mpr_result")

@@ -102,11 +102,11 @@ def update_3d_view_action_state(app: Any) -> None:
 
 def clear_subwindow(app: Any, idx: int) -> None:
     """Clear all viewer-owned state for a single subwindow."""
-    # Interim (parking slice): resetting a pane's data must never leave a
-    # registry view mapped to it. With no park action yet, the safety net
-    # discards the view instead of detaching it.
-    if hasattr(app, "_mpr_controller") and app._mpr_controller.is_mpr(idx):
-        app._mpr_controller.clear_mpr(idx)
+    # Interim (parking slice) safety net: resetting a pane's data must never
+    # leave a registry view mapped to it. Keyed off the registry mapping —
+    # not the pane's display flag — so inconsistent panes are covered too.
+    if hasattr(app, "_mpr_controller"):
+        app._mpr_controller.discard_view_on_pane_reset(idx)
     app._reset_fusion_handler_for_subwindow(idx)
 
     subwindow = app.multi_window_layout.get_subwindow(idx)
