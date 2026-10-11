@@ -15,7 +15,7 @@ MPR lets you build **orthogonal views** (e.g. sagittal / coronal) from an axial 
 
 The pane switches to the MPR for that configuration. Afterward you can change combine settings from the right pane; window/level stays fixed when you do (same as for a normal 2D series).
 
-Building a new MPR **never discards** an MPR you already have: if the window already shows an MPR, the earlier result stays in the session registry and keeps its admission slot until you clear it or close its source data (its window is taken over by the new MPR; a later update restores the parked window). While an MPR is being built, the status bar shows how many sessions and views you are using; when it finishes you see the same line again (see [Limits and memory](#limits-and-memory)).
+Building a new MPR **never discards** an MPR you already have: if the window already shows an MPR, the earlier result stays in the session registry and keeps its admission slot until its source data is closed or the app restarts (its window is taken over by the new MPR; a later update restores controls for parked results). While an MPR is being built, the status bar shows how many sessions and views you are using; when it finishes you see the same line again (see [Limits and memory](#limits-and-memory)).
 
 ## Clearing MPR
 
@@ -25,10 +25,10 @@ Building a new MPR **never discards** an MPR you already have: if the window alr
 
 ## Limits and memory
 
-You can have up to **8 sessions** by default (counting MPRs still being built). Change the limit in **Edit → Settings… → MPR Limits** (**Maximum MPR sessions**). The change applies to the next MPR you create, with no restart. Lowering a limit never closes anything; it only stops new ones until you are under it.
+You can have up to **8 sessions** by default (counting MPRs still being built); each session's window and any kept displaced result count as **views** against the **Maximum MPR views** limit (default **16**, never below the session limit). Change both in **Edit → Settings… → MPR Limits**. The change applies to the next MPR you create, with no restart. Lowering a limit never closes anything; it only stops new ones until you are under it.
 
 - Building a new MPR needs one free session. At the limit you get a message naming it with the current counts, for example `MPR session limit reached (8/8)`, followed by a usage line.
-- The usage line (`MPR: 2/8 sessions, about 410 MiB (estimate)`) is an **approximate** estimate of the memory the MPR sessions use, counting shared volumes and slices once. It is there to help you judge; it is **not** a memory limit, nothing is refused because of it, and it does not include the image data you already have loaded. The real memory use of the application is higher.
+- The usage line (`MPR: 2/8 sessions, 2/16 views, about 410 MiB (estimate)`) shows the approximate memory the MPR sessions use, counting shared volumes and slices once. It is there to help you judge; it is **not** a memory limit, nothing is refused because of it, and it does not include the image data you already have loaded. The real memory use of the application is higher.
 
 ## Saving MPR as DICOM
 
