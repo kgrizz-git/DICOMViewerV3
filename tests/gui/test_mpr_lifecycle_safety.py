@@ -142,7 +142,9 @@ class ProbeWorker(QThread):
 
     def release_and_join(self) -> bool:
         self.release_evt.set()
-        return self.wait(10000)
+        # The join must outlast the worker's own safety cap, or a timed-out
+        # wait could destroy a QThread whose native thread is still running.
+        return self.wait(int((self.SAFETY_TIMEOUT_S + 10.0) * 1000))
 
 
 class TestTrueTermination:
