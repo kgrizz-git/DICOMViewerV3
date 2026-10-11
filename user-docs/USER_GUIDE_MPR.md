@@ -15,7 +15,7 @@ MPR lets you build **orthogonal views** (e.g. sagittal / coronal) from an axial 
 
 The pane switches to the MPR for that configuration. Afterward you can change combine settings from the right pane; window/level stays fixed when you do (same as for a normal 2D series).
 
-Building a new MPR **never discards** an MPR you already have: if the window already shows an MPR, the earlier result stays in the session registry and keeps its admission slot until its source data is closed or the app restarts (its window is taken over by the new MPR; a later update restores controls for parked results). While an MPR is being built, the status bar shows how many sessions and views you are using; when it finishes you see the same line again (see [Limits and memory](#limits-and-memory)).
+Building a new MPR **never discards** an MPR you already have: if the window already shows an MPR, the earlier result stays in the session registry and keeps its admission slot until its source data is closed or the app restarts; its window is taken over by the new MPR. While an MPR is being built, the status bar shows how many sessions and views you are using; when it finishes you see the same line again (see [Limits and memory](#limits-and-memory)).
 
 ## Clearing MPR
 
