@@ -465,5 +465,7 @@ class MprThumbnailWidget(QWidget):
             drag.setPixmap(scaled)
             drag.setHotSpot(QPoint(scaled.width() // 2, scaled.height() // 2))
 
-        drag.exec(Qt.DropAction.MoveAction)
+        # Announce before exec: the drop can rebuild the navigator and delete
+        # this tile while the nested drag loop runs.
         self.drag_started.emit(self._view_id)
+        drag.exec(Qt.DropAction.MoveAction)

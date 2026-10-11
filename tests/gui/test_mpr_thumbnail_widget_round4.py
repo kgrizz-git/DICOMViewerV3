@@ -493,6 +493,16 @@ class TestDragBehaviour:
 
         drag_instance.exec.assert_called_once_with(Qt.DropAction.MoveAction)
 
+    def test_drag_started_fires_before_the_nested_drag_loop(self, qapp) -> None:
+        w = _make_widget(0, view_id=9)
+        w._drag_start_pos = QPoint(0, 0)
+        drag_instance = MagicMock()
+        exec_called_at_emit: list[bool] = []
+        w.drag_started.connect(lambda _v: exec_called_at_emit.append(drag_instance.exec.called))
+        with patch("gui.mpr_thumbnail_widget.QDrag", return_value=drag_instance):
+            w._start_drag()
+        assert exec_called_at_emit == [False]
+
 
 # ---------------------------------------------------------------------------
 # paintEvent (state-triggered rendering)
