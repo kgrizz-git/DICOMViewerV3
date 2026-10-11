@@ -81,6 +81,9 @@ class SeriesNavigator(QWidget):
     close_study_requested = Signal(str)         # (study_uid) — forwarded from thumbnail
     mpr_thumbnail_clicked = Signal(int)         # Emitted with the stable view_id when an MPR tile is clicked
     mpr_thumbnail_clear_requested = Signal(int)  # Right-click → Clear MPR (view_id)
+    mpr_thumbnail_duplicate_requested = Signal(int)  # Right-click → Duplicate into Window… (view_id)
+    mpr_thumbnail_duplicate_linked_requested = Signal(int)  # … Duplicate Linked into Window… (view_id)
+    mpr_thumbnail_unlink_requested = Signal(int)  # … Unlink View (view_id)
 
     def __init__(self, dicom_processor: DICOMProcessor, parent=None):
         """
@@ -149,6 +152,9 @@ class SeriesNavigator(QWidget):
         widget = MprThumbnailWidget(view_id, pane_index, parent=parent)
         widget.clicked.connect(self.mpr_thumbnail_clicked.emit)
         widget.clear_mpr_requested.connect(self.mpr_thumbnail_clear_requested.emit)
+        widget.duplicate_requested.connect(self.mpr_thumbnail_duplicate_requested.emit)
+        widget.duplicate_linked_requested.connect(self.mpr_thumbnail_duplicate_linked_requested.emit)
+        widget.unlink_requested.connect(self.mpr_thumbnail_unlink_requested.emit)
         self._mpr_thumbnails[view_id] = widget
         return widget
 

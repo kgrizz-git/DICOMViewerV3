@@ -51,6 +51,7 @@ from gui.layout_window_slot_controller import (
 from gui.layout_window_slot_controller import (
     restore_subwindow_views as layout_restore_subwindow_views,
 )
+from gui.mpr_duplicate_menu import show_duplicate_target_menu
 from gui.sub_window_container import SubWindowContainer
 from gui.subwindow_image_viewer_sync import apply_theme_viewer_background_all
 from gui.subwindow_manager_factory import build_managers_for_subwindow
@@ -559,6 +560,14 @@ class MPRNavigationMixin:
     def _on_mpr_clear_from_navigator_thumbnail(self, view_id: int) -> None:
         """Clear exactly one MPR view from the tile context menu (stale IDs no-op)."""
         self._mpr_controller.clear_view(view_id)
+
+    def _on_mpr_duplicate_requested(self, view_id: int, linked: bool = False) -> None:
+        """Tile context menu → Duplicate [Linked] into Window…: let the user pick a target pane."""
+        show_duplicate_target_menu(self, view_id, linked)
+
+    def _on_mpr_unlink_requested(self, view_id: int) -> None:
+        """Tile context menu → Unlink View: leave the link group (a pair dissolves)."""
+        self._mpr_controller.unlink_view(view_id)
 
     def _sync_intensity_projection_widget_from_mpr_data(self, data: dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""
