@@ -43,7 +43,7 @@ def test_series_thumbnail_display_label_variants() -> None:
     assert series_thumbnail_display_label(SimpleNamespace(), 7) == "S7"
 
 
-def test_compute_study_section_width_with_instances() -> None:
+def test_compute_study_section_width_instances_and_mpr() -> None:
     ds = SimpleNamespace()
     series_list = [(1, "ser", ds)]
     info = SimpleNamespace(instance_count=3, max_frame_count=4)
@@ -52,9 +52,13 @@ def test_compute_study_section_width_with_instances() -> None:
         "stu",
         show_instances_separately=True,
         multiframe_info_map={("stu", "ser"): info},
+        mpr_thumbnail_specs={
+            0: {"study_uid": "stu", "source_series_uid": "ser"},
+            1: {"study_uid": "other", "source_series_uid": "ser"},
+        },
     )
-    # 68 + 4 + 3*48 + 2*4
-    assert width == 68 + 4 + 144 + 8
+    # 68 + 4 + 3*48 + 2*4 + one MPR (5+68)
+    assert width == 68 + 4 + 144 + 8 + 73
 
     assert (
         compute_study_section_width(
@@ -62,6 +66,7 @@ def test_compute_study_section_width_with_instances() -> None:
             "stu",
             show_instances_separately=False,
             multiframe_info_map={},
+            mpr_thumbnail_specs={},
         )
         == 68
     )

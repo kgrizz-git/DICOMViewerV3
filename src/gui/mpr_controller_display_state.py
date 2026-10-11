@@ -1,11 +1,11 @@
 """Per-pane MPR display-state application for ``MprController``.
 
-Owns the window/level reset and preferred-window/level resolution that
-``MprController`` invokes during activate/display. Extracted so
+Owns the window/level reset, carried-state restore, and shared-toolbar sync
+that ``MprController`` invokes during install/activate/display. Extracted so
 ``gui/mpr_controller.py`` stays within its line budget; behavior is
 unchanged. The controller keeps thin delegates (``_reset_window_level_for_mpr``,
-``_get_preferred_mpr_window_level``) so existing call sites and test seams
-keep working. Carried-state restore arrives with the parking update.
+``_get_preferred_mpr_window_level``, ``_install_apply_display_state``) so
+existing call sites and test seams keep working.
 
 Conventions match the controller: ``app`` is duck-typed, the shared toolbar
 syncs only for the focused pane, and failures inside the reset path are
@@ -19,8 +19,10 @@ from typing import Any
 
 import numpy as np
 
+from core.mpr_session_types import MprDisplayState
 from core.mpr_view_display_state import (
     clear_mpr_lut_override,
+    restore_mpr_display_state,
 )
 from core.mpr_view_math import auto_window_level
 from utils.debug_flags import DEBUG_MPR
@@ -222,3 +224,68 @@ def controls_window_level(wl_controls: Any, array: np.ndarray) -> Any:
     return auto_window_level(array)
 
 
+def install_apply_display_state(
+    app: Any,
+    get_image_viewer: Callable[[int], Any],
+    idx: int,
+    payload: dict[str, Any],
+    source_ds: Any,
+    reset: Callable[[int, Any], None],
+) -> None:
+    """Restore carried display state, or reset to source defaults.
+
+    Payloads carrying an ``MprDisplayState`` snapshot restore the view's
+    own W/L, rescale, inversion and LUT. Older payloads without one keep
+    the previous reset-to-source-defaults behavior (plus stale-override
+    cleanup) via *reset*. New builds always use the reset path.
+    """
+    managers = app.subwindow_managers.get(idx, {})
+    view_state_manager = managers.get("view_state_manager")
+    state = payload.get("mpr_display")
+    if isinstance(state, MprDisplayState):
+        restore_mpr_display_state(
+            view_state_manager, get_image_viewer(idx), state
+        )
+        sync_shared_mpr_controls(app, idx, state)
+        return
+    clear_mpr_lut_override(view_state_manager)
+    reset(idx, source_ds)
+
+
+def sync_shared_mpr_controls(app: Any, idx: int, state: MprDisplayState) -> None:
+    """Sync the shared W/L toolbar for carried state when *idx* is focused.
+
+    Mirrors the focused-only policy of the new-build reset path; unfocused
+    panes keep their carried values pane-local until focused. Signals stay
+    blocked so the shared ``window_changed`` handlers cannot reprocess
+    these values back into the pane (which would snap W/L to presets and
+    clobber the carried user-modified flag). The rescale unit shows only
+    when the carried state actually uses rescaled values.
+    """
+    if idx != getattr(app, "focused_subwindow_index", -1):
+        return
+    if (
+        state.window_center is not None
+        and state.window_width is not None
+        and state.window_width > 0
+    ):
+        wl_controls = getattr(app, "window_level_controls", None)
+        if wl_controls is not None:
+            unit = None
+            if (
+                state.use_rescaled
+                and state.rescale_slope is not None
+                and state.rescale_intercept is not None
+            ):
+                unit = state.rescale_type or None
+            wl_controls.set_window_level(
+                state.window_center, state.window_width,
+                block_signals=True, unit=unit,
+            )
+            if unit is None:
+                # set_window_level leaves a prior unit label in place
+                # when unit is None; clear it so a stale HU does not
+                # linger on raw (non-rescaled) state.
+                wl_controls.set_unit(None)
+    if hasattr(app, "main_window"):
+        app.main_window.set_rescale_toggle_state(bool(state.use_rescaled))

@@ -5,7 +5,7 @@ Seams used by the rest of the MPR controller:
 - ``refresh_session_caps`` re-reads the persisted caps and applies them to the
   live registry *before an admission decision* (and from the settings-applied
   callback via ``MprController.apply_session_caps``), so a change in Settings
-  governs the next new build or duplicate without a restart. It only changes
+  governs the next new build without a restart. It only changes
   the limits: existing sessions and views are never evicted, and builds that
   were already admitted (pending reservations) are honored. A refresh applies
   only when the persisted pair is valid and differs from the pair last seen,

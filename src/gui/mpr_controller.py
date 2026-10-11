@@ -15,15 +15,17 @@ Responsibilities:
   - Provides ``is_mpr(idx)`` and ``clear_mpr(idx)`` for callers.
 
 Inputs:
-    app — DICOMViewerApp instance (subwindow_managers, subwindow_data,
-          config_manager, focused_subwindow_index, etc.).
+    app — DICOMViewerApp instance (provides subwindow_managers,
+          subwindow_data, config_manager, focused_subwindow_index, etc.).
 
 Outputs:
-    Mutates subwindow_data[idx] with MPR-specific keys and drives the
-    ImageViewer + SliceNavigator for MPR subwindows.
+    Mutates subwindow_data[idx] with MPR-specific keys ("is_mpr",
+    "mpr_result", "mpr_slice_index") and drives the ImageViewer + SliceNavigator
+    for MPR subwindows.
 
-Requirements: PySide6, numpy, PIL, pydicom (already project
-    dependencies); SimpleITK (for MprBuilder/MprVolume).
+Requirements:
+    PySide6, numpy, PIL, pydicom (all already project dependencies).
+    SimpleITK (for MprBuilder/MprVolume).
 """
 
 from __future__ import annotations
@@ -46,7 +48,10 @@ from core.mpr_cache import MprCache, resolve_cached_photometric_interpretation
 from core.mpr_combine_slice_count import normalize_mpr_combine_slice_count
 from core.mpr_memory_estimate import estimate_pending_volume_bytes
 from core.mpr_overlay_dataset import build_overlay_dataset
+from core.mpr_session_types import MprCombineState, MprDisplayState, MprViewMetadata
 from core.mpr_stack_combine import apply_mpr_stack_combine
+from core.mpr_view_display_state import restore_mpr_combine_state
+from core.mpr_view_drag import new_drag_origin
 from core.mpr_view_math import (
     array_to_pil,
     build_mpr_banner_text,
@@ -68,16 +73,34 @@ from gui.mpr_admission import (
     strict_session_caps,
 )
 from gui.mpr_controller_display_state import (
+    install_apply_display_state,
     preferred_mpr_window_level,
     reset_window_level_for_mpr,
 )
 from gui.mpr_controller_sessions import (
+    all_view_ids,
+    clear_view,
     detached_view_ids,
+    discard_detached,
     emit_tiles_changed,
+    pane_view_metadata,
     release_pane_reservation,
     reserve_pane_build,
+    view_display_state,
+    view_metadata,
+    view_thumbnail_pixels,
 )
-from gui.mpr_controller_transactions import discard_view_on_pane_reset
+from gui.mpr_controller_transactions import (
+    attach_detached_view,
+    capture_destination_snapshot,
+    capture_mpr_payload,
+    detach_mpr_view,
+    detach_view_on_pane_reset,
+    move_view,
+    relocate_mpr_view,
+    restore_failed_install,
+    validate_install_request,
+)
 from gui.mpr_dicom_save_flow import prompt_save_mpr_as_dicom
 from gui.mpr_loaded_series import collect_loaded_series
 from gui.mpr_pane_teardown import tear_down_mpr_at_subwindow
@@ -164,11 +187,14 @@ class MprController(QObject):
     Each subwindow may independently be in "MPR mode", indicated by
     ``subwindow_data[idx].get("is_mpr") == True``.
 
-    MPR-mode subwindow_data keys: is_mpr (bool), mpr_result (MprResult),
-    mpr_orientation (str) and mpr_slice_index (int, 0-based stack index).
+    MPR-mode subwindow_data extra keys:
+        is_mpr (bool):           Always True when in MPR mode.
+        mpr_result (MprResult):  The current MprResult.
+        mpr_orientation (str):   Human-readable label ("Axial", etc.)
+        mpr_slice_index (int):   Current MPR stack index (0-based).
 
-    Views are owned by the session/view registry; ``subwindow_data`` is the live
-    display adapter of an attached view.
+    Views are owned by the session/view registry; ``subwindow_data`` is the
+    live display adapter of an attached view.
 
     Signals:
         mpr_activated(int):  Emitted with the subwindow index after an MPR view
@@ -218,7 +244,10 @@ class MprController(QObject):
         # display adapter while attached (see ``gui.mpr_controller_sessions``).
         self._registry = create_registry(app)
         self._seen_caps = strict_session_caps(app)  # last persisted caps applied (see mpr_admission)
-        # Canonical slice setter state (see ``gui.mpr_view_links``): the
+        # Opaque per-controller drag-origin token (see ``core.mpr_view_drag``): view
+        # IDs collide across controllers/instances, so drops must prove their origin.
+        self._drag_origin = new_drag_origin()
+        # Canonical slice setter / link state (see ``gui.mpr_view_links``): the
         # re-entrancy guard is deliberately separate from global sync's ``_syncing``.
         self._slice_propagating = False
         # Pane -> (reservation id, source key) for an in-flight/just-loaded build.
@@ -403,9 +432,30 @@ class MprController(QObject):
     # Public per-view API (navigator-facing; exact view IDs, stale IDs no-op)
     # ------------------------------------------------------------------
 
+    @property
+    def drag_origin(self) -> str:
+        """This controller's opaque drag-origin token (never reset; no patient content)."""
+        return self._drag_origin
+
+    def has_detached_mpr(self) -> bool:
+        """Return True if any MPR view exists without an assigned subwindow."""
+        return bool(detached_view_ids(self))
+
     def detached_view_ids(self) -> list[int]:
         """Detached view IDs in creation order."""
         return detached_view_ids(self)
+
+    def all_view_ids(self) -> list[int]:
+        """Every view ID (attached and detached) in creation order."""
+        return all_view_ids(self)
+
+    def clear_view(self, view_id: int) -> bool:
+        """Clear one view by exact ID (pane clear or detached discard); stale IDs no-op."""
+        return clear_view(self, view_id)
+
+    def move_view(self, view_id: int, to_idx: int) -> None:
+        """Move/attach a view by stable ID to pane *to_idx* (see transactions)."""
+        move_view(self, view_id, to_idx)
 
     def set_view_slice(self, view_id: int, slice_index: int) -> SliceUpdate | None:
         """Canonical slice setter: clamps and moves the view's slice once."""
@@ -420,9 +470,27 @@ class MprController(QObject):
         view = self._registry.view_for_pane(idx)
         return None if view is None else view.view_id
 
-    def discard_view_on_pane_reset(self, idx: int) -> bool:
-        """Interim pane-reset safety net: discard the mapped view (parking slice)."""
-        return discard_view_on_pane_reset(self, idx)
+    def get_view_metadata(self, view_id: int) -> MprViewMetadata | None:
+        """Read-only metadata for an exact view ID, or None if unknown."""
+        return view_metadata(self, view_id)
+
+    def get_pane_view_metadata(self, idx: int) -> MprViewMetadata | None:
+        """Read-only metadata for the view attached to pane *idx*, or None."""
+        return pane_view_metadata(self, idx)
+
+    def get_view_display_state(self, view_id: int) -> MprDisplayState | None:
+        """Copy of a view's own display state (never the focused pane's)."""
+        return view_display_state(self, view_id)
+
+    def get_view_thumbnail_pixels(
+        self, view_id: int, use_rescaled: bool | None = None
+    ) -> np.ndarray | None:
+        """Mid-stack slice for a view's navigator tile, or None if unknown."""
+        return view_thumbnail_pixels(self, view_id, use_rescaled)
+
+    def discard_detached_view(self, view_id: int) -> bool:
+        """Discard one detached view; stale or attached IDs are no-ops (False)."""
+        return discard_detached(self, view_id)
 
     def release_mpr_for_closed_source(
         self, study_uid: str, series_uid: str | None = None
@@ -440,6 +508,86 @@ class MprController(QObject):
         """
         return release_all_mpr(self)
 
+    def _capture_mpr_payload(self, idx: int) -> dict[str, Any] | None:
+        """Snapshot live MPR fields from *idx* for relocate / detach (see helper)."""
+        return capture_mpr_payload(self, idx)
+
+    def relocate_mpr_subwindow(self, from_idx: int, to_idx: int) -> None:
+        """Move an active MPR from *from_idx* to *to_idx*, transactionally.
+
+        See ``gui.mpr_controller_transactions.relocate_mpr_view``: the source
+        is preserved until the destination install succeeds, and a failed
+        install restores the destination without signals.
+        """
+        relocate_mpr_view(self, from_idx, to_idx)
+
+    def attach_detached_view(self, view_id: int, to_idx: int) -> None:
+        """Attach detached view *view_id* to *to_idx*, transactionally.
+
+        See ``gui.mpr_controller_transactions.attach_detached_view``.
+        """
+        attach_detached_view(self, view_id, to_idx)
+
+    def detach_view_for_pane_reset(self, idx: int) -> None:
+        """Detach a view still mapped to *idx* just before its pane data is reset.
+
+        See ``gui.mpr_controller_transactions.detach_view_on_pane_reset``.
+        """
+        detach_view_on_pane_reset(self, idx)
+
+    def detach_mpr_from_subwindow(self, idx: int) -> None:
+        """Detach the view in *idx*; the registry keeps it and its session."""
+        detach_mpr_view(self, idx)
+
+
+    def _install_mpr_payload_at_subwindow(self, idx: int, payload: dict[str, Any]) -> bool:
+        """
+        Apply a captured MPR payload to *idx* (same end state as _activate_mpr).
+
+        Validates the target and payload before any mutation, including
+        before ``mpr_previous_state`` is written. On install failure the
+        destination is rolled back (pane teardown plus captured display
+        state) and no success signal is emitted.
+
+        Returns:
+            True if the MPR view was installed; False on missing data or install error.
+        """
+        validated = validate_install_request(self._app, self._get_image_viewer, idx, payload)
+        if validated is None:
+            return False
+        result, si, source_ds = validated
+        data = self._app.subwindow_data.get(idx)
+        if data is None:  # pragma: no cover (validated above)
+            return False
+
+        orientation_label = str(payload.get("mpr_orientation", "MPR") or "MPR")
+        snapshot = capture_destination_snapshot(
+            self._app, self._get_image_viewer, idx
+        )
+        try:
+            self._ensure_mpr_previous_state(data)
+            self._install_write_payload_fields(
+                data, payload, result, orientation_label, source_ds, si
+            )
+            self._sync_slice_navigator_for_mpr(idx, result.n_slices, data["mpr_slice_index"])
+            self._set_tools_enabled(idx, enabled=False)
+            self._install_apply_display_state(idx, payload, source_ds)
+
+            if self.display_mpr_slice(idx, data["mpr_slice_index"]) is False:
+                raise RuntimeError("MPR slice could not be rendered")
+            self._fit_image_viewer_after_mpr(idx)
+            self._apply_mpr_banner(idx, data)
+            self._sync_intensity_projection_if_focused(idx, data)
+        except Exception as exc:
+            _mpr_log(f"_install_mpr_payload_at_subwindow failed: {exc}")
+            if not restore_failed_install(self, idx, snapshot, self._get_image_viewer):
+                QMessageBox.warning(
+                    self._app.main_window, "MPR",
+                    "The MPR could not be installed and the previous display could "
+                    "not be fully restored. Reload this window's series.",
+                )
+            return False
+        return True
 
     def _ensure_mpr_previous_state(self, data: dict[str, Any]) -> None:
         """Snapshot pre-MPR 2-D state once per subwindow session."""
@@ -452,6 +600,48 @@ class MprController(QObject):
             "current_study_uid": data.get("current_study_uid", ""),
             "current_datasets": list(data.get("current_datasets", [])),
         }
+
+    def _install_write_payload_fields(
+        self,
+        data: dict[str, Any],
+        payload: dict[str, Any],
+        result: MprResult,
+        orientation_label: str,
+        source_ds: Any,
+        slice_index: int,
+    ) -> None:
+        """Copy payload / result fields into subwindow_data for install."""
+        data["is_mpr"] = True
+        data["mpr_result"] = result
+        data["mpr_orientation"] = orientation_label
+        data["mpr_slice_index"] = slice_index
+        data["mpr_source_dataset"] = payload.get("mpr_source_dataset") or source_ds
+        data["current_study_uid"] = str(payload.get("current_study_uid", "") or "")
+        data["current_series_uid"] = str(payload.get("current_series_uid", "") or "")
+        data["current_datasets"] = list(payload.get("current_datasets") or [])
+        combine = payload.get("mpr_combine")
+        if isinstance(combine, MprCombineState):
+            restore_mpr_combine_state(data, combine)
+            return
+        # Legacy payloads predate the combine snapshot; keep the flat keys.
+        data["mpr_combine_enabled"] = bool(payload.get("mpr_combine_enabled", False))
+        data["mpr_combine_mode"] = str(payload.get("mpr_combine_mode", "aip") or "aip")
+        data["mpr_combine_slice_count"] = int(
+            payload.get("mpr_combine_slice_count", 4) or 4
+        )
+
+    def _install_apply_display_state(
+        self, idx: int, payload: dict[str, Any], source_ds: Any
+    ) -> None:
+        """Restore carried display state, or reset to source defaults (see helper)."""
+        install_apply_display_state(
+            self._app,
+            self._get_image_viewer,
+            idx,
+            payload,
+            source_ds,
+            reset=self._reset_window_level_for_mpr,
+        )
 
     def _sync_slice_navigator_for_mpr(
         self, idx: int, n_slices: int, slice_index: int

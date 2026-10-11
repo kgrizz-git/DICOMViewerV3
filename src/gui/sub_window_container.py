@@ -36,6 +36,12 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
+from core.mpr_view_drag import (
+    MAX_PAYLOAD_BYTES,
+    MPR_VIEW_MIME,
+    ViewDragPayload,
+    decode_view_drag,
+)
 from gui.image_viewer import ImageViewer
 from gui.style_constants import get_focus_border_color
 
@@ -143,6 +149,18 @@ class _PaneTitleBarFrame(QFrame):
         SubWindowContainer.mousePressEvent(self._container, event)
 
 
+def decode_mpr_drop(mime: QMimeData) -> ViewDragPayload | None:
+    """Validated MPR tile payload from a drop, or None (malformed/oversized/foreign).
+
+    The size is checked on the Qt byte array before any copy, so an oversized
+    payload is rejected without being materialised.
+    """
+    data = mime.data(MPR_VIEW_MIME)
+    if data.size() > MAX_PAYLOAD_BYTES:
+        return None
+    return decode_view_drag(bytes(data.data()))
+
+
 class SubWindowContainer(QFrame):
     """
     Container widget wrapping an ImageViewer for multi-window layouts.
@@ -160,6 +178,10 @@ class SubWindowContainer(QFrame):
     assign_series_requested = Signal(str, int, str)
     context_menu_requested = Signal()  # Emitted when context menu is requested
     expand_to_1x1_requested = Signal()  # Emitted when user double-clicks on image/background to expand this pane to 1x1
+    # Emitted when an MPR tile is dropped on this container:
+    # (view_id, operation, origin_token, target_pane_index). Stable view ID plus the
+    # drag-origin token the dispatcher validates; never a pane index.
+    mpr_view_drop_requested = Signal(int, str, str, int)
 
     def __init__(self, image_viewer: ImageViewer, parent=None):
         """
@@ -245,6 +267,8 @@ class SubWindowContainer(QFrame):
             self._pane_title_bar.show()
 
     def _mime_accepts_series_or_mpr(self, mime: QMimeData) -> bool:
+        if mime.hasFormat(MPR_VIEW_MIME):
+            return True
         if mime.hasText():
             text = mime.text()
             if text.startswith(_SERIES_UID_PREFIX) or text.startswith("dv3_assign\t"):
@@ -493,6 +517,19 @@ class SubWindowContainer(QFrame):
             event: Drop event
         """
         mime = event.mimeData()
+
+        # MPR tile drop: a validated (view_id, operation) request for this pane.
+        if mime.hasFormat(MPR_VIEW_MIME):
+            request = decode_mpr_drop(mime)
+            target_idx = getattr(self.image_viewer, "subwindow_index", None)
+            if request is None or target_idx is None:
+                event.ignore()
+                return
+            self.mpr_view_drop_requested.emit(
+                request.view_id, request.operation, request.origin, int(target_idx)
+            )
+            event.acceptProposedAction()
+            return
 
         if not mime.hasText():
             event.ignore()

@@ -15,8 +15,8 @@ Ownership split:
   or public metadata read.
 - While a view is detached, the registry view is the only owner of its
   slice/combine/display state; its session owns the result.
-- Transfer payloads arrive with the parking slice; this module owns only
-  admission and the live pane flush.
+- The transfer "payload" is an adapter built on demand from the view and
+  session (``build_view_payload``). It is not stored.
 
 Admission: a pane's pending build holds one registry reservation
 (``controller._build_reservations``: pane -> ``(reservation_id, source_key)``;
@@ -32,14 +32,21 @@ message never raise.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
+import numpy as np
 from PySide6.QtWidgets import QMessageBox
 
+from core.mpr_memory_estimate import THUMBNAIL_MAX_SIDE
 from core.mpr_session_types import (
     AdmissionError,
+    MprDisplayState,
     MprView,
+    MprViewMetadata,
+    UnknownViewError,
 )
+from core.mpr_stack_combine import apply_mpr_stack_combine
 from core.mpr_view_display_state import (
     capture_mpr_combine_state,
     capture_mpr_display_state,
@@ -143,24 +150,250 @@ def refresh_view_from_pane(controller: Any, idx: int) -> MprView | None:
     return view
 
 
+def build_view_payload(controller: Any, view_id: int) -> dict[str, Any] | None:
+    """Install payload adapter for a view, built from its view and session.
+
+    Holds the session's result by reference (never copied). Value state is
+    copied so installing cannot alias the registry's sub-objects. Returns
+    None for an unknown view or an unusable result.
+    """
+    registry = controller._registry
+    view = find_view(controller, view_id)
+    if view is None:
+        return None
+    session = registry.get_session(view.session_id)
+    try:
+        source_datasets = list(session.result.source_volume.source_datasets)
+    except Exception:
+        return None
+    return {
+        "mpr_result": session.result,
+        "mpr_orientation": session.orientation,
+        "mpr_slice_index": view.slice_index,
+        "mpr_combine_enabled": view.combine.enabled,
+        "mpr_combine_mode": view.combine.mode,
+        "mpr_combine_slice_count": view.combine.slice_count,
+        "mpr_combine": replace(view.combine),
+        "mpr_display": replace(view.display),
+        "mpr_source_dataset": source_datasets[0] if source_datasets else None,
+        "current_study_uid": session.source_study_uid,
+        "current_series_uid": session.source_series_uid,
+        "current_datasets": source_datasets,
+    }
+
+
+def capture_pane_payload(controller: Any, idx: int) -> dict[str, Any] | None:
+    """Payload for the view attached to pane *idx*, after flushing live state.
+
+    None when the pane is not an MPR pane, holds no registry view, or its
+    displayed result is not the session's own result (inconsistent state
+    must never be transferred).
+    """
+    data = controller._app.subwindow_data.get(idx, {})
+    if not data.get("is_mpr") or data.get("mpr_result") is None:
+        return None
+    view = refresh_view_from_pane(controller, idx)
+    if view is None:
+        return None
+    if controller._registry.get_session(view.session_id).result is not data["mpr_result"]:
+        return None
+    return build_view_payload(controller, view.view_id)
 
 
 # ---------------------------------------------------------------------------
+# Public per-view metadata and pixel access (navigator-facing)
+# ---------------------------------------------------------------------------
+
+
+def find_view(controller: Any, view_id: int) -> MprView | None:
+    """The live view for an exact ID, or None for stale/unknown IDs."""
+    try:
+        return controller._registry.get_view(view_id)
+    except (UnknownViewError, TypeError):
+        return None
+
+
+def _result_photometric(result: Any) -> str | None:
+    """Source-series PI carried on a result (tile polarity), else None."""
+    value = getattr(result, "photometric_interpretation", None)
+    return str(value) if value else None
+
+
+def _lut_signature(lut: Any) -> Any:
+    """Value signature of a (frozen, identity-compared) LUT, stable across re-creation."""
+    if lut is None:
+        return None
+    fields = (
+        getattr(lut, "name", None), getattr(lut, "lut_type", None), getattr(lut, "source", None),
+        getattr(lut, "gamma", None), getattr(lut, "sigmoid_k", None), getattr(lut, "exp_k", None),
+        getattr(lut, "control_points", None), getattr(lut, "color_stops", None),
+    )
+    try:
+        hash(fields)
+    except TypeError:
+        return id(lut)
+    return fields
+
+
+def _content_stamp(view: MprView, n_slices: int) -> tuple[Any, ...]:
+    """Hashable summary of everything that changes a view's tile pixels."""
+    display = view.display
+    # The current slice is deliberately absent: tiles show a fixed mid-stack plane,
+    # so scrolling (including linked scrolling) changes no tile pixels.
+    return (
+        view.session_id, n_slices,
+        view.combine.enabled, view.combine.mode, view.combine.slice_count,
+        display.window_center, display.window_width, display.use_rescaled,
+        display.inverted, _lut_signature(display.lut),
+    )
+
+
+def _metadata(controller: Any, view: MprView) -> MprViewMetadata:
+    session = controller._registry.get_session(view.session_id)
+    siblings = controller._registry.views_for_session(view.session_id)
+    try:
+        n_slices = max(0, int(getattr(session.result, "n_slices", 0) or 0))
+    except (TypeError, ValueError):
+        n_slices = 0
+    return MprViewMetadata(
+        view_id=view.view_id,
+        session_id=view.session_id,
+        creation_seq=view.creation_seq,
+        pane_index=view.pane_index,
+        orientation=session.orientation,
+        source_study_uid=session.source_study_uid,
+        source_series_uid=session.source_series_uid,
+        n_slices=n_slices,
+        slice_index=view.slice_index,
+        photometric_interpretation=_result_photometric(session.result),
+        view_number=1 + next(i for i, v in enumerate(siblings) if v.view_id == view.view_id),
+        view_count=len(siblings),
+        link_group_id=view.link_group_id,
+        content_stamp=_content_stamp(view, n_slices),
+    )
+
+
+def view_metadata(controller: Any, view_id: int) -> MprViewMetadata | None:
+    """Metadata for an exact view ID (attached views are refreshed first)."""
+    view = find_view(controller, view_id)
+    if view is None:
+        return None
+    if view.pane_index is not None:
+        refresh_view_from_pane(controller, view.pane_index)
+    return _metadata(controller, view)
+
+
+def pane_view_metadata(controller: Any, idx: int) -> MprViewMetadata | None:
+    """Metadata for the view attached to pane *idx*, or None."""
+    view = refresh_view_from_pane(controller, idx)
+    return None if view is None else _metadata(controller, view)
+
+
+def all_view_ids(controller: Any) -> list[int]:
+    """Every view ID (attached and detached) in creation order."""
+    return [v.view_id for v in controller._registry.ordered_views()]
+
+
+def emit_tiles_changed(controller: Any, dirty: Any = ()) -> None:
+    """Announce, once per transaction, that navigator tiles need reconciling.
+
+    *dirty* names attached views whose pixels must be regenerated even though
+    their content stamp looks unchanged (their live pane state changed).
+    """
+    controller.mpr_tiles_changed.emit(frozenset(dirty))
+
+
 def detached_view_ids(controller: Any) -> list[int]:
     """Detached view IDs in creation order."""
     return [v.view_id for v in controller._registry.ordered_views() if v.pane_index is None]
 
 
-def emit_tiles_changed(controller: Any, dirty: Any = ()) -> None:
-    """Announce, once per transaction, that navigator tiles need reconciling."""
-    controller.mpr_tiles_changed.emit(frozenset(dirty))
+def view_display_state(controller: Any, view_id: int) -> MprDisplayState | None:
+    """Copy of a view's display state (attached views are refreshed first)."""
+    view = find_view(controller, view_id)
+    if view is None:
+        return None
+    if view.pane_index is not None:
+        refresh_view_from_pane(controller, view.pane_index)
+    return replace(view.display)
+
+
+def view_thumbnail_pixels(
+    controller: Any, view_id: int, use_rescaled: bool | None = None
+) -> np.ndarray | None:
+    """Mid-stack slice for a view's navigator tile, honouring its combine state.
+
+    ``use_rescaled`` defaults to the view's own display state. The returned
+    array is a new copy with its longest side bounded by ``THUMBNAIL_MAX_SIDE``
+    (stride-subsampled), so tiles never copy full-resolution planes.
+    """
+    view = find_view(controller, view_id)
+    if view is None:
+        return None
+    if view.pane_index is not None:
+        refresh_view_from_pane(controller, view.pane_index)
+    result = controller._registry.get_session(view.session_id).result
+    n_slices = int(getattr(result, "n_slices", 0) or 0)
+    if n_slices <= 0:
+        return None
+    raw = apply_mpr_stack_combine(
+        result.slices,
+        n_slices // 2,
+        enabled=view.combine.enabled,
+        mode=view.combine.mode or "aip",
+        n_planes=int(view.combine.slice_count or 4),
+    )
+    # Bounded, owned copy (nearest-neighbour stride) before any rescale: the
+    # tile is ~68 px, so never copy or rescale the full-resolution plane.
+    stride = max(1, -(-max(raw.shape[:2]) // THUMBNAIL_MAX_SIDE)) if raw.ndim >= 2 else 1
+    small = np.array(raw[::stride, ::stride], dtype=np.float32, copy=True)
+    rescaled = view.display.use_rescaled if use_rescaled is None else use_rescaled
+    return result.apply_rescale(small) if rescaled else small
+
+
+def discard_detached(controller: Any, view_id: int) -> bool:
+    """Discard one detached view (and its session with the last view).
+
+    Stale, unknown or attached IDs are harmless no-ops returning False; an
+    attached view must be cleared through its pane.
+    """
+    view = find_view(controller, view_id)
+    if view is None or view.pane_index is not None:
+        return False
+    controller._registry.discard_view(view_id)
+    emit_tiles_changed(controller)
+    return True
+
+
+def clear_view(controller: Any, view_id: int) -> bool:
+    """Clear one view by exact ID: via its pane when attached, else discard it.
+
+    Stale or unknown IDs are harmless no-ops returning False.
+    """
+    view = find_view(controller, view_id)
+    if view is None:
+        return False
+    if view.pane_index is None:
+        return discard_detached(controller, view_id)
+    controller.clear_mpr(view.pane_index)
+    return True
 
 
 __all__ = [
+    "all_view_ids",
+    "build_view_payload",
+    "capture_pane_payload",
+    "clear_view",
     "detached_view_ids",
+    "discard_detached",
     "emit_tiles_changed",
+    "find_view",
     "notify_mpr",
+    "pane_view_metadata",
     "refresh_view_from_pane",
     "release_pane_reservation",
     "reserve_pane_build",
+    "view_display_state",
+    "view_metadata",
+    "view_thumbnail_pixels",
 ]

@@ -1,8 +1,13 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-11
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-11
+- **MPR parking, tiles and drags (PR-B of the three-way split of the multi-session work).** Restores parked (detached) views, navigator MPR tiles keyed by stable view ID, and tile drags that move or attach a view by ID (`core/mpr_view_drag.py`, `core/mpr_tile_label.py`, `gui/mpr_thumbnail_widget.py`, `gui/series_navigator_model.py`, `gui/sub_window_container.py`, and the move/attach/detach transactions). **Clear This Window** parks an MPR again and the pane-reset safety nets detach the mapped view, which closes the engine slice's interim contract; `tests/gui/test_mpr_clear_window_interim.py` is replaced by the reviewed pane-reset tests. Duplicate, link and unlink surfaces stay out until the last slice; the tile tooltip's right-click hint lists only **Clear MPR**.
+- **Complexity manifest.** Reviewed raises in `scripts/line_complexity_grandfather.json` to the slice's actual sizes: `mpr_controller.py` 1241 → 1431, `series_navigator.py` 1035 → 1108, `subwindow_signal_wiring.py` 753 → 755. All stay at or below the reviewed end-state caps (1457 / 1114 / 755).
+- **Identity target.** The ProbeWorker join fix from the engine slice's review was also committed to `feature/multiple-mpr-sessions` (`af0e578`, tree `498a4966…`) at the maintainer's direction, so the final slice's restore keeps it.
 
 ## 2026-10-10
 - **MPR sessions engine (PR-A of the three-way split of the multi-session work).** The single detached-MPR slot and per-pane `mpr_result` ownership were replaced by a pure `MprSessionRegistry` (sessions own the `MprResult`; views have stable IDs; reservations enforce the 8-session / 16-view defaults). `MprController` stays far under its grandfathered size cap by delegating to small helpers: `mpr_controller_sessions` (admission + pane/view adapters), `mpr_controller_transactions` (install validation and rollback), `mpr_activation` (fenced builds with the failure bracket from the review fixes), `mpr_view_links` (single-view canonical slice setter), `mpr_admission` (live limits and usage line), `mpr_worker_fencing` / `mpr_source_closure`, `mpr_pane_teardown`, `mpr_dicom_save_flow` and `mpr_loaded_series`. Pure helpers moved to `core/` (`mpr_memory_estimate`, `mpr_overlay_dataset`). Review fixes folded in: pre-install activation failures release their reservation exactly once (no leaked admission token), registry confirms roll back on post-consume failures, and `format_mib` rounds the half-MiB boundary per its docstring.

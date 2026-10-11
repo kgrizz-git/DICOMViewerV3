@@ -160,7 +160,7 @@ def test_thumbnail_generation_and_regeneration_cover_success_and_errors(qapp, mo
 
 
 @pytest.mark.qt
-def test_regenerate_updates_existing_widget_and_clear(qapp) -> None:
+def test_regenerate_updates_existing_widget_and_clear_preserves_mpr(qapp) -> None:
     processor = MagicMock()
     processor.dataset_to_image.return_value = Image.new("L", (80, 40))
     navigator = SeriesNavigator(processor)
@@ -168,6 +168,7 @@ def test_regenerate_updates_existing_widget_and_clear(qapp) -> None:
     thumbnail = MagicMock()
     navigator.thumbnails["study:series"] = thumbnail
     navigator.thumbnail_cache[("study", "series")] = Image.new("L", (2, 2))
+    navigator._mpr_thumbnail_specs[0] = {"study_uid": "study", "source_series_uid": "series"}
     navigator.regenerate_series_thumbnail("study", "series", dataset, 1, 2, True)
     image = navigator.thumbnail_cache[("study", "series")]
     assert image.size == (57, 29)
@@ -176,6 +177,9 @@ def test_regenerate_updates_existing_widget_and_clear(qapp) -> None:
     navigator.clear()
     assert navigator.thumbnails == {}
     assert navigator.thumbnail_cache == {}
+    assert navigator._mpr_thumbnail_specs == {
+        0: {"study_uid": "study", "source_series_uid": "series"}
+    }
 
 
 @pytest.mark.qt

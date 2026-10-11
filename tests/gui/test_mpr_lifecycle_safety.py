@@ -17,6 +17,7 @@ from mpr_lifecycle_harness import (
     _make_controller,
     _make_result,
     _register_worker,
+    _seed_mpr_pane,
     _source_dataset,
 )
 from PySide6.QtCore import QThread, Signal
@@ -105,6 +106,22 @@ class TestWorkerRetirement:
         ctrl, _app = _make_controller()
         ctrl._cancel_mpr_worker(3)
         assert ctrl._build_generations[3] == 1
+
+    def test_relocate_cancels_destination_build(self) -> None:
+        ctrl, app = _make_controller()
+        result = _make_result(n_slices=4)
+        _seed_mpr_pane(app, 0, result)
+        dest_worker = FakeWorker()
+        _register_worker(ctrl, 1, dest_worker)
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            ctrl.relocate_mpr_subwindow(0, 1)
+        assert dest_worker.cancel_calls == 1
+        assert app.subwindow_data[1].get("is_mpr") is True
+
 
 class ProbeWorker(QThread):
     """Real QThread that stays alive until the test releases it.
@@ -318,7 +335,7 @@ class TestBuildSourceCloseMatching:
         _register_worker(ctrl, 1, worker)
         ctrl._build_sources[1] = ("ST-X", "SE-X")
         app.subwindow_data[1] = {}  # pending on an empty pane
-        _add_detached_view(ctrl, _make_result(), "ST-Y", "SE-Y")
+        detached_view = _add_detached_view(ctrl, _make_result(), "ST-Y", "SE-Y")
         ctrl._source_generations[("ST-Y", "SE-Y")] = 3
 
         released = ctrl.release_all_mpr()
@@ -328,6 +345,7 @@ class TestBuildSourceCloseMatching:
         assert worker.cancel_calls == 1
         assert ctrl.detached_view_ids() == []
         assert ctrl._registry.view_count == 0 and ctrl._registry.session_count == 0
+        assert ctrl.get_view_metadata(detached_view) is None
         assert ctrl._source_generations[("ST-Y", "SE-Y")] == 4
 
 

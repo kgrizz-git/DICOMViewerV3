@@ -91,8 +91,8 @@ def test_subwindow_management_mixin_method_resolves_on_app() -> None:
 def test_mpr_navigation_mixin_method_resolves_on_app() -> None:
     """Phase 4: MPR navigation lives on MPRNavigationMixin, not DICOMViewerApp body."""
     assert (
-        main_module.DICOMViewerApp._get_subwindow_mpr_pixel_array
-        is MPRNavigationMixin._get_subwindow_mpr_pixel_array
+        main_module.DICOMViewerApp._update_mpr_navigator_thumbnail
+        is MPRNavigationMixin._update_mpr_navigator_thumbnail
     )
 
 

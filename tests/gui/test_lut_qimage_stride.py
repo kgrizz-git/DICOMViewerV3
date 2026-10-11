@@ -22,6 +22,7 @@ from PIL import Image
 from PySide6.QtGui import QImage
 
 from core.lut_catalog import colormap_lut
+from core.lut_display import apply_user_invert_and_lut
 from core.lut_engine import apply_lut_to_uint8
 
 _ODD_WIDTHS = (63, 65, 101)
@@ -84,6 +85,26 @@ def test_viewer_color_lut_has_no_row_skew(qapp, monkeypatch, width: int) -> None
     assert strides, "set_image did not build an RGB888 QImage from a buffer"
     for packed, passed in strides:
         assert passed == packed
+    _ = qapp
+
+
+@pytest.mark.qt
+def test_thumbnail_color_lut_stride_matches_its_68px_buffer(qapp, monkeypatch) -> None:
+    from gui.mpr_thumbnail_widget import MprThumbnailWidget
+
+    size = MprThumbnailWidget.THUMBNAIL_SIZE
+    assert size == 68
+    spy = _spy(monkeypatch, "gui.mpr_thumbnail_widget")
+    codes = _ramp(size, size)
+    lut = colormap_lut("viridis")
+    widget = MprThumbnailWidget(0)
+    # Center 127.5 / width 255 maps code c to c exactly, so the expected
+    # pixels are the LUT of the input codes with no resampling (68 fits).
+    widget.update_preview(codes.astype(np.float32), 127.5, 255.0, "MONOCHROME2", lut=lut)
+    assert widget._preview_pixmap is not None
+    expected = apply_user_invert_and_lut(codes, image_inverted=False, lut=lut)
+    assert np.array_equal(_rgb_pixels(widget._preview_pixmap.toImage()), expected)
+    assert _buffer_strides(spy.calls) == [(3 * size, 3 * size)]
     _ = qapp
 
 

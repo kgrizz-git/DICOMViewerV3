@@ -102,11 +102,10 @@ def update_3d_view_action_state(app: Any) -> None:
 
 def clear_subwindow(app: Any, idx: int) -> None:
     """Clear all viewer-owned state for a single subwindow."""
-    # Interim (parking slice) safety net: resetting a pane's data must never
-    # leave a registry view mapped to it. Keyed off the registry mapping —
-    # not the pane's display flag — so inconsistent panes are covered too.
+    # Safety net: resetting a pane's data must never leave a registry view mapped
+    # to it. Normal paths release or detach first, making this a no-op.
     if hasattr(app, "_mpr_controller"):
-        app._mpr_controller.discard_view_on_pane_reset(idx)
+        app._mpr_controller.detach_view_for_pane_reset(idx)
     app._reset_fusion_handler_for_subwindow(idx)
 
     subwindow = app.multi_window_layout.get_subwindow(idx)
@@ -191,9 +190,7 @@ def clear_subwindow_content(app: Any, idx: int) -> None:
     if idx == app.focused_subwindow_index and getattr(app, "cine_player", None):
         app.cine_player.stop_playback()
     if hasattr(app, "_mpr_controller") and data.get("is_mpr"):
-        # Interim (parking slice): no park action yet, so clearing an MPR
-        # pane removes its view (same as "Clear MPR View").
-        app._mpr_controller.clear_mpr(idx)
+        app._mpr_controller.detach_mpr_from_subwindow(idx)
         if idx == app.focused_subwindow_index:
             app._update_focused_subwindow_references()
         app.series_navigator.set_subwindow_assignments(app._get_subwindow_assignments())

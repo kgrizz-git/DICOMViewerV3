@@ -21,6 +21,7 @@ from pydicom.uid import generate_uid
 
 from core.lut_catalog import linear_lut, sigmoid_lut
 from core.mpr_builder import MprResult
+from core.mpr_session_types import MprCombineState, MprDisplayState
 from core.mpr_view_display_state import get_mpr_lut_override
 from core.slice_geometry import SlicePlane, SliceStack
 from gui.mpr_controller import MprController
@@ -177,6 +178,195 @@ def _seed_mpr_pane(app: Any, idx: int, result, **display) -> None:
     if old is not None:
         registry.discard_view(old.view_id)
     registry.create_session(result, "ST", "SE", "Axial", slice_index=1, pane_index=idx)
+
+
+class TestPayloadCapture:
+    def test_capture_carries_per_pane_display_and_combine(self) -> None:
+        ctrl, app = _make_two_pane_controller()
+        result = _make_result()
+        custom = sigmoid_lut()
+        _seed_mpr_pane(app, 0, result, wc=50.0, ww=350.0, user_modified=True,
+                       slope=1.0, intercept=-1024.0, inverted=True, lut=custom,
+                       combine_enabled=True, combine_mode="mip", combine_count=6)
+        _seed_mpr_pane(app, 1, result, wc=70.0, ww=700.0)
+        first = ctrl._capture_mpr_payload(0)
+        second = ctrl._capture_mpr_payload(1)
+        assert first is not None and second is not None
+        assert isinstance(first["mpr_combine"], MprCombineState)
+        assert (first["mpr_combine"].enabled, first["mpr_combine"].mode,
+                first["mpr_combine"].slice_count) == (True, "mip", 6)
+        display = first["mpr_display"]
+        assert isinstance(display, MprDisplayState)
+        assert (display.window_center, display.window_width) == (50.0, 350.0)
+        assert display.wl_user_modified is True
+        assert (display.rescale_slope, display.rescale_intercept, display.rescale_type) == (1.0, -1024.0, "HU")
+        assert display.inverted is True
+        assert display.lut is custom
+        assert (second["mpr_display"].window_center, second["mpr_display"].window_width) == (70.0, 700.0)
+        assert second["mpr_display"].inverted is False
+
+    def test_capture_ignores_focus(self) -> None:
+        ctrl, app = _make_two_pane_controller(focused=1)
+        result = _make_result()
+        _seed_mpr_pane(app, 0, result, wc=51.0, ww=351.0)
+        payload = ctrl._capture_mpr_payload(0)
+        assert payload is not None
+        assert (payload["mpr_display"].window_center, payload["mpr_display"].window_width) == (51.0, 351.0)
+
+    def test_capture_none_when_not_mpr(self) -> None:
+        ctrl, _app = _make_two_pane_controller()
+        assert ctrl._capture_mpr_payload(0) is None
+
+
+class TestInstallRestore:
+    def test_install_restores_carried_state_without_reset(self) -> None:
+        ctrl, app = _make_two_pane_controller(focused=1)
+        app.window_level_controls = MagicMock()
+        result = _make_result(n_slices=4)
+        custom = sigmoid_lut()
+        _seed_mpr_pane(app, 0, result, wc=50.0, ww=350.0, user_modified=True,
+                       slope=1.0, intercept=-1024.0, inverted=True, lut=custom,
+                       combine_enabled=True, combine_mode="mip", combine_count=6)
+        payload = ctrl._capture_mpr_payload(0)
+        assert payload is not None
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_reset_window_level_for_mpr") as reset,
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            assert ctrl._install_mpr_payload_at_subwindow(1, payload) is True
+        reset.assert_not_called()
+        dest = app.subwindow_managers[1]["view_state_manager"]
+        assert (dest.current_window_center, dest.current_window_width) == (50.0, 350.0)
+        assert dest.window_level_user_modified is True
+        assert dest.rescale_calls == [(1.0, -1024.0, "HU")]
+        assert dest.use_rescaled_values is True
+        dest_viewer = app.multi_window_layout.get_subwindow(1).image_viewer
+        assert dest_viewer.image_inverted is True
+        assert get_mpr_lut_override(dest) is custom
+        data = app.subwindow_data[1]
+        assert (data["mpr_combine_enabled"], data["mpr_combine_mode"],
+                data["mpr_combine_slice_count"]) == (True, "mip", 6)
+        # Focused pane: shared toolbar follows the carried values with signals
+        # blocked, so window_changed handlers cannot snap or clobber them.
+        app.window_level_controls.set_window_level.assert_called_once_with(
+            50.0, 350.0, block_signals=True, unit="HU"
+        )
+        app.window_level_controls.set_unit.assert_not_called()
+        app.main_window.set_rescale_toggle_state.assert_called_with(True)
+        # The carried user-modified flag survives the focused install.
+        assert dest.window_level_user_modified is True
+
+    def test_focused_sync_hides_unit_when_not_rescaled(self) -> None:
+        ctrl, app = _make_two_pane_controller(focused=1)
+        app.window_level_controls = MagicMock()
+        result = _make_result(n_slices=4)
+        _seed_mpr_pane(app, 0, result, wc=50.0, ww=350.0, use_rescaled=False)
+        payload = ctrl._capture_mpr_payload(0)
+        assert payload is not None
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_reset_window_level_for_mpr"),
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            assert ctrl._install_mpr_payload_at_subwindow(1, payload) is True
+        app.window_level_controls.set_window_level.assert_called_once_with(
+            50.0, 350.0, block_signals=True, unit=None
+        )
+        dest_viewer = app.multi_window_layout.get_subwindow(1).image_viewer
+        dest_viewer.set_rescale_toggle_state.assert_called_with(False)
+
+    def test_focused_sync_clears_stale_unit_for_raw_state(self) -> None:
+        ctrl, app = _make_two_pane_controller(focused=1)
+        app.window_level_controls = MagicMock()
+        result = _make_result(n_slices=4)
+        _seed_mpr_pane(
+            app, 0, result, wc=50.0, ww=350.0, use_rescaled=False,
+            slope=None, intercept=None, rtype="",
+        )
+        payload = ctrl._capture_mpr_payload(0)
+        assert payload is not None
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_reset_window_level_for_mpr"),
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            assert ctrl._install_mpr_payload_at_subwindow(1, payload) is True
+        # Prior toolbar unit (e.g. HU) must not linger on raw state:
+        # set_window_level(unit=None) alone does not clear it.
+        app.window_level_controls.set_window_level.assert_called_once_with(
+            50.0, 350.0, block_signals=True, unit=None
+        )
+        app.window_level_controls.set_unit.assert_called_once_with(None)
+
+    def test_install_skips_shared_toolbar_when_unfocused(self) -> None:
+        ctrl, app = _make_two_pane_controller(focused=0)
+        app.window_level_controls = MagicMock()
+        result = _make_result(n_slices=4)
+        _seed_mpr_pane(app, 0, result, wc=50.0, ww=350.0)
+        payload = ctrl._capture_mpr_payload(0)
+        assert payload is not None
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_reset_window_level_for_mpr") as reset,
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            assert ctrl._install_mpr_payload_at_subwindow(1, payload) is True
+        reset.assert_not_called()
+        dest = app.subwindow_managers[1]["view_state_manager"]
+        assert (dest.current_window_center, dest.current_window_width) == (50.0, 350.0)
+        app.window_level_controls.set_window_level.assert_not_called()
+        app.main_window.set_rescale_toggle_state.assert_not_called()
+
+    def test_install_legacy_payload_falls_back_to_reset(self) -> None:
+        ctrl, app = _make_two_pane_controller()
+        result = _make_result(n_slices=4)
+        payload = {
+            "mpr_result": result,
+            "mpr_orientation": "Axial",
+            "mpr_slice_index": 0,
+            "current_study_uid": "st",
+            "current_series_uid": "se",
+            "current_datasets": [],
+            "mpr_combine_enabled": True,
+            "mpr_combine_mode": "mip",
+            "mpr_combine_slice_count": 8,
+        }
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_reset_window_level_for_mpr") as reset,
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            assert ctrl._install_mpr_payload_at_subwindow(1, payload) is True
+        reset.assert_called_once()
+        data = app.subwindow_data[1]
+        assert (data["mpr_combine_mode"], data["mpr_combine_slice_count"]) == ("mip", 8)
+
+    def test_source_pane_series_lut_untouched_by_move(self) -> None:
+        ctrl, app = _make_two_pane_controller()
+        result = _make_result(n_slices=4)
+        custom = sigmoid_lut()
+        _seed_mpr_pane(app, 0, result, wc=50.0, ww=350.0, lut=custom)
+        payload = ctrl._capture_mpr_payload(0)
+        assert payload is not None
+        app.subwindow_data[1] = {"current_datasets": []}
+        with (
+            patch.object(ctrl, "display_mpr_slice"),
+            patch.object(ctrl, "_reset_window_level_for_mpr"),
+            patch.object(ctrl, "_set_tools_enabled"),
+        ):
+            assert ctrl._install_mpr_payload_at_subwindow(1, payload) is True
+        source = app.subwindow_managers[0]["view_state_manager"]
+        assert source.series_defaults["series-id"]["current_lut"] is custom
+        assert get_mpr_lut_override(source) is None
+        dest = app.subwindow_managers[1]["view_state_manager"]
+        assert "current_lut" not in dest.series_defaults.get("series-id", {})
+        assert get_mpr_lut_override(dest) is custom
 
 
 class TestResetAndTeardown:
