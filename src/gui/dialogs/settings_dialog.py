@@ -241,9 +241,9 @@ class SettingsDialog(QDialog):
         group = QGroupBox("MPR Limits")
         form = QFormLayout(group)
         hint = QLabel(
-            "Sessions are independently built MPR volumes; views are the windows and "
-            "navigator tiles showing them (duplicates share their session's volume). "
-            "Detached MPRs count too. Lowering a limit never closes an existing MPR; it "
+            "Sessions are independently built MPR volumes; views are the windows showing "
+            "them, plus earlier results kept when a new MPR takes over a window. "
+            "Lowering a limit never closes an existing MPR; it "
             "only blocks new ones until usage falls below it. The memory figure shown "
             "when creating an MPR is an approximate estimate, not a limit."
         )
