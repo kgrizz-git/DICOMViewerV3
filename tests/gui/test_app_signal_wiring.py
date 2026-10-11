@@ -129,6 +129,9 @@ def mock_app() -> SimpleNamespace:
         close_study_requested=DummySignal(),
         mpr_thumbnail_clicked=DummySignal(),
         mpr_thumbnail_clear_requested=DummySignal(),
+        mpr_thumbnail_duplicate_requested=DummySignal(),
+        mpr_thumbnail_duplicate_linked_requested=DummySignal(),
+        mpr_thumbnail_unlink_requested=DummySignal(),
     )
 
     # Metadata panel signals
@@ -272,9 +275,6 @@ def mock_app() -> SimpleNamespace:
     app._on_import_customizations = MagicMock()
     app._on_export_tag_presets = MagicMock()
     app._on_import_tag_presets = MagicMock()
-    app._update_mpr_navigator_thumbnail = MagicMock()
-    app._clear_mpr_navigator_thumbnail = MagicMock()
-    app._on_mpr_detached = MagicMock()
     app.get_focused_subwindow_index = MagicMock(return_value=1)
 
     return app

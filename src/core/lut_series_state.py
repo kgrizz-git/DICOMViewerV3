@@ -55,6 +55,65 @@ def get_series_lut(view_state: Any, series_identifier: str | None) -> LookUpTabl
     return linear_lut()
 
 
+#: ``series_defaults`` key holding a pane's MPR LUT override (never a series).
+#: Real series identifiers are ``"{StudyUID}_{composite}"`` strings, so this
+#: key cannot collide with one.
+MPR_LUT_OVERRIDE_KEY = "__mpr__"
+
+
+def get_mpr_lut_override(view_state: Any) -> LookUpTable | None:
+    """Return the pane's MPR LUT override, or None when unset."""
+    if view_state is None:
+        return None
+    series_defaults = getattr(view_state, "series_defaults", None)
+    if not isinstance(series_defaults, dict):
+        return None
+    bucket = series_defaults.get(MPR_LUT_OVERRIDE_KEY)
+    if not isinstance(bucket, dict):
+        return None
+    stored = bucket.get("current_lut")
+    return stored if isinstance(stored, LookUpTable) else None
+
+
+def set_mpr_lut_override(view_state: Any, lut: LookUpTable | None) -> None:
+    """Store (or, with None, clear) the pane's MPR LUT override.
+
+    Only ``LookUpTable`` instances are stored; anything else clears the
+    slot. Writes touch only the given pane's own manager, never another
+    pane's series slots.
+    """
+    if view_state is None:
+        return
+    series_defaults = getattr(view_state, "series_defaults", None)
+    if not isinstance(series_defaults, dict):
+        return
+    if lut is None or not isinstance(lut, LookUpTable):
+        bucket = series_defaults.get(MPR_LUT_OVERRIDE_KEY)
+        if isinstance(bucket, dict):
+            bucket.pop("current_lut", None)
+            if not bucket:
+                series_defaults.pop(MPR_LUT_OVERRIDE_KEY, None)
+        return
+    series_defaults.setdefault(MPR_LUT_OVERRIDE_KEY, {})["current_lut"] = lut
+
+
+def clear_mpr_lut_override(view_state: Any) -> None:
+    """Remove the pane's MPR LUT override, if any."""
+    set_mpr_lut_override(view_state, None)
+
+
+def get_mpr_effective_lut(view_state: Any) -> LookUpTable:
+    """Pane MPR override when set, else the pane's series LUT, else linear."""
+    override = get_mpr_lut_override(view_state)
+    if override is not None:
+        return override
+    if view_state is None:
+        return linear_lut()
+    return get_series_lut(
+        view_state, getattr(view_state, "current_series_identifier", None)
+    )
+
+
 def set_series_lut(
     view_state: Any,
     lut: LookUpTable,
@@ -108,7 +167,11 @@ def active_image_inverted(
 
 
 def mpr_display_kwargs(managers: dict[str, Any] | None, photometric_interpretation: str | None) -> dict[str, Any]:
-    """LUT and user-invert kwargs for an MPR pane. Linear and False when the pane has no view state."""
+    """LUT and user-invert kwargs for an MPR pane. Linear and False when the pane has no view state.
+
+    Prefers the pane's MPR LUT override when one is set, so a moved or
+    reattached view keeps its own LUT instead of the series default.
+    """
     view_state = (managers or {}).get("view_state_manager")
     if view_state is None:
         return {"image_inverted": False, "lut": linear_lut()}
@@ -120,12 +183,16 @@ def mpr_display_kwargs(managers: dict[str, Any] | None, photometric_interpretati
             preserve_view=True,
             photometric_interpretation=photometric_interpretation,
         ),
-        "lut": get_series_lut(view_state, series_id),
+        "lut": get_mpr_effective_lut(view_state),
     }
 
 
 def focused_pane_lut(view_state: Any) -> tuple[bool, LookUpTable]:
-    """Live user-invert flag and series LUT for the pane currently on screen."""
+    """Live user-invert flag and effective LUT for the pane currently on screen.
+
+    MPR panes report their override when one is set (e.g. carried display
+    state); other panes report the series LUT as before.
+    """
     if view_state is None:
         return False, linear_lut()
     series_id = getattr(view_state, "current_series_identifier", None)
@@ -136,7 +203,7 @@ def focused_pane_lut(view_state: Any) -> tuple[bool, LookUpTable]:
             preserve_view=True,
             photometric_interpretation=None,
         ),
-        get_series_lut(view_state, series_id),
+        get_mpr_effective_lut(view_state),
     )
 
 

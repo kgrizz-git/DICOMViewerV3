@@ -159,6 +159,7 @@ def on_settings_applied(app: Any) -> None:
     )
     if hasattr(app, "_mpr_controller"):
         app._mpr_controller.apply_cache_settings()
+        app._mpr_controller.apply_session_caps()  # new MPR admission limits, no eviction
     app.main_window._apply_theme()
     if app.main_window.apply_toolbar_label_style is not None:
         app.main_window.apply_toolbar_label_style(

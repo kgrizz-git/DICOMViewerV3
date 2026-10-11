@@ -271,56 +271,6 @@ def test_tear_down_clears_view_when_no_previous_state() -> None:
     viewer.scene.clear.assert_called_once()
 
 
-def test_install_payload_writes_fields_and_displays() -> None:
-    ctrl, app = _make_controller()
-    result = _make_result(n_slices=4)
-    app.subwindow_data[0] = {
-        "current_dataset": "old",
-        "current_slice_index": 1,
-        "current_series_uid": "old-se",
-        "current_study_uid": "old-st",
-        "current_datasets": [],
-    }
-    payload = {
-        "mpr_result": result,
-        "mpr_orientation": "Coronal",
-        "mpr_slice_index": 2,
-        "current_study_uid": "st",
-        "current_series_uid": "se",
-        "current_datasets": result.source_volume.source_datasets,
-        "mpr_combine_enabled": True,
-        "mpr_combine_mode": "mip",
-        "mpr_combine_slice_count": 8,
-    }
-    with (
-        patch.object(ctrl, "display_mpr_slice") as display,
-        patch.object(ctrl, "_reset_window_level_for_mpr"),
-        patch.object(ctrl, "_set_tools_enabled"),
-    ):
-        ok = ctrl._install_mpr_payload_at_subwindow(0, payload)
-
-    assert ok is True
-    data = app.subwindow_data[0]
-    assert data["is_mpr"] is True
-    assert data["mpr_orientation"] == "Coronal"
-    assert data["mpr_slice_index"] == 2
-    assert data["mpr_combine_mode"] == "mip"
-    assert data["mpr_previous_state"]["current_dataset"] == "old"
-    display.assert_called_once_with(0, 2)
-
-
-def test_install_payload_rejects_empty_result() -> None:
-    ctrl, app = _make_controller()
-    result = _make_result(n_slices=1)
-    # Force empty stack length via a stub
-    empty = SimpleNamespace(
-        n_slices=0,
-        source_volume=result.source_volume,
-    )
-    app.subwindow_data[0] = {}
-    assert ctrl._install_mpr_payload_at_subwindow(0, {"mpr_result": empty}) is False
-
-
 def test_build_overlay_dataset_sets_geometry_and_strips_location() -> None:
     ctrl, _app = _make_controller()
     result = _make_result(n_slices=2)
@@ -371,65 +321,9 @@ def test_prompt_save_mpr_rejects_empty_stack() -> None:
     assert "No MPR slice stack" in info.call_args[0][2]
 
 
-def test_attach_floating_mpr_noop_without_payload() -> None:
-    ctrl, app = _make_controller()
-    ctrl._detached_mpr_payload = None
-    with patch.object(ctrl, "_install_mpr_payload_at_subwindow") as install:
-        ctrl.attach_floating_mpr(0)
-    install.assert_not_called()
-
-
-def test_attach_floating_mpr_clears_detached_on_success() -> None:
-    ctrl, app = _make_controller()
-    result = _make_result()
-    payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
-    ctrl._detached_mpr_payload = payload
-    activated: list[int] = []
-    ctrl.mpr_activated.connect(activated.append)
-    with patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=True):
-        ctrl.attach_floating_mpr(0)
-    assert ctrl._detached_mpr_payload is None
-    assert activated == [0]
-    app.series_navigator.clear_mpr_thumbnail.assert_called_once_with(-1)
-
-
-def test_attach_floating_mpr_restores_backup_on_install_failure() -> None:
-    ctrl, app = _make_controller()
-    result = _make_result()
-    payload = {"mpr_result": result, "mpr_orientation": "Axial", "mpr_slice_index": 0}
-    ctrl._detached_mpr_payload = payload
-    app.subwindow_data[0] = {
-        "is_mpr": True,
-        "mpr_result": result,
-        "mpr_orientation": "Old",
-        "mpr_slice_index": 1,
-        "current_study_uid": "st",
-        "current_series_uid": "se",
-        "current_datasets": [],
-        "mpr_combine_enabled": False,
-        "mpr_combine_mode": "aip",
-        "mpr_combine_slice_count": 1,
-    }
-    app.main_window = MagicMock()
-    installs: list[Any] = []
-
-    def _install(idx: int, p: dict[str, Any]) -> bool:
-        installs.append(p)
-        return len(installs) != 1
-
-    with (
-        patch.object(ctrl, "_install_mpr_payload_at_subwindow", side_effect=_install),
-        patch.object(ctrl, "clear_mpr"),
-        patch.object(ctrl, "_capture_mpr_payload", return_value={"backup": True}),
-        patch("gui.mpr_controller.QMessageBox.warning") as warn,
-    ):
-        ctrl.attach_floating_mpr(0)
-
-    assert len(installs) == 2
-    assert installs[0] is payload
-    assert installs[1] == {"backup": True}
-    warn.assert_called_once()
-    assert "previous MPR" in warn.call_args[0][2]
+def _add_detached_view(ctrl: MprController, result: MprResult) -> int:
+    """Independent session whose only view is detached; returns the view ID."""
+    return ctrl._registry.create_session(result, "st", "se", "Axial")[1]
 
 
 def test_on_mpr_requested_errors_when_no_orientation_groups() -> None:

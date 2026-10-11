@@ -17,22 +17,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from core.mpr_navigator_thumbnail import (
-    clear_mpr_navigator_thumbnail as mpr_thumb_clear_navigator,
-)
-from core.mpr_navigator_thumbnail import (
     get_subwindow_mpr_pixel_array as mpr_thumb_get_subwindow_pixel_array,
-)
-from core.mpr_navigator_thumbnail import (
-    get_subwindow_mpr_thumbnail_pixel_array as mpr_thumb_get_subwindow_thumbnail_pixel_array,
-)
-from core.mpr_navigator_thumbnail import (
-    on_mpr_detached as mpr_thumb_on_mpr_detached,
-)
-from core.mpr_navigator_thumbnail import (
-    update_floating_mpr_navigator_thumbnail as mpr_thumb_update_floating_navigator,
-)
-from core.mpr_navigator_thumbnail import (
-    update_mpr_navigator_thumbnail as mpr_thumb_update_navigator,
 )
 from core.navigation_slider_state import navigation_slider_mode_label_for_dataset
 from core.overlay_settings_handlers import refresh_overlay_all_subwindows
@@ -63,8 +48,6 @@ from gui.sub_window_container import SubWindowContainer
 from gui.subwindow_image_viewer_sync import apply_theme_viewer_background_all
 from gui.subwindow_manager_factory import build_managers_for_subwindow
 from gui.tag_export_union_host import StudiesNestedDict
-from utils.log_sanitizer import sanitized_format_exc
-from utils.privacy import safe_event_fields
 from utils.slice_sync_group_palette import (
     slice_sync_group_rgb,
     view_index_to_group_index,
@@ -519,98 +502,15 @@ class SubwindowManagementMixin:
 
 class MPRNavigationMixin:
     """
-    Mixin: MPR navigator thumbnail updates, detached MPR handling, and MPR thumbnail
-    click navigation for ``DICOMViewerApp``.
+    Mixin: MPR pane data access and app-level MPR entry points.
+
+    This slice carries no MPR representation in the series navigator; the
+    thumbnail/drag/tile surface arrives with the parking update.
     """
 
     def _get_subwindow_mpr_pixel_array(self, idx: int, slice_index: int | None = None):
         """Return an MPR pixel array for subwindow *idx* (if any). Body in ``core.mpr_navigator_thumbnail``."""
         return mpr_thumb_get_subwindow_pixel_array(self, idx, slice_index)
-
-    def _get_subwindow_mpr_thumbnail_pixel_array(self, idx: int):
-        """Return a representative MPR thumbnail slice, preferring the stack midpoint."""
-        return mpr_thumb_get_subwindow_thumbnail_pixel_array(self, idx)
-
-    def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
-        """
-        Show or refresh the MPR thumbnail in the series navigator for subwindow *idx*.
-
-        Called automatically when ``MprController.mpr_activated`` is emitted.
-        The thumbnail is built from the currently-displayed MPR slice pixel
-        array with the active W/L values so it matches what is on screen.
-
-        Args:
-            idx: Zero-based subwindow index hosting the MPR view.
-        """
-        mpr_thumb_update_navigator(self, idx)
-
-    def _clear_mpr_navigator_thumbnail(self, idx: int) -> None:
-        """
-        Remove the MPR thumbnail from the series navigator for subwindow *idx*.
-
-        Called automatically when ``MprController.mpr_cleared`` is emitted.
-
-        Args:
-            idx: Zero-based subwindow index whose MPR was cleared.
-        """
-        mpr_thumb_clear_navigator(self, idx)
-
-    def _update_floating_mpr_navigator_thumbnail(self) -> None:
-        """
-        Show or refresh detached MPR under navigator key -1 (internal id only).
-
-        Layout matches attached MPR: same study/series keys place the thumbnail
-        immediately after the source series row.
-        """
-        mpr_thumb_update_floating_navigator(self)
-
-    def _on_mpr_detached(self, former_idx: int) -> None:
-        """MPR was detached from a pane; refresh navigator thumbnails."""
-        mpr_thumb_on_mpr_detached(self, former_idx)
-
-    def _on_mpr_thumbnail_clicked(self, subwindow_index: int) -> None:
-        """
-        Focus the subwindow that hosts the MPR view when its thumbnail is clicked.
-
-        Args:
-            subwindow_index: Zero-based index of the MPR subwindow, or -1 if detached.
-        """
-        if subwindow_index < 0:
-            return
-        try:
-            subwindow = self.multi_window_layout.get_subwindow(subwindow_index)
-            if subwindow is not None and not subwindow.is_focused:
-                subwindow.set_focused(True)
-        except Exception as exc:
-            _logger.error(  # NOSONAR (python:S8572): raw logging.exception is prohibited by the PHI/PII sink gate.
-                "MPR thumbnail focus failed",
-                extra=safe_event_fields("mpr.thumbnail_focus", error=exc),
-            )
-            _logger.debug("%s", sanitized_format_exc())
-
-    def _on_mpr_assign_requested(
-        self, source_subwindow_index: int, target_subwindow_index: int
-    ) -> None:
-        """
-        Handle MPR thumbnail drop onto a subwindow: relocate active MPR or
-        attach a detached session (source index -1).
-        """
-        if source_subwindow_index < 0:
-            self._mpr_controller.attach_floating_mpr(target_subwindow_index)
-            return
-        self._mpr_controller.relocate_mpr_subwindow(
-            source_subwindow_index, target_subwindow_index
-        )
-
-    def _on_mpr_clear_from_navigator_thumbnail(self, subwindow_index: int) -> None:
-        """Clear MPR from the navigator context menu (attached or detached)."""
-        if subwindow_index < 0:
-            self._mpr_controller.clear_detached_mpr()
-            if hasattr(self, "series_navigator"):
-                self.series_navigator.clear_mpr_thumbnail(-1)
-            return
-        if self._mpr_controller.is_mpr(subwindow_index):
-            self._mpr_controller.clear_mpr(subwindow_index)
 
     def _sync_intensity_projection_widget_from_mpr_data(self, data: dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""

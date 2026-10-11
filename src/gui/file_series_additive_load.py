@@ -191,6 +191,8 @@ def refresh_appended_series_subwindows(app: Any, appended_series: list[tuple[str
         updated_datasets = app.current_studies.get(study_uid, {}).get(series_key, [])
         appended_series_uids.add(series_key)
         for idx, data in app.subwindow_data.items():
+            if data.get("is_mpr"):
+                continue  # an MPR pane shows its own resampled stack, not the native list
             if (
                 data.get("current_study_uid") == study_uid
                 and data.get("current_series_uid") == series_key

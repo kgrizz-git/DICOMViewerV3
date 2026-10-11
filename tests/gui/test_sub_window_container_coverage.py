@@ -9,7 +9,6 @@ from PySide6.QtCore import QByteArray, QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QDragEnterEvent, QDragMoveEvent, QMouseEvent
 
 from gui.image_viewer import ImageViewer
-from gui.mpr_thumbnail_widget import MPR_ASSIGN_MIME
 from gui.sub_window_container import (
     SubWindowContainer,
     _parse_series_drop_mime,
@@ -226,11 +225,6 @@ class TestMimeAccepts:
             md.setData(mime_type, QByteArray(b"0"))
         return md
 
-    def test_accepts_mpr_mime(self, qapp):
-        viewer = ImageViewer()
-        c = SubWindowContainer(viewer)
-        assert c._mime_accepts_series_or_mpr(self._make_mime(mime_type=MPR_ASSIGN_MIME)) is True
-
     def test_accepts_series_uid_prefix(self, qapp):
         viewer = ImageViewer()
         c = SubWindowContainer(viewer)
@@ -319,17 +313,6 @@ class TestDragEvents:
         c.dragMoveEvent(ev)
         assert not ev.isAccepted()
 
-    def test_drag_enter_accepts_mpr(self, qapp):
-        viewer = ImageViewer()
-        c = SubWindowContainer(viewer)
-        from PySide6.QtCore import QMimeData
-        md = QMimeData()
-        md.setData(MPR_ASSIGN_MIME, QByteArray(b"0"))
-        ev = self._make_drag_event(md)
-        c.dragEnterEvent(ev)
-        assert ev.isAccepted()
-
-
 # ---------------------------------------------------------------------------
 # dropEvent – use mock events to avoid QDropEvent segfault
 # ---------------------------------------------------------------------------
@@ -391,43 +374,6 @@ class TestDropEvent:
         ev = self._mock_drop()
         c.dropEvent(ev)
         ev.ignore.assert_called()
-
-    def test_drop_mpr_assign_emits_signal(self, qapp):
-        viewer = ImageViewer()
-        viewer.subwindow_index = 2
-        c = SubWindowContainer(viewer)
-        received = []
-        c.mpr_assign_requested.connect(lambda s, t: received.append((s, t)))
-        ev = self._mock_drop(mime_type=MPR_ASSIGN_MIME)
-        c.dropEvent(ev)
-        assert received == [(1, 2)]
-        ev.acceptProposedAction.assert_called_once()
-
-    def test_drop_mpr_assign_no_subwindow_index_ignored(self, qapp):
-        viewer = ImageViewer()
-        viewer.subwindow_index = None
-        c = SubWindowContainer(viewer)
-        received = []
-        c.mpr_assign_requested.connect(lambda s, t: received.append((s, t)))
-        ev = self._mock_drop(mime_type=MPR_ASSIGN_MIME)
-        c.dropEvent(ev)
-        assert received == []
-        ev.ignore.assert_called()
-
-    def test_drop_mpr_exception_ignored(self, qapp):
-        viewer = ImageViewer()
-        viewer.subwindow_index = 2
-        c = SubWindowContainer(viewer)
-        from PySide6.QtCore import QMimeData
-        md = QMimeData()
-        md.setData(MPR_ASSIGN_MIME, QByteArray(b"not_a_number"))
-        ev = MagicMock()
-        ev.mimeData.return_value = md
-        ev.acceptProposedAction = MagicMock()
-        ev.ignore = MagicMock()
-        c.dropEvent(ev)
-        ev.ignore.assert_called()
-
 
 # ---------------------------------------------------------------------------
 # mousePressEvent

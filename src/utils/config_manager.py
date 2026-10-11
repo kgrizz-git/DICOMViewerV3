@@ -4,7 +4,7 @@ Configuration Manager
 Manages persistent storage and retrieval of user preferences and settings.
 Settings are stored in a JSON file in the user's application data directory.
 
-This module provides a thin ConfigManager facade that composes thirteen
+This module provides a thin ConfigManager facade that composes the
 feature-domain mixin classes.  All public getter/setter methods live in the
 mixin files under ``src/utils/config/``; this file contains only the core
 infrastructure (load, save, generic get/set) and the default configuration
@@ -39,6 +39,7 @@ from utils.config.layout_config import LayoutConfigMixin
 from utils.config.lut_config import LutConfigMixin
 from utils.config.measurement_config import MeasurementConfigMixin
 from utils.config.metadata_ui_config import MetadataUIConfigMixin
+from utils.config.mpr_session_config import MprSessionConfigMixin
 from utils.config.overlay_config import OverlayConfigMixin
 from utils.config.paths_config import PathsConfigMixin
 from utils.config.privacy_storage_config import PrivacyStorageConfigMixin
@@ -73,6 +74,7 @@ class ConfigManager(
     MeasurementConfigMixin,
     AnnotationConfigMixin,
     CineConfigMixin,
+    MprSessionConfigMixin,
     MetadataUIConfigMixin,
     TagExportConfigMixin,
     CustomizationsConfigMixin,
@@ -87,7 +89,7 @@ class ConfigManager(
     """
     Manages application configuration and user preferences.
 
-    Acts as a thin facade over thirteen feature-domain mixin classes, each of
+    Acts as a thin facade over the feature-domain mixin classes, each of
     which owns the getter/setter methods for one area of settings.  All
     callers continue to use ``config_manager.get_roi_font_size()`` etc.
     without any changes.
@@ -107,6 +109,7 @@ class ConfigManager(
         MeasurementConfigMixin  – measurement font and line
         AnnotationConfigMixin   – text/arrow annotation appearance
         CineConfigMixin         – cine speed and loop defaults
+        MprSessionConfigMixin   – MPR session and view admission caps
         MetadataUIConfigMixin   – metadata panel column widths/order
         TagExportConfigMixin    – tag export presets (CRUD + file I/O)
         CustomizationsConfigMixin – bulk export/import of all visual settings
@@ -233,6 +236,9 @@ class ConfigManager(
             # Cine
             "cine_default_speed": 1.0,
             "cine_default_loop": True,
+            # MPR session/view admission caps
+            "mpr_session_cap": 8,
+            "mpr_view_cap": 16,
             # Metadata panel
             "metadata_panel_column_widths": [100, 200, 50, 200],
             # {group bucket key: expanded}; empty means every group starts collapsed

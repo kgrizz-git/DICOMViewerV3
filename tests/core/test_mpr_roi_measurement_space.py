@@ -56,26 +56,16 @@ def _make_app(lut, inverted: bool) -> tuple[SimpleNamespace, np.ndarray, np.ndar
             }
         },
         subwindow_managers={0: {"view_state_manager": view_state}},
-        series_navigator=SimpleNamespace(
-            set_mpr_thumbnail=MagicMock(),
-            clear_mpr_thumbnail=MagicMock(),
-        ),
-        window_level_controls=SimpleNamespace(window_center="40", window_width="400"),
-        _mpr_controller=SimpleNamespace(has_detached_mpr=MagicMock(return_value=False)),
         focused_subwindow_index=0,
     )
     return app, stored, apply_rescale(stored)
 
 
+
+
 def test_color_lut_reaches_the_display_but_not_the_measurement_array() -> None:
     hot = colormap_lut("hot")
     app, stored, rescaled = _make_app(hot, inverted=True)
-
-    mpr_navigator_thumbnail.update_mpr_navigator_thumbnail(app, 0)
-
-    call = app.series_navigator.set_mpr_thumbnail.call_args
-    assert call.kwargs["lut"] is hot
-    assert call.kwargs["image_inverted"] is True
 
     measurement = mpr_navigator_thumbnail.get_subwindow_mpr_pixel_array(app, 0)
     assert measurement is not None

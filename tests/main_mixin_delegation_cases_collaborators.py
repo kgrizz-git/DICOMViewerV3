@@ -483,19 +483,4 @@ LAYOUT_HANDLER_CASES: tuple[HandlerCase, ...] = (
         "mpr_thumb_get_subwindow_pixel_array",
         (1, 4),
     ),
-    HandlerCase(
-        "MPRNavigationMixin",
-        "_get_subwindow_mpr_thumbnail_pixel_array",
-        "mpr_thumb_get_subwindow_thumbnail_pixel_array",
-        (1,),
-    ),
-    HandlerCase("MPRNavigationMixin", "_update_mpr_navigator_thumbnail", "mpr_thumb_update_navigator", (1,)),
-    HandlerCase("MPRNavigationMixin", "_clear_mpr_navigator_thumbnail", "mpr_thumb_clear_navigator", (1,)),
-    HandlerCase(
-        "MPRNavigationMixin",
-        "_update_floating_mpr_navigator_thumbnail",
-        "mpr_thumb_update_floating_navigator",
-        (),
-    ),
-    HandlerCase("MPRNavigationMixin", "_on_mpr_detached", "mpr_thumb_on_mpr_detached", (2,)),
 )
