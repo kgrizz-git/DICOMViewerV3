@@ -250,9 +250,8 @@ class TestActivationPreservesViews:
             ctrl._activate_mpr(0, new_result, "Coronal")
 
         assert ctrl.detached_view_ids() == [old_view]
-        displaced = ctrl._registry.get_view(old_view)
-        assert displaced.slice_index == 3
-        assert displaced.display.window_center == 99.0
+        assert ctrl.get_view_metadata(old_view).slice_index == 3
+        assert ctrl.get_view_display_state(old_view).window_center == 99.0
         assert app.subwindow_data[0]["mpr_result"] is new_result
         assert ctrl.attached_view_id(0) not in (None, old_view)
         assert _counts(ctrl) == (2, 2, 0, 0)

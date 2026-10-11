@@ -162,6 +162,9 @@ def _disconnect_layout_viewer_signals(
             image_viewer.cine_play_pause_toggle_requested, ctrl._cine_toggle_slots, vid
         )
         _pop_tracked_disconnect(image_viewer.cine_stop_requested, ctrl._cine_stop_slots, vid)
+        _disconnect_ignore_missing(
+            subwindow.mpr_view_drop_requested, app._on_mpr_view_drop_requested
+        )
 
 
 def _bind_slice_location_line_callbacks(app: Any, image_viewer: Any) -> None:
@@ -208,11 +211,9 @@ def _connect_clear_and_cine_slots(
 
     image_viewer.clear_window_content_requested.connect(clear_window_slot)
     ctrl._clear_window_slots[vid] = clear_window_slot
-    # Interim (parking slice): MPR panes have no park action, so Clear This
-    # Window stays disabled there; only "Clear MPR View" applies.
     image_viewer.get_clear_this_window_enabled_callback = lambda i=idx: (
         app.subwindow_data.get(i, {}).get("current_dataset") is not None
-        and not bool(app.subwindow_data.get(i, {}).get("is_mpr"))
+        or bool(app.subwindow_data.get(i, {}).get("is_mpr"))
     )
     image_viewer.get_cine_loop_state_callback = (
         lambda: app.cine_app_facade.get_cine_loop_state()
@@ -278,6 +279,7 @@ def _connect_layout_viewer_signals(
     image_viewer.get_slot_to_view_callback = lambda lay=layout: lay.get_slot_to_view()
 
     # Disconnect before connect so layout changes do not accumulate duplicate handlers.
+    subwindow.mpr_view_drop_requested.connect(app._on_mpr_view_drop_requested)
 
     _connect_clear_and_cine_slots(ctrl, app, image_viewer, idx, vid)
     _connect_mpr_and_3d_slots(ctrl, app, image_viewer, idx, vid)

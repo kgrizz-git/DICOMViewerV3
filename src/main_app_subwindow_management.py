@@ -19,6 +19,13 @@ from PySide6.QtGui import QColor
 from core.mpr_navigator_thumbnail import (
     get_subwindow_mpr_pixel_array as mpr_thumb_get_subwindow_pixel_array,
 )
+from core.mpr_navigator_thumbnail import (
+    refresh_pane_mpr_tile as mpr_thumb_refresh_pane_tile,
+)
+from core.mpr_navigator_thumbnail import (
+    sync_mpr_navigator_tiles as mpr_thumb_sync_tiles,
+)
+from core.mpr_view_drag import OP_MOVE, same_origin
 from core.navigation_slider_state import navigation_slider_mode_label_for_dataset
 from core.overlay_settings_handlers import refresh_overlay_all_subwindows
 from core.session_reset_controller import (
@@ -48,6 +55,8 @@ from gui.sub_window_container import SubWindowContainer
 from gui.subwindow_image_viewer_sync import apply_theme_viewer_background_all
 from gui.subwindow_manager_factory import build_managers_for_subwindow
 from gui.tag_export_union_host import StudiesNestedDict
+from utils.log_sanitizer import sanitized_format_exc
+from utils.privacy import safe_event_fields
 from utils.slice_sync_group_palette import (
     slice_sync_group_rgb,
     view_index_to_group_index,
@@ -502,15 +511,54 @@ class SubwindowManagementMixin:
 
 class MPRNavigationMixin:
     """
-    Mixin: MPR pane data access and app-level MPR entry points.
-
-    This slice carries no MPR representation in the series navigator; the
-    thumbnail/drag/tile surface arrives with the parking update.
+    Mixin: MPR navigator thumbnail updates, detached MPR handling, and MPR thumbnail
+    click navigation for ``DICOMViewerApp``.
     """
 
     def _get_subwindow_mpr_pixel_array(self, idx: int, slice_index: int | None = None):
         """Return an MPR pixel array for subwindow *idx* (if any). Body in ``core.mpr_navigator_thumbnail``."""
         return mpr_thumb_get_subwindow_pixel_array(self, idx, slice_index)
+
+    def _update_mpr_navigator_thumbnail(self, idx: int) -> None:
+        """Regenerate the navigator tile of the MPR view attached to pane *idx*."""
+        mpr_thumb_refresh_pane_tile(self, idx)
+
+    def _sync_mpr_navigator_tiles(self, dirty: Any = ()) -> None:
+        """Reconcile all MPR navigator tiles once (``MprController.mpr_tiles_changed``)."""
+        mpr_thumb_sync_tiles(self, dirty)
+
+    def _on_mpr_thumbnail_clicked(self, view_id: int) -> None:
+        """Focus the pane showing MPR view *view_id* (detached or unknown views: no-op)."""
+        meta = self._mpr_controller.get_view_metadata(view_id)
+        if meta is None or meta.pane_index is None:
+            return
+        try:
+            subwindow = self.multi_window_layout.get_subwindow(meta.pane_index)
+            if subwindow is not None and not subwindow.is_focused:
+                subwindow.set_focused(True)
+        except Exception as exc:
+            _logger.error(  # NOSONAR (python:S8572): raw logging.exception is prohibited by the PHI/PII sink gate.
+                "MPR thumbnail focus failed",
+                extra=safe_event_fields("mpr.thumbnail_focus", error=exc),
+            )
+            _logger.debug("%s", sanitized_format_exc())
+
+    def _on_mpr_view_drop_requested(
+        self, view_id: int, operation: str, origin: str, target_pane: int
+    ) -> None:
+        """Handle a validated MPR tile drop: move/attach view *view_id* to *target_pane*.
+
+        A payload from another controller or running instance (different
+        origin token) is ignored even when its view ID exists here.
+        """
+        if not same_origin(origin, self._mpr_controller.drag_origin):
+            return
+        if operation == OP_MOVE:
+            self._mpr_controller.move_view(view_id, target_pane)
+
+    def _on_mpr_clear_from_navigator_thumbnail(self, view_id: int) -> None:
+        """Clear exactly one MPR view from the tile context menu (stale IDs no-op)."""
+        self._mpr_controller.clear_view(view_id)
 
     def _sync_intensity_projection_widget_from_mpr_data(self, data: dict[str, Any]) -> None:
         """Push ``mpr_combine_*`` from *data* to the right-pane Combine Slices widget."""

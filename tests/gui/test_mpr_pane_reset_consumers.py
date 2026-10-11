@@ -51,14 +51,6 @@ def _full_app(ctrl, app):
     return app
 
 
-def _view_gone(ctrl, view_id: int) -> bool:
-    """True when the registry no longer holds *view_id* (release/discard happened)."""
-    try:
-        ctrl._registry.get_view(view_id)
-    except KeyError:
-        return True
-    return False
-
 class TestFullReplaceLoad:
     def test_replace_load_releases_every_session_view_and_mpr_pane(self) -> None:
         ctrl, app = _make_controller()
@@ -80,8 +72,8 @@ class TestFullReplaceLoad:
         assert worker.cancel_calls == 1
         assert app.subwindow_data[0].get("is_mpr") is None
         assert fired["cleared"] == [0]
-        assert _view_gone(ctrl, detached)
-        assert tiles and tiles[-1] == frozenset()
+        assert ctrl.get_view_metadata(detached) is None
+        assert tiles and tiles[-1] == frozenset()  # tiles reconciled after the release
 
     def test_no_mpr_pane_survives_to_the_stale_data_pass_even_if_its_source_is_reloaded(self) -> None:
         ctrl, app = _make_controller()
@@ -124,17 +116,20 @@ class TestAdditiveAppend:
 
 
 class TestPaneResetSafetyNet:
-    def test_bare_pane_reset_discards_instead_of_leaving_a_stale_mapping(self) -> None:
-        # Interim (parking slice): no park action, so the safety net discards.
+    def test_bare_pane_reset_detaches_instead_of_leaving_a_stale_mapping(self) -> None:
         ctrl, app = _make_controller()
         fired = _signals(ctrl)
         _full_app(ctrl, app)
         _seed_mpr_pane(app, 0, _make_result())
-        ctrl.attached_view_id(0)
+        view_id = ctrl.attached_view_id(0)
+        app.subwindow_data[0]["mpr_slice_index"] = 2
+
         clear_subwindow(app, 0)
+
         assert ctrl.attached_view_id(0) is None  # pane mapping released
-        assert ctrl._registry.view_count == 0  # no stale view kept mapped
-        assert fired["cleared"] == [0]
+        assert ctrl.detached_view_ids() == [view_id]  # session kept, never silently discarded
+        assert ctrl._registry.get_view(view_id).slice_index == 2  # live state flushed first
+        assert fired["detached"] == [0]
         assert app.subwindow_data[0]["current_dataset"] is None
 
     def test_reset_of_a_pane_without_a_view_is_a_no_op(self) -> None:
@@ -144,17 +139,16 @@ class TestPaneResetSafetyNet:
         clear_subwindow(app, 1)
         assert _counts(ctrl) == (0, 0, 0, 0) and fired["detached"] == []
 
-    def test_clear_window_discards_once(self) -> None:
-        # Interim (parking slice): clearing removes the view exactly once.
+    def test_clear_window_still_detaches_once_and_keeps_identity(self) -> None:
         ctrl, app = _make_controller()
         fired = _signals(ctrl)
         _full_app(ctrl, app)
         app.focused_subwindow_index = 1
         _seed_mpr_pane(app, 0, _make_result())
+        view_id = ctrl.attached_view_id(0)
         clear_subwindow_content(app, 0)
-        assert ctrl.attached_view_id(0) is None
-        assert ctrl._registry.view_count == 0
-        assert fired["cleared"] == [0]
+        assert ctrl.detached_view_ids() == [view_id]
+        assert fired["detached"] == [0]  # no second detach from the safety net
 
 
 class TestSourceClose:
@@ -178,7 +172,7 @@ class TestSourceClose:
         assert ctrl.detached_view_ids() == [foreign]
         assert ctrl._registry.session_count == 1
         assert app.subwindow_data[0].get("is_mpr") is None
-        assert _view_gone(ctrl, same_source)
+        assert ctrl.get_view_metadata(same_source) is None
         assert tiles
 
 

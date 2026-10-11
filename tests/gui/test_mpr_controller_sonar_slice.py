@@ -271,6 +271,56 @@ def test_tear_down_clears_view_when_no_previous_state() -> None:
     viewer.scene.clear.assert_called_once()
 
 
+def test_install_payload_writes_fields_and_displays() -> None:
+    ctrl, app = _make_controller()
+    result = _make_result(n_slices=4)
+    app.subwindow_data[0] = {
+        "current_dataset": "old",
+        "current_slice_index": 1,
+        "current_series_uid": "old-se",
+        "current_study_uid": "old-st",
+        "current_datasets": [],
+    }
+    payload = {
+        "mpr_result": result,
+        "mpr_orientation": "Coronal",
+        "mpr_slice_index": 2,
+        "current_study_uid": "st",
+        "current_series_uid": "se",
+        "current_datasets": result.source_volume.source_datasets,
+        "mpr_combine_enabled": True,
+        "mpr_combine_mode": "mip",
+        "mpr_combine_slice_count": 8,
+    }
+    with (
+        patch.object(ctrl, "display_mpr_slice") as display,
+        patch.object(ctrl, "_reset_window_level_for_mpr"),
+        patch.object(ctrl, "_set_tools_enabled"),
+    ):
+        ok = ctrl._install_mpr_payload_at_subwindow(0, payload)
+
+    assert ok is True
+    data = app.subwindow_data[0]
+    assert data["is_mpr"] is True
+    assert data["mpr_orientation"] == "Coronal"
+    assert data["mpr_slice_index"] == 2
+    assert data["mpr_combine_mode"] == "mip"
+    assert data["mpr_previous_state"]["current_dataset"] == "old"
+    display.assert_called_once_with(0, 2)
+
+
+def test_install_payload_rejects_empty_result() -> None:
+    ctrl, app = _make_controller()
+    result = _make_result(n_slices=1)
+    # Force empty stack length via a stub
+    empty = SimpleNamespace(
+        n_slices=0,
+        source_volume=result.source_volume,
+    )
+    app.subwindow_data[0] = {}
+    assert ctrl._install_mpr_payload_at_subwindow(0, {"mpr_result": empty}) is False
+
+
 def test_build_overlay_dataset_sets_geometry_and_strips_location() -> None:
     ctrl, _app = _make_controller()
     result = _make_result(n_slices=2)
@@ -324,6 +374,58 @@ def test_prompt_save_mpr_rejects_empty_stack() -> None:
 def _add_detached_view(ctrl: MprController, result: MprResult) -> int:
     """Independent session whose only view is detached; returns the view ID."""
     return ctrl._registry.create_session(result, "st", "se", "Axial")[1]
+
+
+def test_attach_detached_view_noop_for_stale_or_attached_id() -> None:
+    ctrl, app = _make_controller()
+    attached = ctrl._registry.create_session(_make_result(), "st", "se", "Axial", pane_index=0)[1]
+    with patch.object(ctrl, "_install_mpr_payload_at_subwindow") as install:
+        ctrl.attach_detached_view(999, 0)
+        ctrl.attach_detached_view(attached, 0)
+    install.assert_not_called()
+
+
+def test_attach_detached_view_moves_view_on_success() -> None:
+    ctrl, app = _make_controller()
+    view_id = _add_detached_view(ctrl, _make_result())
+    activated: list[int] = []
+    tiles: list[frozenset[int]] = []
+    ctrl.mpr_activated.connect(activated.append)
+    ctrl.mpr_tiles_changed.connect(tiles.append)
+    with patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=True):
+        ctrl.attach_detached_view(view_id, 0)
+    assert ctrl.detached_view_ids() == []
+    assert ctrl.attached_view_id(0) == view_id
+    assert activated == [0]
+    assert tiles == [frozenset({view_id})]  # one batched tile announcement for the transaction
+
+
+def test_attach_detached_view_warns_and_keeps_detached_on_install_failure() -> None:
+    ctrl, app = _make_controller()
+    result = _make_result()
+    view_id = _add_detached_view(ctrl, result)
+    app.subwindow_data[0] = {
+        "is_mpr": True,
+        "mpr_result": result,
+        "mpr_orientation": "Old",
+        "mpr_slice_index": 1,
+        "current_study_uid": "st",
+        "current_series_uid": "se",
+        "current_datasets": [],
+        "mpr_combine_enabled": False,
+        "mpr_combine_mode": "aip",
+        "mpr_combine_slice_count": 1,
+    }
+    app.main_window = MagicMock()
+    with (
+        patch.object(ctrl, "_install_mpr_payload_at_subwindow", return_value=False),
+        patch("gui.mpr_controller_transactions.QMessageBox.warning") as warn,
+    ):
+        ctrl.attach_detached_view(view_id, 0)
+
+    assert ctrl.detached_view_ids() == [view_id]
+    warn.assert_called_once()
+    assert "previous MPR" in warn.call_args[0][2]
 
 
 def test_on_mpr_requested_errors_when_no_orientation_groups() -> None:

@@ -82,6 +82,13 @@ class TestSummaryAndEstimate:
         _add_detached_view(ctrl, _sized_result(voxels=MIB))
         assert memory_estimate(ctrl).volume_bytes == 2 * one
 
+    def test_discarding_the_last_view_releases_the_estimate(self) -> None:
+        ctrl, _app = _make_controller()
+        view = _add_detached_view(ctrl, _sized_result(voxels=MIB))
+        assert memory_estimate(ctrl).volume_bytes == 4 * MIB
+        ctrl.discard_detached_view(view)
+        assert memory_estimate(ctrl).total_bytes == 0
+
     def test_status_messages_never_leak_implementation_names(self) -> None:
         ctrl, _app = _make_controller()
         text = admission_summary(ctrl)
@@ -163,6 +170,7 @@ class TestRefusalAndDuplicateVisibility:
         assert "session limit" in text and "(1/1)" in text
         assert "MPR: 1/1 sessions, 1/4 views, about 4 MiB (estimate)" in text
 
+
 class TestLiveCaps:
     def test_defaults_are_8_sessions_16_views(self) -> None:
         ctrl, _app = _make_controller()
@@ -189,6 +197,24 @@ class TestLiveCaps:
         assert ctrl.apply_session_caps() is True
         assert (ctrl._registry.session_cap, ctrl._registry.view_cap) == (2, 5)
         assert ctrl.apply_session_caps() is False  # unchanged: nothing to do
+
+    def test_lowering_caps_evicts_nothing_and_only_blocks_growth(self) -> None:
+        ctrl, app = _make_controller()
+        views = [_add_detached_view(ctrl, _make_result()) for _ in range(4)]
+        _config_caps(app, (1, 1))
+        assert ctrl.apply_session_caps() is True
+        assert ctrl.detached_view_ids() == views and ctrl._registry.session_count == 4
+        result = _result_for("ST", "SE")
+        with _build_flow(ctrl, result), patch(_BOX) as box:
+            ctrl._on_mpr_requested(0, _request(result))
+        assert "limit" in box.warning.call_args.args[2]
+        # Usage falls below the limit: growth is allowed again.
+        for view in views[:-1]:
+            ctrl.discard_detached_view(view)
+        ctrl.discard_detached_view(views[-1])
+        with _build_flow(ctrl, result) as (_v, workers):
+            ctrl._on_mpr_requested(0, _request(result))
+        assert len(workers) == 1
 
     def test_already_admitted_pending_builds_are_honored_when_caps_drop(self) -> None:
         ctrl, app = _make_controller()

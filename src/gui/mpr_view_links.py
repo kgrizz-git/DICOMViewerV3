@@ -118,8 +118,7 @@ def set_view_slice(controller: Any, view_id: int, slice_index: int) -> SliceUpda
         # synchronously during a redraw observes a half-updated view, and a
         # failed redraw cannot leave drift behind. Phase 2 redraws only an
         # attached view whose displayed slice actually changed; a detached
-        # view has no pane, so its registry index updates silently (the
-        # parking slice makes detached views navigable again).
+        # view has no pane, so its registry index updates silently.
         needs_redraw = _write_view(controller, view, target)
         if needs_redraw and view.pane_index is not None:
             _redraw_view(controller, view.pane_index, target, n_slices)

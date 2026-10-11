@@ -21,6 +21,7 @@ from core.mpr_view_math import array_to_pil
 from core.slice_display_pixels import create_slice_projection_pil_image
 from gui.export_manager import ExportManager, ExportSliceRequest
 from gui.export_rendering import create_projection_for_export
+from gui.mpr_thumbnail_widget import MprThumbnailWidget
 
 _ARRAY = np.array([[0, 64, 128, 200, 255]], dtype=np.uint8)
 
@@ -114,6 +115,18 @@ def test_slice_and_export_projections_share_inverse_lut(monkeypatch):
     )
     assert np.array_equal(_gray(screen), _gray(exported))
     assert np.array_equal(_gray(screen), 255 - _gray(plain))
+
+
+def test_thumbnail_inverse_changes_preview_pixels(qapp):
+    _ = qapp
+    widget = MprThumbnailWidget(0)
+    widget.update_preview(_ARRAY.astype(np.float32), 127.5, 255.0, "MONOCHROME2")
+    plain = widget._preview_pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+    widget.update_preview(_ARRAY.astype(np.float32), 127.5, 255.0, "MONOCHROME2", lut=inverse_lut())
+    flipped = widget._preview_pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+    plain_px = np.frombuffer(plain.bits(), dtype=np.uint8).reshape(plain.height(), plain.bytesPerLine())
+    flip_px = np.frombuffer(flipped.bits(), dtype=np.uint8).reshape(flipped.height(), flipped.bytesPerLine())
+    assert not np.array_equal(plain_px, flip_px)
 
 
 def test_missing_series_lut_is_linear():
@@ -246,6 +259,29 @@ def test_monochrome1_color_lut_expands_after_polarity():
     assert np.array_equal(np.array(row2), expected)
     # Polarity ran before the LUT expansion; indexing the uninverted bytes is a different image.
     assert not np.array_equal(np.array(row1), hot.colormap[_ARRAY])
+
+
+def test_thumbnail_no_window_fallback_applies_lut(qapp):
+    """Row 5 fallback: a None window normalizes, then the LUT still runs (plan: no-windowing branch)."""
+    from core.display_normalize import normalize_to_uint8
+
+    _ = qapp
+    widget = MprThumbnailWidget(0)
+    size = MprThumbnailWidget.THUMBNAIL_SIZE
+    vals = np.linspace(0.0, 400.0, size * size, dtype=np.float32).reshape(size, size)
+
+    widget.update_preview(vals, None, None, "MONOCHROME2")
+    plain = _thumbnail_rgb_bytes(widget)
+    widget.update_preview(vals, None, None, "MONOCHROME2", lut=inverse_lut())
+    flipped = _thumbnail_rgb_bytes(widget)
+    widget.update_preview(vals, size * 3.0, size / 2.0, "MONOCHROME2")
+    windowed = _thumbnail_rgb_bytes(widget)
+
+    normalized = normalize_to_uint8(vals)
+    assert np.array_equal(plain, np.repeat(normalized[..., np.newaxis], 3, axis=2))
+    assert np.array_equal(flipped, np.repeat((255 - normalized)[..., np.newaxis], 3, axis=2))
+    # The None-window call really took the fallback, not an implicit window.
+    assert not np.array_equal(plain, windowed)
 
 
 def _thumbnail_rgb_bytes(widget):

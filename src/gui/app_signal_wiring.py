@@ -109,6 +109,11 @@ def _wire_dialog_signals(app: DICOMViewerApp) -> None:
     # Series navigator close actions
     app.series_navigator.close_series_requested.connect(app._close_series)
     app.series_navigator.close_study_requested.connect(app._close_study)
+    # MPR tiles (stable view IDs): click focuses its pane; menu actions act on that view.
+    app.series_navigator.mpr_thumbnail_clicked.connect(app._on_mpr_thumbnail_clicked)
+    app.series_navigator.mpr_thumbnail_clear_requested.connect(
+        app._on_mpr_clear_from_navigator_thumbnail
+    )
 
 
 def _wire_undo_redo_and_annotation_signals(app: DICOMViewerApp) -> None:
@@ -193,8 +198,10 @@ def _wire_customization_signals(app: DICOMViewerApp) -> None:
 def _wire_subwindow_signals(app: DICOMViewerApp) -> None:
     """Connect signals that apply to all subwindows. Delegates to subwindow lifecycle controller."""
     app._subwindow_lifecycle_controller.connect_subwindow_signals()
-    # MPR lifecycle → cine context (linear MPR stack vs slice groups). The
-    # navigator carries no MPR representation in this slice.
+    # MPR controller → navigator thumbnail and cine (linear MPR stack vs slice groups).
+    # Navigator tiles are reconciled once per controller transaction; cine
+    # context still follows the individual lifecycle signals.
+    app._mpr_controller.mpr_tiles_changed.connect(app._sync_mpr_navigator_tiles)
     app._mpr_controller.mpr_activated.connect(
         lambda _idx: app.cine_app_facade.update_cine_player_context()
     )

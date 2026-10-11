@@ -426,6 +426,13 @@ COLLABORATOR_CASES: tuple[CollaboratorCase, ...] = (
         "prompt_save_mpr_as_dicom",
         (),
     ),
+    CollaboratorCase(
+        "MPRNavigationMixin",
+        "_on_mpr_clear_from_navigator_thumbnail",
+        "_mpr_controller",
+        "clear_view",
+        (7,),
+    ),
 )
 
 
@@ -483,4 +490,6 @@ LAYOUT_HANDLER_CASES: tuple[HandlerCase, ...] = (
         "mpr_thumb_get_subwindow_pixel_array",
         (1, 4),
     ),
+    HandlerCase("MPRNavigationMixin", "_update_mpr_navigator_thumbnail", "mpr_thumb_refresh_pane_tile", (1,)),
+    HandlerCase("MPRNavigationMixin", "_sync_mpr_navigator_tiles", "mpr_thumb_sync_tiles", (frozenset({4}),)),
 )

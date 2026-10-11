@@ -185,6 +185,27 @@ class TestRenderContract:
         assert _counts(ctrl) == (1, 1, 0, 0)
         assert app.subwindow_data[0] == before
 
+    def test_install_over_unrenderable_target_rolls_back_relocate_and_attach(self) -> None:
+        ctrl, app = _make_controller()
+        fired = _signals(ctrl)
+        _seed_mpr_pane(app, 0, _make_result())
+        _seed_mpr_pane(app, 1, _make_result())
+        mover, resident = ctrl.attached_view_id(0), ctrl.attached_view_id(1)
+        floating = _add_detached_view(ctrl, _make_result())
+        with (
+            patch.object(ctrl, "display_mpr_slice", return_value=False),
+            patch.object(ctrl, "_set_tools_enabled"),
+            patch.object(ctrl, "_reset_window_level_for_mpr"),
+            patch("gui.mpr_controller.QMessageBox"),
+            patch("gui.mpr_controller_transactions.QMessageBox"),
+        ):
+            ctrl.relocate_mpr_subwindow(0, 1)
+            ctrl.attach_detached_view(floating, 1)
+        assert (ctrl.attached_view_id(0), ctrl.attached_view_id(1)) == (mover, resident)
+        assert ctrl.detached_view_ids() == [floating]
+        assert fired == _NO_SIGNALS
+
+
 class TestConfirmFailure:
     def test_confirm_failure_restores_pane_and_preserves_registry(self) -> None:
         ctrl, app = _make_controller()
