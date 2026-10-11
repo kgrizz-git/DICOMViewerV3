@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-11
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -22,7 +22,7 @@ Desktop **PySide6** DICOM viewer: multi-pane layouts, series navigator, MPR, fus
 | **Slice sync / reference lines** | `slice_geometry.py`, `slice_sync_coordinator.py`, `slice_location_line_*` | Anatomic linked-pane sync; cross-view slice-location reference lines |
 | **Loading / organize** | `src/core/loading_*`, DICOM organizer, `FileOperationsHandler` | Open folder/files, navigator population |
 | **Compressed-pixel decode** | `decoder_capabilities.py`, `dicom_loader.py`, `dicom_pixel_array.py` | Transfer-syntax labels, installed-handler detection, safe decode-failure messages; `python-gdcm` for classic JPEG |
-| **MPR** | `src/core/mpr_*.py`, `src/gui/mpr_*.py`, `core/slice_sync_coordinator.py` | Volume build, reslice; session/view registry (several sessions, stable view IDs); admission limits and approximate memory estimate |
+| **MPR** | `src/core/mpr_*.py`, `src/gui/mpr_*.py`, `core/slice_sync_coordinator.py` | Volume build, reslice; session/view registry (several sessions, detached views, stable view IDs); admission limits and approximate memory estimate; navigator tiles |
 | **Fusion** | `src/core/fusion_*`, `fusion_handler_io.py` | 2D/3D registration display |
 | **ROI / tools** | `src/roi/`, `src/tools/`, `src/gui/roi_*` | ROIs, measurements, annotations, crosshair |
 | **Metadata / tags** | `src/metadata/`, `dicom_parser.py`, tag export union/catalog | Panel, tag viewer, export presets |
@@ -71,7 +71,7 @@ first moving that dependency.
 | **Facades for menu slots** | `*_app_facade.py` keeps `main.py` small |
 | **Signal wiring only in `app_signal_wiring.py`** | Single place to audit connections |
 | **Config via `ConfigManager` mixins** | One persistence path per feature domain |
-| **MPR results are owned by `MprSessionRegistry`** | Sessions own the `MprResult`; `subwindow_data` is only the live adapter of an attached view (flushed into its view before any pane data is replaced). Views are addressed by stable view ID, never by pane index or negative key |
+| **MPR results are owned by `MprSessionRegistry`** | Sessions own the `MprResult`; `subwindow_data` is only the live adapter of an attached view (flushed into its view before any transfer). Views are addressed by stable view ID, never by pane index or negative key. Navigator drags carry a versioned payload (view ID, operation, per-controller origin token) |
 | **One canonical MPR slice setter** | `MprController.set_view_slice` / `set_pane_slice` (`gui/mpr_view_links.py`) is the only navigation path. `display_mpr_slice` is redraw-only and must never propagate. The setter never calls the global-sync coordinator |
 
 Custom structural linting has an incremental guard: **`scripts/check_architecture_boundaries.py`** blocks new high-risk import edges while allowing the current legacy baseline in **`dev-docs/architecture_boundary_baseline.txt`**. Remove baseline entries as modules are refactored toward this map.
