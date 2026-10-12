@@ -1,6 +1,6 @@
 # Multi-window layouts & navigation
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-11
 
 The viewer shows your images in **panes** (subwindows). You can split the viewing area into several panes, put a different series in each, and move between slices and frames. This guide covers the pane layouts, how to fill and focus panes, and the basics of slice/cine navigation.
 

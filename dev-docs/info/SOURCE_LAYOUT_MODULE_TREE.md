@@ -1,6 +1,6 @@
 # Detailed source module tree
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-11
 **Purpose:** On-demand file-level navigation. Paths in this document are repository-relative. Read [`../SOURCE_LAYOUT.md`](../SOURCE_LAYOUT.md) first for bootstrap and signal-wiring rules, then read only the relevant domain below.
 
 ## Application shell
