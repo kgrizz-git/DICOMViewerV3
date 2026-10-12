@@ -1,6 +1,6 @@
 # User guide — MPR (multi-planar reformation)
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-11
 
 MPR lets you build **orthogonal views** (e.g. sagittal / coronal) from an axial stack (or another base orientation), shown inside a viewer pane. You can keep **several MPRs at once**, park them as **navigator tiles** while you work on something else, show the same MPR in more than one window, and optionally **link** those windows so they scroll together.
 

@@ -1,6 +1,6 @@
 # Source layout (`src/`)
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-11
 **Purpose:** Compact controller, bootstrap, and signal-wiring index. Agents should read **[`ARCHITECTURE.md`](../ARCHITECTURE.md)** first for domains and dependency rules, then open the on-demand [detailed module tree](info/SOURCE_LAYOUT_MODULE_TREE.md) only when file-level navigation is needed.
 
 ---

@@ -1,6 +1,6 @@
 # Configuration and preferences
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-11
 
 This guide describes **where** to change behavior that is saved between sessions. It complements the **[User guide hub](USER_GUIDE.md)** (workflows and features). For pane, slice-sync, and slice-location-line behavior that overlaps with this guide, see [Multi-window layouts & navigation](USER_GUIDE_LAYOUTS.md); for the keyboard shortcuts that drive these menus, see [Keyboard shortcuts](USER_GUIDE_SHORTCUTS.md).
 
