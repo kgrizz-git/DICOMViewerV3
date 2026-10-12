@@ -105,10 +105,14 @@ from gui.mpr_dicom_save_flow import prompt_save_mpr_as_dicom
 from gui.mpr_loaded_series import collect_loaded_series
 from gui.mpr_pane_teardown import tear_down_mpr_at_subwindow
 from gui.mpr_source_closure import release_all_mpr, release_closed_source_sessions
+from gui.mpr_view_duplication import duplicate_view_into_pane
 from gui.mpr_view_links import (
     SliceUpdate,
+    flush_tile_refresh,
+    link_group_of_pane,
     set_pane_slice,
     set_view_slice,
+    unlink_view,
 )
 from gui.mpr_worker_fencing import (
     dataset_source_key,
@@ -250,6 +254,8 @@ class MprController(QObject):
         # Canonical slice setter / link state (see ``gui.mpr_view_links``): the
         # re-entrancy guard is deliberately separate from global sync's ``_syncing``.
         self._slice_propagating = False
+        self._tile_refresh_dirty: set[int] = set()
+        self._tile_refresh_timer: QTimer | None = None
         # Pane -> (reservation id, source key) for an in-flight/just-loaded build.
         self._build_reservations: dict[int, PaneReservation] = {}
         self._init_cache()
@@ -457,13 +463,33 @@ class MprController(QObject):
         """Move/attach a view by stable ID to pane *to_idx* (see transactions)."""
         move_view(self, view_id, to_idx)
 
+    def duplicate_view(self, view_id: int, to_idx: int, *, linked: bool = False) -> bool:
+        """Duplicate a view into pane *to_idx* sharing its result (no new session).
+
+        ``linked=True`` also joins the duplicate to the source's link group
+        (creating it) in the same transaction; any failure rolls both back.
+        """
+        return duplicate_view_into_pane(self, view_id, to_idx, linked=linked)
+
     def set_view_slice(self, view_id: int, slice_index: int) -> SliceUpdate | None:
-        """Canonical slice setter: clamps and moves the view's slice once."""
+        """Canonical slice setter: clamps, moves the view's whole link group once."""
         return set_view_slice(self, view_id, slice_index)
 
     def set_pane_slice(self, idx: int, slice_index: int) -> SliceUpdate | None:
         """:meth:`set_view_slice` for the view attached to pane *idx* (None if empty)."""
         return set_pane_slice(self, idx, slice_index)
+
+    def link_group_of_pane(self, idx: int) -> int | None:
+        """Explicit link-group ID of the view in pane *idx*, or None."""
+        return link_group_of_pane(self, idx)
+
+    def unlink_view(self, view_id: int) -> bool:
+        """Remove a view from its link group (a pair dissolves); False if not linked."""
+        return unlink_view(self, view_id)
+
+    def flush_tile_refresh(self) -> None:
+        """Emit any debounced tile refresh now (linked scrolling of detached views)."""
+        flush_tile_refresh(self)
 
     def attached_view_id(self, idx: int) -> int | None:
         """View ID attached to pane *idx*, or None."""

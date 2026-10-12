@@ -25,6 +25,7 @@ from mpr_lifecycle_harness import (
     _seed_mpr_pane,
 )
 
+from core.mpr_memory_estimate import THUMBNAIL_BYTES_PER_VIEW
 from core.mpr_session_types import DEFAULT_SESSION_CAP, DEFAULT_VIEW_CAP
 from gui.mpr_admission import (
     PaneReservation,
@@ -74,6 +75,17 @@ class TestSummaryAndEstimate:
         assert text.startswith("MPR: 1/8 sessions, 1/16 views, about ")
         assert text.endswith("MiB (estimate)")
         assert "4 MiB" in text  # the volume dominates; the tile copy is ~0.25 MiB
+
+    def test_a_duplicate_view_shares_the_estimate_apart_from_its_tile(self) -> None:
+        ctrl, app = _make_controller()
+        _seed_mpr_pane(app, 0, _sized_result(voxels=MIB, plane=256, n_slices=20))
+        before = memory_estimate(ctrl)
+        with _light_display(ctrl):
+            assert ctrl.duplicate_view(ctrl.attached_view_id(0), 1) is True
+        after = memory_estimate(ctrl)
+        assert (after.volume_bytes, after.result_bytes) == (before.volume_bytes, before.result_bytes)
+        assert after.total_bytes - before.total_bytes == THUMBNAIL_BYTES_PER_VIEW  # no result copy
+        assert ctrl._registry.session_count == 1
 
     def test_independent_sessions_of_one_series_are_charged_separately(self) -> None:
         ctrl, _app = _make_controller()
@@ -170,6 +182,23 @@ class TestRefusalAndDuplicateVisibility:
         assert "session limit" in text and "(1/1)" in text
         assert "MPR: 1/1 sessions, 1/4 views, about 4 MiB (estimate)" in text
 
+    def test_view_cap_refusal_of_a_duplicate_shows_usage(self) -> None:
+        ctrl, app = _make_controller()
+        ctrl._registry.set_caps(1, 1)
+        source = _add_detached_view(ctrl, _sized_result(voxels=MIB))
+        with patch(_BOX) as box:
+            assert ctrl.duplicate_view(source, 0) is False
+        text = box.warning.call_args.args[2]
+        assert "view limit" in text and "1/1 views" in text and "(estimate)" in text
+
+    def test_successful_duplicate_reports_that_it_shares_the_result(self) -> None:
+        ctrl, app = _make_controller()
+        _seed_mpr_pane(app, 0, _sized_result(voxels=MIB))
+        with _light_display(ctrl):
+            ctrl.duplicate_view(ctrl.attached_view_id(0), 1)
+        status = app.main_window.update_status.call_args.args[0]
+        assert "shares the existing result" in status and "1/8 sessions, 2/16 views" in status
+
 
 class TestLiveCaps:
     def test_defaults_are_8_sessions_16_views(self) -> None:
@@ -190,6 +219,17 @@ class TestLiveCaps:
             ctrl._on_mpr_requested(0, _request(result))
         box.warning.assert_not_called()
         assert len(workers) == 1 and (ctrl._registry.session_cap, ctrl._registry.view_cap) == (3, 6)
+
+    def test_a_persisted_change_governs_the_next_duplicate(self) -> None:
+        ctrl, app = _make_controller()
+        _config_caps(app, (1, 1))
+        ctrl = MprController(app)
+        source = _add_detached_view(ctrl, _make_result())
+        with patch(_BOX):
+            assert ctrl.duplicate_view(source, 0) is False
+        _config_caps(app, (1, 3))
+        with _light_display(ctrl):
+            assert ctrl.duplicate_view(source, 0) is True
 
     def test_settings_applied_callback_path_applies_the_pair(self) -> None:
         ctrl, app = _make_controller()

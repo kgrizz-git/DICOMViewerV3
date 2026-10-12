@@ -47,10 +47,9 @@ class TestOneAnnouncementPerTransaction:
         assert tiles == [frozenset({mover})]
 
     def test_attach_detach_move_clear_and_discard_each_announce_once(self) -> None:
-        ctrl, app = _make_controller(pane_count=3)
+        ctrl, app = _make_controller()
         _seed_mpr_pane(app, 0, _make_result())
-        _seed_mpr_pane(app, 2, _make_result())
-        view, other = ctrl.attached_view_id(0), ctrl.attached_view_id(2)
+        view = ctrl.attached_view_id(0)
         floating = _add_detached_view(ctrl, _make_result())
         tiles = _tile_events(ctrl)
         with _light_display(ctrl):
@@ -58,12 +57,14 @@ class TestOneAnnouncementPerTransaction:
             assert len(tiles) == 1
             ctrl.move_view(view, 1)
             assert len(tiles) == 2
+            ctrl.duplicate_view(view, 0)
+            assert len(tiles) == 3
         ctrl.clear_mpr(1)
-        assert len(tiles) == 3
-        assert ctrl.discard_detached_view(floating) is True
         assert len(tiles) == 4
-        assert ctrl.clear_view(other) is True
+        assert ctrl.discard_detached_view(floating) is True
         assert len(tiles) == 5
+        assert ctrl.clear_view(ctrl.attached_view_id(0)) is True
+        assert len(tiles) == 6
 
     def test_failed_transactions_and_stale_ids_announce_nothing(self) -> None:
         ctrl, app = _make_controller()
@@ -79,6 +80,7 @@ class TestOneAnnouncementPerTransaction:
             patch("gui.mpr_controller_transactions.QMessageBox"),
         ):
             ctrl.move_view(view, 1)
+            ctrl.duplicate_view(view, 1)
             ctrl._activate_mpr(1, _make_result(), "Axial")
         ctrl.move_view(404, 1)
         assert ctrl.clear_view(404) is False and ctrl.discard_detached_view(404) is False

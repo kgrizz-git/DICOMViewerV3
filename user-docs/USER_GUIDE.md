@@ -20,7 +20,7 @@ This hub links topic guides for the application. **In the running app**, use **H
 | Guide | Contents |
 |-------|---------|
 | [CONFIGURATION.md](CONFIGURATION.md) | **Edit → Settings…**, local study index, where other preferences live (View menu, etc.) |
-| [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating, parking (detaching) and clearing several MPRs, navigator tiles and dragging, session/view limits and the memory estimate, saving MPR as DICOM |
+| [USER_GUIDE_MPR.md](USER_GUIDE_MPR.md) | Multi-planar reformation (MPR): creating, parking (detaching) and clearing several MPRs, navigator tiles and dragging, duplicating and linked scrolling, session/view limits and the memory estimate, saving MPR as DICOM |
 | [USER_GUIDE_3D.md](USER_GUIDE_3D.md) | 3D volume rendering (VTK): toolbar **3D View**, transfer-function presets |
 | [USER_GUIDE_LAYOUTS.md](USER_GUIDE_LAYOUTS.md) | Multi-window layouts & navigation: pane layouts (1/2/3/4 keys), assigning series, focus/expand/swap, slice & cine navigation |
 | [USER_GUIDE_ANNOTATIONS.md](USER_GUIDE_ANNOTATIONS.md) | Measurements & annotations: ROI/measure/text/arrow tools + shortcuts, editing, copy/cut/paste, ROI statistics |

@@ -40,7 +40,8 @@ def tile_tooltip(meta: MprViewMetadata, window_number: str | None) -> str:
     else:
         # A detached view is dormant, but a linked one still follows its group: show where.
         lines.append(f"Not in a window (slice {meta.slice_index + 1} of {meta.n_slices}) — drag onto a pane to show")
-    lines.append("Right-click: Clear MPR")
+    menu = "Duplicate into Window… / Duplicate Linked into Window… / "
+    lines.append(f"Right-click: {menu}{'Unlink View / ' if meta.link_group_id is not None else ''}Clear MPR")
     return "\n".join(lines)
 
 

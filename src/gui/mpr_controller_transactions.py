@@ -44,6 +44,7 @@ from gui.mpr_controller_sessions import (
     refresh_view_from_pane,
 )
 from gui.mpr_frame_snapshot import capture_frame, restore_frame
+from gui.mpr_view_links import canonical_slice
 from utils.debug_flags import DEBUG_MPR
 
 
@@ -534,6 +535,12 @@ def attach_detached_view(controller: Any, view_id: int, to_idx: int) -> None:
     payload = build_view_payload(controller, view_id)
     if payload is None:
         return
+    linked = view.link_group_id is not None
+    if linked:
+        # A linked view adopts its group's position on reattach (an unlinked one keeps
+        # its own). Only the local payload carries it until the install succeeds: an
+        # invalid or failed drop must leave the registry view exactly as it was.
+        payload["mpr_slice_index"] = canonical_slice(controller, view)
     app = controller._app
     if not validate_transfer_target(app, controller._get_image_viewer, to_idx):
         _txn_log(f"attach to window {to_idx} refused: invalid destination")
@@ -550,6 +557,8 @@ def attach_detached_view(controller: Any, view_id: int, to_idx: int) -> None:
         _warn_attach_failed(controller, dest_was_mpr)
         return
     displaced = _commit_install(controller, view_id, to_idx)
+    if linked:
+        refresh_view_from_pane(controller, to_idx)  # commit the adopted position (pane is canonical)
     if displaced:
         controller.mpr_detached.emit(to_idx)
     controller.mpr_activated.emit(to_idx)
