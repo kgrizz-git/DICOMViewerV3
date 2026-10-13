@@ -34,7 +34,7 @@ imageio-ffmpeg==0.6.0
 matplotlib>=3.11.2
 openpyxl>=3.1.5
 # Local encrypted study index (SQLCipher-compatible Python binding; wheels on Windows/macOS/Linux for supported Python versions)
-sqlcipher3>=0.6.2
+sqlcipher3>=0.6.3
 # Stores the SQLCipher passphrase in the OS credential store (Windows Credential Manager, macOS Keychain, etc.)
 keyring>=25.7.0
 SimpleITK>=2.5.6  # For 3D image resampling in image fusion (Phase 2)
