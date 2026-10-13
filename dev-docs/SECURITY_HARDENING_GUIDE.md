@@ -1,6 +1,6 @@
 # Security Hardening Guide: Debug Flags, PII Protection, and Automation
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-13
 
 This guide covers the new security features implemented to address safety scan findings:
 1. **Debug flag hooks** - Prevent builds with debug enabled
@@ -294,7 +294,7 @@ Four new security workflows now run automatically:
 Located in `.github/dependabot.yml`:
 
 - **Tracks:** Python (pip), GitHub Actions, Docker (future)
-- **Frequency:** Weekly (Monday 3 AM UTC)
+- **Frequency:** Monthly version updates (1st of the month, 03:00 UTC for pip, 05:00 UTC for Actions); security-update PRs open on advisory when Dependabot security updates are enabled in repo settings
 - **Auto-PR:** Opens automated dependency update PRs
 - **Labels:** `dependencies`, `python`, `security`
 
