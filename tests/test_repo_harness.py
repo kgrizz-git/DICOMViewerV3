@@ -278,7 +278,7 @@ class TestExternalAnalysisUploadPolicy(unittest.TestCase):
                 "        with:\n"
                 "          fetch-depth: 0\n"
                 "          persist-credentials: false\n"
-                "      - uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4\n"
+                "      - uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9\n"
                 "        env:\n"
                 "          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n",
                 encoding="utf-8",

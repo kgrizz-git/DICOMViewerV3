@@ -1,6 +1,6 @@
 # Temporary pip-audit Exceptions
 
-**Last reviewed:** 2026-09-28
+**Last reviewed:** 2026-10-13
 
 These exceptions keep the dependency-audit workflow actionable while compatibility work is completed. They are not assertions that the vulnerabilities are harmless, and they do not suppress Grype, Semgrep, or runtime PHI protections.
 
@@ -12,11 +12,11 @@ Previously excepted and **removed on 2026-09-07** after a workflow audit found t
 
 ## Monitoring and review
 
-- Dependabot checks root Python requirement files every Monday at 03:00 UTC. It already has an open Pylinac update PR; review every Pylinac or Semgrep update PR against this table before merging.
+- Dependabot checks root Python requirement files monthly (on the 1st, 03:00 UTC) for version updates; security-update PRs for vulnerable dependencies are not tied to that schedule. It already has an open Pylinac update PR; review every Pylinac or Semgrep update PR against this table before merging.
 - The `pip-audit` workflow runs weekly at 06:00 UTC and on requirement changes. The single exception is intentional and explicit in the workflow so new findings still fail CI.
 - The job resolves package metadata from PyPI live. A PyPI outage can fail it with a `ServiceError` (observed 2026-09-28: `503 … Backend is unhealthy for url: https://pypi.org/pypi/sqlcipher3/0.6.2/json`) — that is infrastructure flakiness, not a security finding; re-run the failed job before investigating dependencies.
 - Reassess this exception no later than **2026-12-31**, and immediately after a relevant Dependabot PR or upstream security release.
-- Dependabot will create a version-update PR when its weekly check finds a qualifying direct-dependency release. To receive that PR and Dependabot security-alert notifications, the repository owner must watch this repository with **All Activity**, or use **Custom** watch settings with at least **Pull requests** and **Security alerts** enabled. Keep at least one Dependabot PR active (merge, close, or otherwise interact with it) within 90 days: GitHub can pause updates for inactive repositories.
+- Dependabot will create a version-update PR when its monthly check finds a qualifying direct-dependency release. To receive that PR and Dependabot security-alert notifications, the repository owner must watch this repository with **All Activity**, or use **Custom** watch settings with at least **Pull requests** and **Security alerts** enabled. Keep at least one Dependabot PR active (merge, close, or otherwise interact with it) within 90 days: GitHub can pause updates for inactive repositories.
 
 ## Required removal process
 

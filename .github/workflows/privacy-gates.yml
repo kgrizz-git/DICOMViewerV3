@@ -114,21 +114,25 @@ jobs:
 
       - name: Run TruffleHog secret scanner
         if: steps.trufflehog_range.outputs.should_scan == 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'
-        uses: trufflesecurity/trufflehog@4dd8831c5f12599465d4d45c3c447b4018a34c85 # v3.97.9
+        uses: trufflesecurity/trufflehog@0186870afd2c4a90def791d80260923ba583d076 # v3.98.0
         with:
           path: ./
           base: ${{ steps.trufflehog_range.outputs.base_sha }}
           head: ${{ steps.trufflehog_range.outputs.head_sha }}
-          version: "3.97.9"
-          extra_args: --no-verification
+          version: "3.98.0"
+          # SonarCloud detector excluded: it reads the 40-hex commit SHAs in
+          # Dependabot's sonarqube-scan-action compare URLs as tokens (#131,
+          # #194). Gitleaks below (sonar-api-token rule) and Semgrep in ci.yml still
+          # cover real Sonar token assignments.
+          extra_args: --no-verification --exclude-detectors=SonarCloud
 
       - name: Run TruffleHog full-tree scanner for initial/new-ref push
         if: steps.trufflehog_range.outputs.tree_scan == 'true'
-        uses: trufflesecurity/trufflehog@4dd8831c5f12599465d4d45c3c447b4018a34c85 # v3.97.9
+        uses: trufflesecurity/trufflehog@0186870afd2c4a90def791d80260923ba583d076 # v3.98.0
         with:
           path: ./
-          version: "3.97.9"
-          extra_args: --no-verification
+          version: "3.98.0"
+          extra_args: --no-verification --exclude-detectors=SonarCloud
 
       - name: TruffleHog skipped
         if: steps.trufflehog_range.outputs.should_scan != 'true' && steps.trufflehog_range.outputs.tree_scan != 'true'

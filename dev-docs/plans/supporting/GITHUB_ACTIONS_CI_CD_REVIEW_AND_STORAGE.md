@@ -27,7 +27,7 @@
 | [`grype.yml`](../../../.github/workflows/ci.yml) | PR + push to `main` / `develop`, weekly cron | `anchore/scan-action`, SARIF upload, optional PR comment. |
 | `user-docs-links` (job in [`ci.yml`](../../../.github/workflows/ci.yml)) | PR + push to `main` / `develop` | Lightweight Python link check. |
 | [`actions-cache-prune.yml`](../../../.github/workflows/actions-cache-prune.yml) | Weekly cron + `workflow_dispatch` | Low cost; **reduces** cache storage churn via scripted prune. |
-| **Dependabot** ([`dependabot.yml`](../../../.github/dependabot.yml)) | Scheduled weekly | Creates PRs; each PR triggers the same CI gates as human PRs. |
+| **Dependabot** ([`dependabot.yml`](../../../.github/dependabot.yml)) | Scheduled monthly (version updates; security-update PRs open on advisory when Dependabot security updates are enabled in repo settings) | Creates PRs; each PR triggers the same CI gates as human PRs. |
 
 **Assessment:** The repo already applies **thoughtful storage guardrails** (pip cache key alignment in `build.yml`, artifact `retention-days`, weekly cache prune). The main **ongoing** costs on typical branches are **runner minutes** and **workflow run count**, not large artifact churn from day-to-day commits (release builds are the exception).
 
@@ -45,7 +45,7 @@
 
 ## 3. “Busy CI” and Dependabot / bot cascades
 
-**Observed pattern:** A push runs workflows; a tool opens a **follow-up PR**; that PR triggers **another full** round of jobs. Dependabot is configured for **pip** and **github-actions** on a weekly schedule with reasonable open-PR limits.
+**Observed pattern:** A push runs workflows; a tool opens a **follow-up PR**; that PR triggers **another full** round of jobs. Dependabot is configured for **pip** and **github-actions** on a monthly schedule with reasonable open-PR limits.
 
 **Assessment:** This is **normal** for secure repos. The cost is mostly **duplicate minutes** on similar SHAs, not necessarily storage.
 

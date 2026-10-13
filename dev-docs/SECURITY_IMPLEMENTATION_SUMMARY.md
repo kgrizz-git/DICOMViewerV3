@@ -219,7 +219,7 @@ In GitHub repository settings:
 
 **Status:** ✅ AUTOMATED
 
-- **Dependabot:** Now monitors all dependencies weekly
+- **Dependabot:** Now monitors all dependencies (version updates monthly since 2026-10-13)
 - **CodeQL/Semgrep/Grype:** Automated on every push/PR
 - **GitHub tracking:** Centralized in Security tab
 
