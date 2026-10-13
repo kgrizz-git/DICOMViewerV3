@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-11
+**Last updated:** 2026-10-13
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-13
+- **Dependabot version updates moved from weekly to monthly; Copilot reviewer request removed.** `.github/dependabot.yml` now runs pip and github-actions version updates on the 1st of each month, and no longer lists `GitHub-Copilot` under `reviewers` (Dependabot has retired that option in favor of `CODEOWNERS`, which already requests `@kgrizz-git`). Security-update PRs are controlled by the repository's Dependabot security updates setting, not this schedule, and CI still runs pip-audit and Grype on every PR.
 
 ## 2026-10-11
 - **MPR duplicates and linked scrolling (PR-C, the last slice of the split).** Restores the reviewed tree for duplicates, link groups, Unlink View and Slice Sync deduplication, so the merged end state is the reviewed `feature/multiple-mpr-sessions` tree plus two review fixes: the ProbeWorker join wait (PR #185) and announcing a tile drag before its nested drag loop (PR #186). The slice A and B entries below and their documentation assessments are kept as history.

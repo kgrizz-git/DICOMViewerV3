@@ -1,17 +1,19 @@
 version: 2
+# Version updates run monthly. This file does not control security updates:
+# when "Dependabot security updates" is on in the repo's Code security
+# settings, fix PRs for vulnerable dependencies open as soon as an advisory
+# is published, regardless of this schedule. CI also runs pip-audit and Grype
+# on every PR and push to main.
 updates:
   # Python dependencies (pip)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "03:00"
     open-pull-requests-limit: 10
     cooldown:
       default-days: 7
-    reviewers:
-      - "GitHub-Copilot"
     labels:
       - "dependencies"
     commit-message:
@@ -20,7 +22,7 @@ updates:
     pull-request-branch-name:
       separator: "/"
     groups:
-      # Bundle routine patch/minor bumps into one weekly PR; majors (e.g. a
+      # Bundle routine patch/minor bumps into one monthly PR; majors (e.g. a
       # pydicom 2->3 jump) still open individually since they need review.
       # pylinac needs ACR QA re-verify; typer is pinned for phi-scan ~=0.24.1 —
       # both stay ungrouped so they get solo PRs instead of riding with safe bumps.
@@ -37,8 +39,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "05:00"
     open-pull-requests-limit: 5
     cooldown:
