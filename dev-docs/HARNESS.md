@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-10-01
+**Last updated:** 2026-10-15
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -226,6 +226,20 @@ reviewed on the date noted there. Audited 2026-09-07: four of the five entries
 matched nothing in the current dependency set and were removed. The one that
 remains is `PYSEC-2026-2266` (pydicom 2.4.5, fixed in 3.0.2), which cannot be
 cleared while pylinac caps `pydicom<3`.
+
+### Known-vulnerable GitHub Actions
+
+Every action in `.github/workflows/` is pinned by commit SHA, and Dependabot
+raises alerts only for actions referenced by semver tag, so a vulnerable pinned
+action would otherwise never be reported. The **Known-vulnerable actions
+(zizmor)** job (`vulnerable-actions` in `ci.yml`) runs zizmor's
+`known-vulnerable-actions` audit, which resolves each SHA to its release tag
+and checks it against GitHub's advisory database. Only that audit fails the
+job; zizmor's other findings are out of scope. A zizmor tool error (any exit
+code other than 0 or 10-14) also fails the job, so a broken audit cannot pass
+as clean. It runs on every push, PR and the weekly schedule, and is **not** a
+required check: an advisory published against an unchanged tree can turn it
+red.
 
 ### Git hooks (the blocking local layer)
 
