@@ -118,6 +118,7 @@ except Exception as e:
 # 1. CodeQL             - Python SAST via GitHub default code scanning (not codeql.yml; custom workflow conflicts with default)
 # 2. ci.yml (semgrep)   - Semgrep SAST (rule-based security)
 # 3. ci.yml (grype)     - Grype (CVE scanning)
+#    ci.yml (vulnerable-actions) - zizmor: SHA-pinned actions vs GitHub advisories
 # 4. privacy-gates.yml   - Debug flags + secrets validation
 # 5. ../dependabot.yml   - Dependency updates: pip + GitHub Actions (add Docker only with a Dockerfile)
 

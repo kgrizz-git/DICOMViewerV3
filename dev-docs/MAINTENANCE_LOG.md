@@ -1,8 +1,13 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-13
+**Last updated:** 2026-10-15
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-15
+- **zizmor report moved out of the checkout.** In the `vulnerable-actions` job, the zizmor JSON report is now written to `$RUNNER_TEMP` instead of the checkout, so a PR that commits a `zizmor.json` symlink cannot make the shell redirect truncate a workflow file before zizmor scans it (hiding a vulnerable action).
+- **zizmor check fails closed without a token.** The `vulnerable-actions` step now errors when `GH_TOKEN` is empty (without a token zizmor silently skips its online audits, including `known-vulnerable-actions`, and would pass), and per-finding location parsing tolerates findings without a local path instead of raising `KeyError`.
+- **Known-vulnerable GitHub Actions check (zizmor).** GitHub's Dependabot alerts are generated only for actions referenced by semver tag, never for actions pinned by commit SHA, and every action here is SHA-pinned, so a vulnerable pinned action was never reported. `ci.yml` gains a `vulnerable-actions` job (**Known-vulnerable actions (zizmor)**, gated on `privacy-gates` like every other job) that installs `zizmor==1.31.0` and fails only on its `known-vulnerable-actions` audit, which resolves each SHA pin to its release tag and checks GitHub's advisory database. A zizmor tool error (exit other than 0 or 10-14) also fails the job. It runs on push, PR and the existing weekly schedule; it is not added to the required checks. zizmor is recorded in `security/security-tool-inventory.json`; see `HARNESS.md` → Known-vulnerable GitHub Actions.
 
 ## 2026-10-13
 - **Dependabot version updates moved from weekly to monthly; Copilot reviewer request removed.** `.github/dependabot.yml` now runs pip and github-actions version updates on the 1st of each month, and no longer lists `GitHub-Copilot` under `reviewers` (Dependabot has retired that option in favor of `CODEOWNERS`, which already requests `@kgrizz-git`). Security-update PRs are controlled by the repository's Dependabot security updates setting, not this schedule, and CI still runs pip-audit and Grype on every PR.

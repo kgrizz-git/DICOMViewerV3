@@ -124,6 +124,22 @@
       "tracked_configuration": []
     },
     {
+      "id": "zizmor",
+      "category": "dependency-vulnerability",
+      "purpose": "Check commit-pinned GitHub Actions against GitHub's security advisories (known-vulnerable-actions audit only); Dependabot raises no alerts for SHA-pinned actions.",
+      "install_scope": "CI only (pip, exact pin)",
+      "install_reference": ".github/workflows/ci.yml",
+      "tested_version": "1.31.0",
+      "enforcement": [
+        "scheduled and branch CI blocking (not a required check)"
+      ],
+      "network_policy": "GitHub API action-ref and advisory lookups only (github.token, contents: read); no source upload",
+      "entrypoints": [
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": []
+    },
+    {
       "id": "hounddog",
       "category": "privacy-dataflow",
       "purpose": "Advisory local source/sink data-flow review.",

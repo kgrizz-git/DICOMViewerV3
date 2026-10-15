@@ -3,8 +3,8 @@ name: CI
 # Job DAG (privacy-first):
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
-#      pip-audit-phi-tools, repo-harness, user-docs-links, semgrep, codeql,
-#      grype, sonarqube (push only)}
+#      pip-audit-phi-tools, vulnerable-actions, repo-harness, user-docs-links,
+#      semgrep, codeql, grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
 # rename or restructure jobs:
@@ -18,6 +18,10 @@ name: CI
 # Until it is added there, that job fails loudly but can still be merged past.
 # Do NOT add "pip-audit (PHI tooling, advisory)"; it is continue-on-error by
 # design and audits an isolated developer environment that is never shipped.
+#
+# "Known-vulnerable actions (zizmor)" (vulnerable-actions) is deliberately not
+# a required check: it depends on GitHub's advisory database and API, so it
+# can turn red on an unchanged tree when a new advisory is published.
 #
 # Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
 # privacy checks pass via needs: [privacy-gates].
@@ -341,6 +345,67 @@ jobs:
           resolution conflict, or the git-URL dependency being unreachable."
             exit 1
           fi
+
+  # Dependabot alerts are never raised for actions pinned by commit SHA (only
+  # for semver tags), so check pinned actions against GitHub's advisory
+  # database here. zizmor resolves each SHA to its release tag. Only the
+  # known-vulnerable-actions audit fails the job; other zizmor findings are
+  # out of scope for this check.
+  vulnerable-actions:
+    name: Known-vulnerable actions (zizmor)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install zizmor
+        run: "pip install --only-binary=:all: zizmor==1.31.0"
+      - name: Check actions against GitHub security advisories
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Without a token zizmor silently skips its online audits (including
+          # known-vulnerable-actions) and would pass; fail closed instead.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_TOKEN is empty; zizmor would skip its online audits"
+            exit 1
+          fi
+          set +e
+          zizmor --format=json . > "$RUNNER_TEMP/zizmor.json"
+          rc=$?
+          set -e
+          # 0 = no findings, 10-14 = findings by severity; anything else
+          # (e.g. 1) means the audit itself failed, which must not pass.
+          if [ "$rc" -ne 0 ] && { [ "$rc" -lt 10 ] || [ "$rc" -gt 14 ]; }; then
+            echo "::error::zizmor failed (exit $rc)"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          findings = [
+              f for f in json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "zizmor.json")))
+              if f["ident"] == "known-vulnerable-actions" and not f.get("ignored")
+          ]
+          for f in findings:
+              loc = (f.get("locations") or [{}])[0]
+              key = loc.get("symbolic", {}).get("key", {})
+              path = key.get("Local", {}).get("verbatim_path", "?") if isinstance(key, dict) else "?"
+              line = loc.get("concrete", {}).get("location", {}).get("start_point", {}).get("row", 0) + 1
+              note = loc.get("symbolic", {}).get("annotation", "")
+              print(f"::error file={path},line={line}::{f['desc']}: {note}")
+          print(f"{len(findings)} known-vulnerable action reference(s)")
+          sys.exit(1 if findings else 0)
+          PY
 
   repo-harness:
     name: Harness docs and agent smoke
