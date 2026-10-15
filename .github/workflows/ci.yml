@@ -378,7 +378,7 @@ jobs:
             exit 1
           fi
           set +e
-          zizmor --format=json . > zizmor.json
+          zizmor --format=json . > "$RUNNER_TEMP/zizmor.json"
           rc=$?
           set -e
           # 0 = no findings, 10-14 = findings by severity; anything else
@@ -389,10 +389,11 @@ jobs:
           fi
           python3 - <<'PY'
           import json
+          import os
           import sys
 
           findings = [
-              f for f in json.load(open("zizmor.json"))
+              f for f in json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "zizmor.json")))
               if f["ident"] == "known-vulnerable-actions" and not f.get("ignored")
           ]
           for f in findings:
