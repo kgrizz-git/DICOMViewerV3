@@ -237,7 +237,8 @@ action would otherwise never be reported. The **Known-vulnerable actions
 and checks it against GitHub's advisory database. Only that audit fails the
 job; zizmor's other findings are out of scope. A zizmor tool error (any exit
 code other than 0 or 10-14) also fails the job, so a broken audit cannot pass
-as clean. It runs on every push, PR and the weekly schedule, and is **not** a
+as clean; so does an empty `GH_TOKEN`, since zizmor would otherwise silently
+skip its online audits. It runs on every push, PR and the weekly schedule, and is **not** a
 required check: an advisory published against an unchanged tree can turn it
 red.
 
