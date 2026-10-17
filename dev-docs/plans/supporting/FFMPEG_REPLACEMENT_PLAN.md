@@ -172,7 +172,7 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
 - [x] Unit-test resolver priority with temporary files and `monkeypatch`: user env, bundled path, PATH, then dev wheel, then `missing`. Assert `source` as well as `path`. Mock the package-resource lookup so the test does not depend on `_get_ffmpeg_exe()`'s cached order. Do not require a real encode to decide license compliance.
 - [x] License-string checks belong to `scripts/build_lgpl_ffmpeg.py` and the build workflow, using fixtures or the staged binary. Do not fail `tests/gui/test_cine_video_export.py` because the dev wheel is GPL.
 - [ ] Add an optional integration encode of a few synthetic frames to GIF, AVI, MP4, and MPG when `source` is not `missing`. Skip otherwise. Assert container magic bytes, not GPL flags.
-- [ ] Manual QA: export with and without overlays, including MONOCHROME1 and MONOCHROME2; play `.mp4` in stock Windows 11 Media Player; confirm Cancel still deletes a partial file.
+- [ ] Manual QA: export with and without overlays, including MONOCHROME1 and MONOCHROME2; play `.mp4` in stock Windows 11 Media Player; confirm Cancel still deletes a partial file. Partial result, 2026-10-17: an unfrozen macOS MP4 export completed. That run used the development resolver (`IMAGEIO_FFMPEG_EXE`, then `PATH`, then the wheel), not a frozen LGPL binary. Overlays, MONOCHROME1, MONOCHROME2, Windows 11 Media Player, Cancel, and AVI/MPG/GIF remain unchecked.
 
 ---
 
