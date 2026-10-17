@@ -221,9 +221,19 @@ a.binaries = [
 ]
 
 _ffmpeg_exe_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
-_staged_lgpl_ffmpeg = project_root / "build" / "ffmpeg-lgpl" / _ffmpeg_exe_name
+_staged_lgpl_dir = project_root / "build" / "ffmpeg-lgpl"
+_staged_lgpl_ffmpeg = _staged_lgpl_dir / _ffmpeg_exe_name
 if _staged_lgpl_ffmpeg.is_file():
     a.datas.append((str(_staged_lgpl_ffmpeg.resolve()), "ffmpeg"))
+# Phase 4: ship LGPL texts and build manifest beside the bundled CLI when staged (optional for local zero-binary freezes).
+for _staged_name in (
+    "COPYING.LGPLv2.1",
+    "COPYING.LGPLv3",
+    "ffmpeg-lgpl-build-manifest.txt",
+):
+    _staged_sidecar = _staged_lgpl_dir / _staged_name
+    if _staged_sidecar.is_file():
+        a.datas.append((str(_staged_sidecar.resolve()), "ffmpeg"))
 
 _FFMPEG_UPX_EXCLUDE = ("ffmpeg", "ffmpeg.exe")
 

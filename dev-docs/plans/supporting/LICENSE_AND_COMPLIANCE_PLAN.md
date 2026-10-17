@@ -88,6 +88,10 @@ the remaining frozen-build and artifact-inventory gates.
 
 → **Implementation plan:** [`FFMPEG_REPLACEMENT_PLAN.md`](FFMPEG_REPLACEMENT_PLAN.md).
 
+**Freeze workflow (2026-10-17, Phase 3–4):** Release freezes run `scripts/build_lgpl_ffmpeg.py build`, then PyInstaller. `DICOMViewerV3.spec` strips `imageio_ffmpeg/binaries/ffmpeg*` from the collected tree and bundles the staged LGPL CLI under `ffmpeg/` (plus `COPYING.LGPLv2.1`, optional `COPYING.LGPLv3`, and `ffmpeg-lgpl-build-manifest.txt` when present). Packagers use [`resources/licenses/FFMPEG_LGPL_BUNDLED_NOTICE.md`](../../../resources/licenses/FFMPEG_LGPL_BUNDLED_NOTICE.md); rolling Python attribution stays in generated, gitignored **`THIRD_PARTY_LICENSES.md`**. Unfrozen dev installs may still use the wheel’s GPL binary; it must not appear under `dist/`.
+
+**Readiness:** [`COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) item **#2** remains **open** until Windows, macOS, and Linux frozen builds pass the compliance gates in CI (no wheel GPL binary in `dist/`, bundled `ffmpeg -version` audit).
+
 ---
 
 ## Phase 1 — Choose your business model and project license

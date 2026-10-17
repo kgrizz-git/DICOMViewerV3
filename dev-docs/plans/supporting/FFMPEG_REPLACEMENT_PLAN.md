@@ -163,8 +163,8 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
 
 ### Phase 4 — Notices and docs
 
-- [ ] Ship `COPYING.LGPLv2.1` (and `COPYING.LGPLv3` only if `--enable-version3` is present), the configure line, and a pointer to the corresponding FFmpeg source tarball next to `THIRD_PARTY_LICENSES`.
-- [ ] Update the `imageio` / `imageio-ffmpeg` comment in `requirements.txt`, plus `AGENTS.md`, `dev-docs/CONTRIBUTING.md`, `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`, `dev-docs/info/BUILDING_EXECUTABLES.md`, and `CHANGELOG.md`.
+- [x] Ship `COPYING.LGPLv2.1` (and `COPYING.LGPLv3` only if `--enable-version3` is present), the configure line, and a pointer to the corresponding FFmpeg source tarball next to `THIRD_PARTY_LICENSES`.
+- [x] Update the `imageio` / `imageio-ffmpeg` comment in `requirements.txt`, plus `AGENTS.md`, `dev-docs/CONTRIBUTING.md`, `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`, `dev-docs/info/BUILDING_EXECUTABLES.md`, and `CHANGELOG.md`.
 - [ ] Mark Commercial Release Readiness item #2 done only after the frozen gate passes on Windows, macOS, and Linux. Update `LICENSE_AND_COMPLIANCE_PLAN.md` §0b in that same change.
 
 ### Phase 5 — Tests

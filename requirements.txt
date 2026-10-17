@@ -28,7 +28,7 @@ PySide6>=6.11.2
 pydicom>=2.4.5,<3
 numpy>=2.5.3
 Pillow>=12.3.0
-# Cine export (GIF / AVI / MPG): imageio + bundled FFmpeg via imageio-ffmpeg (LGPL/GPL components — see CHANGELOG [Unreleased] and README).
+# Cine export (GIF / AVI / MPG): imageio + imageio-ffmpeg (BSD wrapper; wheel ships a GPL ffmpeg — do not freeze). Frozen builds bundle LGPL ffmpeg from scripts/build_lgpl_ffmpeg.py.
 imageio==2.38.0
 imageio-ffmpeg==0.6.0
 matplotlib>=3.11.2

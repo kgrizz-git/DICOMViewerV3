@@ -61,7 +61,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g. FFmpeg), and **`resources/fonts/`** in **[`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md)** when pins, PyInstaller `datas`, or fonts change.
 
-**Cine export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`** (vendored FFmpeg; LGPL/GPL-style stack). Frozen/redistributed builds must meet FFmpeg license obligations; see **`AGENTS.md`** for the short product note and this inventory doc for packaging.
+**Cine export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`** (BSD wrapper; the wheel’s FFmpeg is GPL and must not be frozen). Release freezes build and bundle an LGPL CLI via **`scripts/build_lgpl_ffmpeg.py`**; see **`resources/licenses/FFMPEG_LGPL_BUNDLED_NOTICE.md`**, **`AGENTS.md`**, and **`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`**.
 
 ## CI and GitHub Actions
 

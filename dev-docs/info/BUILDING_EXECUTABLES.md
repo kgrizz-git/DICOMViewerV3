@@ -1,6 +1,6 @@
 # Building Executables for DICOM Viewer V3
 
-**Last updated:** 2026-09-23
+**Last updated:** 2026-10-17
 
 This guide explains how to compile the DICOM Viewer V3 application into standalone executables for macOS, Windows, and Linux.
 
@@ -109,6 +109,18 @@ python -m pytest tests/test_pyinstaller_exclude_audit.py -v
 ```
 
 A full local `pyinstaller DICOMViewerV3.spec --clean --noconfirm` remains the definitive check that the spec and hooks resolve on your machine.
+
+### LGPL FFmpeg for cine export (release freezes)
+
+**File → Export Cine As…** AVI/MP4/MPG needs an FFmpeg CLI. The pinned **`imageio-ffmpeg`** wheel ships a **GPL** binary that PyInstaller must **not** bundle.
+
+1. **Release / CI:** Run `python scripts/build_lgpl_ffmpeg.py build` before `pyinstaller` (the **Build Executables** workflow does this). It stages `build/ffmpeg-lgpl/ffmpeg` (or `ffmpeg.exe`), `COPYING.LGPLv2.1`, optional `COPYING.LGPLv3` when the configuration includes `--enable-version3`, and `ffmpeg-lgpl-build-manifest.txt`.
+2. **Spec:** `DICOMViewerV3.spec` drops `imageio_ffmpeg/binaries/*` from the analysis output and, when the staged executable exists, adds `ffmpeg/` datas (executable plus any staged license/manifest files that are present).
+3. **Runtime:** Frozen builds resolve the CLI at `sys._MEIPASS/ffmpeg/ffmpeg` (or `ffmpeg.exe` on Windows). Confirm that path on each OS when validating a freeze.
+4. **Post-freeze checks:** Ensure `dist/` contains no `imageio_ffmpeg/binaries/ffmpeg*` and run the bundled `ffmpeg -version` (CI enforces non-GPL configure flags).
+5. **Local zero-binary freeze:** You may run PyInstaller without running the LGPL build; cine video formats will be unavailable unless the user supplies `ffmpeg` on `PATH` or via **`IMAGEIO_FFMPEG_EXE`**. GIF still works.
+
+Packager notice (tarball URL, digest, configure line): **`resources/licenses/FFMPEG_LGPL_BUNDLED_NOTICE.md`**. Regenerate **`THIRD_PARTY_LICENSES.md`** at release (`python scripts/generate_third_party_licenses.py --release`); it is gitignored.
 
 ### For macOS
 
