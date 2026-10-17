@@ -264,7 +264,12 @@ def download_tarball(destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with (
-            urllib.request.urlopen(FFMPEG_TARBALL_URL, timeout=600) as response,
+            # The URL is the pinned ffmpeg.org constant above, not a caller argument.
+            # Semgrep flags every non-literal urlopen target; the SHA-256 check follows.
+            urllib.request.urlopen(  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+                FFMPEG_TARBALL_URL,
+                timeout=600,
+            ) as response,
             destination.open("wb") as handle,
         ):
             shutil.copyfileobj(response, handle)
