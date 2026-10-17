@@ -77,10 +77,14 @@ def write_xlsx_labeled_value_row(
     value: Any,
     unit: str = "",
 ) -> int:
-    """Write columns 1–3 (label, value, optional unit) and return next row."""
-    ws.cell(row=row, column=1, value=label)
-    ws.cell(row=row, column=2, value=value)
-    ws.cell(row=row, column=3, value=_safe_spreadsheet_value(unit) if unit else "")
+    """Write columns 1–3 (label, value, optional unit) and return next row.
+
+    Label, value, and unit are formula-neutralized here so every caller is covered.
+    """
+    ws.cell(row=row, column=1, value=_safe_spreadsheet_value(label))
+    ws.cell(row=row, column=2, value=_safe_spreadsheet_value(value))
+    unit_cell = _safe_spreadsheet_value(unit) if unit else ""
+    ws.cell(row=row, column=3, value=unit_cell)
     return row + 1
 
 

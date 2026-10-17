@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from openpyxl import Workbook
+
 from core.roi_export_xlsx import (
     resolve_export_roi_manager,
+    write_xlsx_labeled_value_row,
     xlsx_area_label_value_unit,
 )
 
@@ -30,6 +33,21 @@ def test_resolve_export_roi_manager_prefers_sorted_first_truthy() -> None:
         {2: {"roi_manager": mgr_b}, 1: {"roi_manager": mgr_a}}
     )
     assert resolved is mgr_a
+
+
+def test_labeled_value_row_neutralizes_formula_text() -> None:
+    """Label, value, and unit are inert even when the caller passes them raw."""
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    write_xlsx_labeled_value_row(sheet, 1, "=Label", "=1+1", "=mm")
+    assert sheet["A1"].value == "'=Label"
+    assert sheet["B1"].value == "'=1+1"
+    assert sheet["C1"].value == "'=mm"
+    write_xlsx_labeled_value_row(sheet, 2, "Mean", 1.5, "")
+    assert sheet["A2"].value == "Mean"
+    assert sheet["B2"].value == 1.5
+    assert sheet["C2"].value == ""
 
 
 def test_resolve_export_roi_manager_all_none_returns_none() -> None:
