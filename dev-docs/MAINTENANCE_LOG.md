@@ -5,6 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-17
+- **LGPL FFmpeg configure line.** `--disable-autodetect` is part of the pinned configure line so a build host cannot link extra libraries it happens to have installed. Built-in `mpeg4` and `mpeg2video` stay available. The packager notice and replacement plan quote the same line.
 - **LGPL FFmpeg download Semgrep finding.** GitHub code scanning alerts on SARIF results even when Semgrep marks them `nosemgrep`. The dynamic-urllib rule also ignores a literal URL when `timeout=` is present. The download now calls `urlopen` with only the pinned URL literal and sets the 600 second limit on the socket default for that call.
 - **Dev-wheel FFmpeg path type.** `resolve_ffmpeg_exe` builds the wheel path from `str()` of the package resource so basedpyright accepts it as a filesystem path. Lookup behavior is unchanged.
 - **Cine export S3776.** `encode_cine_video_from_png_paths` shares one frame-append helper, and `CineExportDialog.__init__` delegates loop bounds and the missing-FFmpeg notice. Compared with the 2026-10-16 local archive, those were the only two added or moved `python:S3776` findings.

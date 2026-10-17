@@ -106,15 +106,17 @@ trust in a paid product.
       → naming exploration in [`FUTURE_WORK_DETAIL_NOTES.md`](FUTURE_WORK_DETAIL_NOTES.md#product-naming-exploration);
       consistency item B8 in [`TO_DO.md`](TO_DO.md). *Check trademark availability for the chosen name.* 🧑‍⚖️
       Detailed rename/hard-fork checklist: [`PREPARE_FOR_DISTRIBUTED_RELEASE.md`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md) §1.
-- [ ] **Mac App Store distribution** (optional channel) — separate from Developer ID
-      direct distribution; requires App Sandbox, "Mac App Distribution" cert, sandbox
-      audit of Qt/VTK/subprocesses, App Store Connect listing. **Not currently
-      planned.** → [`Prepare for distributed release`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md) §2.
+- [ ] **Versioned release pipeline** producing **signed** installers (not raw exes) for Windows
+      and macOS (Linux optional). → [Versioned release plan](plans/supporting/VERSIONED_RELEASE_PLAN.md),
       [`BUILDING_EXECUTABLES.md`](info/BUILDING_EXECUTABLES.md).
       Signing-option comparison (self-signed / CA OV vs EV / Azure Artifact Signing /
       SignPath OSS) and the onefile-vs-onefolder distribution decision (2026-09: stay
       one-folder + zip) are documented in
       [`BUILDING_EXECUTABLES.md`](info/BUILDING_EXECUTABLES.md) Step 4 (Windows) and Step 5.
+- [ ] **Mac App Store distribution** (optional channel) — separate from Developer ID
+      direct distribution; requires App Sandbox, "Mac App Distribution" cert, sandbox
+      audit of Qt/VTK/subprocesses, App Store Connect listing. **Not currently
+      planned.** → [`Prepare for distributed release`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md) §2.
 - [ ] **Generate & bundle `THIRD_PARTY_LICENSES.md`** in the release artifact (generator exists;
       run in release venv after dependency swaps). → [Compliance §3a/§5](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#3a-generate-sbom).
 - [ ] **Privacy policy** stating no data leaves the machine; link from About. → [Compliance §4c](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#4c-privacy-policy).

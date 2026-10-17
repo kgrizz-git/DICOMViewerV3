@@ -75,14 +75,14 @@ the remaining frozen-build and artifact-inventory gates.
 | **Pillow animated GIF only** | MIT-CMU | AVI/MP4/MPG. GIF is limited (256 colors, large file size) | `imageio` (BSD) can write GIFs via Pillow with no FFmpeg; drop `imageio-ffmpeg` entirely |
 | **OpenCV `cv2.VideoWriter`** | Apache 2.0 (wrapper) | — | **NOT recommended**: opencv-python wheels bundle GPLv3 FFmpeg in-process; not a project dependency. See reviewer note above. |
 | **Multi-frame DICOM export** | N/A | Video portability | Export cine as a DICOM multi-frame object — any DICOM viewer plays it; lossless; arguably more appropriate for a medical app |
-| **LGPL-only FFmpeg build (custom)** | LGPL | Build complexity | Bundle your own FFmpeg binary built without GPL codecs; drop `imageio-ffmpeg` |
+| **LGPL-only FFmpeg build (custom)** | LGPL | Build complexity | Keep the `imageio-ffmpeg` wrapper; strip only its wheel binary at freeze time |
 
 **Result (2026-10-17): GPL build confirmed** (`--enable-gpl`, libx264, libx265, vidstab, postproc). The wrapper package is BSD-2-Clause, but the shipped FFmpeg binary is GPL — a real Tier 0 blocker.
 
 **Important (reviewer note):** Do NOT use `opencv-python` as a replacement — its wheel ALSO bundles a GPLv3 FFmpeg (libavcodec/libx264/libx265) and links it in-process (worse than imageio-ffmpeg's subprocess model). `opencv-python` is also not a dependency of this project.
 
 **Better replacement options:**
-1. **Bundle an LGPL-only FFmpeg binary** (e.g. BtbN `ffmpeg-n7.1-latest-*-lgpl-7.1`) pointed to via `IMAGEIO_FFMPEG_EXE` or packaged in PyInstaller; drop the `imageio-ffmpeg` wheel binary. The app already uses only LGPL-safe encoders (`mpeg4`, `mpeg2video`) in `src/gui/cine_video_export.py`, so no codec regression.
+1. **Bundle the digest-pinned official FFmpeg 7.1.5 LGPL CLI** from `scripts/build_lgpl_ffmpeg.py` ([`FFMPEG_REPLACEMENT_PLAN.md`](FFMPEG_REPLACEMENT_PLAN.md) §4). Keep the `imageio-ffmpeg` Python wrapper and strip only its wheel binary at freeze time. The app already uses only LGPL-safe encoders (`mpeg4`, `mpeg2video`) in `src/gui/cine_video_export.py`, so no codec regression.
 2. **Zero-FFmpeg fallback:** Pillow animated GIF (already used) + multi-frame Secondary Capture DICOM export, or a user-supplied system `ffmpeg` on `PATH` / `IMAGEIO_FFMPEG_EXE`.
 3. **PyAV (`av`)** only after verifying its wheel's bundled `libavcodec` config per OS (some PyAV wheels also link GPL x264).
 

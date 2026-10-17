@@ -72,8 +72,8 @@ requires a different path:
 
 - `CODE_SIGNING_AND_NOTARIZATION.md`: clarify App Store is a separate track
   (this doc) and that Developer ID remains the default for direct distribution.
-- `COMMERCIAL_RELEASE_READINESS.md`: add Tier 1 item for App Store distribution
-  (currently absent); add rename as a tracked item (already present as #11).
+- `COMMERCIAL_RELEASE_READINESS.md`: Mac App Store distribution is already a
+  Tier 1 optional item (not currently planned). Rename stays tracked as item #11.
 - `RELEASING.md`: no App Store steps today; link to this doc when App Store
   becomes a release channel.
 

@@ -8,7 +8,7 @@ Frozen DICOM Viewer V3 builds may ship a static **FFmpeg 7.1.5** CLI built from 
 **Configure line** (same as `scripts/build_lgpl_ffmpeg.py`):
 
 ```text
-./configure --disable-gpl --disable-nonfree --disable-ffplay --disable-ffprobe --disable-doc --disable-debug
+./configure --disable-gpl --disable-nonfree --disable-autodetect --disable-ffplay --disable-ffprobe --disable-doc --disable-debug
 ```
 
 The **GNU LGPL** license text for this executable is **`COPYING.LGPLv2.1`** (and **`COPYING.LGPLv3`** only when the built binary’s `ffmpeg -version` configuration includes `--enable-version3`). Those files are taken from the verified tarball at build time, staged under `build/ffmpeg-lgpl/`, and bundled next to `ffmpeg` / `ffmpeg.exe` under `ffmpeg/` in PyInstaller output when the LGPL build step has been run.

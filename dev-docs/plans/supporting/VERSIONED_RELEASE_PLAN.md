@@ -122,7 +122,7 @@ Establish a repeatable release process that produces versioned, downloadable exe
 ## Phase 6 — Post-release process
 
 - [ ] After release, start a new `[Unreleased]` section in `CHANGELOG.md`.
-- [ ] Bump `src/version.py` to the next dev version (e.g., `0.4.0-dev` or just `0.4.0` immediately).
+- [ ] Bump `src/version.py` to the next dev version after the release (for a `0.5.0` release, `0.6.0-dev`).
 - [ ] Document the release process in `dev-docs/RELEASING.md` (or update if it exists).
 
 ---

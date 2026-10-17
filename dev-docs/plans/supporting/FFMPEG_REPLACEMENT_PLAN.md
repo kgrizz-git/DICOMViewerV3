@@ -101,8 +101,10 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
 3. **Configure line (do not component-whitelist):**
 
    ```text
-   ./configure --disable-gpl --disable-nonfree --disable-ffplay --disable-ffprobe --disable-doc --disable-debug
+   ./configure --disable-gpl --disable-nonfree --disable-autodetect --disable-ffplay --disable-ffprobe --disable-doc --disable-debug
    ```
+
+   `--disable-autodetect` stops the build machine from enabling external libraries it happens to have installed. It is not a component whitelist. Built-in `mpeg4`, `mpeg2video`, `rawvideo`, and `scale` stay on.
 
    A whitelist such as `--enable-encoder=mpeg4,mpeg2video --enable-muxer=avi,mp4,mov,mpeg2video,mpeg1system` is wrong for this app. `mpeg1system` is not an FFmpeg 7.1 muxer name. The MPG path needs the muxer named `mpeg`. The writer also needs `rawvideo` and `scale`. Default LGPL configure already includes those. Record the exact tarball version, SHA-256, and configure line in the manifest at implementation time. Do not invent the digest in this plan.
 4. **GPL checks run when we build or fetch our binary, and again on `dist/`.** They do **not** run against a user-supplied `ffmpeg`. Homebrew and apt builds are typically GPL. The user is not asking us to distribute those binaries. Refusing them disables the fallback on the machines that need it.

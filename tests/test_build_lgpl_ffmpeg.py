@@ -142,6 +142,7 @@ def test_configure_command_uses_shell_on_windows(monkeypatch: pytest.MonkeyPatch
     assert command[0] == "sh"
     assert command[1] == "configure"
     assert "--disable-gpl" in command
+    assert "--disable-autodetect" in command
 
 
 def test_configure_command_is_direct_on_posix(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -149,6 +150,7 @@ def test_configure_command_is_direct_on_posix(monkeypatch: pytest.MonkeyPatch) -
     command = configure_command()
     assert command[0] == "./configure"
     assert "--disable-gpl" in command
+    assert "--disable-autodetect" in command
 
 
 def test_stage_replaces_stale_lgplv3_notice(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

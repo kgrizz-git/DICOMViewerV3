@@ -94,6 +94,7 @@ FFMPEG_TARBALL_SHA256 = (
 CONFIGURE_ARGS: tuple[str, ...] = (
     "--disable-gpl",
     "--disable-nonfree",
+    "--disable-autodetect",
     "--disable-ffplay",
     "--disable-ffprobe",
     "--disable-doc",
