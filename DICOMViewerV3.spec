@@ -205,6 +205,28 @@ a = Analysis(
     noarchive=False,
 )
 
+# Phase 3 (FFMPEG_REPLACEMENT_PLAN): drop GPL wheel binaries from hook-imageio_ffmpeg;
+# bundle our staged LGPL CLI under ffmpeg/ for resolve_ffmpeg_exe() (sys._MEIPASS/ffmpeg/).
+def _entry_mentions_imageio_ffmpeg_binaries(entry) -> bool:
+    for part in entry[:2]:
+        normalized = str(part).replace("\\", "/").lower()
+        if "imageio_ffmpeg" in normalized and "binaries" in normalized:
+            return True
+    return False
+
+
+a.datas = [entry for entry in a.datas if not _entry_mentions_imageio_ffmpeg_binaries(entry)]
+a.binaries = [
+    entry for entry in a.binaries if not _entry_mentions_imageio_ffmpeg_binaries(entry)
+]
+
+_ffmpeg_exe_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+_staged_lgpl_ffmpeg = project_root / "build" / "ffmpeg-lgpl" / _ffmpeg_exe_name
+if _staged_lgpl_ffmpeg.is_file():
+    a.datas.append((str(_staged_lgpl_ffmpeg.resolve()), "ffmpeg"))
+
+_FFMPEG_UPX_EXCLUDE = ("ffmpeg", "ffmpeg.exe")
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -233,7 +255,7 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=USE_UPX,
-    upx_exclude=[],
+    upx_exclude=list(_FFMPEG_UPX_EXCLUDE),
     name='DICOMViewerV3',
 )
 

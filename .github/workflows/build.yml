@@ -115,6 +115,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python
+        id: setup-python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -153,10 +154,123 @@ jobs:
         run: |
           python -m pip uninstall -y typing || true
 
+      - name: LGPL FFmpeg cache key
+        id: ffmpeg_cache_key
+        shell: bash
+        run: |
+          # Hash the digest and configure line so the cache key stays free of spaces.
+          KEY=$(PYTHONPATH=scripts python -c "import hashlib; from build_lgpl_ffmpeg import FFMPEG_TARBALL_SHA256, CONFIGURE_LINE; raw = f'{FFMPEG_TARBALL_SHA256}|{CONFIGURE_LINE}'; print(hashlib.sha256(raw.encode()).hexdigest())")
+          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore staged LGPL FFmpeg cache
+        uses: actions/cache@68457722f35b609fd9536b223b0827ba67dfd8dd # v4.2.2
+        id: ffmpeg_cache
+        with:
+          path: build/ffmpeg-lgpl
+          key: lgpl-ffmpeg-${{ matrix.os }}-${{ steps.ffmpeg_cache_key.outputs.key }}
+
+      - name: Check staged LGPL FFmpeg
+        id: ffmpeg_staged
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            if [ -f build/ffmpeg-lgpl/ffmpeg.exe ]; then
+              echo "present=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "present=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ -f build/ffmpeg-lgpl/ffmpeg ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install MSYS2 toolchain (Windows)
+        if: matrix.os == 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'
+        uses: msys2/setup-msys2@77fa077fd567cc4eee719e3c5c74e8e998d98dcc # v2.28.0
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            diffutils
+            pkgconf
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
+
+      - name: Install FFmpeg compile dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest' && steps.ffmpeg_staged.outputs.present != 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config nasm yasm
+
+      - name: Install FFmpeg compile dependencies (macOS)
+        if: matrix.os == 'macos-latest' && steps.ffmpeg_staged.outputs.present != 'true'
+        shell: bash
+        run: |
+          brew install nasm pkg-config
+
+      - name: Build LGPL FFmpeg (Windows)
+        if: matrix.os == 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'
+        shell: msys2 {0}
+        run: |
+          export MSYS2_ARG_CONV_EXCL="*"
+          # Pull libgcc and winpthreads into the exe. The pinned configure flags stay unchanged.
+          export LDFLAGS="-static"
+          PY="$(cygpath -u "${{ steps.setup-python.outputs.python-path }}")"
+          "$PY" scripts/build_lgpl_ffmpeg.py build
+
+      - name: Build LGPL FFmpeg (macOS/Linux)
+        if: matrix.os != 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'
+        shell: bash
+        run: |
+          python scripts/build_lgpl_ffmpeg.py build
+
+      - name: Require staged LGPL FFmpeg before freeze
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            test -f build/ffmpeg-lgpl/ffmpeg.exe
+          else
+            test -f build/ffmpeg-lgpl/ffmpeg
+          fi
+
       - name: Build executable
         shell: bash
         run: |
           pyinstaller DICOMViewerV3.spec --clean --noconfirm
+
+      - name: Verify frozen FFmpeg bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHEEL_FFMPEG="$(find dist -path '*imageio_ffmpeg/binaries/ffmpeg*' -print -quit)"
+          if [ -n "${WHEEL_FFMPEG}" ]; then
+            echo "Error: imageio-ffmpeg wheel binary still present under dist/" >&2
+            find dist -path '*imageio_ffmpeg/binaries/ffmpeg*' -print
+            exit 1
+          fi
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            BUNDLED="$(find dist -path '*/ffmpeg/ffmpeg.exe' -type f -print -quit)"
+          else
+            BUNDLED="$(find dist -path '*/ffmpeg/ffmpeg' -type f -print -quit)"
+          fi
+          if [ -z "${BUNDLED}" ]; then
+            echo "Error: bundled ffmpeg/ executable not found under dist/" >&2
+            exit 1
+          fi
+          echo "Bundled ffmpeg for audit: ${BUNDLED}"
+          VERSION_FILE="$(mktemp)"
+          ENCODERS_FILE="$(mktemp)"
+          MUXERS_FILE="$(mktemp)"
+          "${BUNDLED}" -version > "${VERSION_FILE}"
+          "${BUNDLED}" -hide_banner -encoders > "${ENCODERS_FILE}"
+          "${BUNDLED}" -hide_banner -muxers > "${MUXERS_FILE}"
+          python scripts/build_lgpl_ffmpeg.py audit \
+            --version-file "${VERSION_FILE}" \
+            --encoders-file "${ENCODERS_FILE}" \
+            --muxers-file "${MUXERS_FILE}"
 
       - name: Verify offline docs in frozen bundle
         shell: bash

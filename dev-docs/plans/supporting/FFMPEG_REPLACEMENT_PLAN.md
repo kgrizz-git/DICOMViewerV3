@@ -148,18 +148,18 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
   - Runs `ffmpeg -version` and fails if the configuration line contains any of these whole flags: `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-postproc`. A bare substring such as `postproc` or `libx264` is the wrong check: it also matches `--disable-postproc` and `--disable-libx264`.
   - Runs `ffmpeg -hide_banner -encoders` and `-muxers` and requires `mpeg4`, `mpeg2video`, and muxer `mpeg`.
 - [x] If the build was configured with `--enable-version3`, ship `COPYING.LGPLv3` and say LGPL-3. If not, say LGPL-2.1-or-later. Do not guess; use the configuration line.
-- [ ] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary.
-- [ ] macOS and Linux: build with the runner's clang/gcc. The Linux binary may require the runner's glibc; that matches `ubuntu-latest`.
+- [x] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary.
+- [x] macOS and Linux: build with the runner's clang/gcc. The Linux binary may require the runner's glibc; that matches `ubuntu-latest`.
 
 ### Phase 3 — PyInstaller
 
-- [ ] In `DICOMViewerV3.spec`, after `Analysis` and before `COLLECT`, drop every `a.datas` entry collected by `hook-imageio_ffmpeg.py` (`collect_data_files('imageio_ffmpeg', subdir="binaries")` puts the GPL executable in `a.datas`, not `a.binaries`). Also drop any `a.binaries` entry whose path contains `imageio_ffmpeg` and `binaries`, in case a later hook change collects it as a binary.
-- [ ] Add the staged executable as a datas entry with destination `ffmpeg/`. The frozen file is `Path(sys._MEIPASS) / "ffmpeg" / "ffmpeg.exe"` on Windows and `Path(sys._MEIPASS) / "ffmpeg" / "ffmpeg"` on macOS and Linux. Use `_MEIPASS`. Do not hard-code `Contents/Resources` or `resources/ffmpeg`. Confirm that relative path once on a real Windows, macOS, and Linux freeze.
-- [ ] Keep `ffmpeg` out of UPX (`upx_exclude` if it is collected as a binary). `USE_UPX` is still true on Windows and Linux.
-- [ ] In `.github/workflows/build.yml`, run the LGPL build before `pyinstaller`, then after the freeze:
+- [x] In `DICOMViewerV3.spec`, after `Analysis` and before `COLLECT`, drop every `a.datas` entry collected by `hook-imageio_ffmpeg.py` (`collect_data_files('imageio_ffmpeg', subdir="binaries")` puts the GPL executable in `a.datas`, not `a.binaries`). Also drop any `a.binaries` entry whose path contains `imageio_ffmpeg` and `binaries`, in case a later hook change collects it as a binary.
+- [ ] Add the staged executable as a datas entry with destination `ffmpeg/`. The frozen file is `Path(sys._MEIPASS) / "ffmpeg" / "ffmpeg.exe"` on Windows and `Path(sys._MEIPASS) / "ffmpeg" / "ffmpeg"` on macOS and Linux. Use `_MEIPASS`. Do not hard-code `Contents/Resources` or `resources/ffmpeg`. Confirm that relative path once on a real Windows, macOS, and Linux freeze. The spec destination is in place; this stays open until a real freeze on each OS shows `ffmpeg/<exe>` under `_MEIPASS`.
+- [x] Keep `ffmpeg` out of UPX (`upx_exclude` if it is collected as a binary). `USE_UPX` is still true on Windows and Linux.
+- [x] In `.github/workflows/build.yml`, run the LGPL build before `pyinstaller`, then after the freeze:
   1. Fail if `dist/` contains `imageio_ffmpeg/binaries/ffmpeg*`.
   2. Run the bundled `ffmpeg -version` and fail on the same whole flags as Phase 2: `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-postproc`. Do not fail on `--disable-libx264`, `--disable-libx265`, or `--disable-postproc`.
-- [ ] Sign the bundled executable with the app: Windows Authenticode when signing is enabled, macOS Developer ID + Hardened Runtime before notarization. `USE_UPX = False` on macOS stays.
+- [ ] Sign the bundled executable with the app: Windows Authenticode when signing is enabled, macOS Developer ID + Hardened Runtime before notarization. `USE_UPX = False` on macOS stays. The build workflow has no Authenticode, codesign, or notarization step, so there is nothing to attach the bundled `ffmpeg` to yet.
 
 ### Phase 4 — Notices and docs
 
