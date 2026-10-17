@@ -1,27 +1,36 @@
 # FFmpeg (`imageio-ffmpeg`) GPL Binary Replacement Plan
 
-**Status:** Draft — ready for implementation  
-**Priority:** P0 — commercial-release Tier 0 blocker  
-**TO_DO ref:** Release / Product — [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #2 ("Replace `imageio-ffmpeg` — bundled FFmpeg 7.1 binary is a GPL build"); [License & library compliance](LICENSE_AND_COMPLIANCE_PLAN.md) §0b  
-**Last updated:** 2026-10-17  
+**Status:** Ready for implementation (review blockers incorporated 2026-10-17)
+**Priority:** P0 — commercial-release Tier 0 blocker
+**TO_DO ref:** Release / Product — [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #2 ("Replace `imageio-ffmpeg` — bundled FFmpeg 7.1 binary is a GPL build"); [License & library compliance](LICENSE_AND_COMPLIANCE_PLAN.md) §0b
+**Last updated:** 2026-10-17
 **Owner:** product/release
+
+This plan is an engineering recommendation, not a legal opinion. Counsel still reviews the final notice text and source offer before a paid release.
 
 ---
 
 ## 1. Background & Verified Finding
 
-`requirements.txt` pins `imageio==2.38.0` and `imageio-ffmpeg==0.6.0` to power cine video export (**File → Export Cine As…**).
+`requirements.txt` pins `imageio==2.38.0` and `imageio-ffmpeg==0.6.0` for cine video export (**File → Export Cine As…**).
 
-While the `imageio-ffmpeg` Python wrapper metadata (`.dist-info/METADATA`) declares **BSD-2-Clause** (and therefore passes the stdlib Python metadata gate `scripts/check_dependency_licenses.py`), a direct inspection of the vendored FFmpeg 7.1 binary inside the `imageio-ffmpeg==0.6.0` wheel on **2026-10-17** confirmed that it is compiled as a **GPLv3 build**:
+The `imageio-ffmpeg` Python wrapper metadata (`.dist-info/METADATA`) declares **BSD-2-Clause**, so `scripts/check_dependency_licenses.py` does not see the native binary. Direct inspection of the vendored FFmpeg 7.1 binary inside the `imageio-ffmpeg==0.6.0` wheel on **2026-10-17** confirmed a **GPLv3-applicable build**. On macOS arm64 the binary is `imageio_ffmpeg/binaries/ffmpeg-macos-aarch64-v7.1`, and `ffmpeg -version` reports:
 
-- Running `<imageio_ffmpeg_exe> -version` reports:
-  `configuration: --enable-gpl --enable-version3 --enable-libx264 --enable-libx265 --enable-libvidstab ...` (plus `postproc`).
-- Distributing a GPLv3 FFmpeg binary inside a proprietary/closed-source PyInstaller release artifact is a **Tier 0 commercial release blocker** ([`COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) item #2, [`LICENSE_AND_COMPLIANCE_PLAN.md`](LICENSE_AND_COMPLIANCE_PLAN.md) §0b, [`BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](../../info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md) row 1).
+```text
+configuration: --prefix=/Volumes/tempdisk/sw ... --enable-gpl --enable-libx264 --enable-libx265 ... --enable-libvidstab ... --enable-postproc ...
+```
 
- Crucially, **DICOM Viewer V3 does not use any GPL-only encoders (`libx264`, `libx265`, `vidstab`, `postproc`)**:
-- `src/gui/cine_video_export.py` explicitly avoids H.264/HEVC and encodes only with FFmpeg's built-in **LGPL-2.1+** encoders: **`mpeg4`** (MPEG-4 Part 2 for `.avi` and `.mp4`) and **`mpeg2video`** (MPEG-2 Program Stream for `.mpg`), while **`.gif`** uses Pillow via `imageio` without invoking FFmpeg at all.
+That configuration line does **not** include `--enable-version3`. `--enable-gpl` plus GPL libraries (`libx264`, `libx265`, `postproc`, `libvidstab`) is enough: the binary is GPL, not LGPL. Distributing it inside a proprietary PyInstaller artifact is a Tier 0 blocker ([`COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) item #2, [`LICENSE_AND_COMPLIANCE_PLAN.md`](LICENSE_AND_COMPLIANCE_PLAN.md) §0b, [`BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](../../info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md)).
 
-Therefore, we can eliminate the GPL binary from our release artifacts without losing any export container (**GIF**, **AVI**, **MP4**, **MPG**) or regressing **Windows 11 Media Player** in-box `.mp4` playback.
+DICOM Viewer V3 does not use those GPL encoders:
+
+- **GIF** uses Pillow through `imageio` and does not start FFmpeg.
+- **AVI and MP4** use the built-in `mpeg4` encoder (MPEG-4 Part 2).
+- **MPG** uses the built-in `mpeg2video` encoder and the `mpeg` muxer (`-f mpeg`).
+
+Those encoders and that muxer are available in an LGPL FFmpeg build. The export containers and the Windows 11 Media Player `.mp4` path can stay.
+
+**What must be replaced:** the GPL executable that the wheel and the PyInstaller hook would ship. **What stays:** the `imageio` / `imageio-ffmpeg` Python wrapper, the existing codec flags, and GIF-via-Pillow.
 
 ---
 
@@ -31,175 +40,187 @@ Therefore, we can eliminate the GPL binary from our release artifacts without lo
 
 | Location | Symbols / Role | FFmpeg / Codec Details |
 |----------|----------------|------------------------|
-| [`src/gui/cine_video_export.py`](../../../src/gui/cine_video_export.py) | `ffmpeg_codec_and_params_for_cine_container(video_format)`<br>`encode_cine_video_from_png_paths(...)`<br>`gif_frame_duration_milliseconds(...)`<br>`effective_fps_for_encoder(...)`<br>`rasterize_cine_export_frame(...)` | - **GIF:** `imageio.get_writer(output_path, format="GIF", mode="I", duration=duration_ms, loop=0)` — routes through Pillow plugin; **does not invoke FFmpeg**.<br>- **AVI:** `codec="mpeg4"`, `ffmpeg_params=["-pix_fmt", "yuv420p"]`<br>- **MP4:** `codec="mpeg4"`, `ffmpeg_params=["-pix_fmt", "yuv420p", "-movflags", "+faststart"]` (default in UI; stock Windows 11 Media Player compatible)<br>- **MPG:** `codec="mpeg2video"`, `ffmpeg_params=["-f", "mpeg", "-pix_fmt", "yuv420p"]`<br>- Calls `imageio.get_writer(..., format="FFMPEG", mode="I", fps=eff_fps, codec=vid_codec, ffmpeg_params=vid_extra, ffmpeg_log_level="error")` |
-| [`src/gui/dialogs/cine_export_encode_thread.py`](../../../src/gui/dialogs/cine_export_encode_thread.py) | `CineVideoEncodeThread(QThread)` | Runs `encode_cine_video_from_png_paths` in a worker `QThread` over temporary PNGs rendered on the Qt main thread. No `shell=True`. |
-| [`src/gui/dialogs/cine_export_dialog.py`](../../../src/gui/dialogs/cine_export_dialog.py) | `CineExportDialog`, `CineExportOptions` | Format combo (`["GIF", "AVI", "MP4", "MPG"]`, default index `2` = `"MP4"`). Line 149 help label mentions: `"Video encoding uses FFmpeg via the imageio-ffmpeg package (LGPL/GPL components)."` |
-| [`src/gui/actions/dialog_actions.py`](../../../src/gui/actions/dialog_actions.py) | `open_export_cine_video(app)` | Orchestrates **File → Export Cine As…**: checks `describe_focused_cine_export_blocker(app)`, opens `CineExportDialog`, renders frames to `tempfile.mkdtemp(prefix="dv3_cine_")`, runs `CineVideoEncodeThread`, cleans up partial output on cancel/error. |
-| [`tests/gui/test_cine_video_export.py`](../../../tests/gui/test_cine_video_export.py) | Unit tests for `cine_video_export.py` | Mocks `imageio.get_writer` and `imageio.imread` to verify codec/parameter plumbing (`mpeg4`, `mpeg2video`, `-movflags +faststart`, `yuv420p`), cancel handling, and frame index math. |
+| [`src/gui/cine_video_export.py`](../../../src/gui/cine_video_export.py) | `ffmpeg_codec_and_params_for_cine_container(video_format)`<br>`encode_cine_video_from_png_paths(...)` | - **GIF:** `imageio.get_writer(..., format="GIF")` — Pillow; no FFmpeg.<br>- **AVI:** `codec="mpeg4"`, `ffmpeg_params=["-pix_fmt", "yuv420p"]`<br>- **MP4:** `codec="mpeg4"`, `ffmpeg_params=["-pix_fmt", "yuv420p", "-movflags", "+faststart"]`<br>- **MPG:** `codec="mpeg2video"`, `ffmpeg_params=["-f", "mpeg", "-pix_fmt", "yuv420p"]`<br>- Writer: `imageio.get_writer(..., format="FFMPEG", mode="I", fps=..., codec=..., ffmpeg_params=..., ffmpeg_log_level="error")` |
+| [`src/gui/dialogs/cine_export_encode_thread.py`](../../../src/gui/dialogs/cine_export_encode_thread.py) | `CineVideoEncodeThread` | Runs encode on a `QThread`. No `shell=True`. |
+| [`src/gui/dialogs/cine_export_dialog.py`](../../../src/gui/dialogs/cine_export_dialog.py) | `CineExportDialog` | Formats `GIF`, `AVI`, `MP4`, `MPG` (default MP4). Help text says `"Video encoding uses FFmpeg via the imageio-ffmpeg package (LGPL/GPL components)."` |
+| [`src/gui/actions/dialog_actions.py`](../../../src/gui/actions/dialog_actions.py) | `open_export_cine_video(app)` | Renders frames to `tempfile.mkdtemp(prefix="dv3_cine_")`, then encodes. |
+| [`tests/gui/test_cine_video_export.py`](../../../tests/gui/test_cine_video_export.py) | Unit tests | Mocks `imageio.get_writer`. Does not run a real FFmpeg binary. |
 
-### 2.2 FFmpeg Binary Resolution (`IMAGEIO_FFMPEG_EXE`)
+`imageio_ffmpeg.write_frames` invokes FFmpeg as a separate process. The input side is stdin raw video, not a PNG demux:
 
-- Application code under `src/` **does not currently read or set `IMAGEIO_FFMPEG_EXE`**.
-- Instead, `imageio`'s `FFMPEG` plugin delegates binary discovery to `imageio_ffmpeg.get_ffmpeg_exe()`, which resolves in exact order:
-  1. `os.getenv("IMAGEIO_FFMPEG_EXE")` — if set and non-empty, returned immediately.
-  2. Wheel-bundled binary inside `imageio_ffmpeg.binaries` (`ffmpeg-<platform>-v7.1*`) — **this is the GPLv3 binary that must not ship**.
-  3. Conda environment binary (`$CONDA_PREFIX/bin/ffmpeg` or `Library/bin/ffmpeg.exe`).
-  4. System `ffmpeg` on `PATH` (`shutil.which("ffmpeg")`).
+```text
+ffmpeg -y -f rawvideo -vcodec rawvideo -s WxH -pix_fmt rgb24 -r FPS -i - -an -vcodec mpeg4 -pix_fmt yuv420p ...
+```
 
-### 2.3 Dependencies & PyInstaller Spec Collection
+Odd frame sizes can add `-vf scale=...` (default macro-block size 16). A replacement build must keep the `rawvideo` demuxer/decoder, the `scale` filter, the `pipe` protocol, encoders `mpeg4` and `mpeg2video`, and muxers `avi`, `mp4`, and `mpeg`.
 
-- [`requirements.txt`](../../../requirements.txt) lines 31–33:
-  ```text
-  imageio==2.38.0
-  imageio-ffmpeg==0.6.0
-  ```
-- [`requirements-dev.txt`](../../../requirements-dev.txt): includes `-r requirements.txt`; `scripts/check_dependency_licenses.py` inspects Python dist-info metadata (`BSD-2-Clause` for `imageio-ffmpeg`), which is why the native GPL binary inside `imageio_ffmpeg/binaries/` is invisible to metadata-only checks.
-- [`DICOMViewerV3.spec`](../../../DICOMViewerV3.spec): does not explicitly list `imageio_ffmpeg` in `binaries`, `datas`, or `hiddenimports` (only `'imageio.tests'` in `excludes`). However, `_pyinstaller_hooks_contrib`'s standard hook **`hook-imageio_ffmpeg.py`** automatically executes:
-  ```python
-  datas = collect_data_files('imageio_ffmpeg', subdir="binaries")
-  hiddenimports = ['imageio_ffmpeg.binaries']
-  ```
-  Consequently, any PyInstaller build executed in a venv where the binary `imageio-ffmpeg` wheel is installed **silently bundles the ~70–80 MB GPLv3 `ffmpeg` executable** into `dist/` unless explicitly excluded/replaced.
+### 2.2 How `imageio-ffmpeg` 0.6.0 finds the binary
+
+`get_ffmpeg_exe()` in `imageio_ffmpeg._utils` (verified in the project venv):
+
+1. `os.getenv("IMAGEIO_FFMPEG_EXE")` — returned immediately when non-empty. **Not cached. Not checked for existence.**
+2. `_get_ffmpeg_exe()` — `@lru_cache`. Wheel file under `imageio_ffmpeg/binaries/` (`ffmpeg-<platform>-v7.1*`). This is the GPL binary.
+3. `sys.prefix/bin/ffmpeg`, or on Windows `sys.prefix/Library/bin/ffmpeg.exe`. This is the interpreter prefix, not `$CONDA_PREFIX`.
+4. The command name `ffmpeg` on `PATH` (the string `"ffmpeg"`, after a `-version` probe). Not `shutil.which`.
+
+Application code does not set `IMAGEIO_FFMPEG_EXE` today. On Windows, `imageio_ffmpeg` hides the console with `STARTF_USESHOWWINDOW`, not `CREATE_NO_WINDOW`.
+
+### 2.3 Freeze behavior
+
+[`DICOMViewerV3.spec`](../../../DICOMViewerV3.spec) does not name `imageio_ffmpeg`. `_pyinstaller_hooks_contrib`'s `hook-imageio_ffmpeg.py` does:
+
+```python
+datas = collect_data_files('imageio_ffmpeg', subdir="binaries")
+hiddenimports = ['imageio_ffmpeg.binaries']  # imageio-ffmpeg >= 0.5
+```
+
+Those files land in `a.datas`. A freeze from a venv that has the wheel installed copies the GPL executable into `dist/` unless the spec removes those entries before `COLLECT`.
+
+`pip install --no-binary imageio-ffmpeg` is **not** a compliance fix. The sdist downloads the same GPL binary at install time. Keep the wrapper pin. Strip the binary at freeze time.
 
 ---
 
 ## 3. Options Assessment
 
-| Option | Effective License | Platforms | Effort | Regression Risk | Pros | Cons |
-|--------|-------------------|-----------|--------|-----------------|------|------|
-| **A. Bundle LGPL-only FFmpeg binary** (e.g. BtbN `ffmpeg-n7.1-latest-*-lgpl-7.1` or custom `--disable-gpl` build) via `IMAGEIO_FFMPEG_EXE` + PyInstaller `datas`/`binaries`, and strip `imageio_ffmpeg/binaries/*` | **LGPL-2.1-or-later** (binary) + **BSD-2-Clause** (`imageio` / `imageio-ffmpeg` wrapper) | Windows x64, macOS (arm64/x64), Linux x64 | **Medium** | **Low** — `mpeg4` and `mpeg2video` are native LGPL encoders in FFmpeg 7.1; zero change to containers or CLI flags | - Preserves out-of-the-box **GIF, AVI, MP4, MPG** export with zero user setup.<br>- Preserves stock **Windows 11 Media Player** `.mp4` playback.<br>- Keeps `imageio-ffmpeg`'s battle-tested subprocess management (`no shell=True`). | - Must fetch/verify LGPL FFmpeg binaries per OS in CI/build scripts (especially macOS universal/arm64 where BtbN only publishes Windows/Linux).<br>- Must comply with LGPL-2.1+ attribution, license text, and source/build-script offer in release artifacts.<br>- Must sign the bundled `ffmpeg` binary on Windows (Authenticode) and macOS (codesign + Hardened Runtime / notarization). |
-| **B. User-supplied system `ffmpeg` (`PATH` / `IMAGEIO_FFMPEG_EXE`) — no bundled FFmpeg binary** (keep `imageio` + `imageio-ffmpeg` sdist/wrapper only, strip wheel binary) | **BSD-2-Clause** (app ships zero FFmpeg code; user supplies binary) | Windows, macOS, Linux | **Easy** | **Medium** (UX) — AVI/MP4/MPG require user to install FFmpeg or configure path; GIF still works out-of-the-box | - **Zero FFmpeg copyleft or binary-signing obligations** in the shipped installer.<br>- Shrinks frozen bundle size by ~70–85 MB.<br>- Power users / clinical workstations can point `IMAGEIO_FFMPEG_EXE` or Settings to an IT-approved `ffmpeg`. | - Out-of-the-box AVI/MP4/MPG export is unavailable until the user installs FFmpeg (friction for non-technical Windows/macOS users).<br>- Requires clear UI detection and actionable guidance in `CineExportDialog`. |
-| **C. Zero-FFmpeg native export:** Pillow animated **GIF** + **Multi-frame Secondary Capture DICOM** export (drop AVI/MP4/MPG, or gate them behind optional system `ffmpeg` as in B) | **MIT-CMU / MIT** (`Pillow` + `pydicom`) | Windows, macOS, Linux | **Medium** | **Medium–High** if MP4/AVI are dropped completely; **Low** if combined with Option B | - 100% pure Python/permissive stack (`Pillow` + `pydicom`) in the default bundle.<br>- Multi-frame SC DICOM is lossless/clinical-grade and plays natively in any DICOM viewer (including DICOM Viewer V3). | - Dropping MP4/AVI breaks stock Windows 11 Media Player slide-deck/presentation workflows unless paired with Option B.<br>- GIF is 256-color palette quantized. |
-| **D. `PyAV` (`av` wheel)** replacing `imageio-ffmpeg` | **BSD-3-Clause** wrapper, **but wheel-bundled `libavcodec` license varies by OS/release** (often GPLv3 on PyPI when built with `libx264`/`libx265`) | Windows, macOS, Linux | **Hard** | **High** | - In-process CFFI/Cython bindings to FFmpeg libraries; no child subprocess spawn. | - **High licensing trap:** upstream PyPI binary wheels for `av` frequently bundle `libx264`/`libx265` (GPL), and link `libavcodec` **in-process** (dynamic/static library linking rather than separate-process CLI execution).<br>- Rewrites working `encode_cine_video_from_png_paths` pipeline. |
-| **E. *(Rejected)* OpenCV (`opencv-python` / `cv2.VideoWriter`)** | **GPLv3** in PyPI wheels (wrapper is Apache-2.0, but bundled FFmpeg is GPLv3) | Windows, macOS, Linux | **Hard** | **High** | *(None for this project)* | - **Explicitly rejected** ([`COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) #2, [`LICENSE_AND_COMPLIANCE_PLAN.md`](LICENSE_AND_COMPLIANCE_PLAN.md) §0b): `opencv-python` wheels bundle GPLv3 FFmpeg (`libavcodec`/`libx264`/`libx265`) linked **in-process**, which is legally and architecturally worse than `imageio-ffmpeg`.<br>- Not a project dependency (~90 MB bloat).<br>- Known Windows MSMF/FourCC fallback bugs ([`MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md`](MPR_DICOM_SAVE_CINE_VIDEO_EXPORT_ANGLE_MEASUREMENT_PLAN.md) §2.1). |
+| Option | License of what we ship | Effort | Fit |
+|--------|-------------------------|--------|-----|
+| **A. Bundle our own static LGPL `ffmpeg` CLI** and strip the wheel binary | LGPL for that executable (2.1 or 3, matching the build) + BSD-2-Clause wrapper | Medium | **Chosen for release builds.** Same containers and flags. Separate process, not linked into the app. |
+| **B. No bundled FFmpeg; user supplies `PATH` or `IMAGEIO_FFMPEG_EXE`** | No FFmpeg code in the installer | Low | **Required fallback** for dev machines and for a release cut whose LGPL build or notarization is blocked. GIF still works. |
+| **C. Drop AVI/MP4/MPG; GIF + multi-frame Secondary Capture DICOM only** | Permissive (`Pillow`, `pydicom`) | Medium | Out of scope. Does not preserve Windows Media Player export. SC DICOM can be a later feature. |
+| **D. PyAV (`av`)** | PyPI wheels often bundle GPL `libx264` / `libx265` and link them in-process | Hard | Rejected. |
+| **E. OpenCV `VideoWriter`** | PyPI wheels bundle GPLv3 FFmpeg linked in-process | Hard | Rejected. Not a dependency. |
+
+BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritten, so a SHA-256 of that URL does not stay valid. The non-`shared` archives are one static executable; `*-lgpl-shared-*` is the DLL/.so set. BtbN also does not publish macOS binaries. One pinned official source tarball and one configure line for every OS avoids that split.
 
 ---
 
-## 4. Recommended Approach
+## 4. Decisions
 
-Adopt a **two-layer hybrid of Option A (Primary for Release Builds) + Option B (Runtime Resolver & Dev/Fallback Path)**:
+1. **Replace the bundled binary. Keep the wrapper.** Frozen builds must not contain `imageio_ffmpeg/binaries/ffmpeg*`. `imageio` and `imageio-ffmpeg` stay pinned. Codec flags stay `mpeg4` / `mpeg2video` / `-f mpeg`.
+2. **Ship a static LGPL CLI, built from a pinned official FFmpeg 7.1.x source tarball**, the same configure line on Windows, macOS, and Linux. "Static" means libavcodec/libavformat/libavutil/libswscale are linked into the `ffmpeg` executable. The executable may still depend on system libc (and on macOS, libSystem). Do not ship `lgpl-shared` DLLs or `.so` files. The app does not link those libraries; it only spawns the CLI. Users replace the whole executable.
+3. **Configure line (do not component-whitelist):**
 
-1. **Runtime FFmpeg Resolver (`src/gui/cine_video_export.py`):**
-   - Add a dedicated helper `resolve_ffmpeg_exe() -> Path | None` that resolves an approved FFmpeg binary in deterministic priority order:
-     1. Explicit `IMAGEIO_FFMPEG_EXE` environment variable (if pointing to an existing executable file).
-     2. Bundled LGPL FFmpeg inside the frozen PyInstaller distribution (`Path(sys._MEIPASS) / "resources" / "ffmpeg" / <exe_name>` or platform equivalent) — sets `os.environ["IMAGEIO_FFMPEG_EXE"]` so `imageio-ffmpeg` uses it.
-     3. System `ffmpeg` on `PATH` (`shutil.which("ffmpeg")`).
-   - **Never** fall back to `imageio_ffmpeg`'s wheel-bundled `imageio_ffmpeg/binaries/ffmpeg-*` unless explicitly running in an unstripped dev test environment, and strip `imageio_ffmpeg/binaries` from all PyInstaller builds.
-2. **Bundle a Verified LGPL-2.1+ FFmpeg Binary in Frozen Releases (Option A):**
-   - Package an audited **LGPL-only** FFmpeg 7.1 binary (`--disable-gpl`, no `libx264`/`libx265`/`postproc`/`vidstab`, with `mpeg4` and `mpeg2video` encoders enabled) into the PyInstaller bundle and point `IMAGEIO_FFMPEG_EXE` to it at startup/export time.
-   - Strip the `imageio_ffmpeg/binaries` directory in `DICOMViewerV3.spec` so the GPL binary from the PyPI wheel can never enter `dist/`.
-3. **Graceful UI Degradation When No FFmpeg Binary Is Present (Option B safety net):**
-   - If a developer or source-checkout user removes the wheel binary and has no system `ffmpeg` installed, **GIF export continues to work unconditionally**, while **AVI / MP4 / MPG** remain listed (or clearly badged) with a clear, actionable message explaining how to install `ffmpeg` or set `IMAGEIO_FFMPEG_EXE`.
+   ```text
+   ./configure --disable-gpl --disable-nonfree --disable-ffplay --disable-ffprobe --disable-doc --disable-debug
+   ```
 
----
+   A whitelist such as `--enable-encoder=mpeg4,mpeg2video --enable-muxer=avi,mp4,mov,mpeg2video,mpeg1system` is wrong for this app. `mpeg1system` is not an FFmpeg 7.1 muxer name. The MPG path needs the muxer named `mpeg`. The writer also needs `rawvideo` and `scale`. Default LGPL configure already includes those. Record the exact tarball version, SHA-256, and configure line in the manifest at implementation time. Do not invent the digest in this plan.
+4. **GPL checks run when we build or fetch our binary, and again on `dist/`.** They do **not** run against a user-supplied `ffmpeg`. Homebrew and apt builds are typically GPL. The user is not asking us to distribute those binaries. Refusing them disables the fallback on the machines that need it.
+5. **Resolver order.** `resolve_ffmpeg_exe()` is pure: it does not write `os.environ`. It returns a small frozen result, not a bare `Path`, so the caller can tell a user override from a discovered binary:
 
-## 5. Phased Implementation Steps
+   ```text
+   FfmpegResolution(path: Path | None, source: "user_env" | "bundled" | "path" | "dev_wheel" | "missing")
+   ```
 
-### Phase 1 — Runtime FFmpeg Resolution, License Guard & Graceful Fallback
-- [ ] **Add `resolve_ffmpeg_exe()` and `probe_ffmpeg_build_config()` in `src/gui/cine_video_export.py`:**
-  - Inspect: `1) os.environ.get("IMAGEIO_FFMPEG_EXE")`, `2) bundled path under sys._MEIPASS / repo resources`, `3) shutil.which("ffmpeg")`.
-  - Provide a helper `probe_ffmpeg_build_config(exe_path: Path) -> dict[str, Any]` that runs `[str(exe_path), "-version"]` (`shell=False`, timeout 5 s) and checks whether `--enable-gpl`, `--enable-libx264`, `--enable-libx265`, or `--enable-nonfree` appear in the `configuration:` line.
-  - Before invoking `imageio.get_writer(..., format="FFMPEG", ...)`, pin `os.environ["IMAGEIO_FFMPEG_EXE"] = str(resolved_exe)` so `imageio_ffmpeg.get_ffmpeg_exe()` uses the resolved binary.
-- [ ] **Update `CineExportDialog` (`src/gui/dialogs/cine_export_dialog.py`):**
-  - Update the line 149 description text from `"Video encoding uses FFmpeg via the imageio-ffmpeg package (LGPL/GPL components)."` to accurately reflect the LGPL-2.1+ bundled/system FFmpeg posture.
-  - If `resolve_ffmpeg_exe()` returns `None` at dialog open, keep `"GIF"` enabled and either disable `"AVI"`, `"MP4"`, `"MPG"` with a tooltip/banner explaining how to set `IMAGEIO_FFMPEG_EXE` / install `ffmpeg`, or surface a clear message on accept.
-
-### Phase 2 — Acquire & Pin Audited LGPL-Only FFmpeg Binaries per Platform
-- [ ] **Provision LGPL-only FFmpeg 7.1 binaries for all three target OSes:**
-  - **Windows (`win64`):** BtbN `ffmpeg-n7.1-latest-win64-lgpl-7.1.zip` (extract `ffmpeg.exe` + required LGPL shared DLLs if shared build, or static LGPL `ffmpeg.exe`, plus `LICENSE.txt`).
-  - **Linux (`linux64`):** BtbN `ffmpeg-n7.1-latest-linux64-lgpl-7.1.tar.xz` (extract `ffmpeg` + `LICENSE.txt`).
-  - **macOS (`macos-arm64` / `x86_64`):** Build or fetch a reproducible static/relocatable FFmpeg 7.1 binary configured with:
-    `./configure --prefix=... --disable-gpl --disable-nonfree --disable-ffplay --disable-ffprobe --enable-ffmpeg --enable-avcodec --enable-avformat --enable-avfilter --enable-swscale --enable-swresample --enable-encoder=mpeg4,mpeg2video --enable-muxer=avi,mp4,mov,mpeg2video,mpeg1system`
-    (since BtbN only publishes Windows and Linux builds, and Homebrew's default `ffmpeg` formula enables GPL dependencies).
-- [ ] **Record SHA-256 checksums and provenance:**
-  - Create a manifest script `scripts/fetch_lgpl_ffmpeg.py` (or CI step) that downloads the pinned release archive, verifies its **SHA-256 digest**, runs `ffmpeg -version` to assert **zero `--enable-gpl` / `--enable-nonfree` flags** and presence of `mpeg4` + `mpeg2video` encoders, and stages the binary + `LICENSE.txt` + build-config metadata into a gitignored staging directory (e.g. `build/ffmpeg-lgpl/`).
-
-### Phase 3 — PyInstaller Spec & Build Pipeline Integration
-- [ ] **Update `DICOMViewerV3.spec`:**
-  - Filter out any `imageio_ffmpeg/binaries/*` entries from `a.datas` and `a.binaries` so `hook-imageio_ffmpeg.py` cannot slip the wheel's GPL binary into `dist/`.
-  - Collect the staged LGPL `ffmpeg` executable and its `LICENSE.txt` / build configuration notice into the bundle under a deterministic relative path (e.g. `ffmpeg/`).
-- [ ] **Update `.github/workflows/build.yml`:**
-  - Add a step before `pyinstaller DICOMViewerV3.spec --clean --noconfirm` that provisions the platform's LGPL FFmpeg binary via `scripts/fetch_lgpl_ffmpeg.py` and verifies its SHA-256 and `--disable-gpl` configuration.
-  - Add a post-freeze verification step that:
-    1. Fails if any file matching `imageio_ffmpeg/binaries/ffmpeg*` exists inside `dist/`.
-    2. Runs the bundled `ffmpeg -version` inside `dist/` and asserts `"--enable-gpl"` and `"--enable-nonfree"` are **absent** from output.
-
-### Phase 4 — Compliance Artifacts & Documentation Alignment
-- [ ] **Include LGPL-2.1+ compliance notices in the distribution:**
-  - Bundle FFmpeg's `COPYING.LGPLv2.1` (or `LICENSE.txt`), copyright notices, exact `ffmpeg -buildconf` output, and the written source/relinking pointer alongside `THIRD_PARTY_LICENSES.md`.
-- [ ] **Update project documentation:**
-  - [`requirements.txt`](../../../requirements.txt): update the comment above `imageio` / `imageio-ffmpeg` (or install `imageio-ffmpeg` with `--no-binary imageio-ffmpeg` if feasible).
-  - [`AGENTS.md`](../../../AGENTS.md), [`dev-docs/CONTRIBUTING.md`](../../CONTRIBUTING.md), [`dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](../../info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md), [`dev-docs/info/BUILDING_EXECUTABLES.md`](../../info/BUILDING_EXECUTABLES.md), [`CHANGELOG.md`](../../../CHANGELOG.md).
-  - Mark item #2 complete in [`dev-docs/COMMERCIAL_RELEASE_READINESS.md`](../../COMMERCIAL_RELEASE_READINESS.md) and update [`LICENSE_AND_COMPLIANCE_PLAN.md`](LICENSE_AND_COMPLIANCE_PLAN.md) §0b once frozen verification passes on all three platforms.
-
-### Phase 5 — Testing & Verification Gates
-- [ ] **Unit & integration tests (`tests/gui/test_cine_video_export.py`):**
-  - Test `resolve_ffmpeg_exe()` priority order (`IMAGEIO_FFMPEG_EXE` override → bundled path → system `PATH` → `None`).
-  - Test `probe_ffmpeg_build_config()` correctly rejects `--enable-gpl` / `--enable-nonfree` outputs and accepts clean LGPL-only outputs.
-  - Test end-to-end synthetic 4-frame encode to `tmp_path` for **GIF**, **AVI**, **MP4**, and **MPG** (< 512 KiB per file), verifying magic bytes and readable frame count.
-- [ ] **Frozen bundle license & binary gate (all 3 OSes):**
-  - Confirm zero `imageio_ffmpeg/binaries/*` files in `dist/`.
-  - Confirm bundled `ffmpeg -version` has no `--enable-gpl` or `libx264`/`libx265`.
-  - Run `python scripts/check_dependency_licenses.py` and Syft/ScanCode on `dist/`.
-- [ ] **Manual export QA gate:**
-  - Export a multi-frame cine loop (with and without overlays/ROIs, and with MONOCHROME1/MONOCHROME2) to **GIF**, **AVI**, **MP4**, and **MPG**.
-  - Verify `.mp4` and `.avi` play out-of-the-box in stock **Windows 11 Media Player**, macOS QuickTime / VLC, and Linux players.
-  - Verify mid-encode **Cancel** terminates the subprocess cleanly and removes the partial output file.
+   1. `source="user_env"` when `IMAGEIO_FFMPEG_EXE` names an existing regular file. Honor it. Never overwrite it.
+   2. `source="bundled"` when `sys.frozen` and `Path(sys._MEIPASS) / "ffmpeg" / exe_name` is an existing file. `exe_name` is `ffmpeg.exe` on Windows and `ffmpeg` elsewhere. The staged tree and the spec destination use that same filename under `ffmpeg/`.
+   3. `source="path"` from `shutil.which("ffmpeg")` when that path is an existing file.
+   4. `source="dev_wheel"` only when **not** frozen. Read the wheel file from `importlib.resources.files("imageio_ffmpeg.binaries")` using the platform filename in `imageio_ffmpeg._definitions.FNAME_PER_PLATFORM`. Do **not** call `imageio_ffmpeg._get_ffmpeg_exe()` or `get_ffmpeg_exe()` for this step. `_get_ffmpeg_exe()` is `@lru_cache` and checks the wheel, then `sys.prefix`, then `PATH`, which would undo the PATH-before-wheel order above.
+   5. `source="missing"` and `path=None` otherwise. An empty or non-file `IMAGEIO_FFMPEG_EXE` is not `user_env`; resolution continues.
+6. **Encode path.** `encode_cine_video_from_png_paths` calls the resolver before any FFmpeg `get_writer`:
+   - GIF does not need a binary.
+   - For AVI, MP4, and MPG, `source="missing"` raises `RuntimeError` with text that tells the user to install `ffmpeg` or set `IMAGEIO_FFMPEG_EXE`. `CineVideoEncodeThread.run` already emits `failed` with `str(exc)`; do not add a second error channel.
+   - When `source` is not `user_env` and `path` is set, assign `os.environ["IMAGEIO_FFMPEG_EXE"] = str(path)` immediately before `imageio.get_writer(..., format="FFMPEG")`. The env read inside `get_ffmpeg_exe()` is uncached, so this beats the cached wheel lookup.
+   - When `source` is `user_env`, leave the environment alone.
+7. **UI:** GIF stays available with no FFmpeg. If `source` is `missing`, disable AVI/MP4/MPG and explain `IMAGEIO_FFMPEG_EXE` or a system `ffmpeg`. In a normal dev venv the wheel binary counts as resolved, so those formats stay enabled. Frozen builds never use `dev_wheel`. The dialog check is read-only and must not set `IMAGEIO_FFMPEG_EXE`.
+8. **macOS arch:** current [`.github/workflows/build.yml`](../../../.github/workflows/build.yml) builds `macos-latest` only (Apple silicon). Do not block this work on an Intel or universal binary.
+9. **Multi-frame Secondary Capture DICOM** is not part of this change.
+10. **Size:** a default LGPL static `ffmpeg` is tens of megabytes. This change does not claim a bundle-size reduction. The size win exists only in the zero-binary fallback.
 
 ---
 
-## 6. Cross-Platform Notes, Build Changes & `IMAGEIO_FFMPEG_EXE` Handling
+## 5. Implementation Steps
 
-### 6.1 Platform-Specific Packaging Details
-- **Windows (`windows-latest` / x64):**
-  - BtbN's `ffmpeg-n7.1-latest-win64-lgpl-7.1.zip` ships `bin/ffmpeg.exe` and `bin/*.dll` (`avcodec-61.dll`, `avformat-61.dll`, `avutil-59.dll`, `swresample-5.dll`, `swscale-8.dll`). Keeping the shared LGPL DLLs next to `ffmpeg.exe` inside the one-folder `dist/DICOMViewerV3/ffmpeg/` directory also satisfies LGPL-2.1 dynamic relinking/replacement friendliness on Windows.
-  - When Windows Authenticode signing is enabled ([`BUILDING_EXECUTABLES.md`](../../info/BUILDING_EXECUTABLES.md) Step 4), include `dist/DICOMViewerV3/ffmpeg/*.exe` and `*.dll` in the `signtool` pass.
-  - Ensure `subprocess` calls inside `imageio_ffmpeg` continue to use `CREATE_NO_WINDOW` on Windows so no console window flashes during cine export.
-- **macOS (`macos-latest` / arm64 & x86_64):**
-  - Place the LGPL `ffmpeg` Mach-O binary under `DICOMViewerV3.app/Contents/Resources/ffmpeg/ffmpeg` (or `Contents/MacOS/ffmpeg` as appropriate for notarization).
-  - **Code signing & notarization:** Apple notarization requires all bundled Mach-O executables inside `.app` to be signed with **Developer ID Application** and **Hardened Runtime** (`--options runtime`) and a valid timestamp before `create-dmg` / `notarytool submit` ([`CODE_SIGNING_AND_NOTARIZATION.md`](../../info/CODE_SIGNING_AND_NOTARIZATION.md)). Do not use UPX on macOS (`USE_UPX = False` is already enforced in `DICOMViewerV3.spec`).
-- **Linux (`ubuntu-latest` / x86_64 AppImage):**
-  - Bundle BtbN's `ffmpeg-n7.1-latest-linux64-lgpl-7.1` `bin/ffmpeg` and `lib/*.so*` into `dist/DICOMViewerV3/ffmpeg/` before `AppDir` assembly in `.github/workflows/build.yml`, with `chmod +x`.
+### Phase 1 — Resolver and dialog
 
-### 6.2 `IMAGEIO_FFMPEG_EXE` Contract
-- **User / Admin Override First:** If the user or system administrator sets `IMAGEIO_FFMPEG_EXE=/path/to/ffmpeg` in the environment before launching DICOM Viewer V3, the application **must** honor that path and never overwrite it.
-- **Frozen App Default:** If `IMAGEIO_FFMPEG_EXE` is unset (or points to a non-existent path) and the bundled LGPL `ffmpeg` binary exists at the expected bundle path, the app sets `os.environ["IMAGEIO_FFMPEG_EXE"] = str(bundled_ffmpeg_path)` before calling `imageio.get_writer(..., format="FFMPEG")`.
-- **Subprocess Safety:** `IMAGEIO_FFMPEG_EXE` is passed as `argv[0]` to `subprocess.Popen` by `imageio-ffmpeg` with **`shell=False`**. Validate that the resolved path is an existing regular file (`os.path.isfile` and `os.access(..., os.X_OK)`) before invoking.
+- [ ] Add `FfmpegResolution` and `resolve_ffmpeg_exe() -> FfmpegResolution` in `src/gui/cine_video_export.py` with the order and wheel lookup in Decision 5. Validate with `Path.is_file()` before use. On Windows, `os.access(..., os.X_OK)` is a weak check; require a regular file. The dev-wheel helper reads package resources directly and does not call `_get_ffmpeg_exe()`.
+- [ ] Do not add a runtime function that rejects `--enable-gpl` on the resolved binary.
+- [ ] Wire `encode_cine_video_from_png_paths` as in Decision 6: resolve, raise `RuntimeError` for AVI/MP4/MPG when `source` is `missing`, and set `IMAGEIO_FFMPEG_EXE` only when `source` is not `user_env`. Rely on `CineVideoEncodeThread.run`'s existing `failed.emit(str(exc))`.
+- [ ] Update the cine dialog help text so it no longer says the app ships LGPL/GPL components together. When `source` is `missing`, keep GIF and disable AVI/MP4/MPG with a short explanation. Do not write the environment from the dialog.
 
----
+### Phase 2 — Pinned LGPL build
 
-## 7. Rollback & Fallback Strategy
+- [ ] Add `scripts/build_lgpl_ffmpeg.py` (or a small script plus a shell/MSYS2 recipe) that:
+  - Downloads one official FFmpeg 7.1.x tarball.
+  - Verifies the recorded SHA-256 before configure.
+  - Configures with Decision 3. No `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, or `--enable-postproc`.
+  - Stages `ffmpeg` (or `ffmpeg.exe`) plus `COPYING.LGPLv2.1` and a text file with the tarball version, digest, and configure line into gitignored `build/ffmpeg-lgpl/`.
+  - Runs `ffmpeg -version` and fails if the configuration line contains any of these whole flags: `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-postproc`. A bare substring such as `postproc` or `libx264` is the wrong check: it also matches `--disable-postproc` and `--disable-libx264`.
+  - Runs `ffmpeg -hide_banner -encoders` and `-muxers` and requires `mpeg4`, `mpeg2video`, and muxer `mpeg`.
+- [ ] If the build was configured with `--enable-version3`, ship `COPYING.LGPLv3` and say LGPL-3. If not, say LGPL-2.1-or-later. Do not guess; use the configuration line.
+- [ ] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary.
+- [ ] macOS and Linux: build with the runner's clang/gcc. The Linux binary may require the runner's glibc; that matches `ubuntu-latest`.
 
-- **Immediate compliance fallback (zero-binary ship):** If any platform's LGPL FFmpeg build or code-signing/notarization step blocks a release cut, build with `DICOMViewerV3.spec` stripping `imageio_ffmpeg/binaries/*` and **without** bundling a replacement binary (Option B). In that fallback build:
-  - **GIF** export works 100% out-of-the-box via Pillow.
-  - **AVI / MP4 / MPG** automatically activate when the user installs `ffmpeg` on `PATH` or sets `IMAGEIO_FFMPEG_EXE`.
-  - Zero GPL binary is distributed in the release artifact.
-- **Dev environment rollback:** Developers can always set `IMAGEIO_FFMPEG_EXE` to any local `ffmpeg` binary to test encoding without modifying the spec or virtual environment.
+### Phase 3 — PyInstaller
 
----
+- [ ] In `DICOMViewerV3.spec`, after `Analysis` and before `COLLECT`, drop every `a.datas` entry collected by `hook-imageio_ffmpeg.py` (`collect_data_files('imageio_ffmpeg', subdir="binaries")` puts the GPL executable in `a.datas`, not `a.binaries`). Also drop any `a.binaries` entry whose path contains `imageio_ffmpeg` and `binaries`, in case a later hook change collects it as a binary.
+- [ ] Add the staged executable as a datas entry with destination `ffmpeg/`. The frozen file is `Path(sys._MEIPASS) / "ffmpeg" / "ffmpeg.exe"` on Windows and `Path(sys._MEIPASS) / "ffmpeg" / "ffmpeg"` on macOS and Linux. Use `_MEIPASS`. Do not hard-code `Contents/Resources` or `resources/ffmpeg`. Confirm that relative path once on a real Windows, macOS, and Linux freeze.
+- [ ] Keep `ffmpeg` out of UPX (`upx_exclude` if it is collected as a binary). `USE_UPX` is still true on Windows and Linux.
+- [ ] In `.github/workflows/build.yml`, run the LGPL build before `pyinstaller`, then after the freeze:
+  1. Fail if `dist/` contains `imageio_ffmpeg/binaries/ffmpeg*`.
+  2. Run the bundled `ffmpeg -version` and fail on the same whole flags as Phase 2: `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-postproc`. Do not fail on `--disable-libx264`, `--disable-libx265`, or `--disable-postproc`.
+- [ ] Sign the bundled executable with the app: Windows Authenticode when signing is enabled, macOS Developer ID + Hardened Runtime before notarization. `USE_UPX = False` on macOS stays.
 
-## 8. Files Likely Touched (During Implementation)
+### Phase 4 — Notices and docs
 
-| File | Planned Change |
-|------|----------------|
-| `src/gui/cine_video_export.py` | Add `resolve_ffmpeg_exe()`, `probe_ffmpeg_build_config()`, and set `IMAGEIO_FFMPEG_EXE` to the resolved LGPL/system binary before `imageio.get_writer(..., format="FFMPEG")`. |
-| `src/gui/dialogs/cine_export_dialog.py` | Update FFmpeg license/notice wording on line 149; add graceful UI feedback if no FFmpeg executable is found for AVI/MP4/MPG. |
-| `DICOMViewerV3.spec` | Strip `imageio_ffmpeg/binaries/*` from `a.datas` / `a.binaries`; include staged LGPL `ffmpeg` binary + `LICENSE.txt` in bundle. |
-| `scripts/fetch_lgpl_ffmpeg.py` | **New** — download, SHA-256 verify, and audit (`--disable-gpl` check) the pinned LGPL FFmpeg 7.1 build per OS. |
-| `.github/workflows/build.yml` | Run `scripts/fetch_lgpl_ffmpeg.py` before PyInstaller freeze; assert frozen bundle contains LGPL `ffmpeg` and zero `imageio_ffmpeg/binaries/*` files. |
-| `requirements.txt` | Update cine export comment (and optionally document `--no-binary imageio-ffmpeg` or wrapper-only usage). |
-| `tests/gui/test_cine_video_export.py` | Add unit tests for `resolve_ffmpeg_exe()`, `probe_ffmpeg_build_config()`, missing-FFmpeg graceful error, and LGPL flag verification. |
-| `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md` | Update FFmpeg row from GPL blocker to verified LGPL-2.1+ bundled binary once landed. |
-| `dev-docs/info/BUILDING_EXECUTABLES.md` | Document the LGPL FFmpeg staging step and post-build verification check. |
-| `dev-docs/COMMERCIAL_RELEASE_READINESS.md` | Check off Tier 0 item #2 once verified across Windows, macOS, and Linux frozen builds. |
-| `dev-docs/plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md` | Update §0b and Decision Summary table once complete. |
-| `AGENTS.md` / `CHANGELOG.md` | Update cine export FFmpeg notes and `[Unreleased]` changelog entry. |
+- [ ] Ship `COPYING.LGPLv2.1` (and `COPYING.LGPLv3` only if `--enable-version3` is present), the configure line, and a pointer to the corresponding FFmpeg source tarball next to `THIRD_PARTY_LICENSES`.
+- [ ] Update the `imageio` / `imageio-ffmpeg` comment in `requirements.txt`, plus `AGENTS.md`, `dev-docs/CONTRIBUTING.md`, `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`, `dev-docs/info/BUILDING_EXECUTABLES.md`, and `CHANGELOG.md`.
+- [ ] Mark Commercial Release Readiness item #2 done only after the frozen gate passes on Windows, macOS, and Linux. Update `LICENSE_AND_COMPLIANCE_PLAN.md` §0b in that same change.
+
+### Phase 5 — Tests
+
+- [ ] Unit-test resolver priority with temporary files and `monkeypatch`: user env, bundled path, PATH, then dev wheel, then `missing`. Assert `source` as well as `path`. Mock the package-resource lookup so the test does not depend on `_get_ffmpeg_exe()`'s cached order. Do not require a real encode to decide license compliance.
+- [ ] License-string checks belong to `scripts/build_lgpl_ffmpeg.py` and the build workflow, using fixtures or the staged binary. Do not fail `tests/gui/test_cine_video_export.py` because the dev wheel is GPL.
+- [ ] Add an optional integration encode of a few synthetic frames to GIF, AVI, MP4, and MPG when `source` is not `missing`. Skip otherwise. Assert container magic bytes, not GPL flags.
+- [ ] Manual QA: export with and without overlays, including MONOCHROME1 and MONOCHROME2; play `.mp4` in stock Windows 11 Media Player; confirm Cancel still deletes a partial file.
 
 ---
 
-## 9. Open Questions
+## 6. `IMAGEIO_FFMPEG_EXE` Contract
 
-1. **macOS LGPL FFmpeg binary source:** Since BtbN publishes prebuilt LGPL 7.1 archives only for Windows (`win64`) and Linux (`linux64`/`linuxarm64`), should our macOS CI job compile a minimal LGPL FFmpeg 7.1 binary from the official FFmpeg 7.1 source tarball (cached in GitHub Actions by source SHA-256 + configure flags), or pull from a dedicated internal release asset repo?
-2. **Static vs. shared LGPL FFmpeg executable:** FFmpeg is an external CLI helper invoked in a **separate process** via `subprocess.Popen` (not linked into the Python interpreter or app process). Does counsel prefer shipping the **shared** LGPL FFmpeg build (`ffmpeg` + `libav*.dll`/`.so`/`.dylib` in `dist/DICOMViewerV3/ffmpeg/`) so end users can trivially swap the FFmpeg shared libraries too, or is a single **static** LGPL `ffmpeg` executable plus source/build-script offer sufficient since it is an independent executable?
-3. **Should we also add Multi-frame Secondary Capture DICOM cine export (Option C) as a P2 feature enhancement?** While not needed to unblock Windows 11 Media Player `.mp4` export, exporting a rendered cine loop (with burned-in overlays/LUT) as a multi-frame Secondary Capture DICOM series is a natural medical-imaging complement.
-4. **Runtime GPL guard policy for user-supplied `IMAGEIO_FFMPEG_EXE`:** When a user explicitly sets `IMAGEIO_FFMPEG_EXE` to their own system `ffmpeg` (which may be a Homebrew/apt GPL build), our app is not distributing that binary. Confirm that the `--disable-gpl` assertion runs **strictly on our bundled/packaged binary in CI and release builds**, while allowing user-supplied system `ffmpeg` at runtime without blocking the user.
+- `source="user_env"` means the variable already names an existing file. `encode_cine_video_from_png_paths` must not replace that value with the bundled, PATH, or dev-wheel binary.
+- An empty value, or a value that is not an existing file, is not `user_env`. Resolution continues at the bundled path.
+- Only `encode_cine_video_from_png_paths` may set the variable, and only when `source` is `bundled`, `path`, or `dev_wheel`. The dialog's enablement check is read-only.
+- `imageio-ffmpeg` passes the value as `argv[0]` with `shell=False`.
+
+---
+
+## 7. Rollback
+
+If the LGPL build or code signing blocks a release:
+
+- Strip `imageio_ffmpeg/binaries/*` from the spec.
+- Do not bundle a replacement binary.
+- GIF works. AVI/MP4/MPG work when the user has `ffmpeg` on `PATH` or sets `IMAGEIO_FFMPEG_EXE`.
+- The installer contains no GPL FFmpeg.
+
+Developers can keep using the wheel binary in an unfrozen checkout. That binary must never appear under `dist/`.
+
+---
+
+## 8. Files Likely Touched
+
+| File | Change |
+|------|--------|
+| `src/gui/cine_video_export.py` | `FfmpegResolution` and `resolve_ffmpeg_exe()`; dev-wheel lookup via `importlib.resources`; `encode_cine_video_from_png_paths` sets `IMAGEIO_FFMPEG_EXE` only when `source` is not `user_env`, and raises `RuntimeError` for AVI/MP4/MPG when `source` is `missing`. |
+| `src/gui/dialogs/cine_export_encode_thread.py` | No new signal. `run` already emits `failed` with the exception text. |
+| `src/gui/dialogs/cine_export_dialog.py` | Help text; disable AVI/MP4/MPG when `source` is `missing`. Do not set the environment. |
+| `scripts/build_lgpl_ffmpeg.py` | New. Download, digest-check, configure, and audit the LGPL CLI. |
+| `DICOMViewerV3.spec` | Drop wheel binaries from `a.datas` / `a.binaries`; add `ffmpeg/` from `build/ffmpeg-lgpl/`. |
+| `.github/workflows/build.yml` | Build LGPL FFmpeg before freeze; fail the job if `dist/` still contains the wheel binary or any `--enable-gpl` / `--enable-nonfree` / `--enable-libx264` / `--enable-libx265` / `--enable-postproc` flag. |
+| `requirements.txt` | Comment only. Do not drop the wrapper pins. Do not rely on `--no-binary`. |
+| `tests/gui/test_cine_video_export.py` | Resolver tests. Integration encodes skip when no binary resolves. |
+| `dev-docs/info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md` | Replace the GPL-blocker row after the frozen gate passes. |
+| `dev-docs/info/BUILDING_EXECUTABLES.md` | Document the staging step, `_MEIPASS/ffmpeg`, and the post-freeze check. |
+| `dev-docs/COMMERCIAL_RELEASE_READINESS.md` | Close item #2 only after all three frozen builds pass. |
+| `dev-docs/plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md` | Update §0b with this plan. |
+| `AGENTS.md`, `CHANGELOG.md` | Cine-export note and `[Unreleased]` entry when the code lands. |
+
+---
+
+## 9. Closed Questions
+
+1. **macOS binary source.** Build macOS from the same official tarball as Windows and Linux. Do not use BtbN.
+2. **Static vs shared.** Static CLI. Shared LGPL libraries are for in-process linking, which this app does not do, and they add DLL search hazards.
+3. **Secondary Capture DICOM cine.** Not this change.
+4. **User-supplied GPL `ffmpeg`.** Allowed at runtime. The `--enable-gpl` assertion applies only to the binary we build and to the frozen `dist/` tree.
