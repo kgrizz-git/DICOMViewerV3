@@ -2,7 +2,7 @@
 
 **Purpose:** Living checklist of **third-party Python packages**, **vendored native binaries**, and **shipped fonts** that may appear in a **PyInstaller** (or source) distribution of DICOM Viewer V3, with pointers to **authoritative license text**.  
 **Status:** Maintainer reference — **not** legal advice; product owners remain responsible for compliance, attribution, and source-offer obligations where licenses require them.  
-**Last updated:** 2026-07-29
+**Last updated:** 2026-10-17
 
 ---
 
@@ -19,20 +19,20 @@
 - **Two different axes:** **Commercial** means for-profit use (sales, paid services, internal use at a company). **Proprietary closed source** means you do **not** publish your application’s source under an open license. They are **orthogonal**: many products are **commercial + closed source**; open source can also be commercial (e.g. paid support). Copyleft cares about **redistribution and combination**, not “do you charge money?” alone.
 - **Most direct Python dependencies** are **MIT / BSD / Apache-style**. Those generally **allow commercial distribution** and **do not force you to open-source your own code**, subject to **attribution / license-file** requirements.
 - **PySide6 / Qt (LGPL path)** — Common pattern for **commercial, closed-source** desktop apps: comply with **LGPL** (notices, delivery/relinking rules as applicable per Qt documentation). That is **not** “must publish all viewer source on GitHub.”
-- **FFmpeg (`imageio-ffmpeg`)** — Often shipped in **commercial** products; satisfy **FFmpeg** / wheel obligations (see **`AGENTS.md`**). Again, **not** automatically “entire app must be open source.”
+- **FFmpeg (`imageio-ffmpeg`)** — Verified 2026-10-17: the bundled FFmpeg 7.1 binary is a **GPL build** (`--enable-gpl`, libx264, libx265). Tier 0 blocker; replacement required (see `COMMERCIAL_RELEASE_READINESS.md` item #2).
 - **Classic JPEG decoder** — `pylibjpeg-libjpeg` (GPL-3.0) is no longer in the runtime
   requirements. `python-gdcm==3.2.6` is selected for JPEG Baseline / Extended / Lossless; its
   package metadata declares Apache-2.0. The final frozen-bundle inventory must still capture the
   licenses and notices of the GDCM native libraries and their bundled dependencies.
 - **Liberation Sans** — **GPL-2.0** font binaries with an **embedding exception** for documents; still handle **font redistribution** compliance (on-disk **`License.txt`** / **`COPYING`**).
 
-**Bottom line:** **Commercial** shipping is compatible with this dependency profile for many models. **Closed-source commercial** is **plausible** for much of the stack but expects **LGPL (Qt, possibly FFmpeg) hygiene**, a release-artifact license inventory for GDCM, and the other unresolved license decisions below.
+**Bottom line:** **Commercial** shipping is compatible with much of this stack, but the bundled FFmpeg is a **GPL build** (Tier 0 blocker) and Qt/Liberation Sans compliance is unresolved. See `COMMERCIAL_RELEASE_READINESS.md`.
 
 Rough ordering in the table is by **copyleft strength and common redistribution duties**, not a legal ranking—confirm with counsel for your distribution model.
 
 | Priority | Component | License (summary) | Why it stands out |
 |----------|-----------|-------------------|-------------------|
-| **1** | **FFmpeg** binary pulled in by **`imageio-ffmpeg`** | **LGPL** and/or **GPL** (build-dependent) | Native codec stack; obligations often include **notice**, **license text**, and for LGPL/GPL builds **source offer** / attribution. See **`AGENTS.md`** and project **CHANGELOG** cine-export notes. |
+| **1** | **FFmpeg** binary pulled in by **`imageio-ffmpeg`** | **GPL** (verified 2026-10-17: `--enable-gpl`/libx264/libx265) | Native codec stack; obligations often include **notice**, **license text**, and for LGPL/GPL builds **source offer** / attribution. See **`AGENTS.md`** and project **CHANGELOG** cine-export notes. |
 | **2** | **Liberation Sans** (`resources/fonts/liberation_sans/`) | **GPL-2.0** + **Red Hat font embedding exceptions** | Font binaries are **GPL-2.0**-licensed with **specific exceptions** for documents using the font—still requires **compliance for redistributing the font files** (read **`License.txt`** / **`COPYING`** in that folder). |
 | **3** | **Qt** via **`PySide6`** | **LGPL-3.0-only** *or* **GPL-2.0/3.0** (upstream’s OR choice; commercial Qt license is a separate purchase) | Large GUI/native dependency. **LGPL** is **weaker copyleft than GPL** for many app-distribution patterns but still imposes **ongoing compliance** (notices, object code / relinking rules as applicable—see Qt Company LGPL materials). |
 | **4** | **`python-gdcm` / GDCM native libraries** | **Apache-2.0** package metadata; inspect the collected release asset | Replaces the GPL JPEG plugin. The exact wheel and its native-library notices must be included in the release SBOM and attribution review. |
@@ -103,7 +103,7 @@ Direct pins from **`requirements.txt`** (versions are minimums or exact pins as 
 
 | Component | Source | License (summary) | Notes |
 |-----------|--------|-------------------|--------|
-| **FFmpeg** (via **imageio-ffmpeg**) | Binary extracted at runtime from the **imageio-ffmpeg** wheel | **LGPL / GPL** family (build configuration–dependent) | **`IMAGEIO_FFMPEG_EXE`** may redirect to a system FFmpeg; frozen builds must still satisfy **FFmpeg license obligations** (attribution, license texts, source offers where required). See **`AGENTS.md`** (cine export) and **`CHANGELOG`** cine/video entries. |
+| **FFmpeg** (via **imageio-ffmpeg**) | Binary extracted at runtime from the **imageio-ffmpeg** wheel | **GPL** (verified 2026-10-17) | **`IMAGEIO_FFMPEG_EXE`** may redirect to a system FFmpeg; frozen builds must still satisfy **FFmpeg license obligations** (attribution, license texts, source offers where required). See **`AGENTS.md`** (cine export) and **`CHANGELOG`** cine/video entries. |
 | **GDCM** (via **python-gdcm**) | Native libraries collected from the exact `python-gdcm==3.2.6` wheel | Inspect the release wheel and collected files | Required for classic JPEG decoding. The current PyInstaller spec collects `_gdcm` dynamic libraries and data without hard-coded platform paths; the final frozen-artifact/SBOM review remains required. |
 
 ---
@@ -152,6 +152,7 @@ See **`dev-docs/info/BUILDING_EXECUTABLES.md`** and **`DICOMViewerV3.spec`**.
 | Date | Notes |
 |------|--------|
 | 2026-07-29 | Replaced GPL `pylibjpeg-libjpeg` in runtime requirements with `python-gdcm==3.2.6`; removed its license-policy exception. The wheel metadata declares Apache-2.0; final GDCM native-asset inventory and notices remain release work. |
+| 2026-10-17 | Verified `imageio-ffmpeg` 0.6.0 bundled FFmpeg 7.1 is a GPL build (`--enable-gpl`, libx264, libx265); Tier 0 blocker. |
 | 2026-04-17 | Top **Summary assessment** (commercial vs closed source); **`pylibjpeg-libjpeg` alternatives** table (Pillow, omit plugin, TurboJPEG, GDCM, MIT plugins); removed duplicate “Does this block…” prose. |
 | 2026-04-17 | After restrictive summary: **Commercial vs proprietary** note with **assessment basis** (`__version__` **0.2.10**, date **2026-04-17**). |
 | 2026-04-17 | Added **Most restrictive components (built app only)** summary (GPL/LGPL stack + Liberation fonts + caveat on transitive deps). |

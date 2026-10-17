@@ -12,7 +12,7 @@ Establish a repeatable release process that produces versioned, downloadable exe
 
 ### Prior work
 
-- **Version source:** `src/version.py` → `__version__ = "0.3.0"`.
+- **Version source:** `src/version.py` → `__version__ = "0.5.0"`.
 - **Changelog:** `CHANGELOG.md` follows Keep a Changelog + SemVer.
 - **SemVer guide:** `dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`.
 - **Releases guide:** `dev-docs/info/GITHUB_RELEASES_AND_VERSIONING.md` — describes tags, releases, and the intended workflow.
@@ -33,8 +33,8 @@ Establish a repeatable release process that produces versioned, downloadable exe
   6. All tests pass locally and in CI.
   7. Manual smoke test on at least one platform (open folder, view, export, 3D, fusion, pylinac).
   8. Commit version bump + changelog finalization.
-  9. Create annotated Git tag: `git tag -a v0.3.0 -m "Release v0.3.0"`.
-  10. Push tag: `git push origin v0.3.0`.
+  9. Create annotated Git tag: `git tag -a v0.5.0 -m "Release v0.5.0"`.
+  10. Push tag: `git push origin v0.5.0`.
   11. CI builds executables; verify artifacts download and run.
   12. Create GitHub Release from tag with release notes (see Phase 3).
 
@@ -98,7 +98,7 @@ Establish a repeatable release process that produces versioned, downloadable exe
 
 ## Phase 4 — Artifact naming and structure
 
-- [ ] Standardize artifact names with version: `DICOMViewerV3-v0.3.0-Windows.zip`, `DICOMViewerV3-v0.3.0-macOS.dmg`, `DICOMViewerV3-v0.3.0-Linux.AppImage`.
+- [ ] Standardize artifact names with version: `DICOMViewerV3-v0.5.0-Windows.zip`, `DICOMViewerV3-v0.5.0-macOS.dmg`, `DICOMViewerV3-v0.5.0-Linux.AppImage`.
 - [ ] Update `DICOMViewerV3.spec` or CI scripts to include version in output directory/filename.
 - [ ] Include `LICENSE`, `THIRD_PARTY_LICENSES.md`, and `CHANGELOG.md` inside each platform archive.
 - [ ] Windows: consider an NSIS/Inno Setup installer as an alternative to a raw zip (defer to follow-up if complexity is too high for first release).
@@ -110,9 +110,9 @@ Establish a repeatable release process that produces versioned, downloadable exe
 
 - [ ] Complete all items from the pre-release checklist (Phase 1).
 - [ ] Decide on the version number for the first formal release:
-  - `v0.3.0` (current) — signals pre-1.0 / beta.
+  - `v0.5.0` (current) — signals pre-1.0 / beta.
   - `v1.0.0` — signals production-ready. **Requires:** license decided, all P0 bugs resolved, manual QA pass.
-  - **Recommendation:** Ship `v0.3.0` as a "beta" GitHub Release first, then iterate toward `v1.0.0`.
+  - **Recommendation:** Ship `v0.5.0` as a "beta" GitHub Release first, then iterate toward `v1.0.0`.
 - [ ] Tag, push, verify CI creates the Release with attached executables.
 - [ ] Download and smoke-test each platform's executable from the GitHub Release page.
 - [ ] Update `README.md` with a "Download" section linking to the latest release.
@@ -129,7 +129,7 @@ Establish a repeatable release process that produces versioned, downloadable exe
 
 ## Open questions
 
-1. **First release version:** `v0.3.0` (beta/pre-release) or `v1.0.0` (production)? Recommend `v0.3.0` first.
+1. **First release version:** `v0.5.0` (beta/pre-release) or `v1.0.0` (production)? Recommend `v0.5.0` first.
 2. **Code signing:** macOS notarization is documented but may not be set up with credentials. Is this needed for the first release, or can it be unsigned with a "open anyway" instruction?
 3. **Windows installer:** Zip-only for now, or invest in an NSIS/Inno Setup installer? Recommend zip for first release.
 4. **Update checker:** Should the app check for new versions on startup? Defer to post-first-release.

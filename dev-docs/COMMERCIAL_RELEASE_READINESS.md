@@ -1,7 +1,7 @@
 # Commercial Release Readiness — Master Gate
 
 **Status:** Active — the single "can we sell this yet?" checklist
-**Last updated:** 2026-07-29
+**Last updated:** 2026-10-17
 **Owner:** product/release
 
 > **Purpose.** One place to see everything that must be true **before charging money** for
@@ -22,7 +22,7 @@
 | # | Blocker | Tier | Owner plan | Status |
 |---|---------|------|-----------|--------|
 | 1 | Replace GPL `pylibjpeg-libjpeg` + verify decode | 0 | [GDCM release validation plan](plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md) | 🟡 `python-gdcm==3.2.6` now replaces the GPL requirement and policy exception; DCMTK+dcm4che confirm `.50` color and valid `.51` output. Exact successful `.51` native diagnostic is allowlisted with a subprocess/hash test. Pending: clean frozen builds/corpus smokes on all targets and final GDCM asset-notice review |
-| 2 | Verify/replace FFmpeg (`imageio-ffmpeg`) license | 0 | [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker) | ❌ Not started |
+| 2 | Verify/replace FFmpeg (`imageio-ffmpeg`) license | 0 | [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker) | ❌ **GPL build confirmed** (ffmpeg 7.1) — blocker; replace with LGPL-only binary (not OpenCV) |
 | 3 | Replace Liberation Sans font with OFL/Apache font | 0 | [Compliance §3b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#3b-per-component-checklist-post-phase-0) | ❌ Not started |
 | 4 | Choose project license + add `LICENSE` | 0 | [Compliance §1](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#1b-project-license-file) | ❌ Not started |
 | 5 | Qt/PySide6 LGPL compliance (or Qt commercial) | 0 | [Compliance §2](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#phase-2--qt--pyside6-lgpl-compliance-for-commercial-distribution) | ❌ Not started |
@@ -61,7 +61,7 @@ trust in a paid product.
       transfer syntax that fails; assert the single documented successful `.51` native diagnostic
       in an isolated subprocess and clear every other native diagnostic; run full test suite +
       manual smoke after removal.
-- [ ] **Verify `imageio-ffmpeg` is the LGPL-only build** (likely fine) or replace it.
+- [ ] **Replace `imageio-ffmpeg`** — verified 2026-10-17: the bundled FFmpeg 7.1 binary is a **GPL build** (`--enable-gpl`, libx264, libx265). Must replace. Preferred: bundle an LGPL-only FFmpeg binary (app already uses only `mpeg4`/`mpeg2video`). Do NOT use opencv-python (also bundles GPLv3 FFmpeg).
       → [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker).
 - [ ] **Replace Liberation Sans** (GPL-2.0 + ambiguous embedding exception) with an SIL OFL /
       Apache font (Noto Sans, Source Sans 3, Inter, or Roboto).
@@ -105,8 +105,11 @@ trust in a paid product.
       installer, docs, metadata currently mix "DICOM Viewer V3" / "DICOMViewerV3").
       → naming exploration in [`FUTURE_WORK_DETAIL_NOTES.md`](FUTURE_WORK_DETAIL_NOTES.md#product-naming-exploration);
       consistency item B8 in [`TO_DO.md`](TO_DO.md). *Check trademark availability for the chosen name.* 🧑‍⚖️
-- [ ] **Versioned release pipeline** producing **signed** installers (not raw exes) for Windows
-      and macOS (Linux optional). → [Versioned release plan](plans/supporting/VERSIONED_RELEASE_PLAN.md),
+      Detailed rename/hard-fork checklist: [`PREPARE_FOR_DISTRIBUTED_RELEASE.md`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md) §1.
+- [ ] **Mac App Store distribution** (optional channel) — separate from Developer ID
+      direct distribution; requires App Sandbox, "Mac App Distribution" cert, sandbox
+      audit of Qt/VTK/subprocesses, App Store Connect listing. **Not currently
+      planned.** → [`Prepare for distributed release`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md) §2.
       [`BUILDING_EXECUTABLES.md`](info/BUILDING_EXECUTABLES.md).
       Signing-option comparison (self-signed / CA OV vs EV / Azure Artifact Signing /
       SignPath OSS) and the onefile-vs-onefolder distribution decision (2026-09: stay
@@ -165,6 +168,8 @@ silently break image loading for some modalities, and nothing ships until it's r
 | Versioned executables & release pipeline | [`VERSIONED_RELEASE_PLAN.md`](plans/supporting/VERSIONED_RELEASE_PLAN.md) |
 | Per-release version/changelog/tag procedure | [`RELEASING.md`](RELEASING.md) |
 | Decoder replacement engineering detail | [`PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md`](info/PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md) |
+| FFmpeg (`imageio-ffmpeg`) replacement | [`FFMPEG_REPLACEMENT_PLAN.md`](plans/supporting/FFMPEG_REPLACEMENT_PLAN.md) |
 | Code signing / notarization | [`CODE_SIGNING_AND_NOTARIZATION.md`](info/CODE_SIGNING_AND_NOTARIZATION.md) |
 | Building executables | [`BUILDING_EXECUTABLES.md`](info/BUILDING_EXECUTABLES.md) |
+| Rename / hard fork + Mac App Store distribution | [`PREPARE_FOR_DISTRIBUTED_RELEASE.md`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md) |
 | Dependency license policy & gate | [`DEPENDENCY_LICENSE_POLICY.md`](info/DEPENDENCY_LICENSE_POLICY.md) |

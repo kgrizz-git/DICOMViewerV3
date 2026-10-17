@@ -63,8 +63,8 @@ the remaining frozen-build and artifact-inventory gates.
 `imageio-ffmpeg` ships a pre-built FFmpeg binary. **Their documentation states this is an LGPL-only build** — built without GPL components (no libx264, libx265, etc.). If accurate, this is **not a blocker**: LGPL is compatible with closed-source commercial distribution under the same compliance path as Qt (notices + relinking opportunity).
 
 **Verify first before any engineering work:**
-- [ ] Check `imageio-ffmpeg`'s GitHub README and the wheel's `.dist-info/METADATA` License field to confirm the LGPL-only claim for the version pinned in `requirements.txt`.
-- [ ] Run: `pip show -f imageio-ffmpeg` and inspect the bundled binary's accompanying license text if any.
+- [x] Checked `imageio-ffmpeg` 0.6.0 wheel `.dist-info/METADATA` (License: BSD-2-Clause) and the bundled binary (verified 2026-10-17).
+- [x] Ran the bundled binary: `ffmpeg -version` reports `configuration: --enable-gpl --enable-libx264 --enable-libx265 ...` → **GPL build**, not LGPL-only. **Blocker confirmed.**
 
 **If confirmed LGPL-only:** No blocker. Add FFmpeg LGPL notice to `THIRD_PARTY_LICENSES.md` and comply as with Qt (see Phase 2b). No engineering change needed.
 
@@ -73,11 +73,20 @@ the remaining frozen-build and artifact-inventory gates.
 | Alternative | License | What you lose | Notes |
 |-------------|---------|---------------|-------|
 | **Pillow animated GIF only** | MIT-CMU | AVI/MP4/MPG. GIF is limited (256 colors, large file size) | `imageio` (BSD) can write GIFs via Pillow with no FFmpeg; drop `imageio-ffmpeg` entirely |
-| **OpenCV `cv2.VideoWriter`** | Apache 2.0 | Nothing obvious | OpenCV is likely already a transitive dep via pylinac→scikit-image; can write AVI with platform codecs |
+| **OpenCV `cv2.VideoWriter`** | Apache 2.0 (wrapper) | — | **NOT recommended**: opencv-python wheels bundle GPLv3 FFmpeg in-process; not a project dependency. See reviewer note above. |
 | **Multi-frame DICOM export** | N/A | Video portability | Export cine as a DICOM multi-frame object — any DICOM viewer plays it; lossless; arguably more appropriate for a medical app |
 | **LGPL-only FFmpeg build (custom)** | LGPL | Build complexity | Bundle your own FFmpeg binary built without GPL codecs; drop `imageio-ffmpeg` |
 
-**Recommendation:** Check the license first — this is likely already fine. If it is GPL, use **Pillow GIF + OpenCV AVI** as the replacement (both already available as transitive deps).
+**Result (2026-10-17): GPL build confirmed** (`--enable-gpl`, libx264, libx265, vidstab, postproc). The wrapper package is BSD-2-Clause, but the shipped FFmpeg binary is GPL — a real Tier 0 blocker.
+
+**Important (reviewer note):** Do NOT use `opencv-python` as a replacement — its wheel ALSO bundles a GPLv3 FFmpeg (libavcodec/libx264/libx265) and links it in-process (worse than imageio-ffmpeg's subprocess model). `opencv-python` is also not a dependency of this project.
+
+**Better replacement options:**
+1. **Bundle an LGPL-only FFmpeg binary** (e.g. BtbN `ffmpeg-n7.1-latest-*-lgpl-7.1`) pointed to via `IMAGEIO_FFMPEG_EXE` or packaged in PyInstaller; drop the `imageio-ffmpeg` wheel binary. The app already uses only LGPL-safe encoders (`mpeg4`, `mpeg2video`) in `src/gui/cine_video_export.py`, so no codec regression.
+2. **Zero-FFmpeg fallback:** Pillow animated GIF (already used) + multi-frame Secondary Capture DICOM export, or a user-supplied system `ffmpeg` on `PATH` / `IMAGEIO_FFMPEG_EXE`.
+3. **PyAV (`av`)** only after verifying its wheel's bundled `libavcodec` config per OS (some PyAV wheels also link GPL x264).
+
+→ **Implementation plan:** [`FFMPEG_REPLACEMENT_PLAN.md`](FFMPEG_REPLACEMENT_PLAN.md).
 
 ---
 
