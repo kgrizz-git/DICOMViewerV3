@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pydicom
 import pytest
+from openpyxl import load_workbook
 from PySide6.QtWidgets import QMessageBox
 
 from gui.dialogs.structured_report_browser_dialog import StructuredReportBrowserDialog
@@ -106,4 +108,57 @@ def test_export_events_cancel_skips_write(qapp, rdsr_ds, monkeypatch) -> None:
     dlg._export_events_csv_xlsx(xlsx=False)
     write_csv.assert_not_called()
     write_xlsx.assert_not_called()
+    dlg.close()
+
+
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _spreadsheet_cells_are_inert(values: list[object]) -> bool:
+    for value in values:
+        if isinstance(value, str) and value[:1] in _FORMULA_PREFIXES:
+            return False
+    return True
+
+
+@pytest.mark.qt
+def test_dose_event_exports_neutralize_formula_text(qapp, rdsr_ds, tmp_path) -> None:
+    """SR headers and values that start with =, +, -, or @ are written as text.
+
+    A benign header and value are left unchanged.
+    """
+    dlg = StructuredReportBrowserDialog(None, rdsr_ds, get_privacy_enabled=lambda: False)
+    assert dlg._events.rows
+    injected = {
+        "=Header": "=SUM(A1)",
+        "+Header": "+cmd",
+        "-Header": "-1.2",
+        "@Header": "@SUM(A1)",
+        "Target region": "Head",
+    }
+    dlg._events.rows[0].columns.update(injected)
+    headers = list(dlg._events.rows[0].columns.keys())
+
+    csv_path = tmp_path / "events.csv"
+    xlsx_path = tmp_path / "events.xlsx"
+    dlg._write_events_csv(str(csv_path), headers, dlg._events.rows)
+    dlg._write_events_xlsx(str(xlsx_path), headers, dlg._events.rows)
+
+    with csv_path.open(newline="", encoding="utf-8") as f:
+        csv_values = [cell for row in csv.reader(f) for cell in row]
+    workbook = load_workbook(xlsx_path)
+    sheet = workbook.active
+    assert sheet is not None
+    xlsx_values = [cell.value for row in sheet.iter_rows() for cell in row]
+
+    for values in (csv_values, xlsx_values):
+        assert _spreadsheet_cells_are_inert(values)
+        for prefix in _FORMULA_PREFIXES:
+            assert f"'{prefix}Header" in values
+            assert any(
+                isinstance(cell, str) and cell.startswith(f"'{prefix}") and "Header" not in cell
+                for cell in values
+            )
+        assert "Target region" in values
+        assert "Head" in values
     dlg.close()
