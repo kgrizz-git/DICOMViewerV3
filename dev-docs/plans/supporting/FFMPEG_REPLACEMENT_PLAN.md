@@ -1,6 +1,6 @@
 # FFmpeg (`imageio-ffmpeg`) GPL Binary Replacement Plan
 
-**Status:** Ready for implementation (review blockers incorporated 2026-10-17)
+**Status:** Implemented on the branch; Windows, macOS, and Linux frozen gates have not passed (2026-10-17)
 **Priority:** P0 — commercial-release Tier 0 blocker
 **TO_DO ref:** Release / Product — [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #2 ("Replace `imageio-ffmpeg` — bundled FFmpeg 7.1 binary is a GPL build"); [License & library compliance](LICENSE_AND_COMPLIANCE_PLAN.md) §0b
 **Last updated:** 2026-10-17
@@ -148,7 +148,7 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
   - Runs `ffmpeg -version` and fails if the configuration line contains any of these whole flags: `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-postproc`. A bare substring such as `postproc` or `libx264` is the wrong check: it also matches `--disable-postproc` and `--disable-libx264`.
   - Runs `ffmpeg -hide_banner -encoders` and `-muxers` and requires `mpeg4`, `mpeg2video`, and muxer `mpeg`.
 - [x] If the build was configured with `--enable-version3`, ship `COPYING.LGPLv3` and say LGPL-3. If not, say LGPL-2.1-or-later. Do not guess; use the configuration line.
-- [x] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary.
+- [ ] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary. Native CPython starts `configure` through `sh` because `CreateProcess` cannot execute the extensionless script. This stays open until `windows-latest` goes green.
 - [x] macOS and Linux: build with the runner's clang/gcc. The Linux binary may require the runner's glibc; that matches `ubuntu-latest`.
 
 ### Phase 3 — PyInstaller
@@ -169,8 +169,8 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
 
 ### Phase 5 — Tests
 
-- [ ] Unit-test resolver priority with temporary files and `monkeypatch`: user env, bundled path, PATH, then dev wheel, then `missing`. Assert `source` as well as `path`. Mock the package-resource lookup so the test does not depend on `_get_ffmpeg_exe()`'s cached order. Do not require a real encode to decide license compliance.
-- [ ] License-string checks belong to `scripts/build_lgpl_ffmpeg.py` and the build workflow, using fixtures or the staged binary. Do not fail `tests/gui/test_cine_video_export.py` because the dev wheel is GPL.
+- [x] Unit-test resolver priority with temporary files and `monkeypatch`: user env, bundled path, PATH, then dev wheel, then `missing`. Assert `source` as well as `path`. Mock the package-resource lookup so the test does not depend on `_get_ffmpeg_exe()`'s cached order. Do not require a real encode to decide license compliance.
+- [x] License-string checks belong to `scripts/build_lgpl_ffmpeg.py` and the build workflow, using fixtures or the staged binary. Do not fail `tests/gui/test_cine_video_export.py` because the dev wheel is GPL.
 - [ ] Add an optional integration encode of a few synthetic frames to GIF, AVI, MP4, and MPG when `source` is not `missing`. Skip otherwise. Assert container magic bytes, not GPL flags.
 - [ ] Manual QA: export with and without overlays, including MONOCHROME1 and MONOCHROME2; play `.mp4` in stock Windows 11 Media Player; confirm Cancel still deletes a partial file.
 

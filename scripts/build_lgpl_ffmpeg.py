@@ -13,7 +13,9 @@ at dev time; it produces the binary PyInstaller will bundle in a later phase.
 
 **Windows:** run the ``build`` subcommand on ``windows-latest`` inside an
 MSYS2 **mingw64** shell with a typical autotools toolchain (``gcc``, ``make``,
-``nasm``/``yasm`` as needed). There is no third-party prebuilt binary fallback.
+``nasm``/``yasm`` as needed). Native CPython starts ``configure`` through
+``sh`` because Windows cannot execute that extensionless script directly.
+There is no third-party prebuilt binary fallback.
 
 Design notes
 ------------
@@ -288,6 +290,28 @@ def ffmpeg_exe_name() -> str:
     return "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
 
 
+def pyinstaller_data_entry(source: Path, dest_name: str) -> tuple[str, str, str]:
+    """Return a post-Analysis ``a.datas`` entry ``(dest_name, source, "DATA")``.
+
+    ``COLLECT`` passes that list to ``normalize_toc``, which unpacks 3-tuples.
+    A hook-style ``(source, dest_dir)`` pair aborts the freeze.
+    """
+    return (dest_name.replace("\\", "/"), str(source.resolve()), "DATA")
+
+
+def configure_command() -> list[str]:
+    """Return the argv that runs the FFmpeg ``configure`` script.
+
+    On Windows the CI interpreter is native CPython, even inside an MSYS2
+    shell. ``CreateProcess`` cannot execute the extensionless POSIX script,
+    so the script is started through ``sh.exe``. ``make`` is a native
+    executable and stays a direct argv.
+    """
+    if os.name == "nt":
+        return ["sh", "configure", *CONFIGURE_ARGS]
+    return ["./configure", *CONFIGURE_ARGS]
+
+
 def _run_checked(
     command: list[str],
     *,
@@ -301,12 +325,14 @@ def _run_checked(
         raise FfmpegLgplError(
             f"Command failed with exit {exc.returncode}: {command[0]}"
         ) from exc
+    except OSError as exc:
+        raise FfmpegLgplError(f"Command failed to start: {command[0]}: {exc}") from exc
 
 
 def run_configure_and_build(source_root: Path) -> Path:
-    """Run ``./configure`` and ``make`` in ``source_root``; return built ``ffmpeg`` path."""
+    """Run ``configure`` and ``make`` in ``source_root``; return built ``ffmpeg`` path."""
     env = os.environ.copy()
-    configure_cmd = ["./configure", *CONFIGURE_ARGS]
+    configure_cmd = configure_command()
     LOGGER.info("Running %s in %s", CONFIGURE_LINE, source_root)
     _run_checked(configure_cmd, cwd=source_root, env=env)
     try:

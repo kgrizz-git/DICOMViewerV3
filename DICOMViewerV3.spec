@@ -220,11 +220,16 @@ a.binaries = [
     entry for entry in a.binaries if not _entry_mentions_imageio_ffmpeg_binaries(entry)
 ]
 
+from build_lgpl_ffmpeg import pyinstaller_data_entry
+
 _ffmpeg_exe_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
 _staged_lgpl_dir = project_root / "build" / "ffmpeg-lgpl"
 _staged_lgpl_ffmpeg = _staged_lgpl_dir / _ffmpeg_exe_name
 if _staged_lgpl_ffmpeg.is_file():
-    a.datas.append((str(_staged_lgpl_ffmpeg.resolve()), "ffmpeg"))
+    # Post-Analysis a.datas entries are (dest_name, source, typecode), not hook pairs.
+    a.datas.append(
+        pyinstaller_data_entry(_staged_lgpl_ffmpeg, f"ffmpeg/{_ffmpeg_exe_name}")
+    )
 # Phase 4: ship LGPL texts and build manifest beside the bundled CLI when staged (optional for local zero-binary freezes).
 for _staged_name in (
     "COPYING.LGPLv2.1",
@@ -233,7 +238,7 @@ for _staged_name in (
 ):
     _staged_sidecar = _staged_lgpl_dir / _staged_name
     if _staged_sidecar.is_file():
-        a.datas.append((str(_staged_sidecar.resolve()), "ffmpeg"))
+        a.datas.append(pyinstaller_data_entry(_staged_sidecar, f"ffmpeg/{_staged_name}"))
 
 _FFMPEG_UPX_EXCLUDE = ("ffmpeg", "ffmpeg.exe")
 

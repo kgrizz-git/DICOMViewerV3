@@ -11,7 +11,9 @@ from scripts.build_lgpl_ffmpeg import (
     FfmpegAuditError,
     TarballDigestError,
     audit_ffmpeg_outputs,
+    configure_command,
     find_forbidden_enable_flags,
+    pyinstaller_data_entry,
     stage_built_ffmpeg,
     verify_tarball_sha256,
 )
@@ -123,6 +125,29 @@ def test_verify_tarball_sha256_accepts_matching_digest(tmp_path: Path) -> None:
 def test_pinned_digest_constant_is_lowercase_hex() -> None:
     assert len(FFMPEG_TARBALL_SHA256) == 64
     assert FFMPEG_TARBALL_SHA256.lower() == FFMPEG_TARBALL_SHA256
+
+
+def test_pyinstaller_data_entry_is_dest_source_data(tmp_path: Path) -> None:
+    """COLLECT unpacks 3-tuples. A (source, dest) pair crashes normalize_toc."""
+    source = tmp_path / "ffmpeg"
+    source.write_bytes(b"fake-ffmpeg")
+    entry = pyinstaller_data_entry(source, "ffmpeg/ffmpeg")
+    assert entry == ("ffmpeg/ffmpeg", str(source.resolve()), "DATA")
+
+
+def test_configure_command_uses_shell_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("scripts.build_lgpl_ffmpeg.os.name", "nt")
+    command = configure_command()
+    assert command[0] == "sh"
+    assert command[1] == "configure"
+    assert "--disable-gpl" in command
+
+
+def test_configure_command_is_direct_on_posix(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("scripts.build_lgpl_ffmpeg.os.name", "posix")
+    command = configure_command()
+    assert command[0] == "./configure"
+    assert "--disable-gpl" in command
 
 
 def test_stage_replaces_stale_lgplv3_notice(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
