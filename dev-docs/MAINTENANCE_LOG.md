@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-17
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-17
+- **FFmpeg packager notice is scanned.** `resources/licenses/` is now part of the user-docs link checker's living Markdown set, so `FFMPEG_LGPL_BUNDLED_NOTICE.md` is not an unscanned tracked file.
 
 ## 2026-10-15
 - **zizmor report moved out of the checkout.** In the `vulnerable-actions` job, the zizmor JSON report is now written to `$RUNNER_TEMP` instead of the checkout, so a PR that commits a `zizmor.json` symlink cannot make the shell redirect truncate a workflow file before zizmor scans it (hiding a vulnerable action).
