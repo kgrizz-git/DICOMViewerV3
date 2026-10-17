@@ -8,8 +8,9 @@ on open, enabling phishing callbacks and local-environment disclosure (CSV / for
 injection). Prefixing such cells with an apostrophe forces the client to treat the
 value as literal text.
 
-This is the single source of truth for that neutralization; all tag/ROI/dose export
-writers route their string cells through here.
+This is the single source of truth for that neutralization. Tag, ROI, QA, dose
+summary, study-index, and SR dose-event export writers route their string cells
+through here.
 """
 
 from typing import Any

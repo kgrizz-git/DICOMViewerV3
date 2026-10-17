@@ -4,7 +4,8 @@ Structured Report browser — modeless SR document tree, dose event table, expor
 **Purpose:** Full-fidelity ``ContentSequence`` tree (lazy ``QAbstractItemModel``), optional
 per-irradiation-event table for RDSR-style instances (with optional **hide empty columns** in
 the table view only; exports keep all columns), legacy CT dose summary tab when parsing succeeds,
-raw-tags shortcut, and JSON / CSV / XLSX export.
+raw-tags shortcut, and JSON / CSV / XLSX export. Dose-event CSV and XLSX
+cells go through ``core.spreadsheet_safety`` so formula-like SR text stays literal.
 
 **Inputs:** ``pydicom.dataset.Dataset``, privacy flag, optional callbacks.
 
@@ -59,6 +60,7 @@ from core.rdsr_irradiation_events import (
     irradiation_event_column_is_empty_for_all_rows,
     ordered_irradiation_event_column_headers,
 )
+from core.spreadsheet_safety import SafeCsvWriter, neutralize_spreadsheet_value
 from core.sr_document_tree import (
     SrContentNode,
     SrDocumentTree,
@@ -533,22 +535,26 @@ class StructuredReportBrowserDialog(QDialog):
         QMessageBox.information(self, "Export", f"Wrote:\n{path}")
 
     def _write_events_csv(self, path: str, headers: list[str], rows: list[IrradiationEventRow]) -> None:
+        """Write dose-event rows. Formula-like header and cell text is neutralized."""
         with open(path, "w", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
+            w = SafeCsvWriter(csv.writer(f))
             w.writerow(headers)
             for er in rows:
                 w.writerow([er.columns.get(h, "") for h in headers])
 
     def _write_events_xlsx(self, path: str, headers: list[str], rows: list[IrradiationEventRow]) -> None:
+        """Write dose-event rows. Formula-like header and cell text is neutralized."""
         from openpyxl import Workbook
 
         wb = Workbook()
         ws = wb.active
         assert ws is not None
         ws.title = "Irradiation events"
-        ws.append(headers)
+        ws.append([neutralize_spreadsheet_value(h) for h in headers])
         for er in rows:
-            ws.append([er.columns.get(h, "") for h in headers])
+            ws.append(
+                [neutralize_spreadsheet_value(er.columns.get(h, "")) for h in headers]
+            )
         wb.save(path)
 
     def _open_tag_viewer(self) -> None:
