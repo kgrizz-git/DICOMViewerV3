@@ -87,7 +87,9 @@ def _dev_wheel_ffmpeg_path() -> Path | None:
     fname = FNAME_PER_PLATFORM.get(plat, "")
     if not fname:
         return None
-    candidate = Path(files("imageio_ffmpeg.binaries") / fname)
+    # ``files()`` is typed as a Traversable. An installed wheel is a real path;
+    # ``str()`` is what ``Path`` accepts, and a non-file result falls through.
+    candidate = Path(str(files("imageio_ffmpeg.binaries") / fname))
     if candidate.is_file():
         return candidate
     return None
