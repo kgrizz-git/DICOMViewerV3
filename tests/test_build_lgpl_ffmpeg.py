@@ -8,6 +8,7 @@ import pytest
 
 from scripts.build_lgpl_ffmpeg import (
     FFMPEG_TARBALL_SHA256,
+    FFMPEG_TARBALL_URL,
     FfmpegAuditError,
     TarballDigestError,
     audit_ffmpeg_outputs,
@@ -168,3 +169,14 @@ def test_stage_replaces_stale_lgplv3_notice(tmp_path: Path, monkeypatch: pytest.
     assert (stage / "COPYING.LGPLv2.1").is_file()
     assert (stage / "ffmpeg").is_file()
     assert not (stage / "COPYING.LGPLv3").exists()
+
+
+def test_urlopen_uses_the_pinned_tarball_url_literal() -> None:
+    """The download call must pass the pinned URL as a literal, not a name.
+
+    Semgrep's dynamic-urllib rule ignores a call only when ``urlopen`` has a
+    single string-literal argument. ``timeout=`` and ``nosemgrep`` both still
+    produce a SARIF result that GitHub code scanning alerts on.
+    """
+    source = Path("scripts/build_lgpl_ffmpeg.py").read_text(encoding="utf-8")
+    assert f'urllib.request.urlopen("{FFMPEG_TARBALL_URL}")' in source

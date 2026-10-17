@@ -5,7 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-17
-- **LGPL FFmpeg download Semgrep finding.** `urlopen` of the pinned tarball URL is a Semgrep `dynamic-urllib-use-detected` false positive. The URL is a module constant, and the bytes are SHA-256 checked before extract.
+- **LGPL FFmpeg download Semgrep finding.** GitHub code scanning alerts on SARIF results even when Semgrep marks them `nosemgrep`. The dynamic-urllib rule also ignores a literal URL when `timeout=` is present. The download now calls `urlopen` with only the pinned URL literal and sets the 600 second limit on the socket default for that call.
 - **Dev-wheel FFmpeg path type.** `resolve_ffmpeg_exe` builds the wheel path from `str()` of the package resource so basedpyright accepts it as a filesystem path. Lookup behavior is unchanged.
 - **Cine export S3776.** `encode_cine_video_from_png_paths` shares one frame-append helper, and `CineExportDialog.__init__` delegates loop bounds and the missing-FFmpeg notice. Compared with the 2026-10-16 local archive, those were the only two added or moved `python:S3776` findings.
 - **FFmpeg packager notice is scanned.** `resources/licenses/` is now part of the user-docs link checker's living Markdown set, so `FFMPEG_LGPL_BUNDLED_NOTICE.md` is not an unscanned tracked file.
