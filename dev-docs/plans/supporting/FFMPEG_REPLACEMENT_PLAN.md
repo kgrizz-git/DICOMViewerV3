@@ -133,10 +133,10 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
 
 ### Phase 1 — Resolver and dialog
 
-- [ ] Add `FfmpegResolution` and `resolve_ffmpeg_exe() -> FfmpegResolution` in `src/gui/cine_video_export.py` with the order and wheel lookup in Decision 5. Validate with `Path.is_file()` before use. On Windows, `os.access(..., os.X_OK)` is a weak check; require a regular file. The dev-wheel helper reads package resources directly and does not call `_get_ffmpeg_exe()`.
-- [ ] Do not add a runtime function that rejects `--enable-gpl` on the resolved binary.
-- [ ] Wire `encode_cine_video_from_png_paths` as in Decision 6: resolve, raise `RuntimeError` for AVI/MP4/MPG when `source` is `missing`, and set `IMAGEIO_FFMPEG_EXE` only when `source` is not `user_env`. Rely on `CineVideoEncodeThread.run`'s existing `failed.emit(str(exc))`.
-- [ ] Update the cine dialog help text so it no longer says the app ships LGPL/GPL components together. When `source` is `missing`, keep GIF and disable AVI/MP4/MPG with a short explanation. Do not write the environment from the dialog.
+- [x] Add `FfmpegResolution` and `resolve_ffmpeg_exe() -> FfmpegResolution` in `src/gui/cine_video_export.py` with the order and wheel lookup in Decision 5. Validate with `Path.is_file()` before use. On Windows, `os.access(..., os.X_OK)` is a weak check; require a regular file. The dev-wheel helper reads package resources directly and does not call `_get_ffmpeg_exe()`.
+- [x] Do not add a runtime function that rejects `--enable-gpl` on the resolved binary.
+- [x] Wire `encode_cine_video_from_png_paths` as in Decision 6: resolve, raise `RuntimeError` for AVI/MP4/MPG when `source` is `missing`, and set `IMAGEIO_FFMPEG_EXE` only when `source` is not `user_env`. Rely on `CineVideoEncodeThread.run`'s existing `failed.emit(str(exc))`.
+- [x] Update the cine dialog help text so it no longer says the app ships LGPL/GPL components together. When `source` is `missing`, keep GIF and disable AVI/MP4/MPG with a short explanation. Do not write the environment from the dialog.
 
 ### Phase 2 — Pinned LGPL build
 

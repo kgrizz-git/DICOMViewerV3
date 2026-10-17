@@ -34,6 +34,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from gui.cine_video_export import resolve_ffmpeg_exe
+
 
 @dataclass
 class CineExportOptions:
@@ -71,7 +73,10 @@ class CineExportDialog(QDialog):
         last = max(0, self._total - 1)
 
         self._format_combo = QComboBox()
-        self._format_combo.addItems(["GIF", "AVI", "MP4", "MPG"])
+        format_model = QStandardItemModel()
+        for label in ("GIF", "AVI", "MP4", "MPG"):
+            format_model.appendRow(QStandardItem(label))
+        self._format_combo.setModel(format_model)
         # Default **MP4**: Windows 11 Media Player documents in-box playback for .mp4 + MPEG-4;
         # .mpg is routed to MPEG-1/2 and usually needs the Store MPEG-2 Video Extension.
         self._format_combo.setCurrentIndex(2)
@@ -146,9 +151,29 @@ class CineExportDialog(QDialog):
         help_lbl = QLabel(
             "Frames are rendered with the same LUT, rescale, resolution, and overlay drawing "
             "path as PNG/JPG export (not a viewport grab). Cancel removes a partial output file.\n"
-            "Video encoding uses FFmpeg via the imageio-ffmpeg package (LGPL/GPL components)."
+            "GIF export does not require FFmpeg. AVI, MP4, and MPG use an external FFmpeg "
+            "executable (the app bundle's LGPL ffmpeg when frozen, ffmpeg on PATH, or "
+            "IMAGEIO_FFMPEG_EXE)."
         )
         help_lbl.setWordWrap(True)
+
+        ffmpeg_resolution = resolve_ffmpeg_exe()
+        ffmpeg_notice: QLabel | None = None
+        if ffmpeg_resolution.source == "missing":
+            for row, label in enumerate(("GIF", "AVI", "MP4", "MPG")):
+                if label == "GIF":
+                    continue
+                item = format_model.item(row)
+                if item is not None:
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+            current_fmt = str(self._format_combo.currentText()).upper()
+            if current_fmt in ("AVI", "MP4", "MPG"):
+                self._format_combo.setCurrentIndex(0)
+            ffmpeg_notice = QLabel(
+                "FFmpeg was not found. Install ffmpeg on your PATH or set IMAGEIO_FFMPEG_EXE "
+                "to the ffmpeg executable. GIF export remains available."
+            )
+            ffmpeg_notice.setWordWrap(True)
 
         privacy_notice = QLabel(
             "<b>Privacy notice:</b> Cine export can include visible image text, overlays, ROIs, "
@@ -181,6 +206,8 @@ class CineExportDialog(QDialog):
         root.addWidget(loop_group)
         root.addWidget(self._overlay_check)
         root.addWidget(help_lbl)
+        if ffmpeg_notice is not None:
+            root.addWidget(ffmpeg_notice)
         root.addWidget(privacy_notice)
         root.addWidget(buttons)
         self.setLayout(root)
