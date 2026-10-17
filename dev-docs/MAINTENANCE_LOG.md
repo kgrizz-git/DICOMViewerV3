@@ -5,6 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-17
+- **Cine export S3776.** `encode_cine_video_from_png_paths` shares one frame-append helper, and `CineExportDialog.__init__` delegates loop bounds and the missing-FFmpeg notice. Compared with the 2026-10-16 local archive, those were the only two added or moved `python:S3776` findings.
 - **FFmpeg packager notice is scanned.** `resources/licenses/` is now part of the user-docs link checker's living Markdown set, so `FFMPEG_LGPL_BUNDLED_NOTICE.md` is not an unscanned tracked file.
 
 ## 2026-10-15

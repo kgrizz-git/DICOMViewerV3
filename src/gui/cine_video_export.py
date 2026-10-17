@@ -364,6 +364,25 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
     return image
 
 
+def _append_png_frames(
+    writer: Any,
+    paths: Sequence[Path],
+    cancel_event: threading.Event | None,
+) -> None:
+    """Append each PNG to ``writer``, expanding gray frames to RGB.
+
+    Raises:
+        RuntimeError: when ``cancel_event`` is set between frames.
+    """
+    for path in paths:
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError(_MSG_EXPORT_CANCELLED)
+        frame = imageio.imread(str(path))
+        if getattr(frame, "ndim", 0) == 2:
+            frame = np.stack([frame] * 3, axis=-1)
+        writer.append_data(frame)
+
+
 def _pin_ffmpeg_exe_for_encode() -> None:
     """
     Resolve FFmpeg and point imageio at it before an AVI, MP4, or MPG writer.
@@ -415,17 +434,6 @@ def encode_cine_video_from_png_paths(
             duration=duration_ms,
             loop=0,
         )
-        try:
-            for _i, p in enumerate(paths):
-                if cancel_event and cancel_event.is_set():
-                    raise RuntimeError(_MSG_EXPORT_CANCELLED)
-                arr = imageio.imread(str(p))
-                if arr.ndim == 2:
-                    arr = np.stack([arr] * 3, axis=-1)
-                writer.append_data(arr)
-        finally:
-            writer.close()
-
     elif fmt in ("AVI", "MP4", "MPG"):
         vid_codec, vid_extra = ffmpeg_codec_and_params_for_cine_container(fmt)
         _pin_ffmpeg_exe_for_encode()
@@ -438,18 +446,12 @@ def encode_cine_video_from_png_paths(
             ffmpeg_params=vid_extra,
             ffmpeg_log_level="error",
         )
-        try:
-            for p in paths:
-                if cancel_event and cancel_event.is_set():
-                    raise RuntimeError(_MSG_EXPORT_CANCELLED)
-                arr = imageio.imread(str(p))
-                if arr.ndim == 2:
-                    arr = np.stack([arr] * 3, axis=-1)
-                writer.append_data(arr)
-        finally:
-            writer.close()
     else:
         raise RuntimeError(f"Unsupported video format: {video_format}")
+    try:
+        _append_png_frames(writer, paths, cancel_event)
+    finally:
+        writer.close()
 
 
 def safe_remove_partial_output(path: str) -> None:
