@@ -5,6 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-18
+- **README badges.** `README.md` shows the `main` CI status, the SonarQube Cloud quality gate, and a static platforms badge. Add a latest-release badge after the first release is published.
 - **macOS FFmpeg collection type.** The staged `ffmpeg` executable is a PyInstaller `BINARY` entry. `DATA` would land in `Contents/Resources`, which `codesign --deep` does not sign. License files stay `DATA`.
 - **Three-OS LGPL FFmpeg freeze.** Build Executables run 39093453422 passed on Windows, macOS, and Ubuntu at commit `0a2f1ce`. Windows compiled FFmpeg from source after the compiler-test fix. Configure reported LGPL 2.1 or later, and each frozen bundle passed the wheel-strip check and the LGPL audit. Signing and a launched-process `_MEIPASS` check stay open.
 

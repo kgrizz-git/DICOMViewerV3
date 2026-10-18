@@ -1,5 +1,9 @@
 # DICOM Viewer V3
 
+[![CI](https://github.com/kgrizz-git/DICOMViewerV3/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kgrizz-git/DICOMViewerV3/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kgrizz-git_DICOMViewerV3&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kgrizz-git_DICOMViewerV3)
+![Platforms: Windows | macOS | Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
+
 DICOM Viewer V3 is a cross-platform desktop application for reviewing medical
 imaging studies locally on Windows, macOS, and Linux. Open studies from files
 or folders, review them with multi-window viewing and clinical measurement
