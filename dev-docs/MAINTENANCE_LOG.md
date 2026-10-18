@@ -5,6 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-17
+- **Action pin check Semgrep finding.** `scripts/check_action_pins.py` refuses any URL that is not under `https://api.github.com/` and loads it with `urllib.request.build_opener`, not `urlopen`. Semgrep's dynamic-urllib rule matches every non-literal `urlopen`, and its HTTPSConnection rule matches `http.client` even when the host is fixed.
 - **Action pin check.** `scripts/check_action_pins.py` and the **Action pins exist** CI job require every remote `uses:` under `.github/workflows/` to be a commit that exists, and a version comment to match that tag. zizmor still only checks advisories and does not catch a pin that is not a commit. The job is not a required check until it is added to KGRuleset1.
 
 ## 2026-10-15

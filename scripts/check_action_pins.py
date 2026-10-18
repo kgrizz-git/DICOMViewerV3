@@ -203,7 +203,16 @@ def check_action_uses(uses: list[ActionUse], fetch: Fetch, token: str) -> list[s
 
 
 def github_fetch(url: str, token: str) -> tuple[int, dict[str, object] | None]:
-    """GET one GitHub API URL. Network and HTTP transport errors fail closed."""
+    """GET one GitHub API URL. Network and HTTP transport errors fail closed.
+
+    Only ``https://api.github.com/`` URLs are requested. ``urlopen`` is not used:
+    Semgrep treats every non-literal ``urlopen`` as a dynamic URL, including one
+    this module just built. ``build_opener`` uses the default HTTPS handler, which
+    verifies certificates.
+    """
+    prefix = f"{API_ROOT}/"
+    if not url.startswith(prefix):
+        raise PinCheckError("Refusing a URL outside the GitHub API")
     request = urllib.request.Request(
         url,
         headers={
@@ -214,14 +223,19 @@ def github_fetch(url: str, token: str) -> tuple[int, dict[str, object] | None]:
         },
         method="GET",
     )
+    opener = urllib.request.build_opener()
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        with opener.open(request, timeout=30) as response:
+            raw = response.read()
             status = int(response.status)
-    except urllib.error.HTTPError as exc:
-        return int(exc.code), None
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-        raise PinCheckError(f"GitHub API request failed for {url}: {exc}") from exc
+    except urllib.error.HTTPError as http_failure:
+        return int(http_failure.code), None
+    except (urllib.error.URLError, TimeoutError, OSError) as failure:
+        raise PinCheckError(f"GitHub API request failed for {url}: {failure}") from failure
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as failure:
+        raise PinCheckError(f"GitHub API response for {url} was not JSON") from failure
     if not isinstance(payload, dict):
         raise PinCheckError(f"GitHub API response for {url} was not an object")
     return status, payload

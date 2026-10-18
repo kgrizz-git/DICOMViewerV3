@@ -157,3 +157,10 @@ def test_unpinned_ref_is_reported_without_network() -> None:
 
     problems = check_action_uses([unpinned], fetch, "token")
     assert "not a 40-character commit pin" in problems[0]
+
+
+def test_github_fetch_refuses_urls_outside_the_api() -> None:
+    from scripts.check_action_pins import PinCheckError, github_fetch
+
+    with pytest.raises(PinCheckError, match="outside the GitHub API"):
+        github_fetch("https://example.com/repos/actions/checkout", "token")
