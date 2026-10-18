@@ -183,6 +183,7 @@ def _markdown_under(directory: Path, recursive: bool = True) -> list[Path]:
 #: project, and scanning them would couple the gate to their file formats.
 DOC_SUBDIRS = (
     ".github",
+    "resources/licenses",
     "security",
     "tools",
     "tests",
@@ -200,6 +201,8 @@ def _repo_wide_doc_files(repo_root: Path) -> list[Path]:
     ``CODE_OF_CONDUCT.md``, ``.github/CONTRIBUTING.md``,
     ``.github/PULL_REQUEST_TEMPLATE.md``, ``tests/README.md``, the five
     ``tests/fixtures/*/README.md`` and ``security/pip-audit-exceptions.md``.
+    ``resources/licenses/`` is included for the same reason: a packager notice
+    committed there is a living claim, not agent-tooling config.
     Most are living documents, which is the same "absent rather than excluded on
     purpose" gap as the unscanned dev-docs directories and nested AGENTS.md files.
     """

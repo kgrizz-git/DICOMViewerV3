@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-17
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -50,7 +50,7 @@ If no venv exists: `python -m venv .venv`, activate, `pip install -r requirement
 VTK's macOS wheel has no EGL/OSMesa fallback here, so `vtkRenderWindow` can segfault at `vtkGenericRenderWindowInteractor.Initialize()`.
 Retry the narrow test once with `require_escalated` (native graphics); do not skip it or blame xdist. See [`dev-docs/info/TESTING_GUIDANCE.md`](dev-docs/info/TESTING_GUIDANCE.md#vtk-rendering-on-macos).
 
-**Cine export:** `requirements.txt` pins **`imageio`** + **`imageio-ffmpeg`** (FFmpeg license obligations for frozen builds). **`IMAGEIO_FFMPEG_EXE`** can override the wheel binary. Prefer **`.mp4`** on Windows 11 Media Player over **`.mpg`** without the MPEG-2 extension.
+**Cine export:** `requirements.txt` pins **`imageio`** + **`imageio-ffmpeg`** (dev may use the wheel’s GPL `ffmpeg`; frozen builds bundle LGPL `ffmpeg/` from `scripts/build_lgpl_ffmpeg.py` and strip wheel binaries). **`IMAGEIO_FFMPEG_EXE`** overrides discovery. Prefer **`.mp4`** on Windows 11 Media Player over **`.mpg`** without the MPEG-2 extension.
 
 ## Repository map (read next)
 

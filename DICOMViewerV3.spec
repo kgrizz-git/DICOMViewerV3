@@ -205,6 +205,43 @@ a = Analysis(
     noarchive=False,
 )
 
+# Phase 3 (FFMPEG_REPLACEMENT_PLAN): drop GPL wheel binaries from hook-imageio_ffmpeg;
+# bundle our staged LGPL CLI under ffmpeg/ for resolve_ffmpeg_exe() (sys._MEIPASS/ffmpeg/).
+def _entry_mentions_imageio_ffmpeg_binaries(entry) -> bool:
+    for part in entry[:2]:
+        normalized = str(part).replace("\\", "/").lower()
+        if "imageio_ffmpeg" in normalized and "binaries" in normalized:
+            return True
+    return False
+
+
+a.datas = [entry for entry in a.datas if not _entry_mentions_imageio_ffmpeg_binaries(entry)]
+a.binaries = [
+    entry for entry in a.binaries if not _entry_mentions_imageio_ffmpeg_binaries(entry)
+]
+
+from build_lgpl_ffmpeg import pyinstaller_binary_entry, pyinstaller_data_entry
+
+_ffmpeg_exe_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+_staged_lgpl_dir = project_root / "build" / "ffmpeg-lgpl"
+_staged_lgpl_ffmpeg = _staged_lgpl_dir / _ffmpeg_exe_name
+if _staged_lgpl_ffmpeg.is_file():
+    # BINARY so macOS codesign sees the Mach-O under Contents/Frameworks. Licenses stay DATA.
+    a.binaries.append(
+        pyinstaller_binary_entry(_staged_lgpl_ffmpeg, f"ffmpeg/{_ffmpeg_exe_name}")
+    )
+# Phase 4: ship LGPL texts and build manifest beside the bundled CLI when staged (optional for local zero-binary freezes).
+for _staged_name in (
+    "COPYING.LGPLv2.1",
+    "COPYING.LGPLv3",
+    "ffmpeg-lgpl-build-manifest.txt",
+):
+    _staged_sidecar = _staged_lgpl_dir / _staged_name
+    if _staged_sidecar.is_file():
+        a.datas.append(pyinstaller_data_entry(_staged_sidecar, f"ffmpeg/{_staged_name}"))
+
+_FFMPEG_UPX_EXCLUDE = ("ffmpeg", "ffmpeg.exe")
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -233,7 +270,7 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=USE_UPX,
-    upx_exclude=[],
+    upx_exclude=list(_FFMPEG_UPX_EXCLUDE),
     name='DICOMViewerV3',
 )
 

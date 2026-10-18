@@ -1,8 +1,21 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-18
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-18
+- **macOS FFmpeg collection type.** The staged `ffmpeg` executable is a PyInstaller `BINARY` entry. `DATA` would land in `Contents/Resources`, which `codesign --deep` does not sign. License files stay `DATA`.
+- **Three-OS LGPL FFmpeg freeze.** Build Executables run 39093453422 passed on Windows, macOS, and Ubuntu at commit `0a2f1ce`. Windows compiled FFmpeg from source after the compiler-test fix. Configure reported LGPL 2.1 or later, and each frozen bundle passed the wheel-strip check and the LGPL audit. Signing and a launched-process `_MEIPASS` check stay open.
+
+## 2026-10-17
+- **Windows LGPL FFmpeg compiler test.** Build Executables run 39089774784 passed on macOS and Ubuntu. Windows failed in FFmpeg configure (`gcc is unable to create an executable file`) while `MSYS2_ARG_CONV_EXCL=*` was exported. That setting blocks MSYS path conversion, so mingw `gcc` cannot open the configure test sources. The Windows build step now leaves conversion on, sets `TMPDIR=.`, clears the setup-python `PKG_CONFIG_PATH`, and prints `ffbuild/config.log` if configure fails.
+- **Build workflow action pins.** `actions/cache` v4.2.2 and `msys2/setup-msys2` v2.28.0 were pinned to commits that do not exist, so every OS job failed at setup. The pins are now the tag commits `d4323d4df104b026a6aa633fdb11d772146be0bf` and `40677d36a502eb2cf0fb808cc9dec31bf6152638`.
+- **LGPL FFmpeg configure line.** `--disable-autodetect` is part of the pinned configure line so a build host cannot link extra libraries it happens to have installed. Built-in `mpeg4` and `mpeg2video` stay available. The packager notice and replacement plan quote the same line.
+- **LGPL FFmpeg download Semgrep finding.** GitHub code scanning alerts on SARIF results even when Semgrep marks them `nosemgrep`. The dynamic-urllib rule also ignores a literal URL when `timeout=` is present. The download now calls `urlopen` with only the pinned URL literal and sets the 600 second limit on the socket default for that call.
+- **Dev-wheel FFmpeg path type.** `resolve_ffmpeg_exe` builds the wheel path from `str()` of the package resource so basedpyright accepts it as a filesystem path. Lookup behavior is unchanged.
+- **Cine export S3776.** `encode_cine_video_from_png_paths` shares one frame-append helper, and `CineExportDialog.__init__` delegates loop bounds and the missing-FFmpeg notice. Compared with the 2026-10-16 local archive, those were the only two added or moved `python:S3776` findings.
+- **FFmpeg packager notice is scanned.** `resources/licenses/` is now part of the user-docs link checker's living Markdown set, so `FFMPEG_LGPL_BUNDLED_NOTICE.md` is not an unscanned tracked file.
 
 ## 2026-10-15
 - **zizmor report moved out of the checkout.** In the `vulnerable-actions` job, the zizmor JSON report is now written to `$RUNNER_TEMP` instead of the checkout, so a PR that commits a `zizmor.json` symlink cannot make the shell redirect truncate a workflow file before zizmor scans it (hiding a vulnerable action).

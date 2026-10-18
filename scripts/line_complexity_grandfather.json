@@ -111,7 +111,6 @@
     "src/gui/actions/dialog_actions.py::open_export_cine_video": 38,
     "src/gui/annotation_paste_handler.py::paste_annotations": 26,
     "src/gui/arrow_annotation_coordinator.py::_finalize_arrow_move": 18,
-    "src/gui/cine_video_export.py::encode_cine_video_from_png_paths": 17,
     "src/gui/cine_video_export.py::rasterize_cine_export_frame": 16,
     "src/gui/dialogs/about_this_file_dialog.py::update_file_info": 19,
     "src/gui/dialogs/export_dialog.py::_on_export": 22,

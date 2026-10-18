@@ -18,6 +18,8 @@ from pydicom.dataset import Dataset
 
 from gui.cine_video_export import (
     CineFrameRequest,
+    FfmpegResolution,
+    _ffmpeg_bundled_exe_name,
     build_cine_export_frame_indices,
     clamp_int,
     cleanup_temp_frame_dir,
@@ -27,6 +29,7 @@ from gui.cine_video_export import (
     ffmpeg_codec_and_params_for_cine_container,
     gif_frame_duration_milliseconds,
     rasterize_cine_export_frame,
+    resolve_ffmpeg_exe,
     safe_remove_partial_output,
 )
 
@@ -68,6 +71,86 @@ def test_effective_fps_and_gif_duration() -> None:
 
     # GIF frame duration calculation (10 FPS -> 100 ms)
     assert gif_frame_duration_milliseconds("GIF", 10.0) == 100.0
+
+
+def test_resolve_ffmpeg_exe_priority_user_env_over_bundled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """IMAGEIO_FFMPEG_EXE wins over a frozen-bundle candidate."""
+    user_exe = tmp_path / "user-ffmpeg"
+    user_exe.write_bytes(b"x")
+    bundled = tmp_path / "ffmpeg" / _ffmpeg_bundled_exe_name()
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(b"y")
+    monkeypatch.setenv("IMAGEIO_FFMPEG_EXE", str(user_exe))
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr("shutil.which", lambda _name: str(bundled))
+
+    res = resolve_ffmpeg_exe()
+    assert res.source == "user_env"
+    assert res.path == user_exe
+
+
+def test_resolve_ffmpeg_exe_priority_bundled_over_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Frozen bundle wins over PATH when user env is unset."""
+    bundled = tmp_path / "ffmpeg" / _ffmpeg_bundled_exe_name()
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(b"b")
+    path_exe = tmp_path / "path-ffmpeg"
+    path_exe.write_bytes(b"p")
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr("shutil.which", lambda _name: str(path_exe))
+    monkeypatch.setattr(
+        "gui.cine_video_export._dev_wheel_ffmpeg_path",
+        lambda: tmp_path / "wheel-ffmpeg",
+    )
+
+    res = resolve_ffmpeg_exe()
+    assert res.source == "bundled"
+    assert res.path == bundled
+
+
+def test_resolve_ffmpeg_exe_priority_path_over_dev_wheel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PATH ffmpeg wins over the imageio-ffmpeg wheel binary."""
+    path_exe = tmp_path / "on-path"
+    path_exe.write_bytes(b"p")
+    wheel_exe = tmp_path / "wheel-ffmpeg"
+    wheel_exe.write_bytes(b"w")
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    monkeypatch.setattr("sys.frozen", False, raising=False)
+    monkeypatch.setattr("shutil.which", lambda _name: str(path_exe))
+    monkeypatch.setattr(
+        "gui.cine_video_export._dev_wheel_ffmpeg_path",
+        lambda: wheel_exe,
+    )
+
+    res = resolve_ffmpeg_exe()
+    assert res.source == "path"
+    assert res.path == path_exe
+
+
+def test_resolve_ffmpeg_exe_missing_when_nothing_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All discovery steps absent yields missing."""
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    monkeypatch.setattr("sys.frozen", False, raising=False)
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "gui.cine_video_export._dev_wheel_ffmpeg_path",
+        lambda: None,
+    )
+
+    res = resolve_ffmpeg_exe()
+    assert res.source == "missing"
+    assert res.path is None
 
 
 def test_ffmpeg_codec_and_params_for_cine_container() -> None:
@@ -503,6 +586,121 @@ def test_gif_frame_duration_ms_cross_validates_with_effective_fps() -> None:
         eff = effective_fps_for_encoder("GIF", req)
         d_ms = gif_frame_duration_milliseconds("GIF", req)
         assert abs((d_ms / 1000.0) * eff - 1.0) < 1e-9
+
+
+@pytest.mark.parametrize("fmt", ["AVI", "MP4", "MPG"])
+def test_encode_ffmpeg_formats_raise_when_resolver_missing(
+    tmp_path: Path, fmt: str
+) -> None:
+    """AVI/MP4/MPG fail before get_writer when FFmpeg cannot be resolved."""
+    p = tmp_path / "f.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8), mode="RGB").save(p)
+    missing = FfmpegResolution(path=None, source="missing")
+    with (
+        patch(
+            "gui.cine_video_export.resolve_ffmpeg_exe",
+            return_value=missing,
+        ),
+        patch("gui.cine_video_export.imageio.get_writer") as gw,
+        pytest.raises(RuntimeError, match="IMAGEIO_FFMPEG_EXE"),
+    ):
+        encode_cine_video_from_png_paths([p], str(tmp_path / "out"), fmt, 10.0)
+    gw.assert_not_called()
+
+
+def test_encode_gif_does_not_resolve_ffmpeg_or_touch_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GIF encoding never calls the FFmpeg resolver or IMAGEIO_FFMPEG_EXE."""
+    p = tmp_path / "g.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8), mode="RGB").save(p)
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    mock_writer = MagicMock()
+    with (
+        patch(
+            "gui.cine_video_export.resolve_ffmpeg_exe",
+        ) as resolve_mock,
+        patch(
+            "gui.cine_video_export.imageio.get_writer",
+            return_value=mock_writer,
+        ) as gw,
+        patch(
+            "gui.cine_video_export.imageio.imread",
+            return_value=np.zeros((8, 8, 3), dtype=np.uint8),
+        ),
+    ):
+        encode_cine_video_from_png_paths([p], str(tmp_path / "out.gif"), "GIF", 10.0)
+    resolve_mock.assert_not_called()
+    assert "IMAGEIO_FFMPEG_EXE" not in os.environ
+    assert gw.call_args.kwargs["format"] == "GIF"
+
+
+def test_encode_user_env_does_not_overwrite_imageio_ffmpeg_exe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When source is user_env, encode leaves IMAGEIO_FFMPEG_EXE unchanged."""
+    p = tmp_path / "f.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8), mode="RGB").save(p)
+    user_path = tmp_path / "my-ffmpeg"
+    user_path.write_bytes(b"ff")
+    monkeypatch.setenv("IMAGEIO_FFMPEG_EXE", str(user_path))
+    resolution = FfmpegResolution(path=user_path, source="user_env")
+    mock_writer = MagicMock()
+    with (
+        patch(
+            "gui.cine_video_export.resolve_ffmpeg_exe",
+            return_value=resolution,
+        ),
+        patch(
+            "gui.cine_video_export.imageio.get_writer",
+            return_value=mock_writer,
+        ),
+        patch(
+            "gui.cine_video_export.imageio.imread",
+            return_value=np.zeros((8, 8, 3), dtype=np.uint8),
+        ),
+    ):
+        encode_cine_video_from_png_paths([p], str(tmp_path / "out.mp4"), "MP4", 10.0)
+    assert os.environ["IMAGEIO_FFMPEG_EXE"] == str(user_path)
+
+
+def test_encode_non_user_source_sets_imageio_ffmpeg_exe_before_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bundled/PATH/dev_wheel sources set IMAGEIO_FFMPEG_EXE immediately before get_writer."""
+    p = tmp_path / "f.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8), mode="RGB").save(p)
+    discovered = tmp_path / "discovered-ffmpeg"
+    discovered.write_bytes(b"ff")
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    # Production code assigns os.environ directly. Seed through monkeypatch so
+    # the assignment is undone after the test.
+    monkeypatch.setenv("IMAGEIO_FFMPEG_EXE", "")
+    resolution = FfmpegResolution(path=discovered, source="path")
+    mock_writer = MagicMock()
+    env_at_writer: list[str | None] = []
+
+    def capture_writer(*args, **kwargs):
+        env_at_writer.append(os.environ.get("IMAGEIO_FFMPEG_EXE"))
+        return mock_writer
+
+    with (
+        patch(
+            "gui.cine_video_export.resolve_ffmpeg_exe",
+            return_value=resolution,
+        ),
+        patch(
+            "gui.cine_video_export.imageio.get_writer",
+            side_effect=capture_writer,
+        ),
+        patch(
+            "gui.cine_video_export.imageio.imread",
+            return_value=np.zeros((8, 8, 3), dtype=np.uint8),
+        ),
+    ):
+        encode_cine_video_from_png_paths([p], str(tmp_path / "out.mp4"), "MP4", 10.0)
+    assert env_at_writer == [str(discovered)]
+    assert os.environ.get("IMAGEIO_FFMPEG_EXE") == str(discovered)
 
 
 def test_gif_file_frame_duration_metadata_scales_with_fps(tmp_path: Path) -> None:

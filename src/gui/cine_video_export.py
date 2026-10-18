@@ -34,11 +34,13 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import imageio.v2 as imageio
 import numpy as np
@@ -50,6 +52,82 @@ from core.lut_display import grayscale_export_kwargs, invert_color_export_image
 from gui import export_rendering as _er
 
 _MSG_EXPORT_CANCELLED = "Export cancelled."
+_MSG_FFMPEG_MISSING = (
+    "FFmpeg was not found. Install ffmpeg on your PATH or set the "
+    "IMAGEIO_FFMPEG_EXE environment variable to the ffmpeg executable."
+)
+
+FfmpegSource = Literal["user_env", "bundled", "path", "dev_wheel", "missing"]
+
+
+@dataclass(frozen=True)
+class FfmpegResolution:
+    """Result of :func:`resolve_ffmpeg_exe` — path and how it was discovered."""
+
+    path: Path | None
+    source: FfmpegSource
+
+
+def _ffmpeg_bundled_exe_name() -> str:
+    """Frozen-bundle filename under ``ffmpeg/`` (``ffmpeg.exe`` on Windows)."""
+    if sys.platform.startswith("win"):
+        return "ffmpeg.exe"
+    return "ffmpeg"
+
+
+def _dev_wheel_ffmpeg_path() -> Path | None:
+    """
+    Wheel-shipped FFmpeg binary in an unfrozen dev/venv install.
+
+    Uses package resources only — does not call ``imageio_ffmpeg.get_ffmpeg_exe()``.
+    """
+    from imageio_ffmpeg._definitions import FNAME_PER_PLATFORM, get_platform
+
+    plat = get_platform()
+    fname = FNAME_PER_PLATFORM.get(plat, "")
+    if not fname:
+        return None
+    # ``files()`` is typed as a Traversable. An installed wheel is a real path;
+    # ``str()`` is what ``Path`` accepts, and a non-file result falls through.
+    candidate = Path(str(files("imageio_ffmpeg.binaries") / fname))
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def resolve_ffmpeg_exe() -> FfmpegResolution:
+    """
+    Locate an FFmpeg executable for cine export without mutating ``os.environ``.
+
+    Priority: ``IMAGEIO_FFMPEG_EXE`` (existing file) → frozen bundle → ``PATH`` →
+    dev wheel (unfrozen only) → missing.
+    """
+    env_val = os.environ.get("IMAGEIO_FFMPEG_EXE", "")
+    if env_val:
+        env_path = Path(env_val)
+        if env_path.is_file():
+            return FfmpegResolution(path=env_path, source="user_env")
+
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            bundled = Path(meipass) / "ffmpeg" / _ffmpeg_bundled_exe_name()
+            if bundled.is_file():
+                return FfmpegResolution(path=bundled, source="bundled")
+
+    which_result = shutil.which("ffmpeg")
+    if which_result:
+        path_candidate = Path(which_result)
+        if path_candidate.is_file():
+            return FfmpegResolution(path=path_candidate, source="path")
+
+    if not getattr(sys, "frozen", False):
+        wheel_path = _dev_wheel_ffmpeg_path()
+        if wheel_path is not None:
+            return FfmpegResolution(path=wheel_path, source="dev_wheel")
+
+    return FfmpegResolution(path=None, source="missing")
+
 
 def clamp_int(value: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, value))
@@ -288,6 +366,42 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
     return image
 
 
+def _append_png_frames(
+    writer: Any,
+    paths: Sequence[Path],
+    cancel_event: threading.Event | None,
+) -> None:
+    """Append each PNG to ``writer``, expanding gray frames to RGB.
+
+    Raises:
+        RuntimeError: when ``cancel_event`` is set between frames.
+    """
+    for path in paths:
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError(_MSG_EXPORT_CANCELLED)
+        frame = imageio.imread(str(path))
+        if getattr(frame, "ndim", 0) == 2:
+            frame = np.stack([frame] * 3, axis=-1)
+        writer.append_data(frame)
+
+
+def _pin_ffmpeg_exe_for_encode() -> None:
+    """
+    Resolve FFmpeg and point imageio at it before an AVI, MP4, or MPG writer.
+
+    ``user_env`` is left untouched. Any other found binary is written to
+    ``IMAGEIO_FFMPEG_EXE`` so imageio does not fall through to its wheel lookup.
+
+    Raises:
+        RuntimeError: when no executable can be resolved.
+    """
+    ffmpeg_resolution = resolve_ffmpeg_exe()
+    if ffmpeg_resolution.source == "missing" or ffmpeg_resolution.path is None:
+        raise RuntimeError(_MSG_FFMPEG_MISSING)
+    if ffmpeg_resolution.source != "user_env":
+        os.environ["IMAGEIO_FFMPEG_EXE"] = str(ffmpeg_resolution.path)
+
+
 def encode_cine_video_from_png_paths(
     png_paths: Sequence[Path],
     output_path: str,
@@ -322,19 +436,9 @@ def encode_cine_video_from_png_paths(
             duration=duration_ms,
             loop=0,
         )
-        try:
-            for _i, p in enumerate(paths):
-                if cancel_event and cancel_event.is_set():
-                    raise RuntimeError(_MSG_EXPORT_CANCELLED)
-                arr = imageio.imread(str(p))
-                if arr.ndim == 2:
-                    arr = np.stack([arr] * 3, axis=-1)
-                writer.append_data(arr)
-        finally:
-            writer.close()
-
     elif fmt in ("AVI", "MP4", "MPG"):
         vid_codec, vid_extra = ffmpeg_codec_and_params_for_cine_container(fmt)
+        _pin_ffmpeg_exe_for_encode()
         writer = imageio.get_writer(
             output_path,
             format=cast(Any, "FFMPEG"),
@@ -344,18 +448,12 @@ def encode_cine_video_from_png_paths(
             ffmpeg_params=vid_extra,
             ffmpeg_log_level="error",
         )
-        try:
-            for p in paths:
-                if cancel_event and cancel_event.is_set():
-                    raise RuntimeError(_MSG_EXPORT_CANCELLED)
-                arr = imageio.imread(str(p))
-                if arr.ndim == 2:
-                    arr = np.stack([arr] * 3, axis=-1)
-                writer.append_data(arr)
-        finally:
-            writer.close()
     else:
         raise RuntimeError(f"Unsupported video format: {video_format}")
+    try:
+        _append_png_frames(writer, paths, cancel_event)
+    finally:
+        writer.close()
 
 
 def safe_remove_partial_output(path: str) -> None:
