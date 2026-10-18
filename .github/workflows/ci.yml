@@ -3,8 +3,8 @@ name: CI
 # Job DAG (privacy-first):
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
-#      pip-audit-phi-tools, vulnerable-actions, repo-harness, user-docs-links,
-#      semgrep, codeql, grype, sonarqube (push only)}
+#      pip-audit-phi-tools, vulnerable-actions, action-pins, repo-harness,
+#      user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
 # rename or restructure jobs:
@@ -22,6 +22,11 @@ name: CI
 # "Known-vulnerable actions (zizmor)" (vulnerable-actions) is deliberately not
 # a required check: it depends on GitHub's advisory database and API, so it
 # can turn red on an unchanged tree when a new advisory is published.
+#
+# "Action pins exist" (action-pins) asks GitHub whether every workflow pin is
+# a real commit and whether a version comment's tag still contains that
+# commit. It fails closed on API errors. Add it to KGRuleset1 after it has
+# passed on main; until then a red run does not block merge.
 #
 # Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
 # privacy checks pass via needs: [privacy-gates].
@@ -406,6 +411,25 @@ jobs:
           print(f"{len(findings)} known-vulnerable action reference(s)")
           sys.exit(1 if findings else 0)
           PY
+
+  action-pins:
+    name: Action pins exist
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Check that action pins are real commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/check_action_pins.py
 
   repo-harness:
     name: Harness docs and agent smoke

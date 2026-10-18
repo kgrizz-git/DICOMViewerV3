@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-17
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-17
+- **Action pin check.** `scripts/check_action_pins.py` and the **Action pins exist** CI job require every remote `uses:` under `.github/workflows/` to be a commit that exists, and a version comment to match that tag. zizmor still only checks advisories and does not catch a pin that is not a commit. The job is not a required check until it is added to KGRuleset1.
 
 ## 2026-10-15
 - **zizmor report moved out of the checkout.** In the `vulnerable-actions` job, the zizmor JSON report is now written to `$RUNNER_TEMP` instead of the checkout, so a PR that commits a `zizmor.json` symlink cannot make the shell redirect truncate a workflow file before zizmor scans it (hiding a vulnerable action).
