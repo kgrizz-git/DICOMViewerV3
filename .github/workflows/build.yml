@@ -163,7 +163,7 @@ jobs:
           echo "key=${KEY}" >> "$GITHUB_OUTPUT"
 
       - name: Restore staged LGPL FFmpeg cache
-        uses: actions/cache@68457722f35b609fd9536b223b0827ba67dfd8dd # v4.2.2
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         id: ffmpeg_cache
         with:
           path: build/ffmpeg-lgpl
@@ -187,7 +187,7 @@ jobs:
 
       - name: Install MSYS2 toolchain (Windows)
         if: matrix.os == 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'
-        uses: msys2/setup-msys2@77fa077fd567cc4eee719e3c5c74e8e998d98dcc # v2.28.0
+        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2.28.0
         with:
           msystem: MINGW64
           update: true
