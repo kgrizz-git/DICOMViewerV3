@@ -215,11 +215,22 @@ jobs:
         if: matrix.os == 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'
         shell: msys2 {0}
         run: |
-          export MSYS2_ARG_CONV_EXCL="*"
+          # Relative temp files avoid MSYS path conversion. Do not set
+          # MSYS2_ARG_CONV_EXCL=*: that stops mingw gcc from seeing the
+          # configure test sources, so the C compiler test fails.
+          export TMPDIR=.
+          unset PKG_CONFIG_PATH
           # Pull libgcc and winpthreads into the exe. The pinned configure flags stay unchanged.
           export LDFLAGS="-static"
           PY="$(cygpath -u "${{ steps.setup-python.outputs.python-path }}")"
-          "$PY" scripts/build_lgpl_ffmpeg.py build
+          "$PY" scripts/build_lgpl_ffmpeg.py build || {
+            cfg=$(find . -path '*/ffbuild/config.log' -print -quit || true)
+            if [ -n "${cfg}" ]; then
+              echo "----- ${cfg} (last 160 lines) -----"
+              tail -n 160 "${cfg}"
+            fi
+            exit 1
+          }
 
       - name: Build LGPL FFmpeg (macOS/Linux)
         if: matrix.os != 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'

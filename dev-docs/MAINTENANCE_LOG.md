@@ -5,6 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-17
+- **Windows LGPL FFmpeg compiler test.** Build Executables run 39089774784 passed on macOS and Ubuntu. Windows failed in FFmpeg configure (`gcc is unable to create an executable file`) while `MSYS2_ARG_CONV_EXCL=*` was exported. That setting blocks MSYS path conversion, so mingw `gcc` cannot open the configure test sources. The Windows build step now leaves conversion on, sets `TMPDIR=.`, clears the setup-python `PKG_CONFIG_PATH`, and prints `ffbuild/config.log` if configure fails.
 - **Build workflow action pins.** `actions/cache` v4.2.2 and `msys2/setup-msys2` v2.28.0 were pinned to commits that do not exist, so every OS job failed at setup. The pins are now the tag commits `d4323d4df104b026a6aa633fdb11d772146be0bf` and `40677d36a502eb2cf0fb808cc9dec31bf6152638`.
 - **LGPL FFmpeg configure line.** `--disable-autodetect` is part of the pinned configure line so a build host cannot link extra libraries it happens to have installed. Built-in `mpeg4` and `mpeg2video` stay available. The packager notice and replacement plan quote the same line.
 - **LGPL FFmpeg download Semgrep finding.** GitHub code scanning alerts on SARIF results even when Semgrep marks them `nosemgrep`. The dynamic-urllib rule also ignores a literal URL when `timeout=` is present. The download now calls `urlopen` with only the pinned URL literal and sets the 600 second limit on the socket default for that call.

@@ -1,9 +1,9 @@
 # FFmpeg (`imageio-ffmpeg`) GPL Binary Replacement Plan
 
-**Status:** Implemented on the branch; Windows, macOS, and Linux frozen gates have not passed (2026-10-17)
+**Status:** Implemented on the branch. The 2026-10-17 Build Executables run passed on macOS and Ubuntu and failed on Windows during the FFmpeg C compiler test. Signing and a real frozen `_MEIPASS` check remain open.
 **Priority:** P0 — commercial-release Tier 0 blocker
 **TO_DO ref:** Release / Product — [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #2 ("Replace `imageio-ffmpeg` — bundled FFmpeg 7.1 binary is a GPL build"); [License & library compliance](LICENSE_AND_COMPLIANCE_PLAN.md) §0b
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 **Owner:** product/release
 
 This plan is an engineering recommendation, not a legal opinion. Counsel still reviews the final notice text and source offer before a paid release.
@@ -150,7 +150,7 @@ BtbN GitHub builds are not the supply chain. The rolling `latest` tag is rewritt
   - Runs `ffmpeg -version` and fails if the configuration line contains any of these whole flags: `--enable-gpl`, `--enable-nonfree`, `--enable-libx264`, `--enable-libx265`, `--enable-postproc`. A bare substring such as `postproc` or `libx264` is the wrong check: it also matches `--disable-postproc` and `--disable-libx264`.
   - Runs `ffmpeg -hide_banner -encoders` and `-muxers` and requires `mpeg4`, `mpeg2video`, and muxer `mpeg`.
 - [x] If the build was configured with `--enable-version3`, ship `COPYING.LGPLv3` and say LGPL-3. If not, say LGPL-2.1-or-later. Do not guess; use the configuration line.
-- [ ] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary. Native CPython starts `configure` through `sh` because `CreateProcess` cannot execute the extensionless script. This stays open until `windows-latest` goes green.
+- [ ] Windows: build on `windows-latest` with MSYS2 mingw64 (or an equivalent documented toolchain). Cache by tarball digest plus configure line. If that toolchain blocks a release cut, use the zero-binary fallback in section 7. Do not substitute an unpinned third-party binary. Native CPython starts `configure` through `sh` because `CreateProcess` cannot execute the extensionless script. The 2026-10-17 `windows-latest` run failed that compiler test while `MSYS2_ARG_CONV_EXCL=*` was set, which stops mingw `gcc` from seeing the configure test files. The Windows build step no longer sets that variable. It sets `TMPDIR=.` so the test files stay on a relative path, and it prints `ffbuild/config.log` when configure fails. This stays open until `windows-latest` goes green.
 - [x] macOS and Linux: build with the runner's clang/gcc. The Linux binary may require the runner's glibc; that matches `ubuntu-latest`.
 
 ### Phase 3 — PyInstaller
