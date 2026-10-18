@@ -247,7 +247,10 @@ red.
 The zizmor job does not fail when a pin is not a commit. **Action pins exist**
 (`action-pins` in `ci.yml`) reads every remote ``uses:`` under
 ``.github/workflows/``, including workflows that do not run on pull requests,
-and requires a 40-character commit that exists in that action repository. A version comment must name a tag that still contains that commit when the
+and requires a 40-character commit that exists in that action repository. ``uses``
+counts only as a mapping key: quoted keys, space before the colon, and flow
+mappings count, and a ``run`` command that contains the text ``uses:`` does
+not. A missing workflow directory fails the check. A version comment must name a tag that still contains that commit when the
 comment is only that tag (``# v4.2.2``) or the tag is in parentheses
 (``(v8.3.0)``). Other words, such as ``Node v20``, are not tags, and a
 full-line comment is not a ``uses:``. A release tag may move forward without

@@ -54,6 +54,55 @@ def test_parser_keeps_remote_pins_and_skips_local_actions(tmp_path: Path) -> Non
     ]
 
 
+def test_run_text_is_ignored_and_yaml_key_forms_are_kept(tmp_path: Path) -> None:
+    """A run command that mentions uses: is not a pin. Quoted and flow keys are."""
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    _write(
+        workflows,
+        "ci.yml",
+        "\n".join(
+            [
+                "jobs:",
+                "  build:",
+                "    steps:",
+                f'      - run: echo "uses: actions/checkout@{SHA}"',
+                f"      - uses : actions/checkout@{SHA} # v7",
+                f'      - "uses": actions/setup-python@{OTHER}',
+                f"      - 'uses': actions/upload-artifact@{SHA}",
+                f"      - {{uses: actions/cache@{SHA}}}",
+                f"      - {{name: Checkout, uses: actions/download-artifact@{OTHER}}}",
+            ]
+        )
+        + "\n",
+    )
+    uses = iter_action_uses(workflows)
+    assert [(item.repo, item.sha, item.versions) for item in uses] == [
+        ("actions/checkout", SHA, ("v7",)),
+        ("actions/setup-python", OTHER, ()),
+        ("actions/upload-artifact", SHA, ()),
+        ("actions/cache", SHA, ()),
+        ("actions/download-artifact", OTHER, ()),
+    ]
+
+
+def test_missing_workflows_directory_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from scripts.check_action_pins import main
+
+    missing = tmp_path / "missing"
+    monkeypatch.setattr("sys.argv", ["check_action_pins.py", "--workflows", str(missing)])
+    assert main() == 1
+    assert "not found" in capsys.readouterr().err
+
+
+def test_empty_workflows_directory_has_no_uses(tmp_path: Path) -> None:
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    assert iter_action_uses(workflows) == []
+
+
 def test_repository_workflows_are_full_commit_pins() -> None:
     """Every remote action in this checkout is a 40-character pin."""
     uses = iter_action_uses(Path(".github/workflows"))

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Check that GitHub Action pins in ``.github/workflows`` are real commits.
 
-Every remote ``uses:`` must be ``owner/repo@<40 hex>`` (a path such as
-``github/codeql-action/init`` is still the ``github/codeql-action`` repository).
-Local ``./`` actions are ignored. A full-line comment is ignored. When the
-same line comments a version, that tag must still contain the pinned commit.
+Every remote ``uses`` mapping key must be ``owner/repo@<40 hex>`` (a path such
+as ``github/codeql-action/init`` is still the ``github/codeql-action``
+repository). The key may be quoted, may have space before the colon, and may
+appear in a flow mapping. Text that merely contains ``uses:``, such as a
+``run`` command, is ignored. Local ``./`` actions are ignored. A full-line
+comment is ignored. When the same line comments a version, that tag must still
+contain the pinned commit.
 The comment must be only the tag (``# v4.2.2``) or the tag must be in
 parentheses (``(v8.3.0)``). Other words, such as ``Node v20``, are not tags.
 A release tag may move forward; the pin stays valid when it is that tag or an
@@ -12,7 +15,8 @@ ancestor of it.
 
 The GitHub API is required. ``GH_TOKEN`` or ``GITHUB_TOKEN`` must be set.
 A missing token, a rate limit, or any other API error fails the process.
-A missing commit is a finding, not a skipped pin.
+A missing ``--workflows`` directory fails the process. A missing commit is a
+finding, not a skipped pin.
 
 Inputs:
     Workflow YAML under ``.github/workflows`` (or ``--workflows``).
@@ -41,8 +45,12 @@ from pathlib import Path
 
 API_ROOT = "https://api.github.com"
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+# A YAML mapping key, not the substring "uses:" inside another value.
+# Block form: optional "- ", optional quotes, optional space before the colon.
+# Flow form: the key is the first key, or follows a comma, inside "{...}".
 USES_RE = re.compile(
-    r"""uses:\s*['\"]?(?P<spec>[^'\"\s#]+)""",
+    r"""(?:^\s*(?:-\s+)?|\{(?:\s*|[^}\n]*?,\s*))"""
+    r"""(?P<quote>['\"]?)uses(?P=quote)\s*:\s*['\"]?(?P<spec>[^'\"\s#}]+)"""
 )
 _VERSION_TOKEN = r"v\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.]+)?"
 WHOLE_COMMENT_VERSION_RE = re.compile(rf"^{_VERSION_TOKEN}$")
@@ -281,6 +289,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Run the pin check and print every problem."""
     args = parse_args()
+    if not args.workflows.is_dir():
+        print(f"error: workflow directory not found: {args.workflows}", file=sys.stderr)
+        return 1
     try:
         token = token_from_environment()
         problems = check_action_uses(iter_action_uses(args.workflows), github_fetch, token)

@@ -5,6 +5,7 @@
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
 
 ## 2026-10-18
+- **Action pin key matching.** `uses` is a YAML mapping key, including a quoted key, space before the colon, and a flow mapping whose spec stops before `}`. A `run` value that contains the text `uses:` is not a pin. A missing `--workflows` directory fails the check; an existing empty directory still has nothing to scan.
 - **Action pin comment parsing.** A full-line `#` comment is not a `uses:`. A version comment is a required tag only when the comment is that tag alone (`# v4.2.2`) or the tag is in parentheses (`(v8.3.0)`). Wording such as `Node v20` is not a tag.
 - **macOS FFmpeg collection type.** The staged `ffmpeg` executable is a PyInstaller `BINARY` entry. `DATA` would land in `Contents/Resources`, which `codesign --deep` does not sign. License files stay `DATA`.
 - **Three-OS LGPL FFmpeg freeze.** Build Executables run 39093453422 passed on Windows, macOS, and Ubuntu at commit `0a2f1ce`. Windows compiled FFmpeg from source after the compiler-test fix. Configure reported LGPL 2.1 or later, and each frozen bundle passed the wheel-strip check and the LGPL audit. Signing and a launched-process `_MEIPASS` check stay open.
