@@ -314,7 +314,24 @@ def pyinstaller_data_entry(source: Path, dest_name: str) -> tuple[str, str, str]
     ``COLLECT`` passes that list to ``normalize_toc``, which unpacks 3-tuples.
     A hook-style ``(source, dest_dir)`` pair aborts the freeze.
     """
-    return (dest_name.replace("\\", "/"), str(source.resolve()), "DATA")
+    return _pyinstaller_toc_entry(source, dest_name, "DATA")
+
+
+def pyinstaller_binary_entry(source: Path, dest_name: str) -> tuple[str, str, str]:
+    """Return a post-Analysis ``a.binaries`` entry ``(dest_name, source, "BINARY")``.
+
+    macOS ``BUNDLE`` puts ``DATA`` in ``Contents/Resources``. ``codesign --deep``
+    does not sign Mach-O files stored there, so the FFmpeg executable must be
+    ``BINARY`` (placed under ``Contents/Frameworks``, which is ``_MEIPASS``).
+    License texts stay ``DATA``.
+    """
+    return _pyinstaller_toc_entry(source, dest_name, "BINARY")
+
+
+def _pyinstaller_toc_entry(source: Path, dest_name: str, typecode: str) -> tuple[str, str, str]:
+    """Return a ``COLLECT`` 3-tuple. A hook-style pair aborts ``normalize_toc``."""
+    return (dest_name.replace("\\", "/"), str(source.resolve()), typecode)
+
 
 
 def configure_command() -> list[str]:

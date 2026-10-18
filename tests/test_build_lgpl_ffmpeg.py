@@ -14,6 +14,7 @@ from scripts.build_lgpl_ffmpeg import (
     audit_ffmpeg_outputs,
     configure_command,
     find_forbidden_enable_flags,
+    pyinstaller_binary_entry,
     pyinstaller_data_entry,
     stage_built_ffmpeg,
     verify_tarball_sha256,
@@ -134,6 +135,8 @@ def test_pyinstaller_data_entry_is_dest_source_data(tmp_path: Path) -> None:
     source.write_bytes(b"fake-ffmpeg")
     entry = pyinstaller_data_entry(source, "ffmpeg/ffmpeg")
     assert entry == ("ffmpeg/ffmpeg", str(source.resolve()), "DATA")
+    binary = pyinstaller_binary_entry(source, "ffmpeg/ffmpeg")
+    assert binary == ("ffmpeg/ffmpeg", str(source.resolve()), "BINARY")
 
 
 def test_configure_command_uses_shell_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
