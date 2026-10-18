@@ -147,12 +147,16 @@ def _comment_after(lines: list[str], key_node: Node, value_node: Node) -> str:
 
     The comment is the last ``#`` on the key's line. An alias reuses an earlier
     node, so the value's own end is not on that line; a folded value can also
-    carry a comment where the value ends.
+    carry a comment where the value ends. A block scalar (``|`` or ``>``) is
+    skipped: its end mark points at the next line, which belongs to the
+    following step, and its only comment slot is the header on the key's line.
     """
     parts: list[str] = []
     key_line = key_node.start_mark.line
     if 0 <= key_line < len(lines) and "#" in lines[key_line]:
         parts.append(lines[key_line].split("#")[-1])
+    if isinstance(value_node, ScalarNode) and value_node.style in {"|", ">"}:
+        return " ".join(parts)
     end = value_node.end_mark
     if end.line != key_line and 0 <= end.line < len(lines) and "#" in lines[end.line][end.column :]:
         parts.append(lines[end.line][end.column :].split("#", 1)[1])

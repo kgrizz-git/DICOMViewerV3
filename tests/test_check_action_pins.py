@@ -130,6 +130,28 @@ def test_hidden_yaml_uses_are_checked_and_run_text_is_not(tmp_path: Path) -> Non
     ]
 
 
+def test_block_scalar_uses_does_not_take_the_next_step_comment(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "ci.yml",
+        f"""jobs:
+  a:
+    steps:
+      - uses: >
+          actions/checkout@{SHA}
+      - uses: actions/cache@{OTHER} # v4.2.2
+      - uses: |  # v7
+          actions/setup-python@{SHA}
+""",
+    )
+    uses = iter_action_uses(tmp_path)
+    assert [(use.repo, use.versions) for use in uses] == [
+        ("actions/checkout", ()),
+        ("actions/cache", ("v4.2.2",)),
+        ("actions/setup-python", ("v7",)),
+    ]
+
+
 def test_invalid_workflow_yaml_fails(tmp_path: Path) -> None:
     workflows = tmp_path / "workflows"
     workflows.mkdir()
