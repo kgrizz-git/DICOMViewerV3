@@ -266,8 +266,12 @@ def _tag_contains_pin(repo: str, pin: str, tagged: str, fetch: Fetch, token: str
 
     ``ahead`` means the tag is a later commit on the pin's history. ``identical``
     means the tag still points at the pin. A moved release tag stays valid.
+    ``unrelated`` means the two commits share no history.
     """
     status, body = fetch(_api_url(repo, "compare", f"{pin}...{tagged}"), token)
+    if status == 404 and body is None:
+        # GitHub answers 404 when the two commits share no history.
+        return "unrelated"
     if status != 200 or body is None:
         raise PinCheckError(f"GitHub API status {status} comparing {repo} {pin}...{tagged}")
     return str(body.get("status", ""))
@@ -288,6 +292,36 @@ def _default_branch(repo: str, fetch: Fetch, token: str, cache: dict[str, str]) 
     return branch
 
 
+def _version_problems(
+    use: ActionUse, sha: str, fetch: Fetch, token: str, tags: dict[str, str]
+) -> tuple[list[str], bool]:
+    """Check ``use``'s version comments against upstream tags.
+
+    Return the problems and whether some upstream tag contains the pin. A fork
+    commit is never in an upstream tag's history, so a containing tag proves the
+    pin is upstream code even when releases live off the default branch.
+    """
+    problems: list[str] = []
+    in_tag = False
+    for version in use.versions:
+        try:
+            tagged = _commit_for_tag(use.repo, version, fetch, token, tags)
+        except KeyError:
+            problems.append(f"{use.label()}: {use.repo} has no tag {version}")
+            continue
+        if tagged.lower() == sha.lower():
+            in_tag = True
+            continue
+        relation = _tag_contains_pin(use.repo, sha, tagged, fetch, token)
+        if relation in {"ahead", "identical"}:
+            in_tag = True
+            continue
+        problems.append(
+            f"{use.label()}: {use.repo} tag {version} ({tagged}) does not contain {sha}"
+        )
+    return problems, in_tag
+
+
 def check_action_uses(uses: list[ActionUse], fetch: Fetch, token: str) -> list[str]:
     """Return human-readable problems. Raise ``PinCheckError`` when the API fails."""
     problems: list[str] = []
@@ -302,26 +336,16 @@ def check_action_uses(uses: list[ActionUse], fetch: Fetch, token: str) -> list[s
         if not _commit_exists(use.repo, use.sha, fetch, token, commits):
             problems.append(f"{use.label()}: {use.repo}@{use.sha} is not a commit")
             continue
+        version_problems, in_tag = _version_problems(use, use.sha, fetch, token, tags)
+        problems.extend(version_problems)
+        if in_tag:
+            continue
         branch = _default_branch(use.repo, fetch, token, branches)
         relation = _tag_contains_pin(use.repo, use.sha, branch, fetch, token)
         if relation not in {"ahead", "identical"}:
             problems.append(
                 f"{use.label()}: {use.repo}@{use.sha} is not on the default branch {branch}"
             )
-            continue
-        for version in use.versions:
-            try:
-                tagged = _commit_for_tag(use.repo, version, fetch, token, tags)
-            except KeyError:
-                problems.append(f"{use.label()}: {use.repo} has no tag {version}")
-                continue
-            if tagged.lower() == use.sha.lower():
-                continue
-            relation = _tag_contains_pin(use.repo, use.sha, tagged, fetch, token)
-            if relation not in {"ahead", "identical"}:
-                problems.append(
-                    f"{use.label()}: {use.repo} tag {version} ({tagged}) does not contain {use.sha}"
-                )
     return problems
 
 

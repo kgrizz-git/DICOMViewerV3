@@ -163,6 +163,54 @@ def test_fork_commit_is_not_on_the_default_branch() -> None:
     assert "not on the default branch main" in problems[0]
 
 
+def test_unrelated_fork_commit_is_a_finding_not_an_error() -> None:
+    from scripts.check_action_pins import ActionUse
+
+    pinned = ActionUse(
+        path=Path("ci.yml"),
+        line=3,
+        repo="actions/checkout",
+        sha=SHA,
+        raw_ref=SHA,
+        versions=(),
+    )
+
+    def fetch(url: str, _token: str) -> tuple[int, dict[str, object] | None]:
+        if url.endswith(f"/commits/{SHA}"):
+            return 200, {"sha": SHA}
+        if url.endswith("/repos/actions/checkout"):
+            return 200, {"default_branch": "main"}
+        if url.endswith(f"/compare/{SHA}...main"):
+            return 404, None
+        raise AssertionError(url)
+
+    problems = check_action_uses([pinned], fetch, "token")
+    assert problems == [f"ci.yml:3: actions/checkout@{SHA} is not on the default branch main"]
+
+
+def test_release_tag_off_the_default_branch_passes() -> None:
+    """msys2/setup-msys2 tags releases on history unrelated to ``main``."""
+    from scripts.check_action_pins import ActionUse
+
+    pinned = ActionUse(
+        path=Path("build.yml"),
+        line=190,
+        repo="msys2/setup-msys2",
+        sha=SHA,
+        raw_ref=SHA,
+        versions=("v2.28.0",),
+    )
+
+    def fetch(url: str, _token: str) -> tuple[int, dict[str, object] | None]:
+        if url.endswith(f"/commits/{SHA}"):
+            return 200, {"sha": SHA}
+        if url.endswith("/git/ref/tags/v2.28.0"):
+            return 200, {"object": {"type": "commit", "sha": SHA}}
+        raise AssertionError(url)
+
+    assert check_action_uses([pinned], fetch, "token") == []
+
+
 def test_redirects_are_refused() -> None:
     from scripts.check_action_pins import _refuse_redirect
 

@@ -24,8 +24,9 @@ name: CI
 # can turn red on an unchanged tree when a new advisory is published.
 #
 # "Action pins exist" (action-pins) parses workflow YAML and asks GitHub
-# whether every remote uses value is a commit on that action's default branch,
-# and whether a version comment's tag still contains that commit. It fails
+# whether every remote uses value is an upstream commit, and whether a version
+# comment's tag still contains that commit. A pin counts as upstream when a
+# version tag contains it or it is on the default branch. It fails
 # closed on API errors. Add it to KGRuleset1 after it has passed on main;
 # until then a red run does not block merge.
 #
