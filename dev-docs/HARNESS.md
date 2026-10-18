@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -247,10 +247,11 @@ red.
 The zizmor job does not fail when a pin is not a commit. **Action pins exist**
 (`action-pins` in `ci.yml`) reads every remote ``uses:`` under
 ``.github/workflows/``, including workflows that do not run on pull requests,
-and requires a 40-character commit that exists in that action repository. A
-version comment (``# v4.2.2`` or ``(v8.3.0)``) must name a tag that still
-contains that commit, so a release tag may move forward without failing the
-pin. Local ``./`` actions are ignored. An empty token or any GitHub API
+and requires a 40-character commit that exists in that action repository. A version comment must name a tag that still contains that commit when the
+comment is only that tag (``# v4.2.2``) or the tag is in parentheses
+(``(v8.3.0)``). Other words, such as ``Node v20``, are not tags, and a
+full-line comment is not a ``uses:``. A release tag may move forward without
+failing the pin. Local ``./`` actions are ignored. An empty token or any GitHub API
 error fails the job. It is not a required check until it is added to
 KGRuleset1.
 

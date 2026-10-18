@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-18
+- **Action pin comment parsing.** A full-line `#` comment is not a `uses:`. A version comment is a required tag only when the comment is that tag alone (`# v4.2.2`) or the tag is in parentheses (`(v8.3.0)`). Wording such as `Node v20` is not a tag.
 
 ## 2026-10-17
 - **Action pin check Semgrep finding.** `scripts/check_action_pins.py` refuses any URL that is not under `https://api.github.com/` and loads it with `urllib.request.build_opener`, not `urlopen`. Semgrep's dynamic-urllib rule matches every non-literal `urlopen`, and its HTTPSConnection rule matches `http.client` even when the host is fixed.

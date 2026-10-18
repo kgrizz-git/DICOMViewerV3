@@ -3,8 +3,10 @@
 
 Every remote ``uses:`` must be ``owner/repo@<40 hex>`` (a path such as
 ``github/codeql-action/init`` is still the ``github/codeql-action`` repository).
-Local ``./`` actions are ignored. When the same line comments a version, such
-as ``# v4.2.2`` or ``(v8.3.0)``, that tag must still contain the pinned commit.
+Local ``./`` actions are ignored. A full-line comment is ignored. When the
+same line comments a version, that tag must still contain the pinned commit.
+The comment must be only the tag (``# v4.2.2``) or the tag must be in
+parentheses (``(v8.3.0)``). Other words, such as ``Node v20``, are not tags.
 A release tag may move forward; the pin stays valid when it is that tag or an
 ancestor of it.
 
@@ -42,7 +44,9 @@ SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 USES_RE = re.compile(
     r"""uses:\s*['\"]?(?P<spec>[^'\"\s#]+)""",
 )
-VERSION_RE = re.compile(r"\bv\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.]+)?\b")
+_VERSION_TOKEN = r"v\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.]+)?"
+WHOLE_COMMENT_VERSION_RE = re.compile(rf"^{_VERSION_TOKEN}$")
+PAREN_VERSION_RE = re.compile(rf"\(({_VERSION_TOKEN})\)")
 Fetch = Callable[[str, str], tuple[int, dict[str, object] | None]]
 
 
@@ -80,8 +84,19 @@ def _repo_and_ref(spec: str) -> tuple[str, str] | None:
 
 
 def _versions(comment: str) -> tuple[str, ...]:
-    """Return version tags mentioned in a trailing comment, in order."""
-    return tuple(dict.fromkeys(VERSION_RE.findall(comment)))
+    """Return pin tags from a trailing comment.
+
+    A tag counts when the comment is only that tag (``v4.2.2``) or the tag is
+    in parentheses (``(v8.3.0)``). Other words, such as ``Node v20``, are not
+    tags.
+    """
+    text = comment.strip()
+    found: list[str] = []
+    whole = WHOLE_COMMENT_VERSION_RE.fullmatch(text)
+    if whole is not None:
+        found.append(whole.group(0))
+    found.extend(PAREN_VERSION_RE.findall(text))
+    return tuple(dict.fromkeys(found))
 
 
 def iter_action_uses(workflows: Path) -> list[ActionUse]:
@@ -90,6 +105,8 @@ def iter_action_uses(workflows: Path) -> list[ActionUse]:
     files = sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml"))
     for path in files:
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if line.lstrip().startswith("#"):
+                continue
             match = USES_RE.search(line)
             if match is None:
                 continue

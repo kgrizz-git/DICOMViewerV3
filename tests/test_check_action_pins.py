@@ -35,6 +35,9 @@ def test_parser_keeps_remote_pins_and_skips_local_actions(tmp_path: Path) -> Non
                 "    steps:",
                 f"      - uses: actions/checkout@{SHA} # v7",
                 f"      - uses: github/codeql-action/init@{OTHER} # v4.38.2",
+                f"      # - uses: actions/checkout@{SHA} # v4",
+                f"      - uses: actions/setup-node@{SHA} # Node v20",
+                f"      - uses: SonarSource/sonarqube-scan-action@{SHA} # note (v8.3.0) only",
                 "      - uses: actions/cache@v4",
                 "      - uses: docker://alpine:3",
             ]
@@ -45,6 +48,8 @@ def test_parser_keeps_remote_pins_and_skips_local_actions(tmp_path: Path) -> Non
     assert [(item.repo, item.sha, item.versions) for item in uses] == [
         ("actions/checkout", SHA, ("v7",)),
         ("github/codeql-action", OTHER, ("v4.38.2",)),
+        ("actions/setup-node", SHA, ()),
+        ("SonarSource/sonarqube-scan-action", SHA, ("v8.3.0",)),
         ("actions/cache", None, ()),
     ]
 
