@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """Check that GitHub Action pins in ``.github/workflows`` are real commits.
 
-Every remote ``uses`` mapping key must be ``owner/repo@<40 hex>`` (a path such
-as ``github/codeql-action/init`` is still the ``github/codeql-action``
-repository). The key may be quoted, may have space before the colon, and may
-appear in a flow mapping. Text that merely contains ``uses:``, such as a
-``run`` command, is ignored. Local ``./`` actions are ignored. A full-line
-comment is ignored. When the same line comments a version, that tag must still
-contain the pinned commit.
+Workflow files are parsed as YAML. Every ``uses`` value must be
+``owner/repo@<40 hex>`` (a path such as ``github/codeql-action/init`` is still
+the ``github/codeql-action`` repository). Quoted keys, flow mappings, folded
+scalars, aliases, and quoted escapes are read as YAML, so a ``run`` script that
+mentions ``uses:`` is not an action. Local ``./`` actions and ``docker://``
+actions are ignored. A value that is not ``owner/repo@ref`` is a finding.
+The pinned commit must be the default branch tip or an ancestor of it, so a
+commit that exists only in a fork does not pass. A version comment on the
+value's ending line must still contain the pinned commit.
 The comment must be only the tag (``# v4.2.2``) or the tag must be in
 parentheses (``(v8.3.0)``). Other words, such as ``Node v20``, are not tags.
 A release tag may move forward; the pin stays valid when it is that tag or an
 ancestor of it.
 
 The GitHub API is required. ``GH_TOKEN`` or ``GITHUB_TOKEN`` must be set.
-A missing token, a rate limit, or any other API error fails the process.
-A missing ``--workflows`` directory fails the process. A missing commit is a
-finding, not a skipped pin.
+A missing token, a rate limit, a redirect, an unreadable workflow, or any
+other API error fails the process. A missing ``--workflows`` directory fails
+the process. A missing commit is a finding, not a skipped pin.
 
 Inputs:
     Workflow YAML under ``.github/workflows`` (or ``--workflows``).
+    PyYAML (``requirements-dev.txt``).
     A GitHub token in the environment.
 
 Outputs:
@@ -43,15 +46,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+from yaml.nodes import MappingNode, Node, ScalarNode
+
 API_ROOT = "https://api.github.com"
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
-# A YAML mapping key, not the substring "uses:" inside another value.
-# Block form: optional "- ", optional quotes, optional space before the colon.
-# Flow form: the key is the first key, or follows a comma, inside "{...}".
-USES_RE = re.compile(
-    r"""(?:^\s*(?:-\s+)?|\{(?:\s*|[^}\n]*?,\s*))"""
-    r"""(?P<quote>['\"]?)uses(?P=quote)\s*:\s*['\"]?(?P<spec>[^'\"\s#}]+)"""
-)
+_BRANCH_RE = re.compile(r"[A-Za-z0-9._/-]+")
 _VERSION_TOKEN = r"v\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.]+)?"
 WHOLE_COMMENT_VERSION_RE = re.compile(rf"^{_VERSION_TOKEN}$")
 PAREN_VERSION_RE = re.compile(rf"\(({_VERSION_TOKEN})\)")
@@ -107,39 +107,113 @@ def _versions(comment: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(found))
 
 
-def iter_action_uses(workflows: Path) -> list[ActionUse]:
-    """Collect remote action uses from workflow YAML files."""
+class _WorkflowLoader(yaml.SafeLoader):
+    """Safe YAML loader that records every ``uses`` value while parsing."""
+
+    def __init__(self, stream: str) -> None:
+        super().__init__(stream)
+        self.found: list[tuple[Node, Node, object]] = []
+        self.seen: set[tuple[int, int]] = set()
+
+
+def _construct_yaml_map(loader: _WorkflowLoader, node: MappingNode):
+    """Build a mapping and remember each ``uses`` value once.
+
+    PyYAML fills mappings in two steps so an anchor can point at the mapping
+    before its keys exist. Recording happens before that fill, and ``seen``
+    ignores the second walk of the same node.
+    """
+    data: dict[object, object] = {}
+    yield data
+    for key_node, value_node in node.value:
+        if not isinstance(key_node, ScalarNode) or key_node.value != "uses":
+            continue
+        ident = (key_node.start_mark.line, key_node.start_mark.column)
+        if ident in loader.seen:
+            continue
+        loader.seen.add(ident)
+        loader.found.append((key_node, value_node, loader.construct_object(value_node, deep=True)))
+    data.update(yaml.constructor.SafeConstructor.construct_mapping(loader, node))
+
+
+_WorkflowLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_yaml_map,
+)
+
+
+def _comment_after(lines: list[str], key_node: Node, value_node: Node) -> str:
+    """Return version-comment text for this ``uses`` key.
+
+    The comment is the last ``#`` on the key's line. An alias reuses an earlier
+    node, so the value's own end is not on that line; a folded value can also
+    carry a comment where the value ends.
+    """
+    parts: list[str] = []
+    key_line = key_node.start_mark.line
+    if 0 <= key_line < len(lines) and "#" in lines[key_line]:
+        parts.append(lines[key_line].split("#")[-1])
+    end = value_node.end_mark
+    if end.line != key_line and 0 <= end.line < len(lines) and "#" in lines[end.line][end.column :]:
+        parts.append(lines[end.line][end.column :].split("#", 1)[1])
+    return " ".join(parts)
+
+
+def _use_from_value(path: Path, lines: list[str], key_node: Node, value_node: Node, value: object) -> ActionUse | None:
+    """Turn one parsed ``uses`` value into a remote action, or skip local ones."""
+    line = key_node.start_mark.line + 1
+    versions = _versions(_comment_after(lines, key_node, value_node))
+    if not isinstance(value, str) or not value.strip():
+        return ActionUse(path, line, "", None, "unsupported value", versions)
+    spec = value.strip()
+    if spec.startswith("./") or spec.startswith("docker://"):
+        return None
+    parsed = _repo_and_ref(spec)
+    if parsed is None:
+        return ActionUse(path, line, "", None, spec, versions)
+    repo, ref = parsed
+    sha = ref if SHA_RE.fullmatch(ref) else None
+    return ActionUse(path, line, repo, sha, ref, versions)
+
+
+def _uses_in_file(path: Path) -> list[ActionUse]:
+    """Parse one workflow and return its remote ``uses`` values in source order."""
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    loader = _WorkflowLoader(text)
+    try:
+        while loader.check_data():
+            loader.get_data()
+    except yaml.YAMLError as failure:
+        raise PinCheckError(f"{path}: workflow YAML could not be parsed: {failure}") from failure
+    finally:
+        loader.dispose()
+    loader.found.sort(key=lambda item: (item[0].start_mark.line, item[0].start_mark.column))
     uses: list[ActionUse] = []
-    files = sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml"))
-    for path in files:
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if line.lstrip().startswith("#"):
-                continue
-            match = USES_RE.search(line)
-            if match is None:
-                continue
-            parsed = _repo_and_ref(match.group("spec"))
-            if parsed is None:
-                continue
-            repo, ref = parsed
-            sha = ref if SHA_RE.fullmatch(ref) else None
-            uses.append(
-                ActionUse(
-                    path=path,
-                    line=line_number,
-                    repo=repo,
-                    sha=sha,
-                    raw_ref=ref,
-                    versions=_versions(line.split("#", 1)[1] if "#" in line else ""),
-                )
-            )
+    for key_node, value_node, value in loader.found:
+        use = _use_from_value(path, lines, key_node, value_node, value)
+        if use is not None:
+            uses.append(use)
     return uses
 
 
+def iter_action_uses(workflows: Path) -> list[ActionUse]:
+    """Collect remote action uses from workflow YAML files."""
+    files = sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml"))
+    uses: list[ActionUse] = []
+    for path in files:
+        uses.extend(_uses_in_file(path))
+    return uses
+
+
+def _repo_url(repo: str) -> str:
+    """Return the repository URL, with no trailing slash."""
+    return f"{API_ROOT}/repos/{repo}"
+
+
 def _api_url(repo: str, *parts: str) -> str:
-    """Build an API URL for ``repo`` without following URLs from responses."""
-    suffix = "/".join(parts)
-    return f"{API_ROOT}/repos/{repo}/{suffix}"
+    """Build an API URL for ``repo`` from local path parts."""
+    return f"{_repo_url(repo)}/{'/'.join(parts)}"
 
 
 def _commit_for_tag(repo: str, tag: str, fetch: Fetch, token: str, cache: dict[str, str]) -> str:
@@ -199,17 +273,41 @@ def _tag_contains_pin(repo: str, pin: str, tagged: str, fetch: Fetch, token: str
     return str(body.get("status", ""))
 
 
+def _default_branch(repo: str, fetch: Fetch, token: str, cache: dict[str, str]) -> str:
+    """Return ``repo``'s default branch. The result is cached for this run."""
+    cached = cache.get(repo)
+    if cached is not None:
+        return cached
+    status, body = fetch(_repo_url(repo), token)
+    if status != 200 or body is None:
+        raise PinCheckError(f"GitHub API status {status} for {repo}")
+    branch = body.get("default_branch")
+    if not isinstance(branch, str) or _BRANCH_RE.fullmatch(branch) is None:
+        raise PinCheckError(f"GitHub repository {repo} has no usable default branch")
+    cache[repo] = branch
+    return branch
+
+
 def check_action_uses(uses: list[ActionUse], fetch: Fetch, token: str) -> list[str]:
     """Return human-readable problems. Raise ``PinCheckError`` when the API fails."""
     problems: list[str] = []
     commits: dict[str, bool] = {}
+    branches: dict[str, str] = {}
     tags: dict[str, str] = {}
     for use in uses:
         if use.sha is None:
-            problems.append(f"{use.label()}: {use.repo}@{use.raw_ref} is not a 40-character commit pin")
+            shown = f"{use.repo}@{use.raw_ref}" if use.repo else use.raw_ref
+            problems.append(f"{use.label()}: {shown} is not a 40-character commit pin")
             continue
         if not _commit_exists(use.repo, use.sha, fetch, token, commits):
             problems.append(f"{use.label()}: {use.repo}@{use.sha} is not a commit")
+            continue
+        branch = _default_branch(use.repo, fetch, token, branches)
+        relation = _tag_contains_pin(use.repo, use.sha, branch, fetch, token)
+        if relation not in {"ahead", "identical"}:
+            problems.append(
+                f"{use.label()}: {use.repo}@{use.sha} is not on the default branch {branch}"
+            )
             continue
         for version in use.versions:
             try:
@@ -227,13 +325,27 @@ def check_action_uses(uses: list[ActionUse], fetch: Fetch, token: str) -> list[s
     return problems
 
 
+def _refuse_redirect(newurl: str) -> None:
+    """Fail closed instead of following a redirect."""
+    raise PinCheckError(f"Refusing a GitHub API redirect to {newurl}")
+
+
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """Reject redirects so a response cannot send the token to another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Fail closed instead of following ``newurl``."""
+        _refuse_redirect(str(newurl))
+        return None
+
+
 def github_fetch(url: str, token: str) -> tuple[int, dict[str, object] | None]:
     """GET one GitHub API URL. Network and HTTP transport errors fail closed.
 
-    Only ``https://api.github.com/`` URLs are requested. ``urlopen`` is not used:
-    Semgrep treats every non-literal ``urlopen`` as a dynamic URL, including one
-    this module just built. ``build_opener`` uses the default HTTPS handler, which
-    verifies certificates.
+    Only ``https://api.github.com/`` URLs are requested. Redirects are refused.
+    ``urlopen`` is not used: Semgrep treats every non-literal ``urlopen`` as a
+    dynamic URL, including one this module just built. ``build_opener`` uses the
+    default HTTPS handler, which verifies certificates.
     """
     prefix = f"{API_ROOT}/"
     if not url.startswith(prefix):
@@ -248,7 +360,7 @@ def github_fetch(url: str, token: str) -> tuple[int, dict[str, object] | None]:
         },
         method="GET",
     )
-    opener = urllib.request.build_opener()
+    opener = urllib.request.build_opener(_RefuseRedirect())
     try:
         with opener.open(request, timeout=30) as response:
             raw = response.read()

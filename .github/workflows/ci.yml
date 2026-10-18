@@ -23,10 +23,11 @@ name: CI
 # a required check: it depends on GitHub's advisory database and API, so it
 # can turn red on an unchanged tree when a new advisory is published.
 #
-# "Action pins exist" (action-pins) asks GitHub whether every workflow pin is
-# a real commit and whether a version comment's tag still contains that
-# commit. It fails closed on API errors. Add it to KGRuleset1 after it has
-# passed on main; until then a red run does not block merge.
+# "Action pins exist" (action-pins) parses workflow YAML and asks GitHub
+# whether every remote uses value is a commit on that action's default branch,
+# and whether a version comment's tag still contains that commit. It fails
+# closed on API errors. Add it to KGRuleset1 after it has passed on main;
+# until then a red run does not block merge.
 #
 # Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
 # privacy checks pass via needs: [privacy-gates].
@@ -426,6 +427,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      - name: Install the workflow parser
+        run: pip install "$(grep '^PyYAML' requirements-dev.txt)"
       - name: Check that action pins are real commits
         env:
           GH_TOKEN: ${{ github.token }}

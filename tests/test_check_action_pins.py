@@ -66,7 +66,7 @@ def test_run_text_is_ignored_and_yaml_key_forms_are_kept(tmp_path: Path) -> None
                 "jobs:",
                 "  build:",
                 "    steps:",
-                f'      - run: echo "uses: actions/checkout@{SHA}"',
+                f"      - run: 'echo \"uses: actions/checkout@{SHA}\"'",
                 f"      - uses : actions/checkout@{SHA} # v7",
                 f'      - "uses": actions/setup-python@{OTHER}',
                 f"      - 'uses': actions/upload-artifact@{SHA}",
@@ -84,6 +84,90 @@ def test_run_text_is_ignored_and_yaml_key_forms_are_kept(tmp_path: Path) -> None
         ("actions/cache", SHA, ()),
         ("actions/download-artifact", OTHER, ()),
     ]
+
+
+def test_hidden_yaml_uses_are_checked_and_run_text_is_not(tmp_path: Path) -> None:
+    """Forms a line search skips are still pins. A run script is not."""
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    _write(
+        workflows,
+        "ci.yml",
+        "\n".join(
+            [
+                "pins:",
+                "  bad: &bad evil/x@v1",
+                "jobs:",
+                "  build:",
+                "    steps:",
+                "      - run: |",
+                "          uses: actions/cache@v4",
+                "      - uses: >-",
+                f"          actions/checkout@{SHA}",
+                f"      - {{with: {{k: 1}}, uses: actions/cache@{SHA}, name: x}}",
+                "      - - uses: actions/setup-python@" + OTHER,
+                "        - uses: actions/upload-artifact@" + SHA,
+                f'      - {{name: "C#", uses: actions/download-artifact@{SHA}}} # v8',
+                f'      - uses: "actions/checkout\\x40{SHA}"',
+                "      - uses: *bad",
+                "      - uses: !!str evil/y@v1",
+                "      - uses: actions/checkout",
+            ]
+        )
+        + "\n",
+    )
+    uses = iter_action_uses(workflows)
+    assert [(item.repo, item.raw_ref, item.sha, item.versions) for item in uses] == [
+        ("actions/checkout", SHA, SHA, ()),
+        ("actions/cache", SHA, SHA, ()),
+        ("actions/setup-python", OTHER, OTHER, ()),
+        ("actions/upload-artifact", SHA, SHA, ()),
+        ("actions/download-artifact", SHA, SHA, ("v8",)),
+        ("actions/checkout", SHA, SHA, ()),
+        ("evil/x", "v1", None, ()),
+        ("evil/y", "v1", None, ()),
+        ("", "actions/checkout", None, ()),
+    ]
+
+
+def test_invalid_workflow_yaml_fails(tmp_path: Path) -> None:
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    _write(workflows, "ci.yml", "jobs: [\n")
+    with pytest.raises(PinCheckError, match="could not be parsed"):
+        iter_action_uses(workflows)
+
+
+def test_fork_commit_is_not_on_the_default_branch() -> None:
+    from scripts.check_action_pins import ActionUse
+
+    pinned = ActionUse(
+        path=Path("ci.yml"),
+        line=3,
+        repo="actions/checkout",
+        sha=SHA,
+        raw_ref=SHA,
+        versions=(),
+    )
+
+    def fetch(url: str, _token: str) -> tuple[int, dict[str, object] | None]:
+        if url.endswith(f"/commits/{SHA}"):
+            return 200, {"sha": SHA}
+        if url.endswith("/repos/actions/checkout"):
+            return 200, {"default_branch": "main"}
+        if url.endswith(f"/compare/{SHA}...main"):
+            return 200, {"status": "diverged"}
+        raise AssertionError(url)
+
+    problems = check_action_uses([pinned], fetch, "token")
+    assert "not on the default branch main" in problems[0]
+
+
+def test_redirects_are_refused() -> None:
+    from scripts.check_action_pins import _refuse_redirect
+
+    with pytest.raises(PinCheckError, match="redirect"):
+        _refuse_redirect("https://example.com")
 
 
 def test_missing_workflows_directory_fails(
@@ -133,6 +217,10 @@ def test_missing_commit_and_tag_mismatch_are_findings() -> None:
     def fetch_tag(url: str, _token: str) -> tuple[int, dict[str, object] | None]:
         if url.endswith(f"/commits/{SHA}"):
             return 200, {"sha": SHA}
+        if url.endswith("/repos/actions/cache"):
+            return 200, {"default_branch": "main"}
+        if url.endswith(f"/compare/{SHA}...main"):
+            return 200, {"status": "ahead"}
         if url.endswith("/git/ref/tags/v4.2.2"):
             return 200, {"object": {"type": "commit", "sha": OTHER}}
         if "/compare/" in url:
@@ -159,6 +247,10 @@ def test_annotated_tag_match_passes() -> None:
     def fetch(url: str, _token: str) -> tuple[int, dict[str, object] | None]:
         if url.endswith(f"/commits/{SHA}"):
             return 200, {"sha": SHA}
+        if url.endswith("/repos/actions/checkout"):
+            return 200, {"default_branch": "main"}
+        if url.endswith(f"/compare/{SHA}...main"):
+            return 200, {"status": "identical"}
         if url.endswith("/git/ref/tags/v7"):
             return 200, {"object": {"type": "tag", "sha": tag_object}}
         if url.endswith(f"/git/tags/{tag_object}"):
