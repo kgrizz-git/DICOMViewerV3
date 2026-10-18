@@ -340,7 +340,7 @@ comment via rule-scoped `# NOSONAR(S1244)`.
       the `:229` parity fix; the deferred 114 CODE_SMELL follow-up pointer).
 - [x] **`dev-docs/TO_DO.md`:** add a follow-up backlog item for the 114 deferred
       MAJOR CODE_SMELL findings so they are not lost.
-- [ ] **Version bump:** optional for this pass. (deferred — staying on 0.4.0 / Unreleased) Keep work under **[Unreleased]**
+- [ ] **Version bump:** optional for this pass. (deferred — staying on 0.5.0 / Unreleased) Keep work under **[Unreleased]**
       without bumping `src/version.py` / CHANGELOG **Current version** unless
       cutting a release or intentionally advancing the project version. If
       bumping, keep both in sync per

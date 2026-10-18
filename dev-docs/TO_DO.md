@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-13
+**Last updated:** 2026-10-17
 
 ---
 
@@ -37,6 +37,9 @@ sections below and in [`ICEBOX.md`](ICEBOX.md).
 3. **[P1] Fusion overlay rescaled values and units** — add a raw-vs-rescaled
    selector for overlay normalization and show units (HU, SUV) in the fusion
    controls. See [Fusion Follow-up](#fusion-follow-up).
+4. **Prepare for distributed release** — rename/fork process + Mac App Store
+   distribution plan + stale-doc updates. See
+   [`PREPARE_FOR_DISTRIBUTED_RELEASE.md`](info/PREPARE_FOR_DISTRIBUTED_RELEASE.md).
 
 Release blockers (license compliance, versioned executables) live in
 [Release / Product](#release--product) and are a separate track from this queue.

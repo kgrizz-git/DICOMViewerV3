@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
+from unittest.mock import patch
+
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel
 
+from gui.cine_video_export import FfmpegResolution
 from gui.dialogs.cine_export_dialog import CineExportDialog
 
 
@@ -60,6 +65,33 @@ def test_reject_leaves_dialog_rejected(qapp) -> None:
     )
     dlg.reject()
     assert dlg.result() == int(dlg.DialogCode.Rejected)
+
+
+@pytest.mark.qt
+def test_dialog_disables_ffmpeg_formats_when_resolver_missing(
+    qapp, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When FFmpeg is missing, GIF stays enabled and the dialog does not set env."""
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    missing = FfmpegResolution(path=None, source="missing")
+    with patch(
+        "gui.dialogs.cine_export_dialog.resolve_ffmpeg_exe",
+        return_value=missing,
+    ):
+        dlg = CineExportDialog(
+            None, default_fps=10.0, total_frames=3, loop_start=None, loop_end=None
+        )
+    model = dlg._format_combo.model()
+    gif_item = model.item(0)
+    assert gif_item is not None
+    assert gif_item.flags() & Qt.ItemFlag.ItemIsEnabled
+    for row, label in enumerate(("AVI", "MP4", "MPG"), start=1):
+        item = model.item(row)
+        assert item is not None
+        assert item.text() == label
+        assert not (item.flags() & Qt.ItemFlag.ItemIsEnabled)
+    assert dlg.build_options().video_format == "GIF"
+    assert "IMAGEIO_FFMPEG_EXE" not in os.environ
 
 
 @pytest.mark.qt

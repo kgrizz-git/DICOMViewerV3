@@ -2,6 +2,8 @@
 
 This guide explains how to code sign and notarize your DICOM Viewer V3 macOS application for distribution outside the Mac App Store. Code signing and notarization are required to avoid Gatekeeper warnings and security issues on macOS 10.15 (Catalina) and later.
 
+**Mac App Store distribution is a separate track** and is not covered here; see [`PREPARE_FOR_DISTRIBUTED_RELEASE.md`](PREPARE_FOR_DISTRIBUTED_RELEASE.md) §2.
+
 If you **do not yet** have an Apple Developer Program membership (**Developer ID Application** certificate), you can still build and test the `.app` locally; end users will see Gatekeeper prompts until you sign and notarize. The PyInstaller spec keeps **UPX off on macOS** (`USE_UPX = not IS_DARWIN`) so the layout stays compatible when you later enable signing — see **`DICOMViewerV3.spec`** and **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**.
 
 ## Prerequisites

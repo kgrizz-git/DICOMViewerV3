@@ -34,6 +34,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from gui.cine_video_export import resolve_ffmpeg_exe
+
+_FFMPEG_VIDEO_FORMATS = ("AVI", "MP4", "MPG")
+
 
 @dataclass
 class CineExportOptions:
@@ -46,6 +50,61 @@ class CineExportOptions:
     loop_end_frame: int
     include_overlays: bool
     export_scale: float  # 1.0, 1.5, 2.0, or 4.0 — same cap logic as PNG/JPG export
+
+
+def _loop_bounds_available(
+    loop_start: int | None,
+    loop_end: int | None,
+    total_frames: int,
+) -> bool:
+    """True when both A–B markers exist and the series has at least one frame."""
+    return loop_start is not None and loop_end is not None and total_frames > 0
+
+
+def _apply_loop_spin_values(
+    loop_start_spin: QSpinBox,
+    loop_end_spin: QSpinBox,
+    *,
+    has_bounds: bool,
+    loop_start: int | None,
+    loop_end: int | None,
+    last_frame: int,
+) -> None:
+    """Fill the loop spin boxes, swapping a reversed A–B pair into order."""
+    if not has_bounds:
+        loop_start_spin.setValue(0)
+        loop_end_spin.setValue(last_frame)
+        return
+    start = int(max(0, min(loop_start or 0, last_frame)))
+    end = int(max(0, min(loop_end or last_frame, last_frame)))
+    if end < start:
+        start, end = end, start
+    loop_start_spin.setValue(start)
+    loop_end_spin.setValue(end)
+
+
+def _notice_when_ffmpeg_missing(
+    format_model: QStandardItemModel,
+    format_combo: QComboBox,
+) -> QLabel | None:
+    """Disable AVI/MP4/MPG and return a notice when no FFmpeg executable resolves."""
+    if resolve_ffmpeg_exe().source != "missing":
+        return None
+    for row, label in enumerate(("GIF", *_FFMPEG_VIDEO_FORMATS)):
+        if label == "GIF":
+            continue
+        item = format_model.item(row)
+        if item is None:
+            continue
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+    if str(format_combo.currentText()).upper() in _FFMPEG_VIDEO_FORMATS:
+        format_combo.setCurrentIndex(0)
+    notice = QLabel(
+        "FFmpeg was not found. Install ffmpeg on your PATH or set IMAGEIO_FFMPEG_EXE "
+        "to the ffmpeg executable. GIF export remains available."
+    )
+    notice.setWordWrap(True)
+    return notice
 
 
 class CineExportDialog(QDialog):
@@ -71,7 +130,10 @@ class CineExportDialog(QDialog):
         last = max(0, self._total - 1)
 
         self._format_combo = QComboBox()
-        self._format_combo.addItems(["GIF", "AVI", "MP4", "MPG"])
+        format_model = QStandardItemModel()
+        for label in ("GIF", "AVI", "MP4", "MPG"):
+            format_model.appendRow(QStandardItem(label))
+        self._format_combo.setModel(format_model)
         # Default **MP4**: Windows 11 Media Player documents in-box playback for .mp4 + MPEG-4;
         # .mpg is routed to MPEG-1/2 and usually needs the Store MPEG-2 Video Extension.
         self._format_combo.setCurrentIndex(2)
@@ -103,11 +165,7 @@ class CineExportDialog(QDialog):
         self._fps_spin.setValue(float(max(0.1, default_fps)))
 
         self._use_loop_check = QCheckBox("Use cine loop range (A–B markers)")
-        has_bounds = (
-            loop_start is not None
-            and loop_end is not None
-            and self._total > 0
-        )
+        has_bounds = _loop_bounds_available(loop_start, loop_end, self._total)
         self._use_loop_check.setChecked(bool(has_bounds))
         self._use_loop_check.setEnabled(self._total > 1)
 
@@ -115,16 +173,14 @@ class CineExportDialog(QDialog):
         self._loop_start.setRange(0, max(0, last))
         self._loop_end = QSpinBox()
         self._loop_end.setRange(0, max(0, last))
-        if has_bounds:
-            ls = int(max(0, min(loop_start or 0, last)))
-            le = int(max(0, min(loop_end or last, last)))
-            if le < ls:
-                ls, le = le, ls
-            self._loop_start.setValue(ls)
-            self._loop_end.setValue(le)
-        else:
-            self._loop_start.setValue(0)
-            self._loop_end.setValue(last)
+        _apply_loop_spin_values(
+            self._loop_start,
+            self._loop_end,
+            has_bounds=has_bounds,
+            loop_start=loop_start,
+            loop_end=loop_end,
+            last_frame=last,
+        )
 
         loop_row = QFormLayout()
         loop_row.addRow("Loop start frame:", self._loop_start)
@@ -146,9 +202,13 @@ class CineExportDialog(QDialog):
         help_lbl = QLabel(
             "Frames are rendered with the same LUT, rescale, resolution, and overlay drawing "
             "path as PNG/JPG export (not a viewport grab). Cancel removes a partial output file.\n"
-            "Video encoding uses FFmpeg via the imageio-ffmpeg package (LGPL/GPL components)."
+            "GIF export does not require FFmpeg. AVI, MP4, and MPG use an external FFmpeg "
+            "executable (the app bundle's LGPL ffmpeg when frozen, ffmpeg on PATH, or "
+            "IMAGEIO_FFMPEG_EXE)."
         )
         help_lbl.setWordWrap(True)
+
+        ffmpeg_notice = _notice_when_ffmpeg_missing(format_model, self._format_combo)
 
         privacy_notice = QLabel(
             "<b>Privacy notice:</b> Cine export can include visible image text, overlays, ROIs, "
@@ -181,6 +241,8 @@ class CineExportDialog(QDialog):
         root.addWidget(loop_group)
         root.addWidget(self._overlay_check)
         root.addWidget(help_lbl)
+        if ffmpeg_notice is not None:
+            root.addWidget(ffmpeg_notice)
         root.addWidget(privacy_notice)
         root.addWidget(buttons)
         self.setLayout(root)
