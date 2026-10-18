@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-18
+- **Three-OS LGPL FFmpeg freeze.** Build Executables run 39093453422 passed on Windows, macOS, and Ubuntu at commit `0a2f1ce`. Windows compiled FFmpeg from source after the compiler-test fix. Configure reported LGPL 2.1 or later, and each frozen bundle passed the wheel-strip check and the LGPL audit. Signing and a launched-process `_MEIPASS` check stay open.
 
 ## 2026-10-17
 - **Windows LGPL FFmpeg compiler test.** Build Executables run 39089774784 passed on macOS and Ubuntu. Windows failed in FFmpeg configure (`gcc is unable to create an executable file`) while `MSYS2_ARG_CONV_EXCL=*` was exported. That setting blocks MSYS path conversion, so mingw `gcc` cannot open the configure test sources. The Windows build step now leaves conversion on, sets `TMPDIR=.`, clears the setup-python `PKG_CONFIG_PATH`, and prints `ffbuild/config.log` if configure fails.

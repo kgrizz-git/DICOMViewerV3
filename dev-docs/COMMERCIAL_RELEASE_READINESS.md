@@ -1,7 +1,7 @@
 # Commercial Release Readiness — Master Gate
 
 **Status:** Active — the single "can we sell this yet?" checklist
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 **Owner:** product/release
 
 > **Purpose.** One place to see everything that must be true **before charging money** for
@@ -22,7 +22,7 @@
 | # | Blocker | Tier | Owner plan | Status |
 |---|---------|------|-----------|--------|
 | 1 | Replace GPL `pylibjpeg-libjpeg` + verify decode | 0 | [GDCM release validation plan](plans/supporting/GDCM_DECODER_PRODUCTIONIZATION_PLAN.md) | 🟡 `python-gdcm==3.2.6` now replaces the GPL requirement and policy exception; DCMTK+dcm4che confirm `.50` color and valid `.51` output. Exact successful `.51` native diagnostic is allowlisted with a subprocess/hash test. Pending: clean frozen builds/corpus smokes on all targets and final GDCM asset-notice review |
-| 2 | Verify/replace FFmpeg (`imageio-ffmpeg`) license | 0 | [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker) | ❌ **GPL build confirmed** (ffmpeg 7.1) — blocker; replace with LGPL-only binary (not OpenCV) |
+| 2 | Verify/replace FFmpeg (`imageio-ffmpeg`) license | 0 | [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker) | 🟡 LGPL frozen builds passed the audit on Windows, macOS, and Linux (run 39093453422, 2026-10-18). Signing and a launched `_MEIPASS` check remain |
 | 3 | Replace Liberation Sans font with OFL/Apache font | 0 | [Compliance §3b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#3b-per-component-checklist-post-phase-0) | ❌ Not started |
 | 4 | Choose project license + add `LICENSE` | 0 | [Compliance §1](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#1b-project-license-file) | ❌ Not started |
 | 5 | Qt/PySide6 LGPL compliance (or Qt commercial) | 0 | [Compliance §2](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#phase-2--qt--pyside6-lgpl-compliance-for-commercial-distribution) | ❌ Not started |
@@ -61,7 +61,7 @@ trust in a paid product.
       transfer syntax that fails; assert the single documented successful `.51` native diagnostic
       in an isolated subprocess and clear every other native diagnostic; run full test suite +
       manual smoke after removal.
-- [ ] **Replace `imageio-ffmpeg`** — verified 2026-10-17: the bundled FFmpeg 7.1 binary is a **GPL build** (`--enable-gpl`, libx264, libx265). Must replace. Preferred: bundle an LGPL-only FFmpeg binary (app already uses only `mpeg4`/`mpeg2video`). Do NOT use opencv-python (also bundles GPLv3 FFmpeg).
+- [ ] **Replace `imageio-ffmpeg`** — the wheel binary is a **GPL build** (`--enable-gpl`, libx264, libx265) and is stripped from the frozen app. Build Executables run 39093453422 (2026-10-18) built an LGPL FFmpeg on Windows, macOS, and Ubuntu and the frozen audit passed. Signing and a launched `_MEIPASS` check remain. Do NOT use opencv-python (also bundles GPLv3 FFmpeg).
       → [Compliance §0b](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md#0b-ffmpeg-via-imageio-ffmpeg--likely-lgpl-only-but-verify-verify-before-treating-as-blocker).
 - [ ] **Replace Liberation Sans** (GPL-2.0 + ambiguous embedding exception) with an SIL OFL /
       Apache font (Noto Sans, Source Sans 3, Inter, or Roboto).
