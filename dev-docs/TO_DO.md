@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 
 ---
 
@@ -390,6 +390,7 @@ Read paths exist for **GSPS** and **KO** on load (`presentation_state_handler`, 
 - [ ] **[P0]** Figure out license; also check which libraries are covered by which licenses and make sure we are compliant. **Plan:** [License & library compliance](plans/supporting/LICENSE_AND_COMPLIANCE_PLAN.md)
 - [ ] **[P1]** **Tiered distribution (free basic / full trial / paid full):** decide feature split, trial, and in-app license enforcement (single build + entitlements + offline signed license file). **Plan:** [Product tiers & licensing enforcement](plans/supporting/PRODUCT_TIERS_AND_LICENSING_ENFORCEMENT_PLAN.md) — *P0-blocked by compliance Phase 0 (GPL deps).*
 - [ ] **[P0]** Make versioned release with exectutables — **Plan:** [Versioned release](plans/supporting/VERSIONED_RELEASE_PLAN.md)
+    - [ ] **[P3]** Add a latest-release badge to `README.md` after the first tagged release ships.
 
 **Product / outreach** (post-release track):
 
