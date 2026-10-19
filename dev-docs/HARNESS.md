@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-18
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -241,6 +241,25 @@ as clean; so does an empty `GH_TOKEN`, since zizmor would otherwise silently
 skip its online audits. It runs on every push, PR and the weekly schedule, and is **not** a
 required check: an advisory published against an unchanged tree can turn it
 red.
+
+### Action commit pins
+
+The zizmor job does not fail when a pin is not a commit. **Action pins exist**
+(`action-pins` in `ci.yml`) reads every remote ``uses:`` under
+``.github/workflows/``, including workflows that do not run on pull requests,
+and requires a 40-character commit that is the action repository's default
+branch tip or an ancestor of it. The job parses the workflow as YAML, so a
+``uses`` value in a flow mapping, a folded scalar, an alias, or a quoted
+escape is still checked, and text inside a ``run`` script is not. A value
+that is not ``owner/repo@ref`` fails. A missing workflow directory or an
+unreadable workflow fails the check. A version comment on the line where the
+value ends must name a tag that still contains that commit when the
+comment is only that tag (``# v4.2.2``) or the tag is in parentheses
+(``(v8.3.0)``). Other words, such as ``Node v20``, are not tags, and a
+full-line comment is not a ``uses:``. A release tag may move forward without
+failing the pin. Local ``./`` actions are ignored. An empty token or any GitHub API
+error fails the job. It is not a required check until it is added to
+KGRuleset1.
 
 ### Git hooks (the blocking local layer)
 
