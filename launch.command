@@ -162,8 +162,8 @@ build_docs() {
     echo ""
     echo "Installing documentation builder (zensical)..."
     local pin
-    pin="$(grep '^zensical' "$SCRIPT_DIR/requirements-dev.txt")" || {
-        echo "ERROR: Could not read the zensical pin from requirements-dev.txt."
+    pin="$(grep '^zensical' "$SCRIPT_DIR/requirements-dev.in")" || {
+        echo "ERROR: Could not read the zensical pin from requirements-dev.in."
         return 1
     }
     "$VENV_PY" -m pip install -q "$pin" || {

@@ -202,9 +202,9 @@ if errorlevel 1 (
 echo.
 echo Installing documentation builder (zensical)...
 set "ZENSICAL_PIN="
-for /f "delims=" %%Z in ('findstr /B "zensical" "%ROOT%requirements-dev.txt"') do set "ZENSICAL_PIN=%%Z"
+for /f "delims=" %%Z in ('findstr /B "zensical" "%ROOT%requirements-dev.in"') do set "ZENSICAL_PIN=%%Z"
 if not defined ZENSICAL_PIN (
-    echo ERROR: Could not read the zensical pin from requirements-dev.txt.
+    echo ERROR: Could not read the zensical pin from requirements-dev.in.
     pause
     goto :MENU
 )

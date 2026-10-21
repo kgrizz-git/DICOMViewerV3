@@ -3,7 +3,8 @@ name: CI
 # Job DAG (privacy-first):
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
-#      pip-audit-phi-tools, vulnerable-actions, action-pins, repo-harness,
+#      pip-audit-phi-tools, vulnerable-actions, action-pins, requirements-lock,
+#      repo-harness,
 #      user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
@@ -29,6 +30,12 @@ name: CI
 # version tag contains it or it is on the default branch. It fails
 # closed on API errors. Add it to KGRuleset1 after it has passed on main;
 # until then a red run does not block merge.
+#
+# "Requirements locks match" (requirements-lock) recompiles requirements*.in with
+# the pinned uv and fails when a committed requirements*.txt differs. It needs
+# PyPI access, keeps the existing pins (so a new upstream release alone never
+# fails it), and fails closed if uv cannot resolve. Add it to KGRuleset1 after it
+# has passed on main; until then a red run does not block merge.
 #
 # Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
 # privacy checks pass via needs: [privacy-gates].
@@ -148,9 +155,9 @@ jobs:
           # (pip took ~45s here even with a warm wheel cache). Pinned so CI is
           # reproducible; bump deliberately. Other jobs keep pip, and so do the
           # launch scripts, so pip resolution is still exercised in CI.
-          python -m pip install "uv==0.12.23"
-          # requirements-dev.txt includes requirements.txt plus lizard, pytest-cov, etc.
-          uv pip install --system -r requirements-dev.txt
+          python -m pip install "uv==0.13.4"
+          # requirements-dev.txt is the hashed lock of requirements-dev.in; it includes the app lock plus lizard, pytest-cov, etc.
+          uv pip install --system --require-hashes -r requirements-dev.txt
 
       - name: Run tests with coverage
         env:
@@ -223,7 +230,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           # requirements-dev.txt supplies lizard + basedpyright (and app deps).
-          .venv/bin/pip install -r requirements-dev.txt
+          .venv/bin/pip install --require-hashes -r requirements-dev.txt
 
       - name: Run basedpyright (errors must be 0)
         run: .venv/bin/python scripts/check_basedpyright_errors.py
@@ -313,7 +320,7 @@ jobs:
       #
       # PYSEC-2026-2266 — pydicom 2.4.5, fixed in 3.0.2. Cannot upgrade: pylinac
       # caps pydicom<3 (confirmed still true in pylinac 3.47.0), and
-      # requirements.txt records that moving to pydicom 3 needs a coordinated
+      # requirements.in records that moving to pydicom 3 needs a coordinated
       # pylinac bump plus ACR QA re-verification. Unblocks when pylinac ships a
       # release allowing pydicom>=3. Review by 2026-12-31.
       - name: Run pip-audit
@@ -429,11 +436,31 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install the workflow parser
-        run: pip install "$(grep '^PyYAML' requirements-dev.txt)"
+        run: pip install "$(grep '^PyYAML' requirements-dev.in)"
       - name: Check that action pins are real commits
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/check_action_pins.py
+
+  requirements-lock:
+    name: Requirements locks match
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the pinned lock compiler
+        # Must equal UV_VERSION in scripts/compile_requirements.py (a unit test checks it).
+        run: python -m pip install "uv==0.13.4"
+      - name: Check that requirements*.txt match requirements*.in
+        run: python scripts/check_requirements_lock.py
 
   repo-harness:
     name: Harness docs and agent smoke
@@ -452,7 +479,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install runtime dependencies
-        run: pip install -r requirements.txt
+        run: pip install --require-hashes -r requirements.txt
 
       - name: Check repo harness documentation
         run: python scripts/check_repo_harness.py --root "${{ github.workspace }}"
@@ -503,11 +530,11 @@ jobs:
 
       # Publisher build gate (C2 adopted Zensical): the release-time offline
       # bundle builds from this same config, so keep it warning-free. Pin is
-      # sourced from requirements-dev.txt (single source of truth).
+      # sourced from requirements-dev.in (single source of truth).
       # `python -m` (not the bare binary) so no PATH assumptions are needed.
       - name: Build docs with Zensical (strict)
         run: |
-          pip install "$(grep '^zensical' requirements-dev.txt)"
+          pip install "$(grep '^zensical' requirements-dev.in)"
           python -m zensical build --strict
 
       # Warning-only by default: the script exits 0 unless --strict is passed.

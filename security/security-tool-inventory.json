@@ -56,7 +56,7 @@
       "category": "secret-scanning",
       "purpose": "Fast staged-file secret detection and informational CI second opinion.",
       "install_scope": "application development venv",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.5.0",
       "enforcement": [
         "pre-commit blocking on main",
@@ -92,7 +92,7 @@
       "category": "dependency-vulnerability",
       "purpose": "Audit Python dependencies against published vulnerability data.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "2.10.1",
       "enforcement": [
         "pre-push blocking except reviewed advisories",
@@ -362,7 +362,7 @@
       "category": "static-analysis",
       "purpose": "Type-error gate across application and repository scripts.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.39.9",
       "enforcement": [
         "pre-push blocking",
@@ -382,7 +382,7 @@
       "category": "static-analysis",
       "purpose": "Fast lint, import-order, and Python modernization checks.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "0.15.21",
       "enforcement": [
         "pre-commit blocking",
@@ -400,7 +400,7 @@
       "category": "complexity",
       "purpose": "Cyclomatic-complexity and function-size gate.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.24.0",
       "enforcement": [
         "pre-commit blocking",
@@ -420,7 +420,7 @@
       "category": "docstring-coverage",
       "purpose": "Docstring coverage percentage for the main.py split safety net and ongoing docstring-regression gating.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.7.0",
       "enforcement": [
         "pre-push blocking"
@@ -436,7 +436,7 @@
       "category": "coverage",
       "purpose": "Local and CI console coverage; reports are never uploaded to third parties.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "7.1.0",
       "enforcement": [
         "pre-push blocking",
@@ -454,7 +454,7 @@
       "category": "license-compliance",
       "purpose": "Generate the third-party dependency/license inventory.",
       "install_scope": "application development venv",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "5.5.5",
       "enforcement": [
         "manual release maintenance"
@@ -485,6 +485,7 @@
       "tracked_configuration": [
         ".env.example",
         ".envrc",
+        "requirements-dev.in",
         "requirements-dev.txt"
       ]
     },

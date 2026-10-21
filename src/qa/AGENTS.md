@@ -5,7 +5,7 @@ for changes under `src/qa/`.
 
 ## QA safety and entry points
 
-- `requirements.txt` pins `pylinac` exactly. Follow the root dependency-bump
+- `requirements.in` pins `pylinac` exactly (and `requirements.txt` locks it). Follow the root dependency-bump
   guidance and [`PYLINAC_INTEGRATION_OVERVIEW.md`](../../dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md)
   before changing pylinac-facing behavior.
 - Keep clinical data out of the repository. Use committed reviewed synthetic

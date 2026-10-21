@@ -38,6 +38,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 ## Security tooling and optional dev dependencies
 
+- **Editing dependencies:** change the floor in a `requirements*.in` file, then run **`python scripts/compile_requirements.py`** and commit the `.in` and `.txt` files together. CI **Requirements locks match** fails if they disagree.
 - **`pip install -r requirements-dev.txt`** — adds local Python security scanners (semgrep, detect-secrets).
 - **TruffleHog v3:** install separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI’s TruffleHog v3 action/binary line.
 - **Debug flags:** do not merge with **`DEBUG_*`** set to **`True`** in `src/utils/debug_flags.py` (CI fails on that).
@@ -54,14 +55,14 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 
 ## Pylinac pin and QA documentation
 
-- **`requirements.txt`** pins an exact **`pylinac`** version. When **bumping** the pin, follow **`dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`** (install, **`python -m pytest tests/ -v`**, optional manual ACR QA), and update **`info/PYLINAC_INTEGRATION_OVERVIEW.md`** (**Verified pylinac package version**) plus any user-facing version callouts (`README.md`, `user-docs/USER_GUIDE_QA_PYLINAC.md`, etc.).
+- **`requirements.in`** pins an exact **`pylinac`** (recompile the lock after a bump: see *Requirements files* in `DEVELOPER_SETUP.md`) version. When **bumping** the pin, follow **`dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`** (install, **`python -m pytest tests/ -v`**, optional manual ACR QA), and update **`info/PYLINAC_INTEGRATION_OVERVIEW.md`** (**Verified pylinac package version**) plus any user-facing version callouts (`README.md`, `user-docs/USER_GUIDE_QA_PYLINAC.md`, etc.).
 - Default Stage‑1 runs use **`src/qa/pylinac_extent_subclasses.py`** (**`ACRCTForViewer`** / **`ACRMRILargeForViewer`**) so origin indices may be **0 … N−1** (stock pylinac is stricter); JSON **`pylinac_analysis_profile`** records **`relaxed_image_extent`**. Users may enable **Vanilla pylinac** in the ACR CT/MRI options dialogs (persisted in **`qa_pylinac_config`**) to run stock **`ACRCT`** / **`ACRMRILarge`** instead.
 
 ## Third-party license inventory
 
 Maintain a rolling checklist of bundled Python packages, vendored binaries (e.g. FFmpeg), and **`resources/fonts/`** in **[`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`](info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md)** when pins, PyInstaller `datas`, or fonts change.
 
-**Cine export:** **`requirements.txt`** pins **`imageio`** + **`imageio-ffmpeg`** (BSD wrapper; the wheel’s FFmpeg is GPL and must not be frozen). Release freezes build and bundle an LGPL CLI via **`scripts/build_lgpl_ffmpeg.py`**; see **`resources/licenses/FFMPEG_LGPL_BUNDLED_NOTICE.md`**, **`AGENTS.md`**, and **`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`**.
+**Cine export:** **`requirements.in`** pins **`imageio`** + **`imageio-ffmpeg`** (BSD wrapper; the wheel’s FFmpeg is GPL and must not be frozen). Release freezes build and bundle an LGPL CLI via **`scripts/build_lgpl_ffmpeg.py`**; see **`resources/licenses/FFMPEG_LGPL_BUNDLED_NOTICE.md`**, **`AGENTS.md`**, and **`info/BUNDLED_PACKAGES_AND_FONTS_LICENSES.md`**.
 
 ## CI and GitHub Actions
 

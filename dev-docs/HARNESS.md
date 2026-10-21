@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-21
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -210,7 +210,7 @@ Two separate jobs, because they have different reliability:
 
 | Job | Scope | Blocks? |
 |-----|-------|---------|
-| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt` | Fails the job. Add it to the required-check ruleset to make it block merges |
+| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
 | `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
 
 The PHI-tooling audit is advisory because it resolves an isolated developer-only
@@ -260,6 +260,29 @@ full-line comment is not a ``uses:``. A release tag may move forward without
 failing the pin. Local ``./`` actions are ignored. An empty token or any GitHub API
 error fails the job. It is not a required check until it is added to
 KGRuleset1.
+
+### Requirements locks
+
+`requirements.in`, `requirements-dev.in` and `requirements-build.in` hold the
+hand-edited floors. `requirements.txt`, `requirements-dev.txt` and
+`requirements-build.txt` are hash-pinned locks compiled from them by
+`python scripts/compile_requirements.py` (`--upgrade` re-resolves to the newest
+versions). The compiler is `uv pip compile --universal --python-version 3.12`
+at the exact version in `UV_VERSION`, so one lock serves win32, darwin and
+linux. `pip-compile` was rejected because it resolves for the host only, so a
+Linux lock drops the Windows and macOS only packages (for example `colorama`,
+`pywin32-ctypes`, `pefile`, `macholib`). Dev and build are compiled with
+`-c requirements.txt` so all three agree on the application versions.
+
+**Requirements locks match** (`requirements-lock` in `ci.yml`) runs
+`scripts/check_requirements_lock.py`. It recompiles in a scratch folder under
+`tmp/`, seeded with the committed locks so existing pins are kept, and fails if
+any lock differs, is missing, or lost its uv header. It needs PyPI and fails
+closed. It is not a required check until it is added to KGRuleset1.
+
+One gap: `pip-audit` evaluates environment markers for the Linux runner, so pins
+that only apply elsewhere (`colorama`, `pywin32-ctypes`, `pefile`, `macholib`)
+are not audited by that job.
 
 ### Git hooks (the blocking local layer)
 

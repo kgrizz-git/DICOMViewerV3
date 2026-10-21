@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-21
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-21
+- **Hashed universal requirements locks.** `requirements*.txt` became hash-pinned locks compiled from new `requirements*.in` floor files by `scripts/compile_requirements.py` (`uv pip compile --universal --python-version 3.12 --generate-hashes`, uv pinned to 0.13.4). `pip-compile` was rejected because it resolves only for the host: a Linux lock dropped `colorama`, `pywin32-ctypes`, `pefile` and `macholib`, which the Windows and macOS builds need under `--require-hashes`. The **Requirements locks match** CI job (`scripts/check_requirements_lock.py`) fails on any stale or hand-edited lock. Launchers and CI read the zensical and PyYAML floors from the `.in` files. Dependabot support for uv-generated locks is unverified; confirm it on the first Dependabot PR.
 
 ## 2026-10-18
 - **README badges.** `README.md` shows the `main` CI status, the SonarQube Cloud quality gate, and a static platforms badge.
