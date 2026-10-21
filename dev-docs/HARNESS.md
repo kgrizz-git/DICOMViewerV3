@@ -206,12 +206,13 @@ the disjunction form.
 
 ### Dependency vulnerability audits
 
-Two separate jobs, because they have different reliability:
+Three separate jobs, because they have different reliability:
 
 | Job | Scope | Blocks? |
 |-----|-------|---------|
 | `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
 | `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
+| `osv-scanner (locked dependencies)` | The same three compiled locks, against the OSV database | Never yet. `continue-on-error: true`; promote to required by 2026-11-30 (`TO_DO.md`) |
 
 The PHI-tooling audit is advisory because it resolves an isolated developer-only
 environment that installs a dependency from a GitHub URL, so it can fail without
@@ -226,6 +227,23 @@ reviewed on the date noted there. Audited 2026-09-07: four of the five entries
 matched nothing in the current dependency set and were removed. The one that
 remains is `PYSEC-2026-2266` (pydicom 2.4.5, fixed in 3.0.2), which cannot be
 cleared while pylinac caps `pydicom<3`.
+
+`security/pip-audit-exceptions.md` is the single source of truth for suppressions.
+The `osv-scanner (locked dependencies)` job reads `osv-scanner.toml`, whose
+`[[IgnoredVulns]]` entries each need `id`, `ignoreUntil` and `reason`. The only
+app-lane entry is `PYSEC-2026-2266`, and OSV also filters its aliases
+(`CVE-2026-32711`, `GHSA-v856-2rf8-9f28`). `tests/test_osv_scanner_config.py`
+fails when an entry lacks a reason or a future date, when an ID has no row in
+the exceptions record, or when an app-lane row is in neither the `ci.yml`
+`pip-audit` flags nor `osv-scanner.toml`. Never add a broad ignore.
+
+The OSV job runs a release binary pinned by version and SHA-256 in `ci.yml`
+(not the Docker action, whose image tag is mutable, nor the reusable workflow,
+which needs `security-events: write`). It uploads nothing and has
+`contents: read` only. It reports every package in the locks, including
+`colorama`, `pywin32-ctypes`, `pefile` and `macholib`, so it covers the
+platform-only pins that the Linux `pip-audit` run misses. Against the committed
+locks it showed none of the phantom `pip 9.0.3` findings seen on a freeze file.
 
 ### Known-vulnerable GitHub Actions
 
@@ -282,7 +300,8 @@ closed. It is not a required check until it is added to KGRuleset1.
 
 One gap: `pip-audit` evaluates environment markers for the Linux runner, so pins
 that only apply elsewhere (`colorama`, `pywin32-ctypes`, `pefile`, `macholib`)
-are not audited by that job.
+are not audited by that job. The advisory `osv-scanner` job reads the lock files
+directly and covers them.
 
 ### Git hooks (the blocking local layer)
 

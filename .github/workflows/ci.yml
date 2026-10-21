@@ -3,8 +3,8 @@ name: CI
 # Job DAG (privacy-first):
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
-#      pip-audit-phi-tools, vulnerable-actions, action-pins, requirements-lock,
-#      repo-harness,
+#      pip-audit-phi-tools, osv-scanner, vulnerable-actions, action-pins,
+#      requirements-lock, repo-harness,
 #      user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
@@ -17,8 +17,16 @@ name: CI
 # Proposed addition, needs a ruleset change in repository settings:
 #   "pip-audit (app dependencies)"                → ci.yml: pip-audit
 # Until it is added there, that job fails loudly but can still be merged past.
+# Not yet required: "osv-scanner (locked dependencies)" → ci.yml: osv-scanner
+# (advisory, continue-on-error; see the note below).
 # Do NOT add "pip-audit (PHI tooling, advisory)"; it is continue-on-error by
 # design and audits an isolated developer environment that is never shipped.
+#
+# "osv-scanner (locked dependencies)" (osv-scanner) is not yet required. It
+# starts as continue-on-error so it can prove itself on main; promote it by
+# removing continue-on-error and adding it to KGRuleset1 (tracked in TO_DO.md,
+# Maintenance, due 2026-11-30). A softened scanner can hide a stopped scan (see
+# the code-scanning note below), so do not leave it advisory.
 #
 # "Known-vulnerable actions (zizmor)" (vulnerable-actions) is deliberately not
 # a required check: it depends on GitHub's advisory database and API, so it
@@ -372,6 +380,53 @@ jobs:
           requirements-phi-tools.txt. This is advisory and does not block the \
           merge, but check whether it is a real vulnerability, a dependency \
           resolution conflict, or the git-URL dependency being unreachable."
+            exit 1
+          fi
+
+  # Advisory: scans the committed hashed locks with osv-scanner (OSV database,
+  # which also covers win32/darwin-only pins that the Linux-only pip-audit
+  # misses). Runs a checksum-verified release binary, not the Docker action
+  # (mutable image tag, "not intended to be used directly") or the reusable
+  # workflow (needs security-events: write for SARIF). Nothing is uploaded; the
+  # job has contents: read only. Ignores live in osv-scanner.toml and must match
+  # security/pip-audit-exceptions.md (tests/test_osv_scanner_config.py).
+  # Bump: update OSV_SCANNER_VERSION and OSV_SCANNER_SHA256 together, using
+  # osv-scanner_SHA256SUMS from the release (osv-scanner_linux_amd64).
+  osv-scanner:
+    name: osv-scanner (locked dependencies)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      OSV_SCANNER_VERSION: v2.7.0
+      OSV_SCANNER_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install osv-scanner (checksum verified)
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/osv-scanner"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output "$dest" \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  ${dest}" | sha256sum --check --strict -
+          chmod +x "$dest"
+
+      # Review by 2026-12-31; ignores are in osv-scanner.toml.
+      - name: Scan the committed locks
+        run: |
+          if ! "$RUNNER_TEMP/osv-scanner" scan source --config osv-scanner.toml \
+            -L requirements.txt -L requirements-dev.txt -L requirements-build.txt; then
+            echo "::warning title=OSV scan::osv-scanner reported findings or could \
+          not run. This is advisory and does not block the merge. Check for a \
+          real vulnerability, an api.osv.dev outage, or a stale ignore."
             exit 1
           fi
 

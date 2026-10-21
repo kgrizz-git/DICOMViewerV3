@@ -2,6 +2,8 @@
 
 **Last reviewed:** 2026-10-21
 
+This file is the single source of truth for dependency-scan suppressions. The `ci.yml` `--ignore-vuln` flags and `osv-scanner.toml` (`[[IgnoredVulns]]`, each with a reason and an `ignoreUntil` date) must match it. `tests/test_osv_scanner_config.py` enforces that. OSV also suppresses the aliases of an ignored ID, so `PYSEC-2026-2266` covers `CVE-2026-32711` and `GHSA-v856-2rf8-9f28`.
+
 These exceptions keep the dependency-audit workflow actionable while compatibility work is completed. They are not assertions that the vulnerabilities are harmless, and they do not suppress Grype, Semgrep, or runtime PHI protections.
 
 | Advisory | Affected package | Fixed version | Why the project cannot upgrade yet | Remove the exception when |

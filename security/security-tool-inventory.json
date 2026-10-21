@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-09-30",
+  "last_verified": "2026-10-21",
   "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
   "policy": {
     "default_data_handling": "local-only",
@@ -104,6 +104,25 @@
         ".github/workflows/ci.yml"
       ],
       "tracked_configuration": [
+        "security/pip-audit-exceptions.md"
+      ]
+    },
+    {
+      "id": "osv-scanner",
+      "category": "dependency-vulnerability",
+      "purpose": "Scan the committed hashed requirements locks against the OSV database, including win32/darwin-only pins that Linux-only pip-audit does not see.",
+      "install_scope": "CI only (checksum-verified GitHub release binary); optional local Homebrew install",
+      "install_reference": ".github/workflows/ci.yml",
+      "tested_version": "2.7.0 (CI, SHA-256 pinned linux_amd64); 2.6.0 local",
+      "enforcement": [
+        "CI advisory (continue-on-error) until promoted to required in KGRuleset1"
+      ],
+      "network_policy": "api.osv.dev and deps.dev lookups of package names and versions only; no source, SARIF or result upload; release binary downloaded from github.com",
+      "entrypoints": [
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": [
+        "osv-scanner.toml",
         "security/pip-audit-exceptions.md"
       ]
     },
