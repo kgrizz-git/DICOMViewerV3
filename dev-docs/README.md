@@ -1,6 +1,6 @@
 # Developer documentation index
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-10-21
 
 This folder is for **contributors, maintainers, and release engineering**. End-user guides live under **`user-docs/`** (start at [`USER_GUIDE.md`](../user-docs/USER_GUIDE.md)); repository orientation for everyone is in the root **[`README.md`](../README.md)**.
 
@@ -47,6 +47,7 @@ For docs that already have a `**Last updated:**` line, update the date when an e
 | [`plans/`](plans/) | Active, supporting, and archived implementation plans |
 | [`plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md`](plans/DOCUMENTATION_WORKFLOW_AND_FRESHNESS_PLAN.md) | Documentation freshness workflow, assessment cadence, and platform-evaluation gate |
 | [`plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md`](plans/completed/USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md) | User-docs publisher path: Material layout PoC (not for adopt), Zensical preferred pilot, docs-impact harness, self-contain links, platform decision |
+| [`plans/completed/OSV_DEPENDENCY_TRIAGE_AND_LOCKS_PLAN.md`](plans/completed/OSV_DEPENDENCY_TRIAGE_AND_LOCKS_PLAN.md) | OSV triage: hashed universal uv locks, Pillow 13 and the PHI-lane exception, advisory osv-scanner job |
 | [`plans/supporting/`](plans/supporting/) | Ongoing dependency/reference plans that still support open backlog work |
 | [`plans/completed/`](plans/completed/) | Completed implementation plan records; move finished plans here when closing their backlog items |
 | [`TO_DO.md`](TO_DO.md) | Active product and engineering backlog |
