@@ -350,9 +350,24 @@ jobs:
       - name: Install pip-audit
         run: pip install "pip-audit>=2.10.1"
 
+      # presidio-image-redactor 0.0.60 caps pillow<13.0.0, so this isolated
+      # environment resolves to Pillow 12.x (12.3.0), while the app lock is on
+      # 13.0.0. The eight advisories below are the PyPI-feed findings for
+      # Pillow 12.3.0, all fixed in 13.0.0. They are ignored so this advisory
+      # job still reports anything new. The environment is never shipped.
+      # Unblocks when a presidio-image-redactor release allows pillow>=13.
+      # Review by 2026-12-31; see security/pip-audit-exceptions.md.
       - name: Run pip-audit for isolated PHI tooling
         run: |
-          if ! pip-audit --requirement requirements-phi-tools.txt; then
+          if ! pip-audit --requirement requirements-phi-tools.txt \
+            --ignore-vuln CVE-2026-112895 \
+            --ignore-vuln CVE-2026-112400 \
+            --ignore-vuln CVE-2026-112397 \
+            --ignore-vuln CVE-2026-112896 \
+            --ignore-vuln CVE-2026-112897 \
+            --ignore-vuln CVE-2026-112395 \
+            --ignore-vuln CVE-2026-112404 \
+            --ignore-vuln CVE-2026-112899; then
             echo "::warning title=PHI tooling audit::pip-audit could not clear \
           requirements-phi-tools.txt. This is advisory and does not block the \
           merge, but check whether it is a real vulnerability, a dependency \

@@ -32,7 +32,8 @@ PySide6>=6.11.2
 # dev-docs/info/HIGHDICOM_OVERVIEW.md and PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md.
 pydicom>=2.4.5,<3
 numpy>=2.5.3
-Pillow>=12.3.0
+# Floor 13.0.0 closes 9 GHSAs fixed in that release, incl. GHSA-8g5g-8vmr-9782 (critical).
+Pillow>=13.0.0
 # Cine export (GIF / AVI / MPG): imageio + imageio-ffmpeg (BSD wrapper; wheel ships a GPL ffmpeg — do not freeze). Frozen builds bundle LGPL ffmpeg from scripts/build_lgpl_ffmpeg.py.
 imageio==2.38.0
 imageio-ffmpeg==0.6.0
