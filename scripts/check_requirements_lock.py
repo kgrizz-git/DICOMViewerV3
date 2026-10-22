@@ -119,7 +119,7 @@ def check(repo_root: Path, *, uv: str = "uv") -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.parse_args(argv)
     uv = shutil.which("uv") or "uv"
     found = cr.installed_uv_version(uv)

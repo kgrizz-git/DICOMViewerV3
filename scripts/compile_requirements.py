@@ -105,7 +105,7 @@ def compile_all(directory: Path, *, uv: str = "uv", upgrade: bool = False) -> in
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument(
         "--upgrade", action="store_true", help="Re-resolve to the newest versions."
     )
