@@ -8,7 +8,8 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 _SCRIPT = _ROOT / "scripts" / "sync_dev_environment.py"
 _spec = importlib.util.spec_from_file_location("sync_dev_environment", _SCRIPT)
-assert _spec and _spec.loader
+assert _spec is not None
+assert _spec.loader is not None
 sync = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sync)
 
