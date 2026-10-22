@@ -14,7 +14,8 @@ _ROOT = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location(
     "compile_requirements", _ROOT / "scripts" / "compile_requirements.py"
 )
-assert _spec and _spec.loader
+assert _spec is not None
+assert _spec.loader is not None
 cr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cr)
 
@@ -170,7 +171,8 @@ def test_locks_are_hashed_and_universal() -> None:
     # Markers for other platforms prove one lock serves win32, darwin and linux.
     assert re.search(r"^colorama==\S+ ; sys_platform == 'win32'", app, re.MULTILINE)
     build = (_ROOT / "requirements-build.txt").read_text(encoding="utf-8")
-    assert "pefile==" in build and "macholib==" in build
+    assert "pefile==" in build
+    assert "macholib==" in build
 
 
 def test_launchers_read_zensical_pin_from_input_file() -> None:

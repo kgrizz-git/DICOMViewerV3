@@ -93,7 +93,8 @@ def test_resize_and_thumbnail_lanczos(mode: str) -> None:
     assert thumb.size == (16, 16)
     assert thumb.mode == mode
     resized = resize_image(image, 20, 20)
-    assert resized is not None and resized.size == (20, 20)
+    assert resized is not None
+    assert resized.size == (20, 20)
 
 
 def test_imagedraw_text_marks_pixels() -> None:

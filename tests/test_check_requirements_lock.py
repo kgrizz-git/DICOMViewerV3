@@ -17,7 +17,8 @@ def _load(name: str):
     spec = importlib.util.spec_from_file_location(
         name, _ROOT / "scripts" / f"{name}.py"
     )
-    assert spec and spec.loader
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -126,7 +127,8 @@ def test_check_fails_when_lock_is_stale(
     ):
         assert crl.check(tmp_path) == 1
     err = capsys.readouterr().err
-    assert "requirements.txt" in err and "compile_requirements.py" in err
+    assert "requirements.txt" in err
+    assert "compile_requirements.py" in err
 
 
 def test_check_fails_on_hand_edited_lock(tmp_path: Path) -> None:
