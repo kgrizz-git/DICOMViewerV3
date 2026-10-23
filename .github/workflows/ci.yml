@@ -334,7 +334,7 @@ jobs:
       - name: Run pip-audit
         run: >-
           pip-audit --requirement requirements.txt --requirement requirements-dev.txt
-          --requirement requirements-build.txt
+          --requirement requirements-build.txt --requirement requirements-docs.txt
           --ignore-vuln PYSEC-2026-2266
 
   # Advisory: reports, never blocks. See the note above the pip-audit job.
@@ -419,7 +419,8 @@ jobs:
       - name: Scan the committed locks
         run: |
           if ! "$RUNNER_TEMP/osv-scanner" scan source --config osv-scanner.toml \
-            -L requirements.txt -L requirements-dev.txt -L requirements-build.txt; then
+            -L requirements.txt -L requirements-dev.txt -L requirements-build.txt \
+            -L requirements-docs.txt; then
             echo "::warning title=OSV scan::osv-scanner reported findings or could \
           not run. This is advisory and does not block the merge. Check for a \
           real vulnerability, an api.osv.dev outage, or a stale ignore."
@@ -502,7 +503,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install the workflow parser
-        run: pip install "$(grep -iE '^pyyaml==' requirements-dev.txt | head -1 | awk '{print $1}')"
+        run: pip install --require-hashes -r requirements-docs.txt
       - name: Check that action pins are real commits
         env:
           GH_TOKEN: ${{ github.token }}
@@ -596,11 +597,11 @@ jobs:
 
       # Publisher build gate (C2 adopted Zensical): the release-time offline
       # bundle builds from this same config, so keep it warning-free. Pin is
-      # sourced from the exact pin in requirements-dev.txt (single source of truth).
+      # installed from the hashed requirements-docs.txt lock.
       # `python -m` (not the bare binary) so no PATH assumptions are needed.
       - name: Build docs with Zensical (strict)
         run: |
-          pip install "$(grep -E '^zensical==' requirements-dev.txt | head -1 | awk '{print $1}')"
+          pip install --require-hashes -r requirements-docs.txt
           python -m zensical build --strict
 
       # Warning-only by default: the script exits 0 unless --strict is passed.

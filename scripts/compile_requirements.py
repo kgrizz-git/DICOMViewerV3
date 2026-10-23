@@ -21,6 +21,10 @@ Design notes:
   Windows and macOS only packages and fail ``--require-hashes`` installs there.
 * ``requirements-dev`` and ``requirements-build`` are compiled with
   ``-c requirements.txt`` so every file agrees on the application versions.
+* ``requirements-docs`` (zensical + PyYAML, installed by the docs build, the
+  offline-docs bundle, the launchers, and the action-pins job) is also compiled
+  with ``-c requirements-dev.txt``. uv accepts a hashed constraints file, so
+  the docs lock cannot drift from the versions the dev lock pins.
 * uv keeps the pins already present in the output file, so recompiling an
   unchanged tree is a no-op. ``--upgrade`` deletes the old locks first.
 * Resolving needs network access to PyPI.
@@ -38,9 +42,16 @@ from pathlib import Path
 UV_VERSION = "0.13.4"
 PYTHON_VERSION = "3.12"
 
-# Order matters: the app lock is the constraint for the other two.
-LOCK_STEMS = ("requirements", "requirements-dev", "requirements-build")
+# Order matters: the app lock constrains the others, and the dev lock also
+# constrains the docs/tooling lock.
+LOCK_STEMS = (
+    "requirements",
+    "requirements-dev",
+    "requirements-build",
+    "requirements-docs",
+)
 APP_LOCK = "requirements.txt"
+DEV_LOCK = "requirements-dev.txt"
 COMMON_FLAGS = (
     "--universal",
     "--python-version",
@@ -65,6 +76,8 @@ def compile_command(stem: str, uv: str = "uv") -> list[str]:
     command = [uv, "pip", "compile", input_name(stem), *COMMON_FLAGS]
     if stem != "requirements":
         command += ["-c", APP_LOCK]
+    if stem == "requirements-docs":
+        command += ["-c", DEV_LOCK]
     command += ["-o", output_name(stem)]
     return command
 
@@ -92,7 +105,7 @@ def installed_uv_version(uv: str = "uv") -> str | None:
 
 
 def compile_all(directory: Path, *, uv: str = "uv", upgrade: bool = False) -> int:
-    """Compile all three locks inside ``directory``; return the first failing exit code."""
+    """Compile every lock inside ``directory``; return the first failing exit code."""
     for stem in LOCK_STEMS:
         if upgrade:
             (directory / output_name(stem)).unlink(missing_ok=True)

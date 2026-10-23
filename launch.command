@@ -188,14 +188,8 @@ build_docs() {
     require_python_312 "$VENV_PY" existing || return 1
     echo ""
     echo "Installing documentation builder (zensical)..."
-    local pin
-    # The lock line looks like "zensical==X.Y.Z \"; keep only the first token.
-    pin="$(grep -E '^zensical==' "$SCRIPT_DIR/requirements-dev.txt" | head -1 | awk '{print $1}')"
-    [[ -n "$pin" ]] || {
-        echo "ERROR: Could not read the exact zensical== pin from requirements-dev.txt."
-        return 1
-    }
-    "$VENV_PY" -m pip install -q "$pin" || {
+    # Hashed lock: pip verifies every artifact, including transitive dependencies.
+    "$VENV_PY" -m pip install -q --require-hashes -r "$SCRIPT_DIR/requirements-docs.txt" || {
         echo "ERROR: Failed to install the documentation builder into the virtual environment."
         return 1
     }

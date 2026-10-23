@@ -59,6 +59,8 @@ def test_locked_files_covers_every_input_and_lock() -> None:
         "requirements-dev.txt",
         "requirements-build.in",
         "requirements-build.txt",
+        "requirements-docs.in",
+        "requirements-docs.txt",
     ]
 
 

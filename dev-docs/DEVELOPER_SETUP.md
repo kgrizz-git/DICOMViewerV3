@@ -94,6 +94,7 @@ what the launchers, CI, frozen builds and `pip-audit` install and scan.
 | `requirements.in` | `requirements.txt` | Running the app, tests |
 | `requirements-dev.in` | `requirements-dev.txt` | Contributor tooling (includes the app set) |
 | `requirements-build.in` | `requirements-build.txt` | PyInstaller builds |
+| `requirements-docs.in` | `requirements-docs.txt` | Docs build (zensical) and the PyYAML parser for `check_action_pins.py`; compiled with `-c requirements-dev.txt` so versions match the dev lock. Keep its two floors equal to the same lines in `requirements-dev.in`. Install with `pip install --require-hashes -r requirements-docs.txt`. |
 
 After editing a `.in` file, run `python scripts/compile_requirements.py` (add
 `--upgrade` to re-resolve to the newest versions) and commit the `.in` and `.txt`

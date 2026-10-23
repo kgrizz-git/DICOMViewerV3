@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import re
-import shutil
 import subprocess
 from pathlib import Path
 from unittest import mock
@@ -26,7 +25,12 @@ def _completed(code: int = 0, out: str = "") -> subprocess.CompletedProcess[str]
 
 
 def test_lock_file_set_and_order() -> None:
-    assert cr.LOCK_STEMS == ("requirements", "requirements-dev", "requirements-build")
+    assert cr.LOCK_STEMS == (
+        "requirements",
+        "requirements-dev",
+        "requirements-build",
+        "requirements-docs",
+    )
     assert cr.LOCK_STEMS[0] == "requirements"  # the app lock constrains the others
     assert cr.input_name("requirements-dev") == "requirements-dev.in"
     assert cr.output_name("requirements-dev") == "requirements-dev.txt"
@@ -49,6 +53,14 @@ def test_dependent_commands_use_app_lock_as_constraint(stem: str) -> None:
     assert cmd[cmd.index("-c") + 1] == "requirements.txt"
     assert cmd[3] == f"{stem}.in"
     assert cmd[-1] == f"{stem}.txt"
+
+
+def test_docs_command_is_constrained_by_app_and_dev_locks() -> None:
+    cmd = cr.compile_command("requirements-docs")
+    constraints = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-c"]
+    assert constraints == ["requirements.txt", "requirements-dev.txt"]
+    assert cmd[3] == "requirements-docs.in"
+    assert cmd[-1] == "requirements-docs.txt"
 
 
 def test_command_uses_given_uv_executable() -> None:
@@ -86,7 +98,7 @@ def test_installed_uv_version_parses_output() -> None:
         assert cr.installed_uv_version("uv") == "0.13.4"
 
 
-def test_compile_all_runs_three_commands_in_order(tmp_path: Path) -> None:
+def test_compile_all_runs_every_command_in_order(tmp_path: Path) -> None:
     with mock.patch.object(cr.subprocess, "run", return_value=_completed()) as run:
         assert cr.compile_all(tmp_path) == 0
     commands = [call.args[0] for call in run.call_args_list]
@@ -94,6 +106,7 @@ def test_compile_all_runs_three_commands_in_order(tmp_path: Path) -> None:
         "requirements.in",
         "requirements-dev.in",
         "requirements-build.in",
+        "requirements-docs.in",
     ]
     assert all(call.kwargs["cwd"] == tmp_path for call in run.call_args_list)
 
@@ -184,11 +197,28 @@ def _launcher_text(name: str) -> str:
 
 
 @pytest.mark.parametrize("name", _LAUNCHERS)
-def test_launchers_read_zensical_pin_from_lock(name: str) -> None:
+def test_launchers_install_docs_builder_from_hashed_lock(name: str) -> None:
     text = _launcher_text(name)
-    assert "zensical==" in text
-    assert "requirements-dev.txt" in text
+    assert "--require-hashes -r" in text
+    assert "requirements-docs.txt" in text
+    assert "zensical==" not in text
     assert "requirements-dev.in" not in text
+
+
+@pytest.mark.parametrize("workflow", ["ci.yml", "build.yml"], ids=["ci", "build"])
+def test_workflows_install_docs_tooling_from_hashed_lock(workflow: str) -> None:
+    text = (_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+    assert "pip install --require-hashes -r requirements-docs.txt" in text
+    assert "grep -E '^zensical==" not in text
+    assert "grep -iE '^pyyaml==" not in text
+
+
+def test_docs_input_holds_zensical_and_pyyaml_floors_matching_dev() -> None:
+    docs = (_ROOT / "requirements-docs.in").read_text(encoding="utf-8")
+    dev = (_ROOT / "requirements-dev.in").read_text(encoding="utf-8")
+    for line in ("zensical>=0.0.68,<0.1", "PyYAML>=6.0.3"):
+        assert re.search(rf"^{re.escape(line)}$", docs, re.MULTILINE)
+        assert re.search(rf"^{re.escape(line)}$", dev, re.MULTILINE)
 
 
 @pytest.mark.parametrize("name", _LAUNCHERS)
@@ -214,18 +244,23 @@ def test_launch_bat_gates_before_venv_and_pip() -> None:
     assert install.index("call :CHECK_VENV_PYTHON") < install.index("-m pip install")
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
-def test_launch_command_zensical_extraction_matches_lock() -> None:
-    text = _launcher_text("launch.command")
-    line = next(ln for ln in text.splitlines() if "grep -E '^zensical=='" in ln)
-    expr = line.split('pin="$(', 1)[1].rsplit(')"', 1)[0]
-    expr = expr.replace('"$SCRIPT_DIR/requirements-dev.txt"', "requirements-dev.txt")
-    out = subprocess.run(
-        ["bash", "-c", expr], cwd=_ROOT, capture_output=True, text=True, check=True
-    ).stdout.strip()
-    assert re.fullmatch(r"zensical==\d+(\.\d+)*", out)
-    lock = (_ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
-    assert f"\n{out} \\\n" in lock
+def test_docs_lock_pins_agree_with_dev_lock() -> None:
+    pin = re.compile(r"^([A-Za-z0-9_.-]+)==(\S+) ", re.MULTILINE)
+    dev = {
+        n.lower(): v
+        for n, v in pin.findall(
+            (_ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+        )
+    }
+    docs = {
+        n.lower(): v
+        for n, v in pin.findall(
+            (_ROOT / "requirements-docs.txt").read_text(encoding="utf-8")
+        )
+    }
+    assert "zensical" in docs
+    assert "pyyaml" in docs
+    assert {k: v for k, v in docs.items() if dev.get(k) != v} == {}
 
 
 def test_launch_command_gates_system_python_path() -> None:

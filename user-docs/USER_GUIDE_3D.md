@@ -6,7 +6,7 @@ The viewer can open a **GPU-accelerated 3D volume render** of the **focused** 2D
 
 ## Requirements
 
-- **VTK** (`vtk>=9.3.0` floor in `requirements.in`, locked in `requirements.txt`). If VTK is not installed, the app shows an install hint when you use **3D View**.
+- **VTK** (`vtk>=9.7.1` floor in `requirements.in`, locked in `requirements.txt`). If VTK is not installed, the app shows an install hint when you use **3D View**.
 - A **multi-slice** series in the focused pane (at least **3** instances with consistent geometry). Single-slice or empty panes show an informational message instead of opening the dialog.
 
 ## Where to find it

@@ -211,9 +211,9 @@ Three separate jobs, because they have different reliability:
 
 | Job | Scope | Blocks? |
 |-----|-------|---------|
-| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
+| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt`, `requirements-docs.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
 | `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
-| `osv-scanner (locked dependencies)` | The same three compiled locks, against the OSV database | Never yet. `continue-on-error: true`; promote to required by 2026-11-30 (`TO_DO.md`) |
+| `osv-scanner (locked dependencies)` | The same four compiled locks, against the OSV database | Never yet. `continue-on-error: true`; promote to required by 2026-11-30 (`TO_DO.md`) |
 
 The PHI-tooling audit is advisory because it resolves an isolated developer-only
 environment that installs a dependency from a GitHub URL, so it can fail without
@@ -282,16 +282,19 @@ KGRuleset1.
 
 ### Requirements locks
 
-`requirements.in`, `requirements-dev.in` and `requirements-build.in` hold the
-hand-edited floors. `requirements.txt`, `requirements-dev.txt` and
-`requirements-build.txt` are hash-pinned locks compiled from them by
+`requirements.in`, `requirements-dev.in`, `requirements-build.in` and
+`requirements-docs.in` hold the hand-edited floors. `requirements.txt`,
+`requirements-dev.txt`, `requirements-build.txt` and `requirements-docs.txt` are hash-pinned locks compiled from them by
 `python scripts/compile_requirements.py` (`--upgrade` re-resolves to the newest
 versions). The compiler is `uv pip compile --universal --python-version 3.12`
 at the exact version in `UV_VERSION`, so one lock serves win32, darwin and
 linux. `pip-compile` was rejected because it resolves for the host only, so a
 Linux lock drops the Windows and macOS only packages (for example `colorama`,
 `pywin32-ctypes`, `pefile`, `macholib`). Dev and build are compiled with
-`-c requirements.txt` so all three agree on the application versions.
+`-c requirements.txt` so all agree on the application versions. The docs lock
+(zensical + PyYAML, installed with `pip install --require-hashes -r
+requirements-docs.txt` by the docs jobs, the action-pins job and the launchers)
+is also compiled with `-c requirements-dev.txt`, so it cannot drift from the dev lock.
 
 **Requirements locks match** (`requirements-lock` in `ci.yml`) runs
 `scripts/check_requirements_lock.py`. It recompiles in a scratch folder under

@@ -235,15 +235,8 @@ call :CHECK_VENV_PYTHON
 if errorlevel 1 goto :MENU
 echo.
 echo Installing documentation builder (zensical)...
-set "ZENSICAL_PIN="
-rem The lock line looks like "zensical==X.Y.Z \"; keep only the first token.
-for /f "tokens=1" %%Z in ('findstr /B "zensical==" "%ROOT%requirements-dev.txt"') do if not defined ZENSICAL_PIN set "ZENSICAL_PIN=%%Z"
-if not defined ZENSICAL_PIN (
-    echo ERROR: Could not read the exact zensical== pin from requirements-dev.txt.
-    pause
-    goto :MENU
-)
-"%VENV_PY%" -m pip install -q "%ZENSICAL_PIN%"
+rem Hashed lock: pip verifies every artifact, including transitive dependencies.
+"%VENV_PY%" -m pip install -q --require-hashes -r "%ROOT%requirements-docs.txt"
 if errorlevel 1 (
     echo ERROR: Failed to install the documentation builder into the virtual environment.
     pause
