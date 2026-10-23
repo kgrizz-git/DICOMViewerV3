@@ -214,7 +214,6 @@ Three separate jobs, because they have different reliability:
 | `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt`, `requirements-docs.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
 | `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
 | `osv-scanner (locked dependencies)` | The same four compiled locks, against the OSV database | Never yet. `continue-on-error: true`; promote to required by 2026-11-30 (`TO_DO.md`) |
-| `Launcher (Windows cmd)` | Runs `launch.bat` under `cmd.exe` on `windows-latest` via `DICOMVIEWER_LAUNCHER_SELFTEST=system\|venv`: real 3.12, a 3.11 stub, no Python, a 3.12 and a 3.11 venv, and a hashed docs-lock install | Never yet. `continue-on-error: true`; promote after it passes on `main` (`TO_DO.md`) |
 
 The PHI-tooling audit is advisory because it resolves an isolated developer-only
 environment that installs a dependency from a GitHub URL, so it can fail without
@@ -307,6 +306,16 @@ One gap: `pip-audit` evaluates environment markers for the Linux runner, so pins
 that only apply elsewhere (`colorama`, `pywin32-ctypes`, `pefile`, `macholib`)
 are not audited by that job. The advisory `osv-scanner` job reads the lock files
 directly and covers them.
+
+### Launcher self-test
+
+**Launcher (Windows cmd)** (`launcher-windows` in `ci.yml`) runs `launch.bat`
+under `cmd.exe` on `windows-latest`. Setting `DICOMVIEWER_LAUNCHER_SELFTEST` to
+`system` or `venv` makes the launcher run one Python 3.12 gate and exit, skipping
+the menu and `pause`. The job covers a real 3.12, a 3.11 stub, no Python on PATH,
+a 3.12 venv and a 3.11 venv, and a `--require-hashes` install of
+`requirements-docs.txt`. It is advisory (`continue-on-error: true`) until it
+passes on `main` and is promoted (`TO_DO.md`).
 
 ### Git hooks (the blocking local layer)
 
