@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from unittest import mock
@@ -175,8 +176,53 @@ def test_locks_are_hashed_and_universal() -> None:
     assert "macholib==" in build
 
 
-def test_launchers_read_zensical_pin_from_input_file() -> None:
-    for name in ("launch.bat", "launch.command"):
-        text = (_ROOT / name).read_text(encoding="utf-8")
-        assert "requirements-dev.in" in text
-        assert "requirements-dev.txt" not in text
+_LAUNCHERS = ("launch.bat", "launch.command")
+
+
+def _launcher_text(name: str) -> str:
+    return (_ROOT / name).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("name", _LAUNCHERS)
+def test_launchers_read_zensical_pin_from_lock(name: str) -> None:
+    text = _launcher_text(name)
+    assert "zensical==" in text
+    assert "requirements-dev.txt" in text
+    assert "requirements-dev.in" not in text
+
+
+@pytest.mark.parametrize("name", _LAUNCHERS)
+def test_launchers_gate_python_312(name: str) -> None:
+    text = _launcher_text(name)
+    assert "(3, 12)" in text
+    assert "(3, 10)" not in text
+
+
+def test_launch_command_gates_before_venv_and_pip() -> None:
+    text = _launcher_text("launch.command")
+    setup = text[text.index("setup_and_run() {") :]
+    assert setup.index("require_python_312 python3") < setup.index("-m venv")
+    install = text[text.index("install_requirements() {") :]
+    assert install.index("require_python_312") < install.index("-m pip install")
+
+
+def test_launch_bat_gates_before_venv_and_pip() -> None:
+    text = _launcher_text("launch.bat")
+    setup = text[text.index(":SETUP\n") :]
+    assert setup.index("(3, 12)") < setup.index("-m venv")
+    install = text[text.index(":INSTALL_REQUIREMENTS\n") :]
+    assert install.index("call :CHECK_VENV_PYTHON") < install.index("-m pip install")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
+def test_launch_command_zensical_extraction_matches_lock() -> None:
+    text = _launcher_text("launch.command")
+    line = next(ln for ln in text.splitlines() if "grep -E '^zensical=='" in ln)
+    expr = line.split('pin="$(', 1)[1].rsplit(')"', 1)[0]
+    expr = expr.replace('"$SCRIPT_DIR/requirements-dev.txt"', "requirements-dev.txt")
+    out = subprocess.run(
+        ["bash", "-c", expr], cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert re.fullmatch(r"zensical==\d+(\.\d+)*", out)
+    lock = (_ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    assert f"\n{out} \\\n" in lock

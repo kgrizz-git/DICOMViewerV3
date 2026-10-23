@@ -26,7 +26,27 @@ resolve_venv() {
 
 resolve_venv
 
+# The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
+# Usage: require_python_312 <interpreter> [existing-venv]
+require_python_312() {
+    local py="$1" existing="$2" found
+    if "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' >/dev/null 2>&1; then
+        return 0
+    fi
+    found="$("$py" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null)"
+    echo ""
+    echo "ERROR: DICOM Viewer needs Python 3.12 or newer."
+    echo "Found: ${found:-unknown} ($py)"
+    echo "Install Python 3.12 or newer, then run this launcher again."
+    if [[ -n "$existing" ]]; then
+        echo "This virtual environment uses an older Python. Delete it (option 3)"
+        echo "and create it again."
+    fi
+    return 1
+}
+
 install_requirements() {
+    require_python_312 "$VENV_PY" existing || return 1
     echo ""
     echo "Installing requirements into:"
     echo "  $VENV_PY"
@@ -80,6 +100,7 @@ run_sys() {
 }
 
 setup_and_run() {
+    require_python_312 python3 || exit 1
     echo ""
     echo "Creating virtual environment..."
     python3 -m venv "$VENV" || {
@@ -153,17 +174,14 @@ build_docs() {
         echo "  $VENV_PY"
         return 1
     fi
-    if ! "$VENV_PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
-        echo "ERROR: Documentation build needs Python 3.10 or newer (zensical requirement)."
-        echo "This virtual environment uses an older Python. Delete it (option 3)"
-        echo "and create it again with a newer python3."
-        return 1
-    fi
+    require_python_312 "$VENV_PY" existing || return 1
     echo ""
     echo "Installing documentation builder (zensical)..."
     local pin
-    pin="$(grep '^zensical' "$SCRIPT_DIR/requirements-dev.in")" || {
-        echo "ERROR: Could not read the zensical pin from requirements-dev.in."
+    # The lock line looks like "zensical==X.Y.Z \"; keep only the first token.
+    pin="$(grep -E '^zensical==' "$SCRIPT_DIR/requirements-dev.txt" | head -1 | awk '{print $1}')"
+    [[ -n "$pin" ]] || {
+        echo "ERROR: Could not read the exact zensical== pin from requirements-dev.txt."
         return 1
     }
     "$VENV_PY" -m pip install -q "$pin" || {

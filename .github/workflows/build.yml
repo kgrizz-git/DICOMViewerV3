@@ -143,11 +143,11 @@ jobs:
       - name: Stage offline documentation bundle
         shell: bash
         run: |
-          # Pin sourced from requirements-dev.in (single source of truth;
+          # Pin sourced from the exact lock pin in requirements-dev.txt (single source of truth;
           # same pattern as the user-docs-links job in ci.yml). The script
           # runs `zensical build --strict` and stages the site into
           # resources/help/docs/, picked up by the spec's resources datas entry.
-          python -m pip install "$(grep '^zensical' requirements-dev.in)"
+          python -m pip install "$(grep -E '^zensical==' requirements-dev.txt | head -1 | awk '{print $1}')"
           python scripts/build_offline_docs.py
           test -f resources/help/docs/index.html
 

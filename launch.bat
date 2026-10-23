@@ -60,6 +60,15 @@ goto :MENU
 
 :SETUP
 echo.
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: DICOM Viewer needs Python 3.12 or newer.
+    echo Found:
+    python --version
+    echo Install Python 3.12 or newer, then run this launcher again.
+    pause
+    goto :END
+)
 echo Creating virtual environment...
 python -m venv "%VENV%"
 if errorlevel 1 (
@@ -90,6 +99,8 @@ if errorlevel 1 goto :END
 goto :RUN_ACTIVATED
 
 :INSTALL_REQUIREMENTS
+call :CHECK_VENV_PYTHON
+if errorlevel 1 exit /b 1
 echo.
 echo Installing requirements into:
 echo   %VENV_PY%
@@ -120,6 +131,20 @@ if errorlevel 1 (
     exit /b 1
 )
 echo Requirements installed successfully.
+exit /b 0
+
+:CHECK_VENV_PYTHON
+rem The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
+"%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: DICOM Viewer needs Python 3.12 or newer.
+    echo This virtual environment uses:
+    "%VENV_PY%" --version
+    echo Install Python 3.12 or newer. Then choose option 3 ^(Delete virtual environment^)
+    echo and create the venv again.
+    pause
+    exit /b 1
+)
 exit /b 0
 
 :RUN
@@ -191,20 +216,15 @@ if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :BUILD_DOCS_PY_OK
     pause
     goto :MENU
 :BUILD_DOCS_PY_OK
-"%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"
-if errorlevel 1 (
-    echo ERROR: Documentation build needs Python 3.10 or newer (zensical requirement).
-    echo This virtual environment uses an older Python. Delete it (option 3)
-    echo and create it again with a newer Python.
-    pause
-    goto :MENU
-)
+call :CHECK_VENV_PYTHON
+if errorlevel 1 goto :MENU
 echo.
 echo Installing documentation builder (zensical)...
 set "ZENSICAL_PIN="
-for /f "delims=" %%Z in ('findstr /B "zensical" "%ROOT%requirements-dev.in"') do set "ZENSICAL_PIN=%%Z"
+rem The lock line looks like "zensical==X.Y.Z \"; keep only the first token.
+for /f "tokens=1" %%Z in ('findstr /B "zensical==" "%ROOT%requirements-dev.txt"') do if not defined ZENSICAL_PIN set "ZENSICAL_PIN=%%Z"
 if not defined ZENSICAL_PIN (
-    echo ERROR: Could not read the zensical pin from requirements-dev.in.
+    echo ERROR: Could not read the exact zensical== pin from requirements-dev.txt.
     pause
     goto :MENU
 )
