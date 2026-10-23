@@ -26,7 +26,7 @@ executable on ``PATH`` as fallback.
 Outputs: ``site/`` (normal build output, gitignored) and
 ``resources/help/docs/`` (generated bundle, gitignored).
 Requirements: Python 3.10+ (zensical declares ``requires-python >= 3.10``);
-zensical (see ``requirements-dev.txt`` pin).
+zensical (floor in ``requirements-dev.in``, locked in ``requirements-dev.txt``).
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def find_zensical_command() -> list[str]:
     print(
         "error: no 'zensical' on PATH and "
         f"'{sys.executable} -m zensical' is not usable "
-        "(install the requirements-dev.txt zensical pin)",
+        "(install the zensical pin from requirements-dev.txt)",
         file=sys.stderr,
     )
     raise SystemExit(1)

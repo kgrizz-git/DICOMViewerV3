@@ -91,11 +91,37 @@ def test_pillow_13_installed_is_stale(tmp_path, capsys) -> None:
 def test_skipped_dependencies_are_ok(tmp_path, capsys) -> None:
     deps = [
         {"name": "en-core-web-lg", "skip_reason": "Dependency not found on PyPI"},
-        {"name": "typer", "version": "0.24.1", "vulns": []},
+        {"name": "dicom-phi-scan", "skip_reason": "Dependency not found on PyPI"},
+        {"name": "pillow", "version": "12.3.0", "vulns": []},
     ]
     code, out = _run(tmp_path, deps, capsys)
     assert code == 0
     assert "skipped: en-core-web-lg" in out
+    assert "skipped: dicom-phi-scan" in out
+
+
+def test_empty_dependency_list_fails(tmp_path, capsys) -> None:
+    code, out = _run(tmp_path, [], capsys)
+    assert code == 1
+    assert "pillow is absent" in out
+
+
+def test_pillow_absent_with_other_packages_fails(tmp_path, capsys) -> None:
+    deps = [{"name": "typer", "version": "0.24.1", "vulns": []}]
+    code, out = _run(tmp_path, deps, capsys)
+    assert code == 1
+    assert "pillow is absent" in out
+
+
+def test_pillow_skipped_fails(tmp_path, capsys) -> None:
+    deps = [
+        {"name": "pillow", "skip_reason": "Dependency not found on PyPI"},
+        {"name": "typer", "version": "0.24.1", "vulns": []},
+    ]
+    code, out = _run(tmp_path, deps, capsys)
+    assert code == 1
+    assert "pillow was skipped" in out
+    assert "absent" not in out
 
 
 def test_malformed_json_exits_2(tmp_path, capsys) -> None:

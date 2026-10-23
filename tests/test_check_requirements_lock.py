@@ -118,6 +118,18 @@ def test_check_passes_when_recompile_matches(tmp_path: Path) -> None:
         assert crl.check(tmp_path) == 0
 
 
+def test_check_passes_for_txt_only_in_range_bump(tmp_path: Path) -> None:
+    """Documents the limit: a .txt-only bump inside the .in range still passes.
+
+    The recompile keeps existing pins, so a lock bumped upward within the
+    floors round-trips unchanged and is accepted as a valid resolution.
+    """
+    bumped = "pkg==2 \\\n    --hash=sha256:bb\n"
+    _write_repo(tmp_path, body=bumped)
+    with mock.patch.object(cr, "compile_all", _fake_compile(bumped)):
+        assert crl.check(tmp_path) == 0
+
+
 def test_check_fails_when_lock_is_stale(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

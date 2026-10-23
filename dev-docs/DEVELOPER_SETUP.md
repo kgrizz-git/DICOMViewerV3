@@ -100,8 +100,10 @@ After editing a `.in` file, run `python scripts/compile_requirements.py` (add
 files together. It needs network access and `uv==0.13.4`, which
 `requirements-dev.txt` installs. The lock is universal: one file is valid on Windows,
 macOS and Linux for Python 3.12. Never hand-edit a `.txt` lock. CI **Requirements
-locks match** (`python scripts/check_requirements_lock.py`) recompiles and fails on any
-difference. Do not run `pip-compile` on these files; it resolves for the host platform
+locks match** (`python scripts/check_requirements_lock.py`) recompiles with the
+committed pins kept. It fails on a missing or non-uv lock, a package that is not in the
+resolution, a pin outside the `.in` floors, and hash or format drift. It does not catch
+an in-range version bump made only in a `.txt`, because that is still a valid resolution. Do not run `pip-compile` on these files; it resolves for the host platform
 only and would drop the other platforms' packages.
 
 ## Optional contributor tooling

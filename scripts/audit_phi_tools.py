@@ -77,15 +77,24 @@ def evaluate(data: dict[str, Any]) -> tuple[list[str], list[str], list[str]]:
     tolerated: list[str] = []
     failures: list[str] = []
     skipped: list[str] = []
+    seen_pillow = False
     for dep in data["dependencies"]:
         if not isinstance(dep, dict):
             raise AuditError("dependency entry is not an object")
         name = str(dep.get("name", "?"))
+        is_pillow = name.lower() == "pillow"
+        seen_pillow = seen_pillow or is_pillow
+        if is_pillow and "skip_reason" in dep:
+            failures.append(
+                f"pillow was skipped by pip-audit ({dep['skip_reason']}): "
+                "the Pillow rule cannot be applied, so nothing was audited."
+            )
+            continue
         if "skip_reason" in dep:
             skipped.append(f"{name}: {dep['skip_reason']}")
             continue
         vulns = dep.get("vulns") or []
-        if name.lower() != "pillow":
+        if not is_pillow:
             for v in vulns:
                 failures.append(
                     _describe(
@@ -93,32 +102,48 @@ def evaluate(data: dict[str, Any]) -> tuple[list[str], list[str], list[str]]:
                     )
                 )
             continue
-        try:
-            installed = Version(str(dep.get("version")))
-        except InvalidVersion as exc:
-            raise AuditError(f"bad pillow version {dep.get('version')!r}") from exc
-        if installed >= CAP:
-            failures.append(
-                f"pillow {installed} is installed: the Pillow 12.x exception is stale. "
-                "Remove it from scripts/audit_phi_tools.py, ci.yml and "
-                "security/pip-audit-exceptions.md."
-            )
-            for v in vulns:
-                failures.append(_describe(name, dep.get("version"), v, "real finding"))
-            continue
-        for v in vulns:
-            if _is_tolerated(v):
-                tolerated.append(str(v.get("id")))
-            else:
-                failures.append(
-                    _describe(
-                        name,
-                        dep.get("version"),
-                        v,
-                        "no fix, or a fix other than 13.0.0",
-                    )
-                )
+        _evaluate_pillow(dep, vulns, tolerated, failures)
+    if not seen_pillow:
+        failures.append(
+            "pillow is absent from the pip-audit output: the audit covered nothing "
+            "it was written to check."
+        )
     return tolerated, failures, skipped
+
+
+def _evaluate_pillow(
+    dep: dict[str, Any],
+    vulns: list[dict[str, Any]],
+    tolerated: list[str],
+    failures: list[str],
+) -> None:
+    """Apply the cap rule to the Pillow entry, appending to the result lists."""
+    name = str(dep.get("name", "pillow"))
+    try:
+        installed = Version(str(dep.get("version")))
+    except InvalidVersion as exc:
+        raise AuditError(f"bad pillow version {dep.get('version')!r}") from exc
+    if installed >= CAP:
+        failures.append(
+            f"pillow {installed} is installed: the Pillow 12.x exception is stale. "
+            "Remove it from scripts/audit_phi_tools.py, ci.yml and "
+            "security/pip-audit-exceptions.md."
+        )
+        for v in vulns:
+            failures.append(_describe(name, dep.get("version"), v, "real finding"))
+        return
+    for v in vulns:
+        if _is_tolerated(v):
+            tolerated.append(str(v.get("id")))
+        else:
+            failures.append(
+                _describe(
+                    name,
+                    dep.get("version"),
+                    v,
+                    "no fix, or a fix other than 13.0.0",
+                )
+            )
 
 
 def _describe(name: str, version: object, vuln: dict[str, Any], why: str) -> str:
