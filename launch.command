@@ -62,7 +62,7 @@ install_requirements() {
         echo "ERROR: Failed to upgrade pip inside the virtual environment."
         return 1
     }
-    "$VENV_PY" -m pip install -r "$SCRIPT_DIR/requirements.txt" || {
+    "$VENV_PY" -m pip install --require-hashes -r "$SCRIPT_DIR/requirements.txt" || {
         echo "ERROR: Failed to install requirements into the virtual environment."
         echo "The venv folder may exist but be incomplete. Choose option 2"
         echo "(Reinstall / update requirements) after fixing the error, or delete"
@@ -103,7 +103,7 @@ run_sys() {
         echo "DICOM Viewer exited with an error."
         echo "If you see ModuleNotFoundError, install requirements for this Python"
         echo "(Python 3.12 or newer is required):"
-        echo "  python3 -m pip install -r \"$SCRIPT_DIR/requirements.txt\""
+        echo "  python3 -m pip install --require-hashes -r \"$SCRIPT_DIR/requirements.txt\""
         read -rp "Press Enter to close..."
         exit 1
     fi

@@ -197,6 +197,18 @@ def _launcher_text(name: str) -> str:
 
 
 @pytest.mark.parametrize("name", _LAUNCHERS)
+def test_launchers_install_app_lock_with_require_hashes(name: str) -> None:
+    lines = [
+        line
+        for line in _launcher_text(name).splitlines()
+        if "pip install" in line and "requirements.txt" in line
+    ]
+    assert lines
+    for line in lines:
+        assert "--require-hashes" in line
+
+
+@pytest.mark.parametrize("name", _LAUNCHERS)
 def test_launchers_install_docs_builder_from_hashed_lock(name: str) -> None:
     text = _launcher_text(name)
     assert "--require-hashes -r" in text

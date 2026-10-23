@@ -466,7 +466,7 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 3. **Upload artifacts** (**30-day** **`retention-days`** in **`build.yml`**; see **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for **GB-hour** artifact storage on small plans) for tag pushes and manual runs **without** **Publish to a GitHub Release** checked — **skipped** when a manual run publishes a release. Platform-specific artifact paths: **Windows** `dist/DICOMViewerV3*` (one-folder PyInstaller output; release assets use a **`DICOMViewerV3-*-Windows.zip`** instead), **macOS** a `.dmg` containing only `DICOMViewerV3.app`, **Linux** the `.AppImage`. PyInstaller’s **`build/`** folder is **never** uploaded — reproduce analysis issues locally. Per-OS size commands and a **baseline table** template: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **GitHub Releases** remain the long-lived distribution path.
 4. **Log bundle sizes** after each build (`du -sh` on `dist/` outputs; on macOS, drill-down under `.app/Contents/` plus **top 10 largest** entries under `Frameworks/` and `Resources/` via `sort -hr | head -10`) so regressions show up in the Actions log without uploading extra bytes.
 5. **Create releases** with executables attached when you push tags
-6. **Stage the offline documentation bundle** before freezing (`pip install` the `requirements-dev.txt` zensical pin, then `python scripts/build_offline_docs.py`), and **verify** the frozen output contains `resources/help/docs/index.html` — every run, including plain test builds, so Help → Documentation works offline in shipped executables. See [Release step: staging the offline doc bundle](#release-step-staging-the-offline-doc-bundle).
+6. **Stage the offline documentation bundle** before freezing (`pip install --require-hashes -r requirements-docs.txt`, then `python scripts/build_offline_docs.py`), and **verify** the frozen output contains `resources/help/docs/index.html` — every run, including plain test builds, so Help → Documentation works offline in shipped executables. See [Release step: staging the offline doc bundle](#release-step-staging-the-offline-doc-bundle).
 
 ### How to Use
 
@@ -1010,7 +1010,7 @@ Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. When a 
 **Gate cleared 2026-09-14** (audit slice 2a assessed, TRIAGE-038 closed).
 Populate `resources/help/docs/` before freezing. **Automated builds** (`.github/workflows/build.yml`) do this on every run — staging plus a frozen-payload check for `resources/help/docs/index.html` — so the steps below are only needed for **local** builds:
 
-1. Install the dev requirements including the zensical pin (`pip install -r requirements-dev.txt`).
+1. Install the docs requirements (`pip install --require-hashes -r requirements-docs.txt`).
 2. Run `python scripts/build_offline_docs.py` from the repo root. It runs `zensical build --strict` (any warning fails the release step), copies `site/` into `resources/help/docs/` (cleaned first), and verifies `index.html` plus every `mkdocs.yml` nav target is present.
 3. Run PyInstaller as usual (`pyinstaller DICOMViewerV3.spec --clean --noconfirm`). The existing `('resources', 'resources')` datas entry picks up `resources/help/docs/` with no spec changes.
 4. Verify the frozen bundle contains `resources/help/docs/index.html` alongside the nav pages before distributing.

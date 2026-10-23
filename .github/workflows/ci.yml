@@ -366,9 +366,11 @@ jobs:
       # 13.0.0. New Pillow advisories keep landing, so a per-ID ignore list
       # does not hold. scripts/audit_phi_tools.py tolerates one rule instead:
       # a Pillow advisory, Pillow 12.x installed, lowest fix version 13.0.0. It
-      # fails on any other package, on Pillow findings with no fix or a
+      # fails on advisories in any other package, on Pillow findings with no fix or a
       # different fix, on Pillow below 12.0.0, and when Pillow >= 13 is
-      # installed (stale exception). The
+      # installed (stale exception). Non-Pillow dependencies that pip-audit
+      # skips (the direct-URL en-core-web-lg and dicom-phi-scan) print as
+      # "skipped:" and do not fail. The
       # environment is never shipped. Unblocks when a presidio-image-redactor
       # release allows pillow>=13. Review by 2026-12-31; see
       # security/pip-audit-exceptions.md.

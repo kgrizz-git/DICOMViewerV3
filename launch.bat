@@ -109,7 +109,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-"%VENV_PY%" -m pip install -r "%ROOT%requirements.txt"
+"%VENV_PY%" -m pip install --require-hashes -r "%ROOT%requirements.txt"
 if errorlevel 1 (
     echo ERROR: Failed to install requirements into the virtual environment.
     echo The venv folder may exist but be incomplete. Choose option 2
@@ -204,7 +204,7 @@ if errorlevel 1 (
     echo DICOM Viewer exited with an error.
     echo If you see ModuleNotFoundError, install requirements for this Python
     echo ^(Python 3.12 or newer is required^):
-    echo   python -m pip install -r "%ROOT%requirements.txt"
+    echo   python -m pip install --require-hashes -r "%ROOT%requirements.txt"
     pause
 )
 goto :END

@@ -7,9 +7,12 @@ Pillow advisories one ID at a time, this script tolerates exactly one class of
 finding: a Pillow advisory, with Pillow 12.x installed, whose lowest fix
 version is 13.0.0 (so the presidio cap is the only reason it is unfixed).
 
-Everything else fails: other packages, Pillow advisories with no fix or a fix
-above 13.0.0, an advisory that is fixable inside 12.x, Pillow below 12.0.0,
-and Pillow >= 13 being installed (the exception is stale and should be removed).
+Everything else fails: advisories in other packages, Pillow advisories with no
+fix or a fix above 13.0.0, an advisory that is fixable inside 12.x, Pillow below
+12.0.0, and Pillow >= 13 being installed (the exception is stale and should be
+removed). Non-Pillow dependencies that pip-audit skips (the direct-URL
+``en-core-web-lg`` and ``dicom-phi-scan``) are printed as ``skipped:`` and are
+non-fatal by design.
 
 Usage: ``audit_phi_tools.py [pip-audit-json-file]``. With no argument it runs
 ``pip-audit --requirement requirements-phi-tools.txt --format json``.

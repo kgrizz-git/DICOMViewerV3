@@ -39,7 +39,7 @@ Activate a virtual environment before installing or running (see **`AGENTS.md`**
 ## Security tooling and optional dev dependencies
 
 - **Editing dependencies:** change the floor in a `requirements*.in` file, then run **`python scripts/compile_requirements.py`** and commit the `.in` and `.txt` files together. CI **Requirements locks match** fails if they disagree.
-- **`pip install -r requirements-dev.txt`** — adds local Python security scanners (semgrep, detect-secrets).
+- **`pip install -r requirements-dev.txt`** — adds local Python tooling and scanners (detect-secrets, pip-audit, pip-licenses, basedpyright, ruff, lizard, interrogate, pytest-cov, pytest-xdist). Semgrep is not installed from it (removed in PR #167).
 - **TruffleHog v3:** install separately via `powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1 -AddToUserPath` so local scans align with CI’s TruffleHog v3 action/binary line.
 - **Debug flags:** do not merge with **`DEBUG_*`** set to **`True`** in `src/utils/debug_flags.py` (CI fails on that).
 - **Isolated privacy tools:** create a separate environment from

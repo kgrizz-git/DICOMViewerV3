@@ -11,7 +11,7 @@
 # Usage:
 #   1. Install build requirements: pip install -r requirements-build.txt
 #   2. Build executable: pyinstaller DICOMViewerV3.spec
-#   3. See docs/BUILDING_EXECUTABLES.md for detailed instructions
+#   3. See dev-docs/info/BUILDING_EXECUTABLES.md for detailed instructions
 
 # Security floor 6.22.1: GHSA-9fxf-4qw3-ghmr (onefile env spoofing / LPE).
 pyinstaller>=6.22.3
