@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-21
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -47,7 +47,7 @@ works. Python 3.12+ is required (see the wheels note below).
 
 ### Compressed DICOM will not decode
 
-The runtime decoder stack is defined in `requirements.txt`:
+The runtime decoder stack is defined in `requirements.in` (locked in `requirements.txt`):
 
 | Handler | Package | Transfer syntaxes |
 |---------|---------|-------------------|
@@ -76,16 +76,40 @@ The runtime decoder stack is defined in `requirements.txt`:
 
 ### Python version and native wheels (Windows)
 
-- **Python 3.12+** is required for the full `requirements.txt` stack because `numpy>=2.5.1` requires it. Python 3.12 is the supported CI baseline; on Windows it also has pre-built wheels for packages such as **pyjpegls**.
+- **Python 3.12+** is required for the full `requirements.in` stack because `numpy>=2.5.1` requires it. Python 3.12 is the supported CI baseline; on Windows it also has pre-built wheels for packages such as **pyjpegls**.
 - If **`pip install` fails building pyjpegls** with *Microsoft Visual C++ 14.0 or greater is required*, switch the venv to **Python 3.12** or install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the C++ workload.
 
 ### Parallels / network home paths (Windows guests)
 
 - A project clone on a local drive sometimes avoids venv or pip quirks seen with shared-folder paths.
 
+## Requirements files
+
+Each dependency set has two files. The `.in` file is the one you edit: it holds the
+floors and comments. The `.txt` file is a hash-pinned lock compiled from it, and it is
+what the launchers, CI, frozen builds and `pip-audit` install and scan.
+
+| Edit | Lock | Used for |
+|------|------|----------|
+| `requirements.in` | `requirements.txt` | Running the app, tests |
+| `requirements-dev.in` | `requirements-dev.txt` | Contributor tooling (includes the app set) |
+| `requirements-build.in` | `requirements-build.txt` | PyInstaller builds |
+| `requirements-docs.in` | `requirements-docs.txt` | Docs build (zensical) and the PyYAML parser for `check_action_pins.py`; compiled with `-c requirements-dev.txt` so versions match the dev lock. Keep its two floors equal to the same lines in `requirements-dev.in`. Install with `pip install --require-hashes -r requirements-docs.txt`. |
+
+After editing a `.in` file, run `python scripts/compile_requirements.py` (add
+`--upgrade` to re-resolve to the newest versions) and commit the `.in` and `.txt`
+files together. It needs network access and `uv==0.13.4`, which
+`requirements-dev.txt` installs. The lock is universal: one file is valid on Windows,
+macOS and Linux for Python 3.12. Never hand-edit a `.txt` lock. CI **Requirements
+locks match** (`python scripts/check_requirements_lock.py`) recompiles with the
+committed pins kept. It fails on a missing or non-uv lock, a package that is not in the
+resolution, a pin outside the `.in` floors, and hash or format drift. It catches an in-range bump of an app pin made only in `requirements.txt`, because the dev, build, and docs recompiles are constrained by the app lock. It does not catch
+a version bumped by hand only in the dev, build, or docs lock, because that is still a valid resolution. Do not run `pip-compile` on these files; it resolves for the host platform
+only and would drop the other platforms' packages.
+
 ## Optional contributor tooling
 
-Security scanners and related CLI tools are **not** in `requirements.txt`. For parity with CI docs:
+Security scanners and related CLI tools are **not** in `requirements.txt` or `requirements.in`. For parity with CI docs:
 
 ```bash
 pip install -r requirements-dev.txt
@@ -147,7 +171,7 @@ visibility; `--staged` reads the Git index (correct for the hook).
 
 The tracked `.envrc` loads an ignored `.env` file and activates an existing
 `.venv` or `venv`. It intentionally performs no package installation or network
-access. It watches `requirements.txt` and `requirements-dev.txt` and prints a
+access. It watches the compiled `requirements.txt` and `requirements-dev.txt` locks and prints a
 short reminder when the active venv has not been explicitly synchronized.
 
 ```bash

@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-23
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -78,6 +78,7 @@ raw-output path for every output filter.
 | Script | What it validates |
 |--------|-------------------|
 | [`scripts/check_user_docs_links.py`](../scripts/check_user_docs_links.py) | Relative links **and** inline code paths in `user-docs/`, the living `dev-docs/` (top level and `info/`), the **active** plan tree (`plans/*.md` plus `plans/supporting/`, recursively, so `supporting/research/` is covered), `README.md`, `ARCHITECTURE.md` and `AGENTS.md` — plus every nested `src/**/AGENTS.md`, which are live agent instructions and therefore **blocking** rather than advisory, because the root `AGENTS.md` tells agents to run named scripts and paths. Under `user-docs/`, relative links that resolve outside that tree fail (Phase C0 escape guard), and absolute GitHub blob links must share `GITHUB_BLOB_BASE` from `src/utils/doc_urls.py`. Inline paths are checked in two classes with different exemptions: **plan-exempt** — `src/...py`, `scripts/...py`, `tests/...py`, and plans *only*. A plan legitimately proposes a module, gate script or test file it has not written; `TO_DO.md` and `FUTURE_WORK_DETAIL_NOTES.md` were briefly exempted too and then narrowed back, because those two files hold 17 such references of which 13 are descriptive claims that would have rotted unmonitored. Proposals there are written as plain prose rather than inline code, per this checker's own contract. Note `pyproject.toml` is deliberately outside the closed set, since two plans propose creating it; and **not** plan-exempt — a closed set of well-known files (`.github/workflows/*.yml`, `requirements*.txt`, `pytest.ini`, `ruff.toml`, `.coveragerc`, `.githooks/*`) that no plan ever proposes, which is why a stale workflow name in an active plan blocks. Historical material is excluded as accurate history and surfaced by `--include-completed-plans` as advisory: `plans/completed/`, the dated files in `HISTORICAL_RECORD_FILES` (`CHANGELOG.md`, `MAINTENANCE_LOG.md`, `SECURITY_IMPLEMENTATION_SUMMARY.md`) and the generated-assessment directories in `SNAPSHOT_SUBDIRS` (`safety-scans/`, `security-assessments/`, `doc-assessments/`, `refactor-assessments/`, `templates-generalized/`, `bug-investigations/`, `investigations/`, `ux-assessments/`, `assessments/`, `code-assessments/`, `testing-assessments/`, `orchestration/`). Two real-repo guard tests enforce the boundary: one asserts no `dev-docs/` subdirectory holding Markdown is unaccounted for, the other that no `src/**/AGENTS.md` escapes the scan set — a fixture cannot catch a directory that exists only in the repo, which is how seven unscanned directories and three unscanned instruction files survived review. Those snapshot directories are scanned *and* advisory on purpose — outside the scanned set a reviewer cannot tell "checked and clean" from "never looked at" — and the advisory pass is wired into CI as a `continue-on-error` step, so that figure is reported on every run rather than only when someone remembers the flag. Two known blind spots, both from the same cause — the check reads inline code (backticks), so a path written as a bare filename in a comment or fenced block is invisible to it. `templates-generalized/` carries its example paths as `# .github/workflows/...` header comments, and those are deliberately left alone because they are filenames an example would be *saved as* in a hypothetical new project. `QUICK_REFERENCE_SECURITY.md` listed this repo's own workflows the same way and was rot; corrected to name `ci.yml` / `privacy-gates.yml` and the jobs within them |
+| [`scripts/audit_phi_tools.py`](../scripts/audit_phi_tools.py) | Advisory `pip-audit-phi-tools` CI job: runs pip-audit on `requirements-phi-tools.txt` and tolerates only Pillow 12.x advisories fixed in 13.0.0 (the presidio `pillow<13` cap); fails on anything else or when Pillow 13 is installed. Exit 0 clean, 1 findings, 2 tool/parse error. Tests: `tests/test_audit_phi_tools.py` |
 | [`scripts/check_repo_harness.py`](../scripts/check_repo_harness.py) | Harness files present, `AGENTS.md` not bloated, `TO_DO.md` freshness, plan paths in `TO_DO.md`, links in harness docs, required **user-docs** topic guides linked from `USER_GUIDE.md` hub |
 | [`scripts/check_architecture_boundaries.py`](../scripts/check_architecture_boundaries.py) | AST import-boundary checks for the highest-risk edges in `ARCHITECTURE.md`; existing legacy edges are listed in [`architecture_boundary_baseline.txt`](architecture_boundary_baseline.txt) |
 | [`scripts/agent_smoke_harness.py`](../scripts/agent_smoke_harness.py) | Python path, core imports, committed DICOM fixture read; optional Qt headless smoke |
@@ -206,12 +207,13 @@ the disjunction form.
 
 ### Dependency vulnerability audits
 
-Two separate jobs, because they have different reliability:
+Three separate jobs, because they have different reliability:
 
 | Job | Scope | Blocks? |
 |-----|-------|---------|
-| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt` | Fails the job. Add it to the required-check ruleset to make it block merges |
+| `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt`, `requirements-docs.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
 | `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
+| `osv-scanner (locked dependencies)` | The same four compiled locks, against the OSV database | Never yet. `continue-on-error: true`; promote to required by 2026-11-30 (`TO_DO.md`) |
 
 The PHI-tooling audit is advisory because it resolves an isolated developer-only
 environment that installs a dependency from a GitHub URL, so it can fail without
@@ -226,6 +228,23 @@ reviewed on the date noted there. Audited 2026-09-07: four of the five entries
 matched nothing in the current dependency set and were removed. The one that
 remains is `PYSEC-2026-2266` (pydicom 2.4.5, fixed in 3.0.2), which cannot be
 cleared while pylinac caps `pydicom<3`.
+
+`security/pip-audit-exceptions.md` is the single source of truth for suppressions.
+The `osv-scanner (locked dependencies)` job reads `osv-scanner.toml`, whose
+`[[IgnoredVulns]]` entries each need `id`, `ignoreUntil` and `reason`. The only
+app-lane entry is `PYSEC-2026-2266`, and OSV also filters its aliases
+(`CVE-2026-32711`, `GHSA-v856-2rf8-9f28`). `tests/test_osv_scanner_config.py`
+fails when an entry lacks a reason or a future date, when an ID has no row in
+the exceptions record, or when an app-lane row is in neither the `ci.yml`
+`pip-audit` flags nor `osv-scanner.toml`. Never add a broad ignore.
+
+The OSV job runs a release binary pinned by version and SHA-256 in `ci.yml`
+(not the Docker action, whose image tag is mutable, nor the reusable workflow,
+which needs `security-events: write`). It uploads nothing and has
+`contents: read` only. It reports every package in the locks, including
+`colorama`, `pywin32-ctypes`, `pefile` and `macholib`, so it covers the
+platform-only pins that the Linux `pip-audit` run misses. Against the committed
+locks it showed none of the phantom `pip 9.0.3` findings seen on a freeze file.
 
 ### Known-vulnerable GitHub Actions
 
@@ -260,6 +279,43 @@ full-line comment is not a ``uses:``. A release tag may move forward without
 failing the pin. Local ``./`` actions are ignored. An empty token or any GitHub API
 error fails the job. It is not a required check until it is added to
 KGRuleset1.
+
+### Requirements locks
+
+`requirements.in`, `requirements-dev.in`, `requirements-build.in` and
+`requirements-docs.in` hold the hand-edited floors. `requirements.txt`,
+`requirements-dev.txt`, `requirements-build.txt` and `requirements-docs.txt` are hash-pinned locks compiled from them by
+`python scripts/compile_requirements.py` (`--upgrade` re-resolves to the newest
+versions). The compiler is `uv pip compile --universal --python-version 3.12`
+at the exact version in `UV_VERSION`, so one lock serves win32, darwin and
+linux. `pip-compile` was rejected because it resolves for the host only, so a
+Linux lock drops the Windows and macOS only packages (for example `colorama`,
+`pywin32-ctypes`, `pefile`, `macholib`). Dev and build are compiled with
+`-c requirements.txt` so all agree on the application versions. The docs lock
+(zensical + PyYAML, installed with `pip install --require-hashes -r
+requirements-docs.txt` by the docs jobs, the action-pins job and the launchers)
+is also compiled with `-c requirements-dev.txt`, so it cannot drift from the dev lock.
+
+**Requirements locks match** (`requirements-lock` in `ci.yml`) runs
+`scripts/check_requirements_lock.py`. It recompiles in a scratch folder under
+`tmp/`, seeded with the committed locks so existing pins are kept, and fails if
+any lock differs, is missing, or lost its uv header. It needs PyPI and fails
+closed. It is not a required check until it is added to KGRuleset1.
+
+One gap: `pip-audit` evaluates environment markers for the Linux runner, so pins
+that only apply elsewhere (`colorama`, `pywin32-ctypes`, `pefile`, `macholib`)
+are not audited by that job. The advisory `osv-scanner` job reads the lock files
+directly and covers them.
+
+### Launcher self-test
+
+**Launcher (Windows cmd)** (`launcher-windows` in `ci.yml`) runs `launch.bat`
+under `cmd.exe` on `windows-latest`. Setting `DICOMVIEWER_LAUNCHER_SELFTEST` to
+`system` or `venv` makes the launcher run one Python 3.12 gate and exit, skipping
+the menu and `pause`. The job covers a real 3.12, a 3.11 stub, no Python on PATH,
+a 3.12 venv and a 3.11 venv, and a `--require-hashes` install of
+`requirements-docs.txt`. It is advisory (`continue-on-error: true`) until it
+passes on `main` and is promoted (`TO_DO.md`).
 
 ### Git hooks (the blocking local layer)
 

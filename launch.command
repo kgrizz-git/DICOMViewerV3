@@ -26,7 +26,33 @@ resolve_venv() {
 
 resolve_venv
 
+# The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
+# Usage: require_python_312 <interpreter> [existing-venv]
+require_python_312() {
+    local py="$1" existing="$2" found
+    if ! command -v "$py" >/dev/null 2>&1; then
+        echo ""
+        echo "ERROR: Python was not found on PATH ($py)."
+        echo "Install Python 3.12 or newer and make sure it is on your PATH."
+        return 1
+    fi
+    if "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' >/dev/null 2>&1; then
+        return 0
+    fi
+    found="$("$py" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null)"
+    echo ""
+    echo "ERROR: DICOM Viewer needs Python 3.12 or newer."
+    echo "Found: ${found:-unknown} ($py)"
+    echo "Install Python 3.12 or newer, then run this launcher again."
+    if [[ -n "$existing" ]]; then
+        echo "This virtual environment uses an older Python. Delete it (option 3)"
+        echo "and create it again."
+    fi
+    return 1
+}
+
 install_requirements() {
+    require_python_312 "$VENV_PY" existing || return 1
     echo ""
     echo "Installing requirements into:"
     echo "  $VENV_PY"
@@ -36,7 +62,7 @@ install_requirements() {
         echo "ERROR: Failed to upgrade pip inside the virtual environment."
         return 1
     }
-    "$VENV_PY" -m pip install -r "$SCRIPT_DIR/requirements.txt" || {
+    "$VENV_PY" -m pip install --require-hashes -r "$SCRIPT_DIR/requirements.txt" || {
         echo "ERROR: Failed to install requirements into the virtual environment."
         echo "The venv folder may exist but be incomplete. Choose option 2"
         echo "(Reinstall / update requirements) after fixing the error, or delete"
@@ -66,13 +92,18 @@ run_activated() {
 }
 
 run_sys() {
+    require_python_312 python3 || {
+        read -rp "Press Enter to close..."
+        exit 1
+    }
     echo ""
     echo "Starting DICOM Viewer (system Python)..."
     if ! python3 "$SCRIPT_DIR/run.py"; then
         echo ""
         echo "DICOM Viewer exited with an error."
-        echo "If you see ModuleNotFoundError, install requirements for this Python:"
-        echo "  python3 -m pip install -r \"$SCRIPT_DIR/requirements.txt\""
+        echo "If you see ModuleNotFoundError, install requirements for this Python"
+        echo "(Python 3.12 or newer is required):"
+        echo "  python3 -m pip install --require-hashes -r \"$SCRIPT_DIR/requirements.txt\""
         read -rp "Press Enter to close..."
         exit 1
     fi
@@ -80,6 +111,7 @@ run_sys() {
 }
 
 setup_and_run() {
+    require_python_312 python3 || exit 1
     echo ""
     echo "Creating virtual environment..."
     python3 -m venv "$VENV" || {
@@ -113,6 +145,7 @@ run_with_check() {
         echo "  $VENV_PY"
         exit 1
     fi
+    require_python_312 "$VENV_PY" existing || exit 1
     # Recover from a half-created venv (folder exists, packages never installed).
     if ! "$VENV_PY" -c "import pydicom, PySide6, numpy, PIL" >/dev/null 2>&1; then
         echo ""
@@ -153,20 +186,11 @@ build_docs() {
         echo "  $VENV_PY"
         return 1
     fi
-    if ! "$VENV_PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
-        echo "ERROR: Documentation build needs Python 3.10 or newer (zensical requirement)."
-        echo "This virtual environment uses an older Python. Delete it (option 3)"
-        echo "and create it again with a newer python3."
-        return 1
-    fi
+    require_python_312 "$VENV_PY" existing || return 1
     echo ""
     echo "Installing documentation builder (zensical)..."
-    local pin
-    pin="$(grep '^zensical' "$SCRIPT_DIR/requirements-dev.txt")" || {
-        echo "ERROR: Could not read the zensical pin from requirements-dev.txt."
-        return 1
-    }
-    "$VENV_PY" -m pip install -q "$pin" || {
+    # Hashed lock: pip verifies every artifact, including transitive dependencies.
+    "$VENV_PY" -m pip install -q --require-hashes -r "$SCRIPT_DIR/requirements-docs.txt" || {
         echo "ERROR: Failed to install the documentation builder into the virtual environment."
         return 1
     }

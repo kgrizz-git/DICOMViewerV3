@@ -8,7 +8,8 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 _SCRIPT = _ROOT / "scripts" / "sync_dev_environment.py"
 _spec = importlib.util.spec_from_file_location("sync_dev_environment", _SCRIPT)
-assert _spec and _spec.loader
+assert _spec is not None
+assert _spec.loader is not None
 sync = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sync)
 
@@ -52,3 +53,23 @@ def test_project_venv_accepts_repo_venv(tmp_path: Path) -> None:
     venv.mkdir()
 
     assert sync.project_venv(repo, venv) == venv.resolve()
+
+
+def test_tracks_compiled_locks_not_floor_files() -> None:
+    assert sync.REQUIREMENT_FILES == ("requirements.txt", "requirements-dev.txt")
+    assert all(name.endswith(".txt") for name in sync.REQUIREMENT_FILES)
+
+
+def test_real_repo_lock_files_exist_and_digest() -> None:
+    for name in sync.REQUIREMENT_FILES:
+        assert (_ROOT / name).is_file()
+    assert len(sync.requirements_digest(_ROOT)) == 64
+
+
+def test_digest_ignores_floor_file_edits(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    (repo / "requirements.in").write_text("example>=1\n", encoding="utf-8")
+    before = sync.requirements_digest(repo)
+    (repo / "requirements.in").write_text("example>=2\n", encoding="utf-8")
+
+    assert sync.requirements_digest(repo) == before

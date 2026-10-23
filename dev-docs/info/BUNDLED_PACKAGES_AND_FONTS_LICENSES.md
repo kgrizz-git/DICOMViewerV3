@@ -64,7 +64,7 @@ Detailed engineering strategy and option-by-option risks: [`PYLIBJPEG_ALTERNATIV
 2. **Authoritative text:** Inspect each wheel’s **`*.dist-info/METADATA`** (`License`, `License-Expression`) and any **`LICENSE*`** files inside the installed package or its sdist — PyPI classifiers can be wrong or incomplete.  
 3. **Quick audit (optional):** In an activated venv, tools such as **`pip-licenses`** (if installed) can dump a table; always **spot-check** GPL/LGPL/MPL families against primary sources.  
 4. **Fonts:** Shipped files live under **`resources/fonts/`**; the registry in **`src/utils/bundled_fonts.py`** lists which TTFs the app registers. Each font subtree should retain its upstream **`OFL.txt`**, **`LICENSE`**, **`COPYING`**, or **`License.txt`** (do not strip these from releases).  
-5. **When to update:** After any **`requirements.txt`** pin change, PyInstaller **`datas` / `binaries`** change, or font add/remove — update the tables below and bump **Last updated**.
+5. **When to update:** After any **`requirements.in`** floor or pin change (and its recompiled lock), PyInstaller **`datas` / `binaries`** change, or font add/remove — update the tables below and bump **Last updated**.
 
 ---
 

@@ -9,6 +9,9 @@ rem Avoid EnableDelayedExpansion so checkout paths containing "!" are not corrup
 setlocal
 set "ROOT=%~dp0"
 call :RESOLVE_VENV
+rem CI hook: DICOMVIEWER_LAUNCHER_SELFTEST=system or venv runs one Python gate and exits.
+rem Unset in normal use, so the menu below is unchanged.
+if defined DICOMVIEWER_LAUNCHER_SELFTEST goto :SELFTEST
 
 :MENU
 cls
@@ -60,6 +63,8 @@ goto :MENU
 
 :SETUP
 echo.
+call :CHECK_SYSTEM_PYTHON
+if errorlevel 1 goto :END
 echo Creating virtual environment...
 python -m venv "%VENV%"
 if errorlevel 1 (
@@ -90,6 +95,8 @@ if errorlevel 1 goto :END
 goto :RUN_ACTIVATED
 
 :INSTALL_REQUIREMENTS
+call :CHECK_VENV_PYTHON
+if errorlevel 1 exit /b 1
 echo.
 echo Installing requirements into:
 echo   %VENV_PY%
@@ -102,7 +109,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-"%VENV_PY%" -m pip install -r "%ROOT%requirements.txt"
+"%VENV_PY%" -m pip install --require-hashes -r "%ROOT%requirements.txt"
 if errorlevel 1 (
     echo ERROR: Failed to install requirements into the virtual environment.
     echo The venv folder may exist but be incomplete. Choose option 2
@@ -122,6 +129,39 @@ if errorlevel 1 (
 echo Requirements installed successfully.
 exit /b 0
 
+:CHECK_SYSTEM_PYTHON
+rem The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
+where python 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: Python was not found on PATH. Install Python 3.12 or newer and make sure it is on your PATH.
+    if not defined DICOMVIEWER_LAUNCHER_SELFTEST pause
+    exit /b 1
+)
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: DICOM Viewer needs Python 3.12 or newer.
+    echo Found:
+    python --version
+    echo Install Python 3.12 or newer, then run this launcher again.
+    if not defined DICOMVIEWER_LAUNCHER_SELFTEST pause
+    exit /b 1
+)
+exit /b 0
+
+:CHECK_VENV_PYTHON
+rem The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
+"%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: DICOM Viewer needs Python 3.12 or newer.
+    echo This virtual environment uses:
+    "%VENV_PY%" --version
+    echo Install Python 3.12 or newer. Then choose option 3 ^(Delete virtual environment^)
+    echo and create the venv again.
+    if not defined DICOMVIEWER_LAUNCHER_SELFTEST pause
+    exit /b 1
+)
+exit /b 0
+
 :RUN
 if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :RUN_PY_OK
     echo ERROR: Virtual environment python not found:
@@ -129,6 +169,8 @@ if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :RUN_PY_OK
     pause
     goto :END
 :RUN_PY_OK
+call :CHECK_VENV_PYTHON
+if errorlevel 1 goto :END
 rem Recover from a half-created venv (folder exists, packages never installed).
 "%VENV_PY%" -c "import pydicom, PySide6, numpy, PIL" 1>nul 2>nul
 if errorlevel 1 (
@@ -152,14 +194,17 @@ if errorlevel 1 (
 goto :END
 
 :RUN_SYS
+call :CHECK_SYSTEM_PYTHON
+if errorlevel 1 goto :END
 echo.
 echo Starting DICOM Viewer (system Python)...
 python "%ROOT%run.py"
 if errorlevel 1 (
     echo.
     echo DICOM Viewer exited with an error.
-    echo If you see ModuleNotFoundError, install requirements for this Python:
-    echo   python -m pip install -r "%ROOT%requirements.txt"
+    echo If you see ModuleNotFoundError, install requirements for this Python
+    echo ^(Python 3.12 or newer is required^):
+    echo   python -m pip install --require-hashes -r "%ROOT%requirements.txt"
     pause
 )
 goto :END
@@ -191,24 +236,12 @@ if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :BUILD_DOCS_PY_OK
     pause
     goto :MENU
 :BUILD_DOCS_PY_OK
-"%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"
-if errorlevel 1 (
-    echo ERROR: Documentation build needs Python 3.10 or newer (zensical requirement).
-    echo This virtual environment uses an older Python. Delete it (option 3)
-    echo and create it again with a newer Python.
-    pause
-    goto :MENU
-)
+call :CHECK_VENV_PYTHON
+if errorlevel 1 goto :MENU
 echo.
 echo Installing documentation builder (zensical)...
-set "ZENSICAL_PIN="
-for /f "delims=" %%Z in ('findstr /B "zensical" "%ROOT%requirements-dev.txt"') do set "ZENSICAL_PIN=%%Z"
-if not defined ZENSICAL_PIN (
-    echo ERROR: Could not read the zensical pin from requirements-dev.txt.
-    pause
-    goto :MENU
-)
-"%VENV_PY%" -m pip install -q "%ZENSICAL_PIN%"
+rem Hashed lock: pip verifies every artifact, including transitive dependencies.
+"%VENV_PY%" -m pip install -q --require-hashes -r "%ROOT%requirements-docs.txt"
 if errorlevel 1 (
     echo ERROR: Failed to install the documentation builder into the virtual environment.
     pause
@@ -245,6 +278,18 @@ if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" if not exist 
 if not defined VENV set "VENV=%ROOT%.venv"
 set "VENV_PY=%VENV%\Scripts\python.exe"
 exit /b 0
+
+:SELFTEST
+if /i "%DICOMVIEWER_LAUNCHER_SELFTEST%"=="system" goto :SELFTEST_SYSTEM
+if /i "%DICOMVIEWER_LAUNCHER_SELFTEST%"=="venv" goto :SELFTEST_VENV
+echo ERROR: DICOMVIEWER_LAUNCHER_SELFTEST must be system or venv.
+exit /b 2
+:SELFTEST_SYSTEM
+call :CHECK_SYSTEM_PYTHON
+exit /b %errorlevel%
+:SELFTEST_VENV
+call :CHECK_VENV_PYTHON
+exit /b %errorlevel%
 
 :END
 endlocal

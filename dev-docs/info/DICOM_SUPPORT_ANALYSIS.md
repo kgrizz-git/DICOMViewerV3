@@ -146,7 +146,7 @@ The application has **improved error handling** for compressed DICOM files:
    - `python-gdcm`: Classic JPEG Baseline, Extended, and Lossless
    - `pylibjpeg`: Host for retained JPEG 2000 and RLE plugins
    - `pyjpegls`: For JPEG-LS compression
-   - Defined in `requirements.txt`; user-facing errors do not instruct users to install a GPL decoder
+   - Floors live in `requirements.in` (locked in `requirements.txt`); user-facing errors do not instruct users to install a GPL decoder
 
 #### Limitations
 - Frozen builds must still prove GDCM native-library discovery on every release platform

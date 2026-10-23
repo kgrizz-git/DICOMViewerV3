@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Agent instructions – DICOM Viewer V3
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-21
 
 **Table of contents** for agents: operational facts here; architecture, module tree, and harness checks linked below (progressive disclosure per [harness engineering](https://openai.com/index/harness-engineering/)).
 
@@ -38,19 +38,19 @@ From project root, after activation:
 
 - Run the app: `python src/main.py`
 - Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v` (**`tests/README.md`**). `pytest.ini` sets `-n auto --dist worksteal`, so runs are parallel; add `-n 0` for serial/single-test iteration. Never construct a `QCoreApplication` in a test — depend on the session `qapp` fixture.
-- **basedpyright vs PySide6:** CI installs fresh deps, so it may resolve a newer PySide6 than your venv holds (the pin in `requirements.txt` is a `>=` floor). If local basedpyright suddenly reports many `QTreeWidgetItem | None` errors after `pip install -r requirements-dev.txt`, upgrade PySide6 to match CI and re-run `python scripts/check_basedpyright_errors.py` (tree code uses `gui.qt_tree_widget_utils.iter_tree_children`).
+- **basedpyright vs PySide6:** CI and local development both install the compiled `requirements-dev.txt` lock, so they get the same PySide6. If local basedpyright suddenly reports many `QTreeWidgetItem | None` errors, your venv has drifted from the lock. Run `python scripts/sync_dev_environment.py` to reinstall the lock and refresh its sync stamp. Extra packages that are not in the lock stay installed, so recreate the venv from `requirements-dev.txt` if they are the cause. Then re-run `python scripts/check_basedpyright_errors.py` (tree code uses `gui.qt_tree_widget_utils.iter_tree_children`).
 - Agent smoke: `python scripts/agent_smoke_harness.py`
 - Harness docs check: `python scripts/check_repo_harness.py`
 - Architecture boundaries: `python scripts/check_architecture_boundaries.py`
 
-If no venv exists: `python -m venv .venv`, activate, `pip install -r requirements.txt`.
+If no venv exists: `python -m venv .venv`, activate, `pip install -r requirements.txt`. To change dependencies, edit the `requirements*.in` floors, run `python scripts/compile_requirements.py`, and commit the hashed `.txt` locks with them (never hand-edit a `.txt`; CI job `requirements-lock` checks it).
 
 ## Native VTK tests in the agent sandbox
 
 VTK's macOS wheel has no EGL/OSMesa fallback here, so `vtkRenderWindow` can segfault at `vtkGenericRenderWindowInteractor.Initialize()`.
 Retry the narrow test once with `require_escalated` (native graphics); do not skip it or blame xdist. See [`dev-docs/info/TESTING_GUIDANCE.md`](dev-docs/info/TESTING_GUIDANCE.md#vtk-rendering-on-macos).
 
-**Cine export:** `requirements.txt` pins **`imageio`** + **`imageio-ffmpeg`** (dev may use the wheel’s GPL `ffmpeg`; frozen builds bundle LGPL `ffmpeg/` from `scripts/build_lgpl_ffmpeg.py` and strip wheel binaries). **`IMAGEIO_FFMPEG_EXE`** overrides discovery. Prefer **`.mp4`** on Windows 11 Media Player over **`.mpg`** without the MPEG-2 extension.
+**Cine export:** `requirements.in` pins **`imageio`** + **`imageio-ffmpeg`** (dev may use the wheel’s GPL `ffmpeg`; frozen builds bundle LGPL `ffmpeg/` from `scripts/build_lgpl_ffmpeg.py` and strip wheel binaries). **`IMAGEIO_FFMPEG_EXE`** overrides discovery. Prefer **`.mp4`** on Windows 11 Media Player over **`.mpg`** without the MPEG-2 extension.
 
 ## Repository map (read next)
 
@@ -79,7 +79,7 @@ use `find` and the platform's available text-search tool rather than assuming
 
 - **Layout:** `src/` (app), `tests/`, `user-docs/`, `dev-docs/` (plans, assessments).
 - **Local study index:** `src/core/study_index/` — plan: [`LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md`](dev-docs/plans/supporting/LOCAL_STUDY_DATABASE_AND_INDEXING_PLAN.md).
-- **Pylinac:** exact pin in `requirements.txt`; bump via [`DEPENDENCY_BUMP_VERIFICATION_PLAN.md`](dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) and [`PYLINAC_INTEGRATION_OVERVIEW.md`](dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
+- **Pylinac:** exact pin in `requirements.in`; bump via [`DEPENDENCY_BUMP_VERIFICATION_PLAN.md`](dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md) and [`PYLINAC_INTEGRATION_OVERVIEW.md`](dev-docs/info/PYLINAC_INTEGRATION_OVERVIEW.md).
 - **Known dependency advisories:** [`security/pip-audit-exceptions.md`](security/pip-audit-exceptions.md) records the current `pip-audit` exception, its review trigger, and the required removal criteria. Do not add or broaden an exception without explicit review.
 - **Version / changelog / SemVer:** bump [`src/version.py`](src/version.py) and keep **Current version** in [`CHANGELOG.md`](CHANGELOG.md) in sync; follow [`dev-docs/RELEASING.md`](dev-docs/RELEASING.md) for release cuts and [`dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md`](dev-docs/info/SEMANTIC_VERSIONING_GUIDE.md) for version increments.
 - **Tracking split / plan archive:** [`dev-docs/TO_DO.md`](dev-docs/TO_DO.md) is the active backlog, not a completion log. Remove fully completed items once captured in [`CHANGELOG.md`](CHANGELOG.md), [`dev-docs/MAINTENANCE_LOG.md`](dev-docs/MAINTENANCE_LOG.md), or a durable plan/investigation record. Move finished implementation plans to [`dev-docs/plans/completed/`](dev-docs/plans/completed/); keep only ongoing dependency/reference plans in [`dev-docs/plans/supporting/`](dev-docs/plans/supporting/). When a plan is merged but manual smoke remains, archive the plan and track the smoke in **Manual Smoke Checks** in `TO_DO.md` (one umbrella pointer in **Next up**). Use `CHANGELOG.md` for user-visible release changes and `MAINTENANCE_LOG.md` for CI, harness, static-analysis, dependency-verification, and repo-maintenance history. Do the closeout in the same PR that finishes the work (TO_DO removal, changelog / maintenance-log entries, plan archiving) — not a follow-up.

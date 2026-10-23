@@ -1,6 +1,6 @@
 # Building Executables for DICOM Viewer V3
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-22
 
 This guide explains how to compile the DICOM Viewer V3 application into standalone executables for macOS, Windows, and Linux.
 
@@ -367,7 +367,7 @@ We investigated switching the Windows build to PyInstaller **onefile** mode (a s
 **Cons / risks:**
 
 - **Slower startup.** The bootloader decompresses the bundled support binaries/resources (the bulk of the payload: Qt/PySide6 and VTK native libraries, `resources/`) into `%TEMP%\_MEI*xxxxxx*` on every launch (pure-Python modules are additionally unpacked from the embedded PYZ archive). For a bundle of this size (~1.1 GB on the macOS baseline; see [`PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`](PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md)) this extraction would likely add seconds to every cold start, and the bulk of the bundle is rewritten to the temp directory each run.
-- **Security floor.** Onefile mode has a history of bootloader environment-spoofing issues: [GHSA-9fxf-4qw3-ghmr](https://github.com/pyinstaller/pyinstaller/security/advisories/GHSA-9fxf-4qw3-ghmr) (CVSS 7.8, High) affects onefile executables built with `pyinstaller < 6.22.1` (per the advisory, very old one*dir* builds ≤ 6.7 were affected too; since 6.8 the exposure is onefile-only). The attack condition is narrow — an attacker must be able to run the vulnerable onefile executable *with elevated privileges* (UAC-elevated on Windows, setuid on POSIX) and spoof its `_PYI_*` environment variables; our viewer never runs elevated, so exposure is minimal. Our `requirements-build.txt` floor (`pyinstaller>=6.22.2`) already covers the fix, but onefile still carries a larger bootloader attack surface than onedir, and the PyInstaller docs explicitly warn against giving a onefile executable administrator privileges.
+- **Security floor.** Onefile mode has a history of bootloader environment-spoofing issues: [GHSA-9fxf-4qw3-ghmr](https://github.com/pyinstaller/pyinstaller/security/advisories/GHSA-9fxf-4qw3-ghmr) (CVSS 7.8, High) affects onefile executables built with `pyinstaller < 6.22.1` (per the advisory, very old one*dir* builds ≤ 6.7 were affected too; since 6.8 the exposure is onefile-only). The attack condition is narrow — an attacker must be able to run the vulnerable onefile executable *with elevated privileges* (UAC-elevated on Windows, setuid on POSIX) and spoof its `_PYI_*` environment variables; our viewer never runs elevated, so exposure is minimal. Our `requirements-build.in` floor (`pyinstaller>=6.22.3`) already covers the fix, but onefile still carries a larger bootloader attack surface than onedir, and the PyInstaller docs explicitly warn against giving a onefile executable administrator privileges.
 - **Antivirus / SmartScreen noise.** Onefile executables that self-extract to `%TEMP%` at launch are a pattern some antivirus engines flag more aggressively than a plain folder of files; the self-extraction behaviour cannot be disabled.
 - **Leftover temp folders.** Per the PyInstaller docs, the `_MEI*xxxxxx*` folder is *not* removed if the app crashes or is killed (Task Manager / Force Quit), so users leak disk space on abnormal termination.
 - **macOS stays one-folder.** A macOS `.app` bundle is inherently one-folder (`BUNDLE` requires `COLLECT`); onefile would be a Windows-only divergence, doubling the maintenance surface.
@@ -466,7 +466,7 @@ A GitHub Actions workflow file is already included in the project at `.github/wo
 3. **Upload artifacts** (**30-day** **`retention-days`** in **`build.yml`**; see **`dev-docs/info/GITHUB_ACTIONS_STORAGE_AND_BILLING.md`** for **GB-hour** artifact storage on small plans) for tag pushes and manual runs **without** **Publish to a GitHub Release** checked — **skipped** when a manual run publishes a release. Platform-specific artifact paths: **Windows** `dist/DICOMViewerV3*` (one-folder PyInstaller output; release assets use a **`DICOMViewerV3-*-Windows.zip`** instead), **macOS** a `.dmg` containing only `DICOMViewerV3.app`, **Linux** the `.AppImage`. PyInstaller’s **`build/`** folder is **never** uploaded — reproduce analysis issues locally. Per-OS size commands and a **baseline table** template: **`dev-docs/info/PYINSTALLER_BUNDLE_SIZE_AND_BASELINES.md`**. **GitHub Releases** remain the long-lived distribution path.
 4. **Log bundle sizes** after each build (`du -sh` on `dist/` outputs; on macOS, drill-down under `.app/Contents/` plus **top 10 largest** entries under `Frameworks/` and `Resources/` via `sort -hr | head -10`) so regressions show up in the Actions log without uploading extra bytes.
 5. **Create releases** with executables attached when you push tags
-6. **Stage the offline documentation bundle** before freezing (`pip install` the `requirements-dev.txt` zensical pin, then `python scripts/build_offline_docs.py`), and **verify** the frozen output contains `resources/help/docs/index.html` — every run, including plain test builds, so Help → Documentation works offline in shipped executables. See [Release step: staging the offline doc bundle](#release-step-staging-the-offline-doc-bundle).
+6. **Stage the offline documentation bundle** before freezing (`pip install --require-hashes -r requirements-docs.txt`, then `python scripts/build_offline_docs.py`), and **verify** the frozen output contains `resources/help/docs/index.html` — every run, including plain test builds, so Help → Documentation works offline in shipped executables. See [Release step: staging the offline doc bundle](#release-step-staging-the-offline-doc-bundle).
 
 ### How to Use
 
@@ -1010,7 +1010,7 @@ Frozen builds ship **Help → Quick Start** HTML from `resources/help/`. When a 
 **Gate cleared 2026-09-14** (audit slice 2a assessed, TRIAGE-038 closed).
 Populate `resources/help/docs/` before freezing. **Automated builds** (`.github/workflows/build.yml`) do this on every run — staging plus a frozen-payload check for `resources/help/docs/index.html` — so the steps below are only needed for **local** builds:
 
-1. Install the dev requirements including the zensical pin (`pip install -r requirements-dev.txt`).
+1. Install the docs requirements (`pip install --require-hashes -r requirements-docs.txt`).
 2. Run `python scripts/build_offline_docs.py` from the repo root. It runs `zensical build --strict` (any warning fails the release step), copies `site/` into `resources/help/docs/` (cleaned first), and verifies `index.html` plus every `mkdocs.yml` nav target is present.
 3. Run PyInstaller as usual (`pyinstaller DICOMViewerV3.spec --clean --noconfirm`). The existing `('resources', 'resources')` datas entry picks up `resources/help/docs/` with no spec changes.
 4. Verify the frozen bundle contains `resources/help/docs/index.html` alongside the nav pages before distributing.

@@ -1,0 +1,14 @@
+# Documentation build and CI tooling: the Zensical docs builder plus PyYAML
+# (parser for scripts/check_action_pins.py). Installed with
+#   pip install --require-hashes -r requirements-docs.txt
+# by the docs CI job, the offline-docs bundle in build.yml, the action-pins job,
+# and the "Build documentation" launcher menu entries.
+#
+# requirements-docs.txt is compiled from this file by
+# scripts/compile_requirements.py, constrained by requirements.txt and
+# requirements-dev.txt so versions cannot drift from the dev lock. The floors
+# below must stay in step with the same lines in requirements-dev.in.
+
+# Cap <0.1 so 0.0.x patches float but a 0.1/1.x release needs explicit review.
+zensical>=0.0.68,<0.1
+PyYAML>=6.0.3

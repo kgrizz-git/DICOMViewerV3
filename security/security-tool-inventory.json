@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_verified": "2026-09-30",
+  "last_verified": "2026-10-21",
   "scope": "Repository security, privacy, compliance, and supporting local-analysis tools intentionally used by DICOM Viewer V3.",
   "policy": {
     "default_data_handling": "local-only",
@@ -56,7 +56,7 @@
       "category": "secret-scanning",
       "purpose": "Fast staged-file secret detection and informational CI second opinion.",
       "install_scope": "application development venv",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.5.0",
       "enforcement": [
         "pre-commit blocking on main",
@@ -92,7 +92,7 @@
       "category": "dependency-vulnerability",
       "purpose": "Audit Python dependencies against published vulnerability data.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "2.10.1",
       "enforcement": [
         "pre-push blocking except reviewed advisories",
@@ -104,6 +104,25 @@
         ".github/workflows/ci.yml"
       ],
       "tracked_configuration": [
+        "security/pip-audit-exceptions.md"
+      ]
+    },
+    {
+      "id": "osv-scanner",
+      "category": "dependency-vulnerability",
+      "purpose": "Scan the committed hashed requirements locks against the OSV database, including win32/darwin-only pins that Linux-only pip-audit does not see.",
+      "install_scope": "CI only (checksum-verified GitHub release binary); optional local Homebrew install",
+      "install_reference": ".github/workflows/ci.yml",
+      "tested_version": "2.7.0 (CI, SHA-256 pinned linux_amd64); 2.6.0 local",
+      "enforcement": [
+        "CI advisory (continue-on-error) until promoted to required in KGRuleset1"
+      ],
+      "network_policy": "api.osv.dev and deps.dev lookups of package names and versions only; no source, SARIF or result upload; release binary downloaded from github.com",
+      "entrypoints": [
+        ".github/workflows/ci.yml"
+      ],
+      "tracked_configuration": [
+        "osv-scanner.toml",
         "security/pip-audit-exceptions.md"
       ]
     },
@@ -362,7 +381,7 @@
       "category": "static-analysis",
       "purpose": "Type-error gate across application and repository scripts.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.39.9",
       "enforcement": [
         "pre-push blocking",
@@ -382,7 +401,7 @@
       "category": "static-analysis",
       "purpose": "Fast lint, import-order, and Python modernization checks.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "0.15.21",
       "enforcement": [
         "pre-commit blocking",
@@ -400,7 +419,7 @@
       "category": "complexity",
       "purpose": "Cyclomatic-complexity and function-size gate.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.24.0",
       "enforcement": [
         "pre-commit blocking",
@@ -420,7 +439,7 @@
       "category": "docstring-coverage",
       "purpose": "Docstring coverage percentage for the main.py split safety net and ongoing docstring-regression gating.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "1.7.0",
       "enforcement": [
         "pre-push blocking"
@@ -436,7 +455,7 @@
       "category": "coverage",
       "purpose": "Local and CI console coverage; reports are never uploaded to third parties.",
       "install_scope": "application development venv and CI",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "7.1.0",
       "enforcement": [
         "pre-push blocking",
@@ -454,7 +473,7 @@
       "category": "license-compliance",
       "purpose": "Generate the third-party dependency/license inventory.",
       "install_scope": "application development venv",
-      "install_reference": "requirements-dev.txt",
+      "install_reference": "requirements-dev.in",
       "tested_version": "5.5.5",
       "enforcement": [
         "manual release maintenance"
@@ -485,6 +504,7 @@
       "tracked_configuration": [
         ".env.example",
         ".envrc",
+        "requirements-dev.in",
         "requirements-dev.txt"
       ]
     },

@@ -3,7 +3,8 @@ name: CI
 # Job DAG (privacy-first):
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
-#      pip-audit-phi-tools, vulnerable-actions, action-pins, repo-harness,
+#      pip-audit-phi-tools, osv-scanner, vulnerable-actions, action-pins,
+#      requirements-lock, repo-harness, launcher-windows,
 #      user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
@@ -16,8 +17,19 @@ name: CI
 # Proposed addition, needs a ruleset change in repository settings:
 #   "pip-audit (app dependencies)"                → ci.yml: pip-audit
 # Until it is added there, that job fails loudly but can still be merged past.
+# Not yet required: "osv-scanner (locked dependencies)" → ci.yml: osv-scanner
+# (advisory, continue-on-error; see the note below).
+# Not yet required: "Launcher (Windows cmd)" -> ci.yml: launcher-windows. It
+# runs launch.bat under cmd.exe on windows-latest and starts as
+# continue-on-error; promote it after it passes on main (tracked in TO_DO.md).
 # Do NOT add "pip-audit (PHI tooling, advisory)"; it is continue-on-error by
 # design and audits an isolated developer environment that is never shipped.
+#
+# "osv-scanner (locked dependencies)" (osv-scanner) is not yet required. It
+# starts as continue-on-error so it can prove itself on main; promote it by
+# removing continue-on-error and adding it to KGRuleset1 (tracked in TO_DO.md,
+# Maintenance, due 2026-11-30). A softened scanner can hide a stopped scan (see
+# the code-scanning note below), so do not leave it advisory.
 #
 # "Known-vulnerable actions (zizmor)" (vulnerable-actions) is deliberately not
 # a required check: it depends on GitHub's advisory database and API, so it
@@ -29,6 +41,12 @@ name: CI
 # version tag contains it or it is on the default branch. It fails
 # closed on API errors. Add it to KGRuleset1 after it has passed on main;
 # until then a red run does not block merge.
+#
+# "Requirements locks match" (requirements-lock) recompiles requirements*.in with
+# the pinned uv and fails when a committed requirements*.txt differs. It needs
+# PyPI access, keeps the existing pins (so a new upstream release alone never
+# fails it), and fails closed if uv cannot resolve. Add it to KGRuleset1 after it
+# has passed on main; until then a red run does not block merge.
 #
 # Cloud-uploading jobs (semgrep, codeql, grype, sonarqube) only run after all
 # privacy checks pass via needs: [privacy-gates].
@@ -148,9 +166,9 @@ jobs:
           # (pip took ~45s here even with a warm wheel cache). Pinned so CI is
           # reproducible; bump deliberately. Other jobs keep pip, and so do the
           # launch scripts, so pip resolution is still exercised in CI.
-          python -m pip install "uv==0.12.23"
-          # requirements-dev.txt includes requirements.txt plus lizard, pytest-cov, etc.
-          uv pip install --system -r requirements-dev.txt
+          python -m pip install "uv==0.13.4"
+          # requirements-dev.txt is the hashed lock of requirements-dev.in; it includes the app lock plus lizard, pytest-cov, etc.
+          uv pip install --system --require-hashes -r requirements-dev.txt
 
       - name: Run tests with coverage
         env:
@@ -223,7 +241,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           # requirements-dev.txt supplies lizard + basedpyright (and app deps).
-          .venv/bin/pip install -r requirements-dev.txt
+          .venv/bin/pip install --require-hashes -r requirements-dev.txt
 
       - name: Run basedpyright (errors must be 0)
         run: .venv/bin/python scripts/check_basedpyright_errors.py
@@ -313,13 +331,13 @@ jobs:
       #
       # PYSEC-2026-2266 — pydicom 2.4.5, fixed in 3.0.2. Cannot upgrade: pylinac
       # caps pydicom<3 (confirmed still true in pylinac 3.47.0), and
-      # requirements.txt records that moving to pydicom 3 needs a coordinated
+      # requirements.in records that moving to pydicom 3 needs a coordinated
       # pylinac bump plus ACR QA re-verification. Unblocks when pylinac ships a
       # release allowing pydicom>=3. Review by 2026-12-31.
       - name: Run pip-audit
         run: >-
           pip-audit --requirement requirements.txt --requirement requirements-dev.txt
-          --requirement requirements-build.txt
+          --requirement requirements-build.txt --requirement requirements-docs.txt
           --ignore-vuln PYSEC-2026-2266
 
   # Advisory: reports, never blocks. See the note above the pip-audit job.
@@ -343,15 +361,178 @@ jobs:
       - name: Install pip-audit
         run: pip install "pip-audit>=2.10.1"
 
+      # presidio-image-redactor 0.0.60 caps pillow<13.0.0, so this isolated
+      # environment resolves to Pillow 12.x (12.3.0), while the app lock is on
+      # 13.0.0. New Pillow advisories keep landing, so a per-ID ignore list
+      # does not hold. scripts/audit_phi_tools.py tolerates one rule instead:
+      # a Pillow advisory, Pillow 12.x installed, lowest fix version 13.0.0. It
+      # fails on advisories in any other package, on Pillow findings with no fix or a
+      # different fix, on Pillow below 12.0.0, and when Pillow >= 13 is
+      # installed (stale exception). Non-Pillow dependencies that pip-audit
+      # skips (the direct-URL en-core-web-lg and dicom-phi-scan) print as
+      # "skipped:" and do not fail. The
+      # environment is never shipped. Unblocks when a presidio-image-redactor
+      # release allows pillow>=13. Review by 2026-12-31; see
+      # security/pip-audit-exceptions.md.
       - name: Run pip-audit for isolated PHI tooling
         run: |
-          if ! pip-audit --requirement requirements-phi-tools.txt; then
+          if ! python scripts/audit_phi_tools.py; then
             echo "::warning title=PHI tooling audit::pip-audit could not clear \
           requirements-phi-tools.txt. This is advisory and does not block the \
           merge, but check whether it is a real vulnerability, a dependency \
           resolution conflict, or the git-URL dependency being unreachable."
             exit 1
           fi
+
+  # Advisory: scans the committed hashed locks with osv-scanner (OSV database,
+  # which also covers win32/darwin-only pins that the Linux-only pip-audit
+  # misses). Runs a checksum-verified release binary, not the Docker action
+  # (mutable image tag, "not intended to be used directly") or the reusable
+  # workflow (needs security-events: write for SARIF). Nothing is uploaded; the
+  # job has contents: read only. Ignores live in osv-scanner.toml and must match
+  # security/pip-audit-exceptions.md (tests/test_osv_scanner_config.py).
+  # Bump: update OSV_SCANNER_VERSION and OSV_SCANNER_SHA256 together, using
+  # osv-scanner_SHA256SUMS from the release (osv-scanner_linux_amd64).
+  osv-scanner:
+    name: osv-scanner (locked dependencies)
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      OSV_SCANNER_VERSION: v2.7.0
+      OSV_SCANNER_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install osv-scanner (checksum verified)
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/osv-scanner"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output "$dest" \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  ${dest}" | sha256sum --check --strict -
+          chmod +x "$dest"
+
+      # Review by 2026-12-31; ignores are in osv-scanner.toml.
+      - name: Scan the committed locks
+        run: |
+          if ! "$RUNNER_TEMP/osv-scanner" scan source --config osv-scanner.toml \
+            -L requirements.txt -L requirements-dev.txt -L requirements-build.txt \
+            -L requirements-docs.txt; then
+            echo "::warning title=OSV scan::osv-scanner reported findings or could \
+          not run. This is advisory and does not block the merge. Check for a \
+          real vulnerability, an api.osv.dev outage, or a stale ignore."
+            exit 1
+          fi
+
+  # Advisory: runs launch.bat under cmd.exe on Windows for real. The selftest
+  # hook (DICOMVIEWER_LAUNCHER_SELFTEST=system|venv) calls one Python 3.12 gate
+  # and exits with its errorlevel, so no menu or pause is involved. The stub
+  # "old Python" is a compiled python.exe: a python.bat would be run without
+  # "call" by the launcher and never return. Scenarios write to %RUNNER_TEMP%
+  # only; nothing in the checkout is modified.
+  launcher-windows:
+    name: Launcher (Windows cmd)
+    needs: [privacy-gates]
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Build the old-Python stub (python.exe reporting 3.11)
+        shell: powershell
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'stub'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $src = 'using System; class P { static int Main(string[] a) { foreach (string s in a) { if (s == "--version") { Console.WriteLine("Python 3.11.9"); return 0; } } return 1; } }'
+          Add-Type -TypeDefinition $src -OutputAssembly (Join-Path $dir 'python.exe') -OutputType ConsoleApplication
+
+      - name: "Scenario (a): real Python 3.12 passes CHECK_SYSTEM_PYTHON"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
+          cmd /d /c "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\a.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\a.log"
+          if not "%RC%"=="0" (echo FAIL scenario a: expected exit 0, got %RC% & exit /b 1)
+          findstr /c:"ERROR" "%RUNNER_TEMP%\a.log" 1>nul 2>nul
+          if not errorlevel 1 (echo FAIL scenario a: unexpected ERROR text & exit /b 1)
+          rem findstr exits 1 when no ERROR text is found; do not let that become the step result.
+          exit /b 0
+
+      - name: "Scenario (b): python 3.11 first on PATH is rejected"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
+          set "PATH=%RUNNER_TEMP%\stub;%PATH%"
+          cmd /d /c "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\b.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\b.log"
+          if not "%RC%"=="1" (echo FAIL scenario b: expected exit 1, got %RC% & exit /b 1)
+          findstr /c:"needs Python 3.12" "%RUNNER_TEMP%\b.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario b: missing needs Python 3.12 text & exit /b 1)
+          findstr /c:"Python 3.11.9" "%RUNNER_TEMP%\b.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario b: stub was not the python found & exit /b 1)
+
+      - name: "Scenario (c): no python on PATH is reported as not found"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
+          set "PATH=%SystemRoot%\System32"
+          cmd /d /c "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\c.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\c.log"
+          if not "%RC%"=="1" (echo FAIL scenario c: expected exit 1, got %RC% & exit /b 1)
+          findstr /c:"not found on PATH" "%RUNNER_TEMP%\c.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario c: missing not found on PATH text & exit /b 1)
+
+      - name: "Scenario (d): CHECK_VENV_PYTHON accepts a 3.12 venv and rejects 3.11"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=venv"
+          mkdir "%RUNNER_TEMP%\real"
+          copy /y "%GITHUB_WORKSPACE%\launch.bat" "%RUNNER_TEMP%\real\launch.bat" 1>nul
+          python -m venv "%RUNNER_TEMP%\real\.venv"
+          if errorlevel 1 (echo FAIL scenario d: could not create venv & exit /b 1)
+          cmd /d /c "%RUNNER_TEMP%\real\launch.bat" > "%RUNNER_TEMP%\d1.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\d1.log"
+          if not "%RC%"=="0" (echo FAIL scenario d real venv: expected exit 0, got %RC% & exit /b 1)
+          mkdir "%RUNNER_TEMP%\old\.venv\Scripts"
+          copy /y "%GITHUB_WORKSPACE%\launch.bat" "%RUNNER_TEMP%\old\launch.bat" 1>nul
+          copy /y "%RUNNER_TEMP%\stub\python.exe" "%RUNNER_TEMP%\old\.venv\Scripts\python.exe" 1>nul
+          cmd /d /c "%RUNNER_TEMP%\old\launch.bat" > "%RUNNER_TEMP%\d2.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\d2.log"
+          if not "%RC%"=="1" (echo FAIL scenario d stub venv: expected exit 1, got %RC% & exit /b 1)
+          findstr /c:"needs Python 3.12" "%RUNNER_TEMP%\d2.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario d stub venv: missing needs Python 3.12 text & exit /b 1)
+          findstr /c:"Python 3.11.9" "%RUNNER_TEMP%\d2.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario d stub venv: missing version text & exit /b 1)
+
+      - name: "Scenario (e): docs lock installs with hashes on Windows"
+        shell: cmd
+        run: |
+          "%RUNNER_TEMP%\real\.venv\Scripts\python.exe" -m pip install --require-hashes -r requirements-docs.txt
+          if errorlevel 1 (echo FAIL scenario e: hashed docs lock did not install & exit /b 1)
 
   # Dependabot alerts are never raised for actions pinned by commit SHA (only
   # for semver tags), so check pinned actions against GitHub's advisory
@@ -429,11 +610,31 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install the workflow parser
-        run: pip install "$(grep '^PyYAML' requirements-dev.txt)"
+        run: pip install --require-hashes -r requirements-docs.txt
       - name: Check that action pins are real commits
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/check_action_pins.py
+
+  requirements-lock:
+    name: Requirements locks match
+    needs: [privacy-gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the pinned lock compiler
+        # Must equal UV_VERSION in scripts/compile_requirements.py (a unit test checks it).
+        run: python -m pip install "uv==0.13.4"
+      - name: Check that requirements*.txt match requirements*.in
+        run: python scripts/check_requirements_lock.py
 
   repo-harness:
     name: Harness docs and agent smoke
@@ -452,7 +653,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install runtime dependencies
-        run: pip install -r requirements.txt
+        run: pip install --require-hashes -r requirements.txt
 
       - name: Check repo harness documentation
         run: python scripts/check_repo_harness.py --root "${{ github.workspace }}"
@@ -503,11 +704,11 @@ jobs:
 
       # Publisher build gate (C2 adopted Zensical): the release-time offline
       # bundle builds from this same config, so keep it warning-free. Pin is
-      # sourced from requirements-dev.txt (single source of truth).
+      # installed from the hashed requirements-docs.txt lock.
       # `python -m` (not the bare binary) so no PATH assumptions are needed.
       - name: Build docs with Zensical (strict)
         run: |
-          pip install "$(grep '^zensical' requirements-dev.txt)"
+          pip install --require-hashes -r requirements-docs.txt
           python -m zensical build --strict
 
       # Warning-only by default: the script exits 0 unless --strict is passed.

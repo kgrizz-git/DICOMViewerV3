@@ -43,13 +43,13 @@ This is a **snapshot** of pylinac usage in **application code** (`src/qa`, Tools
 
 ### Verified pylinac package version
 
-**`requirements.txt`** pins **`pylinac==3.43.2`** and lists **`pypdf>=4.0.0`** as an explicit direct dependency (with a short comment in that file) for merging per-run pylinac PDFs into the combined compare report—see `dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`. The **`pylinac==3.43.2`** pin is the **current** upstream release used with this project’s ACR CT / ACR MRI Large integration (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses); follow **`dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`** after each bump. Other pylinac versions may work but should be treated as **unverified** until that plan (and targeted QA) is completed; update this subsection and the comment in `requirements.txt` whenever the pin changes.
+**`requirements.in`** pins **`pylinac==3.43.2`** and lists **`pypdf>=6.21.2`** as an explicit direct dependency (with a short comment in that file) for merging per-run pylinac PDFs into the combined compare report—see `dev-docs/plans/completed/MRI_COMPARE_COMBINED_PDF_PLAN.md`. The **`pylinac==3.43.2`** pin is the **currently validated** upstream version and the project pin for this project’s ACR CT / ACR MRI Large integration (constructors, `analyze()`, optional `check_uid`, and the relaxed scan-extent subclasses); follow **`dev-docs/plans/completed/DEPENDENCY_BUMP_VERIFICATION_PLAN.md`** after each bump. Other pylinac versions may work but should be treated as **unverified** until that plan (and targeted QA) is completed; update this subsection and the comment in `requirements.in` whenever the pin changes, then recompile the `.txt` locks with `python scripts/compile_requirements.py`.
 
 `reportlab` (a pylinac transitive dependency) is also used directly by the viewer to build the compare-mode summary page.
 
 ### pydicom version compatibility (pylinac caps `pydicom<3`)
 
-**The app stays on pydicom 2.x because pylinac caps it.** `requirements.txt` allows `pydicom>=2.4.0,<3`; the `<3` ceiling comes from **`pylinac 3.43.2` → `pydicom<3,>=2.0`** (and the **latest** pylinac, 3.44.0 PyPI / 3.45.0 dev, **still** caps `<3` as of 2026-06-14). This same cap blocks **highdicom** and the BSD **imagecodecs** decoder (see [`HIGHDICOM_OVERVIEW.md`](HIGHDICOM_OVERVIEW.md) §4a, [decoder strategy](PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md)).
+**The app stays on pydicom 2.x because pylinac caps it.** `requirements.in` allows `pydicom>=2.4.5,<3` (the compiled `requirements.txt` lock holds the installed pin); the `<3` ceiling comes from **`pylinac 3.43.2` → `pydicom<3,>=2.0`** (and the **latest** pylinac, 3.44.0 PyPI / 3.45.0 dev, **still** caps `<3` as of 2026-06-14). This same cap blocks **highdicom** and the BSD **imagecodecs** decoder (see [`HIGHDICOM_OVERVIEW.md`](HIGHDICOM_OVERVIEW.md) §4a, [decoder strategy](PYLIBJPEG_ALTERNATIVES_AND_DICOM_DECODER_STRATEGY.md)).
 
 **The cap is conservative — pylinac 3.43.2 actually runs fine on pydicom 3.0.2.** Spike (2026-06-14): the only code-level incompatibility is `pylinac/core/image.py` importing `pydicom.pixel_data_handlers` (`apply_rescale`), reorganized into `pydicom.pixels` in v3 — but pydicom 3.0.2 still ships that shim. Validation forced `pydicom==3.0.2` past the cap and compared full results vs 2.4.5:
 
@@ -158,7 +158,7 @@ Because pylinac is also Python‑based, and DICOMViewerV3 already uses **pydicom
 - `scipy`
 - `scikit-image`
 
-From a dependency standpoint, integration mostly means **adding pylinac + SciPy/scikit‑image** to `requirements.txt`, which is low risk.
+From a dependency standpoint, integration mostly means **adding pylinac + SciPy/scikit‑image** to `requirements.in` (then recompile the lock), which is low risk.
 
 ### 2.2 ACR (CT and MRI) vs. CatPhan in this project
 
@@ -304,7 +304,7 @@ scipy                # numeric routines used by pylinac
 scikit-image         # image processing utilities used by pylinac
 ```
 
-These should be added to `requirements.txt` once we commit to implementing integration.
+These should be added to `requirements.in` once we commit to implementing integration.
 
 **Runtime checks:**
 - The PoC should **gracefully handle missing pylinac**:
@@ -393,7 +393,7 @@ def run_acr_analysis(dicom_paths: list[str], modality: str) -> ACRAnalysisResult
     )
 ```
 
-> **Important:** Pylinac class names/attributes vary across versions. Before implementation, lock a tested pylinac version in `requirements.txt`, then update adapter code to match that exact API.
+> **Important:** Pylinac class names/attributes vary across versions. Before implementation, lock a tested pylinac version in `requirements.in`, then update adapter code to match that exact API.
 
 5. **Displaying results**
    - When the analysis completes, the main thread:

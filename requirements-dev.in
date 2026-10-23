@@ -1,0 +1,63 @@
+# Development and local security scanning (optional)
+#
+# Install everything needed to run the app, tests, and the CLI tools documented in
+# dev-docs/SECURITY_TOOLS_CLI_GUIDE.md:
+#   pip install -r requirements-dev.txt
+# (requirements-dev.txt is compiled from this file; see requirements.in.)
+#
+# This pulls in application + test dependencies from requirements.txt, then adds
+# Python-based security scanners. Semgrep runs in an isolated uvx environment
+# locally and in its own CI job; its pinned transitive dependencies must not
+# constrain the application dependency audit. End users who only run the viewer
+# can use requirements.txt alone.
+#
+# TruffleHog v3 is installed as an official binary (not from PyPI):
+#   powershell -ExecutionPolicy Bypass -File .\scripts\install-trufflehog-v3.ps1
+# See dev-docs/SECURITY_TOOLS_CLI_GUIDE.md for details.
+
+-r requirements.in
+
+# Lock compiler for the requirements*.txt files. The version must match the
+# `uv==` pin in .github/workflows/ci.yml and UV_VERSION in
+# scripts/compile_requirements.py (tests/test_compile_requirements.py enforces it).
+uv==0.13.4
+
+detect-secrets>=1.5.0
+pip-audit>=2.10.1
+# Generates the third-party attribution SBOM (THIRD_PARTY_LICENSES.md) with full
+# license texts. Used by scripts/generate_third_party_licenses.py — NOT by the
+# pre-commit license gate (that is stdlib-only). See dev-docs/info/DEPENDENCY_LICENSE_POLICY.md.
+pip-licenses>=5.5.5
+# Type checker CLI (matches common IDE Pyright/Based Pyright settings); run from repo root:
+#   basedpyright [files...]
+basedpyright>=1.40.2
+# Coverage for local + CI summaries; reports are not uploaded to third parties.
+pytest-cov>=7.1.0
+# Parallel test execution (pytest-xdist): splits tests across workers.
+pytest-xdist>=3.8.0
+# Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
+ruff>=0.16.10
+# Complexity analysis (cyclomatic complexity, NLOC, etc.). Pin to keep the
+# grandfathered CCN baseline reproducible in local checks and CI.
+lizard==1.24.1
+# Docstring coverage measurement (percentage of documented functions/classes).
+# Used by MAIN_PY_REFACTOR_PLAN.md to gate docstring regressions during the
+# main.py split; run from repo root:
+#   python -m interrogate src/main_app_*.py src/main.py --ignore-init-method -f <baseline>
+interrogate>=1.7.0
+
+# Local static user-docs layout pilot (MkDocs Material) — Phase A only.
+# Do NOT adopt Material long-term (EOL ~2026-11-05). Phase CZ Zensical pilot:
+# zensical is the candidate successor; mkdocs/mkdocs-material pins stay as a
+# safety net until C2. Preview: mkdocs serve / mkdocs build. site/ is gitignored.
+# Cap mkdocs<2: Material / this pilot config target the 1.x plugin surface;
+# MkDocs 2.x is not a drop-in. See USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md.
+mkdocs>=1.6.1,<2
+mkdocs-material>=9.7.7,<10
+# Phase CZ Zensical pilot (dev-only): cap <0.1 so 0.0.x patches float but a
+# 0.1/1.x release (likely breaking at this maturity) needs explicit review.
+zensical>=0.0.68,<0.1
+# Direct test dependency (tests/test_docs_config_alignment.py parses mkdocs.yml).
+# Resolves transitively via mkdocs today; pinned explicit so the suite does not
+# depend on that chain.
+PyYAML>=6.0.3

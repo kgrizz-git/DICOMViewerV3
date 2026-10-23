@@ -1,19 +1,22 @@
 # Temporary pip-audit Exceptions
 
-**Last reviewed:** 2026-10-13
+**Last reviewed:** 2026-10-22
+
+This file is the single source of truth for dependency-scan suppressions. The `ci.yml` `--ignore-vuln` flags (app lane) and the PHI-lane rule in `scripts/audit_phi_tools.py`, with `osv-scanner.toml` (`[[IgnoredVulns]]`, each with a reason and an `ignoreUntil` date) must match it. `tests/test_osv_scanner_config.py` enforces that. OSV also suppresses the aliases of an ignored ID, so `PYSEC-2026-2266` covers `CVE-2026-32711` and `GHSA-v856-2rf8-9f28`.
 
 These exceptions keep the dependency-audit workflow actionable while compatibility work is completed. They are not assertions that the vulnerabilities are harmless, and they do not suppress Grype, Semgrep, or runtime PHI protections.
 
 | Advisory | Affected package | Fixed version | Why the project cannot upgrade yet | Remove the exception when |
 |---|---|---:|---|---|
 | `PYSEC-2026-2266` | `pydicom 2.4.5` | `3.0.2` | `pylinac` declares `pydicom<3` (confirmed still true in pylinac 3.47.0); this is a clinical QA dependency and its upgrade requires the documented verification plan. | A compatible Pylinac release permits pydicom 3 **and** the required dependency-bump / ACR-QA verification is complete. |
+| Rule: every Pillow 12.x advisory whose lowest fix is `13.0.0` (PHI-tooling lane only; enforced by `scripts/audit_phi_tools.py`, no per-ID list) | `pillow 12.x` in the isolated `requirements-phi-tools.txt` environment | `13.0.0` | `presidio-image-redactor 0.0.60` declares `pillow<13.0.0`. The app and its locks are already on Pillow 13.0.0; only the separate, never-shipped PHI scanning venv stays on 12.x. The advisory-only `pip-audit-phi-tools` job runs `scripts/audit_phi_tools.py`, which fails on advisories in any other package, on a Pillow advisory with no fix or a fix other than 13.0.0, when Pillow is below 12.0.0, and when Pillow 13 or later is installed (stale exception). Non-Pillow dependencies that pip-audit skips (the direct-URL `en-core-web-lg` and `dicom-phi-scan`) are printed as `skipped:` and are non-fatal by design. The blocking `pip-audit` job has no Pillow exception. | A `presidio-image-redactor` release allowing `pillow>=13` is pinned in `requirements-phi-tools.txt`. |
 
 Previously excepted and **removed on 2026-09-07** after a workflow audit found they no longer match anything in the audited dependency set (`requirements.txt`, `requirements-dev.txt`, `requirements-build.txt`): `PYSEC-2026-2132` (click), `CVE-2026-52870` / `CVE-2026-52869` / `CVE-2026-59950` (all `mcp 1.23.3`, a transitive dev-only dependency of Semgrep). Re-run without the corresponding `--ignore-vuln` before re-adding any of them.
 
 ## Monitoring and review
 
 - Dependabot checks root Python requirement files monthly (on the 1st, 03:00 UTC) for version updates; security-update PRs for vulnerable dependencies are not tied to that schedule. It already has an open Pylinac update PR; review every Pylinac or Semgrep update PR against this table before merging.
-- The `pip-audit` workflow runs weekly at 06:00 UTC and on requirement changes. The single exception is intentional and explicit in the workflow so new findings still fail CI.
+- The `pip-audit` workflow runs weekly at 06:00 UTC and on requirement changes. The single blocking-job exception is intentional and explicit in the workflow so new findings still fail CI.
 - The job resolves package metadata from PyPI live. A PyPI outage can fail it with a `ServiceError` (observed 2026-09-28: `503 … Backend is unhealthy for url: https://pypi.org/pypi/sqlcipher3/0.6.2/json`) — that is infrastructure flakiness, not a security finding; re-run the failed job before investigating dependencies.
 - Reassess this exception no later than **2026-12-31**, and immediately after a relevant Dependabot PR or upstream security release.
 - Dependabot will create a version-update PR when its monthly check finds a qualifying direct-dependency release. To receive that PR and Dependabot security-alert notifications, the repository owner must watch this repository with **All Activity**, or use **Custom** watch settings with at least **Pull requests** and **Security alerts** enabled. Keep at least one Dependabot PR active (merge, close, or otherwise interact with it) within 90 days: GitHub can pause updates for inactive repositories.

@@ -22,7 +22,7 @@ the process. A missing commit is a finding, not a skipped pin.
 
 Inputs:
     Workflow YAML under ``.github/workflows`` (or ``--workflows``).
-    PyYAML (``requirements-dev.txt``).
+    PyYAML (floor in ``requirements-dev.in``, locked in ``requirements-dev.txt``).
     A GitHub token in the environment.
 
 Outputs:

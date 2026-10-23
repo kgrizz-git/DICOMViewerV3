@@ -19,6 +19,9 @@ try:
 except ModuleNotFoundError:
     from privacy_console import print_redacted
 
+# The compiled, hash-pinned locks: they are what actually gets installed. The
+# ``.in`` floors need no separate entry, because any floor change must be
+# recompiled into these files (CI "Requirements locks match" enforces that).
 REQUIREMENT_FILES = ("requirements.txt", "requirements-dev.txt")
 STAMP_NAME = ".requirements-dev.sha256"
 
