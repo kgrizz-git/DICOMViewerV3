@@ -244,6 +244,24 @@ def test_launch_bat_gates_before_venv_and_pip() -> None:
     assert install.index("call :CHECK_VENV_PYTHON") < install.index("-m pip install")
 
 
+def test_launch_command_gates_existing_venv_run_path() -> None:
+    text = _launcher_text("launch.command")
+    run = text[text.index("run_with_check() {") : text.index("delete_venv() {")]
+    assert 'require_python_312 "$VENV_PY" existing' in run
+    assert run.index('require_python_312 "$VENV_PY" existing') < run.index(
+        "import pydicom, PySide6, numpy, PIL"
+    )
+
+
+def test_launch_bat_gates_existing_venv_run_path() -> None:
+    text = _launcher_text("launch.bat")
+    run = text[text.index("\n:RUN_PY_OK\n") : text.index("\n:RUN_ACTIVATED\n")]
+    assert "call :CHECK_VENV_PYTHON" in run
+    assert run.index("call :CHECK_VENV_PYTHON") < run.index(
+        "import pydicom, PySide6, numpy, PIL"
+    )
+
+
 def test_docs_lock_pins_agree_with_dev_lock() -> None:
     pin = re.compile(r"^([A-Za-z0-9_.-]+)==(\S+) ", re.MULTILINE)
     dev = {

@@ -145,6 +145,7 @@ run_with_check() {
         echo "  $VENV_PY"
         exit 1
     fi
+    require_python_312 "$VENV_PY" existing || exit 1
     # Recover from a half-created venv (folder exists, packages never installed).
     if ! "$VENV_PY" -c "import pydicom, PySide6, numpy, PIL" >/dev/null 2>&1; then
         echo ""

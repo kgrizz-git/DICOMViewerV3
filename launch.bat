@@ -166,6 +166,8 @@ if exist "%VENV_PY%" if not exist "%VENV_PY%\" goto :RUN_PY_OK
     pause
     goto :END
 :RUN_PY_OK
+call :CHECK_VENV_PYTHON
+if errorlevel 1 goto :END
 rem Recover from a half-created venv (folder exists, packages never installed).
 "%VENV_PY%" -c "import pydicom, PySide6, numpy, PIL" 1>nul 2>nul
 if errorlevel 1 (
