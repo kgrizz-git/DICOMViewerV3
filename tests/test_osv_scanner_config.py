@@ -31,9 +31,13 @@ def _exception_rows() -> list[tuple[set[str], bool]]:
     """Return (advisory IDs, is_phi_lane) for each row of the exceptions table."""
     rows = []
     for line in EXCEPTIONS.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("| `"):
+        if not line.startswith(("| `", "| Rule:")):
             continue
         advisory_cell = line.split("|")[1]
+        if advisory_cell.strip().startswith("Rule:"):
+            # Rule row: no per-ID list; enforced by scripts/audit_phi_tools.py.
+            rows.append((set(), "PHI-tooling lane" in advisory_cell))
+            continue
         ids = set(_ID.findall(advisory_cell))
         if ids:
             rows.append((ids, "PHI-tooling lane" in advisory_cell))
@@ -97,3 +101,13 @@ def test_app_pip_audit_ignores_are_recorded() -> None:
     recorded = set().union(*(ids for ids, _ in _exception_rows()))
     for ident in _pip_audit_ignores("pip-audit"):
         assert ident in recorded, f"{ident} has no row in pip-audit-exceptions.md"
+
+
+def test_phi_rule_row_is_enforced_by_the_audit_script() -> None:
+    phi_rows = [ids for ids, phi in _exception_rows() if phi]
+    assert phi_rows, "PHI-lane rule row missing"
+    assert (ROOT / "scripts" / "audit_phi_tools.py").is_file()
+    workflow = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    runs = [s.get("run", "") for s in workflow["jobs"]["pip-audit-phi-tools"]["steps"]]
+    assert any("scripts/audit_phi_tools.py" in r for r in runs)
+    assert _pip_audit_ignores("pip-audit-phi-tools") == set()

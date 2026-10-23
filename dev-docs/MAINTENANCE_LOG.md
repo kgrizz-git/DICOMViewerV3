@@ -1,8 +1,11 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-10-22
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-22
+- **PHI-lane Pillow exception is now a rule.** The advisory `pip-audit-phi-tools` job runs `scripts/audit_phi_tools.py` instead of eight `--ignore-vuln` IDs, which kept going stale as Pillow advisories landed. The script tolerates only Pillow below 13 findings whose lowest fix is 13.0.0 (the presidio `pillow<13` cap). It fails on other packages, unfixed or differently fixed Pillow findings, and Pillow 13 or later (stale exception). Review by 2026-12-31; see `security/pip-audit-exceptions.md`.
 
 ## 2026-10-21
 - **OSV scan of the locks.** The advisory **osv-scanner (locked dependencies)** CI job scans the three committed locks with a SHA-256-pinned osv-scanner 2.7.0 release binary, not the Docker action or reusable workflow (mutable image, SARIF permissions). It uploads nothing and has `contents: read` only. Against the locks it reported only `PYSEC-2026-2266` (pydicom), with no phantom `pip 9.0.3` findings, and it lists the win32 and darwin pins that Linux `pip-audit` skips. `osv-scanner.toml` holds the one ignore. `security/pip-audit-exceptions.md` stays the source of truth, checked by `tests/test_osv_scanner_config.py`. The tool is in `security/security-tool-inventory.json`. Promotion to required is tracked in `TO_DO.md`.
