@@ -467,7 +467,7 @@ jobs:
         shell: cmd
         run: |
           set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
-          call "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\a.log" 2>&1
+          cmd /d /c "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\a.log" 2>&1
           set "RC=%errorlevel%"
           type "%RUNNER_TEMP%\a.log"
           if not "%RC%"=="0" (echo FAIL scenario a: expected exit 0, got %RC% & exit /b 1)
@@ -479,7 +479,7 @@ jobs:
         run: |
           set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
           set "PATH=%RUNNER_TEMP%\stub;%PATH%"
-          call "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\b.log" 2>&1
+          cmd /d /c "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\b.log" 2>&1
           set "RC=%errorlevel%"
           type "%RUNNER_TEMP%\b.log"
           if not "%RC%"=="1" (echo FAIL scenario b: expected exit 1, got %RC% & exit /b 1)
@@ -493,7 +493,7 @@ jobs:
         run: |
           set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
           set "PATH=%SystemRoot%\System32"
-          call "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\c.log" 2>&1
+          cmd /d /c "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\c.log" 2>&1
           set "RC=%errorlevel%"
           type "%RUNNER_TEMP%\c.log"
           if not "%RC%"=="1" (echo FAIL scenario c: expected exit 1, got %RC% & exit /b 1)
@@ -508,14 +508,14 @@ jobs:
           copy /y "%GITHUB_WORKSPACE%\launch.bat" "%RUNNER_TEMP%\real\launch.bat" 1>nul
           python -m venv "%RUNNER_TEMP%\real\.venv"
           if errorlevel 1 (echo FAIL scenario d: could not create venv & exit /b 1)
-          call "%RUNNER_TEMP%\real\launch.bat" > "%RUNNER_TEMP%\d1.log" 2>&1
+          cmd /d /c "%RUNNER_TEMP%\real\launch.bat" > "%RUNNER_TEMP%\d1.log" 2>&1
           set "RC=%errorlevel%"
           type "%RUNNER_TEMP%\d1.log"
           if not "%RC%"=="0" (echo FAIL scenario d real venv: expected exit 0, got %RC% & exit /b 1)
           mkdir "%RUNNER_TEMP%\old\.venv\Scripts"
           copy /y "%GITHUB_WORKSPACE%\launch.bat" "%RUNNER_TEMP%\old\launch.bat" 1>nul
           copy /y "%RUNNER_TEMP%\stub\python.exe" "%RUNNER_TEMP%\old\.venv\Scripts\python.exe" 1>nul
-          call "%RUNNER_TEMP%\old\launch.bat" > "%RUNNER_TEMP%\d2.log" 2>&1
+          cmd /d /c "%RUNNER_TEMP%\old\launch.bat" > "%RUNNER_TEMP%\d2.log" 2>&1
           set "RC=%errorlevel%"
           type "%RUNNER_TEMP%\d2.log"
           if not "%RC%"=="1" (echo FAIL scenario d stub venv: expected exit 1, got %RC% & exit /b 1)

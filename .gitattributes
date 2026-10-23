@@ -1,0 +1,3 @@
+# cmd.exe parses labels and goto targets reliably only with CRLF line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
