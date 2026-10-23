@@ -4,14 +4,11 @@ annotated-types==0.8.0 \
     --hash=sha256:13b2beaad985e05e2d6407ee4c4f35590b11f8d693a258a561055cac8f64cab7 \
     --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
     # via
-    #   -c requirements.txt
     #   pydantic
     #   quaac
 argue==0.3.1 \
     --hash=sha256:d27c307b6bcafcea72024ae436dbb7af0fcddd1adf34b9a93af3263ffc7f0892
-    # via
-    #   -c requirements.txt
-    #   pylinac
+    # via pylinac
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \
     --hash=sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32
@@ -40,14 +37,14 @@ boolean-py==5.0 \
 cachecontrol==0.14.4 \
     --hash=sha256:b7ac014ff72ee199b5f8af1de29d60239954f223e948196fa3d84adaffc71d2b \
     --hash=sha256:e6220afafa4c22a47dd0badb319f84475d79108100d04e26e8542ef7d3ab05a1
-    # via pip-audit
+    # via
+    #   cachecontrol
+    #   pip-audit
 certifi==2026.10.19 \
     --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
     --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
-    # via
-    #   -c requirements.txt
-    #   requests
-cffi==2.1.1 ; platform_python_implementation != 'PyPy' and sys_platform == 'linux' \
+    # via requests
+cffi==2.1.1 \
     --hash=sha256:046bfc24911b37851ee1b51aab8bffe713d89c68c6a057b09484ce9fd5f69b4e \
     --hash=sha256:06c72bb76605a4b0cd0aad6930b69d4baf7dd5d806cfc409b824191099700e66 \
     --hash=sha256:0beceaabe56af686895136a2de78db54ecd8e4046b236b8fd6d6cb61389e9bf2 \
@@ -148,9 +145,7 @@ cffi==2.1.1 ; platform_python_implementation != 'PyPy' and sys_platform == 'linu
     --hash=sha256:f8ec5e643a9a937f64e1999eb9f75d072263751912dc5cd06d3c85f8f44be7c3 \
     --hash=sha256:fb92203a88b3d3053034db775110081c49d28be6551923805e039924093761e4 \
     --hash=sha256:fcd22650c908d7b7da162bbfaab594a1227a15d1643a98c68b122ac642fa2264
-    # via
-    #   -c requirements.txt
-    #   cryptography
+    # via cryptography
 charset-normalizer==3.5.2 \
     --hash=sha256:01077390b03f7988f11d700a2194e69b119741a86b1a638b1db88891e3eced8e \
     --hash=sha256:01b0c0d2262a9e28e8484a278c7e1b5d650e3ac8cf2683d2967e25899f208bdf \
@@ -325,7 +320,6 @@ charset-normalizer==3.5.2 \
     --hash=sha256:fd1fbe0f116b6e55da77aca2c6ddcddcfac2186cbf78bdebf40fc156efca389d \
     --hash=sha256:fe9753dfee015c570d73df76f899f18444d41388bffcde097deba51c4fadbb9f
     # via
-    #   -c requirements.txt
     #   reportlab
     #   requests
 click==8.5.0 \
@@ -339,12 +333,8 @@ colorama==0.4.6 \
     --hash=sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44 \
     --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
     # via
-    #   -c requirements.txt
     #   interrogate
-    #   mkdocs
     #   mkdocs-material
-    #   pytest
-    #   tqdm
 contourpy==1.4.0 \
     --hash=sha256:018227e134b73090b06f911e773a526c77c9af426be29065500ce096a5accd4c \
     --hash=sha256:072a702e2e178f4fcf96f04775d0c059e4c917925abf0d3208ebb6865df3c23d \
@@ -416,9 +406,7 @@ contourpy==1.4.0 \
     --hash=sha256:f863c6100bf926cf47d13f3cd75f9bb8ebd98aaab230eeb4468b91f98f39a6b3 \
     --hash=sha256:fa1b787362a3856e63dd2b89449f6c384d55ee1beb8f94f4bcc871b40f02462c \
     --hash=sha256:fc9feef8f1f001c5b87decadc67c4a5d1eebb62ca39c4763d1237ff62cf2b707
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 coverage==7.16.2 \
     --hash=sha256:00d3eb96e9988c45f50cccd1f1496571ac5c1f91386ac02c4d55516eeda19a24 \
     --hash=sha256:01c6908bc613b420c26c818fe948e1b97dfd041a53c98b01c63bd8321f5c9aae \
@@ -542,7 +530,7 @@ coverage==7.16.2 \
     --hash=sha256:fb9d92ecfe2d5b494367c67f7446f8b75b68d8d0c8cf3bc3e6997478be25d9e2 \
     --hash=sha256:fd3d72233eb8b48acc94fa57d44e2d32ce8e7abed02882ccb6d855ccc4ed33ec
     # via pytest-cov
-cryptography==50.0.2 ; sys_platform == 'linux' \
+cryptography==50.0.2 \
     --hash=sha256:0ddc924c04591c2811ca024d62ecad4f7f6f08af8939c211438f48a16bd23602 \
     --hash=sha256:0ec5f09541743261e66e291b4a0cbf0fb2997aeaab6d9e9c740b9dba1b58d1c2 \
     --hash=sha256:0ecbc5652bdb6fc9eaf89a7d196e20941adfe812f43bc4ca05d9150496821047 \
@@ -602,15 +590,11 @@ cryptography==50.0.2 ; sys_platform == 'linux' \
     --hash=sha256:f9f6143a8c75945eb960d9eb98905a441394abfa24afaae239d514ffb2586480 \
     --hash=sha256:fa8f5efb344d6908a1ce62f4a24e2e5780f825d6f53f5f50ec5ffacac72936cb \
     --hash=sha256:fdd28f912fccfec1846a94e2e1e8f9b0012f557f0c46fe4f3eb0d7a87afcf90b
-    # via
-    #   -c requirements.txt
-    #   secretstorage
+    # via secretstorage
 cycler==0.12.1 \
     --hash=sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30 \
     --hash=sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 cyclonedx-python-lib==11.12.0 \
     --hash=sha256:0e807521a921a5c3cb8ce1153f8a61d29eedfe76a46aac2796b7c6b573391a54 \
     --hash=sha256:16767c4039de90c04e9f03348f8f0ed4b8ff842eaa7eefcad3a95685f970dacf
@@ -623,7 +607,6 @@ defusedxml==0.7.1 \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   py-serializable
 detect-secrets==1.5.0 \
@@ -633,22 +616,17 @@ detect-secrets==1.5.0 \
 dnspython==2.9.0 \
     --hash=sha256:9a4aedb833c3c1b49214d04d44d3032ab7a9135f7c1d29a549b4ff78fd82fda9 \
     --hash=sha256:b44dc6b18f07a8b1c56676a19fbfdb5209415b046a9cece286baafa87ff3f7f1
-    # via
-    #   -c requirements.txt
-    #   email-validator
+    # via email-validator
 email-validator==2.3.0 \
     --hash=sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4 \
     --hash=sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426
     # via
-    #   -c requirements.txt
     #   pydantic
     #   quaac
 et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
-    # via
-    #   -c requirements.txt
-    #   openpyxl
+    # via openpyxl
 execnet==2.1.2 \
     --hash=sha256:63d83bfdd9a23e35b9c6a3261412324f964c2ec8dcd8d3c6916ee9373e0befcd \
     --hash=sha256:67fba928dd5a544b783f6056f449e5e3931a5c378b128bc18501f7ea79e296ec
@@ -716,14 +694,10 @@ fonttools==4.67.0 \
     --hash=sha256:fc6b6b03aa44f504c8734e62ccc3e4dcda9f4b8213a85aa80742e4d1cc9d96ef \
     --hash=sha256:fcb9743140419410161acfe7ec205fb0a8a703acfccb85b586becb5a97c047c9 \
     --hash=sha256:fd79e36c2968e9fc3e1b082f2ba7dc63ae88a161a3d8ceaa0746b906455f3617
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 future==0.18.3 \
     --hash=sha256:34a17436ed1e96697a86f9de3d15a3b0be01d8bc8de9c1dffd59fb8234ed5307
-    # via
-    #   -c requirements.txt
-    #   py-linq
+    # via py-linq
 ghp-import==2.1.0 \
     --hash=sha256:8337dd7b50877f163d4c0289bc1f1c7f127550241988d568c1db512c4324a619 \
     --hash=sha256:9c535c4c61193c2df8871222567d7fd7e5014d835f97dc7b7439069e2413d343
@@ -732,14 +706,12 @@ idna==3.20 \
     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
     # via
-    #   -c requirements.txt
     #   email-validator
     #   requests
 imageio==2.38.0 \
     --hash=sha256:474ea3a39e36e0e8e02d81d7f10412aaecec7a2825e5fbc4f44cbcd7bb7cebfc \
     --hash=sha256:fe1d406862f6bc2930e8ec662d7bc40d4370cb76e3390dcd33819560d2708531
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   scikit-image
 imageio-ffmpeg==0.6.0 \
@@ -750,15 +722,11 @@ imageio-ffmpeg==0.6.0 \
     --hash=sha256:b1ae3173414b5fc5f538a726c4e48ea97edc0d2cdc11f103afee655c463fa742 \
     --hash=sha256:c7e46fcec401dd990405049d2e2f475e2b397779df2519b544b8aab515195282 \
     --hash=sha256:e2556bed8e005564a9f925bb7afa4002d82770d6b08825078b7697ab88ba1755
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 iniconfig==2.3.1 \
     --hash=sha256:67f4b9c50da0dedf52af349e7749a80a9057a5031199791b906c3bb3ae878960 \
     --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
-    # via
-    #   -c requirements.txt
-    #   pytest
+    # via pytest
 interrogate==1.7.0 \
     --hash=sha256:a320d6ec644dfd887cc58247a345054fc4d9f981100c45184470068f4b3719b0 \
     --hash=sha256:b13ff4dd8403369670e2efe684066de9fcb868ad9d7f2b4095d8112142dc9d12
@@ -766,26 +734,19 @@ interrogate==1.7.0 \
 jaraco-classes==3.4.0 \
     --hash=sha256:47a024b51d0239c0dd8c8540c6c7f484be3b8fcf0b2d85c13825780d3b3f3acd \
     --hash=sha256:f662826b6bed8cace05e7ff873ce0f9283b5c924470fe664fff1c2f00f581790
-    # via
-    #   -c requirements.txt
-    #   keyring
+    # via keyring
 jaraco-context==6.1.2 \
     --hash=sha256:bf8150b79a2d5d91ae48629d8b427a8f7ba0e1097dd6202a9059f29a36379535 \
     --hash=sha256:f1a6c9d391e661cc5b8d39861ff077a7dc24dc23833ccee564b234b81c82dfe3
-    # via
-    #   -c requirements.txt
-    #   keyring
+    # via keyring
 jaraco-functools==4.6.0 \
     --hash=sha256:880c577ec9720b3a052d5bc611fb9f2269b3d87902ef42440df443b88e443280 \
     --hash=sha256:99e3dc0060c5cbe8fcd1cdb36258e2a65ca40f1566b2033b12abb1bb44dd3c30
-    # via
-    #   -c requirements.txt
-    #   keyring
-jeepney==0.9.0 ; sys_platform == 'linux' \
+    # via keyring
+jeepney==0.9.0 \
     --hash=sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683 \
     --hash=sha256:cf0e9e845622b81e4a28df94c40345400256ec608d0e55bb8a3feaa9163f5732
     # via
-    #   -c requirements.txt
     #   keyring
     #   secretstorage
 jinja2==3.1.6 \
@@ -798,9 +759,7 @@ jinja2==3.1.6 \
 keyring==25.7.0 \
     --hash=sha256:be4a0b195f149690c166e850609a477c532ddbfbaed96a404d4e43f8d5e2689f \
     --hash=sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 kiwisolver==1.5.1 \
     --hash=sha256:007a5553dfc4f4e8d184f588a0200e2cd4b63a59cc8796df3c39909e679dc7a0 \
     --hash=sha256:0324cd2567259b7a095f6cf18a52b0ffc6f3de9e69528ff1bc0e7a37bd43ff1a \
@@ -943,15 +902,11 @@ kiwisolver==1.5.1 \
     --hash=sha256:f9b1c4900736e489a812c529100de4b8fb617d4db075e931e213c57424b83d9b \
     --hash=sha256:fc271a6f0a2126958f4090e5507b9da5848927dae331f8f763bd4aa642b3d2cd \
     --hash=sha256:febcce10f2bcdbb80b4ea919238a6a4ac13dbc4c7cadbe8d5d75c3682f8b5404
-    # via
-    #   -c requirements.txt
-    #   matplotlib
+    # via matplotlib
 lazy-loader==0.6 \
     --hash=sha256:2f4b7824d6401958639008a0cae20c776b61dff619accd6890693e2de8260167 \
     --hash=sha256:77253be3391b06124a0e16105bd663b6c54470af1a9ca8e1cf026f38d58ed056
-    # via
-    #   -c requirements.txt
-    #   scikit-image
+    # via scikit-image
 license-expression==30.4.4 \
     --hash=sha256:421788fdcadb41f049d2dc934ce666626265aeccefddd25e162a26f23bcbf8a4 \
     --hash=sha256:73448f0aacd8d0808895bdc4b2c8e01a8d67646e4188f887375398c761f340fd
@@ -1182,7 +1137,6 @@ matplotlib==3.11.2 \
     --hash=sha256:f2ac30cf5eb5dff1b584627ae0b0e1186551a4f69ae3c75073911da497a29170 \
     --hash=sha256:fea03cf56568cc1cba08b470be6a0559e71c3a5b688d54b7179bb35ba23d0821
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   pylinac
     #   vtk
@@ -1218,7 +1172,6 @@ more-itertools==11.2.1 \
     --hash=sha256:35a7377edd1dd6608dcb2cdf534ded55ea32d49448875ad042cd3f879fb1ded0 \
     --hash=sha256:cbf08fd0af284dc69718b9b76a8e6203df624d70209ea511e4219d350c856f63
     # via
-    #   -c requirements.txt
     #   jaraco-classes
     #   jaraco-functools
 msgpack==1.2.3 \
@@ -1317,15 +1270,11 @@ msgpack==1.2.3 \
 narwhals==2.27.1 \
     --hash=sha256:aed93076a3ea42d9c32c88e4eb5ea422a21937011cbe1f480f9572a523c82094 \
     --hash=sha256:d057df13f5852b8e157596e82eb5e955fad267425df5e420e0ee9863da483b31
-    # via
-    #   -c requirements.txt
-    #   plotly
+    # via plotly
 networkx==3.7 \
     --hash=sha256:e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0 \
     --hash=sha256:fd77a511bd90f39f3d016351345b52cf5319b813bdca01de3f755d3cca62e96a
-    # via
-    #   -c requirements.txt
-    #   scikit-image
+    # via scikit-image
 nodejs-wheel-binaries==24.19.0 \
     --hash=sha256:1c890adf4b7e6556ccc1ca66c866bb81884b6c9a581dee4e530dc7f78fb9d514 \
     --hash=sha256:28d078b2ced9e2069516e652dc4b1380e7a1a7f2d3934eccd1611586d283ba4c \
@@ -1405,7 +1354,6 @@ numpy==2.5.4 \
     --hash=sha256:fe4d21ab149f15e4e6043dfb0de87e6e5f34ac176cde83060e9802981fca2ac2 \
     --hash=sha256:ffa6ce09a1c6a08e9667dd9c97aa0b14184e8d18f2a14b78b2a2328c9147f076
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   contourpy
     #   imageio
@@ -1421,9 +1369,7 @@ numpy==2.5.4 \
 openpyxl==3.1.5 \
     --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2 \
     --hash=sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 packageurl-python==0.17.6 \
     --hash=sha256:1252ce3a102372ca6f86eb968e16f9014c4ba511c5c37d95a7f023e2ca6e5c25 \
     --hash=sha256:31a85c2717bc41dd818f3c62908685ff9eebcb68588213745b14a6ee9e7df7c9
@@ -1432,7 +1378,6 @@ packaging==26.3 \
     --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
     # via
-    #   -c requirements.txt
     #   lazy-loader
     #   matplotlib
     #   mkdocs
@@ -1537,17 +1482,12 @@ pillow==13.0.0 \
     --hash=sha256:ff3fe9eb621fbb9db4c4be33ab946f6bac5f98ab50ca8d3260503653656c961b \
     --hash=sha256:ffea6b2986a797c84b6d1d27d4f43e0b83c73fc16281a930891cd237cf0d08fe
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   imageio
     #   matplotlib
     #   pylinac
     #   reportlab
     #   scikit-image
-pip==26.2.2 \
-    --hash=sha256:3a8e5c800492787f33a4114ef54444546c340df428974ebba17e0fd47e11af2f \
-    --hash=sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70
-    # via pip-api
 pip-api==0.0.35 \
     --hash=sha256:14dea05d7b3b68f4c7582213e3ae8932bbba8e1f754bf06b95263d5fa6ab4363 \
     --hash=sha256:66990d0da25378555cbb538db79384bab92d4617c6350dfd7a2126ba2a3a9894
@@ -1573,14 +1513,11 @@ platformdirs==4.13.5 \
 plotly==7.1.0 \
     --hash=sha256:dbb7fa18afce40d0a8e80d1bf162eceb3faa0ce5a77fe741ad09a74cf78f53f3 \
     --hash=sha256:f860166a4a3d78c69cb1f4a15f28a5c8283eade98a282a698f3bb853a449ace5
-    # via
-    #   -c requirements.txt
-    #   pylinac
+    # via pylinac
 pluggy==1.7.0 \
     --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec \
     --hash=sha256:d1eaa46ebb595891b860ab086b4d09c8588af65ebd4361b8e8f4bb8920b90ba8
     # via
-    #   -c requirements.txt
     #   pytest
     #   pytest-cov
 prettytable==3.18.0 \
@@ -1594,24 +1531,19 @@ py==1.11.0 \
 py-linq==1.4.0 \
     --hash=sha256:75af1b618b8206e5a9505d1d9f9d1baa91811db9dd2f66c3bd75f72ac9db1551 \
     --hash=sha256:a60cf0e9b30311e1e0f50a6adbe0badaece248afc1992f424281db8b4cc9b673
-    # via
-    #   -c requirements.txt
-    #   pylinac
+    # via pylinac
 py-serializable==2.1.0 \
     --hash=sha256:9d5db56154a867a9b897c0163b33a793c804c80cee984116d02d49e4578fc103 \
     --hash=sha256:b56d5d686b5a03ba4f4db5e769dc32336e142fc3bd4d68a8c25579ebb0a67304
     # via cyclonedx-python-lib
-pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy' and sys_platform == 'linux' \
+pycparser==3.11 \
     --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80 \
     --hash=sha256:d875f09c3507d00e1aba0eecc6dcadc1352f30fff09dc6bff2f1c2935e97c2bc
-    # via
-    #   -c requirements.txt
-    #   cffi
+    # via cffi
 pydantic==2.14.1 \
     --hash=sha256:9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454 \
     --hash=sha256:94f478203dd03404682a1ada216965651dd74b1d2d5ffd62e00e0837caab5c26
     # via
-    #   -c requirements.txt
     #   pylinac
     #   quaac
 pydantic-core==2.50.1 \
@@ -1753,21 +1685,18 @@ pydantic-core==2.50.1 \
     --hash=sha256:f77ac30b19221cd9bd3fcfa3d4614eff93140d0572ab730cded17b64adca05f3 \
     --hash=sha256:fe90228920fd8ff2be62622b6bb8a2b11acd65046d50c6b130614b5879605a20
     # via
-    #   -c requirements.txt
     #   pydantic
     #   quaac
 pydicom==2.4.5 \
     --hash=sha256:35a594cc8ebae8dd40b1f632cd7c9f08ecaa147cb9305a9f9fbca2c03f5ccc93 \
     --hash=sha256:ba2077bd76cb49e05fe51c3e1e0b2d77218f50c6c231120b443d29b38ea6b7a8
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   pylinac
 pygments==2.21.0 \
     --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9 \
     --hash=sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   lizard
     #   mkdocs-material
@@ -1801,15 +1730,11 @@ pyjpegls==1.5.1 \
     --hash=sha256:e206e4ade507f6a3066a134d04a68b7c2570a2365f18e43ee2b01a08f3efcd30 \
     --hash=sha256:ef8c9a18b7c2b512a9b665cf3407b8403938263fced4933a997a558c24e2750d \
     --hash=sha256:fb56f056868561a1e49995bcbbe7ba8c38d56838d5c975ef5a0ff887d9189230
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 pylibjpeg==2.1.0 \
     --hash=sha256:25df9496a69e64e98c887fddee12a1271e275b5f74ba804f9bf98a08bb80993e \
     --hash=sha256:2decda24982394533f16f1c6a17a6242f3391b95f69fac56c6a598a6b1362105
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 pylibjpeg-openjpeg==2.6.0 \
     --hash=sha256:0a48368ac27db8b0b9357d7d8f1a397ab9ca0e68abb817a61e4df98cd67c2d13 \
     --hash=sha256:245aa7c0de5df806710bbeb0d04c245aa73a1efe61938fcc2d60fc6ce3afab2e \
@@ -1848,9 +1773,7 @@ pylibjpeg-openjpeg==2.6.0 \
     --hash=sha256:dacb4ec2007ec2584cdaa3c080e83d4cbb83981fbb42b30892a2106887060af5 \
     --hash=sha256:e18f326bcf172d4d2e59db7545dbdae2ff75bb36609c9e083343dcaf14e3cc1d \
     --hash=sha256:ee6630c860263f34088c60b98bb343b1649b78d1299fe9a5c7ef60b88c6626ff
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 pylibjpeg-rle==2.2.0 \
     --hash=sha256:0381aac3efecb46cbbd80a06a5e3f6bad74be72257d7e2eaf0c55a1018afa0c8 \
     --hash=sha256:0664634915a50967165df569e31f44e6dbbc2390164dea02b556254c352e9ab0 \
@@ -1883,15 +1806,11 @@ pylibjpeg-rle==2.2.0 \
     --hash=sha256:d1d7f5e3df1873359b6d859a9c68cdfe7e4b14c539c175ba2f94607fb5df64af \
     --hash=sha256:f6002b44b14ebfa2df6bde6598bef95d31a76a839f511df5a52027e5785bcc5e \
     --hash=sha256:f6901768e0c80f6ed805467a65f535eab941d261d34d2bc787b44b4101130e16
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
-pylinac==3.43.2 \
-    --hash=sha256:86160d087adc86cd59e263dbafad799580e287a2db656c1397d2bd0d1b321113 \
-    --hash=sha256:d82d97d41ce8ccc2dd4ad058fb0f86e3dc13f66c41afab2a7fa36bee46d509f3
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
+pylinac==3.48.0 \
+    --hash=sha256:7d3f5cfa5e08bf2020eeebd654a426ecda0167059b0a6c66ac876357549a6fee \
+    --hash=sha256:c58884226b314db6698c85d72b9c26f8199dc02502a4554542dadbbc7c18b631
+    # via -r requirements.in
 pymdown-extensions==12.3 \
     --hash=sha256:345493a8e3497e24382902903a1c43a28e34a52f2b7571a1c9641429b820ca74 \
     --hash=sha256:a7f2a4e0bc60c6e6babfa7922cfb3b01cd640eb00fb208f3c582e12bae00ea67
@@ -1902,24 +1821,19 @@ pyparsing==3.3.3 \
     --hash=sha256:928ae7e20211f3b6f3915a72f06a0cfd29ab9d24279dd6346b6b1a7146397d36 \
     --hash=sha256:ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4
     # via
-    #   -c requirements.txt
     #   matplotlib
     #   pip-requirements-parser
 pypdf==6.21.2 \
     --hash=sha256:0a3e1c5c886a1be03646c16a04827cc166c2a0575c971b26a4bf89686551c2d4 \
     --hash=sha256:1d44d1a3a200f25062adff0085b02040e4646431ac2ccac22e42679e91466084
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 pyside6==6.12.0 \
     --hash=sha256:22e2ec6407f32b61955a28f91ab55676e60017210285c28f0c381bfeed389414 \
     --hash=sha256:31a8d2893f2f28ab483b1534dde0438f27af6e234593de30425cb4729052d8f8 \
     --hash=sha256:8920e163f60493e18822d20f1e01c7c4bcf9c1c5cfbc68284788896f692594f8 \
     --hash=sha256:d13ed4d0053cc20f3e4e0fdbf12790a9b7f958d7e22c0843411ecfa8c799e2a9 \
     --hash=sha256:efea4c2f2aa54403c45de825865a902a1960a1cc9d5aaa92d4ebb8f4c4cd0708
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 pyside6-addons==6.12.0 \
     --hash=sha256:1d9bcd294ce1c9829194c7d13b01f771a2254b86cb3462cc3399321d2797fdac \
     --hash=sha256:3c079cbaad2ad28bc5bfa92fd6bac4ba28d622b825825e3b4220f0682599b2db \
@@ -1927,7 +1841,6 @@ pyside6-addons==6.12.0 \
     --hash=sha256:4ab38c0017f0453671a9313d3a53ca1c0e378924f54b07e596bcea94a9642391 \
     --hash=sha256:98d8d62010da6605344cee83e5c96fb846170a1f2d924523f10f5d92078b02b0
     # via
-    #   -c requirements.txt
     #   pyside6
     #   pyside6-webengine
 pyside6-essentials==6.12.0 \
@@ -1937,7 +1850,6 @@ pyside6-essentials==6.12.0 \
     --hash=sha256:c76aa689989bf9bb9b45535e0a81c6733294df720b0eed1308fa30d2606b98cc \
     --hash=sha256:c9a95102aa23c1f86516a30d5a9be37552d324eee7e567eb7508973f1218cb42
     # via
-    #   -c requirements.txt
     #   pyside6
     #   pyside6-addons
     #   pyside6-pdf
@@ -1947,23 +1859,18 @@ pyside6-pdf==6.12.0.140 \
     --hash=sha256:4971ba1a0ca15e7c29cfd808e9600aeb46b2305dad01456eb09fa3197166268e \
     --hash=sha256:74287989dd24a82ac1604e27a2d4530a0ab71ff03cdf878c16fdbcf5144373fb \
     --hash=sha256:ce6e4d858df1eb4e2adcbd8ba212f3611ce60f9978881fe10d417f36013a6ff9
-    # via
-    #   -c requirements.txt
-    #   pyside6
+    # via pyside6
 pyside6-webengine==6.12.0.140 \
     --hash=sha256:44d1fac2a057a71b8f947fc5177a95fab8a0ea4e2fda068f223a00fd0193a8c7 \
     --hash=sha256:66a842ccb7f06fa7e357f6d4d63bc2739e3cbc1f93583f314e38c43024fe5f74 \
     --hash=sha256:9a1de2da360d1817c08e9400a2a2fc5234beb3022a22123e15355169e183074e \
     --hash=sha256:c041c9921d7c91c9e51a2c027f434d05c3c59baa2c8f17b71dc8194e77791f06 \
     --hash=sha256:f9b61b1d457a591ee590a6b80515f25a3e61e2576a2a0a70566380f9d9de4ab0
-    # via
-    #   -c requirements.txt
-    #   pyside6
+    # via pyside6
 pytest==9.1.1 \
     --hash=sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313 \
     --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   pytest-cov
     #   pytest-xdist
@@ -1979,7 +1886,6 @@ python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
     # via
-    #   -c requirements.txt
     #   ghp-import
     #   matplotlib
 python-gdcm==3.2.6 \
@@ -2009,15 +1915,7 @@ python-gdcm==3.2.6 \
     --hash=sha256:ec2912f4cf10e2a415141351d16c96a288a227450d4bc92fa89aef1c633c998e \
     --hash=sha256:ec91dd1a7bab0c235d3dcdfe0c7a4703a684a1e16cd8b092e609c4269565c76a \
     --hash=sha256:f44cf5ea4acdaacb465dede71842096c0ede26718f4fd8ceae8efb64a94c2d75
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
-pywin32-ctypes==0.2.3 ; sys_platform == 'win32' \
-    --hash=sha256:8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8 \
-    --hash=sha256:d162dc04946d704503b2edc4d55f3dba5c1d539ead017afa00142c38b9885755
-    # via
-    #   -c requirements.txt
-    #   keyring
+    # via -r requirements.in
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
@@ -2093,7 +1991,6 @@ pyyaml==6.0.3 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
-    #   -c requirements.txt
     #   -r requirements-dev.in
     #   detect-secrets
     #   mkdocs
@@ -2108,20 +2005,15 @@ pyyaml-env-tag==1.1 \
     # via mkdocs
 quaac==1.0.2 \
     --hash=sha256:6eddf7d616de65e733bf7c6d7febf3e466a2c3cf3c969cfc9f508928707cf1dc
-    # via
-    #   -c requirements.txt
-    #   pylinac
+    # via pylinac
 reportlab==5.0.1 \
     --hash=sha256:1c36e6bb0e71780c72331eba60da7f602e8d4389a8723825af71342e49d791e8 \
     --hash=sha256:ebd13154be1c8515e665de70bd2d303ae9ddc3ef47e44afd5116441ca0283a26
-    # via
-    #   -c requirements.txt
-    #   pylinac
+    # via pylinac
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   cachecontrol
     #   detect-secrets
@@ -2202,7 +2094,6 @@ scikit-image==0.26.0 \
     --hash=sha256:f775f0e420faac9c2aa6757135f4eb468fb7b70e0b67fa77a5e79be3c30ee331 \
     --hash=sha256:fac96a1f9b06cd771cbbb3cd96c5332f36d4efd839b1d8b053f79e5887acde62
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   pylinac
 scipy==1.18.1 \
@@ -2268,25 +2159,20 @@ scipy==1.18.1 \
     --hash=sha256:f55fa87b6c612ecd6b058f167c53231b1d14e412efe361d3d6e38b3631c73218 \
     --hash=sha256:fdaf5ea890a6183d0565f51a61799d67081bd5b1cf03c5f4b3fd3732108625c9
     # via
-    #   -c requirements.txt
     #   -r requirements.in
     #   pylinac
     #   scikit-image
-secretstorage==3.5.0 ; sys_platform == 'linux' \
+secretstorage==3.5.0 \
     --hash=sha256:0ce65888c0725fcb2c5bc0fdb8e5438eece02c523557ea40ce0703c266248137 \
     --hash=sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be
-    # via
-    #   -c requirements.txt
-    #   keyring
+    # via keyring
 shiboken6==6.12.0 \
     --hash=sha256:3bde565bb0890044b5c7f63808adddede5abc241e9395a2bfed61919884d6240 \
     --hash=sha256:47105e05baf57d35453e07d240bbe59cb4b8d9565377ea5134ff9fb37d4f5c02 \
     --hash=sha256:a1906cb8116869178c64b6bab52623bbc8b4ceed7b30bfc3c9aa0f6e67f6438e \
     --hash=sha256:da382e68f0815b31b6dc2bce11a465b148c4f42c37b91546a361de1576567d10 \
     --hash=sha256:ff72a72b3277b418902d562b987b33a6f6818bed9fe40a49d634d09bc67f620e
-    # via
-    #   -c requirements.txt
-    #   pyside6-essentials
+    # via pyside6-essentials
 simpleitk==2.5.6 \
     --hash=sha256:0002b298efb31332f99587cf26ed9f42c2c3ec006a0570f492dfc9ea27303d73 \
     --hash=sha256:22b825c609fe5ca114c8acc149a26a94a01bd62e8c9e685f362d5f880e237269 \
@@ -2308,14 +2194,11 @@ simpleitk==2.5.6 \
     --hash=sha256:e4ba60dd948bd9db6adba7a654601e757b2a28013877afb108da1abc6654661e \
     --hash=sha256:f6d98d81f12281cb796a6427f295645de284bcc6b5e2e1958fffea88529ce835 \
     --hash=sha256:fd3d21be01a3a5bfff76fe018d183b4adb64880f2ceed4a4505c42f1907fcbbb
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
     # via
-    #   -c requirements.txt
     #   py-linq
     #   python-dateutil
 sortedcontainers==2.4.0 \
@@ -2401,22 +2284,17 @@ sqlcipher3==0.6.4 \
     --hash=sha256:f4ff0c9f7e60314aeb66306ce74c4f778a162ed8b53ed6ff2a02432ee27b9fa0 \
     --hash=sha256:f81a6a794a9f29ef5b2c7aaf355127efe85a0906bf14a062c20bd9157ab452ee \
     --hash=sha256:ff612c1f731a1870457a3fa4c0095bf27ce13ad7e2035ec3f98a489e2d6ccf5c
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 tabulate==0.9.0 \
     --hash=sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c \
     --hash=sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f
     # via
-    #   -c requirements.txt
     #   interrogate
     #   pylinac
 tifffile==2026.10.15 \
     --hash=sha256:3dcf6c56731a45c1f85c81e90dad922b0a380a2d639e77f71207e010f8ef0f7b \
     --hash=sha256:a5ee666dbd6d62e059830a3450825a2521a981b3f45c07a80ab009484aef56f0
-    # via
-    #   -c requirements.txt
-    #   scikit-image
+    # via scikit-image
 tomli==2.5.0 \
     --hash=sha256:069435bd5480429b98c5e5afb02ab21c219b6f0064680671c6dc0d46817346ea \
     --hash=sha256:0dc598040da8d42cf20f0be588ed7004f46db12a0ac6c32e03a59dccedaaadcd \
@@ -2493,14 +2371,11 @@ tomli-w==1.2.0 \
 tqdm==4.70.1 \
     --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73 \
     --hash=sha256:cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4
-    # via
-    #   -c requirements.txt
-    #   pylinac
+    # via pylinac
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 \
     --hash=sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5
     # via
-    #   -c requirements.txt
     #   cyclonedx-python-lib
     #   pydantic
     #   pydantic-core
@@ -2509,15 +2384,11 @@ typing-extensions==4.16.0 \
 typing-inspection==0.4.4 \
     --hash=sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47 \
     --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
-    # via
-    #   -c requirements.txt
-    #   pydantic
+    # via pydantic
 urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
-    # via
-    #   -c requirements.txt
-    #   requests
+    # via requests
 uv==0.13.4 \
     --hash=sha256:05e4332791b4d55b6dde8695b7fa6079b26991519f44760887c5dfbd5ca4fe53 \
     --hash=sha256:205a4f93e568fb24f45a2f3834f1c0a8f1adb5f396bf473c71030ed707dce048 \
@@ -2567,9 +2438,7 @@ vtk==9.7.1 \
     --hash=sha256:ce93d04e363b26955b661e482c02b5ddd38c11af1b6c7af4395c2ef6baab6b0d \
     --hash=sha256:d5d642e5f0cdb213e2eff5d6de93d0b783a0a05ecd968c15805fde65f6df9926 \
     --hash=sha256:ef4d99933652b708e7a6f0830c6705977313986bbe719bf8d4636bb15a2eb27f
-    # via
-    #   -c requirements.txt
-    #   -r requirements.in
+    # via -r requirements.in
 watchdog==6.0.0 \
     --hash=sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a \
     --hash=sha256:20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2 \
