@@ -209,8 +209,8 @@ def test_launch_command_gates_before_venv_and_pip() -> None:
 def test_launch_bat_gates_before_venv_and_pip() -> None:
     text = _launcher_text("launch.bat")
     setup = text[text.index(":SETUP\n") :]
-    assert setup.index("(3, 12)") < setup.index("-m venv")
-    install = text[text.index(":INSTALL_REQUIREMENTS\n") :]
+    assert setup.index("call :CHECK_SYSTEM_PYTHON") < setup.index("-m venv")
+    install = text[text.index("\n:INSTALL_REQUIREMENTS\n") :]
     assert install.index("call :CHECK_VENV_PYTHON") < install.index("-m pip install")
 
 
@@ -226,3 +226,80 @@ def test_launch_command_zensical_extraction_matches_lock() -> None:
     assert re.fullmatch(r"zensical==\d+(\.\d+)*", out)
     lock = (_ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
     assert f"\n{out} \\\n" in lock
+
+
+def test_launch_command_gates_system_python_path() -> None:
+    text = _launcher_text("launch.command")
+    run_sys = text[text.index("run_sys() {") : text.index("setup_and_run() {")]
+    assert "require_python_312 python3" in run_sys
+    assert run_sys.index("require_python_312 python3") < run_sys.index(
+        'python3 "$SCRIPT_DIR/run.py"'
+    )
+    assert "3.12" in run_sys
+
+
+def test_launch_bat_gates_system_python_path() -> None:
+    text = _launcher_text("launch.bat")
+    run_sys = text[text.index("\n:RUN_SYS\n") : text.index("\n:DELETE\n")]
+    assert "call :CHECK_SYSTEM_PYTHON" in run_sys
+    assert run_sys.index("call :CHECK_SYSTEM_PYTHON") < run_sys.index(
+        'python "%ROOT%run.py"'
+    )
+    assert "3.12" in run_sys
+
+
+def test_launch_bat_separates_missing_python_from_too_old() -> None:
+    text = _launcher_text("launch.bat")
+    check = text[
+        text.index("\n:CHECK_SYSTEM_PYTHON\n") : text.index("\n:CHECK_VENV_PYTHON\n")
+    ]
+    assert "where python" in check
+    assert "Python was not found on PATH" in check
+    assert check.index("where python") < check.index("(3, 12)")
+    assert check.index("Python was not found on PATH") < check.index(
+        "needs Python 3.12"
+    )
+
+
+def _run_require_python_312(py: str, path: str) -> subprocess.CompletedProcess[str]:
+    text = _launcher_text("launch.command")
+    start = text.index("require_python_312() {")
+    end = text.index("install_requirements() {")
+    script = text[start:end] + f'\nrequire_python_312 "{py}"\n'
+    return subprocess.run(
+        ["/bin/bash", "-c", script],
+        capture_output=True,
+        text=True,
+        env={"PATH": path},
+        check=False,
+    )
+
+
+@pytest.mark.skipif(not Path("/bin/bash").exists(), reason="bash not available")
+def test_require_python_312_passes_for_current_interpreter() -> None:
+    import sys
+
+    result = _run_require_python_312(sys.executable, "/usr/bin:/bin")
+    assert result.returncode == 0
+
+
+@pytest.mark.skipif(not Path("/bin/bash").exists(), reason="bash not available")
+def test_require_python_312_fails_for_old_interpreter(tmp_path: Path) -> None:
+    fake = tmp_path / "pyold"
+    fake.write_text(
+        '#!/bin/sh\n[ "$1" = "-c" ] && case "$2" in *version_info*) exit 1;; esac\n'
+        "echo 3.11.0\n"
+    )
+    fake.chmod(0o755)
+    result = _run_require_python_312(str(fake), "/usr/bin:/bin")
+    assert result.returncode == 1
+    assert "needs Python 3.12 or newer" in result.stdout
+    assert "was not found" not in result.stdout
+
+
+@pytest.mark.skipif(not Path("/bin/bash").exists(), reason="bash not available")
+def test_require_python_312_reports_missing_python3(tmp_path: Path) -> None:
+    result = _run_require_python_312("python3", str(tmp_path))
+    assert result.returncode == 1
+    assert "Python was not found on PATH" in result.stdout
+    assert "needs Python 3.12 or newer" not in result.stdout

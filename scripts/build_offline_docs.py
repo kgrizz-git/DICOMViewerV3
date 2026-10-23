@@ -25,7 +25,7 @@ under the running interpreter (``python -m zensical``), or a ``zensical``
 executable on ``PATH`` as fallback.
 Outputs: ``site/`` (normal build output, gitignored) and
 ``resources/help/docs/`` (generated bundle, gitignored).
-Requirements: Python 3.10+ (zensical declares ``requires-python >= 3.10``);
+Requirements: Python 3.12+ (the project requires it; zensical itself needs 3.11+);
 zensical (floor in ``requirements-dev.in``, locked in ``requirements-dev.txt``).
 """
 

@@ -65,7 +65,7 @@ and [qapp fixture reference](https://pytest-qt.readthedocs.io/en/latest/referenc
 
 ## Pylinac
 
-The application pins pylinac in `requirements.txt`; tests must match that
+The application pins pylinac in `requirements.in` (locked in `requirements.txt`); tests must match that
 version's public API and the project's documented viewer-specific behavior.
 Start with unit tests at our boundary. Add a real pylinac integration test only
 when it validates an algorithm, a compatibility assumption, or a regression

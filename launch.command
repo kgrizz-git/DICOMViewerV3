@@ -30,6 +30,12 @@ resolve_venv
 # Usage: require_python_312 <interpreter> [existing-venv]
 require_python_312() {
     local py="$1" existing="$2" found
+    if ! command -v "$py" >/dev/null 2>&1; then
+        echo ""
+        echo "ERROR: Python was not found on PATH ($py)."
+        echo "Install Python 3.12 or newer and make sure it is on your PATH."
+        return 1
+    fi
     if "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' >/dev/null 2>&1; then
         return 0
     fi
@@ -86,12 +92,17 @@ run_activated() {
 }
 
 run_sys() {
+    require_python_312 python3 || {
+        read -rp "Press Enter to close..."
+        exit 1
+    }
     echo ""
     echo "Starting DICOM Viewer (system Python)..."
     if ! python3 "$SCRIPT_DIR/run.py"; then
         echo ""
         echo "DICOM Viewer exited with an error."
-        echo "If you see ModuleNotFoundError, install requirements for this Python:"
+        echo "If you see ModuleNotFoundError, install requirements for this Python"
+        echo "(Python 3.12 or newer is required):"
         echo "  python3 -m pip install -r \"$SCRIPT_DIR/requirements.txt\""
         read -rp "Press Enter to close..."
         exit 1

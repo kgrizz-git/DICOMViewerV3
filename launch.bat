@@ -60,15 +60,8 @@ goto :MENU
 
 :SETUP
 echo.
-python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
-if errorlevel 1 (
-    echo ERROR: DICOM Viewer needs Python 3.12 or newer.
-    echo Found:
-    python --version
-    echo Install Python 3.12 or newer, then run this launcher again.
-    pause
-    goto :END
-)
+call :CHECK_SYSTEM_PYTHON
+if errorlevel 1 goto :END
 echo Creating virtual environment...
 python -m venv "%VENV%"
 if errorlevel 1 (
@@ -133,6 +126,25 @@ if errorlevel 1 (
 echo Requirements installed successfully.
 exit /b 0
 
+:CHECK_SYSTEM_PYTHON
+rem The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
+where python 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: Python was not found on PATH. Install Python 3.12 or newer and make sure it is on your PATH.
+    pause
+    exit /b 1
+)
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
+if errorlevel 1 (
+    echo ERROR: DICOM Viewer needs Python 3.12 or newer.
+    echo Found:
+    python --version
+    echo Install Python 3.12 or newer, then run this launcher again.
+    pause
+    exit /b 1
+)
+exit /b 0
+
 :CHECK_VENV_PYTHON
 rem The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
 "%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
@@ -177,13 +189,16 @@ if errorlevel 1 (
 goto :END
 
 :RUN_SYS
+call :CHECK_SYSTEM_PYTHON
+if errorlevel 1 goto :END
 echo.
 echo Starting DICOM Viewer (system Python)...
 python "%ROOT%run.py"
 if errorlevel 1 (
     echo.
     echo DICOM Viewer exited with an error.
-    echo If you see ModuleNotFoundError, install requirements for this Python:
+    echo If you see ModuleNotFoundError, install requirements for this Python
+    echo ^(Python 3.12 or newer is required^):
     echo   python -m pip install -r "%ROOT%requirements.txt"
     pause
 )
