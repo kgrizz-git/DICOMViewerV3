@@ -4,7 +4,7 @@ name: CI
 #   privacy-gates (reusable: .github/workflows/privacy-gates.yml)
 #   → {request-coderabbit-review, tests, ruff, pyright, lizard, pip-audit,
 #      pip-audit-phi-tools, osv-scanner, vulnerable-actions, action-pins,
-#      requirements-lock, repo-harness,
+#      requirements-lock, repo-harness, launcher-windows,
 #      user-docs-links, semgrep, codeql, grype, sonarqube (push only)}
 #
 # Required status checks (KGRuleset1) — update these in the ruleset if you
@@ -19,6 +19,9 @@ name: CI
 # Until it is added there, that job fails loudly but can still be merged past.
 # Not yet required: "osv-scanner (locked dependencies)" → ci.yml: osv-scanner
 # (advisory, continue-on-error; see the note below).
+# Not yet required: "Launcher (Windows cmd)" -> ci.yml: launcher-windows. It
+# runs launch.bat under cmd.exe on windows-latest and starts as
+# continue-on-error; promote it after it passes on main (tracked in TO_DO.md).
 # Do NOT add "pip-audit (PHI tooling, advisory)"; it is continue-on-error by
 # design and audits an isolated developer environment that is never shipped.
 #
@@ -426,6 +429,106 @@ jobs:
           real vulnerability, an api.osv.dev outage, or a stale ignore."
             exit 1
           fi
+
+  # Advisory: runs launch.bat under cmd.exe on Windows for real. The selftest
+  # hook (DICOMVIEWER_LAUNCHER_SELFTEST=system|venv) calls one Python 3.12 gate
+  # and exits with its errorlevel, so no menu or pause is involved. The stub
+  # "old Python" is a compiled python.exe: a python.bat would be run without
+  # "call" by the launcher and never return. Scenarios write to %RUNNER_TEMP%
+  # only; nothing in the checkout is modified.
+  launcher-windows:
+    name: Launcher (Windows cmd)
+    needs: [privacy-gates]
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Build the old-Python stub (python.exe reporting 3.11)
+        shell: powershell
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'stub'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $src = 'using System; class P { static int Main(string[] a) { foreach (string s in a) { if (s == "--version") { Console.WriteLine("Python 3.11.9"); return 0; } } return 1; } }'
+          Add-Type -TypeDefinition $src -OutputAssembly (Join-Path $dir 'python.exe') -OutputType ConsoleApplication
+
+      - name: "Scenario (a): real Python 3.12 passes CHECK_SYSTEM_PYTHON"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
+          call "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\a.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\a.log"
+          if not "%RC%"=="0" (echo FAIL scenario a: expected exit 0, got %RC% & exit /b 1)
+          findstr /c:"ERROR" "%RUNNER_TEMP%\a.log" 1>nul 2>nul
+          if not errorlevel 1 (echo FAIL scenario a: unexpected ERROR text & exit /b 1)
+
+      - name: "Scenario (b): python 3.11 first on PATH is rejected"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
+          set "PATH=%RUNNER_TEMP%\stub;%PATH%"
+          call "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\b.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\b.log"
+          if not "%RC%"=="1" (echo FAIL scenario b: expected exit 1, got %RC% & exit /b 1)
+          findstr /c:"needs Python 3.12" "%RUNNER_TEMP%\b.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario b: missing needs Python 3.12 text & exit /b 1)
+          findstr /c:"Python 3.11.9" "%RUNNER_TEMP%\b.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario b: stub was not the python found & exit /b 1)
+
+      - name: "Scenario (c): no python on PATH is reported as not found"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=system"
+          set "PATH=%SystemRoot%\System32"
+          call "%GITHUB_WORKSPACE%\launch.bat" > "%RUNNER_TEMP%\c.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\c.log"
+          if not "%RC%"=="1" (echo FAIL scenario c: expected exit 1, got %RC% & exit /b 1)
+          findstr /c:"not found on PATH" "%RUNNER_TEMP%\c.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario c: missing not found on PATH text & exit /b 1)
+
+      - name: "Scenario (d): CHECK_VENV_PYTHON accepts a 3.12 venv and rejects 3.11"
+        shell: cmd
+        run: |
+          set "DICOMVIEWER_LAUNCHER_SELFTEST=venv"
+          mkdir "%RUNNER_TEMP%\real"
+          copy /y "%GITHUB_WORKSPACE%\launch.bat" "%RUNNER_TEMP%\real\launch.bat" 1>nul
+          python -m venv "%RUNNER_TEMP%\real\.venv"
+          if errorlevel 1 (echo FAIL scenario d: could not create venv & exit /b 1)
+          call "%RUNNER_TEMP%\real\launch.bat" > "%RUNNER_TEMP%\d1.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\d1.log"
+          if not "%RC%"=="0" (echo FAIL scenario d real venv: expected exit 0, got %RC% & exit /b 1)
+          mkdir "%RUNNER_TEMP%\old\.venv\Scripts"
+          copy /y "%GITHUB_WORKSPACE%\launch.bat" "%RUNNER_TEMP%\old\launch.bat" 1>nul
+          copy /y "%RUNNER_TEMP%\stub\python.exe" "%RUNNER_TEMP%\old\.venv\Scripts\python.exe" 1>nul
+          call "%RUNNER_TEMP%\old\launch.bat" > "%RUNNER_TEMP%\d2.log" 2>&1
+          set "RC=%errorlevel%"
+          type "%RUNNER_TEMP%\d2.log"
+          if not "%RC%"=="1" (echo FAIL scenario d stub venv: expected exit 1, got %RC% & exit /b 1)
+          findstr /c:"needs Python 3.12" "%RUNNER_TEMP%\d2.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario d stub venv: missing needs Python 3.12 text & exit /b 1)
+          findstr /c:"Python 3.11.9" "%RUNNER_TEMP%\d2.log" 1>nul
+          if errorlevel 1 (echo FAIL scenario d stub venv: missing version text & exit /b 1)
+
+      - name: "Scenario (e): docs lock installs with hashes on Windows"
+        shell: cmd
+        run: |
+          "%RUNNER_TEMP%\real\.venv\Scripts\python.exe" -m pip install --require-hashes -r requirements-docs.txt
+          if errorlevel 1 (echo FAIL scenario e: hashed docs lock did not install & exit /b 1)
 
   # Dependabot alerts are never raised for actions pinned by commit SHA (only
   # for semver tags), so check pinned actions against GitHub's advisory

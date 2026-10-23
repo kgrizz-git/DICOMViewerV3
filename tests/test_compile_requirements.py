@@ -356,3 +356,88 @@ def test_require_python_312_reports_missing_python3(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "Python was not found on PATH" in result.stdout
     assert "needs Python 3.12 or newer" not in result.stdout
+
+
+_SELFTEST_VAR = "DICOMVIEWER_LAUNCHER_SELFTEST"
+
+
+def _ci_launcher_job() -> str:
+    text = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    start = text.index("  launcher-windows:")
+    end = text.index("\n  # Dependabot alerts are never raised", start)
+    return text[start:end]
+
+
+def test_launch_bat_selftest_hook_dispatches_to_both_gates() -> None:
+    text = _launcher_text("launch.bat")
+    assert f"if defined {_SELFTEST_VAR} goto :SELFTEST" in text
+    assert "call :CHECK_SYSTEM_PYTHON\nexit /b %errorlevel%" in text.replace(
+        "\r\n", "\n"
+    )
+    assert "call :CHECK_VENV_PYTHON\nexit /b %errorlevel%" in text.replace("\r\n", "\n")
+    # The hook must run before the interactive menu.
+    assert text.index("goto :SELFTEST") < text.index(":MENU")
+
+
+def test_launch_bat_selftest_hook_is_inert_unless_env_var_set() -> None:
+    lines = _launcher_text("launch.bat").splitlines()
+    uses = [ln for ln in lines if _SELFTEST_VAR in ln and not ln.startswith("rem ")]
+    assert uses, "hook lines not found"
+    allowed = (
+        f"if defined {_SELFTEST_VAR} goto",
+        f"if not defined {_SELFTEST_VAR} pause",
+        f'if /i "%{_SELFTEST_VAR}%"==',
+        f"echo ERROR: {_SELFTEST_VAR} must be",
+    )
+    for ln in uses:
+        assert ln.strip().startswith(allowed), ln
+
+
+def test_launch_bat_pause_skipped_only_by_selftest_in_gate_routines() -> None:
+    text = _launcher_text("launch.bat").replace("\r\n", "\n")
+    start = text.index("\n:CHECK_SYSTEM_PYTHON\n")
+    end = text.index("\n:RUN\n", start)
+    gates = text[start:end]
+    assert "\n    pause\n" not in gates
+    assert gates.count(f"if not defined {_SELFTEST_VAR} pause") == 3
+
+
+def test_launch_bat_selftest_keeps_no_delayed_expansion() -> None:
+    text = _launcher_text("launch.bat")
+    assert "setlocal enabledelayedexpansion" not in text.lower()
+
+
+def test_ci_launcher_windows_job_shape() -> None:
+    job = _ci_launcher_job()
+    assert "name: Launcher (Windows cmd)" in job
+    assert "needs: [privacy-gates]" in job
+    assert "runs-on: windows-latest" in job
+    assert "continue-on-error: true" in job
+    assert "timeout-minutes:" in job
+    assert "contents: read" in job
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "Scenario (a)",
+        "Scenario (b)",
+        "Scenario (c)",
+        "Scenario (d)",
+        "Scenario (e)",
+        f"{_SELFTEST_VAR}=system",
+        f"{_SELFTEST_VAR}=venv",
+        "needs Python 3.12",
+        "not found on PATH",
+        "--require-hashes -r requirements-docs.txt",
+    ],
+)
+def test_ci_launcher_windows_job_covers_scenario(marker: str) -> None:
+    assert marker in _ci_launcher_job()
+
+
+def test_ci_launcher_windows_job_actions_are_sha_pinned() -> None:
+    uses = re.findall(r"uses: (\S+)", _ci_launcher_job())
+    assert uses
+    for ref in uses:
+        assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", ref), ref

@@ -9,6 +9,9 @@ rem Avoid EnableDelayedExpansion so checkout paths containing "!" are not corrup
 setlocal
 set "ROOT=%~dp0"
 call :RESOLVE_VENV
+rem CI hook: DICOMVIEWER_LAUNCHER_SELFTEST=system or venv runs one Python gate and exits.
+rem Unset in normal use, so the menu below is unchanged.
+if defined DICOMVIEWER_LAUNCHER_SELFTEST goto :SELFTEST
 
 :MENU
 cls
@@ -131,7 +134,7 @@ rem The hashed requirements*.txt locks are compiled for Python 3.12 or newer.
 where python 1>nul 2>nul
 if errorlevel 1 (
     echo ERROR: Python was not found on PATH. Install Python 3.12 or newer and make sure it is on your PATH.
-    pause
+    if not defined DICOMVIEWER_LAUNCHER_SELFTEST pause
     exit /b 1
 )
 python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 1>nul 2>nul
@@ -140,7 +143,7 @@ if errorlevel 1 (
     echo Found:
     python --version
     echo Install Python 3.12 or newer, then run this launcher again.
-    pause
+    if not defined DICOMVIEWER_LAUNCHER_SELFTEST pause
     exit /b 1
 )
 exit /b 0
@@ -154,7 +157,7 @@ if errorlevel 1 (
     "%VENV_PY%" --version
     echo Install Python 3.12 or newer. Then choose option 3 ^(Delete virtual environment^)
     echo and create the venv again.
-    pause
+    if not defined DICOMVIEWER_LAUNCHER_SELFTEST pause
     exit /b 1
 )
 exit /b 0
@@ -275,6 +278,18 @@ if not defined VENV if exist "%ROOT%virtualenv\Scripts\python.exe" if not exist 
 if not defined VENV set "VENV=%ROOT%.venv"
 set "VENV_PY=%VENV%\Scripts\python.exe"
 exit /b 0
+
+:SELFTEST
+if /i "%DICOMVIEWER_LAUNCHER_SELFTEST%"=="system" goto :SELFTEST_SYSTEM
+if /i "%DICOMVIEWER_LAUNCHER_SELFTEST%"=="venv" goto :SELFTEST_VENV
+echo ERROR: DICOMVIEWER_LAUNCHER_SELFTEST must be system or venv.
+exit /b 2
+:SELFTEST_SYSTEM
+call :CHECK_SYSTEM_PYTHON
+exit /b %errorlevel%
+:SELFTEST_VENV
+call :CHECK_VENV_PYTHON
+exit /b %errorlevel%
 
 :END
 endlocal

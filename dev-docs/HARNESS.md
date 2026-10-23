@@ -1,6 +1,6 @@
 # Agent harness
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-10-23
 **Reference:** [OpenAI — Harness engineering](https://openai.com/index/harness-engineering/) (environment design, progressive disclosure, mechanical checks).
 
 This project uses a **human-led, agent-assisted** workflow—not a fully agent-generated codebase. The harness below makes repository knowledge legible and verifiable for Cursor/Codex-style agents.
@@ -214,6 +214,7 @@ Three separate jobs, because they have different reliability:
 | `pip-audit (app dependencies)` | `requirements.txt`, `requirements-dev.txt`, `requirements-build.txt`, `requirements-docs.txt` (the compiled locks) | Fails the job. Add it to the required-check ruleset to make it block merges |
 | `pip-audit (PHI tooling, advisory)` | `requirements-phi-tools.txt` | Never. `continue-on-error: true` |
 | `osv-scanner (locked dependencies)` | The same four compiled locks, against the OSV database | Never yet. `continue-on-error: true`; promote to required by 2026-11-30 (`TO_DO.md`) |
+| `Launcher (Windows cmd)` | Runs `launch.bat` under `cmd.exe` on `windows-latest` via `DICOMVIEWER_LAUNCHER_SELFTEST=system\|venv`: real 3.12, a 3.11 stub, no Python, a 3.12 and a 3.11 venv, and a hashed docs-lock install | Never yet. `continue-on-error: true`; promote after it passes on `main` (`TO_DO.md`) |
 
 The PHI-tooling audit is advisory because it resolves an isolated developer-only
 environment that installs a dependency from a GitHub URL, so it can fail without
