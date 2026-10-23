@@ -12,7 +12,8 @@ _SPEC = importlib.util.spec_from_file_location(
     "audit_phi_tools",
     Path(__file__).resolve().parents[1] / "scripts" / "audit_phi_tools.py",
 )
-assert _SPEC is not None and _SPEC.loader is not None
+assert _SPEC is not None
+assert _SPEC.loader is not None
 audit = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(audit)
 
