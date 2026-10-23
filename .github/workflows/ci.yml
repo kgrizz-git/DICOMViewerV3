@@ -473,6 +473,8 @@ jobs:
           if not "%RC%"=="0" (echo FAIL scenario a: expected exit 0, got %RC% & exit /b 1)
           findstr /c:"ERROR" "%RUNNER_TEMP%\a.log" 1>nul 2>nul
           if not errorlevel 1 (echo FAIL scenario a: unexpected ERROR text & exit /b 1)
+          rem findstr exits 1 when no ERROR text is found; do not let that become the step result.
+          exit /b 0
 
       - name: "Scenario (b): python 3.11 first on PATH is rejected"
         shell: cmd
