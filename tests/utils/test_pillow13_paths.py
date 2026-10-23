@@ -104,7 +104,8 @@ def test_imagedraw_text_marks_pixels() -> None:
     draw.text((2, 2), "R 12", fill=(255, 255, 0), font=font)
     draw.line([(0, 20), (79, 20)], fill=(0, 255, 0), width=1)
     arr = np.array(image)
-    assert arr[..., :2].max() == 255
+    # Text is yellow (red + green); the line is pure green, so red above row 20 is text only.
+    assert arr[:20, :, 0].max() > 0
     assert tuple(arr[20, 40]) == (0, 255, 0)
 
 

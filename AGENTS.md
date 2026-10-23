@@ -38,7 +38,7 @@ From project root, after activation:
 
 - Run the app: `python src/main.py`
 - Run tests: `python tests/run_tests.py` or `python -m pytest tests/ -v` (**`tests/README.md`**). `pytest.ini` sets `-n auto --dist worksteal`, so runs are parallel; add `-n 0` for serial/single-test iteration. Never construct a `QCoreApplication` in a test — depend on the session `qapp` fixture.
-- **basedpyright vs PySide6:** CI installs fresh deps, so it may resolve a newer PySide6 than your venv holds (the pin in `requirements.in` is a `>=` floor; the compiled `requirements.txt` lock pins what CI and users install). If local basedpyright suddenly reports many `QTreeWidgetItem | None` errors after `pip install -r requirements-dev.txt`, upgrade PySide6 to match CI and re-run `python scripts/check_basedpyright_errors.py` (tree code uses `gui.qt_tree_widget_utils.iter_tree_children`).
+- **basedpyright vs PySide6:** CI and local development both install the compiled `requirements-dev.txt` lock, so they get the same PySide6. If local basedpyright suddenly reports many `QTreeWidgetItem | None` errors, your venv has drifted from the lock. Run `python scripts/sync_dev_environment.py` to reinstall the lock and refresh its sync stamp. Extra packages that are not in the lock stay installed, so recreate the venv from `requirements-dev.txt` if they are the cause. Then re-run `python scripts/check_basedpyright_errors.py` (tree code uses `gui.qt_tree_widget_utils.iter_tree_children`).
 - Agent smoke: `python scripts/agent_smoke_harness.py`
 - Harness docs check: `python scripts/check_repo_harness.py`
 - Architecture boundaries: `python scripts/check_architecture_boundaries.py`

@@ -4,12 +4,12 @@
 ``presidio-image-redactor`` caps ``pillow<13.0.0``, so ``requirements-phi-tools.txt``
 resolves to Pillow 12.x while the app lock is on 13.0.0. Instead of ignoring
 Pillow advisories one ID at a time, this script tolerates exactly one class of
-finding: a Pillow advisory, with Pillow installed below 13, whose lowest fix
+finding: a Pillow advisory, with Pillow 12.x installed, whose lowest fix
 version is 13.0.0 (so the presidio cap is the only reason it is unfixed).
 
 Everything else fails: other packages, Pillow advisories with no fix or a fix
-above 13.0.0, an advisory that is fixable inside 12.x, and Pillow >= 13 being
-installed (the exception is stale and should be removed).
+above 13.0.0, an advisory that is fixable inside 12.x, Pillow below 12.0.0,
+and Pillow >= 13 being installed (the exception is stale and should be removed).
 
 Usage: ``audit_phi_tools.py [pip-audit-json-file]``. With no argument it runs
 ``pip-audit --requirement requirements-phi-tools.txt --format json``.
@@ -30,6 +30,7 @@ from packaging.version import InvalidVersion, Version
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = "requirements-phi-tools.txt"
 CAP = Version("13.0.0")
+FLOOR = Version("12.0.0")
 
 
 class AuditError(Exception):
@@ -128,6 +129,13 @@ def _evaluate_pillow(
             f"pillow {installed} is installed: the Pillow 12.x exception is stale. "
             "Remove it from scripts/audit_phi_tools.py, ci.yml and "
             "security/pip-audit-exceptions.md."
+        )
+        for v in vulns:
+            failures.append(_describe(name, dep.get("version"), v, "real finding"))
+        return
+    if installed < FLOOR:
+        failures.append(
+            f"pillow {installed} is installed: the exception covers Pillow 12.x only."
         )
         for v in vulns:
             failures.append(_describe(name, dep.get("version"), v, "real finding"))

@@ -88,6 +88,25 @@ def test_pillow_13_installed_is_stale(tmp_path, capsys) -> None:
     assert "stale" in out
 
 
+def test_pillow_below_12_reports_real_findings(tmp_path, capsys) -> None:
+    deps = [
+        {"name": "pillow", "version": "11.3.0", "vulns": [_vuln("CVE-6", ["13.0.0"])]}
+    ]
+    code, out = _run(tmp_path, deps, capsys)
+    assert code == 1
+    assert "Pillow 12.x only" in out
+    assert "CVE-6" in out
+    assert "Tolerated" not in out
+
+
+def test_pillow_12_0_0_is_inside_the_exception(tmp_path, capsys) -> None:
+    deps = [
+        {"name": "pillow", "version": "12.0.0", "vulns": [_vuln("CVE-7", ["13.0.0"])]}
+    ]
+    code, _ = _run(tmp_path, deps, capsys)
+    assert code == 0
+
+
 def test_skipped_dependencies_are_ok(tmp_path, capsys) -> None:
     deps = [
         {"name": "en-core-web-lg", "skip_reason": "Dependency not found on PyPI"},
