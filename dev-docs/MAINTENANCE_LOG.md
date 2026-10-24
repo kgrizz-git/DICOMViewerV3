@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-22
+**Last updated:** 2026-10-24
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-24
+
+- **Qt test-worker teardown:** Confirmed that the baseline and export-only patched full suites crashed workers during PySide interpreter cleanup despite green pytest controller summaries. The export module now scopes its widgets; the shared session-finish hook also deletes remaining top-level widgets while QApplication and Python callbacks are alive. A diagnostic full run found 947 surviving widgets and completed worker exit handlers after explicit cleanup. Subprocess regressions cover the export leak and retained parent/child/parentless widgets with either a new QApplication or one created by an earlier plugin. The latter reproduced a skipped-cleanup path, fixed by retaining the existing application in `_QAPP`. Final four-worker coverage run: 8,367 passed, 15 skipped, 84% coverage; controller and all four workers completed the observer after PySide cleanup, with no matching crash reports. Focused tests, Ruff, harness, architecture, smoke, and diff checks passed. No production code or dependency versions change. Details and verification limits: [investigation](qt-test-teardown-2026-10-24.md).
 
 ## 2026-10-22
 - **pypdf floor.** `requirements.in` requires `pypdf>=6.21.2` for CVE-2026-115572, CVE-2026-115580 and CVE-2026-115585, and the four locks were recompiled. The launchers now pass `--require-hashes` explicitly for the app lock install; `tests/test_compile_requirements.py` asserts it.
