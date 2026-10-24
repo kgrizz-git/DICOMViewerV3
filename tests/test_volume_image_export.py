@@ -9,10 +9,18 @@ from typing import Any
 import pytest
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QPushButton
+from qt_widget_scope import widget_scope
 
 from gui.dialogs.volume_render_dialog import VolumeRenderDialog
 from gui.volume import image_export as ie
 from gui.volume import render_surface as rs
+
+
+@pytest.fixture(autouse=True)
+def _destroy_export_widgets(qapp: Any):
+    """Release signal-retained widgets before PySide's interpreter cleanup."""
+    with widget_scope():
+        yield
 
 
 class _FakeRenderWindow:

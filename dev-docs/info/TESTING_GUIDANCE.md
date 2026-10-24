@@ -26,6 +26,13 @@ This repository already supports Qt tests. The session-scoped `qapp` fixture in
 `QApplication`; request it as a test parameter whenever a QApplication is
 needed. Mark tests that need it with `@pytest.mark.qt`.
 
+Tests that create windows should use `qt_widget_scope.widget_scope()` to delete
+them after the test, including delivery of deferred deletion events. This
+prevents stale widgets affecting later tests. A shared session-finish hook also
+deletes remaining top-level widgets before PySide interpreter cleanup; that
+last sweep complements per-test cleanup. It covers an existing QApplication
+created by an earlier plugin as well as the application created by conftest.
+
 Keep Qt tests deterministic:
 
 - Construct only the widgets/scenes required for the behavior.
