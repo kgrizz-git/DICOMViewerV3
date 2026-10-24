@@ -1,6 +1,6 @@
 # Local SonarQube Community Build
 
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-24
 
 This directory holds the **local** SonarQube analysis settings for DICOM Viewer V3
 ([`sonar-project.properties`](sonar-project.properties)). Analysis is submitted
@@ -10,19 +10,81 @@ Setup overview: [`dev-docs/DEVELOPER_SETUP.md`](../../dev-docs/DEVELOPER_SETUP.m
 The SonarQube **server** itself is shared machine infrastructure. It is not part
 of this application's runtime and is not scoped to a single git repo.
 
+## Current server on this machine
+
+One Community Build serves every local project. As of 2026-10-24 it is the
+Compose stack in MyPySkinDose, not a container started from this repo:
+
+| | |
+|--|--|
+| Compose file | `~/MyCode/MyPySkinDose/compose.sonarqube.yaml` |
+| Compose project | `sonarqube-local` |
+| App container | `sonarqube-local` |
+| Image pin | `sonarqube:26.9.0.129388-community` (digest pinned in that file) |
+| Database | Postgres 17 (`sonarqube-local-db-1`), volume `sonarqube-local_postgresql_data` |
+| URL | `http://127.0.0.1:9000` |
+| Runtime | Colima (Docker). The container restart policy is `unless-stopped`. |
+
+Upgrade and backup steps for that stack live in
+`~/MyCode/MyPySkinDose/dev-docs/SONARQUBE_LOCAL.md`. Postgres is what makes an
+in-place server upgrade possible. Do not start a second Sonar container on
+port 9000.
+
+Stopped containers named `sonarqube` and `dicom-viewer-sonarqube` are the older
+embedded-H2 installs described below. Leave them stopped. Starting one of them
+instead of `sonarqube-local` talks to a different database, so the current
+tokens look invalid even though nothing was deleted.
+
+Users, tokens, projects, and analysis history for the live server are in
+`sonarqube-local_postgresql_data`. Recreating the `sonarqube-local` container
+while that volume stays attached keeps them. A new empty Postgres volume, or
+`docker volume rm` / `docker volume prune` of that volume, does not.
+
+## eMudhra / emSign trust store (October 2026)
+
+SonarQube Community Build through 26.10.0.133078, including the pinned
+26.9.0.129388 image, still trusts compromised eMudhra (emSign) certificate
+roots. There is no patched Community Build image yet. Bumping
+`sonarqube:community` does not clear this. SonarQube Cloud's own trust stores
+were already updated; that does not update this local server.
+
+The Docker workaround mounts a cleaned Java `cacerts` read-only and sets
+`SONAR_WEB_JAVAADDITIONALOPTS` and `SONAR_CE_JAVAADDITIONALOPTS` on the
+**existing** `sonarqube` service, then recreates that container. Official
+steps: [eMudhra certificate authority compromise](https://docs.sonarsource.com/sonarqube-community-build/server-update-and-maintenance/release-notes/emudhra-certificate-authority-compromise).
+
+That workaround does not replace a volume, does not run a database migration,
+and does not rotate the admin password or analysis tokens. The JVM property
+`javax.net.ssl.trustStorePassword` is the Java trust-store password
+(`changeit` on the image's `cacerts`), not the Sonar admin password. Expect a
+short restart. If the mounted file is missing or unreadable, Java silently
+keeps the image trust store: the server still starts, and the workaround has
+not applied. Outbound HTTPS from the server to a host whose certificate chains
+to those roots will start failing, which is the point of removing them. This
+local server is not configured for GitHub, LDAP, email, or webhooks.
+
+Scanner JRE provisioning is a separate client setting
+(`SONAR_SCANNER_SKIP_JRE_PROVISIONING=true` until Sonar ships cleaned scanner
+runtimes). It does not touch the server database. The SonarQube CLI (`sonar`,
+not `sonar-scanner`) and a self-hosted SonarQube MCP server are not part of
+this stack. The Cursor SonarQube for IDE extension is a client update only.
+
+Notes from the 2026-10-24 check, including what is and is not installed, are
+in `~/MyCode/empty-landing-dir/sonarqube-local/NOTES.md`.
+
 ## Container vs volume (short)
 
 | Concept | What it is | Survives reboot? | Survives `docker rm`? |
 |---------|------------|------------------|------------------------|
-| **Container** | The running SonarQube process + its config (ports, restart policy, which volumes are attached) | Only if Docker Desktop is running **and** the container has `--restart unless-stopped` (or you start it again) | No — removing the container does not delete named volumes |
-| **Volume** | Durable disk data mounted into the container. For Sonar, `/opt/sonarqube/data` holds the H2 DB, users, tokens, projects, and analyses | Yes (Docker Desktop disk) | **Named** volumes: yes, until you `docker volume rm` / `prune`. **Anonymous** volumes: stay on disk but become easy to lose / prune once no container references them |
+| **Container** | The running SonarQube process + its config (ports, restart policy, which volumes are attached) | Only if Colima (or Docker Desktop) is running **and** the container has `--restart unless-stopped` (or you start it again) | No — removing the container does not delete named volumes |
+| **Volume** | Durable disk. On the live stack, accounts and projects are in `sonarqube-local_postgresql_data`. `sonarqube-local_sonarqube_data` is mounted at `/opt/sonarqube/data` and is not that database. Older H2 containers kept the database inside `/opt/sonarqube/data`. | Yes (Colima / Docker disk) | **Named** volumes: yes, until you `docker volume rm` / `prune`. **Anonymous** volumes: stay on disk but become easy to lose / prune once no container references them |
 
-**Rule of thumb:** tokens and the admin password live in the **data volume**, not in the container name. Recreating a container with a **new empty** data volume looks like a “password reset” and invalidates tokens.
+**Rule of thumb:** tokens and the admin password live in the **database volume**, not in the container name. Recreating a container with a **new empty** database looks like a “password reset” and invalidates tokens.
 
 ## Naming
 
-- **Container name:** use a **generic** name such as `sonarqube`. One server serves many coding projects. Do not name the container after this repo.
-- **Volume names:** these are **server** volumes (shared DB for all projects analyzed on that instance), not per-git-repo volumes. Prefer generic names (`sonarqube-data`, `sonarqube-extensions`) when creating new volumes. Existing names like `dicom-viewer-sonarqube-data` are fine to keep if they already hold the database you want — they are historical labels, not a requirement that each app repo own a Sonar server.
+- **Container name:** the live app container is `sonarqube-local` (Compose project `sonarqube-local`). One server serves many coding projects. Do not start another server named after this repo.
+- **Volume names:** these are **server** volumes (shared DB for all projects analyzed on that instance), not per-git-repo volumes. The live names are `sonarqube-local_postgresql_data`, `sonarqube-local_sonarqube_data`, `sonarqube-local_sonarqube_extensions`, and `sonarqube-local_sonarqube_logs`. Older names such as `dicom-viewer-sonarqube-data` belong to the stopped H2 containers.
 - **Project identity** in Sonar is `sonar.projectKey` (this repo: `dicom-viewer-v3`) plus each checkout’s ignored `.env` `SONAR_TOKEN`.
 
 ## Multi-project usage
@@ -34,7 +96,12 @@ One instance at `http://127.0.0.1:9000` (or `http://localhost:9000`) can hold ma
 
 This repository’s runner rejects non-loopback `SONAR_HOST_URL` values so the local token is not sent off-machine.
 
-## Recommended durable setup
+## Historical H2 setup (do not start this beside the live server)
+
+The commands below describe the older embedded-H2 layout. They are not how
+the current server is created. Running them against a new volume creates a
+second database and a new `admin` / `admin` login. Existing `SONAR_TOKEN`
+values keep working only against the database that issued them.
 
 ```bash
 docker volume create sonarqube-data
@@ -51,12 +118,16 @@ docker run -d \
   sonarqube:community
 ```
 
-Also enable **Docker Desktop → Settings → General → Start Docker Desktop when you sign in** so `unless-stopped` containers can come back after a Mac reboot.
+The current runtime is Colima, started separately from Docker Desktop. A
+container with `--restart unless-stopped` comes back when the Colima VM is
+running.
 
 Bind the published port to loopback only (do not publish on all host
 interfaces) so the UI and API stay on this machine.
 
-Optional compose file may live **outside** any project repo (for example `~/sonarqube/docker-compose.yml`) so multiple checkouts share one definition. Do not treat compose as required application infrastructure for this repo.
+The live definition is `~/MyCode/MyPySkinDose/compose.sonarqube.yaml`. Do not
+treat that file as application infrastructure for this repo, and do not add a
+second compose project that publishes port 9000.
 
 ## Why tokens / admin password looked “reset”
 
@@ -69,9 +140,14 @@ Typical failure mode on this machine:
 
 Named volumes already persist across reboots; the wipe was from attaching a different (empty) data volume, not from reboot itself.
 
-## Restore existing users and tokens (preferred)
+## Restore existing users and tokens (historical H2 only)
 
-If the old container that still mounts the good data volume exists, **prefer restoring it** over minting new credentials.
+These steps apply to the stopped embedded-H2 containers. They are not the
+recovery path for `sonarqube-local`. Starting `sonarqube` while
+`sonarqube-local` is up fails on port 9000. Stopping the live server and
+starting an old container points the UI at a different database.
+
+If the old container that still mounts the good data volume exists, **prefer restoring it** over minting new credentials only when you intentionally want that older database.
 
 Inspect:
 
@@ -158,9 +234,9 @@ If the old data volume is gone or you prefer a clean server:
 ```bash
 curl -s http://127.0.0.1:9000/api/system/status
 docker ps -a --filter name=sonar
-docker logs sonarqube --tail 50
-docker restart sonarqube
-docker inspect sonarqube --format '{{json .Mounts}}' | python3 -m json.tool
+docker logs sonarqube-local --tail 50
+docker restart sonarqube-local
+docker inspect sonarqube-local --format '{{json .Mounts}}' | python3 -m json.tool
 
 # From this repo root, with venv active and SONAR_TOKEN in .env:
 python scripts/run_local_sonarqube.py --status
@@ -180,6 +256,12 @@ reporting failures still stop the archive.
 
 ## Backup
 
+The live database is Postgres. Back it up with the `pg_dump` command in
+`~/MyCode/MyPySkinDose/dev-docs/SONARQUBE_LOCAL.md` before an image upgrade.
+Archiving `sonarqube-local_sonarqube_data` does not copy users, tokens, or
+projects.
+
+The tar command below is only for an older H2 volume named `sonarqube-data`.
 Prefer a backup directory outside any project checkout. Restrict directory
 permissions before writing archives (for example `umask 077` or
 `chmod 700 ~/sonarqube/backups`):
@@ -193,19 +275,19 @@ docker run --rm \
   alpine tar czf "/backup/sonarqube-data-$(date +%Y%m%d).tar.gz" -C /data .
 ```
 
-If your live data volume still uses another name, substitute that volume for `sonarqube-data`.
+If an old H2 data volume uses another name, substitute that volume for `sonarqube-data`.
 
 ## Troubleshooting
 
 ### Token invalid / “unauthorized”
 
-Usually the token was issued for a different data volume than the one currently mounted. Prefer **Restore** above; otherwise create a new token under **User → My Account → Security** and update `.env`.
+Usually the token was issued for a different database than the one currently serving port 9000. Confirm `sonarqube-local` is the container that is up. Prefer that Postgres volume over **Restore** (the restore steps bring back an older H2 database). Otherwise create a new token under **User → My Account → Security** and update `.env`.
 
 ### Not reachable after reboot
 
-1. Confirm Docker Desktop is running (`docker info`).
-2. `docker ps -a --filter name=sonar` — start the container that mounts the good data volume.
-3. Set `--restart unless-stopped` and enable Docker Desktop on login.
+1. Confirm Colima is running (`colima status`, then `docker info`).
+2. `docker ps -a --filter name=sonar` — start `sonarqube-local` (and its Postgres dependency) with `docker compose -f ~/MyCode/MyPySkinDose/compose.sonarqube.yaml up -d` from a shell that can read that repo's `.env`.
+3. Leave the older `sonarqube` and `dicom-viewer-sonarqube` containers stopped.
 
 ### Port 9000 already allocated
 
