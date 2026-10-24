@@ -45,7 +45,8 @@ def pytest_configure(config):
         from PySide6.QtWidgets import QApplication
     except ImportError:
         return  # PySide6 absent; qapp-dependent tests skip themselves.
-    if QApplication.instance() is None:
+    _QAPP = QApplication.instance()
+    if _QAPP is None:
         _QAPP = QApplication(sys.argv[:1])
 
 
@@ -68,3 +69,22 @@ def qapp():
             )
         app = QApplication(sys.argv[:1])
     return app
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session):
+    """Delete remaining test widgets before PySide's interpreter cleanup.
+
+    xdist reports worker completion before Python finalization, so a native
+    crash in PySide's atexit handler can accompany an otherwise green suite.
+    Keep QApplication alive and deliver DeferredDelete while Python callbacks
+    and their modules are still available. Per-test widget scopes remain
+    necessary to prevent stale windows affecting later tests.
+    """
+    if _QAPP is None:
+        return
+    from qt_widget_scope import destroy_widgets, top_level_widgets
+
+    destroy_widgets(top_level_widgets())
+    # Closing widgets can create auxiliary windows through their callbacks.
+    destroy_widgets(top_level_widgets())
