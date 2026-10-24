@@ -215,12 +215,13 @@ The local scan is intentionally **not** a Git hook: it can take time, and
 1. Start the local SonarQube Community Build **server** (Docker) and confirm its
    UI is reachable at `http://localhost:9000` (or set `SONAR_HOST_URL` to another
    loopback URL such as `http://127.0.0.1:9000`). Remote hosts are rejected so
-   the local analysis token cannot be sent off-machine. Use one shared server for
-   all local projects: generic container name (`sonarqube`), durable **named**
-   data volumes, and `--restart unless-stopped`. Prefer restoring an existing
-   data volume (so admin password and tokens keep working) over creating a fresh
-   empty database. Full container-vs-volume explanation, restore steps, and
-   backup notes: [`tools/sonarqube/README.md`](../tools/sonarqube/README.md).
+   the local analysis token cannot be sent off-machine. Use the one shared
+   server already defined for this machine: Compose project `sonarqube-local`
+   in `~/MyCode/MyPySkinDose/compose.sonarqube.yaml` (Postgres, loopback port,
+   `unless-stopped`). Do not create a fresh empty database and do not start
+   the older stopped H2 containers (`sonarqube`, `dicom-viewer-sonarqube`) in
+   its place. Container, volume, backup, and the October 2026 eMudhra
+   trust-store note: [`tools/sonarqube/README.md`](../tools/sonarqube/README.md).
 2. In its UI, create a user or project analysis token at **User → My Account →
    Security** (skip this if you restored a volume that already has a working
    token). Do not put the token in a tracked file. Copy `.env.example` to
@@ -251,13 +252,18 @@ python scripts/run_local_sonarqube.py --status
 ```
 
 Every local push, including a branch pushed to open or update a pull request,
-runs an advisory update check at most once every seven days. It compares the
-Docker-hosted local `sonarqube:community` server image with the matching public
-Docker Hub manifest and compares an installed native `sonar-scanner` with
-SonarSource's public latest-release metadata. It records only identifiers,
-versions, and the check time under ignored `.sonar-local/`. It never pulls,
-installs, or restarts anything, and it never sends repository content or the
-SonarQube token. Run it manually with:
+runs an advisory update check at most once every seven days. It compares a
+local image named `sonarqube:community` with the matching public Docker Hub
+manifest and compares an installed native `sonar-scanner` with SonarSource's
+public latest-release metadata. The live server is the digest-pinned
+`sonarqube:26.9.0.129388-community` image from the MyPySkinDose compose file,
+so a "newer community tag" result is not an instruction to retag that file.
+A newer Community Build tag also does not, by itself, remove the compromised
+eMudhra roots (affected through 26.10.0.133078; see
+[`tools/sonarqube/README.md`](../tools/sonarqube/README.md)). The check records
+only identifiers, versions, and the check time under ignored `.sonar-local/`.
+It never pulls, installs, or restarts anything, and it never sends repository
+content or the SonarQube token. Run it manually with:
 
 ```bash
 python scripts/check_local_sonarqube_updates.py

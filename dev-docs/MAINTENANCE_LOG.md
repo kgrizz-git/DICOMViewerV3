@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-22
+**Last updated:** 2026-10-24
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-10-24
+
+- **Local SonarQube docs aligned with the running server.** `tools/sonarqube/README.md` and `dev-docs/DEVELOPER_SETUP.md` now describe the live Colima stack: Compose project `sonarqube-local` from `~/MyCode/MyPySkinDose/compose.sonarqube.yaml`, image `sonarqube:26.9.0.129388-community`, Postgres volume `sonarqube-local_postgresql_data`. The embedded-H2 `docker run` instructions are marked historical. The October 2026 eMudhra/emSign note says to follow Sonar's trust-store workaround rather than bumping the Community Build tag, and that the workaround does not drop projects or tokens. No server, scanner, or hook behavior changed.
 
 ## 2026-10-22
 - **pypdf floor.** `requirements.in` requires `pypdf>=6.21.2` for CVE-2026-115572, CVE-2026-115580 and CVE-2026-115585, and the four locks were recompiled. The launchers now pass `--require-hashes` explicitly for the app lock install; `tests/test_compile_requirements.py` asserts it.
