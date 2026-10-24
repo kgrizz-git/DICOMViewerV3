@@ -40,7 +40,7 @@ Users, tokens, projects, and analysis history for the live server are in
 while that volume stays attached keeps them. A new empty Postgres volume, or
 `docker volume rm` / `docker volume prune` of that volume, does not.
 
-## eMudhra / emSign trust store (October 2026)
+## eMudhra / emSign trust store (applied 2026-10-24)
 
 SonarQube Community Build through 26.10.0.133078, including the pinned
 26.9.0.129388 image, still trusts compromised eMudhra (emSign) certificate
@@ -48,29 +48,32 @@ roots. There is no patched Community Build image yet. Bumping
 `sonarqube:community` does not clear this. SonarQube Cloud's own trust stores
 were already updated; that does not update this local server.
 
-The Docker workaround mounts a cleaned Java `cacerts` read-only and sets
-`SONAR_WEB_JAVAADDITIONALOPTS` and `SONAR_CE_JAVAADDITIONALOPTS` on the
-**existing** `sonarqube` service, then recreates that container. Official
-steps: [eMudhra certificate authority compromise](https://docs.sonarsource.com/sonarqube-community-build/server-update-and-maintenance/release-notes/emudhra-certificate-authority-compromise).
+The workaround is already applied on the MyPySkinDose compose service: a
+cleaned `cacerts` is mounted read-only, and
+`SONAR_WEB_JAVAADDITIONALOPTS` / `SONAR_CE_JAVAADDITIONALOPTS` point both Java
+processes at it. Applying it recreated the app container and left the Postgres
+volume in place (5 projects, 1 user, 1 token, same server id). The JVM
+property `javax.net.ssl.trustStorePassword` is the Java trust-store password
+(`changeit`), not the Sonar admin password. Official steps, for when the image
+changes: [eMudhra certificate authority compromise](https://docs.sonarsource.com/sonarqube-community-build/server-update-and-maintenance/release-notes/emudhra-certificate-authority-compromise).
+Regenerate the file with
+`~/MyCode/MyPySkinDose/scripts/prepare_sonarqube_truststore.sh` before
+recreating the service. If the mounted file is missing or unreadable, Java
+silently keeps the image trust store.
 
-That workaround does not replace a volume, does not run a database migration,
-and does not rotate the admin password or analysis tokens. The JVM property
-`javax.net.ssl.trustStorePassword` is the Java trust-store password
-(`changeit` on the image's `cacerts`), not the Sonar admin password. Expect a
-short restart. If the mounted file is missing or unreadable, Java silently
-keeps the image trust store: the server still starts, and the workaround has
-not applied. Outbound HTTPS from the server to a host whose certificate chains
-to those roots will start failing, which is the point of removing them. This
-local server is not configured for GitHub, LDAP, email, or webhooks.
+Outbound HTTPS from the server to a host whose certificate chains to those
+roots will fail, which is the point of removing them. This local server is not
+configured for GitHub, LDAP, email, or webhooks.
 
-Scanner JRE provisioning is a separate client setting
-(`SONAR_SCANNER_SKIP_JRE_PROVISIONING=true` until Sonar ships cleaned scanner
-runtimes). It does not touch the server database. The SonarQube CLI (`sonar`,
-not `sonar-scanner`) and a self-hosted SonarQube MCP server are not part of
-this stack. The Cursor SonarQube for IDE extension is a client update only.
+The Homebrew `sonar-scanner` Java runtime was cleaned the same day, and that
+install skips JRE provisioning. `brew upgrade openjdk` or
+`brew upgrade sonar-scanner` can undo those client-side edits. The
+`sonarsource/sonar-scanner-cli` image was not changed. The SonarQube CLI
+(`sonar`) and a self-hosted SonarQube MCP server are not part of this stack.
+Cursor's SonarQube for IDE extension was updated to 6.2.0.
 
-Notes from the 2026-10-24 check, including what is and is not installed, are
-in `~/MyCode/empty-landing-dir/sonarqube-local/NOTES.md`.
+Notes from the 2026-10-24 check are in
+`~/MyCode/empty-landing-dir/sonarqube-local/NOTES.md`.
 
 ## Container vs volume (short)
 
