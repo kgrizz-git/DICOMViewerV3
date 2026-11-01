@@ -3,28 +3,15 @@
 click==8.5.0 \
     --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360 \
     --hash=sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34
-    # via
-    #   -c requirements-dev.txt
-    #   zensical
 deepmerge==3.0.1 \
     --hash=sha256:35b39a4cb92cf328d6eca61cbbf65f68a37c2ceb3085f0f853cbb2e52a59fc23 \
     --hash=sha256:35c96f6a68fcf90719a5b31d9f8042ecef6c00fb56836660d33455d0f5cfda65
-    # via
-    #   -c requirements-dev.txt
-    #   zensical
 jinja2==3.1.6 \
     --hash=sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d \
     --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
-    # via
-    #   -c requirements-dev.txt
-    #   zensical
 markdown==3.11.2 \
     --hash=sha256:87bf5d90f2d2882e2c02fcda182c2800456b985bff38913867c49706481514b0 \
     --hash=sha256:f80390747a2a0ff2ba54da074ce4f862f72a6685f608cd2637b646a6d83993f5
-    # via
-    #   -c requirements-dev.txt
-    #   pymdown-extensions
-    #   zensical
 markupsafe==3.0.4 \
     --hash=sha256:007e1ffd9bf65bb6ee96df7b258fc632a4868dd5566037986c64781f35a36e98 \
     --hash=sha256:02fa4acbc6a3fc5c693c34d4dd8c1130b7fe99cc915181b0ddd6f72aeb296002 \
@@ -177,28 +164,15 @@ markupsafe==3.0.4 \
     --hash=sha256:fa95848c929b6a75f6848d3c9793e59db365ee436776e57db835cdbfa79ba977 \
     --hash=sha256:fd9f8797427910198f95bced71ddfed61130d7e349213bfb8466c9c99e2c46a8 \
     --hash=sha256:fdb4ca07ab75ffadab4a8b135ad59cdbb3156b99310f3d565370da74a15d6bd3
-    # via
-    #   -c requirements-dev.txt
-    #   jinja2
 pathspec==1.1.1 \
     --hash=sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a \
     --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
-    # via
-    #   -c requirements-dev.txt
-    #   zensical
 pygments==2.21.0 \
     --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9 \
     --hash=sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c
-    # via
-    #   -c requirements-dev.txt
-    #   -c requirements.txt
-    #   zensical
 pymdown-extensions==12.3 \
     --hash=sha256:345493a8e3497e24382902903a1c43a28e34a52f2b7571a1c9641429b820ca74 \
     --hash=sha256:a7f2a4e0bc60c6e6babfa7922cfb3b01cd640eb00fb208f3c582e12bae00ea67
-    # via
-    #   -c requirements-dev.txt
-    #   zensical
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
@@ -273,12 +247,6 @@ pyyaml==6.0.3 \
     --hash=sha256:f7057c9a337546edc7973c0d3ba84ddcdf0daa14533c2065749c9075001090e6 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
-    # via
-    #   -c requirements-dev.txt
-    #   -c requirements.txt
-    #   -r requirements-docs.in
-    #   pymdown-extensions
-    #   zensical
 tomli==2.5.0 \
     --hash=sha256:069435bd5480429b98c5e5afb02ab21c219b6f0064680671c6dc0d46817346ea \
     --hash=sha256:0dc598040da8d42cf20f0be588ed7004f46db12a0ac6c32e03a59dccedaaadcd \
@@ -345,20 +313,22 @@ tomli==2.5.0 \
     --hash=sha256:f4b653094e18f9031102d3a1da5c729c8f222d85225b18037dac621695e46e1a \
     --hash=sha256:f79203b3965b4000e91808aaa7c040206093f2b8bf86f455982f2274c9ccf442 \
     --hash=sha256:fd4dc129784e0c5335bd4e61dfcc4487499a013419e655cf2da1d091b7e0efdc
-    # via
-    #   -c requirements-dev.txt
-    #   zensical
-zensical==0.0.71 \
-    --hash=sha256:0b34f58a7f565d956651baf90389aafca5c37a407a72768f30293e415589b932 \
-    --hash=sha256:1e9e39aefdca4b3383b43014e117b27a1ca9f9ac4b25eefa9195099e5a566e2f \
-    --hash=sha256:2d3c2f6360374afc12cd0cfbf087921c6ac4a069b4c1e60a4c80491801dda146 \
-    --hash=sha256:3b206f150eb38d2885158e093113460a5e667847cf36915119c21b20776cee18 \
-    --hash=sha256:433c5a6fecae7b6b5014b7efbc52bb5e0776d715afca60e2832a12162e7d571a \
-    --hash=sha256:57cad23c56a98d87a5eefa7948a98b6ecb479dc99fd7af312cd146555f55f060 \
-    --hash=sha256:81c069cc667946e0a505cc01b99d5ba44883c57f51b95bd5a38003007c5cb6cd \
-    --hash=sha256:bcae388415698cac874e662e667fc0683833cec747607c89037b7e9ad9828830 \
-    --hash=sha256:d22b8924e5145d94bf85b81bd2a8afaeb32e78c8a1ddeb7f4201fc8902547221 \
-    --hash=sha256:fc8ed534717b61f285dc217f165f901f8b8a6142ef37cdd5544976cd99b5720c
-    # via
-    #   -c requirements-dev.txt
-    #   -r requirements-docs.in
+zensical==0.0.72 \
+    --hash=sha256:042795a983823efd2478630164afa708b04b6aff7708a04177657e57292bc1b8 \
+    --hash=sha256:042795a983823efd2478630164afa708b04b6aff7708a04177657e57292bc1b8 \
+    --hash=sha256:2103dabfb6fcbea16ffbf226b5405389f3ac67370293eb649f949f03314dd64c \
+    --hash=sha256:2103dabfb6fcbea16ffbf226b5405389f3ac67370293eb649f949f03314dd64c \
+    --hash=sha256:23514bbf0b3f297d3473b25bee513a133722d020b363d668ef15a4f713d76cde \
+    --hash=sha256:23514bbf0b3f297d3473b25bee513a133722d020b363d668ef15a4f713d76cde \
+    --hash=sha256:2801fcd8baec6e4d14ada113e03a6fb4c6ec2efa2518dc0ae94ee54ed71c94f1 \
+    --hash=sha256:2801fcd8baec6e4d14ada113e03a6fb4c6ec2efa2518dc0ae94ee54ed71c94f1 \
+    --hash=sha256:3513bf501ff5e28b9e8b7255f225bb117d5651c5d50af39a1eb7bb3bbd7251b0 \
+    --hash=sha256:3513bf501ff5e28b9e8b7255f225bb117d5651c5d50af39a1eb7bb3bbd7251b0 \
+    --hash=sha256:3631d44074d4b28448e710d7b54a506caacb6156b38bd0d91d6a033d65da6ad3 \
+    --hash=sha256:3631d44074d4b28448e710d7b54a506caacb6156b38bd0d91d6a033d65da6ad3 \
+    --hash=sha256:40cd37e4525a24d0231635dafb95fc6e431fa021f26b0a1be2b049ea33698b80 \
+    --hash=sha256:40cd37e4525a24d0231635dafb95fc6e431fa021f26b0a1be2b049ea33698b80 \
+    --hash=sha256:9afa0bdb357e0197f5d65cb882e2ad1652d7a3790e2fc3d243f0669092aab536 \
+    --hash=sha256:9afa0bdb357e0197f5d65cb882e2ad1652d7a3790e2fc3d243f0669092aab536 \
+    --hash=sha256:a0603827ea0a04f920cf2a5be555f9e81818beaac1ff5a92399f19f79e330b2e \
+    --hash=sha256:a0603827ea0a04f920cf2a5be555f9e81818beaac1ff5a92399f19f79e330b2e

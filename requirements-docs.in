@@ -10,5 +10,5 @@
 # below must stay in step with the same lines in requirements-dev.in.
 
 # Cap <0.1 so 0.0.x patches float but a 0.1/1.x release needs explicit review.
-zensical>=0.0.68,<0.1
+zensical>=0.0.72,<0.1
 PyYAML>=6.0.3
