@@ -111,8 +111,8 @@ A Dependabot pull request that edits these requirement files is recompiled by
 [`.github/workflows/dependabot-recompile-locks.yml`](../.github/workflows/dependabot-recompile-locks.yml).
 That workflow pushes the four hashed locks with a GitHub App token, so the
 push starts the normal pull request CI. The App needs Contents read and write
-on this repository only, and its client ID and private key go in the
-Dependabot secrets `DEPENDABOT_LOCKS_APP_CLIENT_ID` and
+on this repository only, and its client ID and private key go in both the
+Actions and the Dependabot secrets as `DEPENDABOT_LOCKS_APP_CLIENT_ID` and
 `DEPENDABOT_LOCKS_APP_PRIVATE_KEY`. Without them the push does not start the
 required checks, and the pull request must be closed and reopened. It uses the compiler
 script from the pull request base, so a uv pin bump in `requirements-dev.in`

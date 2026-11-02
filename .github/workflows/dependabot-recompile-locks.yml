@@ -13,12 +13,16 @@ name: Recompile Dependabot locks
 # blocks that pattern.
 #
 # A GITHUB_TOKEN commit does not start pull_request workflows, and checks from
-# a workflow_dispatch run do not satisfy ruleset required status checks. The
+# a `workflow_dispatch` run do not satisfy ruleset required status checks. The
 # commit is therefore pushed with a GitHub App installation token, so the push
 # starts the normal pull_request CI. The App needs only Contents read and write
-# on this repository. Its client ID and private key are Dependabot secrets
-# (DEPENDABOT_LOCKS_APP_CLIENT_ID, DEPENDABOT_LOCKS_APP_PRIVATE_KEY), because
-# runs that Dependabot starts can read only Dependabot secrets. The App's push
+# on this repository. Its client ID and private key are stored as both Actions
+# and Dependabot secrets (DEPENDABOT_LOCKS_APP_CLIENT_ID,
+# DEPENDABOT_LOCKS_APP_PRIVATE_KEY). GitHub restricts Dependabot-triggered
+# pull_request_target runs (read-only token, no secrets) only when Dependabot
+# created the base ref; this repository's base branches are not, so the run
+# gets a write token and repository secrets. Keeping both copies covers either
+# secret store. The App's push
 # re-triggers this workflow with the App as the actor, so the job skips and
 # does not loop. Without the secrets, the job pushes with GITHUB_TOKEN,
 # dispatches an informational CI run, and asks a maintainer to close and
