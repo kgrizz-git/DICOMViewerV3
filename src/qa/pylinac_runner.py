@@ -22,7 +22,7 @@ Public functions (all re-exported here for backward compatibility):
 
 Requirements:
     pylinac (optional, graceful fallback when missing)
-    pypdf>=4.0.0 (optional, graceful fallback when missing)
+    pypdf>=6.21.4 (optional, graceful fallback when missing)
     reportlab (transitively installed by pylinac)
     qa.analysis_types.QARequest / QAResult / LcRunConfig / MRIBatchResult
     qa.pylinac_extent_subclasses (ACRCTForViewer, ACRMRILargeForViewer; RelaxedExtent aliases)
