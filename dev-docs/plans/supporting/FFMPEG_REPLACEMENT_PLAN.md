@@ -3,7 +3,7 @@
 **Status:** Implemented on the branch. Build Executables run 39093453422 (2026-10-18, commit `0a2f1ce`) passed on Windows, macOS, and Ubuntu, including a from-source Windows LGPL compile and the frozen-bundle audit. Signing and a launched-process `_MEIPASS` check remain open.
 **Priority:** P0 — commercial-release Tier 0 blocker
 **TO_DO ref:** Release / Product — [Commercial Release Readiness](../../COMMERCIAL_RELEASE_READINESS.md) item #2 ("Replace `imageio-ffmpeg` — bundled FFmpeg 7.1 binary is a GPL build"); [License & library compliance](LICENSE_AND_COMPLIANCE_PLAN.md) §0b
-**Last updated:** 2026-10-18
+**Last updated:** 2026-11-01
 **Owner:** product/release
 
 This plan is an engineering recommendation, not a legal opinion. Counsel still reviews the final notice text and source offer before a paid release.
@@ -12,7 +12,7 @@ This plan is an engineering recommendation, not a legal opinion. Counsel still r
 
 ## 1. Background & Verified Finding
 
-`requirements.txt` pins `imageio==2.38.0` and `imageio-ffmpeg==0.6.0` for cine video export (**File → Export Cine As…**).
+`requirements.txt` pins `imageio==2.38.1` and `imageio-ffmpeg==0.6.0` for cine video export (**File → Export Cine As…**).
 
 The `imageio-ffmpeg` Python wrapper metadata (`.dist-info/METADATA`) declares **BSD-2-Clause**, so `scripts/check_dependency_licenses.py` does not see the native binary. Direct inspection of the vendored FFmpeg 7.1 binary inside the `imageio-ffmpeg==0.6.0` wheel on **2026-10-17** confirmed a **GPLv3-applicable build**. On macOS arm64 the binary is `imageio_ffmpeg/binaries/ffmpeg-macos-aarch64-v7.1`, and `ffmpeg -version` reports:
 

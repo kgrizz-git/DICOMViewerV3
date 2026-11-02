@@ -28,6 +28,13 @@ Design notes:
 * uv keeps the pins already present in the output file, so recompiling an
   unchanged tree is a no-op. ``--upgrade`` deletes the old locks first.
 * Resolving needs network access to PyPI.
+* ``--untrusted-inputs`` is for the Dependabot recompile workflow, which runs
+  with a write token on requirement files taken from a pull request. It rejects
+  index, find-links, editable, path, and URL requirements before compiling, and
+  compiles with ``--only-binary :all:`` and ``--no-config`` so resolving cannot
+  build (run code from) an arbitrary source distribution. ``SDIST_ONLY`` lists
+  the PyPI packages that ship no wheel and may still be built. The lock header
+  keeps the normal command, so the output is byte-identical to a normal run.
 """
 
 from __future__ import annotations
@@ -39,7 +46,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-UV_VERSION = "0.13.4"
+UV_VERSION = "0.13.5"
 PYTHON_VERSION = "3.12"
 
 # Order matters: the app lock constrains the others, and the dev lock also
@@ -52,6 +59,9 @@ LOCK_STEMS = (
 )
 APP_LOCK = "requirements.txt"
 DEV_LOCK = "requirements-dev.txt"
+# Packages in the locks that publish only a source distribution. With
+# --untrusted-inputs, these are the only ones uv may build to read metadata.
+SDIST_ONLY = ("future",)
 COMMON_FLAGS = (
     "--universal",
     "--python-version",
@@ -71,15 +81,67 @@ def output_name(stem: str) -> str:
     return f"{stem}.txt"
 
 
-def compile_command(stem: str, uv: str = "uv") -> list[str]:
-    """Return the ``uv pip compile`` argv for one lock, with repo-relative paths."""
+def compile_command(stem: str, uv: str = "uv", *, hardened: bool = False) -> list[str]:
+    """Return the ``uv pip compile`` argv for one lock, with repo-relative paths.
+
+    ``hardened`` adds the no-build flags used for untrusted inputs and keeps
+    the normal command in the lock header.
+    """
     command = [uv, "pip", "compile", input_name(stem), *COMMON_FLAGS]
+    if hardened:
+        command += ["--only-binary", ":all:"]
+        for name in SDIST_ONLY:
+            command += ["--no-binary", name]
+        header = " ".join(compile_command(stem))
+        command += ["--no-config", "--custom-compile-command", header]
     if stem != "requirements":
         command += ["-c", APP_LOCK]
     if stem == "requirements-docs":
         command += ["-c", DEV_LOCK]
     command += ["-o", output_name(stem)]
     return command
+
+
+_INCLUDE = re.compile(r"^(?:-r|-c|--requirement|--constraint)(?:\s+|=)(\S+)$")
+_HASH = re.compile(r"^--hash=sha256:[0-9a-f]{64}$")
+_COMMENT = re.compile(r"(?:^|\s)#.*$")
+
+
+def untrusted_input_problems(directory: Path) -> list[str]:
+    """Return the lines in the requirement files that are unsafe to compile.
+
+    Allowed: requirement specifiers by name, ``-r``/``-c`` of another
+    requirement file in this set, and ``--hash=sha256:`` lines. Rejected:
+    every other option (index URLs, find-links, editables, build settings),
+    direct references (``name @ url``), URLs, and local paths.
+    """
+    allowed_files = {input_name(s) for s in LOCK_STEMS} | {
+        output_name(s) for s in LOCK_STEMS
+    }
+    problems: list[str] = []
+    for name in sorted(allowed_files):
+        path = directory / name
+        if not path.exists():
+            continue
+        for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            line = _COMMENT.sub("", raw).strip().removesuffix("\\").strip()
+            if not line:
+                continue
+            include = _INCLUDE.match(line)
+            if include:
+                if include.group(1) not in allowed_files:
+                    problems.append(f"{name}:{number}: include outside the lock set")
+                continue
+            if _HASH.match(line):
+                continue
+            if (
+                line.startswith(("-", ".", "/", "~", "\\"))
+                or "@" in line
+                or "://" in line
+                or not re.match(r"^[A-Za-z0-9]", line)
+            ):
+                problems.append(f"{name}:{number}: not a plain requirement: {line}")
+    return problems
 
 
 def parse_uv_version(output: str) -> str | None:
@@ -104,13 +166,17 @@ def installed_uv_version(uv: str = "uv") -> str | None:
     return parse_uv_version(result.stdout)
 
 
-def compile_all(directory: Path, *, uv: str = "uv", upgrade: bool = False) -> int:
+def compile_all(
+    directory: Path, *, uv: str = "uv", upgrade: bool = False, hardened: bool = False
+) -> int:
     """Compile every lock inside ``directory``; return the first failing exit code."""
     for stem in LOCK_STEMS:
         if upgrade:
             (directory / output_name(stem)).unlink(missing_ok=True)
         print(f"Compiling {output_name(stem)} ...", flush=True)
-        result = subprocess.run(compile_command(stem, uv), cwd=directory, check=False)
+        result = subprocess.run(
+            compile_command(stem, uv, hardened=hardened), cwd=directory, check=False
+        )
         if result.returncode != 0:
             print(f"uv pip compile failed for {input_name(stem)}.", file=sys.stderr)
             return result.returncode or 1
@@ -122,7 +188,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--upgrade", action="store_true", help="Re-resolve to the newest versions."
     )
+    parser.add_argument(
+        "--untrusted-inputs",
+        action="store_true",
+        help="Reject unsafe requirement lines and compile without building sdists.",
+    )
     args = parser.parse_args(argv)
+    directory = Path(__file__).resolve().parent.parent
+    if args.untrusted_inputs:
+        problems = untrusted_input_problems(directory)
+        if problems:
+            print("Refusing to compile untrusted inputs:", file=sys.stderr)
+            for problem in problems:
+                print(f"  {problem}", file=sys.stderr)
+            return 1
     uv = shutil.which("uv") or "uv"
     found = installed_uv_version(uv)
     if found != UV_VERSION:
@@ -133,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     return compile_all(
-        Path(__file__).resolve().parent.parent, uv=uv, upgrade=args.upgrade
+        directory, uv=uv, upgrade=args.upgrade, hardened=args.untrusted_inputs
     )
 
 

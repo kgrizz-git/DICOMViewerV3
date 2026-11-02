@@ -521,9 +521,9 @@ idna==3.20 \
     # via
     #   email-validator
     #   requests
-imageio==2.38.0 \
-    --hash=sha256:474ea3a39e36e0e8e02d81d7f10412aaecec7a2825e5fbc4f44cbcd7bb7cebfc \
-    --hash=sha256:fe1d406862f6bc2930e8ec662d7bc40d4370cb76e3390dcd33819560d2708531
+imageio==2.38.1 \
+    --hash=sha256:36d23eb7423d2fb63f637098758edb3d2df3687f7125e0a5ce8596572022dcf9 \
+    --hash=sha256:6769f1f01c4dd46448307863a787c9a22fa4dbe11c0c88f525c6e410fdfd7983
     # via
     #   -r requirements.in
     #   scikit-image

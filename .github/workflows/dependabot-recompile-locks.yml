@@ -1,0 +1,281 @@
+name: Recompile Dependabot locks
+
+# Dependabot's pip updater rewrites hashed requirements*.txt without
+# `uv pip compile --universal` at the pinned compiler. This job replaces those
+# locks and starts CI on the new commit.
+#
+# pull_request_target runs this file from the pull request base. The job runs
+# only for pull requests that Dependabot opened from a branch in this
+# repository. It downloads the base compiler and the head requirement files
+# through the API.
+# It does not check out either commit. A checkout in this privileged workflow
+# would execute the pull request tree with the job's write token, and Semgrep
+# blocks that pattern.
+#
+# A GITHUB_TOKEN commit does not start pull_request workflows, and checks from
+# a `workflow_dispatch` run do not satisfy ruleset required status checks. The
+# commit is therefore pushed with a GitHub App installation token, so the push
+# starts the normal pull_request CI. The App needs only Contents read and write
+# on this repository. Its client ID and private key are stored as both Actions
+# and Dependabot secrets (DEPENDABOT_LOCKS_APP_CLIENT_ID,
+# DEPENDABOT_LOCKS_APP_PRIVATE_KEY). GitHub restricts Dependabot-triggered
+# pull_request_target runs (read-only token, no secrets) only when Dependabot
+# created the base ref; this repository's base branches are not, so the run
+# gets a write token and repository secrets. Keeping both copies covers either
+# secret store. The App's push
+# re-triggers this workflow with the App as the actor, so the job skips and
+# does not loop. Without the secrets, the job pushes with GITHUB_TOKEN,
+# dispatches an informational CI run, and asks a maintainer to close and
+# reopen the pull request so the required checks run.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-recompile-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  recompile:
+    # github.actor alone can be spoofed: a fork with its own Dependabot opens a
+    # pull request here, and its Dependabot's pushes arrive as dependabot[bot].
+    # Require a pull request that Dependabot opened, from a branch in this
+    # repository (only writers can create one), on a pip update branch.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/pip/')
+    runs-on: ubuntu-latest
+    env:
+      HAS_APP: ${{ secrets.DEPENDABOT_LOCKS_APP_CLIENT_ID != '' && secrets.DEPENDABOT_LOCKS_APP_PRIVATE_KEY != '' }}
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
+    steps:
+      - name: Compile only when the pull request stays inside requirement files
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
+          FILES="$files" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          allowed = {
+              "requirements.in",
+              "requirements-dev.in",
+              "requirements-build.in",
+              "requirements-docs.in",
+              "requirements.txt",
+              "requirements-dev.txt",
+              "requirements-build.txt",
+              "requirements-docs.txt",
+              "requirements-phi-tools.txt",
+          }
+          compiled = allowed - {"requirements-phi-tools.txt"}
+          names = [line for line in os.environ["FILES"].splitlines() if line]
+          unexpected = sorted(set(names) - allowed)
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          if unexpected:
+              out.write_text("compile=false\n", encoding="utf-8")
+              print("Skipping recompile. Unexpected files: " + ", ".join(unexpected))
+          elif not compiled.intersection(names):
+              out.write_text("compile=false\n", encoding="utf-8")
+              print("No hashed requirement files changed.")
+          else:
+              out.write_text("compile=true\n", encoding="utf-8")
+          PY
+
+      - name: Set up Python
+        if: steps.gate.outputs.compile == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Mint a GitHub App token for the push
+        id: app
+        if: steps.gate.outputs.compile == 'true' && env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.DEPENDABOT_LOCKS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPENDABOT_LOCKS_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Recompile and commit the hashed locks
+        id: push
+        if: steps.gate.outputs.compile == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The App token when present, so the push starts pull_request CI.
+          PUSH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          head_sha = os.environ["HEAD_SHA"]
+          base_sha = os.environ["BASE_SHA"]
+          head_ref = os.environ["HEAD_REF"]
+          root = Path("recompile")
+          locks = (
+              "requirements.txt",
+              "requirements-dev.txt",
+              "requirements-build.txt",
+              "requirements-docs.txt",
+          )
+          inputs = (
+              "requirements.in",
+              "requirements-dev.in",
+              "requirements-build.in",
+              "requirements-docs.in",
+              *locks,
+          )
+
+          # Git writes use PUSH_TOKEN; downloads keep the read-only job token.
+          push_env = {**os.environ, "GH_TOKEN": os.environ["PUSH_TOKEN"]}
+
+          def gh(method, path, payload=None):
+              command = ["gh", "api", "--method", method, path]
+              if payload is not None:
+                  # gh api reads a request body from stdin only with --input -.
+                  command += ["--input", "-"]
+              result = subprocess.run(
+                  command,
+                  input=None if payload is None else json.dumps(payload),
+                  text=True,
+                  capture_output=True,
+                  check=False,
+                  env=push_env,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr.strip() or f"gh api {path} failed")
+              return json.loads(result.stdout) if result.stdout.strip() else {}
+
+          def download(path, sha, dest):
+              result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "-H",
+                      "Accept: application/vnd.github.raw",
+                      f"repos/{repo}/contents/{path}?ref={sha}",
+                  ],
+                  capture_output=True,
+                  check=False,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr.decode().strip() or f"download {path} failed")
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              dest.write_bytes(result.stdout)
+
+          download(
+              "scripts/compile_requirements.py",
+              base_sha,
+              root / "scripts" / "compile_requirements.py",
+          )
+          for name in inputs:
+              download(name, head_sha, root / name)
+          original = {name: (root / name).read_bytes() for name in locks}
+          script = (root / "scripts" / "compile_requirements.py").read_text(encoding="utf-8")
+          match = re.search(r'^UV_VERSION = "(\d+\.\d+\.\d+)"$', script, re.MULTILINE)
+          if match is None:
+              raise SystemExit("UV_VERSION pin missing from the base compiler")
+          # Package installs and sdist builds (SDIST_ONLY) run third-party
+          # code. Keep the write token out of their environment; only gh()
+          # and download() need tokens.
+          clean_env = {
+              k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN", "PUSH_TOKEN")
+          }
+          subprocess.run(
+              ["python", "-m", "pip", "install", f"uv=={match.group(1)}"],
+              check=True,
+              env=clean_env,
+          )
+          # --untrusted-inputs rejects index, URL, path, and editable lines and
+          # compiles without building arbitrary sdists, so the pull request's
+          # requirement files cannot run code with this job's token.
+          subprocess.run(
+              ["python", "scripts/compile_requirements.py", "--untrusted-inputs"],
+              cwd=root,
+              check=True,
+              env=clean_env,
+          )
+          changed = [name for name in locks if (root / name).read_bytes() != original[name]]
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          if not changed:
+              output.write_text("pushed=false\n", encoding="utf-8")
+              print("Locks already match the pinned compiler.")
+              raise SystemExit(0)
+          parent = gh("GET", f"repos/{repo}/git/commits/{head_sha}")
+          tree_entries = []
+          for name in changed:
+              blob = gh(
+                  "POST",
+                  f"repos/{repo}/git/blobs",
+                  {"content": (root / name).read_text(encoding="utf-8"), "encoding": "utf-8"},
+              )
+              tree_entries.append(
+                  {"path": name, "mode": "100644", "type": "blob", "sha": blob["sha"]}
+              )
+          tree = gh(
+              "POST",
+              f"repos/{repo}/git/trees",
+              {"base_tree": parent["tree"]["sha"], "tree": tree_entries},
+          )
+          commit = gh(
+              "POST",
+              f"repos/{repo}/git/commits",
+              {
+                  "message": "chore(deps): recompile hashed locks with pinned uv\n",
+                  "tree": tree["sha"],
+                  "parents": [head_sha],
+              },
+          )
+          gh(
+              "PATCH",
+              f"repos/{repo}/git/refs/heads/{head_ref}",
+              {"sha": commit["sha"]},
+          )
+          output.write_text("pushed=true\n", encoding="utf-8")
+          print(f"Committed {commit['sha']} with {', '.join(changed)}.")
+          PY
+
+      # There is no checkout, so gh cannot infer the repository from a git
+      # remote; GH_REPO names it.
+      - name: Report the recompiled commit
+        if: steps.push.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          USED_APP: ${{ steps.app.outputs.token != '' }}
+        run: |
+          if [ "$USED_APP" = "true" ]; then
+            body="Recompiled the hashed requirement locks with the pinned uv compiler. The push starts CI on the new commit."
+          else
+            # GITHUB_TOKEN pushes start no pull_request run, and dispatched
+            # checks do not count toward required checks. The dispatched run is
+            # informational; close and reopen to run the required checks.
+            gh workflow run ci.yml --ref "$HEAD_REF" || echo "::warning::Could not dispatch CI."
+            body="Recompiled the hashed requirement locks with the pinned uv compiler. The GitHub App secrets are not set, so required checks did not start: close and reopen this pull request to run them."
+          fi
+          gh pr comment "$PR_NUMBER" --body "$body" || echo "::warning::Could not comment on the pull request."

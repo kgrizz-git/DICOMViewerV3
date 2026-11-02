@@ -1,0 +1,80 @@
+"""Safety checks for the Dependabot hashed-lock recompile workflow.
+
+The workflow runs with the base repository's token. These tests pin the
+constraints that keep it from executing a pull request's own code.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parent.parent
+_WORKFLOW = _ROOT / ".github" / "workflows" / "dependabot-recompile-locks.yml"
+_CI = _ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def test_workflow_trusts_the_base_compiler_and_dependabot_only() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    assert "pull_request_target:" in text
+    assert "github.actor == 'dependabot[bot]'" in text
+    # The actor alone is spoofable from a fork; these pin the real gate.
+    assert "github.event.pull_request.user.login == 'dependabot[bot]'" in text
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in text
+    assert "startsWith(github.event.pull_request.head.ref, 'dependabot/pip/')" in text
+    assert '"--untrusted-inputs"' in text
+    assert "uses: actions/checkout" not in text
+    assert "git checkout" not in text
+    assert "git fetch" not in text
+    assert "application/vnd.github.raw" in text
+    assert "scripts/compile_requirements.py" in text
+    assert "/git/commits/" in text
+    assert "--upgrade" not in text
+    for name in (
+        "requirements.in",
+        "requirements-dev.in",
+        "requirements-build.in",
+        "requirements-docs.in",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "requirements-build.txt",
+        "requirements-docs.txt",
+        "requirements-phi-tools.txt",
+    ):
+        assert f'"{name}"' in text
+
+
+def test_ci_can_be_dispatched_after_a_token_push() -> None:
+    text = _CI.read_text(encoding="utf-8")
+    assert "\n  workflow_dispatch:\n" in text
+    workflow = _WORKFLOW.read_text(encoding="utf-8")
+    assert "gh workflow run ci.yml --ref" in workflow
+
+
+def test_token_stays_out_of_build_env_and_gh_names_the_repo() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    # Package installs and sdist builds must not inherit the write token.
+    assert text.count("env=clean_env") == 2
+    # No checkout, so gh pr/workflow commands need GH_REPO.
+    assert "GH_REPO: ${{ github.repository }}" in text
+    dispatch = text.index("gh workflow run ci.yml")
+    assert dispatch < text.index("gh pr comment")
+
+
+def test_gh_api_payload_is_read_from_stdin() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    # Without --input -, gh api ignores stdin and sends POST/PATCH bodies empty.
+    assert 'command += ["--input", "-"]' in text
+
+
+def test_push_uses_app_token_so_required_checks_run() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    # workflow_dispatch checks do not satisfy ruleset required checks, so the
+    # push must come from a token whose pushes start pull_request workflows.
+    assert "actions/create-github-app-token@" in text
+    assert "permission-contents: write" in text
+    assert "secrets.DEPENDABOT_LOCKS_APP_CLIENT_ID" in text
+    assert "secrets.DEPENDABOT_LOCKS_APP_PRIVATE_KEY" in text
+    assert "PUSH_TOKEN: ${{ steps.app.outputs.token || github.token }}" in text
+    # Git writes use the push token; the build env must not see it.
+    assert '"GH_TOKEN": os.environ["PUSH_TOKEN"]' in text
+    assert '"PUSH_TOKEN")' in text

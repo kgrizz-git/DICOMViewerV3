@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-11-01
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -98,7 +98,7 @@ what the launchers, CI, frozen builds and `pip-audit` install and scan.
 
 After editing a `.in` file, run `python scripts/compile_requirements.py` (add
 `--upgrade` to re-resolve to the newest versions) and commit the `.in` and `.txt`
-files together. It needs network access and `uv==0.13.4`, which
+files together. It needs network access and `uv==0.13.5`, which
 `requirements-dev.txt` installs. The lock is universal: one file is valid on Windows,
 macOS and Linux for Python 3.12. Never hand-edit a `.txt` lock. CI **Requirements
 locks match** (`python scripts/check_requirements_lock.py`) recompiles with the
@@ -106,6 +106,22 @@ committed pins kept. It fails on a missing or non-uv lock, a package that is not
 resolution, a pin outside the `.in` floors, and hash or format drift. It catches an in-range bump of an app pin made only in `requirements.txt`, because the dev, build, and docs recompiles are constrained by the app lock. It does not catch
 a version bumped by hand only in the dev, build, or docs lock, because that is still a valid resolution. Do not run `pip-compile` on these files; it resolves for the host platform
 only and would drop the other platforms' packages.
+
+A Dependabot pull request that edits these requirement files is recompiled by
+[`.github/workflows/dependabot-recompile-locks.yml`](../.github/workflows/dependabot-recompile-locks.yml).
+That workflow pushes the four hashed locks with a GitHub App token, so the
+push starts the normal pull request CI. The App needs Contents read and write
+on this repository only, and its client ID and private key go in both the
+Actions and the Dependabot secrets as `DEPENDABOT_LOCKS_APP_CLIENT_ID` and
+`DEPENDABOT_LOCKS_APP_PRIVATE_KEY`. Without them the push does not start the
+required checks, and the pull request must be closed and reopened. It uses the compiler
+script from the pull request base, so a uv pin bump in `requirements-dev.in`
+still needs `UV_VERSION` and the `ci.yml` pin updated in the same change.
+It runs only for pull requests that Dependabot opened from a `dependabot/pip/`
+branch in this repository, and compiles with `--untrusted-inputs`, which
+rejects index, URL, path, and editable lines and refuses to build source
+distributions other than those in `SDIST_ONLY`. A new dependency that ships
+only an sdist makes that run fail; add it to `SDIST_ONLY` after review.
 
 ## Optional contributor tooling
 

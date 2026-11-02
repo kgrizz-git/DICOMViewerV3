@@ -228,7 +228,7 @@ def test_workflows_install_docs_tooling_from_hashed_lock(workflow: str) -> None:
 def test_docs_input_holds_zensical_and_pyyaml_floors_matching_dev() -> None:
     docs = (_ROOT / "requirements-docs.in").read_text(encoding="utf-8")
     dev = (_ROOT / "requirements-dev.in").read_text(encoding="utf-8")
-    for line in ("zensical>=0.0.68,<0.1", "PyYAML>=6.0.3"):
+    for line in ("zensical>=0.0.72,<0.1", "PyYAML>=6.0.3"):
         assert re.search(rf"^{re.escape(line)}$", docs, re.MULTILINE)
         assert re.search(rf"^{re.escape(line)}$", dev, re.MULTILINE)
 
@@ -453,3 +453,61 @@ def test_ci_launcher_windows_job_actions_are_sha_pinned() -> None:
     assert uses
     for ref in uses:
         assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", ref), ref
+
+
+def test_hardened_command_blocks_builds_and_keeps_the_normal_header() -> None:
+    for stem in cr.LOCK_STEMS:
+        cmd = cr.compile_command(stem, hardened=True)
+        assert cmd[cmd.index("--only-binary") + 1] == ":all:"
+        assert "--no-config" in cmd
+        header = cmd[cmd.index("--custom-compile-command") + 1]
+        assert header == " ".join(cr.compile_command(stem))
+        assert cmd[-2:] == ["-o", cr.output_name(stem)]
+
+
+def test_current_requirement_files_pass_the_untrusted_input_check() -> None:
+    assert cr.untrusted_input_problems(_ROOT) == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "evil @ https://example.invalid/evil.tar.gz",
+        "git+https://example.invalid/evil.git",
+        "--index-url https://example.invalid/simple",
+        "--extra-index-url https://example.invalid/simple",
+        "-i https://example.invalid/simple",
+        "--find-links /tmp",
+        "-e .",
+        "./local-package",
+        "/abs/path.whl",
+        "-r ../outside.txt",
+        "-c /etc/passwd",
+        "--config-settings foo=bar",
+    ],
+)
+def test_untrusted_input_check_rejects_unsafe_lines(tmp_path: Path, line: str) -> None:
+    (tmp_path / "requirements.in").write_text(f"numpy>=2\n{line}\n", encoding="utf-8")
+    assert len(cr.untrusted_input_problems(tmp_path)) == 1
+
+
+def test_untrusted_input_check_allows_plain_lines(tmp_path: Path) -> None:
+    (tmp_path / "requirements-dev.in").write_text(
+        "-r requirements.in\n"
+        "-c requirements.txt\n"
+        "uv==0.13.5  # pinned\n"
+        'colorama==0.4.6 ; sys_platform == "win32" \\\n'
+        "    --hash=sha256:" + "a" * 64 + "\n",
+        encoding="utf-8",
+    )
+    assert cr.untrusted_input_problems(tmp_path) == []
+
+
+def test_main_refuses_unsafe_untrusted_inputs() -> None:
+    with (
+        mock.patch.object(cr, "installed_uv_version", return_value=cr.UV_VERSION),
+        mock.patch.object(cr, "untrusted_input_problems", return_value=["x"]),
+        mock.patch.object(cr, "compile_all") as compile_all,
+    ):
+        assert cr.main(["--untrusted-inputs"]) == 1
+    compile_all.assert_not_called()
