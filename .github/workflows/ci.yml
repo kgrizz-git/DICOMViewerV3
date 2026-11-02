@@ -77,6 +77,9 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # A GITHUB_TOKEN push does not start pull_request workflows. The Dependabot
+  # lock recompile dispatches this workflow on the updated head branch.
+  workflow_dispatch:
   schedule:
     # Weekly health sweep: Sundays 01:00 UTC (replaces per-workflow schedules).
     - cron: '0 1 * * 0'

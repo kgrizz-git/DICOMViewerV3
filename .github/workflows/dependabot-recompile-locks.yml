@@ -1,0 +1,137 @@
+name: Recompile Dependabot locks
+
+# Dependabot's pip updater rewrites hashed requirements*.txt without
+# `uv pip compile --universal` at the pinned compiler. This job replaces those
+# locks and starts CI on the new commit.
+#
+# pull_request_target runs this file from the pull request base, so the
+# compiler script is the trusted base copy. The job imports only the
+# requirement files from the head commit. It does not run any other file from
+# that commit. A GITHUB_TOKEN push does not start pull_request workflows, so
+# the last step dispatches CI. That dispatch needs `workflow_dispatch` in
+# ci.yml as it exists on the head branch, which holds for Dependabot branches
+# created after this workflow is on the default branch.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-recompile-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  recompile:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
+    steps:
+      - name: Compile only when the pull request stays inside requirement files
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
+          FILES="$files" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          allowed = {
+              "requirements.in",
+              "requirements-dev.in",
+              "requirements-build.in",
+              "requirements-docs.in",
+              "requirements.txt",
+              "requirements-dev.txt",
+              "requirements-build.txt",
+              "requirements-docs.txt",
+              "requirements-phi-tools.txt",
+          }
+          compiled = allowed - {"requirements-phi-tools.txt"}
+          names = [line for line in os.environ["FILES"].splitlines() if line]
+          unexpected = sorted(set(names) - allowed)
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          if unexpected:
+              out.write_text("compile=false\n", encoding="utf-8")
+              print("Skipping recompile. Unexpected files: " + ", ".join(unexpected))
+          elif not compiled.intersection(names):
+              out.write_text("compile=false\n", encoding="utf-8")
+              print("No hashed requirement files changed.")
+          else:
+              out.write_text("compile=true\n", encoding="utf-8")
+          PY
+
+      - name: Checkout the base compiler
+        if: steps.gate.outputs.compile == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        if: steps.gate.outputs.compile == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Recompile from the pull request requirement files
+        if: steps.gate.outputs.compile == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "$HEAD_SHA"
+          git checkout --detach "$HEAD_SHA"
+          git show "${BASE_SHA}:scripts/compile_requirements.py" > scripts/compile_requirements.py
+          uv_version="$(python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("scripts/compile_requirements.py").read_text(encoding="utf-8")
+          match = re.search(r'^UV_VERSION = "(\d+\.\d+\.\d+)"$', text, re.MULTILINE)
+          if match is None:
+              raise SystemExit("UV_VERSION pin missing from the base compiler")
+          print(match.group(1))
+          PY
+          )"
+          python -m pip install "uv==${uv_version}"
+          python scripts/compile_requirements.py
+
+      - name: Push the recompiled locks
+        id: push
+        if: steps.gate.outputs.compile == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git add requirements.txt requirements-dev.txt requirements-build.txt requirements-docs.txt
+          if git diff --cached --quiet; then
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            echo "Locks already match the pinned compiler."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "chore(deps): recompile hashed locks with pinned uv"
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          gh pr comment "$PR_NUMBER" --body "Recompiled the hashed requirement locks with the pinned uv compiler and started CI on the new commit."
+
+      - name: Start CI on the recompiled commit
+        if: steps.push.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: gh workflow run ci.yml --ref "$HEAD_REF"

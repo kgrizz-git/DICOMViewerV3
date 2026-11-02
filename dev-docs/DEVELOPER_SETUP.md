@@ -107,6 +107,12 @@ resolution, a pin outside the `.in` floors, and hash or format drift. It catches
 a version bumped by hand only in the dev, build, or docs lock, because that is still a valid resolution. Do not run `pip-compile` on these files; it resolves for the host platform
 only and would drop the other platforms' packages.
 
+A Dependabot pull request that edits these requirement files is recompiled by
+[`.github/workflows/dependabot-recompile-locks.yml`](../.github/workflows/dependabot-recompile-locks.yml).
+That workflow pushes the four hashed locks and starts CI. It uses the compiler
+script from the pull request base, so a uv pin bump in `requirements-dev.in`
+still needs `UV_VERSION` and the `ci.yml` pin updated in the same change.
+
 ## Optional contributor tooling
 
 Security scanners and related CLI tools are **not** in `requirements.txt` or `requirements.in`. For parity with CI docs:
