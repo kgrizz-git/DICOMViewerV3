@@ -84,6 +84,10 @@ jobs:
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           elif [ "${{ github.event_name }}" = "push" ]; then
             BASE_SHA="${{ github.event.before }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # A dispatched run (for example after the Dependabot lock
+            # recompile pushes a commit) has no range; scan the whole tree.
+            TREE_SCAN="true"
           else
             SKIP_REASON="Unsupported event '${{ github.event_name }}' for TruffleHog range scan"
           fi
@@ -100,7 +104,7 @@ jobs:
           echo "tree_scan=$TREE_SCAN" >> "$GITHUB_OUTPUT"
           if [ "$TREE_SCAN" = "true" ]; then
             echo "should_scan=false" >> "$GITHUB_OUTPUT"
-            echo "TruffleHog will scan the full checked-out tree (initial/new-ref push)."
+            echo "TruffleHog will scan the full checked-out tree (initial/new-ref push or dispatch)."
           elif [ -n "$SKIP_REASON" ]; then
             echo "should_scan=false" >> "$GITHUB_OUTPUT"
             echo "skip_reason=$SKIP_REASON" >> "$GITHUB_OUTPUT"

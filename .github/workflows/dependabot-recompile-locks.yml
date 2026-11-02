@@ -165,9 +165,16 @@ jobs:
           match = re.search(r'^UV_VERSION = "(\d+\.\d+\.\d+)"$', script, re.MULTILINE)
           if match is None:
               raise SystemExit("UV_VERSION pin missing from the base compiler")
+          # Package installs and sdist builds (SDIST_ONLY) run third-party
+          # code. Keep the write token out of their environment; only gh()
+          # and download() need it.
+          clean_env = {
+              k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN")
+          }
           subprocess.run(
               ["python", "-m", "pip", "install", f"uv=={match.group(1)}"],
               check=True,
+              env=clean_env,
           )
           # --untrusted-inputs rejects index, URL, path, and editable lines and
           # compiles without building arbitrary sdists, so the pull request's
@@ -176,6 +183,7 @@ jobs:
               ["python", "scripts/compile_requirements.py", "--untrusted-inputs"],
               cwd=root,
               check=True,
+              env=clean_env,
           )
           changed = [name for name in locks if (root / name).read_bytes() != original[name]]
           output = Path(os.environ["GITHUB_OUTPUT"])
@@ -216,13 +224,17 @@ jobs:
           output.write_text("pushed=true\n", encoding="utf-8")
           print(f"Committed {commit['sha']} with {', '.join(changed)}.")
           PY
-          if [ "$(grep '^pushed=' "$GITHUB_OUTPUT" | cut -d= -f2)" = "true" ]; then
-            gh pr comment "$PR_NUMBER" --body "Recompiled the hashed requirement locks with the pinned uv compiler and started CI on the new commit."
-          fi
 
+      # There is no checkout, so gh cannot infer the repository from a git
+      # remote; GH_REPO names it. Dispatch CI first so a failed comment
+      # cannot leave the new commit without a CI run.
       - name: Start CI on the recompiled commit
         if: steps.push.outputs.pushed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: gh workflow run ci.yml --ref "$HEAD_REF"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh workflow run ci.yml --ref "$HEAD_REF"
+          gh pr comment "$PR_NUMBER" --body "Recompiled the hashed requirement locks with the pinned uv compiler and started CI on the new commit." || echo "::warning::Could not comment on the pull request."

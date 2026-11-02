@@ -48,3 +48,13 @@ def test_ci_can_be_dispatched_after_a_token_push() -> None:
     assert "\n  workflow_dispatch:\n" in text
     workflow = _WORKFLOW.read_text(encoding="utf-8")
     assert "gh workflow run ci.yml --ref" in workflow
+
+
+def test_token_stays_out_of_build_env_and_gh_names_the_repo() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    # Package installs and sdist builds must not inherit the write token.
+    assert text.count("env=clean_env") == 2
+    # No checkout, so gh pr/workflow commands need GH_REPO.
+    assert "GH_REPO: ${{ github.repository }}" in text
+    dispatch = text.index("gh workflow run ci.yml")
+    assert dispatch < text.index("gh pr comment")
