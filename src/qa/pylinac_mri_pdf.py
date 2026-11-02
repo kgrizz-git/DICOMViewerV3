@@ -376,7 +376,7 @@ def assemble_mri_compare_pdf(
     ``output_path``.  Cleans up ``summary_path`` and all temp run PDFs after
     a successful or failed merge (best-effort cleanup).
 
-    Requires ``pypdf>=4.0.0`` (added to requirements.txt).
+    Requires ``pypdf>=6.21.4`` (floor in requirements.in).
 
     Args:
         summary_path: Path to the viewer-authored summary PDF.
@@ -391,7 +391,7 @@ def assemble_mri_compare_pdf(
     except ImportError:
         logger.error(
             "pypdf is not installed; cannot assemble combined compare PDF. "
-            "Install with: pip install pypdf>=4.0.0"
+            "Install with: pip install 'pypdf>=6.21.4'"
         )
         return False
 

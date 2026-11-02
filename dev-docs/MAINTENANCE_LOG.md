@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-10-24
+**Last updated:** 2026-11-01
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-11-01
+
+- **pypdf 6.21.4.** `requirements.in` requires `pypdf>=6.21.4` for CVE-2026-119203 through CVE-2026-119209 (fixed in 6.21.3 and 6.21.4), which failed `pip-audit` and `osv-scanner` on `main`. The locks were recompiled. 6.21.4 was four days old; the Dependabot cooldown does not apply to security fixes.
 
 ## 2026-10-24
 
