@@ -64,3 +64,17 @@ def test_gh_api_payload_is_read_from_stdin() -> None:
     text = _WORKFLOW.read_text(encoding="utf-8")
     # Without --input -, gh api ignores stdin and sends POST/PATCH bodies empty.
     assert 'command += ["--input", "-"]' in text
+
+
+def test_push_uses_app_token_so_required_checks_run() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    # workflow_dispatch checks do not satisfy ruleset required checks, so the
+    # push must come from a token whose pushes start pull_request workflows.
+    assert "actions/create-github-app-token@" in text
+    assert "permission-contents: write" in text
+    assert "secrets.DEPENDABOT_LOCKS_APP_CLIENT_ID" in text
+    assert "secrets.DEPENDABOT_LOCKS_APP_PRIVATE_KEY" in text
+    assert "PUSH_TOKEN: ${{ steps.app.outputs.token || github.token }}" in text
+    # Git writes use the push token; the build env must not see it.
+    assert '"GH_TOKEN": os.environ["PUSH_TOKEN"]' in text
+    assert '"PUSH_TOKEN")' in text
