@@ -167,7 +167,7 @@ enforcement: the same silent-no-op shape this section exists to prevent.
 
 **Fork PRs.** The semgrep and grype jobs gate their SARIF uploads *and* their
 PR comments on `github.event.pull_request.head.repo.full_name ==
-github.repository`, matching the CodeRabbit job. A fork PR gets a read-only
+github.repository`. A fork PR gets a read-only
 `GITHUB_TOKEN`, so `security-events: write` and `issues.createComment` both 403 —
 and with the uploads now blocking, an unguarded fork PR would turn the required
 **Semgrep Security Audit** check red on an outside contribution.
