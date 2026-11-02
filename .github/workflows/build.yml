@@ -116,7 +116,7 @@ jobs:
 
       - name: Set up Python
         id: setup-python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -164,7 +164,7 @@ jobs:
           echo "key=${KEY}" >> "$GITHUB_OUTPUT"
 
       - name: Restore staged LGPL FFmpeg cache
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: ffmpeg_cache
         with:
           path: build/ffmpeg-lgpl
@@ -188,7 +188,7 @@ jobs:
 
       - name: Install MSYS2 toolchain (Windows)
         if: matrix.os == 'windows-latest' && steps.ffmpeg_staged.outputs.present != 'true'
-        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2.28.0
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: MINGW64
           update: true
@@ -537,7 +537,7 @@ jobs:
       # Windows artifact: one-folder PyInstaller output
       - name: Upload build artifacts (Windows)
         if: matrix.os == 'windows-latest' && inputs.publish_to_release != true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ matrix.artifact_name }}
           path: |
@@ -548,7 +548,7 @@ jobs:
       # macOS artifact: DMG containing only DICOMViewerV3.app
       - name: Upload build artifacts (macOS)
         if: matrix.os == 'macos-latest' && inputs.publish_to_release != true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ matrix.artifact_name }}
           path: |
@@ -558,7 +558,7 @@ jobs:
       # Linux artifact: AppImage only
       - name: Upload build artifacts (Linux)
         if: matrix.os == 'ubuntu-latest' && inputs.publish_to_release != true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ matrix.artifact_name }}
           path: |
