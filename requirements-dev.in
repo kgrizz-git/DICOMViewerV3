@@ -20,7 +20,7 @@
 # Lock compiler for the requirements*.txt files. The version must match the
 # `uv==` pin in .github/workflows/ci.yml and UV_VERSION in
 # scripts/compile_requirements.py (tests/test_compile_requirements.py enforces it).
-uv==0.13.4
+uv==0.13.5
 
 detect-secrets>=1.5.0
 pip-audit>=2.10.1
@@ -36,10 +36,10 @@ pytest-cov>=7.1.0
 # Parallel test execution (pytest-xdist): splits tests across workers.
 pytest-xdist>=3.8.0
 # Linter (fast, drop-in replacement for flake8 + isort + pyupgrade)
-ruff>=0.16.10
+ruff>=0.17.2
 # Complexity analysis (cyclomatic complexity, NLOC, etc.). Pin to keep the
 # grandfathered CCN baseline reproducible in local checks and CI.
-lizard==1.24.1
+lizard==1.24.3
 # Docstring coverage measurement (percentage of documented functions/classes).
 # Used by MAIN_PY_REFACTOR_PLAN.md to gate docstring regressions during the
 # main.py split; run from repo root:
@@ -53,10 +53,10 @@ interrogate>=1.7.0
 # Cap mkdocs<2: Material / this pilot config target the 1.x plugin surface;
 # MkDocs 2.x is not a drop-in. See USER_DOCS_PLATFORM_AND_SYNC_HARNESS_PLAN.md.
 mkdocs>=1.6.1,<2
-mkdocs-material>=9.7.7,<10
+mkdocs-material>=9.8.0,<10
 # Phase CZ Zensical pilot (dev-only): cap <0.1 so 0.0.x patches float but a
 # 0.1/1.x release (likely breaking at this maturity) needs explicit review.
-zensical>=0.0.68,<0.1
+zensical>=0.0.72,<0.1
 # Direct test dependency (tests/test_docs_config_alignment.py parses mkdocs.yml).
 # Resolves transitively via mkdocs today; pinned explicit so the suite does not
 # depend on that chain.

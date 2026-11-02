@@ -9,8 +9,8 @@
 # appropriate spaCy model.
 phi-scan==0.7.0; python_version >= "3.12"
 typer==0.24.1; python_version >= "3.12"
-presidio-analyzer==2.2.364
-presidio-image-redactor==0.0.60
+presidio-analyzer==2.2.365
+presidio-image-redactor==0.0.61
 # Security floors for spaCy -> weasel -> httpx -> httpcore -> h11. httpcore
 # <1.0.9 caps h11 <0.15, so a minimum-version resolve (as Aikido does) lands on
 # h11 0.14.0 (CVE-2025-43859, chunked-body request smuggling; fixed in 0.16.0).
