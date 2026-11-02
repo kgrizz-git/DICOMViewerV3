@@ -1886,9 +1886,9 @@ pylibjpeg-rle==2.2.0 \
     # via
     #   -c requirements.txt
     #   -r requirements.in
-pylinac==3.43.2 \
-    --hash=sha256:86160d087adc86cd59e263dbafad799580e287a2db656c1397d2bd0d1b321113 \
-    --hash=sha256:d82d97d41ce8ccc2dd4ad058fb0f86e3dc13f66c41afab2a7fa36bee46d509f3
+pylinac==3.49.0 \
+    --hash=sha256:0201cacc9ee946dd056935c9c84911f1094ab9041224862d010ae4f50bf7119f \
+    --hash=sha256:1fa4ce4ecd54dc4468f8abd5b298b747c1fb8fc2a6062b52e513b50548af94f6
     # via
     #   -c requirements.txt
     #   -r requirements.in
