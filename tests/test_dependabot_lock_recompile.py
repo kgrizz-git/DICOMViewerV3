@@ -17,10 +17,13 @@ def test_workflow_trusts_the_base_compiler_and_dependabot_only() -> None:
     text = _WORKFLOW.read_text(encoding="utf-8")
     assert "pull_request_target:" in text
     assert "github.actor == 'dependabot[bot]'" in text
-    assert "persist-credentials: false" in text
-    assert "git show" in text and "scripts/compile_requirements.py" in text
+    assert "uses: actions/checkout" not in text
+    assert "git checkout" not in text
+    assert "git fetch" not in text
+    assert "application/vnd.github.raw" in text
+    assert "scripts/compile_requirements.py" in text
+    assert "/git/commits/" in text
     assert "--upgrade" not in text
-    assert "github.event.pull_request.head.sha" not in text.split("uses: actions/checkout")[1].split("python-version")[0]
     for name in (
         "requirements.in",
         "requirements-dev.in",

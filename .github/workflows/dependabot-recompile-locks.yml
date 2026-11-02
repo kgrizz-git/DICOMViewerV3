@@ -4,13 +4,14 @@ name: Recompile Dependabot locks
 # `uv pip compile --universal` at the pinned compiler. This job replaces those
 # locks and starts CI on the new commit.
 #
-# pull_request_target runs this file from the pull request base, so the
-# compiler script is the trusted base copy. The job imports only the
-# requirement files from the head commit. It does not run any other file from
-# that commit. A GITHUB_TOKEN push does not start pull_request workflows, so
-# the last step dispatches CI. That dispatch needs `workflow_dispatch` in
-# ci.yml as it exists on the head branch, which holds for Dependabot branches
-# created after this workflow is on the default branch.
+# pull_request_target runs this file from the pull request base. The job
+# downloads the base compiler and the head requirement files through the API.
+# It does not check out either commit. A checkout in this privileged workflow
+# would execute the pull request tree with the job's write token, and Semgrep
+# blocks that pattern. A GITHUB_TOKEN commit does not
+# start pull_request workflows, so the last step dispatches CI. That dispatch
+# needs workflow_dispatch in ci.yml on the head branch, which holds for
+# Dependabot branches created after this workflow is on the default branch.
 
 on:
   pull_request_target:
@@ -69,65 +70,138 @@ jobs:
               out.write_text("compile=true\n", encoding="utf-8")
           PY
 
-      - name: Checkout the base compiler
-        if: steps.gate.outputs.compile == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          persist-credentials: false
-          fetch-depth: 1
-
       - name: Set up Python
         if: steps.gate.outputs.compile == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
-      - name: Recompile from the pull request requirement files
-        if: steps.gate.outputs.compile == 'true'
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch --depth=1 origin "$HEAD_SHA"
-          git checkout --detach "$HEAD_SHA"
-          git show "${BASE_SHA}:scripts/compile_requirements.py" > scripts/compile_requirements.py
-          uv_version="$(python - <<'PY'
-          import re
-          from pathlib import Path
-          text = Path("scripts/compile_requirements.py").read_text(encoding="utf-8")
-          match = re.search(r'^UV_VERSION = "(\d+\.\d+\.\d+)"$', text, re.MULTILINE)
-          if match is None:
-              raise SystemExit("UV_VERSION pin missing from the base compiler")
-          print(match.group(1))
-          PY
-          )"
-          python -m pip install "uv==${uv_version}"
-          python scripts/compile_requirements.py
-
-      - name: Push the recompiled locks
+      - name: Recompile and commit the hashed locks
         id: push
         if: steps.gate.outputs.compile == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          git add requirements.txt requirements-dev.txt requirements-build.txt requirements-docs.txt
-          if git diff --cached --quiet; then
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
-            echo "Locks already match the pinned compiler."
-            exit 0
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          head_sha = os.environ["HEAD_SHA"]
+          base_sha = os.environ["BASE_SHA"]
+          head_ref = os.environ["HEAD_REF"]
+          root = Path("recompile")
+          locks = (
+              "requirements.txt",
+              "requirements-dev.txt",
+              "requirements-build.txt",
+              "requirements-docs.txt",
+          )
+          inputs = (
+              "requirements.in",
+              "requirements-dev.in",
+              "requirements-build.in",
+              "requirements-docs.in",
+              *locks,
+          )
+
+          def gh(method, path, payload=None):
+              command = ["gh", "api", "--method", method, path]
+              result = subprocess.run(
+                  command,
+                  input=None if payload is None else json.dumps(payload),
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr.strip() or f"gh api {path} failed")
+              return json.loads(result.stdout) if result.stdout.strip() else {}
+
+          def download(path, sha, dest):
+              result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "-H",
+                      "Accept: application/vnd.github.raw",
+                      f"repos/{repo}/contents/{path}?ref={sha}",
+                  ],
+                  capture_output=True,
+                  check=False,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr.decode().strip() or f"download {path} failed")
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              dest.write_bytes(result.stdout)
+
+          download(
+              "scripts/compile_requirements.py",
+              base_sha,
+              root / "scripts" / "compile_requirements.py",
+          )
+          for name in inputs:
+              download(name, head_sha, root / name)
+          original = {name: (root / name).read_bytes() for name in locks}
+          script = (root / "scripts" / "compile_requirements.py").read_text(encoding="utf-8")
+          match = re.search(r'^UV_VERSION = "(\d+\.\d+\.\d+)"$', script, re.MULTILINE)
+          if match is None:
+              raise SystemExit("UV_VERSION pin missing from the base compiler")
+          subprocess.run(
+              ["python", "-m", "pip", "install", f"uv=={match.group(1)}"],
+              check=True,
+          )
+          subprocess.run(["python", "scripts/compile_requirements.py"], cwd=root, check=True)
+          changed = [name for name in locks if (root / name).read_bytes() != original[name]]
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          if not changed:
+              output.write_text("pushed=false\n", encoding="utf-8")
+              print("Locks already match the pinned compiler.")
+              raise SystemExit(0)
+          parent = gh("GET", f"repos/{repo}/git/commits/{head_sha}")
+          tree_entries = []
+          for name in changed:
+              blob = gh(
+                  "POST",
+                  f"repos/{repo}/git/blobs",
+                  {"content": (root / name).read_text(encoding="utf-8"), "encoding": "utf-8"},
+              )
+              tree_entries.append(
+                  {"path": name, "mode": "100644", "type": "blob", "sha": blob["sha"]}
+              )
+          tree = gh(
+              "POST",
+              f"repos/{repo}/git/trees",
+              {"base_tree": parent["tree"]["sha"], "tree": tree_entries},
+          )
+          commit = gh(
+              "POST",
+              f"repos/{repo}/git/commits",
+              {
+                  "message": "chore(deps): recompile hashed locks with pinned uv\n",
+                  "tree": tree["sha"],
+                  "parents": [head_sha],
+              },
+          )
+          gh(
+              "PATCH",
+              f"repos/{repo}/git/refs/heads/{head_ref}",
+              {"sha": commit["sha"]},
+          )
+          output.write_text("pushed=true\n", encoding="utf-8")
+          print(f"Committed {commit['sha']} with {', '.join(changed)}.")
+          PY
+          if [ "$(grep '^pushed=' "$GITHUB_OUTPUT" | cut -d= -f2)" = "true" ]; then
+            gh pr comment "$PR_NUMBER" --body "Recompiled the hashed requirement locks with the pinned uv compiler and started CI on the new commit."
           fi
-          git -c user.name="github-actions[bot]" \
-            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -m "chore(deps): recompile hashed locks with pinned uv"
-          gh auth setup-git
-          git push origin "HEAD:refs/heads/${HEAD_REF}"
-          echo "pushed=true" >> "$GITHUB_OUTPUT"
-          gh pr comment "$PR_NUMBER" --body "Recompiled the hashed requirement locks with the pinned uv compiler and started CI on the new commit."
 
       - name: Start CI on the recompiled commit
         if: steps.push.outputs.pushed == 'true'
