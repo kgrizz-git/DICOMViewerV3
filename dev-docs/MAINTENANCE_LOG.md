@@ -7,6 +7,7 @@ This file records development and repository-maintenance history that is useful 
 ## 2026-11-01
 
 - **pypdf 6.21.4.** `requirements.in` requires `pypdf>=6.21.4` for CVE-2026-119203 through CVE-2026-119209 (fixed in 6.21.3 and 6.21.4), which failed `pip-audit` and `osv-scanner` on `main`. The locks were recompiled. 6.21.4 was four days old; the Dependabot cooldown does not apply to security fixes.
+- **Python patch/minor floors, recompiled with uv 0.13.5.** Dependabot PR #214 failed CI because it rewrote `requirements*.txt` without `uv pip compile --universal` at the pinned compiler. The pytest job then rejected that lock (`no trusted hash was provided for pip`), and **Requirements locks match** rejected it as stale. The floors are now `imageio==2.38.1`, `lizard==1.24.3`, `mkdocs-material>=9.8.0`, `ruff>=0.17.2`, `zensical>=0.0.72,<0.1`, and `uv==0.13.5` (also `UV_VERSION` and the CI pin). Recompiling kept the universal markers (`colorama`, `cffi`, `cryptography`, `pefile`, `macholib`) and resolved ruff 0.17.3 and zensical 0.0.74, which are the newest releases inside those floors. `requirements-phi-tools.txt` pins presidio-analyzer 2.2.365 and presidio-image-redactor 0.0.61; the image redactor still caps `pillow<13`, so the PHI-lane Pillow exception stays.
 
 ## 2026-10-24
 

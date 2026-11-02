@@ -166,7 +166,7 @@ jobs:
           # (pip took ~45s here even with a warm wheel cache). Pinned so CI is
           # reproducible; bump deliberately. Other jobs keep pip, and so do the
           # launch scripts, so pip resolution is still exercised in CI.
-          python -m pip install "uv==0.13.4"
+          python -m pip install "uv==0.13.5"
           # requirements-dev.txt is the hashed lock of requirements-dev.in; it includes the app lock plus lizard, pytest-cov, etc.
           uv pip install --system --require-hashes -r requirements-dev.txt
 
@@ -361,7 +361,7 @@ jobs:
       - name: Install pip-audit
         run: pip install "pip-audit>=2.10.1"
 
-      # presidio-image-redactor 0.0.60 caps pillow<13.0.0, so this isolated
+      # presidio-image-redactor 0.0.61 caps pillow<13.0.0, so this isolated
       # environment resolves to Pillow 12.x (12.3.0), while the app lock is on
       # 13.0.0. New Pillow advisories keep landing, so a per-ID ignore list
       # does not hold. scripts/audit_phi_tools.py tolerates one rule instead:
@@ -632,7 +632,7 @@ jobs:
           python-version: "3.12"
       - name: Install the pinned lock compiler
         # Must equal UV_VERSION in scripts/compile_requirements.py (a unit test checks it).
-        run: python -m pip install "uv==0.13.4"
+        run: python -m pip install "uv==0.13.5"
       - name: Check that requirements*.txt match requirements*.in
         run: python scripts/check_requirements_lock.py
 

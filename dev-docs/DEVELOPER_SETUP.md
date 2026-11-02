@@ -1,6 +1,6 @@
 # Developer setup and troubleshooting
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-11-01
 
 Use this page with [CONTRIBUTING.md](CONTRIBUTING.md) (hooks, CI, releases), [AGENTS.md](../AGENTS.md) (venv, module layout, agents), and [tests/README.md](../tests/README.md).
 
@@ -98,7 +98,7 @@ what the launchers, CI, frozen builds and `pip-audit` install and scan.
 
 After editing a `.in` file, run `python scripts/compile_requirements.py` (add
 `--upgrade` to re-resolve to the newest versions) and commit the `.in` and `.txt`
-files together. It needs network access and `uv==0.13.4`, which
+files together. It needs network access and `uv==0.13.5`, which
 `requirements-dev.txt` installs. The lock is universal: one file is valid on Windows,
 macOS and Linux for Python 3.12. Never hand-edit a `.txt` lock. CI **Requirements
 locks match** (`python scripts/check_requirements_lock.py`) recompiles with the

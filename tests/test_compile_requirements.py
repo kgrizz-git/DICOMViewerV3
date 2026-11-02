@@ -228,7 +228,7 @@ def test_workflows_install_docs_tooling_from_hashed_lock(workflow: str) -> None:
 def test_docs_input_holds_zensical_and_pyyaml_floors_matching_dev() -> None:
     docs = (_ROOT / "requirements-docs.in").read_text(encoding="utf-8")
     dev = (_ROOT / "requirements-dev.in").read_text(encoding="utf-8")
-    for line in ("zensical>=0.0.68,<0.1", "PyYAML>=6.0.3"):
+    for line in ("zensical>=0.0.72,<0.1", "PyYAML>=6.0.3"):
         assert re.search(rf"^{re.escape(line)}$", docs, re.MULTILINE)
         assert re.search(rf"^{re.escape(line)}$", dev, re.MULTILINE)
 

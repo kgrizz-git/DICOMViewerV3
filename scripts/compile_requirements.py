@@ -39,7 +39,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-UV_VERSION = "0.13.4"
+UV_VERSION = "0.13.5"
 PYTHON_VERSION = "3.12"
 
 # Order matters: the app lock constrains the others, and the dev lock also
