@@ -58,3 +58,9 @@ def test_token_stays_out_of_build_env_and_gh_names_the_repo() -> None:
     assert "GH_REPO: ${{ github.repository }}" in text
     dispatch = text.index("gh workflow run ci.yml")
     assert dispatch < text.index("gh pr comment")
+
+
+def test_gh_api_payload_is_read_from_stdin() -> None:
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    # Without --input -, gh api ignores stdin and sends POST/PATCH bodies empty.
+    assert 'command += ["--input", "-"]' in text

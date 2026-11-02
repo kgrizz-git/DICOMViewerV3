@@ -125,6 +125,9 @@ jobs:
 
           def gh(method, path, payload=None):
               command = ["gh", "api", "--method", method, path]
+              if payload is not None:
+                  # gh api reads a request body from stdin only with --input -.
+                  command += ["--input", "-"]
               result = subprocess.run(
                   command,
                   input=None if payload is None else json.dumps(payload),
