@@ -112,6 +112,11 @@ A Dependabot pull request that edits these requirement files is recompiled by
 That workflow pushes the four hashed locks and starts CI. It uses the compiler
 script from the pull request base, so a uv pin bump in `requirements-dev.in`
 still needs `UV_VERSION` and the `ci.yml` pin updated in the same change.
+It runs only for pull requests that Dependabot opened from a `dependabot/pip/`
+branch in this repository, and compiles with `--untrusted-inputs`, which
+rejects index, URL, path, and editable lines and refuses to build source
+distributions other than those in `SDIST_ONLY`. A new dependency that ships
+only an sdist makes that run fail; add it to `SDIST_ONLY` after review.
 
 ## Optional contributor tooling
 

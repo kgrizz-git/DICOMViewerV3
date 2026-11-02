@@ -17,6 +17,11 @@ def test_workflow_trusts_the_base_compiler_and_dependabot_only() -> None:
     text = _WORKFLOW.read_text(encoding="utf-8")
     assert "pull_request_target:" in text
     assert "github.actor == 'dependabot[bot]'" in text
+    # The actor alone is spoofable from a fork; these pin the real gate.
+    assert "github.event.pull_request.user.login == 'dependabot[bot]'" in text
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in text
+    assert "startsWith(github.event.pull_request.head.ref, 'dependabot/pip/')" in text
+    assert '"--untrusted-inputs"' in text
     assert "uses: actions/checkout" not in text
     assert "git checkout" not in text
     assert "git fetch" not in text

@@ -4,8 +4,10 @@ name: Recompile Dependabot locks
 # `uv pip compile --universal` at the pinned compiler. This job replaces those
 # locks and starts CI on the new commit.
 #
-# pull_request_target runs this file from the pull request base. The job
-# downloads the base compiler and the head requirement files through the API.
+# pull_request_target runs this file from the pull request base. The job runs
+# only for pull requests that Dependabot opened from a branch in this
+# repository. It downloads the base compiler and the head requirement files
+# through the API.
 # It does not check out either commit. A checkout in this privileged workflow
 # would execute the pull request tree with the job's write token, and Semgrep
 # blocks that pattern. A GITHUB_TOKEN commit does not
@@ -26,7 +28,15 @@ concurrency:
 
 jobs:
   recompile:
-    if: github.actor == 'dependabot[bot]'
+    # github.actor alone can be spoofed: a fork with its own Dependabot opens a
+    # pull request here, and its Dependabot's pushes arrive as dependabot[bot].
+    # Require a pull request that Dependabot opened, from a branch in this
+    # repository (only writers can create one), on a pip update branch.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/pip/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -159,7 +169,14 @@ jobs:
               ["python", "-m", "pip", "install", f"uv=={match.group(1)}"],
               check=True,
           )
-          subprocess.run(["python", "scripts/compile_requirements.py"], cwd=root, check=True)
+          # --untrusted-inputs rejects index, URL, path, and editable lines and
+          # compiles without building arbitrary sdists, so the pull request's
+          # requirement files cannot run code with this job's token.
+          subprocess.run(
+              ["python", "scripts/compile_requirements.py", "--untrusted-inputs"],
+              cwd=root,
+              check=True,
+          )
           changed = [name for name in locks if (root / name).read_bytes() != original[name]]
           output = Path(os.environ["GITHUB_OUTPUT"])
           if not changed:
