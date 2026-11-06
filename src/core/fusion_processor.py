@@ -45,14 +45,35 @@ def cached_matplotlib_colormap(name: str) -> Any:
     return cmap
 
 
-def _fusion_float_base(base_array: np.ndarray) -> np.ndarray:
+def _is_display_final_gray(
+    base_array: np.ndarray, base_wl: tuple[float, float] | None
+) -> bool:
+    """True for a 2D uint8 display image that has no explicit window/level."""
+    return (
+        base_array.ndim == 2
+        and base_array.dtype == np.uint8
+        and base_wl is None
+    )
+
+
+def _fusion_float_base(
+    base_array: np.ndarray, *, display_final_gray: bool = False
+) -> np.ndarray:
     """Float32 base for blending.
 
     A uint8 RGB display image, including a color LUT, is scaled to 0–1 here.
+    A 2D ``uint8`` mode-L PIL display image with no ``base_wl`` is also scaled
+    to 0–1 (divide by 255); that path is display-final and must not be min-max
+    stretched again in ``_base_display_rgb``.
+
     ``create_fusion_image`` casts every base to float32 before the blend, so
     the scale has to be chosen from the original dtype. A float base is left
-    for ``_base_display_rgb`` to scale when its peak is above 1.
+    for ``_base_display_rgb`` to scale when its peak is above 1. An explicit
+    ``base_wl`` on a 2D ``uint8`` base is not divided here; values stay 0–255
+    as float32 for window/level in ``_base_display_rgb``.
     """
+    if display_final_gray:
+        return base_array.astype(np.float32) / np.float32(255.0)
     if (
         base_array.ndim == 3
         and base_array.shape[-1] == 3
@@ -203,8 +224,11 @@ class FusionProcessor:
         Returns:
             Fused RGB array (0-255, uint8)
         """
+        display_final_gray = _is_display_final_gray(base_array, base_wl)
         # Ensure float32 — skip copy if already correct dtype (P1.3)
-        base_array = _fusion_float_base(base_array)
+        base_array = _fusion_float_base(
+            base_array, display_final_gray=display_final_gray
+        )
         if overlay_array.dtype != np.float32:
             overlay_array = overlay_array.astype(np.float32)
 
@@ -281,7 +305,9 @@ class FusionProcessor:
                 print(f"  [TRANSLATION] overlay_array after translation range: [{np.min(overlay_array):.2f}, {np.max(overlay_array):.2f}]")
                 print(f"  [TRANSLATION] non-zero pixels: {np.count_nonzero(overlay_array)}")
 
-        base_rgb = FusionProcessor._base_display_rgb(base_array, base_wl)
+        base_rgb = FusionProcessor._base_display_rgb(
+            base_array, base_wl, display_final_gray=display_final_gray
+        )
 
         # Normalize overlay image
         if overlay_wl is not None:
@@ -329,6 +355,8 @@ class FusionProcessor:
     def _base_display_rgb(
         base_array: np.ndarray,
         base_wl: tuple[float, float] | None,
+        *,
+        display_final_gray: bool = False,
     ) -> np.ndarray:
         """Float RGB in ``[0, 1]``. An RGB base, such as a color LUT, is not expanded again.
 
@@ -336,6 +364,12 @@ class FusionProcessor:
         not the brightest pixel: a color LUT whose peak sample is 1 must stay
         near black. Float arrays still in 0–255 are scaled only when the peak
         exceeds 1.
+
+        When ``display_final_gray`` is true, the base is already 0–1 from a 2D
+        ``uint8`` display image with no ``base_wl``; it is clipped to ``[0, 1]``
+        and not min-max normalized. With an explicit ``base_wl``, a 2D ``uint8``
+        base is still windowed from 0–255 float samples (no divide-by-255 in
+        ``_fusion_float_base``).
         """
         if base_array.ndim == 3 and base_array.shape[-1] == 3:
             rgb = base_array.astype(np.float64)
@@ -346,6 +380,11 @@ class FusionProcessor:
                 if peak > 1.0:
                     rgb = rgb / 255.0
             return np.clip(rgb, 0.0, 1.0)
+        if display_final_gray:
+            normalized = np.clip(base_array, 0.0, 1.0)
+            return np.broadcast_to(
+                normalized[..., np.newaxis], (*normalized.shape, 3)
+            ).copy()
         if base_wl is not None:
             window, level = base_wl
             normalized = FusionProcessor.normalize_array(base_array, window, level)

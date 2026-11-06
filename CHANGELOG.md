@@ -33,6 +33,7 @@ All notable changes to DICOM Viewer V3 are documented here. The format is based 
   **Semantic versioning note: patch** (documentation / developer tooling only).
 
 ### Fixed
+- **Fusion — grayscale base:** Turning on fusion no longer min-max stretches a display-ready 2D `uint8` anatomical base a second time; gray levels match the windowed view. **Semantic versioning note: patch** (bug fix; no version bump while `0.5.0` is still unreleased).
 - **Study Index — relocate:** The index updates, and the search dialog opens those indexed files, only when every indexed path for that study is inside its current folder and each corresponding file in the chosen folder is readable DICOM with matching SOP and Study Instance UID. Otherwise nothing is written. A normal Study Index row open is unchanged. **Semantic versioning note: patch** (bug fix; no version bump while `0.5.0` is still unreleased).
 - **ACR CT batch results dialog:** Opening a second batch while the first dialog is still tearing down no longer clears the live dialog slot when the first window’s `destroyed` runs late; the replacement summary stays reachable. **Semantic versioning note: patch** (bug fix; no version bump while `0.5.0` is still unreleased).
 - **pypdf security floor:** `requirements.in` now requires `pypdf>=6.21.2`, which fixes CVE-2026-115572, CVE-2026-115580, and CVE-2026-115585. The locks were recompiled. **Semantic versioning note: patch** (security fix; no version bump while `0.5.0` is still unreleased).
