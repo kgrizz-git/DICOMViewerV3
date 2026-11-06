@@ -121,13 +121,11 @@ Release blockers (license compliance, versioned executables) live in
 
 > Surfaced on `7016f3b` by the critical-bug automation; none cleared the critical
 > bar. Re-checked in code on 2026-11-06: the six P2 items are real. Cine does not
-> use a `_MIP_Nslices` filename; it does encode the source slice when a
-> projection slab cannot be built. **Plan:**
+> use a `_MIP_Nslices` filename; cine export skips frames when a projection
+> slab cannot be built. **Plan:**
 > [Medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md).
 > Write-up:
 > [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
-
-- [ ] **[P2]** **Cine projection fallback still encodes a source slice when the slab cannot be built** (silent single-slice frame). Cine filenames do not use `_MIP_Nslices`; the gap is rasterized frame content, not naming. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §5 (Cine bullets). **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §5.
 
 - [ ] **[P2]** **DICOM-driven `QLabel`s use Qt AutoText (series navigator / overlays).** `StudyDescription` or overlay tag text with HTML-like markup can be interpreted as rich text. **Fix:** `setTextFormat(PlainText)` on DICOM-sourced labels (same pattern as `lut_pane_label`). **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §6. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §6.
 
