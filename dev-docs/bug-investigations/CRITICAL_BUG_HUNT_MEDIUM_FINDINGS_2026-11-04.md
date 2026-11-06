@@ -3,8 +3,8 @@
 **Last updated:** 2026-11-06  
 **HEAD reviewed:** `7016f3b` (`main`)  
 **Automation:** critical-bug cron; no critical-bar bugs; no fix PR from that run  
-**Status:** re-checked in code on 2026-11-06 — six P2 items confirmed, cine filename claim narrowed (see Verification). Not yet fixed.  
-**Plan:** [`MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md`](../plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md)  
+**Status:** fixes landed on `fix/medium-bug-hunt-20261104` (2026-11-06). The thin-slab DICOM projection filename remains open in [`TO_DO.md`](../TO_DO.md).  
+**Plan:** [`MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md`](../plans/completed/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md)  
 **Tracked in:** [`TO_DO.md`](../TO_DO.md) §Bugs / Correctness
 
 ## Verification (2026-11-06)

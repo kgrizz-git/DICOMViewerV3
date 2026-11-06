@@ -1,6 +1,6 @@
 """P3 MPR hardenings: empty study UID admission, reservation sweep on close.
 
-See ``dev-docs/plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md`` §Optional P3.
+See ``dev-docs/plans/completed/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md`` §Optional P3.
 """
 
 from __future__ import annotations

@@ -117,15 +117,7 @@ Release blockers (license compliance, versioned executables) live in
 
 - **W/L preset smoke (US, CR, DX):** tracked in [Manual Smoke Checks](#manual-smoke-checks).
 
-### Medium findings from 2026-11-04 critical-bug hunt
-
-> Surfaced on `7016f3b` by the critical-bug automation; none cleared the critical
-> bar. Re-checked in code on 2026-11-06: the six P2 items are real. Cine does not
-> use a `_MIP_Nslices` filename; cine export skips frames when a projection
-> slab cannot be built. **Plan:**
-> [Medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md).
-> Write-up:
-> [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
+- [ ] **[P3]** **DICOM projection of a thin slab still uses a projection filename.** A slab shorter than two slices can still be written as a one-slice derived DICOM under an `_MIP_`, `_AIP_`, or `_MINIP_` name. PNG and JPG no longer do this. Anonymized DICOM still skips a slice that was not prebuilt. A later change should stop writing that one-slice file under a projection name without making the overwrite check target the ordinary single-slice path. **Origin:** [Medium bug-hunt fix plan](plans/completed/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §5. Write-up: [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
 
 ## Performance / Packaging
 
