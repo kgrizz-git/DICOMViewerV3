@@ -4,8 +4,8 @@
 **Priority:** P2 (six items) plus optional P3 MPR hardening  
 **Created:** 2026-11-06  
 **Verified against:** `docs/track-medium-bug-hunt-findings-20261104` @ `2816eae` (same `src/` as `7016f3b`)  
-**Tracks:** [`TO_DO.md`](../../TO_DO.md) §Bugs / Correctness — “Medium findings from 2026-11-04 critical-bug hunt”  
-**Investigation:** [`CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md`](../../bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md)
+**Tracks:** [`TO_DO.md`](../TO_DO.md) §Bugs / Correctness — “Medium findings from 2026-11-04 critical-bug hunt”  
+**Investigation:** [`CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md`](../bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md)
 
 ## Verdict
 
