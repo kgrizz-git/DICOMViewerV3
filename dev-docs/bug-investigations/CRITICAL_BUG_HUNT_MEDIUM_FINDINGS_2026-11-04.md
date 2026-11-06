@@ -1,9 +1,25 @@
 # Critical bug hunt — medium findings (2026-11-04)
 
-**Last updated:** 2026-11-04  
+**Last updated:** 2026-11-06  
 **HEAD reviewed:** `7016f3b` (`main`)  
 **Automation:** critical-bug cron; no critical-bar bugs; no fix PR from that run  
-**Status:** tracked in [`TO_DO.md`](../TO_DO.md) §Bugs / Correctness — not yet fixed
+**Status:** re-checked in code on 2026-11-06 — six P2 items confirmed, cine filename claim narrowed (see Verification). Not yet fixed.  
+**Plan:** [`MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md`](../plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md)  
+**Tracked in:** [`TO_DO.md`](../TO_DO.md) §Bugs / Correctness
+
+## Verification (2026-11-06)
+
+Read against the same `src/` as `7016f3b` (PR branch `2816eae` is docs-only).
+
+| Item | Result |
+|------|--------|
+| 1 CT dialog slot | Confirmed. `on_destroyed` always assigns `None`. MRI guards `is dialog`. Dialog uses `WA_DeleteOnClose`. |
+| 2 Relocate | Confirmed. Commit uses `any(os.path.isfile)`. Out-of-prefix rows still get `study_root_path` rewritten. Open then passes `new_root` to `_open_paths`. |
+| 3 Fusion stretch | Confirmed for 2D `uint8` only. Float min-max is an existing test contract and stays. |
+| 4 Formula bypass | Confirmed. `value[:1]` misses tab, CR, and other leading whitespace/controls. |
+| 5 Projection fallback | Confirmed for PNG/JPG names and for cine **pixels**. Cine's save name comes from `SeriesDescription`, not `_MIP_Nslices`. |
+| 6 AutoText labels | Confirmed for the series-navigator study label and overlay corner labels. |
+| MPR near-misses | Code gaps confirmed; normal studies with a real Study Instance UID do not hit the empty-key path. Still optional. |
 
 ## Scope
 
