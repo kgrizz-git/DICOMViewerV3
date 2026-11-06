@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-23
+**Last updated:** 2026-11-06
 
 ---
 
@@ -116,6 +116,30 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** **MONOCHROME1 fusion blend and `(MI)` marker follow-ups.** The polarity fix changes the base image entering fusion, while the overlay half remains windowed from stored values without a polarity concept; if a fusion-capable MONOCHROME1 pair is observed, confirm the fused composite polarity and the manual **Invert** XOR. Separately, the `(MI)` status-bar marker currently reaches the single-slice pane only; extend it to MPR/projection panes if a real use case justifies the status-plumbing change. **Evidence-conditioned:** do not hunt for a fixture or implement speculatively. **Origin:** [MONOCHROME1 MPR + projection panes plan](plans/completed/MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md) §Deferred.
 
 - **W/L preset smoke (US, CR, DX):** tracked in [Manual Smoke Checks](#manual-smoke-checks).
+
+### Medium findings from 2026-11-04 critical-bug hunt
+
+> Surfaced on `7016f3b` by the critical-bug automation; none cleared the critical
+> bar. Re-checked in code on 2026-11-06: the six P2 items are real. Cine does not
+> use a `_MIP_Nslices` filename; it does encode the source slice when a
+> projection slab cannot be built. **Plan:**
+> [Medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md).
+> Write-up:
+> [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
+
+- [ ] **[P2]** **CT batch result dialog deferred-destroy clears the live slot.** `show_ct_batch_result_dialog` always nulls `_ct_batch_result_dialog` in `on_destroyed`; with `WA_DeleteOnClose`, a deferred destroy after a second batch can drop the replacement dialog’s app ref (MRI already guards `is dialog`). **Fix:** mirror the MRI guard. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §1. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §1.
+
+- [ ] **[P2]** **Study-index relocate commits when any one relocated path exists.** `relocate_study_paths` rewrites every row for the study if any new path is a file; Open then folder-rescans `new_root`, so a partial move or a wrongly chosen folder can update the catalog while loading a different study’s files (viewer overlays still re-parse DICOM — not on-image wrong-patient). **Fix:** refuse unless every indexed file is inside the current folder and the same files, with matching SOP and Study UID, exist in the new folder; then open those files. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §2. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §2.
+
+- [ ] **[P2]** **Fusion grayscale base re-stretches under fusion.** Display-final uint8 L bases are min-max normalized when `base_wl=None`, so soft-tissue W/L contrast stretches once fusion is enabled (RGB `/255` path is asymmetric). Float min-max stays. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §3. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §3.
+
+- [ ] **[P2]** **Spreadsheet formula neutralization misses leading whitespace and controls.** `neutralize_spreadsheet_value` only inspects `value[:1]`, so `"\t=..."` / `"\r=..."` can still evaluate in some clients. Writers for study-index / SR / ROI already cover bare `=+-@`. **Fix:** neutralize after leading whitespace/controls; keep study-index CSV import round-trip explicit. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §4. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §4.
+
+- [ ] **[P2]** **Projection PNG/JPG can keep a MIP-style filename after single-slice fallback.** When the slab has &lt;2 slices, rasterize falls back to one slice while the still-image name still claims `_MIP_Nslices`. Cine has no such filename; it still encodes that source slice into a projection request. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §5. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §5.
+
+- [ ] **[P2]** **DICOM-driven `QLabel`s use Qt AutoText (series navigator / overlays).** `StudyDescription` or overlay tag text with HTML-like markup can be interpreted as rich text. **Fix:** `setTextFormat(PlainText)` on DICOM-sourced labels (same pattern as `lut_pane_label`). **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §6. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §6.
+
+- [ ] **[P3]** **MPR admission/sync hardening (optional).** Empty source UIDs can evade closure matching; `_get_slice_index` ignores `mpr_slice_index` after a failed linked redraw; registry-only pending tokens are not UID-swept on close without a pane map. Low confidence on normal studies. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §Optional P3. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §Lower-confidence MPR near-misses.
 
 ## Performance / Packaging
 
