@@ -403,58 +403,44 @@ class StudyIndexStore:
             r["instance_count"] = int(r.get("instance_count") or 0)
         return rows
 
-    def relocate_study_paths(
-        self, study_uid: str, old_root: str, new_root: str
-    ) -> int:
+    def fetch_study_rows_for_relocate(
+        self, study_uid: str, study_root_path: str
+    ) -> list[tuple[int, str, str]]:
         """
-        Rewrite ``file_path``/``study_root_path`` for one study by swapping the root prefix.
+        Load ``id``, ``file_path``, and ``sop_instance_uid`` for one (study_uid, root) group.
 
-        Each entry's ``file_path`` has its ``old_root`` prefix replaced with ``new_root``
-        only when the root ends on a path-component boundary. Unrelated paths with a
-        similar prefix are left unchanged. ``study_root_path`` is set to the normalised new
-        root. The change is only committed when **at least one** relocated path exists on
-        disk; otherwise nothing is written and ``0`` is returned. Returns the number of
-        rows updated.
+        Used by :class:`LocalStudyIndexService` before applying a verified relocate.
         """
         su = (study_uid or "").strip()
-        if not su or not (old_root or "").strip() or not (new_root or "").strip():
-            return 0
-        old = os.path.normpath(os.path.abspath(old_root.strip()))
-        new = os.path.normpath(os.path.abspath(new_root.strip()))
+        sr = os.path.normpath(os.path.abspath((study_root_path or "").strip()))
+        if not su or not sr:
+            return []
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT id, file_path FROM study_index_entry "
+                "SELECT id, file_path, IFNULL(sop_instance_uid, '') AS sop_instance_uid "
+                "FROM study_index_entry "
                 "WHERE study_uid = ? AND study_root_path = ?",
-                (su, old),
+                (su, sr),
             )
-            entries = cur.fetchall()
-            if not entries:
-                return 0
-            updates: list[tuple[str, str, int]] = []
-            relocated_paths: list[str] = []
-            for rid, fp in entries:
-                fp = fp or ""
-                try:
-                    relative_path = os.path.relpath(fp, old)
-                except ValueError:
-                    relative_path = os.pardir
-                if relative_path != os.pardir and not relative_path.startswith(
-                    os.pardir + os.sep
-                ):
-                    new_fp = os.path.normpath(os.path.join(new, relative_path))
-                    relocated_paths.append(new_fp)
-                else:
-                    new_fp = fp
-                updates.append((new_fp, new, int(rid)))
-            if not any(os.path.isfile(path) for path in relocated_paths):
-                return 0
+            return [(int(r[0]), str(r[1] or ""), str(r[2] or "")) for r in cur.fetchall()]
+
+    def apply_study_path_updates(self, rows: list[tuple[str, str, int]]) -> int:
+        """
+        Write ``file_path`` and ``study_root_path`` for each row ``id`` in one transaction.
+
+        Callers validate paths and DICOM headers; this method only persists the update list.
+        """
+        if not rows:
+            return 0
+        with self._connect() as conn:
+            cur = conn.cursor()
             cur.executemany(
                 "UPDATE study_index_entry SET file_path = ?, study_root_path = ? WHERE id = ?",
-                updates,
+                rows,
             )
             conn.commit()
-        return len(updates)
+        return len(rows)
 
     @staticmethod
     def _col(alias: str | None, name: str) -> str:

@@ -32,6 +32,7 @@ class _FakeService:
     def __init__(self) -> None:
         self.relocated: list[tuple] = []
         self.relocate_result = 4
+        self._open_paths = ["/new/loc/a.dcm", "/new/loc/b.dcm"]
 
     def is_backend_available(self) -> bool:
         return True
@@ -39,6 +40,9 @@ class _FakeService:
     def relocate_study(self, study_uid, old_root, new_root) -> int:
         self.relocated.append((study_uid, old_root, new_root))
         return self.relocate_result
+
+    def get_file_paths_for_study(self, study_uid, study_root_path) -> list[str]:
+        return list(self._open_paths)
 
     def search_grouped_studies(self, **kwargs):
         return []
@@ -64,7 +68,7 @@ def test_relocate_reopens_new_folder(qapp, monkeypatch) -> None:
         result = dlg._relocate_and_reopen("1.2.3", "/old/loc")
         assert result is True
         assert svc.relocated == [("1.2.3", "/old/loc", "/new/loc")]
-        assert opened == [["/new/loc"]]
+        assert opened == [svc._open_paths]
     finally:
         dlg.deleteLater()
 

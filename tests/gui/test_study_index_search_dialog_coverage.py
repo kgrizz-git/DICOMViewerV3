@@ -302,11 +302,12 @@ def test_relocate_and_reopen_success_and_guards(monkeypatch, qapp) -> None:
         service.relocate_result = 0
         warning = messages(monkeypatch, "warning")
         assert dlg._relocate_and_reopen("1.2.3", "/old") is False
-        assert "No relocated files" in warning[-1]
+        assert "The index was not changed" in warning[-1]
         service.relocate_result = 2
+        service.file_paths = ["/new/a.dcm", "/new/b.dcm"]
         dlg._run_browse = MagicMock()  # type: ignore[method-assign]
         assert dlg._relocate_and_reopen("1.2.3", "/old") is True
-        assert opened == [["/new"]]
+        assert opened == [list(service.file_paths)]
         assert service.relocated[-1] == ("1.2.3", "/old", "/new")
     finally:
         dlg.deleteLater()

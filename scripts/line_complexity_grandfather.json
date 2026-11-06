@@ -11,7 +11,7 @@
     "src/core/volume_renderer.py": 1117,
     "src/gui/annotation_paste_handler.py": 878,
     "src/gui/dialogs/overlay_config_dialog.py": 781,
-    "src/gui/dialogs/study_index_search_dialog.py": 1374,
+    "src/gui/dialogs/study_index_search_dialog.py": 1373,
     "src/gui/dialogs/tag_export_dialog.py": 1111,
     "src/gui/dialogs/tag_viewer_dialog.py": 842,
     "src/gui/export_rendering.py": 937,

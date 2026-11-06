@@ -717,13 +717,12 @@ class StudyIndexSearchDialog(QDialog):
             QMessageBox.warning(
                 self,
                 _TITLE_STUDY_INDEX,
-                "No relocated files were found in that folder. The index was not changed.",
+                "The index was not changed. Relocate only runs when every indexed file for this study is inside its current folder and the same file is found in the selected folder.",
             )
             return False
-        # Index now points at the new location. Refresh so the list reflects the new
-        # paths, then open the chosen folder directly (mirrors the fast-path rescan).
         self._run_browse(reset=True)
-        self._open_paths([new_root])
+        paths = self._service.get_file_paths_for_study(study_uid, new_root)
+        self._open_paths(paths)
         self.accept()
         return True
 
@@ -1117,7 +1116,7 @@ class _MissingStudiesDialog(QDialog):
             QMessageBox.warning(
                 self,
                 _TITLE_STUDY_INDEX,
-                "No relocated files were found in that folder. The index was not changed.",
+                "The index was not changed. Relocate only runs when every indexed file for this study is inside its current folder and the same file is found in the selected folder.",
             )
             return
         QMessageBox.information(
