@@ -1,6 +1,6 @@
 # Medium bug-hunt findings — fix plan (2026-11-04)
 
-**Status:** Chunks 1–6 committed (including CT dialog slot, relocate, fusion base, spreadsheet neutralization, projection filenames/preview, and cine projection skip); chunk 7 (plain-text labels for study navigator and viewport overlay corners) implemented; remaining P2 items pending. Revised 2026-11-06 after a second review (cine fallback test, relocate test fakes, per-item preview slab).  
+**Status:** Chunks 1–6 committed (including CT dialog slot, relocate, fusion base, spreadsheet neutralization, projection filenames/preview, and cine projection skip); chunk 7 (plain-text labels for study navigator and viewport overlay corners) implemented; P2 items and optional P3 MPR hardening implemented on this branch. Revised 2026-11-06 after a second review (cine fallback test, relocate test fakes, per-item preview slab).  
 **Priority:** P2 (six items) plus optional P3 MPR hardening  
 **Created:** 2026-11-06  
 **Verified against:** `docs/track-medium-bug-hunt-findings-20261104` @ `2816eae` (same `src/` as `7016f3b`)  
@@ -117,7 +117,7 @@ Ship these only after the P2 tests are green, in the same branch if the edits st
 - [x] PNG/JPG: a thin slab, including the last slice of a longer series, is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview uses that same per-item slab test when `studies` is present. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM projection still writes nothing for a slab that was not built.
 - [x] Cine: `rasterize_cine_export_frame` returns `None` when the requested projection slab was not built, and the named fallback assertion in `test_cine_video_export.py` expects `None`. The user is told when frames were skipped or when there is nothing to encode.
 - [x] Navigator study label and overlay corner labels are `PlainText` before the DICOM string is set. A `<b>…</b>` description is shown as characters.
-- [ ] P3 (optional, same branch if small): reject empty-UID admission; MPR slice sync reads `mpr_slice_index`; close sweeps registry reservations that have no pane entry, without discarding a session twice.
+- [x] P3 (optional, same branch if small): reject empty-UID admission; MPR slice sync reads `mpr_slice_index`; close sweeps registry reservations that have no pane entry, without discarding a session twice.
 - [ ] Changelog `[Unreleased]` / Fixed notes for the user-visible items, each marked patch, no version bump while `0.5.0` is unreleased.
 - [ ] Focused tests below, then the full suite if a slice touches more than one domain.
 

@@ -64,6 +64,38 @@ def test_find_group_and_slice_index_helpers() -> None:
     assert c._get_datasets(1) is None
 
 
+def test_get_slice_index_mpr_uses_mpr_slice_index_when_int() -> None:
+    mpr = SimpleNamespace(slice_stack=_FakeStack())
+    c = _coord(
+        subwindow_data={
+            0: {
+                "is_mpr": True,
+                "mpr_result": mpr,
+                "mpr_slice_index": 7,
+                "current_slice_index": 2,
+            },
+            1: {"current_slice_index": 3},
+        }
+    )
+    assert c._get_slice_index(0) == 7
+    assert c._get_slice_index(1) == 3
+
+
+def test_get_slice_index_mpr_non_int_mpr_index_falls_back_to_current() -> None:
+    mpr = SimpleNamespace(slice_stack=_FakeStack())
+    c = _coord(
+        subwindow_data={
+            0: {
+                "is_mpr": True,
+                "mpr_result": mpr,
+                "mpr_slice_index": None,
+                "current_slice_index": 4,
+            }
+        }
+    )
+    assert c._get_slice_index(0) == 4
+
+
 # --------------------------------------------------------------------------- #
 # get_current_plane / get_slice_thickness
 # --------------------------------------------------------------------------- #

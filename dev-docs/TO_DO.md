@@ -127,8 +127,6 @@ Release blockers (license compliance, versioned executables) live in
 > Write-up:
 > [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
 
-- [ ] **[P3]** **MPR admission/sync hardening (optional).** Empty source UIDs can evade closure matching; `_get_slice_index` ignores `mpr_slice_index` after a failed linked redraw; registry-only pending tokens are not UID-swept on close without a pane map. Low confidence on normal studies. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §Optional P3. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §Lower-confidence MPR near-misses.
-
 ## Performance / Packaging
 
 - [ ] **[P1]** **Performance / memory / responsiveness deep dive (continue to optimize):** prior passes already sped up loading/display (enhanced-CT multiframe merge 26.4 s → 1.16 s; post-load first-paint work shipped, pending manual smoke). Keep profiling startup, folder load, fusion (2D vs 3D), MPR build, study-index queries, and UI thread blocking; identify hot paths (redundant resampling, full-series scans, cache churn, large array copies); propose targeted optimizations with before/after measurements ([details](FUTURE_WORK_DETAIL_NOTES.md#performance-initial-load-file-loading-fusion-and-general-responsiveness)) — **Plan:** [Performance Deep Dive](plans/supporting/PERFORMANCE_DEEP_DIVE_PLAN.md)
