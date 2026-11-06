@@ -1,6 +1,6 @@
 # Medium bug-hunt findings — fix plan (2026-11-04)
 
-**Status:** Not started. Revised 2026-11-06 after review (relocate fail-closed, existing-test updates, preview when `studies` is missing).  
+**Status:** Not started. Revised 2026-11-06 after a second review (cine fallback test, relocate test fakes, per-item preview slab).  
 **Priority:** P2 (six items) plus optional P3 MPR hardening  
 **Created:** 2026-11-06  
 **Verified against:** `docs/track-medium-bug-hunt-findings-20261104` @ `2816eae` (same `src/` as `7016f3b`)  
@@ -36,7 +36,7 @@ A partial move, or another folder that happens to contain one shared relative na
 - `iter_study_groups` and `get_file_paths_for_study` key a study by `(study_uid, study_root_path)`. Do not move only the in-prefix rows. If any row in the group has a `file_path` that is not under `old_root` on a path-component boundary, commit nothing and return 0. A partial rewrite would leave a second group at the old root and drop those instances from the relocated open. A root such as `ar` must not absorb `archive/`.
 - Otherwise commit only when **every** rewritten path exists as a file. If any are missing, write nothing and return 0.
 - Before commit, `dcmread(..., stop_before_pixels=True)` each new file. Require `SOPInstanceUID` to match that row and `StudyInstanceUID` to match `study_uid`. A same-relative-name tree from a different study must not commit. A missing UID, or `InvalidDicomError`, fails closed (return 0). Do not let the read exception surface as "Relocate failed".
-- Keep the DICOM read out of `sqlcipher_store`. `index_folder_thread` already uses `pydicom.dcmread`. Put the header check in the index service (or a helper next to it) and let the store apply a fully checked update list.
+- Keep the DICOM read out of `sqlcipher_store`. `index_folder_thread` already uses `pydicom.dcmread`. The header check belongs in the index service (or a helper next to it). `relocate_study_paths` today selects only `id, file_path`, so it cannot see `sop_instance_uid`. Add a store method that applies an already-checked list, for example `apply_study_path_updates(rows: list[tuple[str, str, int]])` writing `(file_path, study_root_path, id)` in one transaction. The service loads the SOP and study UID, checks the files, and calls that method only when every row passes. Header-only reads on the relocate click are enough. Do not move this onto a background indexer.
 - After success, `StudyIndexSearchDialog._relocate_and_reopen` opens `get_file_paths_for_study(study_uid, new_root)`, not `[new_root]`. Sibling DICOM in the chosen directory stays out of this open. `_open_paths` is the dialog's `open_paths_callback`; do not change what a normal Study Index row open loads. `_MissingStudiesDialog._relocate_selected` does not open files; leave that.
 - Both failure strings (search dialog ~line 720 and missing-studies dialog ~line 1120) become: "The index was not changed. Relocate only runs when every indexed file for this study is inside its current folder and the same file is found in the selected folder." Do not claim that files were found.
 
@@ -45,8 +45,8 @@ A partial move, or another folder that happens to contain one shared relative na
 - `tests/test_study_index_integrity_scan.py`: `_seed` and `test_relocate_preserves_similarly_prefixed_unrelated_paths` write `b"DICM"`, which `dcmread` rejects. Write a minimal synthetic dataset per file (`save_as`) whose `SOPInstanceUID` equals that row and whose `StudyInstanceUID` equals the study uid. No real patient data. `_seed` may keep the shared `sop_instance_uid` it already stores (`"{study_uid}.i"`); match that value, do not invent a uniqueness migration for the scan tests.
 - `test_relocate_rewrites_paths_and_counts` still expects `n == 3` once those files are readable DICOM with matching UIDs.
 - `test_relocate_preserves_similarly_prefixed_unrelated_paths` must expect `0`, with both rows still on the old root and the `archive/unrelated.dcm` path unchanged. Do not change it to `1`. Returning 1 would split the `(study_uid, study_root_path)` group.
-- `tests/gui/test_study_index_open_relocate.py` `_FakeService` and `tests/gui/test_study_index_search_dialog_coverage.py` `Service` must implement `get_file_paths_for_study`. `test_relocate_reopens_new_folder` and `test_relocate_and_reopen_success_and_guards` currently assert `opened == [[new_root]]`. Assert the file-path list from the fake instead.
-- `test_relocate_and_reopen_success_and_guards` asserts `"No relocated files"`. Point that assertion at `"The index was not changed"`.
+- `tests/gui/test_study_index_open_relocate.py` `_FakeService` does not implement `get_file_paths_for_study`. Add it, return a non-empty path list, and change `test_relocate_reopens_new_folder` from `opened == [["/new/loc"]]` to that list.
+- `tests/gui/test_study_index_search_dialog_coverage.py` `Service.get_file_paths_for_study` already returns `list(self.file_paths)`. Do not add another method. In `test_relocate_and_reopen_success_and_guards`, set `service.file_paths` to the paths that should open and assert `opened == [list(service.file_paths)]`. Point the `"No relocated files"` assertion at `"The index was not changed"`.
 
 ### 3. Fusion grayscale base re-stretch — P2
 
@@ -54,7 +54,7 @@ A partial move, or another folder that happens to contain one shared relative na
 
 Do **not** delete min-max for every 2D base. `tests/test_fusion_processor.py::test_auto_normalize_when_base_is_non_uniform` locks the float32 contract: values `0, 50, 100, 150` become `0, 85, 170, 255` when `base_wl` is omitted. Wider integer dtypes used as raw samples (`test_non_float32_inputs` uses `int16`) stay on that path.
 
-**Fix:** Treat 2D `uint8` as display-final, the array `np.array` produces from a mode-L PIL image. Scale it by 255 and do not min-max it. Decide that from the dtype **before** `_fusion_float_base` casts it to float32. An explicit `base_wl` still windows. Float and non-`uint8` integer bases keep today's min-max when `base_wl` is `None`.
+**Fix:** Treat 2D `uint8` as display-final, the array `np.array` produces from a mode-L PIL image. Divide it by 255, the same scale the integer RGB path uses, and do not min-max it. Decide that from the dtype **before** `_fusion_float_base` casts it to float32. An explicit `base_wl` still windows. Float and non-`uint8` integer bases keep today's min-max when `base_wl` is `None`.
 
 ### 4. Spreadsheet formula neutralization skips leading whitespace and controls — P2 (AppSec)
 
@@ -73,9 +73,10 @@ Cine's save dialog names the file from `SeriesDescription` (`gui.actions.dialog_
 **Fix:**
 
 - Never write a projection token unless that slice's projection image was actually built. PNG/JPG fallback uses the single-slice filename (`projection_enabled=False` for that item). If a later build still returns `None`, write the single-slice name or fail the item. Do not leave a `_MIP_` file that holds one source slice.
-- Preview (`get_export_paths_for_selection`): when `studies` is present, omit the projection token unless that series slab has at least two slices. When `studies` is `None`, keep today's name. `tests/gui/test_export_manager_slice.py::test_get_export_paths_dicom_and_projection_suffix` locks `_MIP_4slices` for a one-item selection with no `studies` dict, and the method docstring already says a projection that fails to build may appear in the preview and not on disk. Do not change that test.
+- Preview (`get_export_paths_for_selection`): when `studies` is present, use the same slab test as `create_projection_for_export` for that item. Omit the projection token when the series has fewer than two slices, or when `end_slice - start_slice + 1 < 2` (the last slice of a longer series). Do not treat "series length ≥ 2" as enough. When `studies` is `None`, keep today's name. `tests/gui/test_export_manager_slice.py::test_get_export_paths_dicom_and_projection_suffix` locks `_MIP_4slices` for a one-item selection with no `studies` dict, and the method docstring already says a projection that fails to build may appear in the preview and not on disk. Do not change that test.
 - DICOM projection stays fail-closed: no source-slice DICOM written under a projection series when the slab was not built.
-- Cine: when projection is on and a frame's slab cannot be built, do not encode the source slice as that frame. Skip the frame and report how many were skipped, or abort before encode if none can be built. Leave the video filename as the series description.
+- Cine: when projection is on and a frame's slab cannot be built, do not encode the source slice as that frame. `rasterize_cine_export_frame` returns `None` for that frame. The caller skips it and reports how many were skipped, or aborts before encode if none can be built. Leave the video filename as the series description.
+- `tests/gui/test_cine_video_export.py` case "4. Projection image rendering fallback" currently asserts `rasterize_cine_export_frame(...) is not None` when `create_projection_for_export` returns `None`. Change that assertion to `None`. That is the one cine assertion this plan authorizes changing.
 
 ### 6. DICOM text in `QLabel` AutoText — P2 (AppSec)
 
@@ -88,13 +89,13 @@ Confirmed sinks:
 
 `gui.lut_pane_label` already calls `setTextFormat(Qt.TextFormat.PlainText)`. The MPR banner string is app-generated (`"MPR – …"`), not a DICOM tag; leave it unless a later read shows a tag value in that string. Do not flip intentional `RichText` help labels in settings dialogs.
 
-**Fix:** In `StudyLabel.__init__`, replace `QLabel(study_label_text, self)` with `QLabel(self)`, then `setTextFormat(Qt.TextFormat.PlainText)`, then `setText(study_label_text)`. Do the same for each overlay corner label before its first DICOM string. Setting the format after the constructor's initial `setText` does not re-parse that first string. `set_text` / `set_corner_text` keep assigning plain text. The graphics overlay path (`overlay_items_factory.create_graphics_overlay_text_item`) already calls `document.setPlainText`; leave it. Tooltips stay as they are. Do not convert them into labels.
+**Fix:** In `StudyLabel.__init__`, replace `QLabel(study_label_text, self)` with `QLabel(self)`, then `setTextFormat(Qt.TextFormat.PlainText)`, then `setText(study_label_text)`. The corner labels in `ViewportOverlayWidget` are already empty `QLabel(self)` widgets. Call `setTextFormat(PlainText)` on each one while they are created. Do not rebuild them. `set_text` and `set_corner_text` keep assigning text after that. The graphics overlay path (`overlay_items_factory.create_graphics_overlay_text_item`) already calls `document.setPlainText`. Leave it. Tooltips stay as they are. Do not convert them into labels.
 
 ## Optional P3 — MPR admission and sync
 
 Ship these only after the P2 tests are green, in the same branch if the edits stay small. Do not block the P2 fixes on them.
 
-1. **Empty source key.** `dataset_source_key` returns `("", "")` when the first dataset has no `StudyInstanceUID` or the list cannot be read. `_source_matches` requires equal study UIDs, so that build is not released by closing a study that has a real UID. On a normal study the key is populated. Hardening: do not admit `reserve_pane_build` when the study UID is empty; surface the existing admission status text. Do not drop sessions that legitimately belong to a study whose UID is non-empty.
+1. **Empty source key.** `dataset_source_key` returns `("", "")` when the dataset list cannot be read. A readable dataset with no `StudyInstanceUID` returns `("", series_key)`, which is still an empty study UID. `_source_matches` requires equal study UIDs, so that build is not released by closing a study that has a real UID. On a normal study the key is populated. Hardening: do not admit `reserve_pane_build` when the study UID is empty; surface the existing admission status text. Do not drop sessions that legitimately belong to a study whose UID is non-empty.
 
 2. **Slice sync reads the stale index after a failed linked redraw.** `mpr_view_links._write_members` stores `mpr_slice_index` before redraw. `display_mpr_slice` writes `current_slice_index` only when the image is applied. `SliceSyncCoordinator._get_slice_index` in `src/core/slice_sync_coordinator.py` reads only `current_slice_index`. For an MPR pane (`is_mpr` and `mpr_result`), return `mpr_slice_index` when it is an int, otherwise the current index. Native panes stay on `current_slice_index`.
 
@@ -113,8 +114,8 @@ Ship these only after the P2 tests are green, in the same branch if the edits st
 - [ ] Relocate: if any row is outside `old_root`, or any new file is missing, unreadable, or has a different SOP/Study UID, commit nothing and return 0. A fully in-prefix study with matching headers commits. Open passes the relocated file paths. Both dialogs use the new unchanged-index sentence. Existing relocate tests updated as in §2, not left red.
 - [ ] Fusion: 2D `uint8` display base is `/255` with no min-max. Float min-max test still passes. Explicit `base_wl` unchanged.
 - [ ] Formula helper: leading tab, CR, LF, space, and a C0 control before `=+-@` gain one apostrophe. Study-index CSV round-trips `\t=cmd` back to `\t=cmd`. Benign indented text is unchanged.
-- [ ] PNG/JPG: a thin slab is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview omits that token when `studies` is present and the slab is thin. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM projection still writes nothing for a slab that was not built.
-- [ ] Cine: a projection frame whose slab was not built is not encoded as the source slice. The user is told when frames were skipped or when there is nothing to encode.
+- [ ] PNG/JPG: a thin slab, including the last slice of a longer series, is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview uses that same per-item slab test when `studies` is present. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM projection still writes nothing for a slab that was not built.
+- [ ] Cine: `rasterize_cine_export_frame` returns `None` when the requested projection slab was not built, and the named fallback assertion in `test_cine_video_export.py` expects `None`. The user is told when frames were skipped or when there is nothing to encode.
 - [ ] Navigator study label and overlay corner labels are `PlainText` before the DICOM string is set. A `<b>…</b>` description is shown as characters.
 - [ ] P3 (optional, same branch if small): reject empty-UID admission; MPR slice sync reads `mpr_slice_index`; close sweeps registry reservations that have no pane entry, without discarding a session twice.
 - [ ] Changelog `[Unreleased]` / Fixed notes for the user-visible items, each marked patch, no version bump while `0.5.0` is unreleased.
