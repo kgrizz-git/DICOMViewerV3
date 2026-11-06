@@ -1,6 +1,6 @@
 # To-Do Checklist
 
-**Last updated:** 2026-10-23
+**Last updated:** 2026-11-06
 
 ---
 
@@ -116,6 +116,26 @@ Release blockers (license compliance, versioned executables) live in
 - [ ] **[P2]** **MONOCHROME1 fusion blend and `(MI)` marker follow-ups.** The polarity fix changes the base image entering fusion, while the overlay half remains windowed from stored values without a polarity concept; if a fusion-capable MONOCHROME1 pair is observed, confirm the fused composite polarity and the manual **Invert** XOR. Separately, the `(MI)` status-bar marker currently reaches the single-slice pane only; extend it to MPR/projection panes if a real use case justifies the status-plumbing change. **Evidence-conditioned:** do not hunt for a fixture or implement speculatively. **Origin:** [MONOCHROME1 MPR + projection panes plan](plans/completed/MONOCHROME1_MPR_AND_PROJECTION_PANES_PLAN.md) §Deferred.
 
 - **W/L preset smoke (US, CR, DX):** tracked in [Manual Smoke Checks](#manual-smoke-checks).
+
+### Medium findings from 2026-11-04 critical-bug hunt
+
+> Surfaced on `7016f3b` by the critical-bug automation; none cleared the critical
+> bar. Durable write-up:
+> [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
+
+- [ ] **[P2]** **CT batch result dialog deferred-destroy clears the live slot.** `show_ct_batch_result_dialog` always nulls `_ct_batch_result_dialog` in `on_destroyed`; with `WA_DeleteOnClose`, a deferred destroy after a second batch can drop the replacement dialog’s app ref (MRI already guards `is dialog`). **Fix:** mirror the MRI guard. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §1.
+
+- [ ] **[P2]** **Study-index relocate commits when any one relocated path exists.** `relocate_study_paths` rewrites every row for the study if any new path is a file; Open then folder-rescans `new_root`, so a partial move or a wrongly chosen folder can update the catalog while loading a different study’s files (viewer overlays still re-parse DICOM — not on-image wrong-patient). **Fix:** stricter existence / SOP checks before commit; refresh index identity after relocate. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §2.
+
+- [ ] **[P2]** **Fusion grayscale base re-stretches under fusion.** Display-final uint8 L bases are min-max normalized when `base_wl=None`, so soft-tissue W/L contrast stretches once fusion is enabled (RGB `/255` path is asymmetric). **Fix:** treat display-final L like RGB or skip auto-normalize. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §3.
+
+- [ ] **[P2]** **Spreadsheet formula neutralization misses leading tab/CR.** `neutralize_spreadsheet_value` only inspects `value[:1]`, so `"\t=..."` / `"\r=..."` can still evaluate in some clients. Writers for study-index / SR / ROI already cover bare `=+-@`. **Fix:** neutralize after leading whitespace/controls; keep study-index CSV import round-trip explicit. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §4.
+
+- [ ] **[P2]** **Projection PNG/cine can keep a MIP-style filename after single-slice fallback.** When the slab has &lt;2 slices, rasterize falls back to one slice while the export name still claims `_MIP_Nslices`. **Fix:** rename the fallback or refuse the projection container. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §5.
+
+- [ ] **[P2]** **DICOM-driven `QLabel`s use Qt AutoText (series navigator / overlays).** `StudyDescription` or overlay tag text with HTML-like markup can be interpreted as rich text. **Fix:** `setTextFormat(PlainText)` on DICOM-sourced labels (same pattern as `lut_pane_label`). **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §6.
+
+- [ ] **[P3]** **MPR admission/sync hardening (optional).** Empty source UIDs can evade closure matching; `_get_slice_index` ignores `mpr_slice_index` after a failed linked redraw; registry-only pending tokens are not UID-swept on close without a pane map. Low confidence on normal studies — fold into the next MPR admission/sync change if convenient. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §Lower-confidence MPR near-misses.
 
 ## Performance / Packaging
 
