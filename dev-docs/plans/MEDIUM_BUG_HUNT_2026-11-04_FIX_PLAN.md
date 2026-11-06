@@ -1,6 +1,6 @@
 # Medium bug-hunt findings — fix plan (2026-11-04)
 
-**Status:** Chunks 1–3 (CT batch result dialog slot wipe, study-index relocate, fusion grayscale display base) committed; chunk 4 (spreadsheet formula helper — leading whitespace / C0 before triggers) implemented; remaining P2 items pending. Revised 2026-11-06 after a second review (cine fallback test, relocate test fakes, per-item preview slab).  
+**Status:** Chunks 1–4 committed (CT batch result dialog slot wipe, study-index relocate, fusion grayscale display base, spreadsheet formula helper — leading whitespace / C0 before triggers); chunk 5 PNG/JPG projection filenames and preview implemented; cine and remaining P2 items pending. Revised 2026-11-06 after a second review (cine fallback test, relocate test fakes, per-item preview slab).  
 **Priority:** P2 (six items) plus optional P3 MPR hardening  
 **Created:** 2026-11-06  
 **Verified against:** `docs/track-medium-bug-hunt-findings-20261104` @ `2816eae` (same `src/` as `7016f3b`)  
@@ -114,7 +114,7 @@ Ship these only after the P2 tests are green, in the same branch if the edits st
 - [x] Relocate: if any row is outside `old_root`, or any new file is missing, unreadable, or has a different SOP/Study UID, commit nothing and return 0. A fully in-prefix study with matching headers commits. Open passes the relocated file paths. Both dialogs use the new unchanged-index sentence. Existing relocate tests updated as in §2, not left red.
 - [x] Fusion: 2D `uint8` display base is `/255` with no min-max. Float min-max test still passes. Explicit `base_wl` unchanged.
 - [x] Formula helper: leading tab, CR, LF, space, and a C0 control before `=+-@` gain one apostrophe. Study-index CSV round-trips `\t=cmd` back to `\t=cmd`. Benign indented text is unchanged.
-- [ ] PNG/JPG: a thin slab, including the last slice of a longer series, is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview uses that same per-item slab test when `studies` is present. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM projection still writes nothing for a slab that was not built.
+- [x] PNG/JPG: a thin slab, including the last slice of a longer series, is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview uses that same per-item slab test when `studies` is present. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM projection still writes nothing for a slab that was not built.
 - [ ] Cine: `rasterize_cine_export_frame` returns `None` when the requested projection slab was not built, and the named fallback assertion in `test_cine_video_export.py` expects `None`. The user is told when frames were skipped or when there is nothing to encode.
 - [ ] Navigator study label and overlay corner labels are `PlainText` before the DICOM string is set. A `<b>…</b>` description is shown as characters.
 - [ ] P3 (optional, same branch if small): reject empty-UID admission; MPR slice sync reads `mpr_slice_index`; close sweeps registry reservations that have no pane entry, without discarding a session twice.

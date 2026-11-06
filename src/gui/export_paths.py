@@ -1,6 +1,10 @@
 """
 Export path naming shared by the overwrite preview and the export itself.
 
+Includes slab-width checks aligned with ``create_projection_for_export`` (gui.export_rendering)
+so PNG/JPG preview paths and on-disk names omit ``_MIP_`` / ``_AIP_`` / ``_MINIP_`` when no
+projection image can be built.
+
 Requirements: pydicom (Dataset).
 """
 
@@ -11,7 +15,11 @@ from typing import Any
 
 from pydicom.dataset import Dataset
 
-from core.projection_dicom_export import projection_folder_dataset
+from core.projection_dicom_export import (
+    create_projection_dataset,
+    projection_folder_dataset,
+    save_projection_dataset,
+)
 
 
 def sanitize_name(name: Any) -> str:
@@ -44,14 +52,200 @@ def series_directory(output_dir: str, folder_dataset: Dataset) -> str:
 
 
 def export_filename(
-    instance_num: Any, export_format: str, projection_enabled: bool,
-    projection_type: str, projection_slice_count: int,
+    instance_num: Any,
+    export_format: str,
+    projection_enabled: bool,
+    projection_type: str,
+    projection_slice_count: int,
 ) -> str:
     suffix = ""
     if projection_enabled:
         suffix = f"_{projection_type.upper()}_{projection_slice_count}slices"
     extension = {"DICOM": "dcm", "PNG": "png"}.get(export_format, "jpg")
     return f"Instance_{instance_num:04d}{suffix}.{extension}"
+
+
+def export_projection_slab_is_buildable(
+    studies: dict[str, dict[str, list[Any]]],
+    study_uid: str,
+    series_uid: str,
+    slice_index: int,
+    projection_slice_count: int,
+) -> bool:
+    """Return True when ``create_projection_for_export`` would use a multi-slice slab."""
+    if study_uid not in studies or series_uid not in studies[study_uid]:
+        return False
+    series_datasets = studies[study_uid][series_uid]
+    total_slices = len(series_datasets)
+    if total_slices < 2:
+        return False
+    start_slice = max(0, slice_index)
+    end_slice = min(total_slices - 1, slice_index + projection_slice_count - 1)
+    return end_slice - start_slice + 1 >= 2
+
+
+def projection_suffix_for_preview_path(
+    projection_enabled: bool,
+    export_format: str,
+    studies: dict[str, dict[str, list[Any]]] | None,
+    study_uid: str,
+    series_uid: str,
+    slice_index: int,
+    projection_slice_count: int,
+) -> bool:
+    """Whether the overwrite preview includes a projection token for this item.
+
+    When ``studies`` is None, matches legacy preview (projection token follows the
+    request flag). When ``studies`` is set, PNG/JPG paths use the slab rule; DICOM
+    preview naming is unchanged.
+    """
+    if not projection_enabled:
+        return False
+    if studies is None:
+        return True
+    if export_format not in ("PNG", "JPG"):
+        return True
+    return export_projection_slab_is_buildable(
+        studies, study_uid, series_uid, slice_index, projection_slice_count
+    )
+
+
+def png_jpg_projection_filename_for_disk(
+    projection_enabled: bool,
+    export_format: str,
+    studies: dict[str, dict[str, list[Any]]] | None,
+    study_uid: str | None,
+    series_uid: str | None,
+    slice_index: int | None,
+    projection_slice_count: int,
+) -> bool:
+    """Whether on-disk ``export_filename`` should include a projection token.
+
+    PNG/JPG omit the suffix when the slab cannot be built or ``studies`` is missing.
+    DICOM keeps the projection suffix whenever projection is enabled (fail-closed
+    naming unchanged).
+    """
+    if not projection_enabled:
+        return False
+    if export_format not in ("PNG", "JPG"):
+        return True
+    if not (studies and study_uid and series_uid and slice_index is not None):
+        return False
+    return export_projection_slab_is_buildable(
+        studies, study_uid, series_uid, slice_index, projection_slice_count
+    )
+
+
+def png_jpg_fallback_output_path(
+    projection_output_path: str, single_slice_basename: str | None
+) -> str:
+    """When projection rasterization falls back to one slice, use non-projection basename."""
+    if single_slice_basename is None:
+        return projection_output_path
+    return os.path.join(os.path.dirname(projection_output_path), single_slice_basename)
+
+
+def append_export_preview_paths(
+    paths: list[str],
+    items_by_study_series: dict[tuple[str, str], list[tuple[int, Dataset]]],
+    output_dir: str,
+    export_format: str,
+    projection_enabled: bool,
+    projection_type: str,
+    projection_slice_count: int,
+    studies: dict[str, dict[str, list[Dataset]]] | None,
+    deep_dicom: bool,
+    projection_dicom: bool,
+    projection_anon: bool,
+    pre_anonymized: dict[tuple[str, str, int], Dataset],
+) -> None:
+    """Extend ``paths`` with one absolute path per item (overwrite-preview contract)."""
+    for (study_uid, series_uid), items in items_by_study_series.items():
+        folder_dataset = series_folder_dataset(
+            study_uid,
+            series_uid,
+            items,
+            pre_anonymized,
+            deep_dicom,
+            projection_anon,
+            projection_type if projection_dicom else None,
+        )
+        if folder_dataset is None:
+            continue
+        series_dir = series_directory(output_dir, folder_dataset)
+        for position, (slice_index, dataset) in enumerate(items, start=1):
+            slice_key = (study_uid, series_uid, slice_index)
+            if projection_anon and slice_key not in pre_anonymized:
+                continue
+            output_dataset = pre_anonymized.get(slice_key, dataset)
+            instance_num = instance_number_for(
+                position, output_dataset, slice_index, projection_dicom
+            )
+            filename = export_filename(
+                instance_num,
+                export_format,
+                projection_suffix_for_preview_path(
+                    projection_enabled,
+                    export_format,
+                    studies,
+                    study_uid,
+                    series_uid,
+                    slice_index,
+                    projection_slice_count,
+                ),
+                projection_type,
+                projection_slice_count,
+            )
+            paths.append(os.path.join(series_dir, filename))
+
+
+def reported_export_basename(resolved_output_path: str | None, output_path: str) -> str:
+    """Basename for a downgrade notice. Prefer the path actually written."""
+    path = output_path
+    if resolved_output_path:
+        path = resolved_output_path
+    return os.path.basename(path)
+
+
+def write_export_dicom_slice(request: Any) -> bool:
+    """Write one DICOM slice or projection (fail-closed when projection cannot be built).
+
+    ``request`` is an ``ExportSliceRequest``. It is typed as ``Any`` so this
+    module does not import ``export_manager``.
+    """
+    dataset = request.dataset
+    output_path = request.output_path
+    if request.prebuilt_projection is not None:
+        save_projection_dataset(request.prebuilt_projection, output_path)
+        return True
+    studies = request.studies
+    if not (
+        request.projection_enabled
+        and studies
+        and request.study_uid
+        and request.series_uid
+        and request.slice_index is not None
+    ):
+        dataset.save_as(output_path)
+        return True
+    if request.dataset_pre_anonymized:
+        return False  # fail closed: never build from raw source and write it
+    projection_dataset = create_projection_dataset(
+        dataset,
+        studies,
+        request.study_uid,
+        request.series_uid,
+        request.slice_index,
+        request.projection_type,
+        request.projection_slice_count,
+        request.use_rescaled_values,
+        new_series_uid=request.projection_series_uid,
+        instance_number=request.projection_instance_number,
+    )
+    if projection_dataset is None:
+        return False
+    save_projection_dataset(projection_dataset, output_path)
+    return True
 
 
 def instance_number_for(

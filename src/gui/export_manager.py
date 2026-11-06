@@ -20,6 +20,7 @@ Requirements:
     - PIL/Pillow, pydicom (Dataset)
     - core.dicom_processor, core.export_rendering
 """
+
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
@@ -32,16 +33,18 @@ from PySide6.QtWidgets import QProgressDialog
 
 from core.dicom_processor import DICOMProcessor
 from core.lut_display import grayscale_export_kwargs, invert_color_export_image
-from core.projection_dicom_export import (
-    create_projection_dataset,
-    save_projection_dataset,
-)
+from core.projection_dicom_export import create_projection_dataset
 from gui import export_rendering as _er
 from gui.export_paths import (
+    append_export_preview_paths,
     export_filename,
     instance_number_for,
+    png_jpg_fallback_output_path,
+    png_jpg_projection_filename_for_disk,
+    reported_export_basename,
     series_directory,
     series_folder_dataset,
+    write_export_dicom_slice,
 )
 from utils.deep_anonymizer import DeepDICOMAnonymizer
 from utils.privacy.console import print_redacted
@@ -50,16 +53,13 @@ if TYPE_CHECKING:
     from utils.deep_anonymizer import DeepAnonymizerOptions
 
 
-_LEGACY_ANONYMIZE_ERROR = (
-    "Standalone legacy anonymization is disabled; use deep_anonymize=True for DICOM export."
-)
+_LEGACY_ANONYMIZE_ERROR = "Standalone legacy anonymization is disabled; use deep_anonymize=True for DICOM export."
 
 
 def _reject_legacy_anonymize(anonymize: bool, *, deep_anonymize: bool = False) -> None:
     """Reject the obsolete standalone base-anonymizer export request path."""
     if anonymize and not deep_anonymize:
         raise ValueError(_LEGACY_ANONYMIZE_ERROR)
-
 
 
 def _projection_dicom_type(request: "ExportSelectedRequest") -> str | None:
@@ -74,10 +74,8 @@ def not_exported_note(selected_count: int, exported_count: int) -> str:
     missing = selected_count - exported_count
     if missing <= 0:
         return ""
-    return (
-        f"\n\n{missing} of {selected_count} selected image(s) were not exported. "
-        "The export was cancelled, or those images could not be written."
-    )
+    return f"\n\n{missing} of {selected_count} selected image(s) were not exported. The export was cancelled, or those images could not be written."
+
 
 @dataclass
 class ExportSelectedRequest:
@@ -157,6 +155,10 @@ class ExportSliceRequest:
     projection_instance_number: int | None = None
     # Projection already built (and anonymized) by export_selected; saved as is.
     prebuilt_projection: Dataset | None = None
+    # Basename for single-slice PNG/JPG when projection path used a token but slab was not built.
+    single_slice_export_basename: str | None = None
+    # Final path written for PNG/JPG (for downgrade reporting when basename changes).
+    resolved_output_path: str | None = None
 
 
 class ExportManager:
@@ -193,13 +195,9 @@ class ExportManager:
         return grouped
 
     @staticmethod
-    def projection_anonymization_active(
-        deep_anonymize: bool, export_format: str, projection_enabled: bool, studies: Any
-    ) -> bool:
+    def projection_anonymization_active(deep_anonymize: bool, export_format: str, projection_enabled: bool, studies: Any) -> bool:
         """True when DICOM projections are built and then deep-anonymized."""
-        return bool(
-            deep_anonymize and export_format == "DICOM" and projection_enabled and studies
-        )
+        return bool(deep_anonymize and export_format == "DICOM" and projection_enabled and studies)
 
     @staticmethod
     def build_anonymized_projections(
@@ -221,8 +219,14 @@ class ExportManager:
             new_series_uid = pydicom.uid.generate_uid()
             for position, (slice_index, dataset) in enumerate(items, start=1):
                 projection = create_projection_dataset(
-                    dataset, studies, study_uid, series_uid, slice_index,
-                    projection_type, projection_slice_count, use_rescaled_values,
+                    dataset,
+                    studies,
+                    study_uid,
+                    series_uid,
+                    slice_index,
+                    projection_type,
+                    projection_slice_count,
+                    use_rescaled_values,
                     new_series_uid=new_series_uid,
                     instance_number=position,
                 )
@@ -301,7 +305,7 @@ class ExportManager:
         Used to check for overwrites before exporting.
         Identified projection DICOM is predicted without building pixels, so a
         projection that later fails to build may appear here but not on disk.
-        
+
         Args:
             selected_items: Same as export_selected
             output_dir: Output directory
@@ -319,7 +323,7 @@ class ExportManager:
                 batch (``build_anonymized_projections_for_selection``).
             studies: Needed with ``projection_enabled`` to predict built projections
             use_rescaled_values: Forwarded to the projection builder
-            
+
         Returns:
             List of absolute paths that would be written
         """
@@ -329,15 +333,17 @@ class ExportManager:
         items_by_study_series = ExportManager.group_selection(selected_items)
         deep_dicom = bool(deep_anonymize and format == "DICOM")
         projection_dicom = bool(projection_enabled and format == "DICOM" and studies)
-        projection_anon = ExportManager.projection_anonymization_active(
-            deep_anonymize, format, projection_enabled, studies
-        )
+        projection_anon = ExportManager.projection_anonymization_active(deep_anonymize, format, projection_enabled, studies)
         pre_anonymized: dict[tuple[str, str, int], Dataset] = {}
         if projection_anon:
             pre_anonymized = deep_anonymized_items or (
                 ExportManager.build_anonymized_projections_for_selection(
-                    selected_items, studies or {}, projection_type,
-                    projection_slice_count, use_rescaled_values, deep_anonymizer_options,
+                    selected_items,
+                    studies or {},
+                    projection_type,
+                    projection_slice_count,
+                    use_rescaled_values,
+                    deep_anonymizer_options,
                 )
             )
         elif deep_dicom:
@@ -345,33 +351,24 @@ class ExportManager:
                 selected_items,
                 deep_anonymizer_options,
             )
-        for (study_uid, series_uid), items in items_by_study_series.items():
-            folder_dataset = series_folder_dataset(
-                study_uid, series_uid, items, pre_anonymized, deep_dicom, projection_anon,
-                projection_type if projection_dicom else None,
-            )
-            if folder_dataset is None:
-                continue
-            series_dir = series_directory(output_dir, folder_dataset)
-            for position, (slice_index, dataset) in enumerate(items, start=1):
-                slice_key = (study_uid, series_uid, slice_index)
-                if projection_anon and slice_key not in pre_anonymized:
-                    continue  # projection could not be built; nothing is written
-                output_dataset = pre_anonymized.get(slice_key, dataset)
-                instance_num = instance_number_for(
-                    position, output_dataset, slice_index, projection_dicom
-                )
-                filename = export_filename(
-                    instance_num, format, projection_enabled,
-                    projection_type, projection_slice_count,
-                )
-                paths.append(os.path.join(series_dir, filename))
+        append_export_preview_paths(
+            paths,
+            items_by_study_series,
+            output_dir,
+            format,
+            projection_enabled,
+            projection_type,
+            projection_slice_count,
+            studies,
+            deep_dicom,
+            projection_dicom,
+            projection_anon,
+            pre_anonymized,
+        )
 
         return paths
 
-    def export_selected(
-        self, request: ExportSelectedRequest
-    ) -> tuple[int, list[tuple[str, float, float]]]:
+    def export_selected(self, request: ExportSelectedRequest) -> tuple[int, list[tuple[str, float, float]]]:
         """
         Export selected items based on hierarchical selection.
 
@@ -427,9 +424,7 @@ class ExportManager:
         deep_dicom = bool(deep_anonymize and export_format == "DICOM")
         folder_projection_type = _projection_dicom_type(request)
 
-        pre_anonymized, projection_dicom_anon = self._select_pre_anonymized(
-            request, items_by_study_series
-        )
+        pre_anonymized, projection_dicom_anon = self._select_pre_anonymized(request, items_by_study_series)
         failed = 0
 
         try:
@@ -437,7 +432,11 @@ class ExportManager:
                 # Anonymized tags name the folder when deep anonymizing; built
                 # projections name the derived series.
                 folder_dataset = series_folder_dataset(
-                    study_uid, series_uid, items, pre_anonymized, deep_dicom,
+                    study_uid,
+                    series_uid,
+                    items,
+                    pre_anonymized,
+                    deep_dicom,
                     projection_dicom_anon,
                     folder_projection_type,
                 )
@@ -464,66 +463,97 @@ class ExportManager:
                         export_dataset = pre_anonymized.get(slice_key, dataset)
 
                     instance_num = instance_number_for(
-                        position, export_dataset, slice_index,
+                        position,
+                        export_dataset,
+                        slice_index,
                         folder_projection_type is not None,
                     )
+                    use_proj_filename = png_jpg_projection_filename_for_disk(
+                        projection_enabled,
+                        export_format,
+                        studies,
+                        study_uid,
+                        series_uid,
+                        slice_index,
+                        projection_slice_count,
+                    )
                     filename = export_filename(
-                        instance_num, export_format, projection_enabled,
-                        projection_type, projection_slice_count,
+                        instance_num,
+                        export_format,
+                        use_proj_filename,
+                        projection_type,
+                        projection_slice_count,
                     )
                     output_path = os.path.join(series_dir, filename)
+                    single_basename = export_filename(
+                        instance_num,
+                        export_format,
+                        False,
+                        projection_type,
+                        projection_slice_count,
+                    )
 
                     # Calculate total slices for this series
                     total_slices = None
                     if studies and study_uid in studies and series_uid in studies[study_uid]:
                         total_slices = len(studies[study_uid][series_uid])
 
-                    success, downgrade_info = self.export_slice(
-                        ExportSliceRequest(
-                            export_dataset,
-                            output_path,
-                            export_format,
-                            window_level_option,
-                            current_window_center,
-                            current_window_width,
-                            include_overlays,
-                            use_rescaled_values,
-                            roi_manager,
-                            overlay_manager,
-                            measurement_tool,
-                            config_manager,
-                            text_annotation_tool,
-                            arrow_annotation_tool,
-                            study_uid,
-                            series_uid,
-                            slice_index,
-                            total_slices,
-                            export_scale,
-                            scale_annotations_with_image,
-                            anonymize=False,
-                            dataset_pre_anonymized=deep_anonymize and export_format == "DICOM",
-                            projection_enabled=projection_enabled,
-                            projection_type=projection_type,
-                            projection_slice_count=projection_slice_count,
-                            studies=studies,
-                            subwindow_annotation_managers=subwindow_annotation_managers,
-                            image_inverted=image_inverted,
-                            lut=lut,
-                            voi_from_dicom=voi_from_dicom,
-                            projection_series_uid=projection_series_uid,
-                            projection_instance_number=position,
-                            prebuilt_projection=(
-                                pre_anonymized.get(slice_key) if projection_dicom_anon else None
-                            ),
-                        )
+                    slice_req = ExportSliceRequest(
+                        export_dataset,
+                        output_path,
+                        export_format,
+                        window_level_option,
+                        current_window_center,
+                        current_window_width,
+                        include_overlays,
+                        use_rescaled_values,
+                        roi_manager,
+                        overlay_manager,
+                        measurement_tool,
+                        config_manager,
+                        text_annotation_tool,
+                        arrow_annotation_tool,
+                        study_uid,
+                        series_uid,
+                        slice_index,
+                        total_slices,
+                        export_scale,
+                        scale_annotations_with_image,
+                        anonymize=False,
+                        dataset_pre_anonymized=deep_anonymize and export_format == "DICOM",
+                        projection_enabled=projection_enabled,
+                        projection_type=projection_type,
+                        projection_slice_count=projection_slice_count,
+                        studies=studies,
+                        subwindow_annotation_managers=subwindow_annotation_managers,
+                        image_inverted=image_inverted,
+                        lut=lut,
+                        voi_from_dicom=voi_from_dicom,
+                        projection_series_uid=projection_series_uid,
+                        projection_instance_number=position,
+                        prebuilt_projection=(pre_anonymized.get(slice_key) if projection_dicom_anon else None),
+                        single_slice_export_basename=single_basename,
                     )
+                    success, downgrade_info = self.export_slice(slice_req)
                     if not success:
                         failed += 1
                     if success:
                         exported += 1
-                        if downgrade_info is not None and export_format in ("PNG", "JPG"):
+                        if downgrade_info is not None and export_format in (
+                            "PNG",
+                            "JPG",
+                        ):
                             req, act = downgrade_info
-                            downgraded.append((os.path.basename(output_path), req, act))
+                            downgraded.append(
+                                (
+                                    reported_export_basename(
+                                        slice_req.resolved_output_path,
+                                        slice_req.output_path,
+                                    ),
+                                    req,
+                                    act,
+                                )
+                            )
 
                     progress.setValue(exported)
 
@@ -545,9 +575,7 @@ class ExportManager:
         if not (request.deep_anonymize and request.format == "DICOM"):
             return {}, False
         options = request.deep_anonymizer_options
-        if self.projection_anonymization_active(
-            True, request.format, request.projection_enabled, request.studies
-        ):
+        if self.projection_anonymization_active(True, request.format, request.projection_enabled, request.studies):
             # Reuse the dialog's batch (so the overwrite preview matches); else build from the raw source, then anonymize the built batch so the
             # reference sequences get the same UID remap as the datasets.
             return request.deep_anonymized_items or self.build_anonymized_projections(
@@ -558,46 +586,9 @@ class ExportManager:
                 request.use_rescaled_values,
                 options,
             ), True
-        return request.deep_anonymized_items or self.build_deep_anonymized_selection(
-            request.selected_items, options
-        ), False
+        return request.deep_anonymized_items or self.build_deep_anonymized_selection(request.selected_items, options), False
 
-    @staticmethod
-    def _export_dicom_slice(request: ExportSliceRequest) -> bool:
-        """Write one DICOM (deep-anonymized or original dataset already selected by caller).
-
-        Returns False, writing nothing, when a projection cannot be built or when a
-        deep-anonymized projection arrives without its prebuilt dataset.
-        """
-        dataset = request.dataset
-        output_path = request.output_path
-        if request.prebuilt_projection is not None:
-            save_projection_dataset(request.prebuilt_projection, output_path)
-            return True
-        studies = request.studies
-        if not (
-            request.projection_enabled and studies and request.study_uid
-            and request.series_uid and request.slice_index is not None
-        ):
-            dataset.save_as(output_path)
-            return True
-        if request.dataset_pre_anonymized:
-            return False  # fail closed: never build from raw source and write it
-        projection_dataset = create_projection_dataset(
-            dataset, studies, request.study_uid, request.series_uid, request.slice_index,
-            request.projection_type, request.projection_slice_count,
-            request.use_rescaled_values,
-            new_series_uid=request.projection_series_uid,
-            instance_number=request.projection_instance_number,
-        )
-        if projection_dataset is None:
-            return False
-        save_projection_dataset(projection_dataset, output_path)
-        return True
-
-    def export_slice(
-        self, request: ExportSliceRequest
-    ) -> tuple[bool, tuple[float, float] | None]:
+    def export_slice(self, request: ExportSliceRequest) -> tuple[bool, tuple[float, float] | None]:
         """
         Export a single slice or projection image.
 
@@ -647,7 +638,7 @@ class ExportManager:
 
         try:
             if export_format == "DICOM":
-                return (self._export_dicom_slice(request), None)
+                return (write_export_dicom_slice(request), None)
             else:
                 # Export as image (PNG or JPG)
                 window_center = None
@@ -662,13 +653,22 @@ class ExportManager:
                 if projection_enabled and studies and study_uid and series_uid and slice_index is not None:
                     # Create projection image
                     image = _er.create_projection_for_export(
-                        dataset, studies, study_uid, series_uid, slice_index,
-                        projection_type, projection_slice_count,
-                        window_center, window_width, use_rescaled_values,
-                        image_inverted=image_inverted, lut=lut,
+                        dataset,
+                        studies,
+                        study_uid,
+                        series_uid,
+                        slice_index,
+                        projection_type,
+                        projection_slice_count,
+                        window_center,
+                        window_width,
+                        use_rescaled_values,
+                        image_inverted=image_inverted,
+                        lut=lut,
                     )
                     if image is None:
                         # Fall back to single slice if projection fails
+                        output_path = png_jpg_fallback_output_path(output_path, request.single_slice_export_basename)
                         image = DICOMProcessor.dataset_to_image(
                             dataset,
                             window_center=window_center,
@@ -701,9 +701,7 @@ class ExportManager:
                 image = invert_color_export_image(image, dataset, image_inverted)
 
                 # Apply export scale: use effective scale (may be lower than requested to stay under 8192 px)
-                effective_scale = _er.effective_scale_for_image(
-                    image.width, image.height, export_scale
-                )
+                effective_scale = _er.effective_scale_for_image(image.width, image.height, export_scale)
                 downgrade_info: tuple[float, float] | None = (export_scale, effective_scale) if effective_scale < export_scale else None
                 if effective_scale > 1.0:
                     new_width = int(image.width * effective_scale)
@@ -733,10 +731,11 @@ class ExportManager:
                             projection_type=projection_type,
                             projection_slice_count=projection_slice_count,
                             studies=studies,
-                            subwindow_annotation_managers=subwindow_annotation_managers
+                            subwindow_annotation_managers=subwindow_annotation_managers,
                         )
                     )
 
+                request.resolved_output_path = output_path
                 if export_format == "PNG":
                     image.save(output_path, "PNG")
                 elif export_format == "JPG":
