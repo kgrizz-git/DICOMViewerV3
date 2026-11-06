@@ -35,7 +35,7 @@ def _row(**over: str) -> dict[str, str]:
 
 def test_export_prefixes_formula_triggers_and_import_restores(tmp_path) -> None:
     src = _row(
-        patient_name="=HYPERLINK(\"http://evil.example\")",
+        patient_name='=HYPERLINK("http://evil.example")',
         patient_id="+cmd",
         accession_number="-1",
         study_description="@SUM(A1)",
@@ -65,7 +65,9 @@ def test_export_prefixes_formula_triggers_and_import_restores(tmp_path) -> None:
     assert restored[0]["file_path"] == src["file_path"]
 
 
-def test_import_keeps_a_leading_apostrophe_that_is_not_a_formula_escape(tmp_path) -> None:
+def test_import_keeps_a_leading_apostrophe_that_is_not_a_formula_escape(
+    tmp_path,
+) -> None:
     src = _row(patient_name="'Smith")
     path = tmp_path / "apostrophe.csv"
     write_entries_csv(str(path), [src])
@@ -73,8 +75,14 @@ def test_import_keeps_a_leading_apostrophe_that_is_not_a_formula_escape(tmp_path
     assert restored[0]["patient_name"] == "'Smith"
 
 
-def test_import_cannot_tell_a_prequoted_formula_from_a_neutralized_one(tmp_path) -> None:
-    """A stored ``'=`` value and a neutralized ``=`` value share one CSV encoding."""
+def test_import_cannot_tell_a_prequoted_formula_from_a_neutralized_one(
+    tmp_path,
+) -> None:
+    """A stored ``'=`` value and a neutralized ``=`` value share one CSV encoding.
+
+    The same collision applies when a trigger follows only whitespace or C0 controls
+    after the apostrophe (e.g. stored ``'\\t=…`` vs neutralized ``\\t=…``).
+    """
     src = _row(study_description="'=already")
     path = tmp_path / "collision.csv"
     write_entries_csv(str(path), [src])
@@ -83,3 +91,25 @@ def test_import_cannot_tell_a_prequoted_formula_from_a_neutralized_one(tmp_path)
     assert raw["study_description"] == "'=already"
     restored = read_entries_csv(str(path))
     assert restored[0]["study_description"] == "=already"
+
+    src_ws = _row(series_description="'\t=already")
+    path_ws = tmp_path / "collision-ws.csv"
+    write_entries_csv(str(path_ws), [src_ws])
+    with path_ws.open(newline="", encoding="utf-8") as f:
+        raw_ws = next(csv.DictReader(f))
+    assert raw_ws["series_description"] == "'\t=already"
+    restored_ws = read_entries_csv(str(path_ws))
+    assert restored_ws[0]["series_description"] == "\t=already"
+
+
+def test_csv_round_trip_preserves_tab_prefixed_formula_like_text(tmp_path) -> None:
+    """Leading tab before a trigger is neutralized on export and restored on import."""
+    src = _row(patient_name="\t=cmd")
+    path = tmp_path / "tab_formula.csv"
+    assert write_entries_csv(str(path), [src]) == 1
+    with path.open(newline="", encoding="utf-8") as f:
+        raw = next(csv.DictReader(f))
+    assert raw["patient_name"] == "'\t=cmd"
+    restored = read_entries_csv(str(path))
+    assert len(restored) == 1
+    assert restored[0]["patient_name"] == "\t=cmd"

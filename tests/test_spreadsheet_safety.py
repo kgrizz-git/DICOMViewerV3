@@ -16,6 +16,17 @@ def test_neutralizes_formula_prefixed_strings(prefix):
     assert neutralize_spreadsheet_value(value) == f"'{value}"
 
 
+@pytest.mark.parametrize(
+    "leading",
+    ["\t", "\r", "\n", " ", "\x01"],
+    ids=["tab", "cr", "lf", "space", "c0-soh"],
+)
+def test_neutralizes_formula_trigger_after_leading_whitespace_or_c0(leading):
+    """First ignorable characters must not hide =/+/-/@ from neutralization."""
+    raw = f"{leading}=cmd()"
+    assert neutralize_spreadsheet_value(raw) == f"'{raw}"
+
+
 def test_leaves_plain_strings_unchanged():
     assert neutralize_spreadsheet_value("John Doe") == "John Doe"
 

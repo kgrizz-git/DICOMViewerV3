@@ -25,6 +25,16 @@ def test_neutralize_preserves_already_neutralized():
     assert neutralize_spreadsheet_value("'=foo") == "'=foo"
 
 
+def test_neutralize_leaves_indent_before_non_trigger():
+    assert neutralize_spreadsheet_value("\tHello") == "\tHello"
+    assert neutralize_spreadsheet_value(" hello") == " hello"
+
+
+def test_neutralize_does_not_treat_del_as_c0_control_before_equals():
+    """DEL (U+007F) is not skipped; the first significant character must not be =."""
+    assert neutralize_spreadsheet_value("\x7f=cmd") == "\x7f=cmd"
+
+
 def test_neutralize_unicode_formula():
     assert neutralize_spreadsheet_value("=Атака") == "'=Атака"
 
