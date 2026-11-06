@@ -24,7 +24,7 @@
     "src/gui/mpr_controller.py": 1457,
     "src/gui/multi_window_layout.py": 898,
     "src/gui/overlay_manager.py": 1111,
-    "src/gui/qa_app_facade.py": 1217,
+    "src/gui/qa_app_facade.py": 1216,
     "src/gui/roi_coordinator.py": 1138,
     "src/gui/series_navigator.py": 1114,
     "src/gui/slice_display_manager.py": 1623,
