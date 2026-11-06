@@ -127,8 +127,6 @@ Release blockers (license compliance, versioned executables) live in
 > Write-up:
 > [CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md).
 
-- [ ] **[P2]** **DICOM-driven `QLabel`s use Qt AutoText (series navigator / overlays).** `StudyDescription` or overlay tag text with HTML-like markup can be interpreted as rich text. **Fix:** `setTextFormat(PlainText)` on DICOM-sourced labels (same pattern as `lut_pane_label`). **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §6. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §6.
-
 - [ ] **[P3]** **MPR admission/sync hardening (optional).** Empty source UIDs can evade closure matching; `_get_slice_index` ignores `mpr_slice_index` after a failed linked redraw; registry-only pending tokens are not UID-swept on close without a pane map. Low confidence on normal studies. **Plan:** [medium bug-hunt fix plan](plans/MEDIUM_BUG_HUNT_2026-11-04_FIX_PLAN.md) §Optional P3. **Origin:** [medium findings 2026-11-04](bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md) §Lower-confidence MPR near-misses.
 
 ## Performance / Packaging

@@ -120,11 +120,11 @@ class ViewportOverlayWidget(QWidget):
             "lower_left": QLabel(self),
             "lower_right": QLabel(self)
         }
-
         # Configure labels
         font = make_qfont(font_family, font_variant, font_size)
 
         for label in self.corner_labels.values():
+            label.setTextFormat(Qt.TextFormat.PlainText)
             label.setFont(font)
             label.setStyleSheet(f"color: rgb({font_color[0]}, {font_color[1]}, {font_color[2]}); background: transparent;")
             label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
