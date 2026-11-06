@@ -6,6 +6,7 @@ This file records development and repository-maintenance history that is useful 
 
 ## 2026-11-06
 
+- **Study-index FTS delete triggers.** Schema version 4 replaces `study_index_entry_ad` and `study_index_entry_au` so the FTS5 delete command includes `old.doc`, then rebuilds `study_index_entry_fts`. A path-only update no longer leaves the external-content index inconsistent. Existing databases migrate on the next open.
 - **Fusion base display complexity.** `FusionProcessor._base_display_rgb` was already over Sonar's cognitive-complexity limit of 15 (16 on `main`) and the grayscale display-final branch raised it to 17. The RGB and grayscale scale paths now live in `_rgb_display_unit` and `_gray_display_rgb`, so the method itself is under 15. Blend results are unchanged. The pre-commit hook did not catch this: it measures lizard cyclomatic complexity, and that method's CCN stayed at 9.
 
 ## 2026-11-01

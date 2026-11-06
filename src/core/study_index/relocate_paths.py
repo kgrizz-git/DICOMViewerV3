@@ -34,8 +34,9 @@ def every_new_path_is_existing_file(new_paths: list[str]) -> bool:
 
 
 def _read_study_and_sop_uids(path: str) -> tuple[str, str] | None:
+    """Read SOP and Study Instance UIDs, including files with no DICOM preamble."""
     try:
-        ds = pydicom.dcmread(path, stop_before_pixels=True)
+        ds = pydicom.dcmread(path, stop_before_pixels=True, force=True)
     except (OSError, InvalidDicomError):
         return None
     except Exception:

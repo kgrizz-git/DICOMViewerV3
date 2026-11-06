@@ -409,8 +409,8 @@ def cine_export_skip_summary_message(
         return None
     if frames_saved <= 0:
         return (
-            "No frames could be built for the selected range with the current "
-            "projection settings. There is nothing to encode."
+            "No frames could be built for the selected range. "
+            "There is nothing to encode."
         )
     return (
         f"{frames_skipped} frame(s) could not be built (for example the projection "

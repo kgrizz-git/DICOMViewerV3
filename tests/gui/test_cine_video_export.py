@@ -41,6 +41,8 @@ def test_cine_export_skip_summary_message_distinct_cases() -> None:
     msg_all = cine_export_skip_summary_message(5, 0)
     assert msg_all is not None
     assert "nothing to encode" in msg_all
+    assert "projection settings" not in msg_all
+    assert "selected range" in msg_all
     msg_some = cine_export_skip_summary_message(2, 7)
     assert msg_some is not None
     assert "2 frame(s) could not be built" in msg_some

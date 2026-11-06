@@ -304,6 +304,84 @@ def test_study_index_store_global_fts_invalid_query(tmp_path) -> None:
         store.search_grouped_studies(global_fts_query="OR (", limit=5, offset=0)
 
 
+def test_study_index_v3_fts_trigger_migration_keeps_search(tmp_path) -> None:
+    """A v3 database with rowid-only FTS deletes is rebuilt and stays searchable."""
+    import sqlcipher3.dbapi2 as sc
+
+    db = tmp_path / "v3.sqlite"
+    passphrase = "v3-pw"
+    root = os.path.abspath(str(tmp_path))
+    fp = os.path.abspath(str(tmp_path / "kept.dcm"))
+    esc = passphrase.replace("'", "''")
+    conn = sc.connect(str(db))
+    conn.execute(f"PRAGMA key = '{esc}';")
+    conn.executescript(
+        """
+        CREATE TABLE study_index_entry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path TEXT NOT NULL UNIQUE,
+            study_root_path TEXT NOT NULL,
+            study_uid TEXT NOT NULL,
+            series_uid TEXT,
+            sop_instance_uid TEXT,
+            patient_name TEXT,
+            patient_id TEXT,
+            accession_number TEXT,
+            study_date TEXT,
+            study_description TEXT,
+            series_description TEXT,
+            modality TEXT,
+            doc TEXT NOT NULL DEFAULT ' ',
+            indexed_at REAL NOT NULL
+        );
+        CREATE VIRTUAL TABLE study_index_entry_fts USING fts5(
+            doc, content='study_index_entry', content_rowid='id'
+        );
+        CREATE TRIGGER study_index_entry_au AFTER UPDATE ON study_index_entry BEGIN
+          INSERT INTO study_index_entry_fts(study_index_entry_fts, rowid) VALUES('delete', old.id);
+          INSERT INTO study_index_entry_fts(rowid, doc) VALUES (new.id, new.doc);
+        END;
+        PRAGMA user_version = 3;
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO study_index_entry (
+            file_path, study_root_path, study_uid, series_uid, sop_instance_uid,
+            patient_name, patient_id, accession_number, study_date, study_description,
+            series_description, modality, doc, indexed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (fp, root, "1.v3", "", "1.v3.sop", "PathPatient", "", "", "20200101", "", "", "CT", "PathPatient", 0.0),
+    )
+    conn.execute("INSERT INTO study_index_entry_fts(rowid, doc) VALUES (1, 'PathPatient')")
+    conn.commit()
+    conn.close()
+
+    store = StudyIndexStore(str(db), passphrase)
+    store.init_schema()
+    with store._connect() as check:
+        sql = check.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'study_index_entry_au'"
+        ).fetchone()[0]
+        assert "old.doc" in sql
+        check.execute("INSERT INTO study_index_entry_fts(study_index_entry_fts) VALUES('integrity-check')")
+    found = store.search_grouped_studies(global_fts_query="PathPatient", limit=10, offset=0)
+    assert len(found) == 1
+    rows = store.fetch_study_rows_for_relocate("1.v3", root)
+    updated = store.apply_study_path_updates(
+        [(fp + ".moved", root, rows[0][0])],
+        expected_rows=rows,
+        study_uid="1.v3",
+        old_root=root,
+    )
+    assert updated == 1
+    found_after = store.search_grouped_studies(global_fts_query="PathPatient", limit=10, offset=0)
+    assert len(found_after) == 1
+    with store._connect() as check:
+        check.execute("INSERT INTO study_index_entry_fts(study_index_entry_fts) VALUES('integrity-check')")
+
+
 def test_study_index_store_migrate_v1_schema_to_v2_fts(tmp_path) -> None:
     """Opening a legacy v1 DB runs migration and FTS search works."""
     import sqlcipher3.dbapi2 as sc

@@ -66,18 +66,53 @@ def _pragma_key_sql(passphrase: str) -> str:
     return f"PRAGMA key = '{escaped}'"
 
 
-_FTS_TRIGGERS_DDL = """
+# External-content FTS5 requires the old ``doc`` on delete. A rowid-only delete
+# leaves the index inconsistent after a path-only UPDATE.
+_FTS_DELETE_OLD_DOC = (
+    "INSERT INTO study_index_entry_fts(study_index_entry_fts, rowid, doc) "
+    "VALUES('delete', old.id, old.doc);"
+)
+_FTS_TRIGGERS_DDL = f"""
 CREATE TRIGGER IF NOT EXISTS study_index_entry_ai AFTER INSERT ON study_index_entry BEGIN
   INSERT INTO study_index_entry_fts(rowid, doc) VALUES (new.id, new.doc);
 END;
 CREATE TRIGGER IF NOT EXISTS study_index_entry_ad AFTER DELETE ON study_index_entry BEGIN
-  INSERT INTO study_index_entry_fts(study_index_entry_fts, rowid) VALUES('delete', old.id);
+  {_FTS_DELETE_OLD_DOC}
 END;
 CREATE TRIGGER IF NOT EXISTS study_index_entry_au AFTER UPDATE ON study_index_entry BEGIN
-  INSERT INTO study_index_entry_fts(study_index_entry_fts, rowid) VALUES('delete', old.id);
+  {_FTS_DELETE_OLD_DOC}
   INSERT INTO study_index_entry_fts(rowid, doc) VALUES (new.id, new.doc);
 END;
 """
+
+
+def _relocate_group_unchanged(
+    cur: sqlite3.Cursor,
+    expected_rows: list[tuple[int, str, str]],
+    study_uid: str,
+    old_root: str,
+) -> bool:
+    """True when the stored (id, path, SOP) group still matches ``expected_rows``."""
+    cur.execute(
+        "SELECT id, file_path, IFNULL(sop_instance_uid, '') AS sop_instance_uid "
+        "FROM study_index_entry WHERE study_uid = ? AND study_root_path = ?",
+        ((study_uid or "").strip(), os.path.normpath(os.path.abspath((old_root or "").strip()))),
+    )
+    current = [(int(row[0]), str(row[1] or ""), str(row[2] or "")) for row in cur.fetchall()]
+    return sorted(current) == sorted(expected_rows)
+
+
+def _replace_fts_triggers_and_rebuild(cur: sqlite3.Cursor) -> None:
+    """Install the current FTS triggers and rebuild the index from ``doc``."""
+    cur.executescript(
+        """
+        DROP TRIGGER IF EXISTS study_index_entry_ai;
+        DROP TRIGGER IF EXISTS study_index_entry_ad;
+        DROP TRIGGER IF EXISTS study_index_entry_au;
+        """
+    )
+    cur.executescript(_FTS_TRIGGERS_DDL)
+    cur.execute("INSERT INTO study_index_entry_fts(study_index_entry_fts) VALUES('rebuild');")
 
 
 def _create_fts_and_triggers(cur: sqlite3.Cursor) -> None:
@@ -96,7 +131,7 @@ def _create_fts_and_triggers(cur: sqlite3.Cursor) -> None:
 class StudyIndexStore:
     """Create, migrate, upsert, and query study index rows."""
 
-    SCHEMA_VERSION = 3
+    SCHEMA_VERSION = 4
 
     def __init__(self, db_path: str, passphrase: str) -> None:
         self._db_path = db_path
@@ -158,6 +193,13 @@ class StudyIndexStore:
             "CREATE INDEX IF NOT EXISTS idx_grouped_study_cover "
             "ON study_index_entry(study_uid, study_root_path, study_date, patient_name, modality);"
         )
+        cur.execute("PRAGMA user_version = 3;")
+        conn.commit()
+
+    def _migrate_v3_to_v4(self, conn: sqlite3.Connection) -> None:
+        """Replace FTS delete triggers so path updates keep search consistent."""
+        cur = conn.cursor()
+        _replace_fts_triggers_and_rebuild(cur)
         cur.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION};")
         conn.commit()
 
@@ -212,10 +254,13 @@ class StudyIndexStore:
                 self._migrate_v1_to_v2(conn)
             elif version == 2:
                 self._migrate_v2_to_v3(conn)
+                self._migrate_v3_to_v4(conn)
+            elif version == 3:
+                self._migrate_v3_to_v4(conn)
             elif version > self.SCHEMA_VERSION:
                 raise sqlite3.OperationalError(
                     f"study_index unsupported user_version={version}; "
-                    f"expected 0, 1, 2, or {self.SCHEMA_VERSION}"
+                    f"expected 0, 1, 2, 3, or {self.SCHEMA_VERSION}"
                 )
             conn.commit()
 
@@ -425,21 +470,39 @@ class StudyIndexStore:
             )
             return [(int(r[0]), str(r[1] or ""), str(r[2] or "")) for r in cur.fetchall()]
 
-    def apply_study_path_updates(self, rows: list[tuple[str, str, int]]) -> int:
+    def apply_study_path_updates(
+        self,
+        rows: list[tuple[str, str, int]],
+        *,
+        expected_rows: list[tuple[int, str, str]],
+        study_uid: str,
+        old_root: str,
+    ) -> int:
         """
         Write ``file_path`` and ``study_root_path`` for each row ``id`` in one transaction.
 
-        Callers validate paths and DICOM headers; this method only persists the update list.
+        ``expected_rows`` is the ``(id, file_path, sop_instance_uid)`` group just
+        validated. The write aborts when that group changed. Callers validate
+        paths and DICOM headers; this method only persists a still-matching list.
         """
         if not rows:
             return 0
         with self._connect() as conn:
+            conn.isolation_level = None
             cur = conn.cursor()
-            cur.executemany(
-                "UPDATE study_index_entry SET file_path = ?, study_root_path = ? WHERE id = ?",
-                rows,
-            )
-            conn.commit()
+            cur.execute("BEGIN IMMEDIATE")
+            try:
+                if not _relocate_group_unchanged(cur, expected_rows, study_uid, old_root):
+                    cur.execute("ROLLBACK")
+                    return 0
+                cur.executemany(
+                    "UPDATE study_index_entry SET file_path = ?, study_root_path = ? WHERE id = ?",
+                    rows,
+                )
+                cur.execute("COMMIT")
+            except Exception:
+                cur.execute("ROLLBACK")
+                raise
         return len(rows)
 
     @staticmethod

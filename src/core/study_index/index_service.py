@@ -273,7 +273,12 @@ class LocalStudyIndexService:
         updates = build_relocate_updates_or_none(study_uid, old, new, rows)
         if updates is None:
             return 0
-        return store.apply_study_path_updates(updates)
+        return store.apply_study_path_updates(
+            updates,
+            expected_rows=rows,
+            study_uid=(study_uid or "").strip(),
+            old_root=old,
+        )
 
     # --- Metadata (About this index) -----------------------------------------
 

@@ -95,14 +95,16 @@ def projection_suffix_for_preview_path(
 ) -> bool:
     """Whether the overwrite preview includes a projection token for this item.
 
-    When ``studies`` is None, matches legacy preview (projection token follows the
-    request flag). When ``studies`` is set, PNG/JPG paths use the slab rule; DICOM
-    preview naming is unchanged.
+    When ``studies`` is None, DICOM keeps the legacy projection token. PNG and
+    JPG omit it, matching the file ``export_selected`` writes: without
+    ``studies`` that file is one slice and must not use a projection name.
+    When ``studies`` is set, PNG/JPG paths use the slab rule; DICOM preview
+    naming is unchanged.
     """
     if not projection_enabled:
         return False
     if studies is None:
-        return True
+        return export_format not in ("PNG", "JPG")
     if export_format not in ("PNG", "JPG"):
         return True
     return export_projection_slab_is_buildable(
@@ -145,6 +147,38 @@ def png_jpg_fallback_output_path(
     return os.path.join(os.path.dirname(projection_output_path), single_slice_basename)
 
 
+def append_png_jpg_fallback_preview_path(
+    paths: list[str],
+    series_dir: str,
+    instance_num: int,
+    export_format: str,
+    projection_type: str,
+    projection_slice_count: int,
+    *,
+    use_projection_suffix: bool,
+    studies: dict[str, dict[str, list[Any]]] | None,
+    study_uid: str,
+    series_uid: str,
+    slice_index: int,
+) -> None:
+    """Also list the single-slice path a buildable PNG/JPG slab may fall back to.
+
+    ``export_slice`` keeps the projection name when the slab renders, and
+    rewrites to this basename when rendering returns no image. The overwrite
+    prompt has to see both.
+    """
+    if not use_projection_suffix or export_format not in ("PNG", "JPG") or studies is None:
+        return
+    if not export_projection_slab_is_buildable(
+        studies, study_uid, series_uid, slice_index, projection_slice_count
+    ):
+        return
+    fallback_name = export_filename(
+        instance_num, export_format, False, projection_type, projection_slice_count
+    )
+    paths.append(os.path.join(series_dir, fallback_name))
+
+
 def append_export_preview_paths(
     paths: list[str],
     items_by_study_series: dict[tuple[str, str], list[tuple[int, Dataset]]],
@@ -181,22 +215,36 @@ def append_export_preview_paths(
             instance_num = instance_number_for(
                 position, output_dataset, slice_index, projection_dicom
             )
+            use_projection_suffix = projection_suffix_for_preview_path(
+                projection_enabled,
+                export_format,
+                studies,
+                study_uid,
+                series_uid,
+                slice_index,
+                projection_slice_count,
+            )
             filename = export_filename(
                 instance_num,
                 export_format,
-                projection_suffix_for_preview_path(
-                    projection_enabled,
-                    export_format,
-                    studies,
-                    study_uid,
-                    series_uid,
-                    slice_index,
-                    projection_slice_count,
-                ),
+                use_projection_suffix,
                 projection_type,
                 projection_slice_count,
             )
             paths.append(os.path.join(series_dir, filename))
+            append_png_jpg_fallback_preview_path(
+                paths,
+                series_dir,
+                instance_num,
+                export_format,
+                projection_type,
+                projection_slice_count,
+                use_projection_suffix=use_projection_suffix,
+                studies=studies,
+                study_uid=study_uid,
+                series_uid=series_uid,
+                slice_index=slice_index,
+            )
 
 
 def reported_export_basename(resolved_output_path: str | None, output_path: str) -> str:

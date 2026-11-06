@@ -90,6 +90,49 @@ def test_preview_png_last_slice_thin_slab_omits_projection_token(tmp_path: Path)
     assert "_MIP_" not in paths[0]
 
 
+def test_png_preview_matches_disk_name_when_studies_missing(tmp_path: Path) -> None:
+    """Without studies, PNG preview and the written name both omit the projection token.
+
+    DICOM preview still keeps the legacy suffix (see the one-item DICOM test).
+    """
+    from gui.export_paths import png_jpg_projection_filename_for_disk
+
+    items = {("st", "se", 0): _ds()}
+    paths = ExportManager.get_export_paths_for_selection(
+        items,
+        str(tmp_path),
+        "PNG",
+        projection_enabled=True,
+        projection_type="mip",
+        projection_slice_count=4,
+    )
+    assert len(paths) == 1
+    assert "_MIP_" not in paths[0]
+    assert png_jpg_projection_filename_for_disk(
+        True, "PNG", None, "st", "se", 0, 4
+    ) is False
+
+
+def test_preview_buildable_png_also_lists_single_slice_fallback(tmp_path: Path) -> None:
+    """A buildable slab can still be written as one slice if rendering returns nothing."""
+    study_uid, series_uid = "st", "se"
+    slices = [_ds(f"1.2.3.{i}") for i in range(10)]
+    items = {(study_uid, series_uid, 0): slices[0]}
+    studies = {study_uid: {series_uid: slices}}
+    paths = ExportManager.get_export_paths_for_selection(
+        items,
+        str(tmp_path),
+        "PNG",
+        projection_enabled=True,
+        projection_type="mip",
+        projection_slice_count=4,
+        studies=studies,
+    )
+    assert len(paths) == 2
+    assert any("_MIP_4slices" in path for path in paths)
+    assert any(path.endswith("Instance_0001.png") for path in paths)
+
+
 def test_preview_png_early_slice_keeps_projection_token_when_slab_ok(tmp_path: Path) -> None:
     study_uid, series_uid = "st", "se"
     slices = [_ds(f"1.2.3.{i}") for i in range(10)]
@@ -104,8 +147,8 @@ def test_preview_png_early_slice_keeps_projection_token_when_slab_ok(tmp_path: P
         projection_slice_count=4,
         studies=studies,
     )
-    assert len(paths) == 1
-    assert "_MIP_4slices" in paths[0]
+    assert any("_MIP_4slices" in path for path in paths)
+    assert any(path.endswith("Instance_0001.png") for path in paths)
 
 
 def test_export_slice_png_rewrites_path_when_projection_returns_none(monkeypatch, tmp_path: Path) -> None:

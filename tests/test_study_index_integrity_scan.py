@@ -245,6 +245,52 @@ def test_relocate_no_commit_when_target_missing(tmp_path) -> None:
     assert store.get_file_paths_for_study(UID_STUDY, os.path.abspath(str(root)))
 
 
+def _strip_dicom_preamble(path: str) -> None:
+    with open(path, "rb") as handle:
+        data = handle.read()
+    assert data[128:132] == b"DICM"
+    with open(path, "wb") as handle:
+        handle.write(data[132:])
+
+
+def test_relocate_accepts_dicom_without_preamble(tmp_path) -> None:
+    store, root, files = _seed(tmp_path)
+    new_root = tmp_path / "study_no_preamble"
+    new_root.mkdir()
+    for src in files:
+        dest = new_root / os.path.basename(src)
+        _write_minimal_dcm(str(dest), UID_STUDY, UID_SOP_SHARED)
+        _strip_dicom_preamble(str(dest))
+        os.remove(src)
+    os.rmdir(root)
+    svc = _service_for(store)
+    n = svc.relocate_study(
+        UID_STUDY, os.path.abspath(str(root)), os.path.abspath(str(new_root))
+    )
+    assert n == 3
+
+
+def test_relocate_aborts_when_indexed_group_changes_before_write(tmp_path) -> None:
+    store, root, files = _seed(tmp_path)
+    old = os.path.abspath(str(root))
+    expected = store.fetch_study_rows_for_relocate(UID_STUDY, old)
+    with store._connect() as conn:
+        conn.execute(
+            "UPDATE study_index_entry SET file_path = ? WHERE id = ?",
+            (expected[0][1] + ".changed", expected[0][0]),
+        )
+        conn.commit()
+    updates = [(os.path.abspath(files[0]), old, expected[0][0])]
+    assert (
+        store.apply_study_path_updates(
+            updates, expected_rows=expected, study_uid=UID_STUDY, old_root=old
+        )
+        == 0
+    )
+    current = store.fetch_study_rows_for_relocate(UID_STUDY, old)
+    assert any(path.endswith(".changed") for _rid, path, _sop in current)
+
+
 def test_relocate_rejects_blank_inputs(tmp_path) -> None:
     store, root, _files = _seed(tmp_path)
     svc = _service_for(store)

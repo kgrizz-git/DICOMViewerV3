@@ -93,6 +93,36 @@ def test_relocate_no_match_warns_and_does_not_open(qapp, monkeypatch) -> None:
         dlg.deleteLater()
 
 
+def test_relocate_open_failure_keeps_dialog_and_does_not_undo(qapp, monkeypatch) -> None:
+    dlg, svc, opened = _build(qapp)
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("lookup failed")
+
+    svc.get_file_paths_for_study = boom  # type: ignore[method-assign]
+    try:
+        monkeypatch.setattr(
+            QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: "/new/loc")
+        )
+        warnings: list[str] = []
+        monkeypatch.setattr(
+            QMessageBox,
+            "warning",
+            staticmethod(lambda *_a, **_k: warnings.append(str(_a[2]) if len(_a) > 2 else "")),
+        )
+        accepted = {"n": 0}
+        monkeypatch.setattr(dlg, "accept", lambda: accepted.__setitem__("n", 1))
+        result = dlg._relocate_and_reopen("1.2.3", "/old/loc")
+        assert result is True
+        assert svc.relocated == [("1.2.3", "/old/loc", "/new/loc")]
+        assert opened == []
+        assert accepted["n"] == 0
+        assert warnings and "could not be opened" in warnings[0]
+        assert "lookup failed" in warnings[0]
+    finally:
+        dlg.deleteLater()
+
+
 def test_relocate_cancelled_picker_is_noop(qapp, monkeypatch) -> None:
     dlg, svc, opened = _build(qapp)
     try:
