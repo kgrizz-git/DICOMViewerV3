@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-11-01
+**Last updated:** 2026-11-06
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-11-06
+
+- **Fusion base display complexity.** `FusionProcessor._base_display_rgb` was already over Sonar's cognitive-complexity limit of 15 (16 on `main`) and the grayscale display-final branch raised it to 17. The RGB and grayscale scale paths now live in `_rgb_display_unit` and `_gray_display_rgb`, so the method itself is under 15. Blend results are unchanged. The pre-commit hook did not catch this: it measures lizard cyclomatic complexity, and that method's CCN stayed at 9.
 
 ## 2026-11-01
 
