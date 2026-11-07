@@ -432,7 +432,7 @@ def test_about_import_and_export_errors(monkeypatch, qapp) -> None:
         dlg._export_index()
         assert "Export failed" in critical[0]
         monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a: ("/bad.csv", ""))
-        monkeypatch.setattr("gui.dialogs.study_index_search_dialog.read_entries_csv", MagicMock(side_effect=RuntimeError("parse")))
+        monkeypatch.setattr("gui.dialogs.study_index_about_dialog.read_entries_csv", MagicMock(side_effect=RuntimeError("parse")))
         dlg._import_index()
         assert "Import failed" in critical[-1]
     finally:
