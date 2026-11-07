@@ -48,6 +48,16 @@ from core.slice_geometry import SlicePlane, SliceStack, find_nearest_slice
 from utils.privacy.console import print_redacted
 
 
+def _mpr_linked_slice_index(data: dict[str, Any]) -> int | None:
+    """Slice index used for MPR-linked sync when ``mpr_slice_index`` is authoritative."""
+    if not data.get("is_mpr") or data.get("mpr_result") is None:
+        return None
+    idx = data.get("mpr_slice_index")
+    if isinstance(idx, int) and not isinstance(idx, bool):
+        return idx
+    return None
+
+
 class SliceSyncCoordinator:
     """
     Coordinates anatomic slice sync across user-defined linked groups.
@@ -264,6 +274,9 @@ class SliceSyncCoordinator:
     def _get_slice_index(self, idx: int) -> int:
         """Return current dataset-list slice index for subwindow ``idx``."""
         data = self.app.subwindow_data.get(idx, {})
+        mpr_idx = _mpr_linked_slice_index(data)
+        if mpr_idx is not None:
+            return mpr_idx
         return data.get("current_slice_index", 0)
 
     def _get_datasets(self, idx: int) -> list[Any] | None:

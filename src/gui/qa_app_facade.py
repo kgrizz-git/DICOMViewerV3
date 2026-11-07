@@ -752,11 +752,9 @@ class QAAppFacade:
         batch: CTBatchResult,
     ) -> None:
         """
-        Show the non-modal batch summary dialog and wire its export buttons.
-
-        The worker's ``image_temp_dir`` (and ``module_images_temp_dir`` when
-        embed is on) are kept alive for the dialog's life and cleaned up in
-        ``on_destroyed`` (mirrors ``start_qa_worker`` single-run lifecycle).
+        Show the non-modal batch summary and keep its worker temp dirs until
+        this dialog is destroyed. A late destroy clears the app slot only
+        while that slot still points at this dialog.
         """
         app = self._app
         if not batch.run_results:
@@ -765,20 +763,21 @@ class QAAppFacade:
 
         if app._ct_batch_result_dialog is not None:
             app._ct_batch_result_dialog.close()
-            app._ct_batch_result_dialog = None
-
-        def on_dialog_destroyed(*_args: Any) -> None:
-            app._ct_batch_result_dialog = None
-            cleanup_batch_worker_temp_dirs(worker)
-
         dialog = create_ct_batch_result_dialog(
             app.main_window,
             batch,
             on_save_xlsx_clicked=lambda: self.export_ct_batch_xlsx(batch),
             on_save_json_clicked=lambda: self.export_ct_batch_json(batch),
             on_save_csv_clicked=lambda: self.export_ct_batch_csv(batch),
-            on_destroyed=on_dialog_destroyed,
         )
+
+        def on_dialog_destroyed(*_args: Any) -> None:
+            """Leave a replacement dialog in the slot when this one is destroyed late."""
+            if app._ct_batch_result_dialog is dialog:
+                app._ct_batch_result_dialog = None
+            cleanup_batch_worker_temp_dirs(worker)
+
+        dialog.destroyed.connect(on_dialog_destroyed)
         app._ct_batch_result_dialog = dialog
         dialog.activateWindow()
         dialog.raise_()

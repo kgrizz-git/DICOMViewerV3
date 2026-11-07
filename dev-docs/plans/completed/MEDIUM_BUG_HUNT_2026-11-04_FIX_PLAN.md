@@ -1,11 +1,11 @@
 # Medium bug-hunt findings — fix plan (2026-11-04)
 
-**Status:** Not started. Revised 2026-11-06 after a second review (cine fallback test, relocate test fakes, per-item preview slab).  
+**Status:** Implemented on `fix/medium-bug-hunt-20261104` (2026-11-06). All six P2 items and optional P3 are in the branch, with `[Unreleased]` / Fixed notes and no version bump. The branch review ran the full suite (8409 passed, 15 skipped). A thin DICOM slab can still be written under a projection filename; that pre-existing behavior is deferred in [`TO_DO.md`](../../TO_DO.md) and was not part of this fix.  
 **Priority:** P2 (six items) plus optional P3 MPR hardening  
 **Created:** 2026-11-06  
 **Verified against:** `docs/track-medium-bug-hunt-findings-20261104` @ `2816eae` (same `src/` as `7016f3b`)  
-**Tracks:** [`TO_DO.md`](../TO_DO.md) §Bugs / Correctness — “Medium findings from 2026-11-04 critical-bug hunt”  
-**Investigation:** [`CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md`](../bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md)
+**Tracks:** backlog item removed after the fixes landed in [`CHANGELOG.md`](../../../CHANGELOG.md); remaining DICOM filename follow-up is in [`TO_DO.md`](../../TO_DO.md) §Bugs / Correctness  
+**Investigation:** [`CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md`](../../bug-investigations/CRITICAL_BUG_HUNT_MEDIUM_FINDINGS_2026-11-04.md)
 
 ## Verdict
 
@@ -110,16 +110,16 @@ Ship these only after the P2 tests are green, in the same branch if the edits st
 
 ## Checklist
 
-- [ ] CT: `on_destroyed` clears `_ct_batch_result_dialog` only when it is that dialog. A replacement dialog stays referenced if the previous destroy runs late. Worker temp cleanup still runs for the dialog that closed.
-- [ ] Relocate: if any row is outside `old_root`, or any new file is missing, unreadable, or has a different SOP/Study UID, commit nothing and return 0. A fully in-prefix study with matching headers commits. Open passes the relocated file paths. Both dialogs use the new unchanged-index sentence. Existing relocate tests updated as in §2, not left red.
-- [ ] Fusion: 2D `uint8` display base is `/255` with no min-max. Float min-max test still passes. Explicit `base_wl` unchanged.
-- [ ] Formula helper: leading tab, CR, LF, space, and a C0 control before `=+-@` gain one apostrophe. Study-index CSV round-trips `\t=cmd` back to `\t=cmd`. Benign indented text is unchanged.
-- [ ] PNG/JPG: a thin slab, including the last slice of a longer series, is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview uses that same per-item slab test when `studies` is present. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM projection still writes nothing for a slab that was not built.
-- [ ] Cine: `rasterize_cine_export_frame` returns `None` when the requested projection slab was not built, and the named fallback assertion in `test_cine_video_export.py` expects `None`. The user is told when frames were skipped or when there is nothing to encode.
-- [ ] Navigator study label and overlay corner labels are `PlainText` before the DICOM string is set. A `<b>…</b>` description is shown as characters.
-- [ ] P3 (optional, same branch if small): reject empty-UID admission; MPR slice sync reads `mpr_slice_index`; close sweeps registry reservations that have no pane entry, without discarding a session twice.
-- [ ] Changelog `[Unreleased]` / Fixed notes for the user-visible items, each marked patch, no version bump while `0.5.0` is unreleased.
-- [ ] Focused tests below, then the full suite if a slice touches more than one domain.
+- [x] CT: `on_destroyed` clears `_ct_batch_result_dialog` only when it is that dialog. A replacement dialog stays referenced if the previous destroy runs late. Worker temp cleanup still runs for the dialog that closed.
+- [x] Relocate: if any row is outside `old_root`, or any new file is missing, unreadable, or has a different SOP/Study UID, commit nothing and return 0. A fully in-prefix study with matching headers commits. Open passes the relocated file paths. Both dialogs use the new unchanged-index sentence. Existing relocate tests updated as in §2, not left red.
+- [x] Fusion: 2D `uint8` display base is `/255` with no min-max. Float min-max test still passes. Explicit `base_wl` unchanged.
+- [x] Formula helper: leading tab, CR, LF, space, and a C0 control before `=+-@` gain one apostrophe. Study-index CSV round-trips `\t=cmd` back to `\t=cmd`. Benign indented text is unchanged.
+- [x] PNG/JPG: a thin slab, including the last slice of a longer series, is not saved under `_MIP_` / `_AIP_` / `_MINIP_`. Preview uses that same per-item slab test when `studies` is present. Preview with `studies is None` still includes `_MIP_4slices` for the existing one-item DICOM test. DICOM behavior is unchanged: anonymized export still skips a slice that was not prebuilt, and a thin slab can still be written as a one-slice derived instance under a projection filename (pre-existing; tracked in `TO_DO.md`, not this fix).
+- [x] Cine: `rasterize_cine_export_frame` returns `None` when the requested projection slab was not built, and the named fallback assertion in `test_cine_video_export.py` expects `None`. The user is told when frames were skipped or when there is nothing to encode.
+- [x] Navigator study label and overlay corner labels are `PlainText` before the DICOM string is set. A `<b>…</b>` description is shown as characters.
+- [x] P3 (optional, same branch if small): reject empty-UID admission; MPR slice sync reads `mpr_slice_index`; close sweeps registry reservations that have no pane entry, without discarding a session twice.
+- [x] Changelog `[Unreleased]` / Fixed notes for the user-visible items, each marked patch, no version bump while `0.5.0` is unreleased.
+- [x] Focused tests below, then the full suite (branch review: 8409 passed, 15 skipped).
 
 ## Tests
 

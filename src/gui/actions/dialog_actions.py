@@ -36,6 +36,7 @@ from gui.cine_video_export import (
     build_cine_export_frame_indices,
     cleanup_temp_frame_dir,
     describe_focused_cine_export_blocker,
+    inform_cine_export_skip_summary,
     rasterize_cine_export_frame,
     safe_remove_partial_output,
 )
@@ -444,6 +445,7 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
         )
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
+        skipped = 0
         for step, frame_idx in enumerate(indices):
             if progress.wasCanceled():
                 cancel_event.set()
@@ -481,13 +483,8 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
                 )
             )
             if img is None:
-                QMessageBox.critical(
-                    app.main_window,
-                    _TITLE_EXPORT_CINE,
-                    f"Failed to rasterize frame {frame_idx + 1} of {total}.",
-                )
-                safe_remove_partial_output(outp)
-                return
+                skipped += 1
+                continue
             out_png = Path(temp_dir) / f"f{step:05d}.png"
             img.save(str(out_png), "PNG")
             png_paths.append(out_png)
@@ -497,8 +494,23 @@ def open_export_cine_video(app: DICOMViewerApp) -> None:
         progress.close()
 
         if cancel_event.is_set() or not png_paths:
+            inform_cine_export_skip_summary(
+                app.main_window,
+                _TITLE_EXPORT_CINE,
+                skipped,
+                len(png_paths),
+                export_cancelled=cancel_event.is_set(),
+            )
             safe_remove_partial_output(outp)
             return
+
+        inform_cine_export_skip_summary(
+            app.main_window,
+            _TITLE_EXPORT_CINE,
+            skipped,
+            len(png_paths),
+            export_cancelled=False,
+        )
 
         progress_enc = QProgressDialog(
             "Encoding video…",

@@ -85,8 +85,10 @@ class StudyLabel(QFrame):
             "}"
         )
 
-        # Create label for text
-        self.label = QLabel(study_label_text, self)
+        # Create label for text (PlainText: DICOM tags may look like HTML)
+        self.label = QLabel(self)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label.setText(study_label_text)
         self.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.label.setWordWrap(False)
         # Text color will adapt to theme via parent stylesheet

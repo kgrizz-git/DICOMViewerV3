@@ -287,4 +287,12 @@ def test_preview_matches_written_paths_for_each_mode(
     exported, _ = ExportManager().export_selected(request)
     written = sorted(str(p) for p in tmp_path.rglob("*") if p.is_file())
     assert exported == 3
-    assert sorted(preview) == written
+    if export_format == "PNG" and projection_enabled:
+        # A buildable slab also lists the single-slice fallback for overwrite.
+        # This run's projection rendered, so only the projection files were written.
+        assert set(written).issubset(preview)
+        extra = sorted(set(preview) - set(written))
+        assert extra
+        assert all(path.endswith(".png") and "_MIP_" not in path for path in extra)
+    else:
+        assert sorted(preview) == written

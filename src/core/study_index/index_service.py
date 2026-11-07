@@ -21,6 +21,7 @@ from core.study_index.index_folder_thread import StudyIndexFolderThread
 from core.study_index.index_write_thread import StudyIndexWriteThread
 from core.study_index.keyring_storage import get_or_create_study_index_passphrase
 from core.study_index.metadata_extract import dataset_to_index_row
+from core.study_index.relocate_paths import build_relocate_updates_or_none
 from core.study_index.sqlcipher_store import StudyIndexStore
 from utils.config_manager import ConfigManager
 from utils.privacy.safe_storage import DeletionResult, secure_unlink
@@ -258,8 +259,8 @@ class LocalStudyIndexService:
         """
         Point an indexed study at a new folder by rewriting its stored paths.
 
-        Delegates the SQL UPDATE to the store, which only commits when at least one
-        relocated path exists on disk. Blank inputs are rejected. Returns rows updated.
+        Fails closed when any indexed path is outside *old_root*, a target file is
+        missing, or header UIDs do not match. Blank inputs are rejected.
         """
         if not self.is_backend_available():
             return 0
@@ -268,7 +269,16 @@ class LocalStudyIndexService:
         old = os.path.normpath(os.path.abspath(old_root.strip()))
         new = os.path.normpath(os.path.abspath(new_root.strip()))
         store = self._get_ready_store()
-        return store.relocate_study_paths(study_uid, old, new)
+        rows = store.fetch_study_rows_for_relocate(study_uid, old)
+        updates = build_relocate_updates_or_none(study_uid, old, new, rows)
+        if updates is None:
+            return 0
+        return store.apply_study_path_updates(
+            updates,
+            expected_rows=rows,
+            study_uid=(study_uid or "").strip(),
+            old_root=old,
+        )
 
     # --- Metadata (About this index) -----------------------------------------
 

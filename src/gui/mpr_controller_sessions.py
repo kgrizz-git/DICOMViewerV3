@@ -92,6 +92,13 @@ def reserve_pane_build(
     """
     release_pane_reservation(controller, idx)
     refresh_session_caps(controller)
+    study_uid = source_key[0]
+    if not (study_uid or "").strip():
+        notify_mpr(
+            controller,
+            f"MPR build requires a study identifier.\n{admission_summary(controller)}",
+        )
+        return False
     registry = controller._registry
     try:
         reservation_id = registry.reserve_build(*source_key)

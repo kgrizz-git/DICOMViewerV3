@@ -24,6 +24,9 @@ Inputs:
 
 Outputs:
     - Video files on disk; optional temporary PNG frames (caller cleans up).
+    - When projection is enabled, a frame whose slab cannot be built yields no
+      rasterized image (:func:`rasterize_cine_export_frame` returns ``None``);
+      :func:`inform_cine_export_skip_summary` reports all-skipped vs partial skips.
 
 Requirements:
     - Pillow, numpy, pydicom, **imageio**, **imageio-ffmpeg**; ``core.dicom_processor``,
@@ -46,6 +49,7 @@ import imageio.v2 as imageio
 import numpy as np
 from PIL import Image
 from pydicom.dataset import Dataset
+from PySide6.QtWidgets import QMessageBox
 
 from core.dicom_processor import DICOMProcessor
 from core.lut_display import grayscale_export_kwargs, invert_color_export_image
@@ -296,18 +300,7 @@ def rasterize_cine_export_frame(request: CineFrameRequest) -> Image.Image | None
             image_inverted=request.image_inverted,
             lut=request.lut,
         )
-        if image is None:
-            image = DICOMProcessor.dataset_to_image(
-                dataset,
-                window_center=window_center,
-                window_width=window_width,
-                apply_rescale=use_rescaled_values,
-                **grayscale_export_kwargs(
-                    dataset, request.image_inverted, request.lut, request.voi_from_dicom
-                ),
-            )
-        else:
-            is_projection_image = True
+        is_projection_image = image is not None
     else:
         image = DICOMProcessor.dataset_to_image(
             dataset,
@@ -400,6 +393,51 @@ def _pin_ffmpeg_exe_for_encode() -> None:
         raise RuntimeError(_MSG_FFMPEG_MISSING)
     if ffmpeg_resolution.source != "user_env":
         os.environ["IMAGEIO_FFMPEG_EXE"] = str(ffmpeg_resolution.path)
+
+
+def cine_export_skip_summary_message(
+    frames_skipped: int,
+    frames_saved: int,
+) -> str | None:
+    """
+    Build user-facing text when cine export skipped one or more frames.
+
+    Returns ``None`` when no informational message is appropriate (no skips).
+    ``frames_saved`` is the count of PNG frames written for encoding.
+    """
+    if frames_skipped <= 0:
+        return None
+    if frames_saved <= 0:
+        return (
+            "No frames could be built for the selected range. "
+            "There is nothing to encode."
+        )
+    return (
+        f"{frames_skipped} frame(s) could not be built (for example the projection "
+        f"slab was unavailable). The video contains the {frames_saved} frame(s) "
+        "that could be built."
+    )
+
+
+def inform_cine_export_skip_summary(
+    parent: Any,
+    title: str,
+    frames_skipped: int,
+    frames_saved: int,
+    *,
+    export_cancelled: bool,
+) -> None:
+    """
+    Show a single informational dialog for skipped cine frames, if warranted.
+
+    When ``export_cancelled`` is True, does nothing (user already aborted export).
+    """
+    if export_cancelled:
+        return
+    message = cine_export_skip_summary_message(frames_skipped, frames_saved)
+    if message is None:
+        return
+    QMessageBox.information(parent, title, message)
 
 
 def encode_cine_video_from_png_paths(

@@ -402,6 +402,31 @@ class MprSessionRegistry:
             del self._reservations[rid]
         return len(tied)
 
+    def release_source_reservations(
+        self, study_uid: str | None = None, series_uid: str | None = None
+    ) -> int:
+        """Remove pending reservation tokens for a closing study or series.
+
+        A study-only call (``series_uid`` is ``None``) removes every token for
+        that study. A series-only call (``study_uid`` is ``None``) removes every
+        token for that series. When both are set, a token is removed only when
+        both UIDs match, so closing one series leaves other series in the study
+        alone. Does not discard sessions or views.
+
+        Returns:
+            Count of reservation tokens removed (idempotent; second call removes 0).
+        """
+        if study_uid is None and series_uid is None:
+            return 0
+        removed = 0
+        for rid, reservation in list(self._reservations.items()):
+            study_ok = study_uid is None or reservation.source_study_uid == study_uid
+            series_ok = series_uid is None or reservation.source_series_uid == series_uid
+            if study_ok and series_ok:
+                del self._reservations[rid]
+                removed += 1
+        return removed
+
     def _close_source(self, study_uid: str | None, series_uid: str | None) -> dict[str, int]:
         """Remove dependent sessions/views and related pending reservations.
 
@@ -420,12 +445,7 @@ class MprSessionRegistry:
             # Count tied duplicate-view tokens before discard_session removes them.
             released += sum(1 for r in self._reservations.values() if r.session_id == sid)
             views += len(self.discard_session(sid))
-        for rid, reservation in list(self._reservations.items()):
-            if (study_uid is not None and reservation.source_study_uid == study_uid) or (
-                series_uid is not None and reservation.source_series_uid == series_uid
-            ):
-                del self._reservations[rid]
-                released += 1
+        released += self.release_source_reservations(study_uid, series_uid)
         return {"sessions": len(matched), "views": views, "reservations": released}
 
     def close_source_series(self, series_uid: str) -> dict[str, int]:

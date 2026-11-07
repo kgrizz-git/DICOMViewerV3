@@ -32,6 +32,7 @@ class _FakeService:
     def __init__(self) -> None:
         self.relocated: list[tuple] = []
         self.relocate_result = 4
+        self._open_paths = ["/new/loc/a.dcm", "/new/loc/b.dcm"]
 
     def is_backend_available(self) -> bool:
         return True
@@ -39,6 +40,9 @@ class _FakeService:
     def relocate_study(self, study_uid, old_root, new_root) -> int:
         self.relocated.append((study_uid, old_root, new_root))
         return self.relocate_result
+
+    def get_file_paths_for_study(self, study_uid, study_root_path) -> list[str]:
+        return list(self._open_paths)
 
     def search_grouped_studies(self, **kwargs):
         return []
@@ -64,7 +68,7 @@ def test_relocate_reopens_new_folder(qapp, monkeypatch) -> None:
         result = dlg._relocate_and_reopen("1.2.3", "/old/loc")
         assert result is True
         assert svc.relocated == [("1.2.3", "/old/loc", "/new/loc")]
-        assert opened == [["/new/loc"]]
+        assert opened == [svc._open_paths]
     finally:
         dlg.deleteLater()
 
@@ -85,6 +89,36 @@ def test_relocate_no_match_warns_and_does_not_open(qapp, monkeypatch) -> None:
         assert svc.relocated  # service was still consulted
         assert warned["n"] == 1
         assert opened == []
+    finally:
+        dlg.deleteLater()
+
+
+def test_relocate_open_failure_keeps_dialog_and_does_not_undo(qapp, monkeypatch) -> None:
+    dlg, svc, opened = _build(qapp)
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("lookup failed")
+
+    svc.get_file_paths_for_study = boom  # type: ignore[method-assign]
+    try:
+        monkeypatch.setattr(
+            QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: "/new/loc")
+        )
+        warnings: list[str] = []
+        monkeypatch.setattr(
+            QMessageBox,
+            "warning",
+            staticmethod(lambda *_a, **_k: warnings.append(str(_a[2]) if len(_a) > 2 else "")),
+        )
+        accepted = {"n": 0}
+        monkeypatch.setattr(dlg, "accept", lambda: accepted.__setitem__("n", 1))
+        result = dlg._relocate_and_reopen("1.2.3", "/old/loc")
+        assert result is True
+        assert svc.relocated == [("1.2.3", "/old/loc", "/new/loc")]
+        assert opened == []
+        assert accepted["n"] == 0
+        assert warnings and "could not be opened" in warnings[0]
+        assert "lookup failed" in warnings[0]
     finally:
         dlg.deleteLater()
 

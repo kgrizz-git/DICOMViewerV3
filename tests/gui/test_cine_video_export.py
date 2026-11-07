@@ -21,6 +21,7 @@ from gui.cine_video_export import (
     FfmpegResolution,
     _ffmpeg_bundled_exe_name,
     build_cine_export_frame_indices,
+    cine_export_skip_summary_message,
     clamp_int,
     cleanup_temp_frame_dir,
     describe_focused_cine_export_blocker,
@@ -32,6 +33,20 @@ from gui.cine_video_export import (
     resolve_ffmpeg_exe,
     safe_remove_partial_output,
 )
+
+
+def test_cine_export_skip_summary_message_distinct_cases() -> None:
+    """Skip summary text: nothing to encode vs partial encode (pure string helper)."""
+    assert cine_export_skip_summary_message(0, 3) is None
+    msg_all = cine_export_skip_summary_message(5, 0)
+    assert msg_all is not None
+    assert "nothing to encode" in msg_all
+    assert "projection settings" not in msg_all
+    assert "selected range" in msg_all
+    msg_some = cine_export_skip_summary_message(2, 7)
+    assert msg_some is not None
+    assert "2 frame(s) could not be built" in msg_some
+    assert "The video contains the 7 frame(s)" in msg_some
 
 
 def test_clamp_int() -> None:
@@ -249,7 +264,7 @@ def test_rasterize_cine_export_frame() -> None:
         assert res_proj is not None
         assert res_proj.mode == "RGB"
 
-    # 4. Projection image rendering fallback when projection returns None
+    # 4. Projection image rendering — no fallback when projection returns None
     with (
         patch(
             "gui.cine_video_export._er.create_projection_for_export", return_value=None
@@ -258,13 +273,9 @@ def test_rasterize_cine_export_frame() -> None:
             "gui.cine_video_export.DICOMProcessor.dataset_to_image",
             return_value=img_rgb,
         ),
-        patch(
-            "gui.cine_video_export._er.process_image_by_photometric_interpretation",
-            return_value=img_rgb,
-        ),
     ):
         res_fallback = rasterize_cine_export_frame(req_proj)
-        assert res_fallback is not None
+        assert res_fallback is None
 
     # 5. RGBA image mode conversion to RGB
     img_rgba = Image.new("RGBA", (50, 50), (100, 100, 100, 255))

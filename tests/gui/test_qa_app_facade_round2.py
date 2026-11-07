@@ -241,6 +241,7 @@ def test_ct_batch_dialog_wires_exports_and_cleans_temp_dir(qapp, monkeypatch) ->
     facade = QAAppFacade(app)
     worker = FakeWorker()
     dialog = MagicMock()
+    dialog.destroyed = FakeSignal()
     monkeypatch.setattr(facade_module, "create_ct_batch_result_dialog", MagicMock(return_value=dialog))
     export_xlsx = MagicMock()
     export_json = MagicMock()
@@ -254,15 +255,49 @@ def test_ct_batch_dialog_wires_exports_and_cleans_temp_dir(qapp, monkeypatch) ->
 
     factory = facade_module.create_ct_batch_result_dialog
     kwargs = factory.call_args.kwargs
+    assert kwargs.get("on_destroyed") is None
     kwargs["on_save_xlsx_clicked"]()
     kwargs["on_save_json_clicked"]()
     kwargs["on_save_csv_clicked"]()
-    kwargs["on_destroyed"]()
+    dialog.destroyed.emit()
     export_xlsx.assert_called_once_with(batch)
     export_json.assert_called_once_with(batch)
     export_csv.assert_called_once_with(batch)
     assert app._ct_batch_result_dialog is None
     worker.image_temp_dir.cleanup.assert_called_once()
+
+
+def test_ct_batch_second_dialog_keeps_slot_when_first_destroy_fires_late(
+    qapp, monkeypatch,
+) -> None:
+    """Deferred destroy of dialog A must not clear the slot when B replaced it."""
+    app = _app()
+    facade = QAAppFacade(app)
+    worker_a = FakeWorker()
+    worker_b = FakeWorker()
+    dialog_a = MagicMock()
+    dialog_a.destroyed = FakeSignal()
+    dialog_b = MagicMock()
+    dialog_b.destroyed = FakeSignal()
+    factory = MagicMock(side_effect=[dialog_a, dialog_b])
+    monkeypatch.setattr(facade_module, "create_ct_batch_result_dialog", factory)
+    batch = _batch_result()
+
+    facade.show_ct_batch_result_dialog(worker_a, batch)
+
+    facade.show_ct_batch_result_dialog(worker_b, batch)
+    kwargs_b = factory.call_args.kwargs
+
+    dialog_a.close.assert_called_once()
+    assert app._ct_batch_result_dialog is dialog_b
+    dialog_a.destroyed.emit()
+    assert app._ct_batch_result_dialog is dialog_b
+    worker_a.image_temp_dir.cleanup.assert_called_once()
+    worker_b.image_temp_dir.cleanup.assert_not_called()
+    dialog_b.destroyed.emit()
+    assert app._ct_batch_result_dialog is None
+    worker_b.image_temp_dir.cleanup.assert_called_once()
+    assert kwargs_b.get("on_destroyed") is None
 
 
 def test_ct_batch_json_and_xlsx_exports_report_synthetic_paths(qapp, monkeypatch, tmp_path: Path) -> None:

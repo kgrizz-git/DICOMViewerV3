@@ -694,11 +694,7 @@ class StudyIndexSearchDialog(QDialog):
         self.accept()
 
     def _relocate_and_reopen(self, study_uid: str, study_root: str) -> bool:
-        """Prompt for the study's new folder, relocate index paths, then retry opening.
-
-        Returns True when relocation updated the index (open was retried), False when
-        the user canceled or no relocated files were found.
-        """
+        """Relocate the study folder and reopen it. True when the index changed."""
         if not self._backend_ok_or_warn():
             return False
         start = study_root or os.path.expanduser("~")
@@ -717,13 +713,16 @@ class StudyIndexSearchDialog(QDialog):
             QMessageBox.warning(
                 self,
                 _TITLE_STUDY_INDEX,
-                "No relocated files were found in that folder. The index was not changed.",
+                "The index was not changed. Relocate only runs when every indexed file for this study is inside its current folder and the same file is found in the selected folder.",
             )
             return False
-        # Index now points at the new location. Refresh so the list reflects the new
-        # paths, then open the chosen folder directly (mirrors the fast-path rescan).
         self._run_browse(reset=True)
-        self._open_paths([new_root])
+        try:
+            self._open_paths(self._service.get_file_paths_for_study(study_uid, new_root))
+        except Exception as exc:
+            safe = sanitize_message(str(exc), redact_paths=True)
+            QMessageBox.warning(self, _TITLE_STUDY_INDEX, "The index was updated, but the study could not be opened.\n" + safe)
+            return True
         self.accept()
         return True
 
@@ -1117,7 +1116,7 @@ class _MissingStudiesDialog(QDialog):
             QMessageBox.warning(
                 self,
                 _TITLE_STUDY_INDEX,
-                "No relocated files were found in that folder. The index was not changed.",
+                "The index was not changed. Relocate only runs when every indexed file for this study is inside its current folder and the same file is found in the selected folder.",
             )
             return
         QMessageBox.information(

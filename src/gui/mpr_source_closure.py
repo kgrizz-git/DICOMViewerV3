@@ -63,6 +63,7 @@ def release_closed_source_sessions(
         _reset_pane_mpr_chrome(controller, app, idx)
         released["panes"] += 1
     released["detached"] += _discard_closed_sessions(controller, study_uid, series_uid)
+    controller._registry.release_source_reservations(study_uid, series_uid)
     _bump_closed_source_generations(controller, study_uid, series_uid)
     emit_tiles_changed(controller)
     return released

@@ -356,6 +356,7 @@ def test_batch_dialog_destroy_cleans_module_images_temp_dir(qapp, monkeypatch) -
         run_labels=["Series 0"],
     )
     dialog = MagicMock()
+    dialog.destroyed = _Signal()
     captured: dict = {}
 
     def _capture(*args, **kw):
@@ -366,7 +367,8 @@ def test_batch_dialog_destroy_cleans_module_images_temp_dir(qapp, monkeypatch) -
 
     facade.show_ct_batch_result_dialog(worker, batch)
 
-    captured["on_destroyed"]()
+    assert captured.get("on_destroyed") is None
+    dialog.destroyed.emit()
 
     worker.image_temp_dir.cleanup.assert_called_once()
     worker.module_images_temp_dir.cleanup.assert_called_once()

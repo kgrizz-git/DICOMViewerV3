@@ -168,6 +168,30 @@ class TestCreateFusionImage:
         expected_rgb = np.repeat(expected_gray[..., np.newaxis], 3, axis=2)
         np.testing.assert_array_equal(fused, expected_rgb)
 
+    def test_display_final_uint8_grayscale_base_preserves_gray_without_base_wl(self):
+        """Mode-L uint8 display bases must not be min-max stretched when base_wl is omitted."""
+        overlay = np.zeros((2, 2), dtype=np.float32)
+        base = np.array([[0, 50], [100, 150]], dtype=np.uint8)
+        fused = FusionProcessor.create_fusion_image(base, overlay, alpha=0.0)
+        expected_gray = np.array([[0, 50], [100, 150]], dtype=np.uint8)
+        expected_rgb = np.repeat(expected_gray[..., np.newaxis], 3, axis=2)
+        np.testing.assert_array_equal(fused, expected_rgb)
+
+        uniform = np.full((2, 2), 40, dtype=np.uint8)
+        fused_uniform = FusionProcessor.create_fusion_image(uniform, overlay, alpha=0.0)
+        assert np.all(fused_uniform[..., 0] == 40)
+
+        # Explicit base_wl still windows 0–255 float samples (no display-final divide-by-255).
+        window, level = 200.0, 127.5
+        wl_base = base.astype(np.float32)
+        normalized = FusionProcessor.normalize_array(wl_base, window, level)
+        expected_wl_gray = np.clip(normalized * 255.0, 0, 255).astype(np.uint8)
+        expected_wl_rgb = np.repeat(expected_wl_gray[..., np.newaxis], 3, axis=2)
+        fused_wl = FusionProcessor.create_fusion_image(
+            base, overlay, alpha=0.0, base_wl=(window, level)
+        )
+        np.testing.assert_array_equal(fused_wl, expected_wl_rgb)
+
     def test_pixel_spacing_scaling_resizes_overlay(self):
         base = np.full((10, 10), 100.0, dtype=np.float64)
         overlay = np.full((5, 5), 50.0, dtype=np.float64)
