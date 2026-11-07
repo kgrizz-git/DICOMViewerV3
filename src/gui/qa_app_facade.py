@@ -772,7 +772,7 @@ class QAAppFacade:
         )
 
         def on_dialog_destroyed(*_args: Any) -> None:
-            # Late destroy must not clear a replacement dialog already in the slot.
+            """Leave a replacement dialog in the slot when this one is destroyed late."""
             if app._ct_batch_result_dialog is dialog:
                 app._ct_batch_result_dialog = None
             cleanup_batch_worker_temp_dirs(worker)

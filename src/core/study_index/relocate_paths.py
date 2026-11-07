@@ -30,6 +30,7 @@ def new_file_path_after_relocate(old_root: str, new_root: str, file_path: str) -
 
 
 def every_new_path_is_existing_file(new_paths: list[str]) -> bool:
+    """True when every relocated path is an existing file."""
     return all(os.path.isfile(p) for p in new_paths)
 
 
@@ -51,6 +52,7 @@ def _read_study_and_sop_uids(path: str) -> tuple[str, str] | None:
 def dicom_headers_match_row(
     new_path: str, expected_sop_instance_uid: str, expected_study_uid: str
 ) -> bool:
+    """True when *new_path* has the expected SOP and Study Instance UIDs."""
     uids = _read_study_and_sop_uids(new_path)
     if uids is None:
         return False

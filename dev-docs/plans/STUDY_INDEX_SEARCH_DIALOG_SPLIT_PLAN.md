@@ -74,7 +74,7 @@ The timer stays here because it is created with `QTimer(self)` and connected in 
 
 `_open_row` calls `_relocate_and_reopen`. Moving the callee onto the mixin is valid: the dialog inherits it. Leaving `_relocate_and_reopen` beside `_open_row` would also stay under 600 lines. This plan moves it so the long warning lives in a file that is not on the line cap.
 
-The mixin calls back into the dialog through `self` (`_run_browse`, `_backend_ok_or_warn`, `_privacy`, `_open_paths`, `_service`, `_config`, `_model`, `_table`, `_save_columns_timer`). Those attributes stay assigned in the dialog `__init__` or in `_build_ui`. The mixin does not import the model module. The dialog `__init__` still constructs `_StudyIndexGroupedModel`.
+The mixin calls back into the dialog through `self` (`_run_browse`, `_backend_ok_or_warn`, `_privacy`, `_open_paths`, `_service`, `_config`, `_model`, `_table`, `_save_columns_timer`). Those attributes stay assigned in the dialog `__init__` or in `_build_ui`. The mixin imports `_StudyIndexMdyLineEdit` from the model module, because the moved `_build_ui` constructs the two date fields. The dialog `__init__` still constructs `_StudyIndexGroupedModel` and imports the model module for that.
 
 ### Shared strings
 
@@ -98,7 +98,11 @@ Do not drop `safe`. `tests/gui/test_study_index_open_relocate.py` asserts both "
 
 ### Import cycle
 
-`study_index_dialog_common.py` imports neither dialogs nor the mixin. The model imports neither. The missing-studies dialog and the about dialog import the common module and `core` / `utils` only. The mixin imports the common module, the two extracted dialogs, and the study-index helpers it already uses. The search dialog imports the model and the mixin, and re-exports the extracted names. Nothing imports the search dialog except `src/gui/actions/dialog_actions.py` and tests.
+`study_index_dialog_common.py` imports neither dialogs nor the mixin. The model module imports neither. The missing-studies dialog imports the common module and `core` / `utils` only (including `repair_str_bytes_repr_artifact`). It does not import `gui.study_index_info`.
+
+The about dialog imports the common module, `core` / `utils`, and `gui.study_index_info`. `_refresh_info` uses `study_index_db_path`, `credential_store_note`, `format_size_on_disk`, and `format_last_modified`. `_open_location` uses `open_study_index_location` and `study_index_db_path`. `_move_index`, `_export_index`, and `_import_index` also use `study_index_db_path`.
+
+The mixin imports the common module, the model module (`_StudyIndexMdyLineEdit`), the two extracted dialogs, and `gui.study_index_info` (`study_index_db_path` for the Open-location tooltip and failure text, `open_study_index_location` for `_on_open_index_location`). The search dialog imports the model module and the mixin, and re-exports the extracted names. Nothing imports the search dialog except `src/gui/actions/dialog_actions.py` and tests.
 
 ## Public imports that must keep working
 
@@ -150,6 +154,7 @@ Do not add `scripts/check_file_line_counts.py`. A second script would duplicate 
 - No `--generate-grandfather`, no hand-raised grandfather cap, and no new grandfather entry.
 - No `src/version.py` bump and no changelog bullet. This is not user-visible. Record it in [`dev-docs/MAINTENANCE_LOG.md`](../MAINTENANCE_LOG.md) when the split lands.
 - No user-docs edit.
+- No docstring sweep of `study_index_search_dialog.py`. Interrogate already reports that file at about 25% (57 functions without docstrings). The file is on its 1373-line cap, so those docstrings cannot be added until this split lands. CodeRabbit's pre-merge docstring check still sees that pre-existing gap.
 
 ## Implementation order
 
