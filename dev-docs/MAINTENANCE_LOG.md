@@ -1,8 +1,12 @@
 # Maintenance Log
 
-**Last updated:** 2026-11-06
+**Last updated:** 2026-11-07
 
 This file records development and repository-maintenance history that is useful to contributors and agents but is not necessarily user-facing release history.
+
+## 2026-11-07
+
+- **Study index search dialog split.** The study index search dialog was split into `study_index_search_dialog.py`, `study_index_search_panels.py`, `study_index_search_model.py`, `study_index_about_dialog.py`, `study_index_missing_studies_dialog.py`, and `study_index_dialog_common.py` so the dialog file is at or under 600 lines. The pre-commit ratchet removes the file's line-count grandfather entry on the finishing commit. The function caps for `_open_row` (17) and `_remove_studies_at_rows` (22) stay. Not user-visible, so no changelog bullet and no `src/version.py` bump.
 
 ## 2026-11-06
 

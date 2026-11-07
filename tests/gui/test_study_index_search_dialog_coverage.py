@@ -432,7 +432,7 @@ def test_about_import_and_export_errors(monkeypatch, qapp) -> None:
         dlg._export_index()
         assert "Export failed" in critical[0]
         monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_a: ("/bad.csv", ""))
-        monkeypatch.setattr("gui.dialogs.study_index_search_dialog.read_entries_csv", MagicMock(side_effect=RuntimeError("parse")))
+        monkeypatch.setattr("gui.dialogs.study_index_about_dialog.read_entries_csv", MagicMock(side_effect=RuntimeError("parse")))
         dlg._import_index()
         assert "Import failed" in critical[-1]
     finally:
@@ -460,7 +460,7 @@ def test_missing_study_and_location_guards(monkeypatch, qapp) -> None:
         dlg._show_missing_studies([])
         assert "All indexed studies were found" in info[0]
         monkeypatch.setattr(
-            "gui.dialogs.study_index_search_dialog.open_study_index_location",
+            "gui.dialogs.study_index_search_panels.open_study_index_location",
             lambda _config: False,
         )
         dlg._on_open_index_location()
