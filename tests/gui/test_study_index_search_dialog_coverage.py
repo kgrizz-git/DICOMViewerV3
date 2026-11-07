@@ -460,7 +460,7 @@ def test_missing_study_and_location_guards(monkeypatch, qapp) -> None:
         dlg._show_missing_studies([])
         assert "All indexed studies were found" in info[0]
         monkeypatch.setattr(
-            "gui.dialogs.study_index_search_dialog.open_study_index_location",
+            "gui.dialogs.study_index_search_panels.open_study_index_location",
             lambda _config: False,
         )
         dlg._on_open_index_location()
