@@ -145,6 +145,11 @@ class _MissingStudiesDialog(QDialog):
         self._populate()
 
     def _relocate_selected(self) -> None:
+        """Point the selected study at a new folder without opening it.
+
+        On success the row leaves this list and the search dialog refreshes.
+        The index is left unchanged when no indexed file is updated.
+        """
         rec = self._selected_record()
         if rec is None:
             QMessageBox.information(self, _TITLE_STUDY_INDEX, "Select a study first.")
@@ -228,6 +233,11 @@ class _MissingStudiesDialog(QDialog):
         self._on_changed()
 
     def _delete_one(self, rec: MissingStudyRecord) -> bool:
+        """Remove one study's index rows. Files on disk are not deleted.
+
+        Returns False after showing an error when the delete raises, and True
+        when the service call returns.
+        """
         try:
             self._service.delete_grouped_study(rec.study_uid, rec.study_root_path)
         except Exception as e:

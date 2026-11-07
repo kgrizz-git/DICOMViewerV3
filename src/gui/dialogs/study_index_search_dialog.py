@@ -140,6 +140,12 @@ class StudyIndexSearchDialog(StudyIndexSearchPanelsMixin, QDialog):
         return False
 
     def _run_browse(self, *, reset: bool, strict_dates: bool = False) -> None:
+        """Load one page of grouped studies into the table.
+
+        ``reset`` replaces the rows and starts at offset 0; otherwise the page
+        is appended. Invalid dates abort with a warning only when
+        ``strict_dates`` is set. Load more stays enabled when the page is full.
+        """
         if not self._backend_ok_or_warn():
             return
         df, dt, date_err = self._effective_date_filters(strict=strict_dates)
@@ -274,6 +280,14 @@ class StudyIndexSearchDialog(StudyIndexSearchPanelsMixin, QDialog):
         self._open_row(row)
 
     def _open_row(self, row: int) -> None:
+        """Open the study for this grouped row.
+
+        When the indexed folder still exists, open that folder the same way as
+        Open Folder so the loader rescans it instead of a partial path list
+        from the index. When the folder is gone and no indexed file remains,
+        offer relocate or, if a sample file still exists, load that file only.
+        A partial miss warns and opens the files that are still on disk.
+        """
         snap = self._model.group_row_snapshot(row)
         study_uid = (snap.get("study_uid") or "").strip()
         study_root = (snap.get("study_root_path") or "").strip()
@@ -283,8 +297,6 @@ class StudyIndexSearchDialog(StudyIndexSearchPanelsMixin, QDialog):
             QMessageBox.warning(self, _TITLE_STUDY_INDEX, "Row is missing study UID or folder path.")
             return
 
-        # Full folder rescan (same as Open Folder / recent folder) when the indexed
-        # study root still exists — avoids opening only a partial path list from the DB.
         if os.path.isdir(study_root):
             self._open_paths([study_root])
             self.accept()
@@ -389,6 +401,13 @@ class StudyIndexSearchDialog(StudyIndexSearchPanelsMixin, QDialog):
         self._remove_studies_at_rows([row])
 
     def _remove_studies_at_rows(self, rows: list[int]) -> None:
+        """Delete the selected grouped studies from the encrypted index only.
+
+        Duplicate (study UID, folder) pairs are removed once. DICOM files on
+        disk are left in place. One study's failure is reported and the rest
+        continue. The browse list is refreshed afterward, including when
+        nothing was removed.
+        """
         if not self._backend_ok_or_warn():
             return
 

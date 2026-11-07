@@ -191,7 +191,12 @@ class StudyIndexSearchPanelsMixin:
         layout.addLayout(bottom)
 
     def _relocate_and_reopen(self, study_uid: str, study_root: str) -> bool:
-        """Relocate the study folder and reopen it. True when the index changed."""
+        """Point the index at a new folder and open that study.
+
+        Returns True when the index was updated, including when the files
+        could not be opened afterward. Returns False when the user cancels,
+        relocate fails, or no indexed file changes.
+        """
         if not self._backend_ok_or_warn():
             return False
         start = study_root or os.path.expanduser("~")
