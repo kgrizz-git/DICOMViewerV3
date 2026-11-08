@@ -1,17 +1,17 @@
 # Plan: Split the study index search dialog
 
 **Created:** 2026-11-06
-**Last updated:** 2026-11-06
-**Status:** Reviewed — safe to implement. Not started
-**Branch:** `fix/medium-bug-hunt-20261104`
+**Last updated:** 2026-11-07
+**Status:** Implemented on `refactor/study-index-search-dialog` (per-chunk commits, finishing in this chunk)
+**Branch:** `refactor/study-index-search-dialog`
 
 Gemini 3.8 Flash (high) reviewed this draft on 2026-11-06. One blocking wording error is corrected below: the open-failure warning keeps the sanitized exception text. The hook, mixin, import, and test-patch claims were confirmed. Nits from that review (who imports the shared sentence, the constant's name, and that `--all` does not rewrite the grandfather file) are folded in. The stale line-count backlog item that review also flagged is removed; see below.
 
 ## Decision
 
-Yes. Split [`src/gui/dialogs/study_index_search_dialog.py`](../../src/gui/dialogs/study_index_search_dialog.py).
+Yes. Split [`src/gui/dialogs/study_index_search_dialog.py`](../../../src/gui/dialogs/study_index_search_dialog.py).
 
-The file is 1373 lines. [`scripts/line_complexity_grandfather.json`](../../scripts/line_complexity_grandfather.json) records that exact count. [`scripts/git_hook_line_complexity.py`](../../scripts/git_hook_line_complexity.py) blocks a file above 750 lines unless it stays at or under its recorded cap, and it blocks any growth past that cap. This file is already sitting on the cap, so one added line fails the commit.
+The file is 1373 lines. [`scripts/line_complexity_grandfather.json`](../../../scripts/line_complexity_grandfather.json) records that exact count. [`scripts/git_hook_line_complexity.py`](../../../scripts/git_hook_line_complexity.py) blocks a file above 750 lines unless it stays at or under its recorded cap, and it blocks any growth past that cap. This file is already sitting on the cap, so one added line fails the commit.
 
 Two different warnings are stuck on one physical line:
 
@@ -43,7 +43,7 @@ Do not run `--generate-grandfather`. That rewrites every hotspot in the repo. `p
 
 All new modules live under `src/gui/dialogs/`. `gui/` may import `gui/`, `core/`, and `utils/`. Nothing here imports `main`. No new `core/` → `gui/` edge.
 
-Follow the existing dialog split: [`src/gui/dialogs/tag_export_dialog.py`](../../src/gui/dialogs/tag_export_dialog.py) keeps the `QDialog` and composes plain mixins. Mixins do not inherit `QObject` or `QDialog`, do not define `__init__`, and do not declare a `Signal`. `QDialog` stays the only Qt base and is listed last:
+Follow the existing dialog split: [`src/gui/dialogs/tag_export_dialog.py`](../../../src/gui/dialogs/tag_export_dialog.py) keeps the `QDialog` and composes plain mixins. Mixins do not inherit `QObject` or `QDialog`, do not define `__init__`, and do not declare a `Signal`. `QDialog` stays the only Qt base and is listed last:
 
 ```python
 class StudyIndexSearchDialog(StudyIndexSearchPanelsMixin, QDialog):
@@ -136,13 +136,13 @@ No new test behavior. Do not loosen assertions. The only test edits are the two 
 
 ## Stale line-count backlog item
 
-Removed from [`dev-docs/TO_DO.md`](../TO_DO.md) Maintenance in the same commit as this plan. The item said the repo had no line-count hook and asked for a new `scripts/check_file_line_counts.py` plus a CI step.
+Removed from [`dev-docs/TO_DO.md`](../../TO_DO.md) Maintenance in the same commit as this plan. The item said the repo had no line-count hook and asked for a new `scripts/check_file_line_counts.py` plus a CI step.
 
 That work is already done:
 
-- [`scripts/git_hook_line_complexity.py`](../../scripts/git_hook_line_complexity.py) warns at 600 lines and blocks at 750, and blocks cyclomatic complexity above 15. Existing over-cap files stay on the grandfather list until they shrink.
+- [`scripts/git_hook_line_complexity.py`](../../../scripts/git_hook_line_complexity.py) warns at 600 lines and blocks at 750, and blocks cyclomatic complexity above 15. Existing over-cap files stay on the grandfather list until they shrink.
 - `.githooks/pre-commit` runs it with `--staged`.
-- The `lizard` job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs it with `--all`.
+- The `lizard` job in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) runs it with `--all`.
 
 Do not add `scripts/check_file_line_counts.py`. A second script would duplicate this hook. The fixed thresholds plus the grandfather file are the exclusion mechanism the old item was asking for. This split uses that hook; it does not replace it.
 
@@ -152,7 +152,7 @@ Do not add `scripts/check_file_line_counts.py`. A second script would duplicate 
 - No CCN rewrite of `_open_row` or `_remove_studies_at_rows`. Sonar cognitive complexity is also out of scope. The hook measures lizard CCN, not Sonar cognitive complexity.
 - No edit to `sqlcipher_store.py` or `export_manager.py`. Both are already near the 750-line block.
 - No `--generate-grandfather`, no hand-raised grandfather cap, and no new grandfather entry.
-- No `src/version.py` bump and no changelog bullet. This is not user-visible. Record it in [`dev-docs/MAINTENANCE_LOG.md`](../MAINTENANCE_LOG.md) when the split lands.
+- No `src/version.py` bump and no changelog bullet. This is not user-visible. Record it in [`dev-docs/MAINTENANCE_LOG.md`](../../MAINTENANCE_LOG.md) when the split lands.
 - No user-docs edit.
 - No docstring sweep of `study_index_search_dialog.py`. Interrogate already reports that file at about 25% (57 functions without docstrings). The file is on its 1373-line cap, so those docstrings cannot be added until this split lands. CodeRabbit's pre-merge docstring check still sees that pre-existing gap.
 
@@ -168,7 +168,7 @@ Do this in one commit so the line cap is removed rather than ratcheted to a new 
    - `python -m pytest tests/gui/test_study_index_search_dialog_coverage.py tests/gui/test_study_index_search_dialog_state.py tests/gui/test_study_index_search_dialog_sort.py tests/gui/test_study_index_open_relocate.py tests/gui/test_study_index_multi_remove.py tests/gui/test_study_index_missing_studies_dialog.py tests/test_dialog_error_sanitization.py -q`
    - `ruff check` on the touched modules, and `python scripts/check_basedpyright_errors.py` (or the equivalent scoped check if the full script is too broad — the touched files must report 0 errors)
    - `python scripts/check_architecture_boundaries.py`
-5. Update the Study index search row in [`ARCHITECTURE.md`](../../ARCHITECTURE.md) so it names the new modules. Add the maintenance-log paragraph. Remove the matching item from [`dev-docs/TO_DO.md`](../TO_DO.md) in that same commit.
+5. Update the Study index search row in [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) so it names the new modules. Add the maintenance-log paragraph. Remove the matching item from [`dev-docs/TO_DO.md`](../../TO_DO.md) in that same commit.
 
 Focused tests are the acceptance gate. A manual pass of the Study Index dialog (search, open, relocate, remove, missing studies, about) is useful later and is not a blocker for this move.
 

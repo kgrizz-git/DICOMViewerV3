@@ -1,6 +1,6 @@
 # Architecture — DICOM Viewer V3
 
-**Last updated:** 2026-10-11
+**Last updated:** 2026-11-07
 **Audience:** Engineers and AI agents. This is the top-level map; file-level detail lives in **[`dev-docs/SOURCE_LAYOUT.md`](dev-docs/SOURCE_LAYOUT.md)**.
 
 ---
@@ -100,7 +100,7 @@ Custom structural linting has an incremental guard: **`scripts/check_architectur
 | ROI statistics export | `roi_export_service.py`, `gui/dialogs/export_roi_statistics_dialog.py` |
 | Window/level presets | `wl_preset_catalog.py`, `window_level_preset_handler.py`, `dicom_window_level.py` |
 | Privacy / PHI display | `privacy_controller.py`, `view_actions.on_privacy_view_toggled` |
-| Study index search | `src/core/study_index/`, `study_index_search_dialog.py` |
+| Study index search | `src/core/study_index/`, `study_index_search_dialog.py`, `study_index_search_panels.py`, `study_index_search_model.py`, `study_index_about_dialog.py`, `study_index_missing_studies_dialog.py`, `study_index_dialog_common.py` |
 | SR / RDSR | `rdsr_dose_sr.py`, `structured_report_browser_dialog.py` |
 | Pylinac QA | `qa_app_facade.py`, `src/qa/` |
 | User-visible defaults | `src/utils/config/*.py`, `config_manager.default_config` |
