@@ -1244,9 +1244,9 @@ pylibjpeg-rle==2.2.0 \
     --hash=sha256:f6002b44b14ebfa2df6bde6598bef95d31a76a839f511df5a52027e5785bcc5e \
     --hash=sha256:f6901768e0c80f6ed805467a65f535eab941d261d34d2bc787b44b4101130e16
     # via -r requirements.in
-pylinac==3.43.2 \
-    --hash=sha256:86160d087adc86cd59e263dbafad799580e287a2db656c1397d2bd0d1b321113 \
-    --hash=sha256:d82d97d41ce8ccc2dd4ad058fb0f86e3dc13f66c41afab2a7fa36bee46d509f3
+pylinac==3.49.0 \
+    --hash=sha256:0201cacc9ee946dd056935c9c84911f1094ab9041224862d010ae4f50bf7119f \
+    --hash=sha256:1fa4ce4ecd54dc4468f8abd5b298b747c1fb8fc2a6062b52e513b50548af94f6
     # via -r requirements.in
 pyparsing==3.3.3 \
     --hash=sha256:928ae7e20211f3b6f3915a72f06a0cfd29ab9d24279dd6346b6b1a7146397d36 \
