@@ -52,6 +52,9 @@ scikit-image>=0.22.0  # pylinac image processing dependency
 pypdf>=6.21.4  # CVE-2026-119203..119209 fixed in 6.21.3/6.21.4 (earlier: -115572, -115580, -115585). PDF merging for compare-mode combined PDF report
 # HTTP(S) client for local SonarQube utilities and public update metadata checks.
 requests>=2.34.2
+# Transitive via email-validator (pydantic <- quaac <- pylinac). Floor 2.9.2
+# closes GHSA-vvf4-9x63-8xvv / CVE-2026-128089 (WKS record DoS).
+dnspython>=2.9.2
 
 # Compressed DICOM support
 # `python-gdcm` is the selected classic JPEG Baseline/Extended/Lossless decoder.
